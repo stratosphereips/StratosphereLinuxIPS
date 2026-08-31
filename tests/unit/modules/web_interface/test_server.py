@@ -440,7 +440,86 @@ def test_overview_prioritizes_operational_data() -> None:
     assert '["FW added", compact(firewall.added)]' in app_source
     assert '["FW discarded", compact(firewall.discarded)]' in app_source
     assert 'sort: "cpu_percent", order: "desc"' in app_source
+    assert 'id="load-module-evidence" disabled' in index_source
+    assert '"/api/overview/evidence-counts"' in app_source
+    assert "async function loadOverviewEvidenceCounts" in app_source
     assert "document.title = `Slips ${compact" in app_source
+
+
+def test_overview_uses_counter_without_scanning_retained_evidence(
+    tmp_path: Path,
+) -> None:
+    """Keep the first Overview response independent of retained Redis size.
+
+    Parameters:
+        tmp_path: Isolated output directory for durable web data.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.redis_port = 6379
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
+    redis_values = {
+        "number_of_alerts": "0",
+        "number_of_evidence": "123456",
+        "processed_flows_by_profiler_so_far": "42",
+    }
+    reader.redis.get.side_effect = redis_values.get
+    reader._redis_evidence = Mock(
+        side_effect=AssertionError("Overview must not scan retained evidence")
+    )
+    reader._module_rows = Mock(return_value=[])
+    reader._firewall_overview = Mock(
+        return_value={
+            "current": 0,
+            "added": 0,
+            "discarded": 0,
+            "impact": {"packets": 0, "flows": 0, "evidence": 0},
+        }
+    )
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE alerts (alert_id TEXT)")
+        connection.execute("CREATE TABLE evidence (evidence_id TEXT)")
+
+    result = reader.overview()
+
+    assert result["counts"]["evidence"] == 123456
+    assert result["evidence_details_loaded"] is False
+    reader._redis_evidence.assert_not_called()
+    reader._module_rows.assert_called_once_with(None, {}, False)
+
+
+def test_overview_evidence_counts_scans_only_when_requested(
+    tmp_path: Path,
+) -> None:
+    """Load retained evidence attribution through the explicit endpoint.
+
+    Parameters:
+        tmp_path: Isolated output directory for the empty durable database.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._redis_evidence = Mock(
+        return_value=[
+            {"module": "arp"},
+            {"module": "arp"},
+            {"module": "flow_alerts"},
+        ]
+    )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE evidence (evidence_id TEXT)")
+
+    result = reader.overview_evidence_counts()
+
+    assert result["evidence"] == 3
+    assert result["modules"] == {"arp": 2, "flow_alerts": 1}
+    assert result["source"] == "redis"
+    reader._redis_evidence.assert_called_once_with()
 
 
 @pytest.mark.parametrize(
