@@ -78,6 +78,22 @@ def test_check_if_update_based_on_last_modified(
     assert update_manager.should_update(url, float("-inf")) is True
 
 
+def test_should_update_records_attempt_when_feed_is_unreachable(mocker):
+    """A feed that fails to download should still have its last-update
+    time recorded, so it isn't retried on every single slips run until
+    the update period passes again."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    url = "https://example.com/unreachable.txt"
+    update_manager.db.get_ti_feed_info.return_value = {}
+    mocker.patch(
+        "requests.get", side_effect=requests.exceptions.ConnectionError
+    )
+
+    assert update_manager.should_update(url, float("-inf")) is False
+    update_manager.db.set_feed_last_update_time.assert_called_once()
+    assert update_manager.db.set_feed_last_update_time.call_args[0][0] == url
+
+
 @pytest.mark.parametrize(
     "new_hash, old_hash, expected_result",
     [  # Testcase1: File not in DB, update needed

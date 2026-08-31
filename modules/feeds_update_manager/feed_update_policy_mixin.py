@@ -118,6 +118,13 @@ class FeedUpdatePolicyMixin:
             # the same response will be used to update the content in our db
             response = self.download_file(file_to_download)
             if not response:
+                # couldn't reach the feed after all retries. record this
+                # attempt anyway (without counting it as loaded) so we
+                # don't hammer an unreachable feed with 5 retries on
+                # every single slips run until the update period passes
+                self.db.set_feed_last_update_time(
+                    file_to_download, time.time()
+                )
                 return False
 
             # Get the E-TAG of this file to compare with current files
