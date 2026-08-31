@@ -3097,11 +3097,21 @@ class RunDataReader:
 
     def _module_rows(
         self,
-        evidence_counts: Counter[str],
+        evidence_counts: Optional[Counter[str]],
         error_counts: Dict[str, int],
         analysis_complete: bool,
     ) -> List[Dict[str, Any]]:
-        """Build bounded process health rows for current module PIDs."""
+        """Build bounded process health rows for current module PIDs.
+
+        Parameters:
+            evidence_counts: Optional exact evidence totals by module. ``None``
+                keeps expensive historical attribution out of the fast path.
+            error_counts: Parsed runtime-error totals by module.
+            analysis_complete: Whether the monitored analysis has finished.
+
+        Returns:
+            Bounded process-health rows for display.
+        """
         modules: List[Dict[str, Any]] = []
         flow_modules = set(self.redis.smembers("flows_per_minute_modules"))
         now_bucket = int(time.time() // 60 * 60)
@@ -3158,7 +3168,11 @@ class RunDataReader:
                     "cpu_percent": cpu,
                     "memory_mb": memory_mb,
                     "flows_per_minute": flow_rate,
-                    "evidence_count": evidence_counts.get(name, 0),
+                    "evidence_count": (
+                        evidence_counts.get(name, 0)
+                        if evidence_counts is not None
+                        else None
+                    ),
                     "error_count": error_counts.get(name, 0),
                 }
             )
@@ -3326,7 +3340,6 @@ class RunDataReader:
         run_metadata = self._run_metadata()
         complete = bool(analysis.get("analysis_end"))
         now = time.time()
-        durable_evidence_counts: Counter[str] = Counter()
         try:
             with self._connect_sqlite() as connection:
                 alert_count = int(
@@ -3343,17 +3356,16 @@ class RunDataReader:
                     if self._table_exists(connection, "evidence")
                     else 0
                 )
-                durable_evidence_counts = self._durable_evidence_counts(
-                    connection
-                )
         except sqlite3.Error:
             alert_count = 0
             durable_evidence = 0
-        redis_evidence = [] if durable_evidence else self._redis_evidence()
-        evidence_count = durable_evidence or len(redis_evidence)
-        evidence_counts = durable_evidence_counts or Counter(
-            str(item.get("module", "unknown")) for item in redis_evidence
-        )
+        try:
+            redis_evidence_count = int(
+                self.redis.get("number_of_evidence") or 0
+            )
+        except (TypeError, ValueError, redis.RedisError):
+            redis_evidence_count = 0
+        evidence_count = durable_evidence or redis_evidence_count
         with connect_history(self.history_path, read_only=True) as history:
             error_rows = history.execute(
                 "SELECT module, COUNT(*) AS count FROM error_events GROUP BY module"
@@ -3475,11 +3487,50 @@ class RunDataReader:
                 "redis_alert_count": redis_alert_count,
                 "alert_count_mismatch": redis_alert_count != alert_count,
             },
-            "modules": self._module_rows(
-                evidence_counts, error_counts, complete
-            ),
+            "modules": self._module_rows(None, error_counts, complete),
+            "evidence_details_loaded": False,
             "recent_errors": recent_errors,
             "updated_at": now,
+        }
+
+    def overview_evidence_counts(self) -> Dict[str, Any]:
+        """Load exact evidence totals omitted from the fast Overview response.
+
+        Returns:
+            Exact overall and per-module evidence counts from durable storage,
+            or from the retained Redis compatibility data when necessary.
+        """
+        durable_evidence = 0
+        evidence_counts: Counter[str] = Counter()
+        try:
+            with self._connect_sqlite() as connection:
+                if self._table_exists(connection, "evidence"):
+                    durable_evidence = int(
+                        connection.execute(
+                            "SELECT COUNT(*) AS count FROM evidence"
+                        ).fetchone()["count"]
+                    )
+                    if durable_evidence:
+                        evidence_counts = self._durable_evidence_counts(
+                            connection
+                        )
+        except sqlite3.Error:
+            durable_evidence = 0
+        if durable_evidence:
+            evidence_count = durable_evidence
+            source = "sqlite"
+        else:
+            redis_evidence = self._redis_evidence()
+            evidence_count = len(redis_evidence)
+            evidence_counts = Counter(
+                str(item.get("module", "unknown")) for item in redis_evidence
+            )
+            source = "redis"
+        return {
+            "evidence": evidence_count,
+            "modules": dict(evidence_counts),
+            "source": source,
+            "updated_at": time.time(),
         }
 
     def _firewall_intervals(
@@ -4434,6 +4485,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.identity()
         elif path == "/api/overview":
             payload = reader.overview()
+        elif path == "/api/overview/evidence-counts":
+            payload = reader.overview_evidence_counts()
         elif path == "/api/metadata":
             payload = reader.metadata()
         elif path == "/api/logs":
