@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
+import contextlib
 import multiprocessing
 import threading
 from asyncio import Task
@@ -161,7 +162,7 @@ class FeedsUpdateManager(
             # loop for every feed in turn, serializing ~45 requests
             # (each with its own retries) even though update_ti_file()
             # below is scheduled as if downloads were concurrent.
-            should_update_results = await asyncio.gather(
+            should_update_gather = asyncio.gather(
                 *(
                     asyncio.to_thread(
                         self.should_update,
@@ -171,6 +172,16 @@ class FeedsUpdateManager(
                     for file_to_download in files_to_download
                 )
             )
+            should_update_results = await self._await_or_stop(
+                should_update_gather
+            )
+            if should_update_results is None:
+                # shutdown was requested while checking which feeds need
+                # updating; the already-launched checks are left to
+                # finish on their own (each is bounded by its own
+                # retry/timeout), but we don't wait on them or start
+                # any downloads.
+                return False
 
             tasks = []
             for file_to_download, needs_update in zip(
@@ -195,13 +206,49 @@ class FeedsUpdateManager(
 
             # wait for all TI files to update
             if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+                result = await self._await_or_stop(
+                    asyncio.gather(*tasks, return_exceptions=True)
+                )
+                if result is None:
+                    # shutdown was requested while feeds were still
+                    # downloading/parsing; stop waiting instead of
+                    # blocking Slips' shutdown for the remaining feeds.
+                    return False
 
             self.db.set_loaded_ti_files(self.loaded_ti_files)
             self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:
             return False
+
+    async def _await_or_stop(self, future):
+        """
+        Await the given future, but return None early (without
+        cancelling the future's already-launched work, which is bounded
+        by its own retries/timeouts) if a shutdown is requested first.
+        This keeps Slips responsive to SIGTERM instead of blocking
+        shutdown for however long the full TI feed update takes.
+        """
+        termination_task = asyncio.create_task(
+            asyncio.to_thread(self.termination_event.wait)
+        )
+        done, _ = await asyncio.wait(
+            {future, termination_task},
+            return_when=asyncio.FIRST_COMPLETED,
+        )
+        if future in done:
+            termination_task.cancel()
+            return future.result()
+        # future is left running/cancelled in the background; retrieve
+        # its eventual result/exception so asyncio doesn't log
+        # "exception was never retrieved" once it settles.
+        future.add_done_callback(self._suppress_future_exception)
+        return None
+
+    @staticmethod
+    def _suppress_future_exception(future):
+        with contextlib.suppress(BaseException):
+            future.exception()
 
     async def update_ti_files(self):
         """

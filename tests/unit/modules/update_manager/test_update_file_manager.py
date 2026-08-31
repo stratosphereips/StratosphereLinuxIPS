@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/feeds_update_manager/feeds_update_manager.py"""
 
+import asyncio
 import json
+import threading
 import time
 from unittest.mock import Mock, mock_open, patch
 
@@ -956,3 +958,41 @@ async def test_update_checks_all_feeds_concurrently_and_awaits_all_tasks():
         "https://example.com/feed3.txt"
     )
     assert update_manager.update_ti_file.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_update_stops_early_when_termination_requested():
+    """update() should stop waiting on outstanding should_update() checks
+    as soon as a shutdown is requested, instead of blocking until every
+    feed's (slow/network-bound) check has finished."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.update_period = 3600
+    update_manager.url_feeds = {"https://example.com/feed1.txt": {}}
+    update_manager.ja3_feeds = {}
+    update_manager.ssl_feeds = {}
+    update_manager.tor_nodes_feeds = {}
+    update_manager.riskiq_update_period = 3600
+    update_manager._should_update_mac_db = Mock(return_value=False)
+    update_manager.should_update_online_whitelist = Mock(return_value=False)
+    update_manager._delete_unused_cached_remote_feeds = Mock()
+    # termination is already requested before update() is even called,
+    # so the termination watcher should win the race against the slow
+    # should_update() check below every time, deterministically.
+    update_manager.termination_event = threading.Event()
+    update_manager.termination_event.set()
+
+    def slow_should_update(feed, period):
+        time.sleep(1)
+        return True
+
+    update_manager.should_update = Mock(side_effect=slow_should_update)
+    update_manager.update_ti_file = get_mock_coro(None)
+    update_manager.db.set_loaded_ti_files = Mock()
+    update_manager.print_duplicate_ip_summary = Mock()
+
+    result = await asyncio.wait_for(update_manager.update(), timeout=5)
+
+    assert result is False
+    # update() returned before any download was triggered
+    update_manager.update_ti_file.assert_not_called()
+    update_manager.print_duplicate_ip_summary.assert_not_called()
