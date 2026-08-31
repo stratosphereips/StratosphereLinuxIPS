@@ -91,6 +91,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
     ]
     assert "modules.web_interface.server" in command
     collector.return_value.snapshot_hosts.assert_called_once_with()
+    collector.return_value.record_backend_heartbeat.assert_called_once_with()
     collector.return_value.backfill_detections.assert_not_called()
     assert start_thread.call_count == 2
     module.db.store_pid.assert_any_call("Web Interface", 1234)
@@ -216,3 +217,18 @@ def test_stop_verified_server_only_stops_owned_listener(
         process.wait.assert_called_once_with(timeout=3)
     else:
         process.terminate.assert_not_called()
+
+
+def test_shutdown_marks_retained_page_backend_disconnected() -> None:
+    """Mark backend loss after the final history collection completes."""
+    module_factory = ModuleFactory()
+    module = module_factory.create_web_interface_obj()
+    module.history_collector = Mock()
+    module.history_thread = None
+    module.backfill_thread = None
+    module.server_log = None
+
+    module.shutdown_gracefully()
+
+    module.history_collector.collect_once.assert_called_once_with()
+    module.history_collector.mark_backend_disconnected.assert_called_once_with()

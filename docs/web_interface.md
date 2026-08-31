@@ -122,6 +122,8 @@ Only the active tab refreshes every five seconds and only when its range include
 
 Overview prioritizes Alerts, Hosts, Slips uptime, Evidence, processed flows, and firewall rules currently active, added, and discarded. Uptime is elapsed wall-clock time since this Slips run started and freezes at the recorded analysis end time for completed runs. Run version, branch, and commit stay visible in the header, while the top-right status shows run uptime below its latest update time. For interface runs, a second header line lists the monitored interface's non-loopback IPv4 and IPv6 addresses. Full run facts from `metadata/info.txt` are in **Metadata**, and parsed runtime messages are in **Logs**. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events. Modules start sorted by CPU usage and remain sortable by every displayed column. CPU and memory cells are heat mapped from the normal table background at 0% to red at 100%; memory is scaled to total host RAM while the displayed value remains MiB.
 
+The header uses a one-second heartbeat written by the Slips-owned history collector, not HTTP reachability to the retained web server. A clean backend shutdown marks disconnection immediately; an unexpected loss is detected after 15 seconds without a heartbeat. While disconnected, the indicator and last uptime are red, the status reads **Disconnected from backend**, and uptime remains frozen at the final heartbeat even though historical API pages remain available.
+
 Overview also shows the run-wide estimated firewall impact: packets and flows
 observed from blocked source IPs during recorded enforcement intervals, plus
 evidence created for those IPs while blocked. Zeek captures ingress packets

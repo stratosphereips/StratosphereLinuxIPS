@@ -24,7 +24,12 @@ import psutil
 import redis
 import yaml
 
-from modules.web_interface.history import connect_history, initialize_history
+from modules.web_interface.history import (
+    BACKEND_DISCONNECTED_KEY,
+    BACKEND_HEARTBEAT_KEY,
+    connect_history,
+    initialize_history,
+)
 
 LOOPBACK_ADDRESS = "127.0.0.1"
 PROFILE_PREFIX = "profile_"
@@ -33,6 +38,7 @@ MAX_PAGE_SIZE = 100
 MAX_FLOW_LIMIT = 1000
 MAX_CHART_POINTS = 1200
 CLIENT_REQUEST_TIMEOUT_SECONDS = 15
+BACKEND_HEARTBEAT_TIMEOUT_SECONDS = 15
 INTERNAL_PID_NAMES = {
     "web_interface_history",
     "web_interface_detection_backfill",
@@ -848,6 +854,49 @@ class RunDataReader:
         return 0.0
 
     @staticmethod
+    def _backend_status(
+        heartbeat_value: Any,
+        disconnected_value: Any,
+        now: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        """
+        Determine whether the Slips backend heartbeat is still fresh.
+
+        Parameters:
+            heartbeat_value: Last collector heartbeat timestamp.
+            disconnected_value: Explicit clean-shutdown timestamp.
+            now: Current Unix timestamp, or system time when omitted.
+
+        Returns:
+            Backend connectivity, last-seen time, and heartbeat age.
+        """
+        current_time = time.time() if now is None else float(now)
+        try:
+            last_seen = float(heartbeat_value or 0)
+        except (TypeError, ValueError):
+            last_seen = 0.0
+        try:
+            disconnected_at = float(disconnected_value or 0)
+        except (TypeError, ValueError):
+            disconnected_at = 0.0
+        age = max(0.0, current_time - last_seen) if last_seen else None
+        explicitly_disconnected = bool(
+            disconnected_at and disconnected_at >= last_seen
+        )
+        connected = bool(
+            last_seen
+            and not explicitly_disconnected
+            and age is not None
+            and age <= BACKEND_HEARTBEAT_TIMEOUT_SECONDS
+        )
+        return {
+            "connected": connected,
+            "last_seen": last_seen or None,
+            "age_seconds": age,
+            "timeout_seconds": BACKEND_HEARTBEAT_TIMEOUT_SECONDS,
+        }
+
+    @staticmethod
     def _run_uptime_seconds(
         analysis: Dict[str, Any], now: Optional[float] = None
     ) -> Optional[float]:
@@ -1131,14 +1180,20 @@ class RunDataReader:
                     "SELECT key, value FROM metadata WHERE key IN "
                     "('schema_version', 'flow_last_rowid', "
                     "'flow_index_updated_at', 'alerts_json_offset', "
-                    "'error_log_name')"
+                    "'error_log_name', 'backend_heartbeat_at', "
+                    "'backend_disconnected_at')"
                 ).fetchall()
             }
+        backend_status = self._backend_status(
+            values.get(BACKEND_HEARTBEAT_KEY),
+            values.get(BACKEND_DISCONNECTED_KEY),
+        )
         return {
             "run_identity": {
                 "output_dir": str(self.output_dir),
                 "server_pid": os.getpid(),
             },
+            "backend_status": backend_status,
             "source_freshness": {
                 "flow_index_updated_at": float(
                     values.get("flow_index_updated_at", "0")
@@ -3350,15 +3405,36 @@ class RunDataReader:
         estimated_seconds_remaining = (
             disk.free / growth if growth > 0 else None
         )
+        backend_status = self._backend_status(
+            metadata.get(BACKEND_HEARTBEAT_KEY),
+            metadata.get(BACKEND_DISCONNECTED_KEY),
+            now,
+        )
+        uptime_reference = (
+            now
+            if backend_status["connected"]
+            else backend_status["last_seen"] or now
+        )
         firewall = self._firewall_overview()
         return {
             "run": {
                 **analysis,
-                "state": "complete" if complete else "running",
+                "state": (
+                    "complete"
+                    if complete
+                    else (
+                        "running"
+                        if backend_status["connected"]
+                        else "disconnected"
+                    )
+                ),
                 "redis_port": self.redis_port,
                 "output_dir": str(self.output_dir),
-                "uptime_seconds": self._run_uptime_seconds(analysis, now),
+                "uptime_seconds": self._run_uptime_seconds(
+                    analysis, uptime_reference
+                ),
             },
+            "backend_status": backend_status,
             "run_metadata": run_metadata,
             "host_addresses": self._interface_addresses(
                 str(analysis.get("interface") or run_metadata.get("File", ""))

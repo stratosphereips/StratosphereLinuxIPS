@@ -15,6 +15,7 @@ const state = {
   runUptimeObservedAt: 0,
   runUptimeRunning: false,
   timer: null,
+  statusTimer: null,
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
@@ -179,21 +180,30 @@ function clearError() {
 }
 
 /**
- * Show whether the browser can currently reach the local web server.
+ * Show whether the retained page is connected to the Slips backend.
  *
- * @param {boolean} connected True after a successful API response.
+ * @param {boolean} connected True while the backend heartbeat is fresh.
  */
 function renderConnectionState(connected) {
+  if (!connected && state.connected && state.runUptimeRunning
+      && state.runUptimeSeconds !== null) {
+    state.runUptimeSeconds += Math.max(
+      0, (Date.now() - state.runUptimeObservedAt) / 1000,
+    );
+    state.runUptimeObservedAt = Date.now();
+  }
   state.connected = connected;
   const dot = byId("state-dot");
   const label = byId("run-state");
   const updated = byId("updated-at");
   if (!connected) {
+    state.runUptimeRunning = false;
     dot.className = "state-dot error";
-    label.textContent = "Web disconnected";
+    label.textContent = "Disconnected from backend";
     updated.textContent = state.lastSuccessfulRequest
       ? `Last update ${state.lastSuccessfulRequest.toLocaleTimeString()}`
       : "No connection";
+    renderHeaderUptime();
     return;
   }
   const runState = state.overview?.run?.state;
@@ -201,20 +211,26 @@ function renderConnectionState(connected) {
   label.textContent = runState
     ? (runState === "running" ? "Analysis running" : "Analysis complete")
     : "Web connected";
-  updated.textContent = `Updated ${state.lastSuccessfulRequest.toLocaleTimeString()}`;
+  updated.textContent = state.lastSuccessfulRequest
+    ? `Updated ${state.lastSuccessfulRequest.toLocaleTimeString()}`
+    : "Connected";
+  renderHeaderUptime();
 }
 
 /** Update the top-right uptime from the latest server-provided baseline. */
 function renderHeaderUptime() {
   const element = byId("run-uptime");
+  const disconnected = !state.connected;
+  const prefix = disconnected ? "Last uptime" : "Uptime";
+  element.classList.toggle("error", disconnected);
   if (state.runUptimeSeconds === null) {
-    element.textContent = "Uptime —";
+    element.textContent = `${prefix} —`;
     return;
   }
-  const elapsed = state.runUptimeRunning
+  const elapsed = state.runUptimeRunning && state.connected
     ? Math.max(0, (Date.now() - state.runUptimeObservedAt) / 1000)
     : 0;
-  element.textContent = `Uptime ${formatDuration(
+  element.textContent = `${prefix} ${formatDuration(
     state.runUptimeSeconds + elapsed
   )}`;
 }
@@ -242,7 +258,7 @@ function applyRunIdentity(identity) {
   state.runIdentity = token;
 }
 
-async function api(key, path) {
+async function api(key, path, trackFailures = true) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
   state.requests.set(key, controller);
@@ -257,14 +273,14 @@ async function api(key, path) {
       throw error;
     }
     applyRunIdentity(payload.run_identity);
-    state.failures = 0;
+    if (trackFailures) state.failures = 0;
     state.lastSuccessfulRequest = new Date();
-    renderConnectionState(true);
-    clearError();
+    renderConnectionState(payload.backend_status?.connected === true);
+    if (trackFailures) clearError();
     return payload;
   } catch (error) {
     if (error.name === "AbortError") return null;
-    state.failures += 1;
+    if (trackFailures) state.failures += 1;
     renderConnectionState(false);
     showError(error.status === 409
       ? `Run mismatch: ${error.message}. Reload after the current web-enabled Slips run has started.`
@@ -591,10 +607,11 @@ function updatePageTitle(counts = {}) {
  */
 function renderRunContext(data) {
   const run = data.run;
+  const backendConnected = data.backend_status?.connected === true;
   state.runUptimeSeconds = Number.isFinite(Number(run.uptime_seconds))
     ? Number(run.uptime_seconds) : null;
   state.runUptimeObservedAt = Date.now();
-  state.runUptimeRunning = run.state === "running";
+  state.runUptimeRunning = run.state === "running" && backendConnected;
   renderHeaderUptime();
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
@@ -613,7 +630,7 @@ function renderRunContext(data) {
   const addressLine = byId("run-addresses");
   addressLine.textContent = addressParts.join(" · ");
   addressLine.hidden = !addressParts.length;
-  renderConnectionState(true);
+  renderConnectionState(backendConnected);
   byId("alerts-badge").textContent = compact(data.counts.alerts);
   byId("evidence-badge").textContent = compact(data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
@@ -2638,6 +2655,25 @@ function schedulePoll() {
   state.timer = window.setTimeout(refreshActive, delay);
 }
 
+/** Poll backend liveness independently from the active tab's data range. */
+async function pollBackendStatus() {
+  if (document.hidden) return;
+  try {
+    await api("backendStatus", "/api/identity", false);
+  } catch (_) {
+    // renderConnectionState() already exposes the failure persistently.
+  } finally {
+    scheduleBackendStatusPoll();
+  }
+}
+
+/** Schedule the next lightweight backend heartbeat check. */
+function scheduleBackendStatusPoll() {
+  window.clearTimeout(state.statusTimer);
+  if (document.hidden) return;
+  state.statusTimer = window.setTimeout(pollBackendStatus, 5000);
+}
+
 function switchTab(name) {
   state.activeTab = name;
   document.querySelectorAll(".tab").forEach((tab) =>
@@ -2749,14 +2785,19 @@ bindTableSort("host-evidence", loadHostEvidence);
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     window.clearTimeout(state.timer);
+    window.clearTimeout(state.statusTimer);
     state.requests.forEach((controller) => controller.abort());
   } else {
     refreshActive();
+    pollBackendStatus();
   }
 });
-window.addEventListener("beforeunload", () =>
-  state.requests.forEach((controller) => controller.abort()));
+window.addEventListener("beforeunload", () => {
+  window.clearTimeout(state.statusTimer);
+  state.requests.forEach((controller) => controller.abort());
+});
 
 initDrawerResize();
 window.setInterval(renderHeaderUptime, 1000);
 loadOverview().then(schedulePoll).catch(schedulePoll);
+scheduleBackendStatusPoll();

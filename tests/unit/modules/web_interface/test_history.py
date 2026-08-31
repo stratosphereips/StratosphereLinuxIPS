@@ -385,3 +385,28 @@ def test_metric_sample_preserves_exact_profiler_delta(tmp_path) -> None:
 
     assert sample["flows_per_second"] == 3.5
     assert sample["flow_delta"] == 7
+
+
+def test_collector_records_heartbeat_and_clean_disconnect(tmp_path) -> None:
+    """Persist backend attachment independently from retained HTTP service."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+
+    assert collector.record_backend_heartbeat(100.0) == 100.0
+    assert collector.mark_backend_disconnected(101.0) == 101.0
+
+    with connect_history(history_path, read_only=True) as connection:
+        values = {
+            row["key"]: row["value"]
+            for row in connection.execute(
+                "SELECT key, value FROM metadata WHERE key IN (?, ?)",
+                ("backend_heartbeat_at", "backend_disconnected_at"),
+            ).fetchall()
+        }
+
+    assert values == {
+        "backend_heartbeat_at": "100.0",
+        "backend_disconnected_at": "101.0",
+    }
