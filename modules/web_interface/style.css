@@ -71,6 +71,8 @@ main { max-width: 1900px; margin: auto; padding: 2rem 2.5rem 4rem; }
 .surface { margin-bottom: .8rem; padding: 1rem; }
 .table-surface { padding: 0; overflow: hidden; }
 .table-heading { padding: 1rem; border-bottom: 1px solid var(--line); }
+.table-actions { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
+.secondary:disabled { opacity: .55; cursor: wait; }
 .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: .7rem; }
 .metric { padding-right: .6rem; border-right: 1px solid var(--line); }
 .metric:last-child { border: 0; }
