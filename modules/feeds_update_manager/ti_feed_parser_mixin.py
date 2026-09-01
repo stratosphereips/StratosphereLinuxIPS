@@ -337,16 +337,29 @@ class TIFeedParserMixin:
             line = f"{new_line},{description}"
         return line.replace("\n", "").replace('"', "")
 
+    @staticmethod
+    def _get_max_threat_level(level_a: str, level_b: str) -> str:
+        """
+        threat levels are stored as words (e.g. 'low', 'medium'), returns
+        the more severe of the 2 given threat levels, still as a word
+        """
+        if utils.threat_levels[level_a] >= utils.threat_levels[level_b]:
+            return level_a
+        return level_b
+
     def _extract_domain_info(
-        self, domain: str, ti_file_name: str, feed_link: str, description: str
+        self,
+        malicious_domains_dict: dict,
+        domain: str,
+        ti_file_name: str,
+        feed_link: str,
+        description: str,
     ):
         # if we have info about the ioc, append to it, if we don't
         # add a new entry in the correct dict
         try:
             # we already have info about this domain?
-            old_domain_info = json.loads(
-                self.malicious_domains_dict[str(domain)]
-            )
+            old_domain_info = json.loads(malicious_domains_dict[str(domain)])
             # if the domain appeared twice in the same blacklist,  skip it
             if ti_file_name in old_domain_info["source"]:
                 return
@@ -359,14 +372,12 @@ class TIFeedParserMixin:
                 f'{self.url_feeds[feed_link]["tags"]}'
             )
             # the new threat_level is the maximum threat_level
-            threat_level = str(
-                max(
-                    float(old_domain_info["threat_level"]),
-                    float(self.url_feeds[feed_link]["threat_level"]),
-                )
+            threat_level = self._get_max_threat_level(
+                old_domain_info["threat_level"],
+                self.url_feeds[feed_link]["threat_level"],
             )
             # Store the ip in our local dict
-            self.malicious_domains_dict[str(domain)] = json.dumps(
+            malicious_domains_dict[str(domain)] = json.dumps(
                 {
                     "description": old_domain_info["description"],
                     "source": source,
@@ -375,7 +386,7 @@ class TIFeedParserMixin:
                 }
             )
         except KeyError:
-            self.malicious_domains_dict[str(domain)] = json.dumps(
+            malicious_domains_dict[str(domain)] = json.dumps(
                 {
                     "description": description,
                     "source": ti_file_name,
@@ -385,7 +396,12 @@ class TIFeedParserMixin:
             )
 
     def _extract_ip_info(
-        self, ip: str, ti_file_name: str, feed_link: str, description: str
+        self,
+        malicious_ips_dict: dict,
+        ip: str,
+        ti_file_name: str,
+        feed_link: str,
+        description: str,
     ):
         # make sure we're not blacklisting a private ip
         if utils.is_ignored_ip(ip):
@@ -394,7 +410,7 @@ class TIFeedParserMixin:
         try:
             self.add_to_ip_ctr(ip, feed_link)
             # we already have info about this ip?
-            old_ip_info = json.loads(self.malicious_ips_dict[str(ip)])
+            old_ip_info = json.loads(malicious_ips_dict[str(ip)])
             # if the IP appeared twice in the same blacklist,
             # don't add the blacklist name twice
             # or calculate the max threat_level
@@ -408,13 +424,11 @@ class TIFeedParserMixin:
                 f'{old_ip_info["tags"]}, {self.url_feeds[feed_link]["tags"]}'
             )
             # the new threat_level is the max of the 2
-            threat_level = str(
-                max(
-                    int(old_ip_info["threat_level"]),
-                    int(self.url_feeds[feed_link]["threat_level"]),
-                )
+            threat_level = self._get_max_threat_level(
+                old_ip_info["threat_level"],
+                self.url_feeds[feed_link]["threat_level"],
             )
-            self.malicious_ips_dict[str(ip)] = json.dumps(
+            malicious_ips_dict[str(ip)] = json.dumps(
                 {
                     "description": old_ip_info["description"],
                     "source": source,
@@ -425,7 +439,7 @@ class TIFeedParserMixin:
         except KeyError:
             threat_level = self.url_feeds[feed_link]["threat_level"]
             # We don't have info about this IP, Store the ip in our local dict
-            self.malicious_ips_dict[str(ip)] = json.dumps(
+            malicious_ips_dict[str(ip)] = json.dumps(
                 {
                     "description": description,
                     "source": ti_file_name,
@@ -441,6 +455,7 @@ class TIFeedParserMixin:
 
     def _extract_ip_range_info(
         self,
+        malicious_ip_ranges: dict,
         ip_range: str,
         ti_file_name: str,
         feed_link: str,
@@ -454,7 +469,7 @@ class TIFeedParserMixin:
 
         try:
             # we already have info about this range?
-            old_range_info = json.loads(self.malicious_ip_ranges[ip_range])
+            old_range_info = json.loads(malicious_ip_ranges[ip_range])
             # if the Range appeared twice in the same blacklist,
             # don't add the blacklist name twice
             # or calculate the max threat_level
@@ -465,13 +480,11 @@ class TIFeedParserMixin:
             # append the new tag to the old tag
             tags = f'{old_range_info["tags"]}, {self.url_feeds[feed_link]["tags"]}'
             # the new threat_level is the max of the 2
-            threat_level = str(
-                max(
-                    int(old_range_info["threat_level"]),
-                    int(self.url_feeds[feed_link]["threat_level"]),
-                )
+            threat_level = self._get_max_threat_level(
+                old_range_info["threat_level"],
+                self.url_feeds[feed_link]["threat_level"],
             )
-            self.malicious_ip_ranges[str(ip_range)] = json.dumps(
+            malicious_ip_ranges[str(ip_range)] = json.dumps(
                 {
                     "description": old_range_info["description"],
                     "source": source,
@@ -481,7 +494,7 @@ class TIFeedParserMixin:
             )
         except KeyError:
             # We don't have info about this range, Store the ip in our local dict
-            self.malicious_ip_ranges[ip_range] = json.dumps(
+            malicious_ip_ranges[ip_range] = json.dumps(
                 {
                     "description": description,
                     "source": ti_file_name,
@@ -534,9 +547,9 @@ class TIFeedParserMixin:
             return False
         description_col, data_col, line_fields, separator = structure
 
-        self.malicious_ips_dict = {}
-        self.malicious_domains_dict = {}
-        self.malicious_ip_ranges = {}
+        malicious_ips_dict = {}
+        malicious_domains_dict = {}
+        malicious_ip_ranges = {}
 
         feed: IO = open(ti_file_path)
         while line := feed.readline():
@@ -569,11 +582,22 @@ class TIFeedParserMixin:
             if data_type not in handlers:
                 # maybe it's a url, urls as iocs are not supported.
                 continue
-            handlers[data_type](ioc, ti_file_name, feed_link, description)
+            local_dicts = {
+                "domain": malicious_domains_dict,
+                "ip": malicious_ips_dict,
+                "ip_range": malicious_ip_ranges,
+            }
+            handlers[data_type](
+                local_dicts[data_type],
+                ioc,
+                ti_file_name,
+                feed_link,
+                description,
+            )
 
-        self.db.add_ips_to_ioc(self.malicious_ips_dict)
-        self.db.add_domains_to_ioc(self.malicious_domains_dict)
-        self.db.add_ip_range_to_ioc(self.malicious_ip_ranges)
+        self.db.add_ips_to_ioc(malicious_ips_dict)
+        self.db.add_domains_to_ioc(malicious_domains_dict)
+        self.db.add_ip_range_to_ioc(malicious_ip_ranges)
         feed.close()
         return True
 
