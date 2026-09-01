@@ -100,11 +100,48 @@ def test_update_stats(mode, time_diff, expected_calls):
     main.db.get_modified_ips_in_the_last_tw.return_value = 5
     main.db.get_profiles_len.return_value = 10
     main.db.get_evidence_number.return_value = 2
+    main.db.is_running_non_stop.return_value = True
+    main.db.get_max_seen_risk_weight.return_value = {
+        "risk_weight": MagicMock(
+            name="MEDIUM", **{"name.lower.return_value": "medium"}
+        ),
+        "profile": "profile_10.0.0.1",
+    }
+    main.db.get_flows_analyzed_per_minute.return_value = 42
     main.twid_width = 300
 
     with patch.object(main, "print") as mock_print:
         main.update_stats()
         assert mock_print.call_count == expected_calls
+        if expected_calls:
+            printed_stats = mock_print.call_args.args[0]
+            assert "Current risk:" in printed_stats
+            assert "medium" in printed_stats
+
+
+@pytest.mark.parametrize(
+    "processed, total_flows, expected_percentage",
+    [
+        (1, 576, "0.2"),
+        (576, 576, "100"),
+        (700, 576, "100"),
+    ],
+)
+def test_get_analyzed_flows_percentage_caps_and_formats(
+    processed, total_flows, expected_percentage
+):
+    main = ModuleFactory().create_main_obj()
+    main.args = MagicMock(input_module=False)
+    main.input_type = InputType.ZEEK_LOG_FILE
+    main.db = MagicMock()
+    main.db.is_running_non_stop.return_value = False
+    main.db.get_total_flows.return_value = total_flows
+    main.db.get_flows_analyzed_by_the_profiler_so_far.return_value = processed
+
+    assert (
+        main.get_analyzed_flows_percentage()
+        == f"Analyzed Flows: {expected_percentage}%. "
+    )
 
 
 @pytest.mark.parametrize(

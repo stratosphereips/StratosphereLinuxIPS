@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 
+import asyncio
 import datetime
 import json
 import os
@@ -24,6 +25,22 @@ class RemoteFeedUpdaterMixin:
         """
         Update remote TI files, JA3 feeds and SSL feeds by writing them to
         disk and parsing them
+
+        writing the file to disk and parsing it are blocking, CPU/IO bound
+        calls with no 'await' of their own, so running them straight from
+        this coroutine would run every scheduled update_ti_file() task to
+        completion one after the other instead of overlapping them, even
+        though update() schedules them all as concurrent tasks. Offload
+        them to a thread so multiple feeds are actually processed at the
+        same time.
+        """
+        return await asyncio.to_thread(
+            self._update_ti_file_sync, link_to_download
+        )
+
+    def _update_ti_file_sync(self, link_to_download: str) -> bool:
+        """
+        Blocking implementation of update_ti_file(), run in a thread.
         """
         try:
             self.log(f"Updating the remote file {link_to_download}")

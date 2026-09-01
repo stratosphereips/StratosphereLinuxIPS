@@ -42,6 +42,85 @@ def test_get_ts_from_line_returns_timestamp_for_tabs():
     assert line == "1.5\tfield\n"
 
 
+def test_close_rotated_file_handle_closes_and_removes_handle() -> None:
+    """Test closing a rotated Zeek file removes its cached handle."""
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    file_handle = Mock()
+    input_process.zeek_utils.open_file_handles["conn.log"] = file_handle
+
+    input_process.zeek_utils.close_rotated_file_handle("conn.log")
+
+    file_handle.close.assert_called_once_with()
+    assert "conn.log" not in input_process.zeek_utils.open_file_handles
+
+
+def test_print_update_msg_only_prints_once() -> None:
+    """Test the live-update notice is emitted only once."""
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    input_process.zeek_utils.print = Mock()
+
+    input_process.zeek_utils._print_update_msg()
+    input_process.zeek_utils._print_update_msg()
+
+    input_process.zeek_utils.print.assert_called_once_with(
+        "Slips is live updating. Slips will stop receiving new flows in this "
+        "instance and start receiving new flows using the updated version. "
+    )
+
+
+def test_start_zeek_process_stores_pid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Test starting Zeek records its PID and uses the validated directory."""
+    input_process = ModuleFactory().create_input_obj("", InputType.PCAP)
+    zeek_process = Mock(pid=4321)
+    popen = Mock(return_value=zeek_process)
+    monkeypatch.setattr(
+        "slips_files.core.input.zeek.utils.zeek_input_utils.subprocess.Popen",
+        popen,
+    )
+
+    result = input_process.zeek_utils._start_zeek_process(
+        ["zeek", "-r", "capture.pcap"], "zeek_files"
+    )
+
+    assert result is zeek_process
+    assert input_process.zeek_utils.zeek_pids == [4321]
+    popen.assert_called_once_with(
+        ["zeek", "-r", "capture.pcap"],
+        stdout=-1,
+        stderr=-1,
+        stdin=-1,
+        cwd="zeek_files",
+        start_new_session=True,
+    )
+
+
+@pytest.mark.parametrize(
+    "shutdown_requested,returncode,expected",
+    [(True, -15, True), (True, None, False), (False, -15, False)],
+)
+def test_did_zeek_stop_bc_slips_asked_it_to(
+    shutdown_requested: bool,
+    returncode: int | None,
+    expected: bool,
+) -> None:
+    """Test expected Zeek shutdowns require both a request and process exit."""
+    input_process = ModuleFactory().create_input_obj("", InputType.PCAP)
+    input_process.zeek_utils.zeek_shutdown_requested = shutdown_requested
+    zeek_process = Mock(returncode=returncode)
+
+    result = input_process.zeek_utils._did_zeek_stop_bc_slips_asked_it_to(
+        zeek_process
+    )
+
+    assert result is expected
+
+
 def test_get_zeek_cmd_and_logs_dir_logs_command_to_logfiles_only(
     tmp_path: Path,
 ) -> None:

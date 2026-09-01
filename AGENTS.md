@@ -63,6 +63,7 @@ These rules MUST be followed:
 - Docstring must be the first statement in a file (if present)
 - Avoid using environment variables, use variables from slips/config.yaml instead.
 - Use type annotations for all functions and methods parameters and return types.
+- Use utils.start_thread whenever you need to start a new thread.
 
 ### Paths:
 - NEVER use absolute paths
@@ -76,7 +77,8 @@ If a feature is added → MUST update relevant docs in docs/
 Docstrings MUST include:
 - Short description
 - Parameters (if applicable)
-- Return value (if applicable)
+- Return value (if applicable). if the return value is None, it should not be explicitly stated in the docstring, just add it as a type annotation.
+- newly added functions in database_manager.py should never have a docstring, and should always have (*args, **kwargs) as args and should always forward these (*args, **kwargs) to the function it calls.
 
 ## 4. Testing
 - Canonical test runner

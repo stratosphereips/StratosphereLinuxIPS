@@ -71,9 +71,13 @@ jobs:
           fetch-depth: 0
           # submodules are needed for local and global p2p
           submodules: true
+          # without this, LFS-tracked files (e.g. ml_online_model/ml_linear_model
+          # artifacts) are checked out as pointer text files instead of the
+          # real binaries, breaking those models in the published images
+          lfs: true
 
       - name: Login to DockerHub
-        uses: docker/login-action@v4
+        uses: docker/login-action@v4.5.2
         with:
           username: stratosphereips
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}

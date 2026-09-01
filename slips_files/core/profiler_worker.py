@@ -19,7 +19,7 @@ import gc
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
 from slips_files.common.performance_paths import get_performance_csv_path
-from slips_files.common.style import green
+from slips_files.common.startup_report import format_started_line
 from slips_files.core.aid_manager import AIDManager
 from slips_files.core.helpers.flow_handler import FlowHandler
 from slips_files.core.helpers.localnet_handler import LocalnetHandler
@@ -45,8 +45,10 @@ class ProfilerWorker(IModule):
         aid_queue: multiprocessing.Queue,
         aid_manager: AIDManager,
         is_input_done_event: multiprocessing.Event = None,
+        total_processes_to_start: int = 1,
     ):
         self.name = name
+        self.total_processes_to_start = total_processes_to_start
         self.profiler_queue = profiler_queue
         # used to pass aid tasks from workers to the the AIDManager()
         self.aid_queue = aid_queue
@@ -457,9 +459,6 @@ class ProfilerWorker(IModule):
             if gw_ip and self.gw_ip_belongs_to_localnet(gw_ip):
                 self.gw_ips[flow.interface] = gw_ip
                 self.db.set_default_gateway("IP", gw_ip, flow.interface)
-                self.print(
-                    f"IP address of the gateway detected: " f"{green(gw_ip)}"
-                )
 
     def is_ignored_ip(self, ip: str) -> bool:
         """
@@ -540,11 +539,7 @@ class ProfilerWorker(IModule):
         self.print(f"Storing data in the profile: {profileid}", 3, 0)
         flow.starttime = flow_starttime
 
-        # Create profiles for all ips we see
         self.db.add_profile(profileid, flow.starttime)
-
-        # For this 'forward' profile, find the id in the
-        # database of the tw where the flow belongs.
         twid = self.db.get_timewindow(flow.starttime, profileid)
 
         self.store_features_going_out(flow, profileid, twid)
@@ -580,10 +575,24 @@ class ProfilerWorker(IModule):
         latency, it won't know about the processors published in the
         new_zeek_fields_line channel. this pre_main takes care of that
         """
-        worker_number = self.name.split("_")[-1]
+        worker_id = int(self.name.split("_")[-1])
+        started_count = self.db.increment_modules_started_count()
+        line = format_started_line(
+            f"profiler_worker_{worker_id + 1}",
+            started_count,
+            self.total_processes_to_start,
+            os.getpid(),
+            "Parses flows in parallel with other profiler workers",
+            category="worker",
+        )
         self.print(
-            f"Started {green('Profiler Worker')} {green(worker_number)} [PID"
-            f" {green(os.getpid())}]"
+            line,
+            1,
+            0,
+            suppress_sender=True,
+            is_final_startup_announcement=(
+                started_count >= self.total_processes_to_start
+            ),
         )
 
         if line_processors := self.db.get_line_processors():
@@ -609,6 +618,9 @@ class ProfilerWorker(IModule):
 
             msg = self.get_msg_from_queue(self.profiler_queue)
             if not msg:
+                if self.is_input_done_event.is_set():
+                    gc.collect()
+                    return 1
                 return
 
             if self.is_stop_msg(msg):

@@ -5,6 +5,8 @@ import json
 from dataclasses import asdict
 from typing import Any, Callable
 
+from slips_files.common.ips import SPECIAL_MAC_ADDRESSES
+
 
 class Publisher:
     publish: Callable[..., Any]
@@ -33,7 +35,7 @@ class Publisher:
         :param ip: src/dst ip
         src macs should be passed with srcips, dstmac with dstips
         """
-        if not mac or mac in ("00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"):
+        if not mac or mac in SPECIAL_MAC_ADDRESSES:
             return
         try:
             ip_obj = ipaddress.ip_address(ip)

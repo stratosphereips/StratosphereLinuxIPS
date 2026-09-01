@@ -8,6 +8,7 @@ from tests.common_test_utils import (
     run_slips,
     is_evidence_present,
     create_output_dir,
+    allocate_started_redis_port,
     assert_no_errors,
     get_slips_test_command,
     get_total_analyzed_ips_from_output,
@@ -33,8 +34,10 @@ def test_horizontal(path, output_dir, integration_port_factory):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
-    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     success = False
     try:
         expected_evidence = (
@@ -72,8 +75,10 @@ def test_vertical(path, output_dir, integration_port_factory):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
     )
-    redis_port = integration_port_factory("redis")
     output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     success = False
     try:
         expected_evidence = (

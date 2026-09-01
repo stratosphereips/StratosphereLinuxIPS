@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
@@ -17,16 +18,24 @@ import logging
 from managers.host_ip_manager import HostIPManager
 from managers.ap_manager import APManager
 from managers.metadata_manager import MetadataManager
-from managers.process_manager import ProcessManager
+from managers.process_manager.process_manager import ProcessManager
 from managers.profilers_manager import ProfilersManager
 from managers.redis_manager import RedisManager
+from managers.timewindow_manager import TimewindowManager
 from managers.ui_manager import UIManager
+from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
 from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green, yellow
+from slips_files.common.style import (
+    green,
+    grey,
+    header_line,
+    print_separator,
+    yellow,
+)
 from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
@@ -49,6 +58,7 @@ class Main:
         self.redis_man = RedisManager(self)
         self.conf = ConfigParser()
         self.metadata_man = MetadataManager(self)
+        self.timewindow_man = TimewindowManager(self)
         self.ui_man = UIManager(self)
         self.version = utils.get_slips_version()
         # will be filled later
@@ -357,12 +367,12 @@ class Main:
         self.args.debug = max(self.args.debug, 0)
 
     def print_version(self):
-        slips_version = f"Slips Version: {green(self.version)}"
+        slips_version = f"Slips {green(f'v{self.version}')}"
         branch_info = utils.get_branch_info()
         if branch_info is not False:
             # it's false when we're in docker because there's no .git/ there
             self.commit, self.branch = branch_info
-            slips_version += f" ({self.commit[:8]})"
+            slips_version += grey(f" ({self.commit[:8]})")
         slips_version.replace("\n", "")
         print(slips_version)
 
@@ -387,14 +397,29 @@ class Main:
         profiles_len = self.db.get_profiles_len()
         evidence_number = self.db.get_evidence_number() or 0
         flow_per_min = self.db.get_flows_analyzed_per_minute()
+
+        current_risk_weight = None
+        if self.db.is_running_non_stop():
+            max_seen_risk_weight = self.db.get_max_seen_risk_weight()
+            current_risk_weight = max_seen_risk_weight[
+                "risk_weight"
+            ].name.lower()
+
         stats = (
-            f"\r[{now}] Total analyzed IPs: {green(profiles_len)}. "
+            f"[{now}] Total analyzed IPs: {green(profiles_len)}. "
             f"{self.get_analyzed_flows_percentage()}"
             f"Evidence: {green(evidence_number)}. "
+        )
+
+        if current_risk_weight:
+            stats += f"Current risk: {green(current_risk_weight)}. "
+
+        stats += (
             f"Number of IPs seen in the last ({self.twid_width}):"
             f" {green(modified_ips_in_the_last_tw)}. "
             f"Analyzed {green(flow_per_min)} flows/min."
         )
+
         self.print(stats)
         sys.stdout.flush()  # Make sure the output is displayed immediately
 
@@ -419,6 +444,8 @@ class Main:
         except ZeroDivisionError:
             return ""
 
+        percentage = min(100.0, percentage)  # cap at 100%
+
         # in very large pcaps, thousands of flows are nothing compared to
         # the tot flows, so if the percentage is int, slips would print 0%
         # for a while, so we take the first number after the floating point
@@ -427,8 +454,6 @@ class Main:
             percentage = f"{percentage:.1f}"
         else:
             percentage = int(percentage)
-
-        percentage = min(100, percentage)  # cap at 100%
         return f"Analyzed Flows: {green(percentage)}{green('%')}. "
 
     def is_total_flows_unknown(self) -> bool:
@@ -462,9 +487,9 @@ class Main:
 
         for interface in utils.get_all_interfaces(self.args):
             if ip := self.db.get_gateway_ip(interface):
-                self.print(f"Detected gateway IP: {green(ip)}")
+                self.print(header_line("Gateway IP", ip))
             if mac := self.db.get_gateway_mac(interface):
-                self.print(f"Detected gateway MAC: {green(mac)}")
+                self.print(header_line("Gateway MAC", mac))
             self.gw_info_printed = True
 
     def print_localnet_info(self):
@@ -476,10 +501,10 @@ class Main:
             if not local_net:
                 continue
 
-            to_print = f"Used local network: {green(local_net)}"
+            value = local_net
             if interface != "default":
-                to_print += f" for interface {green(interface)}."
-            self.print(to_print)
+                value += f" ({interface})"
+            self.print(header_line("Local Net", value))
             self.localnet_info_printed = True
 
     def prepare_locks_dir(self):
@@ -497,8 +522,8 @@ class Main:
         """Main Slips Function"""
         try:
             self.print_version()
-            print("https://stratosphereips.org")
-            print("-" * 27)
+            print(grey("stratosphereips.org"))
+            print_separator()
 
             self.setup_print_levels()
             stderr: str = self.get_slips_error_file()
@@ -510,7 +535,7 @@ class Main:
             )
             self.printer = Printer(self.logger, self.name)
 
-            self.print(f"Storing Slips logs in {self.args.output}")
+            self.print(header_line("Logs", self.args.output))
 
             self.redis_port: int = self.redis_man.get_redis_port()
             if self.args.is_slips_started_by_an_update:
@@ -582,14 +607,26 @@ class Main:
             host_ips = self.host_ip_man.store_host_ip()
 
             self.print(
-                f"Using redis server on port: {green(self.redis_port)}",
+                header_line("Redis", f"localhost:{self.redis_port}"),
                 1,
                 0,
             )
-            self.print(
-                f'Started {green("Main")} process [PID {green(self.pid)}]',
-                1,
-                0,
+            if host_ips:
+                for iface, ip in host_ips.items():
+                    self.print(
+                        header_line("Host IP", f"{ip} ({iface})"),
+                        1,
+                        0,
+                    )
+            self.proc_man.set_total_processes_to_start(
+                will_load_modules=not self.args.db
+            )
+            print_separator()
+            self.proc_man.announce_started(
+                Modules.MAIN,
+                self.pid,
+                "Coordinates all other slips processes and modules",
+                self.db,
             )
             self.profilers_manager.cpu_profiler_init()
             self.profilers_manager.memory_profiler_init()
@@ -627,25 +664,23 @@ class Main:
                 # if wait_for_TI_to_finish is set to true in the config file,
                 # slips will wait untill all TI files are updated before
                 # starting the rest of the modules
-                self.proc_man.start_update_manager(
+                self.proc_man.start_feeds_update_manager(
                     local_files=True,
                     ti_feeds=self.conf.wait_for_TI_to_finish(),
                 )
-                self.print("Starting modules", 1, 0)
                 # initialize_filter must be called after the update manager
                 # is started, and before the modules start. why? because
                 # update manager updates the iocs that the bloom filters need
                 self.bloom_filters_man.initialize_filter()
+
                 self.proc_man.load_modules()
-                # give outputprocess time to print all the started modules
-                time.sleep(0.5)
-                self.proc_man.print_disabled_modules()
 
             if self.args.webinterface:
                 self.ui_man.start_webinterface()
 
             def sig_handler(sig, frame):
-                """calls shutdown_gracefully on sig"""
+                """Marks sigterm_received so the main loop exits and
+                proc_man.shutdown_gracefully() runs right after it."""
                 if os.getpid() != self.pid:
                     # to ensure that this SIGTERM handler is not inherited by
                     # children created the signal.signal() call, because we
@@ -668,9 +703,12 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            # give the profiler process time to start and subscribe to the db
-            # before we start sending data to it
-            time.sleep(1)
+            if not (
+                self.proc_man.is_profiler_done_starting_initial_workers_event.is_set()
+            ):
+                # give the profiler process time to start and subscribe to the db
+                # before we start sending data to it
+                time.sleep(0.1)
 
             self.c1 = self.db.subscribe("control_channel")
 
@@ -679,7 +717,7 @@ class Main:
 
             self.db.store_pid("main", int(self.pid))
 
-            self.proc_man.declare_that_slips_done_starting_all_children()
+            self.proc_man.declare_that_slips_is_done_starting_all_children()
 
             self.metadata_man.set_input_metadata()
 
@@ -709,6 +747,8 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                self.proc_man.print_disabled_modules()
+
                 self.print_gw_info()
                 self.print_localnet_info()
 
@@ -719,15 +759,17 @@ class Main:
                 self.ui_man.check_if_webinterface_started()
 
                 self.update_stats()
+                self.timewindow_man.update_current_timewindow_if_due()
                 self.db.check_tw_to_close()
                 self.db.ping()
+                self.proc_man.health_check_modules()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
                 self.host_ip_man.update_host_ip(host_ips, modified_profiles)
-                if self.update_man.check_for_update_every_1_day():
+                if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:
@@ -735,7 +777,16 @@ class Main:
             # the system call was in progress
             # comes here if zeek terminates while slips is still working
             pass
+        except Exception:
+            # any other unexpected error must not skip the cleanup below,
+            # otherwise module processes already spawned above are never
+            # told to stop, and this process hangs forever in Python's
+            # default multiprocessing atexit cleanup waiting for them.
+            traceback.print_exc()
+            try:
+                self.proc_man.shutdown_gracefully()
+            except Exception:
+                traceback.print_exc()
+            raise
 
-        if not self.sigterm_received:
-            # to avoid calling this func twice when sigterm is received
-            self.proc_man.shutdown_gracefully()
+        self.proc_man.shutdown_gracefully()

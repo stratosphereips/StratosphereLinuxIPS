@@ -9,6 +9,7 @@ from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
 from unittest.mock import (
+    AsyncMock,
     Mock,
     patch,
 )
@@ -68,7 +69,7 @@ def test_get_geocountry(ip_address, expected_geocountry):
     assert ip_info.get_geocountry(ip_address) == expected_geocountry
 
 
-def test_get_vendor_from_database(mocker):
+async def test_get_vendor_from_database(mocker):
     ip_info = ModuleFactory().create_ip_info_obj()
     mac_addr = "08:00:27:7f:09:e1"
     profileid = "profile_10.0.2.15"
@@ -76,15 +77,14 @@ def test_get_vendor_from_database(mocker):
 
     ip_info.db.get_mac_vendor_from_profile.return_value = db_vendor
 
-    result = ip_info.get_vendor(mac_addr, profileid)
-    expected_result = True
-    assert result == expected_result
+    result = await ip_info.get_vendor_async(mac_addr, profileid)
+    assert result is True
     (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
     mocker.patch.object(ip_info, "get_vendor_offline").assert_not_called()
     mocker.patch.object(ip_info, "get_vendor_online").assert_not_called()
 
 
-def test_get_vendor_from_offline(
+async def test_get_vendor_from_offline(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
@@ -97,7 +97,7 @@ def test_get_vendor_from_offline(
         ip_info, "get_vendor_offline", return_value=offline_vendor
     )
 
-    result = ip_info.get_vendor(mac_addr, profileid)
+    result = await ip_info.get_vendor_async(mac_addr, profileid)
 
     assert result == {"MAC": mac_addr, "Vendor": offline_vendor}
     (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
@@ -108,7 +108,7 @@ def test_get_vendor_from_offline(
     )
 
 
-def test_get_vendor_from_online(
+async def test_get_vendor_from_online(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
@@ -118,22 +118,22 @@ def test_get_vendor_from_online(
 
     ip_info.db.get_mac_vendor_from_profile.return_value = None
     mocker.patch.object(ip_info, "get_vendor_offline", return_value=None)
-    mocker.patch.object(
-        ip_info, "get_vendor_online", return_value=online_vendor
-    )
+    ip_info.run_lookup = AsyncMock(return_value=online_vendor)
 
-    result = ip_info.get_vendor(mac_addr, profileid)
+    result = await ip_info.get_vendor_async(mac_addr, profileid)
 
     assert result == {"MAC": mac_addr, "Vendor": online_vendor}
     (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
     (ip_info.get_vendor_offline.assert_called_once_with(mac_addr, profileid))
-    (ip_info.get_vendor_online.assert_called_once_with(mac_addr))
+    ip_info.run_lookup.assert_awaited_once_with(
+        ip_info.get_vendor_online, mac_addr
+    )
     ip_info.db.set_mac_vendor_to_profile.assert_called_once_with(
         profileid, mac_addr, online_vendor
     )
 
 
-def test_get_vendor_not_found(
+async def test_get_vendor_not_found(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
@@ -142,25 +142,27 @@ def test_get_vendor_not_found(
 
     ip_info.db.get_mac_vendor_from_profile.return_value = None
     mocker.patch.object(ip_info, "get_vendor_offline", return_value=None)
-    mocker.patch.object(ip_info, "get_vendor_online", return_value=None)
+    ip_info.run_lookup = AsyncMock(return_value=None)
 
-    result = ip_info.get_vendor(mac_addr, profileid)
+    result = await ip_info.get_vendor_async(mac_addr, profileid)
 
     assert result == {"MAC": mac_addr, "Vendor": "Unknown"}
     (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
     (ip_info.get_vendor_offline.assert_called_once_with(mac_addr, profileid))
-    ip_info.get_vendor_online.assert_called_once_with(mac_addr)
+    ip_info.run_lookup.assert_awaited_once_with(
+        ip_info.get_vendor_online, mac_addr
+    )
     ip_info.db.set_mac_vendor_to_profile.assert_not_called()
 
 
-def test_get_vendor_broadcast_mac(
+async def test_get_vendor_broadcast_mac(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
     mac_addr = "ff:ff:ff:ff:ff:ff"
     profileid = "profile_10.0.2.19"
 
-    result = ip_info.get_vendor(mac_addr, profileid)
+    result = await ip_info.get_vendor_async(mac_addr, profileid)
 
     assert result is False
     ip_info.db.get_mac_vendor_from_profile.assert_not_called()
@@ -566,7 +568,7 @@ def test_check_if_we_have_pending_mac_queries_with_mac_db(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_vendor_index = {}
+    ip_info.mac_vendor_db_loaded = True
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.side_effect = [False, False, True]
     ip_info.pending_mac_queries.get.side_effect = [
@@ -587,12 +589,14 @@ def test_check_if_we_have_pending_mac_queries_empty_queue(
     mocker,
 ):
     ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.mac_vendor_index = {}
+    ip_info.mac_vendor_db_loaded = True
     ip_info.pending_mac_queries = Mock()
     ip_info.pending_mac_queries.empty.return_value = True
-    mock_get_vendor = mocker.patch.object(ip_info, "get_vendor")
+    mock_get_vendor_offline = mocker.patch.object(
+        ip_info, "get_vendor_offline"
+    )
     ip_info.check_if_we_have_pending_offline_mac_queries()
-    mock_get_vendor.assert_not_called()
+    mock_get_vendor_offline.assert_not_called()
 
 
 def test_register_private_dns_server_stores_private_dns_server():
@@ -702,6 +706,19 @@ def test_non_stop_false_skips_mac_lookup():
     assert result is None
     ip_info._get_mac_using_ip_neigh.assert_not_called()
     ip_info._get_mac_using_arp_cache.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "db_return_value",
+    ["wlan0", None],
+)
+def test_get_wifi_interface_if_ap(db_return_value):
+    """get_wifi_interface() already returns the interface name, not a
+    dict, so this should just pass it through."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_wifi_interface = Mock(return_value=db_return_value)
+
+    assert ip_info._get_wifi_interface_if_ap() == db_return_value
 
 
 def test_wifi_interface_uses_own_mac():

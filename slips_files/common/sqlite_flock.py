@@ -78,8 +78,17 @@ class SQLiteFlock:
             lock_file_exists = False
 
         if not lock_file_exists or file_owner_uid != current_user_uid:
-            open(self.lockfile_path, "w").close()
-            os.chmod(self.lockfile_path, 0o600)
+            # this lock file is shared by every process/module using this
+            # db, and close() (see delete_lockfile()) can unlink it at any
+            # time from another process. chmod-by-path here would be a
+            # TOCTOU race against that unlink; fchmod on the fd we just
+            # opened operates on the still-live inode regardless of
+            # whether the path gets unlinked out from under us.
+            fd = os.open(self.lockfile_path, os.O_WRONLY | os.O_CREAT, 0o600)
+            try:
+                os.fchmod(fd, 0o600)
+            finally:
+                os.close(fd)
 
     @contextmanager
     def acquire(self):

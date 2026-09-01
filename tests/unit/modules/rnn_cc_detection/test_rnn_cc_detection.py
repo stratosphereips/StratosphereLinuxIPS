@@ -20,8 +20,34 @@ from tests.module_factory import ModuleFactory
 )
 def test_get_confidence(pre_behavioral_model, expected_confidence):
     cc_detection = ModuleFactory().create_rnn_detection_object()
-    result = cc_detection.get_confidence(pre_behavioral_model)
-    assert result == expected_confidence
+    cc_detection.tcpmodel = Mock()
+    cc_detection.set_evidence_cc_channel = Mock()
+    cc_detection.print = Mock()
+    cc_detection.db.detect_data_type.return_value = "ip"
+    cc_detection.tcpmodel.predict.return_value = np.array([[0.995]])
+
+    msg_data = {
+        "new_symbol": pre_behavioral_model,
+        "profileid": "profile_192.168.1.1",
+        "twid": "timewindow1",
+        "tupleid": "10.0.0.1-80-TCP",
+        "flow": {
+            "state": "established",
+            "starttime": "2023-01-01 12:00:00",
+            "daddr": "10.0.0.1",
+        },
+        "uid": "uid123",
+    }
+
+    with patch.object(
+        cc_detection,
+        "convert_input_for_module",
+        return_value=np.array([[[0]]]),
+    ):
+        cc_detection.handle_new_letters({"data": json.dumps(msg_data)})
+
+    confidence = cc_detection.set_evidence_cc_channel.call_args.args[1]
+    assert confidence == expected_confidence
 
 
 @pytest.mark.parametrize(

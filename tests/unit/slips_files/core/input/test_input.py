@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import Input, SUPPORTED_INPUT_HANDLERS
 from tests.module_factory import ModuleFactory
 from unittest.mock import (
     patch,
@@ -23,7 +24,7 @@ def test_handle_pcap_input(tmp_path, input_type, input_information):
     input_process = ModuleFactory().create_input_obj(
         input_information, input_type
     )
-    handler = input_process.input_handlers[input_type]
+    handler = SUPPORTED_INPUT_HANDLERS[input_type](input_process)
     input_process.is_running_non_stop = False
     handler.file_remover.start = Mock()
     input_process.zeek_utils.create_zeek_output_dir = Mock(
@@ -46,11 +47,14 @@ def test_handle_pcap_input(tmp_path, input_type, input_information):
 def test_main_publishes_stop_when_handler_returns_false():
     input_process = ModuleFactory().create_input_obj("", InputType.INTERFACE)
     input_process.db.publish_stop = Mock()
-    input_process.input_handlers[InputType.INTERFACE].run = Mock(
-        return_value=False
-    )
+    mock_handler = Mock()
+    mock_handler.run.return_value = False
 
-    assert input_process.main() is False
+    with patch.dict(
+        SUPPORTED_INPUT_HANDLERS,
+        {InputType.INTERFACE: Mock(return_value=mock_handler)},
+    ):
+        assert input_process.main() is False
 
     input_process.is_input_failed_event.set.assert_called_once_with()
     input_process.db.publish_stop.assert_called_once_with()
@@ -65,7 +69,7 @@ def test_main_publishes_stop_when_handler_returns_false():
 )
 def test_read_zeek_folder(zeek_dir: str, is_tabs: bool):
     input = ModuleFactory().create_input_obj(zeek_dir, InputType.ZEEK_FOLDER)
-    handler = input.input_handlers[InputType.ZEEK_FOLDER]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.ZEEK_FOLDER](input)
     input.is_running_non_stop = False
     handler.observer.start = Mock()
     input.given_path = zeek_dir
@@ -105,7 +109,7 @@ def test_handle_zeek_log_file(input_information, expected_output):
     input = ModuleFactory().create_input_obj(
         input_information, InputType.ZEEK_LOG_FILE
     )
-    handler = input.input_handlers[InputType.ZEEK_LOG_FILE]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.ZEEK_LOG_FILE](input)
     assert handler.run() == expected_output
 
 
@@ -237,7 +241,7 @@ def test_reached_timeout(
 @pytest.mark.parametrize("path", ["dataset/test1-malicious.nfdump"])
 def test_handle_nfdump(path):
     input = ModuleFactory().create_input_obj(path, InputType.NFDUMP)
-    handler = input.input_handlers[InputType.NFDUMP]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.NFDUMP](input)
     assert handler.run() is True
 
 
@@ -274,7 +278,7 @@ def test_get_earliest_line():
 def test_handle_binetflow(input_type, input_information):
     input = ModuleFactory().create_input_obj(input_information, input_type)
     with patch.object(input, "get_flows_number", return_value=5):
-        handler = input.input_handlers[InputType.BINETFLOW]
+        handler = SUPPORTED_INPUT_HANDLERS[InputType.BINETFLOW](input)
         assert handler.run() is True
 
 
@@ -286,7 +290,7 @@ def test_handle_suricata(input_information):
     input = ModuleFactory().create_input_obj(
         input_information, InputType.SURICATA
     )
-    handler = input.input_handlers[InputType.SURICATA]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.SURICATA](input)
     assert handler.run() is True
 
 
@@ -332,7 +336,7 @@ def test_read_from_stdin(line_type: str, line: str):
         InputType.STDIN,
         line_type=line_type,
     )
-    handler = input.input_handlers[InputType.STDIN]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.STDIN](input)
     with patch.object(handler, "_stdin", return_value=[line, "done\n"]):
         assert handler.run()
         line_sent: dict = input.profiler_queue.get()
@@ -406,6 +410,25 @@ def test_give_profiler(line, input_type, expected_line, expected_input_type):
     assert line_sent["input_type"] == expected_input_type
 
 
+def test_mark_self_as_done_processing_sends_worker_stop_signals():
+    """Test input sends one stop sentinel per started profiler worker."""
+    input_process = ModuleFactory().create_input_obj("", InputType.STDIN)
+    input_process.profiler_queue = Mock()
+    input_process.done_processing = Mock()
+    input_process.is_input_done_event = Mock()
+    input_process.is_profiler_done_event = Mock()
+    input_process.db.get_slips_start_time.return_value = "0"
+    input_process.db.get_profiler_workers_started.return_value = 3
+
+    type(input_process).mark_self_as_done_processing(input_process)
+
+    input_process.db.get_profiler_workers_started.assert_called_once()
+    input_process.profiler_queue.put.assert_has_calls([call("stop")] * 3)
+    input_process.is_input_done_event.set.assert_called_once()
+    input_process.is_profiler_done_event.wait.assert_called_once()
+    input_process.done_processing.release.assert_called_once()
+
+
 def test_get_file_handle_existing_file(tmp_path):
     """
     Test that the get_file_handle method correctly
@@ -430,9 +453,12 @@ def test_main_sets_active_handler_and_runs_it():
         "", InputType.ZEEK_LOG_FILE
     )
     mock_handler = Mock()
-    input_process.input_handlers[InputType.ZEEK_LOG_FILE] = mock_handler
 
-    assert input_process.main() == 1
+    with patch.dict(
+        SUPPORTED_INPUT_HANDLERS,
+        {InputType.ZEEK_LOG_FILE: Mock(return_value=mock_handler)},
+    ):
+        assert input_process.main() == 1
     assert input_process.active_handler == mock_handler
     mock_handler.run.assert_called_once()
 
@@ -460,12 +486,35 @@ def test_shutdown_gracefully_delegates_to_handler():
     input_process.active_handler.shutdown_gracefully.assert_called_once()
 
 
+def test_mark_self_as_done_processing_waits_for_profiler_workers() -> None:
+    """Test input waits for profiler startup before sending stop sentinels."""
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    input_process.is_profiler_done_starting_initial_workers_event = Mock()
+    input_process.db.get_profiler_workers_started = Mock(return_value=3)
+    input_process.profiler_queue = Mock()
+    input_process.is_input_done_event = Mock()
+    input_process.is_profiler_done_event = Mock()
+    input_process.done_processing = Mock()
+
+    Input.mark_self_as_done_processing(input_process)
+
+    input_process.is_profiler_done_starting_initial_workers_event.wait.assert_called_once_with(
+        30
+    )
+    assert input_process.profiler_queue.put.call_count == 3
+    input_process.is_input_done_event.set.assert_called_once_with()
+    input_process.is_profiler_done_event.wait.assert_called_once_with()
+    input_process.done_processing.release.assert_called_once_with()
+
+
 def test_zeek_log_file_shutdown_closes_handles():
     """Test zeek log file shutdown closes open handles and marks done."""
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
-    handler = input_process.input_handlers[InputType.ZEEK_LOG_FILE]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.ZEEK_LOG_FILE](input_process)
     mock_handle = MagicMock()
     input_process.zeek_utils.open_file_handles = {"test_file.log": mock_handle}
     input_process.mark_self_as_done_processing = MagicMock()

@@ -2,7 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/feeds_update_manager/feeds_update_manager.py"""
 
+import asyncio
 import json
+import threading
 import time
 from unittest.mock import Mock, mock_open, patch
 
@@ -11,6 +13,7 @@ import requests
 from pytest_mock.plugin import MockerFixture
 
 from slips_files.common.timer_manager import PeriodicUpdateTimer
+from tests.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 
 
@@ -73,6 +76,22 @@ def test_check_if_update_based_on_last_modified(
     mock_requests.return_value.text = ""
 
     assert update_manager.should_update(url, float("-inf")) is True
+
+
+def test_should_update_records_attempt_when_feed_is_unreachable(mocker):
+    """A feed that fails to download should still have its last-update
+    time recorded, so it isn't retried on every single slips run until
+    the update period passes again."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    url = "https://example.com/unreachable.txt"
+    update_manager.db.get_ti_feed_info.return_value = {}
+    mocker.patch(
+        "requests.get", side_effect=requests.exceptions.ConnectionError
+    )
+
+    assert update_manager.should_update(url, float("-inf")) is False
+    update_manager.db.set_feed_last_update_time.assert_called_once()
+    assert update_manager.db.set_feed_last_update_time.call_args[0][0] == url
 
 
 @pytest.mark.parametrize(
@@ -224,7 +243,7 @@ def test_download_file_logs_transient_failures_as_warnings(
     [
         # Testcase1: Valid file with single and range ports.
         (
-            """Organization,IP,Ports Range,Protocol
+            """"Organization","IP","Ports Range","Protocol"
 TestOrg,192.168.1.1,80,tcp
 TestOrg,192.168.1.2,443-445,udp""",
             [
@@ -236,7 +255,7 @@ TestOrg,192.168.1.2,443-445,udp""",
         ),
         # Testcase2: File with invalid line format.
         (
-            """Organization,IP,Ports Range,Protocol
+            """"Organization","IP","Ports Range","Protocol"
 TestOrg,192.168.1.1,80
 TestOrg,192.168.1.2,443-445,udp""",
             [
@@ -257,8 +276,9 @@ def test_read_ports_info(mocker, tmp_path, test_data, expected_calls):
     update_manager = ModuleFactory().create_update_manager_obj()
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     update_manager.read_ports_info(str(tmp_path / "ports_info.csv"))
-    for call in expected_calls:
-        update_manager.db.set_organization_of_port.assert_any_call(*call)
+    update_manager.db.set_organizations_of_ports.assert_called_once_with(
+        expected_calls
+    )
 
 
 @pytest.mark.parametrize(
@@ -323,6 +343,26 @@ def test_check_if_update_online_whitelist_not_updated():
     result = update_manager.should_update_online_whitelist()
     assert result is False
     update_manager.db.set_ti_feed_info.assert_not_called()
+
+
+def test_update_online_whitelist_stores_ordered_valid_tranco_rows():
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.online_whitelist_update_period = 86400
+    lines = [
+        "1,Example.com",
+        "2,google.com",
+        "3,github.com",
+        "4,google.com",
+        "bad-line",
+        "5,localhost",
+    ]
+    update_manager.responses["tranco_whitelist"] = Mock(text="\n".join(lines))
+
+    update_manager._update_online_whitelist()
+
+    update_manager.db.store_tranco_whitelisted_domains.assert_called_once_with(
+        ["example.com", "google.com", "github.com", "google.com"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -891,3 +931,120 @@ def test_parse_ssl_feed_no_valid_fingerprints(mocker, tmp_path):
 
     update_manager.db.add_ssl_sha1_to_ioc.assert_not_called()
     assert result is False
+
+
+@pytest.mark.asyncio
+async def test_update_checks_all_feeds_concurrently_and_awaits_all_tasks():
+    """should_update() should run for every feed (not stop at the first
+    one), and every update_ti_file() task it triggers should be awaited,
+    not just the last one scheduled."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.update_period = 3600
+    update_manager.url_feeds = {"https://example.com/feed1.txt": {}}
+    update_manager.ja3_feeds = {"https://example.com/feed2.txt": {}}
+    update_manager.ssl_feeds = {}
+    update_manager.tor_nodes_feeds = {"https://example.com/feed3.txt": {}}
+    update_manager.riskiq_update_period = 3600
+    update_manager._should_update_mac_db = Mock(return_value=False)
+    update_manager.should_update_online_whitelist = Mock(return_value=False)
+    update_manager._delete_unused_cached_remote_feeds = Mock()
+    update_manager.should_update = Mock(
+        side_effect=lambda feed, period: feed
+        != "https://example.com/feed2.txt"
+    )
+    update_manager.update_ti_file = get_mock_coro(None)
+    update_manager.db.set_loaded_ti_files = Mock()
+    update_manager.print_duplicate_ip_summary = Mock()
+
+    await update_manager.update()
+
+    checked_feeds = {
+        call.args[0] for call in update_manager.should_update.call_args_list
+    }
+    assert checked_feeds == {
+        "https://example.com/feed1.txt",
+        "https://example.com/feed2.txt",
+        "https://example.com/feed3.txt",
+        "riskiq_domains",
+    }
+    update_manager.update_ti_file.assert_any_call(
+        "https://example.com/feed1.txt"
+    )
+    update_manager.update_ti_file.assert_any_call(
+        "https://example.com/feed3.txt"
+    )
+    assert update_manager.update_ti_file.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_update_stops_early_when_termination_requested():
+    """update() should stop waiting on outstanding should_update() checks
+    as soon as a shutdown is requested, instead of blocking until every
+    feed's (slow/network-bound) check has finished."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    update_manager.update_period = 3600
+    update_manager.url_feeds = {"https://example.com/feed1.txt": {}}
+    update_manager.ja3_feeds = {}
+    update_manager.ssl_feeds = {}
+    update_manager.tor_nodes_feeds = {}
+    update_manager.riskiq_update_period = 3600
+    update_manager._should_update_mac_db = Mock(return_value=False)
+    update_manager.should_update_online_whitelist = Mock(return_value=False)
+    update_manager._delete_unused_cached_remote_feeds = Mock()
+    # termination is already requested before update() is even called,
+    # so the termination watcher should win the race against the slow
+    # should_update() check below every time, deterministically.
+    update_manager.termination_event = threading.Event()
+    update_manager.termination_event.set()
+
+    def slow_should_update(feed, period):
+        time.sleep(1)
+        return True
+
+    update_manager.should_update = Mock(side_effect=slow_should_update)
+    update_manager.update_ti_file = get_mock_coro(None)
+    update_manager.db.set_loaded_ti_files = Mock()
+    update_manager.print_duplicate_ip_summary = Mock()
+
+    result = await asyncio.wait_for(update_manager.update(), timeout=5)
+
+    assert result is False
+    # update() returned before any download was triggered
+    update_manager.update_ti_file.assert_not_called()
+    update_manager.print_duplicate_ip_summary.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_ti_file_runs_blocking_work_in_a_thread():
+    """update_ti_file() writes the feed to disk and parses it, both
+    blocking calls with no 'await' of their own. If that work ran
+    straight in the coroutine, every update_ti_file() task scheduled by
+    update() would run to completion one after the other instead of
+    overlapping, even though update() gathers them as concurrent tasks.
+    update_ti_file() must offload that work to a thread so multiple
+    feeds are actually processed at the same time."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    sleep_time = 0.2
+    call_threads = []
+
+    def slow_sync_update(link_to_download):
+        call_threads.append(threading.current_thread())
+        time.sleep(sleep_time)
+        return True
+
+    update_manager._update_ti_file_sync = Mock(side_effect=slow_sync_update)
+
+    start = time.time()
+    results = await asyncio.gather(
+        update_manager.update_ti_file("https://example.com/feed1.txt"),
+        update_manager.update_ti_file("https://example.com/feed2.txt"),
+        update_manager.update_ti_file("https://example.com/feed3.txt"),
+    )
+    elapsed = time.time() - start
+
+    assert results == [True, True, True]
+    assert update_manager._update_ti_file_sync.call_count == 3
+    # ran concurrently: far less than 3 * sleep_time (serial execution)
+    assert elapsed < sleep_time * 3
+    # the blocking work never ran on the event loop's own thread
+    assert threading.current_thread() not in call_threads

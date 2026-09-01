@@ -14,6 +14,7 @@ import time
 
 import redis
 
+from slips_files.common.ips import IPV4_LOCALHOST
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
@@ -25,7 +26,7 @@ from webinterface.utils import (
     is_port_open,
 )
 
-LOCALHOST = "127.0.0.1"
+LOCALHOST = IPV4_LOCALHOST
 IMPORTED_REDIS_OUTPUT_DIR = "webinterface/imported_redis"
 IMPORTED_REDIS_START_PORT = 32851
 IMPORTED_REDIS_END_PORT = 32950

@@ -4,15 +4,22 @@ import os
 import platform
 import psutil
 import pwd
+import shlex
+
+IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class Notify:
     def __init__(self):
-        self.bin_found = False
-        if self.is_notify_send_installed():
-            self.bin_found = True
+        self.enabled = False
+        self.notify_cmd = "notify-send -t 5000 "
+        if IS_IN_A_DOCKER_CONTAINER:
+            return
+        if self._is_notify_send_installed():
+            self.enabled = True
+            self._setup_notifications_if_root()
 
-    def is_notify_send_installed(self) -> bool:
+    def _is_notify_send_installed(self) -> bool:
         """
         Checks if notify-send bin is installed
         """
@@ -28,52 +35,55 @@ class Notify:
         )
         return False
 
-    def setup_notifications(self):
+    def _setup_notifications_if_root(self) -> None:
         """
-        Get the used display, the user using this display and the uid of this
-         user in case of using Slips as root on linux
+        Configure notify-send for root processes on Linux.
         """
-        # in linux, if the user's not root, notifications command will need
-        # extra configurations
+        self.notify_cmd = "notify-send -t 5000 "
         if platform.system() != "Linux" or os.geteuid() != 0:
-            self.notify_cmd = "notify-send -t 5000 "
-            return False
+            return
 
-        # Get the used display (if the user has only 1 screen it will be
-        # set to 0), if not we should know which screen is slips running on.
-        # A "display" is the address for your screen. Any program that
-        # wants to write to your screen has to know the address.
-        used_display = psutil.Process().environ()["DISPLAY"]
+        # Get the display used by the graphical session. If it is unavailable,
+        # there is no desktop session to which root can send a notification.
+        used_display = psutil.Process().environ().get("DISPLAY", "")
+        if not used_display:
+            return
 
-        # when you login as user x in linux, no user other than x is authorized to write to your display, not even root
-        # now that we're running as root, we dont't have acess to the used_display
-        # get the owner of the used_display, there's no other way than running the 'who' command
+        user = None
+
+        # Find the user who owns the display. Root cannot send notifications
+        # to that user's graphical session directly.
         command = f'who | grep "({used_display})" '
         cmd_output = os.popen(command).read()
+        if len(cmd_output) >= 5:
+            user = cmd_output.splitlines()[0].split()[0]
 
-        # make sure we found the user of this used display
-        if len(cmd_output) < 5:
-            # we don't know the user of this display!!, try getting it using psutil
-            # user 0 is the one that owns tty1
-            user = str(psutil.users()[0].name)
-        else:
-            # get the first user from the 'who' command
-            user = cmd_output.split("\n")[0].split()[0]
+        # If the display is not listed by who, use the first logged-in user.
+        if user is None:
+            logged_in_users = psutil.users()
+            if logged_in_users:
+                user = str(logged_in_users[0].name)
+            else:
+                return
 
-        # get the uid
-        uid = pwd.getpwnam(user).pw_uid
-        # run notify-send as user using the used_display
-        # and give it the dbus addr
+        # Get the UID and run notify-send as the user who owns the session.
+        try:
+            uid = pwd.getpwnam(user).pw_uid
+        except KeyError:
+            return
         self.notify_cmd = (
-            f"sudo -u {user} DISPLAY={used_display} "
+            f"sudo -u {shlex.quote(user)} "
+            f"DISPLAY={shlex.quote(used_display)} "
             f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus "
-            f"notify-send -t 5000 "
+            "notify-send -t 5000 "
         )
 
     def show_popup(self, alert_to_log: str):
         """
         Function to display a popup with the alert depending on the OS
         """
+        if IS_IN_A_DOCKER_CONTAINER:
+            return
         if platform.system() == "Linux":
             #  is notify_cmd is set in
             #  setup_notifications function depending on the user

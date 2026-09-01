@@ -14,7 +14,7 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
-from slips_files.common.style import green
+from slips_files.common.startup_report import format_started_line
 from slips_files.core.helpers.notify import Notify
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.structures.alerts import Alert
@@ -23,6 +23,10 @@ from slips_files.core.structures.evidence import (
     ThreatLevel,
     TimeWindow,
     dict_to_evidence,
+)
+from slips_files.core.structures.risk_weights import (
+    RiskWeight,
+    increase_risk_weight,
 )
 from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
@@ -39,24 +43,21 @@ class EvidenceHandlerWorker(IModule):
         name: str,
         evidence_queue: Queue,
         evidence_logger_q: Queue,
+        notify: Notify,
+        total_processes_to_start: int = 1,
     ):
         self.name = name
+        self.total_processes_to_start = total_processes_to_start
         self.evidence_queue = evidence_queue
         self.evidence_logger_q = evidence_logger_q
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
         self.idmefv2 = IDMEFv2(self.logger, self.db)
         self.read_configuration()
-        self.detection_threshold_in_this_width = (
-            self.detection_threshold * self.width / 60
-        )
-        if self.popup_alerts:
-            self.notify = Notify()
-            if self.notify.bin_found:
-                self.notify.setup_notifications()
-            else:
-                self.popup_alerts = False
-
+        self.notify = notify
         self.is_running_non_stop = self.db.is_running_non_stop()
+        self.detection_threshold_in_this_width = (
+            self._get_detection_threshold()
+        )
         self.blocking_modules_supported = self.is_blocking_modules_supported()
         self.our_ips: List[str] = utils.get_own_ips(ret="List")
         self.formatter = EvidenceFormatter(self.db, self.args)
@@ -66,10 +67,13 @@ class EvidenceHandlerWorker(IModule):
     def subscribe_to_channels(self):
         self.channels = {}
 
-    def read_configuration(self):
+    def read_configuration(self) -> None:
         conf = ConfigParser()
         self.width: float = conf.get_tw_width_in_seconds()
         self.detection_threshold = conf.evidence_detection_threshold()
+        self.risk_accumulated_threat_level_threshold = (
+            conf.risk_accumulated_threat_level()
+        )
         self.print(
             f"Detection Threshold: {self.detection_threshold} "
             f"attacks per minute "
@@ -78,7 +82,6 @@ class EvidenceHandlerWorker(IModule):
             2,
             0,
         )
-        self.popup_alerts = conf.popup_alerts()
         self.use_p2p: bool = conf.use_local_p2p() or conf.use_global_p2p()
         self.exporting_modules_enabled: bool = (
             conf.export_to() or conf.send_to_warden()
@@ -86,8 +89,16 @@ class EvidenceHandlerWorker(IModule):
         self.generate_performance_plots = (
             conf.generate_performance_plots() is True
         )
-        if IS_IN_A_DOCKER_CONTAINER:
-            self.popup_alerts = False
+        # if IS_IN_A_DOCKER_CONTAINER:
+        #     self.popup_alerts = False
+
+    def _get_detection_threshold(self) -> float:
+        if self.is_running_non_stop:
+            # if the RATL reached this value, slips sets an alert
+            return self.risk_accumulated_threat_level_threshold
+        else:
+            # a fixed threshold for when slips is analyzing files/pcaps
+            return self.detection_threshold * self.width / 60
 
     def handle_unable_to_log(self, failed_log, error=None):
         self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
@@ -109,6 +120,7 @@ class EvidenceHandlerWorker(IModule):
         self,
         evidence: Evidence,
         accumulated_threat_level: float = 0,
+        risk_accumulated_threat_level: float = 0,
     ):
         idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
         if not idmef_evidence:
@@ -118,22 +130,25 @@ class EvidenceHandlerWorker(IModule):
             return
 
         try:
-            idmef_evidence.update(
+            note = (
+                json.loads(idmef_evidence["Note"])
+                if idmef_evidence.get("Note")
+                else {}
+            )
+            note.update(
                 {
-                    "Note": json.dumps(
-                        {
-                            "uids": evidence.uid,
-                            "accumulated_threat_level": accumulated_threat_level,
-                            "threat_level": str(evidence.threat_level),
-                            "confidence": utils.evidence_confidence_to_string(
-                                evidence.confidence
-                            ),
-                            "timewindow": evidence.timewindow.number,
-                            "immune_type": evidence.immune_type,
-                        }
-                    )
+                    "uids": evidence.uid,
+                    "accumulated_threat_level": accumulated_threat_level,
+                    "risk_accumulated_threat_level": risk_accumulated_threat_level,
+                    "threat_level": str(evidence.threat_level),
+                    "confidence": utils.evidence_confidence_to_string(
+                        evidence.confidence
+                    ),
+                    "timewindow": evidence.timewindow.number,
+                    "immune_type": evidence.immune_type,
                 }
             )
+            idmef_evidence.update({"Note": json.dumps(note)})
             self.add_latency_to_csv(idmef_evidence)
             self.evidence_logger_q.put(
                 {
@@ -195,6 +210,8 @@ class EvidenceHandlerWorker(IModule):
         self.evidence_logger_q.put({"to_log": data, "where": "alerts.log"})
 
     def log_alert(self, alert: Alert, blocked=False):
+        """logs the given alert to alerts.log and alerts.json only.
+        doesnt log it to cli"""
         now = utils.get_human_readable_datetime()
 
         alert_description = (
@@ -205,10 +222,15 @@ class EvidenceHandlerWorker(IModule):
         else:
             alert_description += "Generated an alert "
 
+        current_risk_weight = alert.risk_level.name.lower()
+
         alert_description += (
             f"given enough evidence on timewindow "
-            f"{alert.timewindow.number}. (real time {now})"
+            f"{alert.timewindow.number}. (real time: {now})"
         )
+        if self.is_running_non_stop:
+            alert_description += f" (risk weight:" f" {current_risk_weight})"
+
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
 
@@ -311,11 +333,44 @@ class EvidenceHandlerWorker(IModule):
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled
 
+    def escalate_risk_level(self, alert: Alert):
+        """
+        If the last alert in this timewindow was low, then this one should
+        be medium, and the next one should be high.
+        This is a design decision so that slips is able to move between
+        risk levels in 1 timewindow.
+        within 1 timewindow, Slips never decreses risk levels, it can only
+        go up.
+        """
+        next_level: RiskWeight = increase_risk_weight(alert.risk_level)
+        risk_weight_of_last_alert: RiskWeight = (
+            self.db.get_risk_weight_of_last_alert(alert.timewindow)
+        )
+
+        if not risk_weight_of_last_alert:
+            # dont escalate the risk weight, this alert is the first one in
+            # this tw, it should be low.
+            pass
+        elif risk_weight_of_last_alert == alert.risk_level:
+            alert.risk_level = next_level
+
+        # whether this aler is low/med, slips should now be in the next
+        # risk level.
+        self.db.update_max_seen_risk_weight(str(alert.profile), next_level)
+        self.db.set_risk_weight_of_last_alert(
+            alert.risk_level, alert.timewindow
+        )
+        return alert
+
     def handle_new_alert(
         self,
         alert: Alert,
         evidence_causing_the_alert,
     ):
+        # if last alert was low, or medium, escalate the risk level by 1
+        # level.
+        alert = self.escalate_risk_level(alert)
+
         self.db.set_alert(alert, evidence_causing_the_alert)
         is_blocked: bool = self.decide_blocking(
             alert.profile.ip, alert.timewindow
@@ -332,7 +387,7 @@ class EvidenceHandlerWorker(IModule):
         )
         self.print(f"{alert_to_print}", 1, 0)
 
-        if self.popup_alerts:
+        if self.notify and self.notify.enabled:
             self.show_popup(alert)
 
         if is_blocked:
@@ -402,12 +457,44 @@ class EvidenceHandlerWorker(IModule):
         return msg == "stop"
 
     def pre_main(self):
-        worker_number = self.name.split("_")[-1]
-        worker_name = f"Evidence Handler Worker {worker_number}"
-        self.print(f"Started {green(worker_name)} [PID {green(os.getpid())}]")
+        worker_id = int(self.name.split("_")[-1])
+        started_count = self.db.increment_modules_started_count()
+        line = format_started_line(
+            f"evidence_worker_{worker_id + 1}",
+            started_count,
+            self.total_processes_to_start,
+            os.getpid(),
+            "Processes evidence in parallel with other evidence workers",
+            category="worker",
+        )
+        self.print(
+            line,
+            1,
+            0,
+            suppress_sender=True,
+            is_final_startup_announcement=(
+                started_count >= self.total_processes_to_start
+            ),
+        )
 
     def should_stop(self) -> bool:
         return False
+
+    def shutdown_gracefully(self):
+        """
+        Release queue handles so the worker does not hang during process
+        finalization while waiting on queue feeder threads.
+        """
+        for q in (self.evidence_queue, self.evidence_logger_q):
+            try:
+                q.cancel_join_thread()
+            except (AttributeError, OSError, ValueError):
+                pass
+
+            try:
+                q.close()
+            except (AttributeError, OSError, ValueError):
+                pass
 
     def handle_evidence_added_message(self, msg: dict):
         evidence = json.loads(msg["data"])
@@ -445,9 +532,21 @@ class EvidenceHandlerWorker(IModule):
         accumulated_threat_level = self.get_accumulated_threat_level(
             profileid, twid, evidence
         )
+
+        current_risk_weight: RiskWeight = self.db.get_max_seen_risk_weight()[
+            "risk_weight"
+        ]
+        evidence.risk_level = current_risk_weight
+
+        # this is profile-specific RATL = ATL * RW
+        risk_accumulated_threat_level = (
+            accumulated_threat_level * current_risk_weight.weight
+        )
+
         self.add_evidence_to_json_log_file(
             evidence,
             accumulated_threat_level,
+            risk_accumulated_threat_level,
         )
         self.give_evidence_to_exporting_modules(evidence)
 
@@ -456,7 +555,14 @@ class EvidenceHandlerWorker(IModule):
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
 
-        if accumulated_threat_level < self.detection_threshold_in_this_width:
+        if self.is_running_non_stop:
+            # here we use the RATL to dynamically change the risk weight of
+            # slips
+            score = risk_accumulated_threat_level
+        else:
+            score = accumulated_threat_level
+
+        if score < self.detection_threshold_in_this_width:
             return
 
         tw_evidence = self.get_evidence_for_tw(profileid, twid)
@@ -472,7 +578,9 @@ class EvidenceHandlerWorker(IModule):
             timewindow=evidence.timewindow,
             last_evidence=evidence,
             accumulated_threat_level=accumulated_threat_level,
+            accumulated_ratl=risk_accumulated_threat_level,
             correl_id=list(tw_evidence.keys()),
+            risk_level=current_risk_weight,
         )
         self.handle_new_alert(alert, tw_evidence)
 

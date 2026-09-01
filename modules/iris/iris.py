@@ -4,6 +4,7 @@ from pathlib import Path
 
 
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.ips import IPV4_LOCALHOST
 from slips_files.common.abstracts.imodule import IModule
 import json
 import os
@@ -55,11 +56,11 @@ class Iris(IModule):
             # Ensure the Redis section exists and update the port
             if "Redis" in config:
                 config["Redis"]["Port"] = redis_port
-                config["Redis"]["Host"] = "127.0.0.1"
+                config["Redis"]["Host"] = IPV4_LOCALHOST
                 config["Redis"]["Tl2NlChannel"] = "iris_internal"
             else:
                 config["Redis"] = {
-                    "Host": "127.0.0.1",
+                    "Host": IPV4_LOCALHOST,
                     "Port": redis_port,
                     "Tl2NlChannel": "iris_internal",
                 }

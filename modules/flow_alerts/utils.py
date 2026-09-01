@@ -4,11 +4,12 @@ from typing import Any
 import ipaddress
 from datetime import datetime
 
+from slips_files.common.ips import SPECIAL_IPV4_ADDRESSES
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
 DHCPV6_PORTS = {"546", "547"}
-SPECIAL_IPV4 = ("0.0.0.0", "255.255.255.255")
+SPECIAL_IPV4 = SPECIAL_IPV4_ADDRESSES
 
 
 def get_ip_to_check(flow: Any, what_to_check: str) -> str:

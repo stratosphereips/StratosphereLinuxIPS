@@ -1,3 +1,29 @@
+1.1.23 (Aug 31st, 2026)
+
+* Add an LLM-powered Alert Summary module that generates natural-language analyst summaries of alerts, with historical context and memory across summaries.
+* Add a Regex Generator module that learns and validates regex signatures from traffic.
+* Add an LLM proxy module supporting Anthropic, OpenAI, and Ollama backends.
+* Add a T Cell module for immune-style detection: correlates evidence over time, tracks danger scores, and supports optional decision tracing and offline HTML reports.
+* Replace the `flow_ml_detection` module with two new modules, `ml_linear_model` and `ml_online_model`.
+* Split flow processing into a separate `conn_analyzer` module, so conn.log analysis and flow alerting run as independent processes.
+* Add IDMEF-over-HTTPS exporting, allowing Slips to export each piece of evidence to a remote IDMEF server.
+* Rework Slips risk levels: risk now increases per timewindow based on a configurable risk weight, replacing the old bucket-based design.
+* Fix an ARP module memory leak and a bug detecting the attacker in MITM ARP attacks.
+* Fix problem stopping the evidence handler.
+* Fix Slips crashing on shutdown.
+* Fix problem starting the Redis cache database.
+* Fix a false positive where a known vendor showed as "unknown".
+* Fix password-guessing detection from `notice.log`.
+* Fix problems handling disabled modules.
+* Fix problems sending Linux desktop notifications.
+* Fix the crash in the Wi-Fi interface lookup used for gateway MAC detection.
+* Fix stats/log text overlapping the printed live stats.
+* Fix problem using `--killall`.
+* Speed up module startup time.
+* Add a 7-day cooldown before adopting new pip library versions, to reduce supply-chain risk.
+* Warn when a module is disabled because its dependencies are missing.
+
+
 1.1.22 (Jul 3rd, 2026)
 
 * Improve Slips local-network detection.

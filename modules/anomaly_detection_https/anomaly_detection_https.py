@@ -25,10 +25,20 @@ from slips_files.core.structures.evidence import (
     Victim,
 )
 
-try:
-    from river.drift import ADWIN
-except ImportError:
-    ADWIN = None
+
+def _import_adwin():
+    """
+    Lazily import river's ADWIN. Importing river pulls in scipy.stats,
+    which is expensive (hundreds of ms of import time), so this is
+    deferred until a module instance actually needs drift detection
+    instead of running for every module at Slips startup.
+    """
+    try:
+        from river.drift import ADWIN
+
+        return ADWIN
+    except ImportError:
+        return None
 
 
 @dataclass
@@ -217,8 +227,58 @@ class AnomalyDetectionHTTPS(IModule):
         self.operational_log_path = self.get_module_specific_output_path(
             "anomaly_detection_https.log"
         )
-
         self.host_states: Dict[str, HostState] = {}
+
+    def subscribe_to_channels(self):
+        self.c1 = self.db.subscribe("new_ssl")
+        self.channels = {"new_ssl": self.c1}
+
+    def read_configuration(self):
+        conf = ConfigParser()
+        self.training_hours = conf.https_anomaly_training_hours()
+        self.training_fit_method = conf.https_anomaly_training_fit_method()
+        self.training_alpha = conf.https_anomaly_training_alpha()
+        self.hourly_zscore_threshold = conf.https_anomaly_hourly_zscore_thr()
+        self.flow_zscore_threshold = conf.https_anomaly_flow_zscore_thr()
+        self.adaptation_score_threshold = conf.https_anomaly_adapt_score_thr()
+        self.baseline_alpha = conf.https_anomaly_baseline_alpha()
+        self.drift_alpha = conf.https_anomaly_drift_alpha()
+        self.suspicious_alpha = conf.https_anomaly_suspicious_alpha()
+        self.min_baseline_points = conf.https_anomaly_min_baseline_points()
+        self.max_small_flow_anomalies = (
+            conf.https_anomaly_max_small_flow_anomalies()
+        )
+        self.ja3_min_variants_per_server = (
+            conf.https_anomaly_ja3_min_variants_per_server()
+        )
+        self.requested_use_adwin_drift = conf.https_anomaly_use_adwin_drift()
+        self.adwin_delta = conf.https_anomaly_adwin_delta()
+        self.adwin_clock = conf.https_anomaly_adwin_clock()
+        self.adwin_grace_period = conf.https_anomaly_adwin_grace_period()
+        self.adwin_min_window_length = (
+            conf.https_anomaly_adwin_min_window_length()
+        )
+        self.empirical_threshold_quantile = (
+            conf.https_anomaly_empirical_threshold_quantile()
+        )
+        self.log_verbosity = conf.https_anomaly_log_verbosity()
+        # Operational logs always use emojis and colors.
+        self.log_emojis = True
+        self.log_colors = True
+
+    def pre_main(self):
+        utils.drop_root_privs_permanently()
+        # importing river pulls in scipy.stats, which is expensive
+        # (hundreds of ms). we put it in pre_main() instead of init()
+        # so it doesn't block Slips' main process from starting the rest of
+        # the modules.
+        self._adwin_class = (
+            _import_adwin() if self.requested_use_adwin_drift else None
+        )
+        self.adwin_available = self._adwin_class is not None
+        self.use_adwin_drift = (
+            self.requested_use_adwin_drift and self.adwin_available
+        )
         self.log_event(
             1,
             "module_start",
@@ -255,50 +315,6 @@ class AnomalyDetectionHTTPS(IModule):
                 "module_start",
                 "ADWIN requested but river is not installed; using pre-ADWIN drift logic.",
             )
-
-    def subscribe_to_channels(self):
-        self.c1 = self.db.subscribe("new_ssl")
-        self.channels = {"new_ssl": self.c1}
-
-    def read_configuration(self):
-        conf = ConfigParser()
-        self.training_hours = conf.https_anomaly_training_hours()
-        self.training_fit_method = conf.https_anomaly_training_fit_method()
-        self.training_alpha = conf.https_anomaly_training_alpha()
-        self.hourly_zscore_threshold = conf.https_anomaly_hourly_zscore_thr()
-        self.flow_zscore_threshold = conf.https_anomaly_flow_zscore_thr()
-        self.adaptation_score_threshold = conf.https_anomaly_adapt_score_thr()
-        self.baseline_alpha = conf.https_anomaly_baseline_alpha()
-        self.drift_alpha = conf.https_anomaly_drift_alpha()
-        self.suspicious_alpha = conf.https_anomaly_suspicious_alpha()
-        self.min_baseline_points = conf.https_anomaly_min_baseline_points()
-        self.max_small_flow_anomalies = (
-            conf.https_anomaly_max_small_flow_anomalies()
-        )
-        self.ja3_min_variants_per_server = (
-            conf.https_anomaly_ja3_min_variants_per_server()
-        )
-        self.requested_use_adwin_drift = conf.https_anomaly_use_adwin_drift()
-        self.adwin_delta = conf.https_anomaly_adwin_delta()
-        self.adwin_clock = conf.https_anomaly_adwin_clock()
-        self.adwin_grace_period = conf.https_anomaly_adwin_grace_period()
-        self.adwin_min_window_length = (
-            conf.https_anomaly_adwin_min_window_length()
-        )
-        self.empirical_threshold_quantile = (
-            conf.https_anomaly_empirical_threshold_quantile()
-        )
-        self.adwin_available = ADWIN is not None
-        self.use_adwin_drift = (
-            self.requested_use_adwin_drift and self.adwin_available
-        )
-        self.log_verbosity = conf.https_anomaly_log_verbosity()
-        # Operational logs always use emojis and colors.
-        self.log_emojis = True
-        self.log_colors = True
-
-    def pre_main(self):
-        utils.drop_root_privs_permanently()
 
     def shutdown_gracefully(self):
         # Flush all open hourly buckets at shutdown.
@@ -424,7 +440,7 @@ class AnomalyDetectionHTTPS(IModule):
 
     def get_or_create_hourly_adwin(self, state: HostState, signal_name: str):
         if signal_name not in state.hourly_adwins and self.adwin_available:
-            state.hourly_adwins[signal_name] = ADWIN(
+            state.hourly_adwins[signal_name] = self._adwin_class(
                 delta=self.adwin_delta,
                 clock=self.adwin_clock,
                 grace_period=self.adwin_grace_period,
@@ -434,7 +450,7 @@ class AnomalyDetectionHTTPS(IModule):
 
     def get_or_create_flow_adwin(self, state: HostState, signal_name: str):
         if signal_name not in state.flow_adwins and self.adwin_available:
-            state.flow_adwins[signal_name] = ADWIN(
+            state.flow_adwins[signal_name] = self._adwin_class(
                 delta=self.adwin_delta,
                 clock=self.adwin_clock,
                 grace_period=self.adwin_grace_period,
@@ -759,7 +775,7 @@ class AnomalyDetectionHTTPS(IModule):
                 src_port = None
 
         evidence = Evidence(
-            evidence_type=EvidenceType.MALICIOUS_FLOW,
+            evidence_type=EvidenceType.ANOMALOUS_FLOW,
             description=description,
             attacker=Attacker(
                 direction=Direction.SRC,

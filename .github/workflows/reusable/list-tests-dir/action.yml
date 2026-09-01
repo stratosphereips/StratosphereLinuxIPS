@@ -10,7 +10,7 @@ inputs:
     default: ""
 outputs:
   test_files:
-    description: "JSON array of integration test files (relative to tests/)"
+    description: "JSON array of test file metadata objects"
     value: ${{ steps.set-matrix.outputs.files }}
 
 runs:
@@ -19,7 +19,18 @@ runs:
     - id: set-matrix
       shell: bash
       run: |
-        # Find files in test_dir/ and optionally prefix entries for consumers.
         PREFIX="${{ inputs.output_prefix }}"
-        FILES=$(find "${{ inputs.test_dir }}" -name "test_*.py" -printf "%P\n" | sed "s|^|${PREFIX}|" | jq -R -s -c 'split("\n")[:-1]')
+        FILES=$(find "${{ inputs.test_dir }}" -name "test_*.py" -printf "%P\n" | jq -R -s -c --arg prefix "$PREFIX" '
+          split("\n")[:-1]
+          | map({
+              test_file: ($prefix + .),
+              display_name: (
+                split("/")
+                | if length >= 2
+                  then .[-2] + "/" + .[-1]
+                  else .[-1]
+                  end
+              )
+            })
+        ')
         echo "files=$FILES" >> "$GITHUB_OUTPUT"

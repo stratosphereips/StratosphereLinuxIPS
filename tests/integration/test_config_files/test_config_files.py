@@ -13,6 +13,7 @@ import pytest
 from tests.common_test_utils import (
     is_evidence_present,
     create_output_dir,
+    allocate_started_redis_port,
     assert_no_errors,
     check_for_text,
     get_total_analyzed_ips_from_output,
@@ -51,7 +52,10 @@ def test_conf_file(
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
-    redis_port = integration_port_factory("redis")
+    output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     CONFIG_FILES_DIR.mkdir(parents=True, exist_ok=True)
     config_file = modify_yaml_config(
         output_filename=f"config_test_{redis_port}.yaml",
@@ -73,13 +77,11 @@ def test_conf_file(
                 "disable": [
                     "template",
                     "ensembling",
-                    "flow_ml_detection",
                     "feeds_update_manager",
                 ]
             },
         },
     )
-    output_dir = create_output_dir(output_dir)
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
@@ -90,7 +92,11 @@ def test_conf_file(
         command = f"{command} > {output_file} 2>&1"
         print("running slips ...")
         # this function returns when slips is done
-        run_slips(command)
+        # this specific test needs more than the default 300s timeout
+        # under CI's parallel pytest-xdist workers, otherwise it gets
+        # killed mid-run before its graceful shutdown (and zeek files
+        # cleanup) can happen
+        run_slips(command, timeout=800)
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Comparing profiles with expected profiles")
@@ -127,7 +133,7 @@ def test_conf_file(
         # test label=malicious
         assert get_label_count_from_output_db(output_dir, "malicious") > 370
         # test disable
-        for module in ["template", "flow_ml_detection"]:
+        for module in ["template"]:
             print(f"Checking if {module} is disabled")
             assert check_for_text(module, output_dir)
         success = True
@@ -161,7 +167,10 @@ def test_conf_file2(
         binaries=("redis-server",),
         require_zeek_or_bro=True,
     )
-    redis_port = integration_port_factory("redis")
+    output_dir = create_output_dir(output_dir)
+    redis_port = allocate_started_redis_port(
+        integration_port_factory, output_dir
+    )
     CONFIG_FILES_DIR.mkdir(parents=True, exist_ok=True)
     config_file = modify_yaml_config(
         output_filename=f"config_test2_{redis_port}.yaml",
@@ -176,14 +185,12 @@ def test_conf_file2(
                 "disable": [
                     "template",
                     "ensembling",
-                    "flow_ml_detection",
                     "feeds_update_manager",
                 ]
             },
         },
     )
 
-    output_dir = create_output_dir(output_dir)
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")

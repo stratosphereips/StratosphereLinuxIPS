@@ -6,10 +6,12 @@ import redis
 import os
 import psutil
 import socket
+import sys
 import time
 import subprocess
 from typing import Dict, Union
 
+from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
@@ -19,7 +21,7 @@ from slips_files.common.output_paths import (
 )
 from slips_files.core.database.database_manager import DBManager
 
-LOCALHOST = "127.0.0.1"
+LOCALHOST = IPV4_LOCALHOST
 
 
 class AlreadyKilledErr(Exception):
@@ -166,6 +168,10 @@ class RedisManager:
                         "Save the DB\n"
                     )
 
+                db = getattr(self.main, "db", None)
+                zeek_dir = '""'
+                if db:
+                    zeek_dir = db.get_zeek_output_dir()
                 zeek_dir = self.main.args.output
 
                 f.write(
@@ -231,7 +237,10 @@ class RedisManager:
         start_redis_server = not utils.is_port_in_use(redis_port)
         # we dont care about the logger here we're just making sure the
         # server is up, this r isnt gonna be used later
-        logger = ""
+        logger = Output(
+            create_logfiles=False,
+            slips_args=getattr(self.main, "args", None),
+        )
         redis = RedisDB(
             logger,
             redis_port,
@@ -255,7 +264,7 @@ class RedisManager:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 # Attempt to bind to the port
-                sock.bind(("localhost", port))
+                sock.bind((LOCALHOST_HOSTNAME, port))
                 # Close the socket if successful
                 sock.close()
                 return port
@@ -273,7 +282,9 @@ class RedisManager:
         return False
 
     def clear_redis_cache_database(
-        self, redis_host="localhost", redis_port=DEFAULT_REDIS_PORT
+        self,
+        redis_host=LOCALHOST_HOSTNAME,
+        redis_port=DEFAULT_REDIS_PORT,
     ) -> bool:
         """
         Clear cache database
@@ -598,9 +609,13 @@ class RedisManager:
                 f"being used.\nAre you sure you want to {alter} it? ["
                 f"y/n]\n> "
             )
+            if not sys.stdin.isatty():
+                return True
             answer = input(msg)
             if answer.lower() == "y":
                 return True
+        except EOFError:
+            return True
         except KeyboardInterrupt:
             pass
 
@@ -624,8 +639,14 @@ class RedisManager:
         return False
 
     def _get_dbmanager_without_starting_a_new_server(self, port):
+        logger = getattr(self.main, "logger", None)
+        if logger is None:
+            logger = Output(
+                create_logfiles=False,
+                slips_args=getattr(self.main, "args", None),
+            )
         return DBManager(
-            Output(),
+            logger,
             self.main.args.output,
             port,
             self.main.conf,
@@ -757,6 +778,24 @@ class RedisManager:
                 os.remove(tmpfile)
             raise e
 
+    def _get_redis_server_selection(self) -> int:
+        """
+        Read the selected Redis server from stdin.
+
+        Returns:
+            The selected server number, or 0 when stdin is unavailable.
+        """
+        if sys.stdin.isatty():
+            try:
+                return int(input())
+            except EOFError:
+                return 0
+            except ValueError:
+                print("Invalid input.")
+                self.main.terminate_slips()
+
+        return 0
+
     def flush_and_kill(self, pid: int, port):
         """
         raises UserCancelledErr or AlreadyKilledErr if redis isnt killed,
@@ -794,14 +833,11 @@ class RedisManager:
             if not open_servers:
                 self.main.terminate_slips()
 
-            try:
-                server_to_close: int = int(input())
-            except ValueError:
-                print("Invalid input.")
-                self.main.terminate_slips()
+            server_to_close: int = self._get_redis_server_selection()
 
-            # close all ports in running_slips_logs.txt and in our supported range
             if server_to_close == 0:
+                # close all ports in running_slips_logs.txt
+                # and in our supported range
                 self.close_all_ports()
                 self.main.terminate_slips()
                 return

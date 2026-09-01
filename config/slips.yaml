@@ -35,7 +35,6 @@ output:
   logs: slips.log
 
 #############################
-
 parameters:
   # The verbosity is related to how much data you want to see about the
   # detections.
@@ -50,7 +49,7 @@ parameters:
   # For 1 minute
   # time_window_width : 60
   # For 5 min
-  # time_window_width : 300
+#  time_window_width : 300
   # For 1 hour
   time_window_width: 3600
   # For 1 day
@@ -205,9 +204,9 @@ Debug:
 
 #############################
 detection:
-
-  # Evidence detection threshold is the minimum accumulated threat level per
-  # time window needed to generate an alert for that IP.
+  # Evidence detection threshold is used for non-live traffic only, such as
+  # pcaps and Zeek directories. It is the minimum accumulated threat level per
+  # time window needed to generate an alert for that IP in non-live analysis.
   # It controls how sensitive Slips is.
   # The default 0.25 value gives you balanced detections with
   # the optimal false positive rate and TPR.
@@ -226,6 +225,15 @@ detection:
   # Make Slips pop up alerts? Both Linux and Macos
   popup_alerts: false
 
+  # these risk weights define different sensitivity levels in slips.
+  # the higher the risk weight, the more sensitive slips is, the more alerts you will get.
+  low_risk_weight: 0.32
+  medium_risk_weight: 1
+  high_risk_weight: 1.72
+  # When the accumulated evidence weights reach this threshold, slips sets an evidence.
+  # the lower this value is, the more alerts slips will generate.
+  risk_accumulated_threat_level: 5
+
 #############################
 modules:
   # List of modules to ignore. By default we always ignore the template,
@@ -233,8 +241,10 @@ modules:
   # Add the names of other modules that you want to disable
   # (use module snake_case names). Example,
   # threat_intelligence, blocking, network_discovery, timeline, virustotal,
-  # rnn_cc_detection, flow_ml_detection, feeds_update_manager
-  disable: [template]
+  # rnn_cc_detection, feeds_update_manager,
+  # ml_linear_model, ml_online_model
+  disable:
+    - template
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
@@ -242,18 +252,449 @@ modules:
   timeline_human_timestamp: true
 
 #############################
-flow_ml_detection:
-  # This is a module that uses machine learning for detection.
-  # It can be used in train mode or test mode.
-  # The mode 'train' should be used to tell the flow_ml_detection module
-  # that the flows received are all for training.
-  # A label should be provided in the [Parameters] section
-  # mode : train
-  # The mode 'test' should be used for normal Slips usage and  after
-  # training the models, to test in unknown data.
-  # You should have trained at least once with 'Normal' data and once with
-  # 'Malicious' data in order for the test to work.
+llm_proxy:
+  # Enable the shared LLM service module.
+  enabled: false
+
+  # If a request does not specify a backend alias, this one is used.
+  # The value must match one of the keys under backends: below.
+  default_backend: local_qwen
+
+  # Number of worker threads processing LLM requests in parallel.
+  # All caller modules share the same request queue and the same response
+  # channel, so modules must correlate replies by request_id.
+  worker_threads: 2
+
+  # Maximum number of pending requests kept in memory.
+  queue_size: 100
+
+  # Each backend is a named connection that other modules select by alias through the request field backend.
+  backends:
+    slips-goldilock:
+      # slips-goldilock is the fine-tunned model in Slips for general summary and detection.
+      # It is fast enough and good enough
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q5_k_m
+      base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
+    slips-fast:
+      # slips-fast is the fine-tunned model in Slips for fast summary and detection. It has lower quality
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q4_k_m
+      base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
+    slips-high:
+      # slips-high is the fine-tunned model in Slips for high quality. It is slower
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: stratosphere/qwen2.5-1.5b-slips-immune-risk:q8_0
+      base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
+
+    local_qwen:
+      # Supported providers: ollama, openai, anthropic
+      provider: ollama
+      # Default model for this backend alias. Caller modules may override the
+      # model in an individual request while still using this connection.
+      model: qwen2.5:3b
+      base_url: http://127.0.0.1:11434
+      # Optional HTTP timeout in seconds.
+      timeout: 300
+
+    openai_default:
+      provider: openai
+      model: gpt-4o-mini
+      base_url: https://api.openai.com/v1
+      # Provide one of api_key, api_key_env, or api_key_file for providers
+      # that require authentication.
+      api_key_file: config/openai_api_key  # pragma: allowlist secret
+      timeout: 60
+
+    claude_default:
+      provider: anthropic
+      model: claude-sonnet-4-5
+      base_url: https://api.anthropic.com
+      api_key_file: config/anthropic_api_key   # pragma: allowlist secret
+      # Optional Anthropic API version header.
+      anthropic_version: 2023-06-01
+      timeout: 60
+
+#############################
+alert_summary:
+  # the llm_proxy parameter must be enabled and configured for alert summaries.
+  # Enable the analyst-facing alert summary module.
+  enabled: false
+
+  # Write operational logs for this module to:
+  # <output-dir>/llm_proxy-summary/alert_summary.log
+  # log_verbosity levels:
+  # 0 = only create the file
+  # 1 = startup, shutdown, and failures
+  # 2 = per-alert queueing, requests, writes, and reduction progress
+  # 3 = debug details such as prompt-budget decisions
+  log_verbosity: 3
+
+  # Preferred LLM backend aliases for alert summaries. If empty, the module
+  # falls back to the runtime-ready LLM default backend.
+  #allowed_backends: [local_qwen]
+  allowed_backends: [slips-goldilock]
+
+  # Keep the sampling conservative because this module writes one analyst
+  # summary paragraph per alert.
+  llm_temperature: 0.2
+
+  # Token budget for the final analyst summary paragraph.
+  llm_max_tokens: 220
+
+  # Hard timeout in seconds for one in-flight shared-LLM request.
+  # Large alerts may require several internal reduction requests before the
+  # final summary request. If a request times out, the module writes a
+  # one-line error entry for that alert. Set to 0 to wait indefinitely.
+  llm_response_timeout_seconds: 300
+
+  # Include recent alert history for the same source/profile as extra context
+  # in the final analyst-summary prompt.
+  history_enabled: true
+
+  # Number of prior summarized alerts kept in memory per profile.
+  history_max_alerts: 3
+
+  # Approximate token budget reserved for recent alert history in the final
+  # analyst-summary prompt.
+  history_max_tokens: 700
+
+  # Number of dominant grouped patterns stored from each prior alert.
+  history_patterns_per_alert: 2
+
+#############################
+regex_generator:
+  # Enable the shared regex generator module.
+  enabled: false
+
+  # Create output/regex_generator.log with detailed internal progress logs.
+  # This file follows the global parameters.rotation / rotation_period policy.
+  create_log_file: true
+
+  # Wait this many seconds between completed generation cycles.
+  # Set to 0 to start the next cycle immediately after the previous one
+  # finishes and the module is ready again.
+  generation_interval_seconds: 0
+
+  # Preferred LLM backend aliases for this module. If empty, the module falls
+  # back to the runtime-ready LLM default backend.
+  allowed_backends: [local_qwen]
+
+  # Keep the temperature high enough to encourage variation over time.
+  llm_temperature: 1.2
+
+  # Token budget for the LLM response. The prompt asks for one regex line only,
+  # so this should stay very small.
+  llm_max_tokens: 80
+
+  # Soft warning threshold in seconds while waiting for the matching
+  # llm_response. The module keeps waiting after this and only logs that the
+  # LLM is slow. Set to 0 to disable the warning.
+  llm_response_timeout_seconds: 300
+
+  # Prompt history is not sent to the LLM. Repetition is checked locally with a
+  # bloom filter plus exact DB lookup, so keep this at 0.
+  recent_history_size: 0
+
+  # Reject generated regexes longer than this many characters.
+  max_regex_length: 180
+
+  # Hard wall-clock timeout for local regex validation and benign-corpus
+  # matching. This prevents one pathological regex from freezing the module.
+  # Set to 0 to disable the timeout.
+  regex_validation_timeout_seconds: 2
+
+  # Benign match strength threshold from 0 to 100. A generated regex is
+  # rejected only when its strongest match against a benign string reaches
+  # this score. Higher values are more permissive.
+  benign_match_strength_threshold: 75
+
+  # Weighted random choice for the next regex type to generate.
+  type_weights:
+    dns_domain: 1
+    uri: 1
+    filename: 1
+    tls_sni: 1
+    certificate_cn: 1
+
+  # Directory that stores the benign corpus DB and the generated regex DB.
+  # Absolute paths are used as-is. Relative paths are resolved inside the
+  # output directory of the current Slips run.
+  store_dir: output/regex_generator
+
+  # Stable directory for the regex SQLite files. Relative paths are resolved
+  # inside parameters.permanent_dir. If set, it takes precedence over
+  # store_dir and lets the generator reuse the same DBs across many Slips
+  # restarts.
+  persistent_store_dir: databases/regex_store
+
+  # Persist rejected regexes in generated_regexes.sqlite.
+  # Leave this disabled unless you need audit/debug history, otherwise disk
+  # usage will grow with low-value rejected rows.
+  store_rejected_regexes: false
+
+  # If rejected regex persistence is enabled, keep at most this many rejected
+  # rows and prune older ones first. Set to 0 for unlimited retention.
+  max_stored_rejected_regexes: 10000
+
+  # Seed the benign corpus DB once with a small built-in sample for each type.
+  # The module also imports domain entries from the configured local whitelist
+  # file into the benign corpus on each run for dns_domain, tls_sni, and
+  # certificate_cn checks.
+  seed_benign_samples: true
+
+#############################
+t_cell:
+  # Enable the immune-inspired T Cell responder module.
+  enabled: false
+
+  # Create output/t_cell.log with human-readable transition logs.
+  create_log_file: true
+
+  # Keep ANSI colors in the T Cell log file for quick scanning.
+  log_colors: true
+
+  # File log verbosity:
+  # 1 = transitions and terminal actions only
+  # 2 = add decision summaries such as waiting for co-stimulation/context
+  # 3 = add per-evidence debug details such as extracted antigens
+  log_verbosity: 3
+
+  # Optional evaluation trace for auditing why thresholds passed or failed.
+  # off         = disabled
+  # transitions = write detailed traces only when a state transition happens
+  # all         = also trace waiting evaluations
+  decision_trace_mode: on
+
+  # Separate trace file used only when decision_trace_mode is not off.
+  # This path is always resolved inside the selected output directory for the
+  # current Slips run. Absolute or outside paths are not honored.
+  decision_trace_file: t_cell_trace.jsonl
+
+  # Maximum number of contributing evidence rows stored per contributor list
+  # inside the trace file.
+  decision_trace_max_evidence: 10
+
+  # Directory that stores the isolated T Cell SQLite database.
+  # Absolute paths are used as-is. Relative paths are resolved inside the
+  # output directory of the current Slips run.
+  store_dir: output/t_cell/data
+
+  # Optional stable directory for the T Cell SQLite database.
+  # Leave this empty for normal runs because T Cell state is run-specific.
+  # If set, relative paths are resolved inside parameters.permanent_dir.
+  persistent_store_dir: ""
+
+  # Keep processed evidence observations for this many seconds.
+  observation_retention_seconds: 604800
+
+  # How long a cell remains anergic after a PAMP does not match any accepted
+  # regex for its antigen.
+  anergy_ttl_seconds: 21600
+
+  # Time window used to count related PAMP observations for the same
+  # responsible IP.
+  related_lookback_seconds: 3600
+
+  # Saturation point for related PAMP scoring. A value of 5 means that 5 or
+  # more related observations contribute the full score.
+  related_pamps_saturation: 5
+
+  # Saturation point for weighted profile danger:
+  # sum(threat_level_value * confidence) / danger_saturation
+  danger_saturation: 2.5
+
+  # DAMP observations also contribute to danger pressure for the same
+  # responsible IP. That mixed pressure is used by co-stimulation and
+  # context:
+  # combined_raw_danger = pamp_raw_danger + damp_danger_weight * damp_raw_danger
+  damp_danger_weight: 1.5
+
+  # Base activation threshold for co-stimulation. Signal-specific priming
+  # profiles can raise this later for weaker priming sources such as DAMP.
+  co_stimulation_threshold: 0.65
+
+  # Co-stimulation weights are normalized internally.
+  co_stimulation_weights:
+    confidence: 0.35
+    related_pamps: 0.25
+    danger: 0.40
+
+  # Both PAMP and DAMP can move a mature T Cell into state 1 when an
+  # extracted antigen matches an accepted regex. The priming profile
+  # determines how strong that state-1 cell is by shifting later
+  # thresholds, required supporting evidence counts, and how long the
+  # cell can wait before timing out.
+  priming_profiles:
+    PAMP:
+      strength: 1.0
+      co_stimulation_threshold_offset: 0.0
+      effector_threshold_offset: 0.0
+      memory_threshold_offset: 0.0
+      state_wait_timeout_factor: 1.0
+      effector_min_related_count_offset: 0
+      memory_min_related_count_offset: 0
+    DAMP:
+      strength: 0.6
+      co_stimulation_threshold_offset: 0.15
+      effector_threshold_offset: 0.10
+      memory_threshold_offset: 0.05
+      state_wait_timeout_factor: 0.5
+      effector_min_related_count_offset: 1
+      memory_min_related_count_offset: 1
+
+  # Novelty lookback window used to decide whether a matched regex is new.
+  novelty_window_seconds: 86400
+
+  # Recent context window. The previous context window is the immediately
+  # preceding window of the same size.
+  context_recent_window_seconds: 1800
+
+  # Base context threshold for escalating to the effector state. The
+  # effective threshold may be increased by the priming profile.
+  effector_threshold: 0.70
+
+  # Base minimum number of related recent observations required before an
+  # effector response is allowed. The priming profile may add to this.
+  effector_min_related_count: 4
+
+  # Cooldown between effector responses for the same T Cell.
+  effector_cooldown_seconds: 1800
+
+  # Base context threshold for moving into the memory state. The effective
+  # threshold may be increased by the priming profile.
+  memory_threshold: 0.60
+
+  # Maximum recent/previous pressure ratio to consider the threat to be
+  # decreasing enough for memory.
+  memory_trend_ratio_max: 0.60
+
+  # Base minimum number of related recent observations required before
+  # memory is stored. The priming profile may add to this.
+  memory_min_related_count: 3
+
+  # If blocking or ARP-poisoning modules are not running, log a simulated
+  # effector action instead of publishing new_blocking.
+  simulate_effector_without_blocking: true
+
+#############################
+ml_linear_model:
+  # Standalone sklearn-based ML module.
   mode: test
+
+  # Training startup behavior (used only when mode: train):
+  # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
+  # true  -> ignore load paths and train from scratch
+  train_from_scratch: false
+
+  # Write training/testing metrics logs to output dir.
+  # This affects only logging, not training behavior.
+  create_performance_metrics_log_files: true
+
+  # Used only when mode: train.
+  # If true, each training batch is split into train/validation for metrics.
+  validate_on_train: false
+
+  # Used only when validate_on_train is true.
+  # Fraction (0.0-1.0) or percent (1-100) of each training batch used for validation.
+  validation_percentage: 0.1
+
+  # Number of labeled flows collected before each training/retraining step.
+  training_batch_size: 500
+
+  # Reproducibility seed for train/test behavior in this module.
+  seed: 1111
+
+  # Optional per-module override for target conversion values.
+  # benign_target_value: 0.0
+  # malicious_target_value: 1.0
+
+  # Separate log names, so they never overwrite other ML module logs.
+  # Final files are: training_<log_suffix>.log and testing_<log_suffix>.log
+  log_suffix: ml_linear_model
+
+  # Used only in mode: test.
+  # Emit one testing-log snapshot every N processed flows.
+  test_log_batch_size: 1000
+
+  # Artifact paths used by modules/ml_linear_model/ml_linear_model.py
+  # Load paths point to provided reference artifacts for immediate test/warm-start use.
+  model_load_path: modules/ml_linear_model/artifacts/model.bin
+  preprocess_load_path: modules/ml_linear_model/artifacts/scaler.bin
+  pca_load_path: modules/ml_linear_model/artifacts/pca.bin
+  # Store paths point to custom artifacts so training does not overwrite provided ones.
+  model_store_path: modules/ml_linear_model/artifacts/model_custom.bin
+  preprocess_store_path: modules/ml_linear_model/artifacts/scaler_custom.bin
+  pca_store_path: modules/ml_linear_model/artifacts/pca_custom.bin
+
+############################ #
+ml_online_model:
+  # Standalone river-based ML module.
+  mode: test
+
+  # Training startup behavior (used only when mode: train):
+  # false -> warm-start from model_load_path/preprocess_load_path (recommended default)
+  # true  -> ignore load paths and train from scratch
+  train_from_scratch: false
+
+  # Write training/testing metrics logs to output dir.
+  # This affects only logging, not training behavior.
+  create_performance_metrics_log_files: true
+
+  # Used only when mode: train.
+  # If true, each training batch is split into train/validation for metrics.
+  validate_on_train: true
+
+  # Used only when validate_on_train is true.
+  # Fraction (0.0-1.0) or percent (1-100) of each training batch used for validation.
+  validation_percentage: 0.1
+
+  # Number of labeled flows collected before each training/retraining step.
+  training_batch_size: 500
+
+  # Reproducibility seed for train/test behavior in this module.
+  seed: 1111
+
+  # Optional per-module override for target conversion values.
+  # benign_target_value: 0.0
+  # malicious_target_value: 1.0
+
+  # Separate log names, so they never overwrite other ML module logs.
+  # Final files are: training_<log_suffix>.log and testing_<log_suffix>.log
+  log_suffix: ml_online_model
+
+  # Used only in mode: test.
+  # Emit one testing-log snapshot every N processed flows.
+  test_log_batch_size: 1000
+
+  # Artifact paths used by modules/ml_online_model/ml_online_model.py
+  # Load paths point to provided/default artifacts for immediate test/warm-start use.
+  model_load_path: modules/ml_online_model/artifacts/model.bin
+  preprocess_load_path: modules/ml_online_model/artifacts/scaler.bin
+  pca_load_path: modules/ml_online_model/artifacts/pca.bin
+  # Store paths point to custom artifacts so training does not overwrite provided ones.
+  model_store_path: modules/ml_online_model/artifacts/model_custom.bin
+  preprocess_store_path: modules/ml_online_model/artifacts/scaler_custom.bin
+  pca_store_path: modules/ml_online_model/artifacts/pca_custom.bin
+
+  # PCA training params (used only in mode: train)
+  pca_n_components: 11
+  pca_batch_size: 500
 
 #############################
 brute_force_detector:
@@ -405,6 +846,9 @@ whitelists:
   # 2 weeks = 1209600 seconds
   online_whitelist_update_period: 86400
   online_whitelist: https://tranco-list.eu/download/X5QNN/10000
+  # Only store the first N Tranco domains in the database.
+  # RegexGenerator and the offline regex coverage report use this limit.
+  tranco_top_benign_limit: 1000
 
   # if this parameter is set to false, Slips runs with no whitelists at all.
   # May cause a lot of false positives
@@ -445,10 +889,32 @@ flow_alerts:
 exporting_alerts:
 
   # Configuer all the methods Slips will export data with
-  # Available options are slack or stix
+  # Available options are slack, stix or idmef_manager
   # export_to : [stix] (And a TAXII server)
   # export_to : [slack]
+  # export_to : [idmef_manager] (IDMEFv2 HTTPS Server)
   export_to: []
+
+  # IDMEFv2 Manager
+  # When "idmef_manager" is in export_to, Slips acts as an IDMEFv2 Analyzer
+  # and POSTs each evidence to a Manager over mutual TLS 1.3.
+  # For details on the transport and how to set up the certificates, see:
+  # https://datatracker.ietf.org/doc/draft-lehmann-idmefv2-https-transport/
+  idmef_manager:
+    # URL of the IDMEFv2 Manager that Slips should send alerts to.
+    url: https://localhost:8443/
+
+    # Mutual TLS material (required). The Manager requires the Analyzer (Slips)
+    # to present a client certificate, and Slips validates the Manager against
+    # trusted_ca. Certificates must use DNS subjectAltName entries (no
+    # wildcards), per the draft. Provide absolute paths (there are no
+    # defaults); if any file is missing, IDMEFv2 export is disabled.
+    client_certificate: "/path/to/idmef/analyzer.crt"
+    client_private_key: "/path/to/idmef/analyzer.key"
+    trusted_ca: "/path/to/idmef/ca.crt"
+
+    # Timeout (seconds) for each HTTPS request to the IDMEFv2 Manager.
+    timeout: 10
 
   # Slack
   # In case of Slack export, use this channel to send alerts
@@ -549,7 +1015,7 @@ DisabledAlerts:
   # CONNECTION_TO_MULTIPLE_PORTS, HIGH_ENTROPY_DNS_ANSWER,
   # INVALID_DNS_RESOLUTION, PORT_0_CONNECTION, MALICIOUS_JA3, MALICIOUS_JA3S,
   # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
-  # MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
+  # ANOMALOUS_FLOW, MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
   # INCOMPATIBLE_USER_AGENT, EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT,
   # HTTP_TRAFFIC, MALICIOUS_JARM, NETWORK_GPS_LOCATION_LEAKED,
   # ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN, ICMP_ADDRESS_MASK_SCAN,
@@ -559,6 +1025,44 @@ DisabledAlerts:
   # MALICIOUS_DOWNLOADED_FILE, MALICIOUS_URL
   # disabled_detections = [THREAT_INTELLIGENCE_BLACKLISTED_IP]
   disabled_detections: []
+
+#############################
+EvidenceSignals:
+
+  # Slips adds an evidence_signal field to every evidence centrally when it
+  # reaches the shared evidence pipeline. Modules do not need to set it.
+  #
+  # Allowed values are:
+  # - PAMP
+  # - DAMP
+  #
+  # If an evidence type is not listed under overrides, Slips uses
+  # default_signal. Unknown or invalid entries also fall back to PAMP.
+  default_signal: PAMP
+
+  # Override the evidence signal per evidence type.
+  # By default ANOMALOUS_FLOW and MALICIOUS_FLOW are marked as DAMP because
+  # they are emitted by anomaly-detection modules. You can also override
+  # additional evidence types here.
+  overrides:
+    ANOMALOUS_FLOW: DAMP
+    MALICIOUS_FLOW: DAMP
+    UNSOLICITED_ARP: DAMP
+    CONNECTION_TO_MULTIPLE_PORTS: DAMP
+    CONNECTION_TO_PRIVATE_IP: DAMP
+    CONNECTION_WITHOUT_DNS: DAMP
+    DNS_WITHOUT_CONNECTION: DAMP
+    HIGH_ENTROPY_DNS_ANSWER: DAMP
+    LONG_CONNECTION: DAMP
+    MULTIPLE_RECONNECTION_ATTEMPTS: DAMP
+    MULTIPLE_SSH_VERSIONS: DAMP
+    NON_SSL_PORT_443_CONNECTION: DAMP
+    UNKNOWN_PORT: DAMP
+    YOUNG_DOMAIN: DAMP
+    HTTP_TRAFFIC: DAMP
+    MULTIPLE_USER_AGENT: DAMP
+    NON_HTTP_PORT_80_CONNECTION: DAMP
+    SSH_SUCCESSFUL: DAMP
 
 #############################
 Docker:

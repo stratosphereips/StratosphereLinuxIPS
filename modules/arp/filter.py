@@ -1,5 +1,6 @@
 from typing import List
 
+from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 
@@ -37,7 +38,7 @@ class ARPEvidenceFilter:
         return (
             ip in self.our_ips
             and self.args.blocking
-            and "arp_poisoner" in loaded_modules
+            and Modules.ARP_POISONER in loaded_modules
         )
 
     def is_slips_peer(self, ip: str) -> bool:

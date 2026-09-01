@@ -198,6 +198,21 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.mark_self_as_done_processing.assert_called_once()
 
 
+def test_stop_profiler_workers_stops_waiting_when_input_failed():
+    profiler = ModuleFactory().create_profiler_obj()
+    process = Mock()
+    profiler.profiler_child_processes = [process]
+    profiler.is_input_done_event = Mock()
+    profiler.is_input_done_event.wait.side_effect = [False]
+    profiler.is_input_failed_event = Mock()
+    profiler.is_input_failed_event.is_set.return_value = True
+
+    profiler.stop_profiler_workers()
+
+    process.join.assert_called_once_with()
+    assert profiler.did_all_workers_stop.is_set() is True
+
+
 def test_notify_observers_no_observers():
     profiler = ModuleFactory().create_profiler_obj()
     test_msg = {"action": "test"}
@@ -254,6 +269,7 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
         aid_queue=profiler.aid_queue,
         aid_manager=profiler.aid_manager,
         is_input_done_event=profiler.is_input_done_event,
+        total_processes_to_start=profiler.total_processes_to_start,
     )
     worker.start.assert_called_once()
     assert profiler.profiler_child_processes == [worker]

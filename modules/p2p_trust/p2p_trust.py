@@ -11,6 +11,7 @@ from typing import Dict, Optional, Tuple
 import json
 import socket
 
+from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -30,7 +31,7 @@ from slips_files.core.structures.evidence import (
     Direction,
 )
 
-LOCALHOST = "127.0.0.1"
+LOCALHOST = IPV4_LOCALHOST
 
 
 def validate_slips_data(message_data: str) -> (str, int):
@@ -172,7 +173,7 @@ class Trust(IModule):
                 continue
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
-                sock.bind(("0.0.0.0", port))
+                sock.bind((IPV4_ANY, port))
                 sock.close()
                 return port
             except Exception:
@@ -656,7 +657,7 @@ class Trust(IModule):
             "-port": str(self.port),
             "-host": self.host,
             "-key-file": self.pigeon_key_file,
-            "--redis-db": f"localhost:{self.redis_port}",
+            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
         }

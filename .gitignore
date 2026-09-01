@@ -5,6 +5,7 @@ __pycache__/
 2019*/
 2020*/
 .DS_Store
+.claude/
 # Do not store in git the files from the IoCs that we downloaded
 *.etag
 *.time
@@ -20,7 +21,7 @@ daemon/
 
 # Ignore private AGENTS.md, may contain private paths
 private/AGENTS.md
-
+scripts/
 
 # Ignore the results folders
 2019-
@@ -178,7 +179,12 @@ dataset-private/*
 appendonly.aof
 /p2p_db.sqlite
 old-pipeline/
-
-
+databases/regex_store/
+utils/immune_web_sim/runs/
+config/redis.conf
+.vscode/launch.json
 # permanen p2p dbs and encryption keys
 permanent/
+performance_metrics/
+modules/ml_linear_model/artifacts/
+modules/ml_online_model/artifacts/

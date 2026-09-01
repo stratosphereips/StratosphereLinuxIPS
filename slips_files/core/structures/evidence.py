@@ -16,6 +16,7 @@ from typing import (
 )
 
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.risk_weights import RiskWeight
 
 
 # IMPORTANT: remember to update dict_to_evidence() function based on the
@@ -85,7 +86,10 @@ class EvidenceType(Enum):
     BAD_SMTP_LOGIN = auto()
     SMTP_LOGIN_BRUTEFORCE = auto()
     MALICIOUS_SSL_CERT = auto()
+    ANOMALOUS_FLOW = auto()
     MALICIOUS_FLOW = auto()
+    ML_LINEAR_MALICIOUS_FLOW = auto()
+    ML_ONLINE_MALICIOUS_FLOW = auto()
     SUSPICIOUS_USER_AGENT = auto()
     EMPTY_CONNECTIONS = auto()
     INCOMPATIBLE_USER_AGENT = auto()
@@ -144,6 +148,14 @@ class ThreatLevel(Enum):
 
     def __str__(self):
         return self.name.lower()
+
+
+class EvidenceSignal(Enum):
+    PAMP = "PAMP"
+    DAMP = "DAMP"
+
+    def __str__(self):
+        return self.name
 
 
 class Proto(Enum):
@@ -301,6 +313,7 @@ class Evidence:
     confidence: float = field(
         default=0.0, metadata={"validate": lambda x: 0 <= x <= 1}
     )
+    risk_level: Optional[RiskWeight] = field(default=None)
     # uuid4 of a related evidence, for example CC client and server
     # evidence are related.
     rel_id: List[str] = field(
@@ -311,6 +324,7 @@ class Evidence:
             )
         },
     )
+    evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -338,7 +352,9 @@ class Evidence:
             f"  Source Port: {self.src_port},\n"
             f"  ID: {self.id},\n"
             f"  Confidence: {self.confidence},\n"
+            f"  Risk Level: {self.risk_level},\n"
             f"  Related ID: {self.rel_id}\n"
+            f"  Evidence Signal: {self.evidence_signal}\n"
             f")"
         )
 
@@ -349,6 +365,13 @@ def dict_to_evidence(evidence: dict) -> Evidence:
     :param evidence: Dictionary with evidence details.
     returns an instance of the Evidence class.
     """
+    try:
+        evidence_signal = EvidenceSignal[
+            str(evidence.get("evidence_signal", "PAMP")).upper()
+        ]
+    except KeyError:
+        evidence_signal = EvidenceSignal.PAMP
+
     evidence_attributes = {
         "evidence_type": EvidenceType[evidence["evidence_type"]],
         "description": evidence["description"],
@@ -378,7 +401,13 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "id": evidence["id"],
         "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
+        "risk_level": (
+            RiskWeight[evidence["risk_level"]]
+            if "risk_level" in evidence and evidence["risk_level"]
+            else None
+        ),
         "method": Method[evidence["method"].upper()],
+        "evidence_signal": evidence_signal,
     }
 
     return Evidence(**evidence_attributes)

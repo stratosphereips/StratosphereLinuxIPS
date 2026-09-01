@@ -18,7 +18,11 @@ from typing import (
 import redis
 import validators
 
+from slips_files.common.slips_utils import utils
 from slips_files.core.structures.flow_attributes import Role
+
+
+from slips_files.common.ips import IPV4_ANY
 
 
 class ProfileHandler:
@@ -693,7 +697,6 @@ class ProfileHandler:
         """
         try:
             if not self.r.zscore(f"tws{profileid}", timewindow):
-                # Add the new TW to the index of TW
                 self.zadd_but_keep_n_entries(
                     f"tws{profileid}", {timewindow: float(startoftw)}, 50
                 )
@@ -815,7 +818,7 @@ class ProfileHandler:
         self, ip, mac, interface
     ) -> bool:
         return not (
-            ip == "0.0.0.0"
+            ip == IPV4_ANY
             or not mac
             # sometimes we create profiles with the mac address.
             # don't save that in MAC hash
@@ -1051,7 +1054,7 @@ class ProfileHandler:
 
             self.zadd_but_keep_n_entries(
                 self.constants.PROFILES,
-                {str(profileid): float(starttime)},
+                {str(profileid): self._get_profile_start_score(starttime)},
                 2000,
             )
 
@@ -1083,6 +1086,13 @@ class ProfileHandler:
             self.print(type(inst), 0, 1)
             self.print(inst, 0, 1)
             return False
+
+    @staticmethod
+    def _get_profile_start_score(starttime) -> float:
+        try:
+            return float(utils.convert_ts_format(starttime, "unixtimestamp"))
+        except Exception:
+            return float(starttime)
 
     def set_module_label_for_profile(self, profileid, module, label):
         """
@@ -1336,7 +1346,6 @@ class ProfileHandler:
         """
         Returns a str MAC vendor of  the given profile or None
         """
-
         return self.r.hget(profileid, self.constants.MAC_VENDOR)
 
     def get_hostname_from_profile(self, profileid: str) -> Optional[str]:

@@ -19,6 +19,7 @@ import psutil
 import random
 from abc import ABCMeta
 
+from slips_files.common.ips import IPV4_LOCALHOST
 from slips_files.common.slips_utils import utils
 
 
@@ -152,7 +153,7 @@ class LiveSingleProcessProfiler(IPerformanceProfiler):
                 ["memray", "live", str(safe_port)], stdout=devnull
             )
         dest = memray.SocketDestination(
-            server_port=safe_port, address="127.0.0.1"
+            server_port=safe_port, address=IPV4_LOCALHOST
         )
         return memray.Tracker(destination=dest)
 
@@ -355,7 +356,7 @@ class MultiprocessPatchMeta(ABCMeta):
                     )
                 )
                 dest = memray.SocketDestination(
-                    server_port=self.port, address="127.0.0.1"
+                    server_port=self.port, address=IPV4_LOCALHOST
                 )
                 self.tracker = memray.Tracker(destination=dest)
                 self.tracker.__enter__()

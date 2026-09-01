@@ -5,11 +5,13 @@ import ipaddress
 import os
 import time
 import threading
-from multiprocessing import Queue
+
+import queue
 from typing import List
 
 from modules.arp.filter import ARPEvidenceFilter
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.ips import BROADCAST_MAC, IPV4_ANY, NULL_MAC
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
@@ -30,7 +32,7 @@ from slips_files.core.structures.evidence import (
 class ARP(IModule):
 
     name = "arp"
-    description = "Detect ARP attacks"
+    description = "Detects ARP attacks"
     authors = ["Alya Gomaa"]
 
     def init(self):
@@ -44,6 +46,9 @@ class ARP(IModule):
         self.delete_arp_periodically = False
         self.arp_log_creation_time = 0
         self.period_before_deleting = 0
+        # we stop combining evidence when this is reached, and we set 1
+        # evidence immediately.
+        self.max_arp_scan_evidence_to_combine = 1200
         if self.delete_zeek_files and not self.store_zeek_files_copy:
             self.delete_arp_periodically = True
             # first time arp.log is created
@@ -55,9 +60,9 @@ class ARP(IModule):
             daemon=True,
             name="timer_thread_arp_scan",
         )
-        self.pending_arp_scan_evidence = Queue()
-        self.alerted_once_arp_scan = False
-        # wait 10s for mmore arp scan evidence to come
+        self.pending_arp_scan_evidence = queue.Queue(maxsize=50)
+        self.alerted_once_arp_scan = {}
+        # wait 10s for more arp scan evidence to come
         self.time_to_wait = 10
         self.is_zeek_running: bool = self.is_running_zeek()
         self.evidence_filter = ARPEvidenceFilter(self.conf, self.args, self.db)
@@ -95,48 +100,65 @@ class ARP(IModule):
         arp scans happened to reduce the number of evidence
         """
         # this evidence is the one that triggered this thread
-        scans_ctr = 0
         while not self.should_stop():
             try:
                 evidence: dict = self.pending_arp_scan_evidence.get(
                     timeout=0.5
                 )
-            except Exception:
-                # nothing in queue
-                time.sleep(5)
+            except queue.Empty:
+                time.sleep(3)
                 continue
-            # unpack the evidence that triggered the thread
-            (ts, profileid, twid, uids) = evidence
 
-            # wait 10s if a new evidence arrived
-            time.sleep(self.time_to_wait)
+            try:
+                # unpack the evidence that triggered the thread
+                (ts, profileid, twid, uids) = evidence
 
-            while True:
-                try:
-                    new_evidence = self.pending_arp_scan_evidence.get(
-                        timeout=0.5
-                    )
-                except Exception:
-                    # queue is empty
-                    break
+                # wait 10s if a new evidence arrived
+                time.sleep(self.time_to_wait)
 
-                (ts2, profileid2, twid2, uids2) = new_evidence
-                if profileid == profileid2 and twid == twid2:
-                    # this should be combined with the past alert
-                    ts = ts2
-                    uids += uids2
-                else:
-                    # this is an ip performing arp scan in a diff
-                    # profile or a diff twid, we shouldn't accumulate its
-                    # evidence  store it back in the queue until we're done
-                    # with the current one
-                    scans_ctr += 1
-                    self.pending_arp_scan_evidence.put(new_evidence)
-                    if scans_ctr == 3:
-                        scans_ctr = 0
+                for _ in range(self.pending_arp_scan_evidence.qsize()):
+                    try:
+                        new_evidence = self.pending_arp_scan_evidence.get(
+                            timeout=0.5
+                        )
+                    except queue.Empty:
                         break
 
-            self.set_evidence_arp_scan(ts, profileid, twid, uids)
+                    (ts2, profileid2, twid2, uids2) = new_evidence
+                    if profileid == profileid2 and twid == twid2:
+                        # this should be combined with the past alert
+                        ts = ts2
+                        uids += uids2
+                        if len(uids) >= self.max_arp_scan_evidence_to_combine:
+                            # enough combining, time to set 1 evidence.
+                            break
+                    else:
+                        # this is an ip performing arp scan in a diff
+                        # profile or a diff twid, we shouldn't accumulate
+                        # its evidence store it back in the queue until
+                        # we're done with the current one
+                        try:
+                            self.pending_arp_scan_evidence.put_nowait(
+                                new_evidence
+                            )
+                        except queue.Full:
+                            # no room to put it back. we already popped it
+                            # off the queue, so set its own evidence now
+                            # instead of silently dropping it, then stop
+                            # draining to avoid an infinite busy loop.
+                            self.set_evidence_arp_scan(
+                                ts2, profileid2, twid2, uids2
+                            )
+                            break
+
+                self.set_evidence_arp_scan(ts, profileid, twid, uids)
+            except Exception as e:
+                self.print(
+                    f"Error in wait_for_arp_scans: {e}. "
+                    f"Evidence: {evidence}",
+                    0,
+                    1,
+                )
 
     def check_arp_scan(self, profileid, twid, flow):
         """
@@ -150,10 +172,7 @@ class ARP(IModule):
         """
 
         # ARP scans are always requests always? mostly? from 00:00:00:00:00:00
-        if (
-            "request" not in flow.operation
-            or "00:00:00:00:00:00" not in flow.dst_hw
-        ):
+        if "request" not in flow.operation or NULL_MAC not in flow.dst_hw:
             return False
 
         def get_uids():
@@ -174,7 +193,7 @@ class ARP(IModule):
             return False
 
         # What is this?
-        if flow.saddr == "0.0.0.0":
+        if flow.saddr == IPV4_ANY:
             return False
 
         daddr_info = {flow.daddr: {"uids": [flow.uid], "ts": flow.starttime}}
@@ -215,18 +234,25 @@ class ARP(IModule):
             # in seconds
             if self.diff <= 30.00:
                 uids = get_uids()
+                profileid_twid = f"{profileid}_{twid}"
                 # we are sure this is an arp scan
-                if not self.alerted_once_arp_scan:
-                    self.alerted_once_arp_scan = True
+                if not self.alerted_once_arp_scan.get(profileid_twid, False):
+                    self.alerted_once_arp_scan[profileid_twid] = True
                     self.set_evidence_arp_scan(
                         flow.starttime, profileid, twid, uids
                     )
                 else:
-                    # after alerting once, wait 10s to see
-                    # if more evidence are coming
-                    self.pending_arp_scan_evidence.put(
-                        (flow.starttime, profileid, twid, uids)
-                    )
+                    # after alerting once, queue the upcoming evidence and
+                    # combine them into 1 evidence to avoid having too many .
+                    try:
+                        self.pending_arp_scan_evidence.put_nowait(
+                            (flow.starttime, profileid, twid, uids)
+                        )
+                    except queue.Full:
+                        # no room for combining evidence, set it immediately.
+                        self.set_evidence_arp_scan(
+                            flow.starttime, profileid, twid, uids
+                        )
 
                 return True
         return False
@@ -269,7 +295,7 @@ class ARP(IModule):
     def check_dstip_outside_localnet(self, twid, flow):
         """Function to setEvidence when daddr is outside the local network"""
 
-        if "0.0.0.0" in flow.saddr or "0.0.0.0" in flow.daddr:
+        if IPV4_ANY in flow.saddr or IPV4_ANY in flow.daddr:
             # this is the case of arp probe, not an
             # arp outside of local network, don't alert
             return False
@@ -292,7 +318,7 @@ class ARP(IModule):
             confidence: float = 0.6
             threat_level: ThreatLevel = ThreatLevel.LOW
             description: str = (
-                f"{flow.saddr} sending ARP packet to a destination "
+                f"sending ARP packet to a destination "
                 f"address outside of local network: {flow.daddr}. "
             )
 
@@ -336,10 +362,10 @@ class ARP(IModule):
         arp caches but can also be used in arp spoofing
         """
         if (
-            flow.dmac == "ff:ff:ff:ff:ff:ff"
-            and flow.dst_hw == "ff:ff:ff:ff:ff:ff"
-            and flow.smac != "00:00:00:00:00:00"
-            and flow.src_hw != "00:00:00:00:00:00"
+            flow.dmac == BROADCAST_MAC
+            and flow.dst_hw == BROADCAST_MAC
+            and flow.smac != NULL_MAC
+            and flow.src_hw != NULL_MAC
         ):
             # We're sure this is unsolicited arp
             # it may be arp spoofing
@@ -408,25 +434,20 @@ class ARP(IModule):
         # with another IP (original_IP)?
         if flow.saddr != original_ip:
             # From our db we know that:
-            # original_IP has src_MAC
-            # now saddr has src_MAC and saddr isn't the same as original_IP
+            # original_IP has flow.smac
+            # now saddr has flow.smac and saddr isn't the same as original_IP
             # so this is either a MITM arp attack or the IP
-            # address of this src_mac simply changed
+            # address of this flow.smac has simply changed
             # todo how to find out which one is it??
-            # Assuming that 'threat_level' and 'category'
-            # are from predefined enums or constants
+
             confidence: float = 0.2  # low confidence for now
             threat_level: ThreatLevel = ThreatLevel.CRITICAL
 
-            attackers_ip = flow.saddr
-            victims_ip = original_ip
+            attackers_ip = original_ip
+            victims_ip = flow.saddr
 
             gateway_ip = self.db.get_gateway_ip(flow.interface)
             gateway_mac = self.db.get_gateway_mac(flow.interface)
-            if flow.saddr == gateway_ip:
-                saddr = f"The gateway {flow.saddr}"
-            else:
-                saddr = flow.saddr
 
             if flow.smac == gateway_mac:
                 src_mac = f"of the gateway {flow.smac}"
@@ -448,9 +469,12 @@ class ARP(IModule):
                 ioc_type=IoCType.IP,
                 value=victims_ip,
             )
-
+            if flow.saddr == gateway_ip:
+                saddr = f"The gateway {flow.saddr}"
+            else:
+                saddr = flow.saddr
             description = (
-                f"{saddr} performing a MITM ARP attack. "
+                f"{attackers_ip} performing a MITM ARP attack. "
                 f"The MAC {src_mac}, now belonging to "
                 f"{saddr}, was seen before for {original_ip}."
             )
@@ -499,8 +523,8 @@ class ARP(IModule):
         # It should be a reply
         # The dst_mac should be ff:ff:ff:ff:ff:ff or 00:00:00:00:00:00
         return "reply" in flow.operation and flow.dst_hw in [
-            "ff:ff:ff:ff:ff:ff",
-            "00:00:00:00:00:00",
+            BROADCAST_MAC,
+            NULL_MAC,
         ]
 
     def clear_arp_logfile(self):
@@ -564,17 +588,11 @@ class ARP(IModule):
                 # Unsolicited ARPs should be of type reply only, not request
                 self.detect_unsolicited_arp(twid, flow)
 
-        # if the tw is closed, remove all its entries from the cache dict
+        # if the tw is closed, remove all its entries from the cache dicts
         if msg := self.get_msg("tw_closed"):
             profileid_tw = utils.get_msg_payload(msg)
             # when a tw is closed, this means that it's too
             # old so we don't check for arp scan in this time
             # range anymore
-            # this copy is made to avoid dictionary
-            # changed size during iteration err
-            cache_copy = self.cache_arp_requests.copy()
-            for key in cache_copy:
-                if profileid_tw in key:
-                    self.cache_arp_requests.pop(key)
-                    # don't break, keep looking for more
-                    # keys that belong to the same tw
+            self.alerted_once_arp_scan.pop(profileid_tw, None)
+            self.cache_arp_requests.pop(profileid_tw, None)

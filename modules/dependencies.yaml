@@ -1,0 +1,14 @@
+# shows the dependency chain of each module
+# children and parents that depend on a grandparent, should be started if the grandparent is properly configured and working fine, and stopped with it otherwise.
+
+modules:
+  llm_proxy:
+    depends_on: []
+
+  regex_generator:
+    depends_on:
+      - llm_proxy
+
+  alert_summary:
+    depends_on:
+      - llm_proxy

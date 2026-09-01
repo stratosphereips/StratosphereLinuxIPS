@@ -19,8 +19,11 @@ class WhitelistUpdaterMixin:
         if not self.enable_online_whitelist:
             return False
 
-        if not self.db.is_tranco_whitelist_expired():
-            # tranco whitelist not expired yet
+        if not self._did_update_period_pass(
+            self.online_whitelist_update_period,
+            "tranco_whitelist",
+        ):
+            self.loaded_ti_files += 1
             return False
 
         # update period passed
@@ -107,21 +110,23 @@ class WhitelistUpdaterMixin:
         self._mark_feed_as_updated(self.mac_db_link)
         return True
 
-    def _update_online_whitelist(self):
+    def _update_online_whitelist(self) -> None:
         """
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
-        # delete the old ones
-        self.db.delete_tranco_whitelist()
         response = self.responses["tranco_whitelist"]
         domains = []
         for line in response.text.splitlines():
-            domain = line.split(",")[1].strip()
+            parts = line.split(",", 1)
+            if len(parts) != 2:
+                continue
+            domain = parts[1].strip().lower()
+            if not utils.is_valid_domain(domain):
+                continue
             domains.append(domain)
-        self.db.store_tranco_whitelisted_domains(
-            domains, ttl=self.online_whitelist_update_period
-        )
+
+        self.db.store_tranco_whitelisted_domains(domains)
 
         self._mark_feed_as_updated("tranco_whitelist")
 

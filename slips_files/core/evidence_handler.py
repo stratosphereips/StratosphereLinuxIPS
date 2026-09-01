@@ -20,33 +20,58 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
 
-import threading
+import json
 import multiprocessing
-from typing import List
+import threading
 import time
+from typing import List
 
 from multiprocessing import Process
 
+from slips_files.common.idmefv2 import IDMEFv2
+from slips_files.common.abstracts.icore import ICore
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
 from slips_files.common.style import (
     green,
 )
-from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.slips_utils import utils
 from slips_files.core.evidence_logger import EvidenceLogger
-from slips_files.common.abstracts.icore import ICore
+from slips_files.core.helpers.notify import Notify
+from slips_files.core.structures.alerts import Alert
+from slips_files.core.text_formatters.evidence_formatter import (
+    EvidenceFormatter,
+)
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
 
 
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
+EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
 
 
 # Evidence Process
 class EvidenceHandler(ICore):
     name = "evidence_handler"
+    description = "Processes evidence from modules and generates alerts"
+    is_evidence_done_by_others = (
+        EvidenceHandlerWorker.is_evidence_done_by_others
+    )
+    is_filtered_evidence = EvidenceHandlerWorker.is_filtered_evidence
+    get_threat_level = EvidenceHandlerWorker.get_threat_level
+    send_to_exporting_module = EvidenceHandlerWorker.send_to_exporting_module
+    is_blocking_modules_supported = (
+        EvidenceHandlerWorker.is_blocking_modules_supported
+    )
+    show_popup = EvidenceHandlerWorker.show_popup
 
-    def init(self):
+    def init(self, total_processes_to_start: int = 1):
+        # shared with every evidence worker this process starts, so
+        # they all announce themselves against the same run-wide total
+        self.total_processes_to_start = total_processes_to_start
         self.read_configuration()
+        self.idmefv2 = IDMEFv2(self.logger, self.db)
+        self.formatter = EvidenceFormatter(self.db, self.args)
+        self.is_running_non_stop = self.db.is_running_non_stop()
         # to keep track of the number of generated evidence
         self.db.init_evidence_number()
         # thats just a tmp value, this variable will be set and used when
@@ -77,6 +102,14 @@ class EvidenceHandler(ICore):
         )
         utils.start_thread(self.logger_thread, self.db)
 
+        conf = ConfigParser()
+        self.exporting_modules_enabled = (
+            conf.export_to() or conf.send_to_warden()
+        )
+        self.notify = None
+        if self.popup_alerts:
+            self.notify = Notify()
+
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("evidence_added")
         self.c2 = self.db.subscribe("new_blame")
@@ -97,15 +130,123 @@ class EvidenceHandler(ICore):
             2,
             0,
         )
+        self.GID = conf.get_GID()
+        self.UID = conf.get_UID()
+
+        self.popup_alerts = conf.popup_alerts()
+        # In docker, disable alerts no matter what slips.yaml says
+        # if IS_IN_A_DOCKER_CONTAINER:
+        #     self.popup_alerts = False
+
+    def handle_unable_to_log(self, failed_log, error=None):
+        self.print(f"Error logging evidence/alert: {error}. {failed_log}.")
+
+    def add_alert_to_json_log_file(self, alert: Alert):
+        """
+        Add a new alert/event line to our alerts.json file in json format.
+        """
+        idmef_alert: dict = self.idmefv2.convert_to_idmef_alert(alert)
+        if not idmef_alert:
+            self.handle_unable_to_log(alert, "Can't convert to IDMEF alert")
+            return
+
+        to_log = {
+            "to_log": idmef_alert,
+            "where": "alerts.json",
+        }
+        self.evidence_logger_q.put(to_log)
+
+    def add_evidence_to_json_log_file(
+        self,
+        evidence,
+        accumulated_threat_level: float = 0,
+    ):
+        """
+        Add a new evidence line to our alerts.json file in json format.
+        """
+        idmef_evidence: dict = self.idmefv2.convert_to_idmef_event(evidence)
+        if not idmef_evidence:
+            self.handle_unable_to_log(
+                evidence, "Can't convert to IDMEF evidence"
+            )
+            return
+
+        try:
+            idmef_evidence.update(
+                {
+                    "Note": json.dumps(
+                        {
+                            # this is all the uids of the flows that cause
+                            # this evidence
+                            "uids": evidence.uid,
+                            "accumulated_threat_level": accumulated_threat_level,
+                            "threat_level": str(evidence.threat_level),
+                            "evidence_signal": str(evidence.evidence_signal),
+                            "timewindow": evidence.timewindow.number,
+                        }
+                    )
+                }
+            )
+
+            to_log = {
+                "to_log": idmef_evidence,
+                "where": "alerts.json",
+            }
+
+            self.evidence_logger_q.put(to_log)
+
+        except KeyboardInterrupt:
+            return True
+        except Exception as e:
+            self.handle_unable_to_log(evidence, e)
+
+    def add_to_log_file(self, data: str):
+        """
+        Add a new evidence line to the alerts.log and other log files if
+        logging is enabled.
+        """
+        to_log = {"to_log": data, "where": "alerts.log"}
+        self.evidence_logger_q.put(to_log)
+
+    def log_alert(self, alert: Alert, blocked=False):
+        """
+        constructs the alert descript ion from the given alert and logs it
+        to alerts.log and alerts.json
+        :param blocked: bool. if the ip was blocked by the blocking module,
+                we should say so in alerts.log, if not, we should say that
+                we generated an alert
+        """
+        now = utils.get_human_readable_datetime()
+
+        alert_description = (
+            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+        )
+        if blocked:
+            # Add to log files that this srcip is being blocked
+            alert_description += "Is blocked "
+        else:
+            alert_description += "Generated an alert "
+
+        alert_description += (
+            f"given enough evidence on timewindow "
+            f"{alert.timewindow.number}. (real time {now})"
+        )
+        # log to alerts.log
+        self.add_to_log_file(alert_description)
+        # log to alerts.json
+        self.add_alert_to_json_log_file(alert)
 
     def shutdown_gracefully(self):
+        self.print("Stopping all workers.", log_to_logfiles_only=True)
         self.stop_evidence_workers()
         self.logger_stop_signal.set()
+        self.print("Stopping the logger thread.", log_to_logfiles_only=True)
         try:
             self.logger_thread.join(timeout=5)
         except Exception:
             pass
 
+        self.print("Stopping the used queues.", log_to_logfiles_only=True)
         used_queues = [
             self.evidence_worker_queue,
             self.evidence_logger_q,
@@ -114,6 +255,7 @@ class EvidenceHandler(ICore):
         for q in used_queues:
             q.cancel_join_thread()
             q.close()
+        self.print("Done shutting down gracefully.")
 
     def stop_evidence_workers(self):
         for _ in self.evidence_worker_child_processes:
@@ -121,7 +263,17 @@ class EvidenceHandler(ICore):
 
         for process in self.evidence_worker_child_processes:
             try:
-                process.join()
+                process.join(timeout=5)
+                if process.is_alive():
+                    self.print(
+                        f"Evidence worker {process.pid} did not stop in time. "
+                        "Killing it.",
+                        0,
+                        1,
+                        log_to_logfiles_only=True,
+                    )
+                    process.kill()
+                    process.join(timeout=1)
             except (OSError, ChildProcessError):
                 pass
 
@@ -139,51 +291,75 @@ class EvidenceHandler(ICore):
             name=worker_name,
             evidence_queue=self.evidence_worker_queue,
             evidence_logger_q=self.evidence_logger_q,
+            notify=self.notify,
+            total_processes_to_start=self.total_processes_to_start,
         )
         worker.start()
         self.evidence_worker_child_processes.append(worker)
 
     def should_stop(self) -> bool:
         """
-        Overrides imodule's should_stop() to make sure thi smodule only
-        stops after 1 minute of the last received evidence.
+        Determine whether the evidence handler can stop safely.
+
+        Return value:
+            True when shutdown was requested and no new evidence arrived
+            during the grace period.
         """
         if not self.termination_event.is_set():
             return False
 
-        if self.is_msg_received_in_any_channel():
-            self.last_msg_received_time = time.time()
-            return False
-
-        # no new msgs are received in any of the channels here
         # wait some extra time for new evidence to arrive
         # without this, slips has problems processing the last evidence
         # sent by some of the modules.
-        if time.time() - self.last_msg_received_time < 30:
+        if (
+            time.time() - self.last_msg_received_time
+            < EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS
+        ):
             return False
 
-        # 1 min passed since the last evidence with no new msgs. stop.
+        # the grace period passed since the last evidence with no new msgs.
         return True
 
+    def queue_incoming_messages(self) -> bool:
+        """
+        Drain one message from each subscribed channel into the worker queue.
+
+        Return value:
+            True when at least one message was forwarded to a worker.
+        """
+        received_message = False
+
+        if msg := self.get_msg("evidence_added"):
+            self.evidence_worker_queue.put(
+                {
+                    "channel": "evidence_added",
+                    "message": msg,
+                }
+            )
+            received_message = True
+
+        if msg := self.get_msg("new_blame"):
+            self.evidence_worker_queue.put(
+                {
+                    "channel": "new_blame",
+                    "message": msg,
+                }
+            )
+            received_message = True
+
+        if received_message:
+            self.last_msg_received_time = time.time()
+
+        return received_message
+
     def pre_main(self):
-        self.print(f"Using threshold: {green(self.detection_threshold)}")
+        if not self.db.is_running_non_stop():
+            self.print(f"Using threshold: {green(self.detection_threshold)}")
         for worker_id in range(DEFAULT_EVIDENCE_HANDLER_WORKERS):
             self.start_evidence_worker(worker_id)
 
     def main(self):
-        while not self.should_stop():
-            if msg := self.get_msg("evidence_added"):
-                self.evidence_worker_queue.put(
-                    {
-                        "channel": "evidence_added",
-                        "message": msg,
-                    }
-                )
-
-            if msg := self.get_msg("new_blame"):
-                self.evidence_worker_queue.put(
-                    {
-                        "channel": "new_blame",
-                        "message": msg,
-                    }
-                )
+        while True:
+            self.queue_incoming_messages()
+            if self.should_stop():
+                return

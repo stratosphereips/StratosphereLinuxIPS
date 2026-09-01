@@ -9,6 +9,7 @@ from typing import List, Optional
 from slips_files.core.profiler_worker import ProfilerWorker
 
 FIVE_MINS = 300
+NUM_INITIAL_PROFILER_WORKERS = 3
 
 
 class WorkerManagerMixin:
@@ -33,7 +34,7 @@ class WorkerManagerMixin:
         self.did_all_workers_stop = multiprocessing.Event()
         self.last_worker_id = -1
         self.active_profiler_workers = 0
-        self.num_of_initial_profiler_workers = 3
+        self.num_of_initial_profiler_workers = NUM_INITIAL_PROFILER_WORKERS
         # max parallel profiler workers to start when high throughput is
         # detected
         self.max_workers = 6
@@ -49,15 +50,7 @@ class WorkerManagerMixin:
     def stop_profiler_workers(self) -> None:
         """
         Wait as long as needed for each worker to stop.
-
-        Return:
-        None.
         """
-        # ensure we don't block forever waiting for workers that will never
-        # receive the stop sentinel
-        if self.is_input_done_event is not None:
-            self.is_input_done_event.wait()
-
         for process in self.profiler_child_processes:
             try:
                 process.join()
@@ -93,6 +86,7 @@ class WorkerManagerMixin:
             aid_queue=self.aid_queue,
             aid_manager=self.aid_manager,
             is_input_done_event=self.is_input_done_event,
+            total_processes_to_start=self.total_processes_to_start,
         )
         worker.start()
         self.profiler_child_processes.append(worker)

@@ -107,6 +107,7 @@ class CleanupMixin:
 
         # delete ALL keys that have the profileid and twid in them.
         pipe = self._del_all_profile_tw_keys(profileid, tw_to_del, pipe)
+
         return pipe
 
     def zadd_but_keep_n_entries(

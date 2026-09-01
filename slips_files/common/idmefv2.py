@@ -9,6 +9,7 @@ from typing import Tuple
 from uuid import uuid4
 import jsonschema
 
+from slips_files.common.ips import IPV4_ANY
 from slips_files.common.printer import Printer
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
@@ -34,7 +35,7 @@ class IDMEFv2PriorityEnum(Enum):
     HIGH = "High"
 
 
-DEFAULT_ADDRESS = "0.0.0.0"
+DEFAULT_ADDRESS = IPV4_ANY
 
 
 class IDMEFv2:
@@ -131,7 +132,7 @@ class IDMEFv2:
 
     def convert_to_idmef_alert(self, alert: Alert) -> Message:
         """
-        converts the given alert to IDMEFv2 alert
+        converts the given alert to IDMEFv2 alert aka Incident
         """
         try:
             now = datetime.now(utils.local_tz).isoformat("T")
@@ -159,6 +160,12 @@ class IDMEFv2:
                     "Note": json.dumps(
                         {
                             "accumulated_threat_level": alert.accumulated_threat_level,
+                            "accumulated_ratl": alert.accumulated_ratl,
+                            "risk_level": (
+                                alert.risk_level.name.lower()
+                                if alert.risk_level
+                                else None
+                            ),
                             "timewindow": alert.timewindow.number,
                             # temporary. there's an issue with the imefv2 python
                             # library validator, it doesn't recognize the endtime
@@ -217,6 +224,15 @@ class IDMEFv2:
                     "CreateTime": now,
                     "Confidence": evidence.confidence,
                     "Description": evidence.description,
+                    "Note": json.dumps(
+                        {
+                            "risk_level": (
+                                evidence.risk_level.name.lower()
+                                if evidence.risk_level
+                                else None
+                            )
+                        }
+                    ),
                     "Source": [{attacker_type: attacker, "Note": {}}],
                 }
             )
@@ -311,8 +327,6 @@ class IDMEFv2:
                     # remove the note field since its empty
                     del msg["Target"][0]["Note"]
 
-            # PS: The "Note" field is added by the evidencehandler before
-            # logging the evidence to alerts.json
             msg.validate()
             return msg
 

@@ -37,6 +37,10 @@ inputs:
     description: "Matrix job index for unique Docker container names"
     required: false
     default: "0"
+  setup_venv:
+    description: "Create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it (docker execution mode only)"
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -66,6 +70,7 @@ runs:
         OUTPUT_PATH: ${{ inputs.output_path }}
         CONTAINER_PREFIX: ${{ inputs.container_prefix }}
         JOB_INDEX: ${{ inputs.job_index }}
+        SETUP_VENV: ${{ inputs.setup_venv }}
       run: |
         mkdir -p "$OUTPUT_PATH"
         container_name="${CONTAINER_PREFIX}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${JOB_INDEX}"
@@ -78,6 +83,7 @@ runs:
           -e TEST_FILE="$TEST_FILE" \
           -e TEST_PATH_PREFIX="$TEST_PATH_PREFIX" \
           -e PYTEST_WORKERS="$PYTEST_WORKERS" \
+          -e SETUP_VENV="$SETUP_VENV" \
           "$IMAGE_TAG" \
           bash -lc '
             set -e
@@ -92,6 +98,16 @@ runs:
               fi
               sleep 0.5
             done
+            if [ "$SETUP_VENV" = "true" ]; then
+              # Validate this PR against a fresh venv built only from the PRs
+              # install/requirements.txt, rather than the image-baked packages.
+              apt-get update
+              apt-get install -y --no-install-recommends python3.10-venv
+              python3.10 -m venv /tmp/slips-venv
+              . /tmp/slips-venv/bin/activate
+              python3 -m pip install --upgrade pip
+              python3 -m pip install -r install/requirements.txt
+            fi
             python3 -m pytest "${TEST_PATH_PREFIX}${TEST_FILE}" -p no:warnings -vv -s -n "$PYTEST_WORKERS"
           '
 

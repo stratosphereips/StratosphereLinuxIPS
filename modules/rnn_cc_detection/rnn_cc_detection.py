@@ -1,13 +1,16 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import os
+import sys
+import contextlib
 import warnings
 import json
-from typing import Dict
+from typing import Any, Dict
 from uuid import uuid4
 
 import numpy as np
-from tensorflow.keras.models import load_model
 
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.evidence import (
@@ -31,10 +34,34 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
+@contextlib.contextmanager
+def _silence_native_stderr():
+    """Temporarily redirect the C-level stderr (fd 2) to /dev/null.
+
+    TensorFlow prints cuFFT/cuDNN/cuBLAS "already registered" and "computation
+    placer already registered" messages straight from its C++ static
+    initializers to file descriptor 2, before ``absl::InitializeLog()`` runs.
+    Because of that, neither ``TF_CPP_MIN_LOG_LEVEL`` nor the Python logging /
+    absl APIs can suppress them. We silence fd 2 only around the TF import and
+    model load, then restore it so genuine errors stay visible afterwards.
+    """
+    sys.stderr.flush()
+    saved_stderr_fd = os.dup(2)
+    devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    try:
+        os.dup2(devnull_fd, 2)
+        yield
+    finally:
+        sys.stderr.flush()
+        os.dup2(saved_stderr_fd, 2)
+        os.close(devnull_fd)
+        os.close(saved_stderr_fd)
+
+
 class CCDetection(IModule):
     # Name: short name of the module. Do not use spaces
     name = "rnn_cc_detection"
-    description = "Detect C&C channels based on behavioral letters"
+    description = "Detects C&C channels based on behavioral letters"
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
     def init(self):
@@ -171,13 +198,6 @@ class CCDetection(IModule):
         # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
         return pre_behavioral_model
 
-    def get_confidence(self, pre_behavioral_model):
-        threshold_confidence = 100
-        if len(pre_behavioral_model) >= threshold_confidence:
-            return 1
-
-        return len(pre_behavioral_model) / threshold_confidence
-
     def handle_new_letters(self, msg: Dict):
         """handles msgs from the tw_closed channel"""
 
@@ -250,11 +270,28 @@ class CCDetection(IModule):
         twid = profileid_tw[-1]
         self.letters_exporter.export(profileid, twid)
 
+    def load_tcp_model(self) -> Any:
+        """
+        Load the TensorFlow model lazily in the module process.
+
+        TensorFlow is imported here (not at module level) so it is only ever
+        initialized inside this module's own process. This avoids the
+        "computation placer already registered" warning that occurs when TF is
+        imported in the main process and then inherited by forked children.
+
+        Returns:
+            Loaded TensorFlow model instance.
+        """
+        with _silence_native_stderr():
+            from tensorflow.keras.models import load_model
+
+            return load_model("modules/rnn_cc_detection/rnn_model.h5")
+
     def pre_main(self):
         utils.drop_root_privs_permanently()
         # TODO: set the decision threshold in the function call
         try:
-            self.tcpmodel = load_model("modules/rnn_cc_detection/rnn_model.h5")
+            self.tcpmodel = self.load_tcp_model()
         except AttributeError as e:
             self.print("Error loading the model.")
             self.print(e)

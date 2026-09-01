@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from tests.module_factory import ModuleFactory
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 
 
 def test_binetflow_tabs_input_uses_argus_tabs(tmp_path):
@@ -14,7 +15,7 @@ def test_binetflow_tabs_input_uses_argus_tabs(tmp_path):
     input_process.testing = True
     input_process.mark_self_as_done_processing = lambda: None
 
-    handler = input_process.input_handlers[InputType.BINETFLOW_TABS]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.BINETFLOW_TABS](input_process)
     assert handler.run() is True
 
     line_sent = input_process.profiler_queue.get()

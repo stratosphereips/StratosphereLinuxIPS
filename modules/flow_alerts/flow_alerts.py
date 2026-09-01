@@ -7,7 +7,6 @@ from typing import List
 
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.iasync_module import IAsyncModule
-from .conn import Conn
 from .dns import DNS
 from .downloaded_file import DownloadedFile
 from .notice import Notice
@@ -41,18 +40,15 @@ class FlowAlerts(IAsyncModule):
         self.ssh = SSH(self.db, flowalerts=self)
         self.downloaded_file = DownloadedFile(self.db, flowalerts=self)
         self.tunnel = Tunnel(self.db, flowalerts=self)
-        self.conn = Conn(self.db, flowalerts=self)
         self.login = Login(self.db, flowalerts=self)
         # list of async functions to await before flow_alerts shuts down
         self.tasks: List[Task] = []
 
     def subscribe_to_channels(self):
         channels = (
-            "new_flow",
             "new_ssh",
             "new_notice",
             "new_ssl",
-            "tw_closed",
             "new_dns",
             "new_downloaded_file",
             "new_smtp",
@@ -74,12 +70,7 @@ class FlowAlerts(IAsyncModule):
             "new_downloaded_file": [self.downloaded_file],
             "new_notice": [self.notice],
             "new_smtp": [self.smtp],
-            "new_flow": [
-                self.conn,
-                self.ssl,
-            ],
             "new_dns": [self.dns],
-            "tw_closed": [self.conn],
             "new_ssh": [self.ssh],
             "new_software": [self.software],
             "new_tunnel": [self.tunnel],
@@ -97,15 +88,9 @@ class FlowAlerts(IAsyncModule):
             for analyzer in analyzers:
                 # some analyzers are async functions
                 if inspect.iscoroutinefunction(analyzer.analyze):
-                    # analyzer will run normally, until it finishes.
-                    # tasks inside this analyzer will run asynchrously,
-                    # and finish whenever they finish, we'll not wait for them
-                    loop = asyncio.get_event_loop()
-                    task = loop.create_task(analyzer.analyze(msg))
-                    # because Async Tasks swallow exceptions.
-                    task.add_done_callback(self.handle_task_exception)
-                    # to wait for these functions before flow_alerts shuts down
-                    self.tasks.append(task)
+                    # Track async analyzer tasks through create_task so
+                    # completed tasks are removed from self.tasks.
+                    self.create_task(analyzer.analyze, msg)
                     # Allow the event loop to run the scheduled task
                     await asyncio.sleep(0)
                 else:

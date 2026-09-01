@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock, patch
 from tests.module_factory import ModuleFactory
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 
 
 def test_zeek_log_file_input_reads_file(tmp_path):
@@ -18,7 +19,7 @@ def test_zeek_log_file_input_reads_file(tmp_path):
     input_process.zeek_utils.read_zeek_files = MagicMock(return_value=2)
     input_process.mark_self_as_done_processing = MagicMock()
 
-    handler = input_process.input_handlers[InputType.ZEEK_LOG_FILE]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.ZEEK_LOG_FILE](input_process)
     handler.db.add_zeek_file = MagicMock()
     with patch(
         "slips_files.core.input.zeek.zeek_log_file_input.utils.is_ignored_zeek_log_file",

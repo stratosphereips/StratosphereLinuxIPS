@@ -165,31 +165,30 @@ detection:
    # Slips can show a popup/notification with every alert.
    popup_alerts : False
 
+   # these risk weights define different sensitivity levels in slips.
+   # the higher the risk weight, the more sensitive slips is, the more alerts
+   # slips will generate.
+   low_risk_weight : 0.32
+   medium_risk_weight : 1
+   high_risk_weight : 1.72
+
+   # When the accumulated evidence weights reach this threshold, slips creates
+   # an alert.
+   risk_accumulated_threat_level : 5
+
 #############################
 modules:
    # List of modules to ignore. By default we always ignore the template! do not remove it from the list
    # Names of other modules that you can disable (they all should be lowercase with no special characters):
    # threatintelligence, blocking, networkdiscovery, timeline, virustotal,
-   # rnnccdetection, flow_ml_detection, updatemanager
-   disable: [template, updatemanager]
+   # rnnccdetection, feeds_update_manager
+   disable: [template, feeds_update_manager]
 
    # For each line in timeline file there is a timestamp.
    # By default the timestamp is seconds in unix time. However
    # by setting this variable to "True" value the time will be human readable.
    timeline_human_timestamp : True
 
-
-#############################
-flow_ml_detection:
-   # The mode 'train' should be used to tell the flow_ml_detection module
-   # that the flows received are all for training.
-   # A label should be provided in the [Parameters] section
-   # mode : train
-
-   # The mode 'test' should be used after training the models, to test in unknown data.
-   # You should have trained at least once with 'Normal' data and once with
-   # 'Malicious' data in order for the test to work.
-   mode : test
 
 #############################
 virustotal:
@@ -353,7 +352,7 @@ DisabledAlerts:
    # MULTIPLE_RECONNECTION_ATTEMPTS, CONNECTION_TO_MULTIPLE_PORTS, HIGH_ENTROPY_DNS_ANSWER,
    # INVALID_DNS_RESOLUTION, PORT_0_CONNECTION, MALICIOUS_JA3, MALICIOUS_JA3S,
    # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
-   # MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS, INCOMPATIBLE_USER_AGENT,
+   # ANOMALOUS_FLOW, MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS, INCOMPATIBLE_USER_AGENT,
    # EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT, HTTP_TRAFFIC, MALICIOUS_JARM,
    # NETWORK_GPS_LOCATION_LEAKED, ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN,
    # ICMP_ADDRESS_MASK_SCAN, DHCP_SCAN, MALICIOUS_IP_FROM_P2P_NETWORK, P2P_REPORT,

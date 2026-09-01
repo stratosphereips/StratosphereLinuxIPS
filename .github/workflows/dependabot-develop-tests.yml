@@ -1,0 +1,83 @@
+# Runs unit and integration tests for Dependabot PRs to develop.
+# Unlike the regular unit-tests/integration-tests workflows (which use the
+# prebuilt stratosphereips/slips_dependencies image from Docker Hub), this
+# builds a fresh Docker image from docker/Dockerfile and runs the tests inside
+# it, so dependency bumps are validated against a newly built image.
+
+name: dependabot-develop-tests
+
+on:
+  pull_request:
+    branches:
+      - 'develop'
+
+permissions:
+  contents: read
+
+jobs:
+  build-docker-image:
+    name: Build Docker image
+    # Only run for Dependabot-authored pull requests.
+    if: ${{ github.actor == 'dependabot[bot]' }}
+    runs-on: ubuntu-22.04
+    timeout-minutes: 120
+    outputs:
+      docker_image_artifact_name: ${{ steps.image.outputs.artifact_name }}
+      docker_image_tag: ${{ steps.image.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          lfs: true
+
+      - name: Prepare Docker image metadata
+        id: image
+        run: |
+          image_tag="slips-dependabot-develop-tests:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          artifact_name="slips-dependabot-develop-tests-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
+          echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
+
+      - name: Build Docker image
+        uses: ./.github/workflows/reusable/build-docker-image
+        with:
+          artifact_name: ${{ steps.image.outputs.artifact_name }}
+          image_tag: ${{ steps.image.outputs.image_tag }}
+
+  unit-tests:
+    if: ${{ always() && needs.build-docker-image.result == 'success' }}
+    needs:
+      - build-docker-image
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      test_suite_name: unit-tests
+      test_dir: tests/unit
+      test_path_prefix: tests/unit/
+      pytest_workers: "5"
+      timeout_minutes: 120
+      output_path: output/unit_tests
+      artifact_name_prefix: test_slips-output-
+      container_prefix: slips-unit
+      docker_image_artifact_name: ${{ needs.build-docker-image.outputs.docker_image_artifact_name }}
+      docker_image_tag: ${{ needs.build-docker-image.outputs.docker_image_tag }}
+      setup_venv: true
+
+  integration-tests:
+    if: ${{ always() && needs.build-docker-image.result == 'success' }}
+    needs:
+      - build-docker-image
+    uses: ./.github/workflows/test-suite.yml
+    with:
+      test_suite_name: integration-tests
+      test_dir: tests/integration
+      output_prefix: integration/
+      test_path_prefix: tests/
+      pytest_workers: "3"
+      timeout_minutes: 1800
+      output_path: output/integration_tests
+      artifact_name_suffix: -integration-output
+      container_prefix: slips-integration
+      docker_image_artifact_name: ${{ needs.build-docker-image.outputs.docker_image_artifact_name }}
+      docker_image_tag: ${{ needs.build-docker-image.outputs.docker_image_tag }}
+      setup_venv: true

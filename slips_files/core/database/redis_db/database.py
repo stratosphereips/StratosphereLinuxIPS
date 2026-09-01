@@ -47,8 +47,11 @@ from typing import (
     Set,
 )
 
+from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.core.structures.risk_weights import RiskWeight
+
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
-LOCALHOST = "127.0.0.1"
+LOCALHOST = IPV4_LOCALHOST
 VERSION = utils.get_current_version()
 
 
@@ -117,6 +120,8 @@ class RedisDB(
         "slips2fides",
         "iris_internal",
         "new_zeek_fields_line",
+        "llm_request",
+        "llm_response",
     }
 
     separator = "_"
@@ -323,6 +328,8 @@ class RedisDB(
         # By default False. Meaning we don't DELETE the DB by default.
         cls.config_flush_db: bool = conf.delete_prev_db()
         cls.disabled_detections: List[str] = conf.disabled_detections()
+        cls.default_evidence_signal: str = conf.evidence_signal_default()
+        cls.evidence_signal_overrides: dict = conf.evidence_signal_overrides()
         cls.width = conf.get_tw_width_in_seconds()
         cls.client_ips: List[str] = conf.client_ips()
 
@@ -342,6 +349,14 @@ class RedisDB(
     def get_slips_start_time(cls) -> str:
         """get the time slips started in unix format"""
         return cls.r.get(cls.constants.SLIPS_START_TIME)
+
+    def incr_current_timewindow(self) -> None:
+        self.r.incr(self.constants.CURRENT_TIMEWINDOW)
+        self._set_max_seen_risk_weight(None, RiskWeight.LOW)
+
+    @classmethod
+    def get_current_timewindow(cls) -> Optional[str]:
+        return cls.r.get(cls.constants.CURRENT_TIMEWINDOW)
 
     @classmethod
     def _should_flush_db(cls) -> bool:
@@ -469,6 +484,7 @@ class RedisDB(
             "--daemonize",
             "yes",
         ]
+
         cls.printer.print(
             f"Redis command: {shlex.join(cmd)}",
             log_to_logfiles_only=True,
@@ -505,22 +521,29 @@ class RedisDB(
         Connects to the given port and Sets r and rcache
         Returns a tuple of (bool, error message).
         """
-        try:
-            # db 0 changes everytime we run slips
-            cls.r = cls._connect(cls.redis_port, 0)
-            # port 6379 db 0 is cache, delete it using -cc flag
-            cls.rcache = cls._connect(6379, 1)
+        backoff = 0.5
+        last_err = "database.connect_to_redis_server: connection refused"
+        for attempt in range(3):
+            try:
+                # db 0 changes everytime we run slips
+                cls.r = cls._connect(cls.redis_port, 0)
+                # port 6379 db 0 is cache, delete it using -cc flag
+                cls.rcache = cls._connect(6379, 1)
 
-            # fix  ConnectionRefused error by giving redis time to open
-            time.sleep(1)
+                # the connection to redis is only established
+                # when you try to execute a command on the server.
+                # so make sure it's established first
+                cls.r.client_list()
+                return True, ""
+            except redis.ConnectionError as e:
+                last_err = f"database.connect_to_redis_server: {e}"
+                if attempt < 2:
+                    time.sleep(backoff)
+                    backoff *= 2
+            except Exception as e:
+                return False, f"database.connect_to_redis_server: {e}"
 
-            # the connection to redis is only established
-            # when you try to execute a command on the server.
-            # so make sure it's established first
-            cls.r.client_list()
-            return True, ""
-        except Exception as e:
-            return False, f"database.connect_to_redis_server: {e}"
+        return False, last_err
 
     @classmethod
     def change_redis_limits(cls, client: redis.StrictRedis):
@@ -762,6 +785,124 @@ class RedisDB(
         """
         return self.r.hkeys(self.constants.PIDS)
 
+    @staticmethod
+    def _empty_available_llm_backends() -> dict:
+        return {"default_backend": "", "backends": {}}
+
+    def set_available_llm_backends(self, registry: dict):
+        normalized = self._normalize_available_llm_backends_registry(registry)
+        self.r.set(
+            self.constants.AVAILABLE_LLM_BACKENDS, json.dumps(normalized)
+        )
+
+    def get_available_llm_backends(self) -> dict:
+        if registry := self.r.get(self.constants.AVAILABLE_LLM_BACKENDS):
+            try:
+                registry = json.loads(registry)
+            except json.JSONDecodeError:
+                return self._empty_available_llm_backends()
+            return self._normalize_available_llm_backends_registry(registry)
+
+        return self._empty_available_llm_backends()
+
+    def reset_pending_llm_request_counts(self):
+        """
+        Clear requester-level in-flight LLM request counters.
+
+        The shared LLM service owns this key and resets it on startup and
+        shutdown so stale counts from earlier runs do not block modules.
+        """
+        self.r.delete(self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER)
+
+    def increment_pending_llm_request_count(self, requester: str):
+        """
+        Increment the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: New counter value or 0 when requester is empty.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+        return self.r.hincrby(
+            self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER,
+            requester,
+            1,
+        )
+
+    def decrement_pending_llm_request_count(self, requester: str):
+        """
+        Decrement the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: Updated non-negative counter value.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+
+        key = self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER
+        value = self.r.hincrby(key, requester, -1)
+        if value <= 0:
+            self.r.hdel(key, requester)
+            return 0
+        return value
+
+    def get_pending_llm_request_count(self, requester: str) -> int:
+        """
+        Return the in-flight shared-LLM request count for one requester.
+
+        :param requester: Caller module name.
+        :return: Non-negative count.
+        """
+        requester = str(requester or "").strip()
+        if not requester:
+            return 0
+        value = self.r.hget(
+            self.constants.PENDING_LLM_REQUESTS_BY_REQUESTER,
+            requester,
+        )
+        try:
+            return max(0, int(value or 0))
+        except (TypeError, ValueError):
+            return 0
+
+    def _normalize_available_llm_backends_registry(
+        self, registry: dict
+    ) -> dict:
+        if not isinstance(registry, dict):
+            return self._empty_available_llm_backends()
+
+        backends = registry.get("backends")
+        if not isinstance(backends, dict):
+            backends = {}
+
+        normalized_backends = {}
+        for alias, metadata in backends.items():
+            if not isinstance(alias, str) or not alias.strip():
+                continue
+            if not isinstance(metadata, dict):
+                continue
+
+            provider = str(metadata.get("provider", "")).strip()
+            model = str(metadata.get("model", "")).strip()
+            if not provider or not model:
+                continue
+
+            normalized_backends[alias.strip()] = {
+                "provider": provider,
+                "model": model,
+            }
+
+        default_backend = str(registry.get("default_backend", "")).strip()
+        if default_backend not in normalized_backends:
+            default_backend = ""
+
+        return {
+            "default_backend": default_backend,
+            "backends": normalized_backends,
+        }
+
     def get_disabled_modules(self) -> List[str]:
         if disabled_modules := self.r.hget(
             self.constants.ANALYSIS, "disabled_modules"
@@ -934,9 +1075,9 @@ class RedisDB(
         # sometimes adservers are resolved to 0.0.0.0 or "127.0.0.1" to
         # block the domain.
         # don't store this as a valid dns resolution
-        if query != "localhost":
+        if query != LOCALHOST_HOSTNAME:
             for answer in answers:
-                if answer in (LOCALHOST, "0.0.0.0"):
+                if answer in (LOCALHOST, IPV4_ANY):
                     return False
 
         return True
@@ -1179,35 +1320,59 @@ class RedisDB(
         return self.separator
 
     def store_tranco_whitelisted_domains(
-        self, domains: List[str], ttl: Optional[int] = None
-    ):
+        self,
+        domains: List[str],
+        limit: Optional[int] = None,
+    ) -> None:
         """
-        store whitelisted domains from tranco whitelist in the db
+        Store ordered tranco domains in the db.
+
+        Parameters:
+            domains: Ordered Tranco domains to store. they must be ordered.
+            limit: Optional maximum number of domains to store.
         """
-        # the reason we store tranco whitelisted domains in the cache db
-        # instead of the main db is, we don't want them cleared on every new
-        # instance of slips
-        self.rcache.sadd(self.constants.TRANCO_WHITELISTED_DOMAINS, *domains)
-        if ttl and ttl > 0:
-            self.rcache.expire(
-                self.constants.TRANCO_WHITELISTED_DOMAINS, int(ttl)
+        if limit is not None:
+            if limit <= 0:
+                return
+            domains = domains[:limit]
+
+        with self.rcache.pipeline() as pipe:
+            pipe.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+            if domains:
+                pipe.zadd(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS,
+                    {domain: rank for rank, domain in enumerate(domains)},
+                )
+            pipe.execute()
+
+    def get_tranco_top_domains(self, limit: Optional[int] = None) -> List[str]:
+        end = -1 if limit is None or limit <= 0 else limit - 1
+        try:
+            return (
+                self.rcache.zrange(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS, 0, end
+                )
+                or []
             )
+        except redis.ResponseError as error:
+            if "WRONGTYPE" not in str(error):
+                raise
+            self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+            return []
 
-    def is_tranco_whitelist_expired(self) -> bool:
-        """
-        checks if tranco whitelist is expired based on Redis TTL
-        """
-        ttl = self.rcache.ttl(self.constants.TRANCO_WHITELISTED_DOMAINS)
-        # -2: key does not exist, -1: no expire
-        return ttl <= 0
-
-    def is_whitelisted_tranco_domain(self, domain):
-        return self.rcache.sismember(
-            self.constants.TRANCO_WHITELISTED_DOMAINS, domain
-        )
-
-    def delete_tranco_whitelist(self):
-        return self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+    def is_whitelisted_tranco_domain(self, domain: str) -> bool:
+        try:
+            return (
+                self.rcache.zscore(
+                    self.constants.TRANCO_WHITELISTED_DOMAINS, domain
+                )
+                is not None
+            )
+        except redis.ResponseError as error:
+            if "WRONGTYPE" not in str(error):
+                raise
+            self.rcache.delete(self.constants.TRANCO_WHITELISTED_DOMAINS)
+            return False
 
     def get_asn_info(self, ip: str) -> Optional[Dict[str, str]]:
         """
@@ -1326,6 +1491,30 @@ class RedisDB(
         self.rcache.hset(
             self.constants.ORGANIZATIONS_PORTS, portproto, org_info
         )
+
+    def set_organizations_of_ports(self, entries: list) -> None:
+        """
+        Bulk version of set_organization_of_port().
+        Saves many (organization, ip, portproto) entries in a single
+        round trip to the db instead of 1 hget + 1 hset per entry.
+        :param entries: list of (organization, ip, portproto) tuples
+        """
+        if not entries:
+            return
+
+        cached: dict = self.rcache.hgetall(self.constants.ORGANIZATIONS_PORTS)
+        updated: dict = {}
+        for organization, ip, portproto in entries:
+            raw = updated.get(portproto) or cached.get(portproto)
+            if raw:
+                org_info = json.loads(raw)
+                org_info["ip"].append(ip)
+                org_info["org_name"].append(organization)
+            else:
+                org_info = {"org_name": [organization], "ip": [ip]}
+            updated[portproto] = json.dumps(org_info)
+
+        self.rcache.hset(self.constants.ORGANIZATIONS_PORTS, mapping=updated)
 
     def get_organization_of_port(self, portproto: str):
         """
@@ -2042,6 +2231,15 @@ class RedisDB(
         if not count:
             return 0
         return int(count)
+
+    def increment_modules_started_count(self) -> int:
+        """
+        atomically increments and returns the number of detection
+        modules that finished starting so far, used to show live
+        startup progress since each module announces itself from its
+        own process
+        """
+        return self.r.incr(self.constants.MODULES_STARTED_COUNT, 1)
 
     def store_std_file(self, **kwargs):
         """

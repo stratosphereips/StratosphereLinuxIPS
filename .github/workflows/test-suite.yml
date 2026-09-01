@@ -17,6 +17,13 @@
 #image_tag_prefix: slips-my-tests
 #container_prefix: slips-my-tess
 
+
+# this file runs either
+#  build-docker-image -> dockerfile-image-tests
+# or
+# dependency-image-tests -> prebuilt-docker-image-tests
+
+
 name: test-suite
 
 on:
@@ -86,6 +93,11 @@ on:
         required: false
         default: ""
         type: string
+      setup_venv:
+        description: "Inside the test container, create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it"
+        required: false
+        default: false
+        type: boolean
 
 jobs:
   list-tests:
@@ -115,6 +127,7 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Prepare Docker image metadata
         id: image
@@ -132,7 +145,7 @@ jobs:
 
   dependency-image-tests:
     # runs slips tests inside a pre-built slips dependency docker image at stratosphereips/slips_dependencies
-    name: ${{ inputs.test_suite_name }}
+    name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (dependency image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name == '' && inputs.docker_image_tag == '' }}
     needs: list-tests
     runs-on: ubuntu-22.04
@@ -150,13 +163,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
+        include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
+      - name: Install git-lfs
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends git-lfs
+          git lfs install
+
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Run ${{ inputs.test_suite_name }} for ${{ matrix.test_file }}
         uses: ./.github/workflows/reusable/run-test-file
@@ -169,9 +189,10 @@ jobs:
           artifact_name: ${{ inputs.artifact_name_prefix && format('{0}{1}', inputs.artifact_name_prefix, strategy.job-index) || '' }}
           artifact_name_suffix: ${{ inputs.artifact_name_suffix }}
 
+
   dockerfile-image-tests:
-    # runs slips tests inside a newly created docker image from docker/Dockerfile
-    name: ${{ inputs.test_suite_name }}
+    # runs slips tests inside a newly built img from the "build-docker-image" step.
+    name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (build dockerfile)', inputs.test_suite_name) }}"
     if: ${{ inputs.build_dockerfile }}
     needs:
       - list-tests
@@ -186,16 +207,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
+        include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Download Docker Image
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ needs.build-docker-image.outputs.artifact_name }}
 
@@ -218,7 +240,7 @@ jobs:
 
   prebuilt-docker-image-tests:
     # runs slips tests inside a Docker image built by the caller and passed as an artifact
-    name: ${{ inputs.test_suite_name }}
+    name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (prebuilt image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name != '' && inputs.docker_image_tag != '' }}
     needs: list-tests
     runs-on: ubuntu-22.04
@@ -231,16 +253,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_file: ${{ fromJson(needs.list-tests.outputs.test_files) }}
+        include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+          lfs: true
 
       - name: Download Docker Image
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           name: ${{ inputs.docker_image_artifact_name }}
 
@@ -260,3 +283,4 @@ jobs:
           image_tag: ${{ inputs.docker_image_tag }}
           container_prefix: ${{ inputs.container_prefix }}
           job_index: ${{ strategy.job-index }}
+          setup_venv: ${{ inputs.setup_venv }}

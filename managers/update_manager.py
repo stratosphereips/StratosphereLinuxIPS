@@ -426,7 +426,7 @@ class UpdateManager:
             return True
         return False
 
-    def check_for_update_every_1_day(self) -> bool:
+    def check_for_slips_new_version_every_1_day(self) -> bool:
         """
         return sTrue if a new compatible version is available and slips
         should update itself

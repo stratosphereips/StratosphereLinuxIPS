@@ -642,7 +642,9 @@ def test_should_stop_always_returns_false():
 def test_pre_main_updates_line_processor_cache():
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.name = "profiler_worker_process_2"
+    profiler.total_processes_to_start = 5
     profiler.input_handler.line_processor_cache = {}
+    profiler.db.increment_modules_started_count.return_value = 1
     profiler.db.get_line_processors.return_value = {
         "conn.log": json.dumps({"ts": 0})
     }
@@ -658,8 +660,18 @@ def test_main_returns_when_queue_is_empty():
     profiler = ModuleFactory().create_profiler_worker_obj()
     profiler.get_msg = Mock(return_value=None)
     profiler.get_msg_from_queue = Mock(return_value=None)
+    profiler.is_input_done_event.is_set.return_value = False
 
     assert profiler.main() is None
+
+
+def test_main_stops_when_queue_is_empty_and_input_is_done():
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.get_msg = Mock(return_value=None)
+    profiler.get_msg_from_queue = Mock(return_value=None)
+    profiler.is_input_done_event.is_set.return_value = True
+
+    assert profiler.main() == 1
 
 
 def test_main_stops_on_stop_message():

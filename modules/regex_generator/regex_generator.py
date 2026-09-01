@@ -1,0 +1,853 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+import json
+import random
+import re
+import time
+import uuid
+from hashlib import sha256
+from urllib.parse import urlparse
+
+from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.slips_utils import utils
+from modules.regex_generator.match_strength import (
+    compute_match_strength,
+    measure_regex_specificity,
+)
+from modules.regex_generator.log_rotator import LogRotator
+from modules.regex_generator.regex_errors import _NullTimeout, _SignalTimeout
+from slips_files.core.database.sqlite_db.regex_generator_db import (
+    REGEX_TYPES,
+    RegexGeneratorStorage,
+)
+
+
+PROMPT_VERSION = "regex-generator-v2"
+SYSTEM_PROMPT = """
+Return exactly one regex line.
+No JSON.
+No explanation.
+No code fences.
+Do not wrap the regex in slashes.
+Use a conservative regex subset portable to Zeek and Python.
+Do not use lookbehind, named groups, backreferences, or inline flags.
+Avoid catastrophic backtracking and nested wildcards.
+Keep it specific enough to avoid broad benign matching.
+Keep it under 120 characters.
+Model uncommon lexical structure, not explicit threat vocabulary.
+Do not use literal threat words, brand names, or exact known IOCs.
+""".strip()
+
+TYPE_PROMPTS = {
+    "dns_domain": """
+Generate one DNS domain regex for uncommon suspicious-looking lexical structure.
+Target rare structure such as random-looking labels, encoded-looking subdomains,
+digit-heavy tokens, awkward token boundaries, or unusual subdomain depth.
+The input is only a domain name, not a URL.
+Prefer anchors when useful.
+Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
+""".strip(),
+    "uri": """
+Generate one HTTP URI regex for uncommon suspicious-looking lexical structure.
+Target rare path structure such as encoded segments, awkward separators,
+unusual extension combinations, or long mixed-token segments.
+Avoid ordinary website paths unless the lexical structure is clearly unusual.
+Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
+""".strip(),
+    "filename": """
+Generate one filename regex for uncommon suspicious-looking lexical structure.
+Target rare structure such as double extensions, deceptive token boundaries,
+random-looking names, or unusual risky extension combinations.
+Prefer anchors when useful.
+Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
+""".strip(),
+    "tls_sni": """
+Generate one TLS SNI hostname regex for uncommon suspicious-looking lexical structure.
+Target rare structure such as disposable subdomains, random-looking host labels,
+awkward token composition, or deceptive naming without using explicit threat words.
+The input is only the SNI hostname.
+Prefer anchors when useful.
+Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
+""".strip(),
+    "certificate_cn": """
+Generate one X.509 certificate Common Name regex for uncommon suspicious-looking lexical structure.
+Target rare structure such as deceptive hostnames, awkward token combinations,
+random or encoded-looking names, or unusual service-like naming patterns.
+The input is only the CN text.
+Prefer anchors when useful.
+Do not use words such as malware, trojan, virus, exploit, c2, bot, or ransom.
+""".strip(),
+}
+
+
+class RegexGenerator(IModule):
+    name = "regex_generator"
+    description = "Continuously generates and validates pseudo-random regexes"
+    authors = ["Sebastian Garcia"]
+
+    def init(self):
+        self.channels = {}
+        self.subscribe_to_channels()
+        self.storage = None
+        self.enabled = False
+        self.log_rotator = LogRotator(
+            self.output_dir,
+            self.get_module_specific_output_path("regex_generator.log"),
+        )
+        self.generation_interval_seconds = 5.0
+        self.allowed_backends = []
+        self.llm_temperature = 1.2
+        self.llm_max_tokens = 80
+        self.llm_response_timeout_seconds = 90
+        self.recent_history_size = 0
+        self.max_regex_length = 180
+        self.regex_validation_timeout_seconds = 2.0
+        self.benign_match_strength_threshold = 75.0
+        self.type_weights = {regex_type: 1.0 for regex_type in REGEX_TYPES}
+        self.pending_request = None
+        self.next_generation_at = 0.0
+        self._rng = random.Random()
+        self.read_configuration()
+
+    def subscribe_to_channels(self):
+        """
+        Subscribe to the Redis channels used by the regex generator.
+
+        Returns:
+            None
+        """
+        if self.channels:
+            return
+
+        self.c_llm = self.db.subscribe(self.db.channels.LLM_RESPONSE)
+        self.c_tw_closed = self.db.subscribe("tw_closed")
+        self.channels = {
+            self.db.channels.LLM_RESPONSE: self.c_llm,
+            "tw_closed": self.c_tw_closed,
+        }
+
+    def read_configuration(self):
+        conf = (
+            self.conf
+            if hasattr(self.conf, "regex_generator_enabled")
+            else ConfigParser()
+        )
+        rotation_period_getter = getattr(
+            conf, "default_rotation_interval", None
+        ) or getattr(conf, "rotation_period")
+        self.enabled = conf.regex_generator_enabled()
+        self.log_rotator.create_log_file = (
+            conf.regex_generator_create_log_file()
+        )
+        self.log_rotator.enable_log_rotation = conf.rotation()
+        self.log_rotator.log_rotation_period = (
+            LogRotator.parse_rotation_period_seconds(rotation_period_getter())
+        )
+        self.generation_interval_seconds = (
+            conf.regex_generator_generation_interval_seconds()
+        )
+        self.allowed_backends = conf.regex_generator_allowed_backends()
+        self.llm_temperature = conf.regex_generator_llm_temperature()
+        self.llm_max_tokens = conf.regex_generator_llm_max_tokens()
+        self.llm_response_timeout_seconds = (
+            conf.regex_generator_llm_response_timeout_seconds()
+        )
+        self.recent_history_size = conf.regex_generator_recent_history_size()
+        self.max_regex_length = conf.regex_generator_max_regex_length()
+        self.regex_validation_timeout_seconds = (
+            conf.regex_generator_regex_validation_timeout_seconds()
+        )
+        self.benign_match_strength_threshold = (
+            conf.regex_generator_benign_match_strength_threshold()
+        )
+        self.type_weights = conf.regex_generator_type_weights()
+
+    def pre_main(self):
+        utils.drop_root_privs_permanently()
+
+        if not self.enabled:
+            self.print("RegexGenerator module disabled in config.", 2, 0)
+            return True
+
+        self.log_rotator.output_dir = self.output_dir
+        self.log_rotator.init_log_file()
+        self.storage = RegexGeneratorStorage(
+            self.logger,
+            self.conf,
+            self.output_dir,
+            self.ppid,
+            self.db,
+        )
+        self.next_generation_at = time.time()
+        self.log_detail("RegexGenerator module ready.")
+        self.log_detail(
+            f"Using storage at {self.storage.store_dir}. "
+            f"Benign corpus DB: {self.storage.benign_db.db_path}. "
+            f"Generated regex DB: {self.storage.generated_db.db_path}."
+        )
+        self.log_detail(
+            "Rejected regex persistence is "
+            f"{'enabled' if self.storage.store_rejected_regexes else 'disabled'}."
+        )
+        self.print("RegexGenerator module ready.", 2, 0)
+
+    def shutdown_gracefully(self):
+        self.print("Shutting down.")
+        if self.storage:
+            self.storage.close()
+        return True
+
+    def main(self):
+        self._handle_one_tw_closed_message()
+
+        now = time.time()
+        if self.pending_request:
+            self._handle_pending_response(now)
+            return
+
+        if now < self.next_generation_at:
+            time.sleep(min(0.5, self.next_generation_at - now))
+            return
+
+        available_backends = self.db.get_available_llm_backends()
+        backend = self._select_backend(available_backends)
+        if not backend:
+            self.log_detail(
+                "No runtime-ready LLM backend available yet. Waiting for discovery."
+            )
+            self.print(
+                "RegexGenerator is waiting for a runtime-ready LLM backend.",
+                2,
+                0,
+            )
+            self.next_generation_at = now + self.generation_interval_seconds
+            time.sleep(min(0.5, self.generation_interval_seconds))
+            return
+
+        regex_type = self._choose_regex_type()
+        self.log_detail(
+            f"Starting generation cycle. regex_type={regex_type} backend={backend}"
+        )
+        self._send_generation_request(regex_type, backend)
+
+    def _handle_one_tw_closed_message(self):
+        if self.storage is None:
+            return
+
+        msg = self.get_msg("tw_closed")
+        if not msg:
+            return
+
+        profileid, twid = self._split_profileid_twid(msg.get("data", ""))
+        if not profileid or not twid:
+            return
+
+        if not self._is_host_profile(profileid):
+            return
+
+        alerts = self.db.get_profileid_twid_alerts(profileid, twid) or {}
+        evidence = self._normalize_evidence_records(
+            self.db.get_twid_evidence(profileid, twid) or {}
+        )
+        anomaly_evidence_count = self._count_anomaly_evidence(evidence)
+        self.log_detail(
+            f"Finished host TW profileid={profileid} twid={twid} "
+            f"alerts={len(alerts)} evidence={len(evidence)} "
+            f"anomaly_evidence={anomaly_evidence_count}"
+        )
+
+        if alerts or evidence:
+            return
+
+        learned = self._extract_benign_candidates_from_twid(profileid, twid)
+        learned_counts = {}
+        source = f"clean_client_tw:{profileid}:{twid}"
+        for regex_type, values in learned.items():
+            inserted = self.storage.add_benign_strings(
+                regex_type, values, source
+            )
+            if inserted:
+                learned_counts[regex_type] = inserted
+
+        if learned_counts:
+            summary = ", ".join(
+                f"{regex_type}={count}"
+                for regex_type, count in sorted(learned_counts.items())
+            )
+            self.log_detail(
+                f"Imported runtime benign strings from clean host TW "
+                f"profileid={profileid} twid={twid}: {summary}"
+            )
+
+    @staticmethod
+    def _split_profileid_twid(profileid_twid: str) -> tuple[str, str]:
+        text = str(profileid_twid or "").strip()
+        if not text or "_" not in text:
+            return "", ""
+        profileid, twid = text.rsplit("_", 1)
+        return profileid, twid
+
+    def _is_host_profile(self, profileid: str) -> bool:
+        profile_ip = str(profileid or "").split("_", 1)[-1]
+        host_ips = {str(ip).strip() for ip in self.db.get_all_host_ips() or []}
+        return profile_ip in host_ips
+
+    @staticmethod
+    def _normalize_evidence_records(raw_evidence: dict) -> dict[str, dict]:
+        normalized = {}
+        for evidence_id, payload in (raw_evidence or {}).items():
+            if isinstance(payload, str):
+                try:
+                    payload = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+            if isinstance(payload, dict):
+                normalized[evidence_id] = payload
+        return normalized
+
+    @staticmethod
+    def _count_anomaly_evidence(evidence_records: dict[str, dict]) -> int:
+        anomaly_evidence_types = {"ANOMALOUS_FLOW", "MALICIOUS_FLOW"}
+        count = 0
+        for evidence in evidence_records.values():
+            evidence_type = str(evidence.get("evidence_type", ""))
+            description = str(evidence.get("description", "")).lower()
+            if (
+                evidence_type in anomaly_evidence_types
+                or "anomaly" in evidence_type.lower()
+                or "anomaly" in description
+            ):
+                count += 1
+        return count
+
+    def _extract_benign_candidates_from_twid(
+        self, profileid: str, twid: str
+    ) -> dict[str, set[str]]:
+        learned = {regex_type: set() for regex_type in REGEX_TYPES}
+        altflows = (
+            self.db.get_all_altflows_in_profileid_twid(profileid, twid) or []
+        )
+        for row in altflows:
+            flow = row.get("flow", {})
+            flow_type = row.get("flow_type") or flow.get("type_")
+            if flow_type == "dns":
+                domain = self._normalize_domain(flow.get("query", ""))
+                if domain:
+                    learned["dns_domain"].add(domain)
+            elif flow_type == "http":
+                host = self._normalize_domain(flow.get("host", ""))
+                if host:
+                    learned["dns_domain"].add(host)
+                filename = self._extract_filename_from_uri(flow.get("uri", ""))
+                if filename:
+                    learned["filename"].add(filename)
+            elif flow_type == "ssl":
+                server_name = self._normalize_domain(
+                    flow.get("server_name", "")
+                )
+                if server_name:
+                    learned["tls_sni"].add(server_name)
+                cn = self._extract_cn(flow.get("subject", ""))
+                if cn:
+                    learned["certificate_cn"].add(cn)
+        return learned
+
+    @staticmethod
+    def _normalize_domain(value: str) -> str:
+        domain = str(value or "").strip().rstrip(".").lower()
+        if not domain or not utils.is_valid_domain(domain):
+            return ""
+        return domain
+
+    @staticmethod
+    def _extract_cn(subject: str) -> str:
+        match = re.search(r"(?:^|,)CN=([^,]+)", str(subject or ""))
+        if not match:
+            return ""
+        return match.group(1).strip()
+
+    @staticmethod
+    def _extract_filename_from_uri(uri: str) -> str:
+        value = str(uri or "").strip()
+        if not value:
+            return ""
+        parsed = urlparse(value)
+        path = parsed.path or value
+        filename = path.rsplit("/", 1)[-1].strip()
+        if not filename or "." not in filename:
+            return ""
+        return filename
+
+    def log_detail(self, text: str) -> None:
+        """
+        Append one timestamped progress line to the regex generator log.
+
+        Parameters:
+            text: Log message text to append.
+        """
+        if not self.log_rotator.create_log_file:
+            return
+
+        self.log_rotator.rotate_log_file_if_needed()
+        human_readable_datetime = utils.convert_ts_format(
+            time.time(), utils.alerts_format
+        )
+        with open(
+            self.log_rotator.log_file_path, "a", encoding="utf-8"
+        ) as log_file:
+            log_file.write(f"{human_readable_datetime} - {text}\n")
+
+    def _select_backend(self, available_backends: dict) -> str:
+        available = available_backends.get("backends", {})
+        if not available:
+            return ""
+
+        for backend in self.allowed_backends:
+            if backend in available:
+                return backend
+
+        default_backend = available_backends.get("default_backend", "")
+        if default_backend in available:
+            return default_backend
+
+        if self.allowed_backends:
+            return ""
+
+        return sorted(available)[0]
+
+    def _choose_regex_type(self) -> str:
+        regex_types = list(self.type_weights)
+        weights = [self.type_weights[regex_type] for regex_type in regex_types]
+        return self._rng.choices(regex_types, weights=weights, k=1)[0]
+
+    def _send_generation_request(self, regex_type: str, backend: str):
+        request_id = f"{self.name}-{uuid.uuid4()}"
+        generation_nonce = str(uuid.uuid4())
+        request = {
+            "request_id": request_id,
+            "requester": self.name,
+            "backend": backend,
+            "messages": self._build_prompt_messages(
+                regex_type, generation_nonce
+            ),
+            "temperature": self.llm_temperature,
+            "max_tokens": self.llm_max_tokens,
+            "metadata": {
+                "regex_type": regex_type,
+                "prompt_version": PROMPT_VERSION,
+                "generation_nonce": generation_nonce,
+            },
+        }
+        self.db.publish(
+            self.db.channels.LLM_REQUEST,
+            json.dumps(request),
+        )
+        self.log_detail(
+            f"Published llm_request request_id={request_id} "
+            f"regex_type={regex_type} backend={backend}"
+        )
+        self.pending_request = {
+            "request_id": request_id,
+            "regex_type": regex_type,
+            "backend": backend,
+            "sent_at": time.time(),
+            "generation_nonce": generation_nonce,
+            "last_warning_at": 0.0,
+        }
+
+    def _build_prompt_messages(
+        self,
+        regex_type: str,
+        generation_nonce: str,
+    ) -> list:
+        user_prompt = (
+            f"Type: {regex_type}\n"
+            f"Prompt version: {PROMPT_VERSION}\n"
+            f"Nonce: {generation_nonce}\n"
+            "Goal: generate a regex for uncommon suspicious-looking lexical structure.\n"
+            "Prefer structural contrast over explicit malicious words.\n"
+            "Do not repeat previous generations.\n"
+            f"{TYPE_PROMPTS[regex_type]}\n"
+            "Return one regex only."
+        )
+        return [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ]
+
+    def _handle_pending_response(self, now: float):
+        self._warn_if_llm_is_slow(now)
+
+        if not (msg := self.get_msg(self.db.channels.LLM_RESPONSE)):
+            time.sleep(0.1)
+            return
+
+        try:
+            response = json.loads(msg["data"])
+        except (TypeError, json.JSONDecodeError):
+            return
+
+        if response.get("request_id") != self.pending_request["request_id"]:
+            return
+
+        self.log_detail(
+            f"Received matching llm_response request_id={response.get('request_id')}"
+        )
+        self._finalize_request(response)
+        self.pending_request = None
+        self.next_generation_at = (
+            time.time() + self.generation_interval_seconds
+        )
+
+    def _warn_if_llm_is_slow(self, now: float):
+        if self.llm_response_timeout_seconds <= 0:
+            return
+
+        elapsed = now - self.pending_request["sent_at"]
+        if elapsed <= self.llm_response_timeout_seconds:
+            return
+
+        last_warning_at = self.pending_request.get("last_warning_at", 0.0)
+        warning_interval = max(30.0, float(self.llm_response_timeout_seconds))
+        if last_warning_at and now - last_warning_at < warning_interval:
+            return
+
+        self.print(
+            f"RegexGenerator is still waiting for llm_response after {elapsed:.1f}s.",
+            2,
+            0,
+        )
+        self.log_detail(
+            f"Still waiting for llm_response request_id="
+            f"{self.pending_request['request_id']} elapsed={elapsed:.1f}s"
+        )
+        self.pending_request["last_warning_at"] = now
+
+    def _finalize_request(self, response: dict):
+        if not response.get("success"):
+            self.log_detail(
+                f"LLM response failed request_id={response.get('request_id')} "
+                f"error={response.get('error', 'unknown')}"
+            )
+            self.print(
+                f"RegexGenerator LLM error: {response.get('error', 'unknown')}",
+                0,
+                1,
+            )
+            return
+
+        llm_text = response.get("text", "")
+        regex, rejection_reason = self._extract_regex_from_llm_text(llm_text)
+        if rejection_reason:
+            return
+
+        record = {
+            "regex_type": self.pending_request["regex_type"],
+            "regex": regex,
+            "regex_hash": self._hash_regex(regex),
+            "backend_alias": self.pending_request["backend"],
+            "provider": response.get("provider"),
+            "model": response.get("model"),
+            "temperature": self.llm_temperature,
+            "prompt_version": PROMPT_VERSION,
+            "request_id": self.pending_request["request_id"],
+            "created_at": time.time(),
+        }
+        self._validate_and_store_regex(record)
+
+    def _extract_regex_from_llm_text(
+        self, llm_text: str
+    ) -> tuple[str, str | None]:
+        raw_regex = self._extract_raw_regex_candidate(llm_text)
+        if raw_regex:
+            return raw_regex, None
+
+        payload = self._extract_json_payload(llm_text)
+        if payload is None:
+            return "", "invalid_response"
+
+        if not isinstance(payload, dict):
+            return "", "response_not_object"
+
+        regex = payload.get("regex")
+        if not isinstance(regex, str) or not regex.strip():
+            return "", "missing_regex"
+
+        return regex.strip(), None
+
+    @staticmethod
+    def _extract_raw_regex_candidate(llm_text: str) -> str:
+        if not isinstance(llm_text, str):
+            return ""
+
+        text = RegexGenerator._strip_code_fences(llm_text).strip()
+        if not text:
+            return ""
+
+        for line in text.splitlines():
+            candidate = line.strip().strip("`").strip()
+            if not candidate:
+                continue
+            if candidate.lower().startswith("regex:"):
+                candidate = candidate.split(":", 1)[1].strip()
+            candidate = candidate.strip().strip('"').strip("'")
+            if (
+                candidate.startswith("/")
+                and candidate.endswith("/")
+                and len(candidate) > 1
+            ):
+                candidate = candidate[1:-1].strip()
+            if not candidate or " " in candidate or candidate.startswith("{"):
+                continue
+            if not re.search(r"[\^\$\[\]\(\)\{\}\\\.\|\*\+\?]", candidate):
+                continue
+            return candidate
+
+        return ""
+
+    @staticmethod
+    def _strip_code_fences(text: str) -> str:
+        stripped = text.strip()
+        if not stripped.startswith("```"):
+            return stripped
+
+        lines = stripped.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        return "\n".join(lines).strip()
+
+    @staticmethod
+    def _extract_json_payload(llm_text: str) -> dict | None:
+        if not isinstance(llm_text, str):
+            return None
+
+        candidates = [llm_text.strip()]
+        fenced_match = re.search(
+            r"```(?:json)?\s*(\{.*?\})\s*```",
+            llm_text,
+            flags=re.DOTALL,
+        )
+        if fenced_match:
+            candidates.append(fenced_match.group(1).strip())
+
+        object_text = RegexGenerator._extract_first_json_object(llm_text)
+        if object_text:
+            candidates.append(object_text)
+
+        for candidate in candidates:
+            if not candidate:
+                continue
+            try:
+                return json.loads(candidate)
+            except (TypeError, json.JSONDecodeError):
+                continue
+
+        return None
+
+    @staticmethod
+    def _extract_first_json_object(text: str) -> str | None:
+        start = text.find("{")
+        while start != -1:
+            depth = 0
+            in_string = False
+            escaped = False
+            for idx in range(start, len(text)):
+                char = text[idx]
+                if in_string:
+                    if escaped:
+                        escaped = False
+                    elif char == "\\":
+                        escaped = True
+                    elif char == '"':
+                        in_string = False
+                    continue
+
+                if char == '"':
+                    in_string = True
+                elif char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return text[start : idx + 1].strip()
+
+            start = text.find("{", start + 1)
+
+        return None
+
+    @staticmethod
+    def _short_preview(text: str, limit: int = 200) -> str:
+        text = " ".join(str(text).split())
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}..."
+
+    @staticmethod
+    def _hash_regex(regex: str) -> str:
+        return sha256(regex.encode("utf-8")).hexdigest()
+
+    def _validate_and_store_regex(self, record: dict):
+        try:
+            with self._regex_validation_timeout():
+                validation_error = self._validate_regex(record["regex"])
+        except TimeoutError:
+            self._store_rejected_regex(record, "regex_validation_timeout")
+            return
+
+        if validation_error:
+            self._store_rejected_regex(record, validation_error)
+            return
+
+        if self.storage.might_have_generated_regex(record["regex_hash"]):
+            if self.storage.get_existing_generated_regex(
+                record["regex_hash"]
+            ) or self.storage.was_rejected_in_current_run(
+                record["regex_hash"]
+            ):
+                self.log_detail(
+                    f"Rejected duplicate regex request_id={record['request_id']} "
+                    f"regex_type={record['regex_type']} regex={record['regex']}"
+                )
+                self.print(
+                    f"RegexGenerator rejected duplicate regex: {record['regex']}",
+                    2,
+                    0,
+                )
+                return
+
+        try:
+            with self._regex_validation_timeout():
+                compiled_regex = re.compile(record["regex"])
+                matched_benign, benign_match_score = (
+                    self._find_strong_benign_match(
+                        record["regex_type"],
+                        record["regex"],
+                        compiled_regex,
+                    )
+                )
+        except TimeoutError:
+            self._store_rejected_regex(record, "regex_validation_timeout")
+            return
+
+        if matched_benign:
+            self._store_rejected_regex(
+                record,
+                "matched_benign_data_too_strong",
+                matched_benign_value=matched_benign,
+                benign_match_score=benign_match_score,
+            )
+            return
+
+        record["status"] = "accepted"
+        record["rejection_reason"] = None
+        record["matched_benign_value"] = None
+        self.storage.store_generated_regex(record)
+        self.log_detail(
+            f"Accepted regex request_id={record['request_id']} "
+            f"regex_type={record['regex_type']} regex={record['regex']}"
+        )
+
+    def _store_rejected_regex(
+        self,
+        record: dict,
+        rejection_reason: str,
+        matched_benign_value: str | None = None,
+        benign_match_score: float | None = None,
+    ):
+        record["status"] = "rejected"
+        record["rejection_reason"] = rejection_reason
+        record["matched_benign_value"] = matched_benign_value
+        self.storage.store_generated_regex(record)
+        extra = (
+            f" matched_benign_value={matched_benign_value}"
+            if matched_benign_value
+            else ""
+        )
+        if benign_match_score is not None:
+            extra += f" benign_match_score={benign_match_score:.2f}"
+        self.log_detail(
+            f"Rejected regex request_id={record['request_id']} "
+            f"regex_type={record['regex_type']} reason={rejection_reason}"
+            f"{extra} regex={record['regex']}"
+        )
+
+    def _regex_validation_timeout(self):
+        timeout = float(self.regex_validation_timeout_seconds)
+        if timeout <= 0:
+            return _NullTimeout()
+        return _SignalTimeout(timeout)
+
+    def _validate_regex(self, regex: str) -> str | None:
+        try:
+            regex.encode("ascii")
+        except UnicodeEncodeError:
+            return "non_ascii_regex"
+
+        if len(regex) > self.max_regex_length:
+            return "regex_too_long"
+
+        if regex in {".*", ".+", "^.*$", "^.+$"}:
+            return "regex_too_broad"
+
+        if "(?<=" in regex or "(?<!" in regex:
+            return "unsupported_lookbehind"
+
+        if re.search(r"\\[1-9]", regex):
+            return "unsupported_backreference"
+
+        stripped_regex = regex.strip()
+        if stripped_regex.startswith(".*") and stripped_regex.endswith(".*"):
+            return "unbounded_prefix_suffix"
+        if stripped_regex.startswith("^.*") and stripped_regex.endswith(".*$"):
+            return "unbounded_prefix_suffix"
+
+        if re.search(r"\((?:[^()]|\\.)*[.*+](?:[^()]|\\.)*\)[*+]", regex):
+            return "nested_wildcards"
+
+        if self._is_too_broad_alternation(regex):
+            return "regex_too_broad"
+
+        try:
+            re.compile(regex)
+        except re.error:
+            return "invalid_regex_syntax"
+
+        return None
+
+    @staticmethod
+    def _is_too_broad_alternation(regex: str) -> bool:
+        stripped_regex = regex.strip("^$()")
+        if "|" not in stripped_regex:
+            return False
+
+        parts = [
+            part.strip("()[]{}?+*.^$") for part in stripped_regex.split("|")
+        ]
+        parts = [part for part in parts if part]
+        if len(parts) < 4:
+            return False
+        return all(len(part) <= 2 for part in parts)
+
+    def _find_strong_benign_match(
+        self, regex_type: str, regex_text: str, compiled_regex
+    ) -> tuple[str | None, float | None]:
+        regex_features = self._measure_regex_specificity(regex_text)
+        for value in self.storage.iter_benign_strings(regex_type):
+            score = self._compute_match_strength(
+                compiled_regex, value, regex_features
+            )
+            if score >= self.benign_match_strength_threshold:
+                return value, score
+        return None, None
+
+    def _compute_match_strength(
+        self, compiled_regex, value: str, regex_features: dict
+    ) -> float:
+        return compute_match_strength(compiled_regex, value, regex_features)
+
+    @staticmethod
+    def _measure_regex_specificity(regex_text: str) -> dict:
+        return measure_regex_specificity(regex_text)

@@ -64,6 +64,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
     """A class to create the profiles for IPs"""
 
     name = "profiler"
+    description = "Builds per-IP profiles and timewindows from parsed flows"
 
     def init(
         self,
@@ -75,8 +76,12 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         is_profiler_done_starting_initial_workers_event: Optional[
             Event
         ] = None,
+        total_processes_to_start: int = 1,
     ) -> None:
         IObservable.__init__(self)
+        # shared with every profiler worker this process starts, so
+        # they all announce themselves against the same run-wide total
+        self.total_processes_to_start = total_processes_to_start
         self.add_observer(self.logger)
         # when profiler is done processing, it releases this semaphore,
         # that's how the process_manager knows it's done
@@ -214,8 +219,16 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         input_handler_cls = SUPPORTED_INPUT_TYPES[input_type](self.db)
         return input_handler_cls
 
+    def wait_for_input_proc_to_stop(self):
+        if self.is_input_done_event is not None:
+            while not self.is_input_done_event.wait(timeout=1):
+                if self.is_input_failed_event.is_set():
+                    break
+        return
+
     def shutdown_gracefully(self):
         try:
+            self.wait_for_input_proc_to_stop()
             # wait for all flows to be processed by the profiler processes.
             self.stop_profiler_workers()
 

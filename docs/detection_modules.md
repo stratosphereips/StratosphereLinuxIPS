@@ -124,8 +124,35 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>Flow ML Detection</td>
-    <td>module to detect malicious flows using machine learning</td>
+    <td>ml_linear_model</td>
+    <td>standalone linear sklearn-based module to detect malicious flows using machine learning.<br/>
+    <i>This module uses a machine learning model that is the result of training with the <a href="https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS">Slips-ML-Training-Pipeline</a>. The official models, along with training results, usage instructions, and details on how they were trained, are published in the <a href="https://github.com/stratosphereips/Stratosphere-ML-trained-models">Stratosphere-ML-trained-models</a> repository.</i></td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>ml_online_model</td>
+    <td>standalone online module to detect malicious flows using machine learning.<br/>
+    <i>This module uses a machine learning model that is the result of training with the <a href="https://github.com/stratosphereips/pipeline_ml_training_for_SLIPS">Slips-ML-Training-Pipeline</a>. The official models, along with training results, usage instructions, and details on how they were trained, are published in the <a href="https://github.com/stratosphereips/Stratosphere-ML-trained-models">Stratosphere-ML-trained-models</a> repository.</i></td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>LLM</td>
+    <td>shared service module that sends prompts to configured OpenAI, Anthropic, or Ollama backends and publishes the replies for other modules</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Alert Summary</td>
+    <td>analyst-facing module that summarizes each alert and its correlated evidence into one human-readable paragraph using the shared LLM service</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>RegexGenerator</td>
+    <td>shared service module that continuously generates pseudo-random regexes, rejects those matching benign corpora, and stores accepted regexes for later modules</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>T Cell</td>
+    <td>immune-style responder that consumes PAMP evidence, matches accepted regexes, and escalates to blocking or memory using a per-antigen state machine</td>
     <td>✅</td>
   </tr>
 
@@ -146,6 +173,60 @@ It correlates repeated SSH sessions by source IP, destination IP, destination po
 For the full design and configuration details, see:
 
 - [Bruteforcing Module](bruteforcing.md)
+## LLM Module
+
+The LLM module is a shared service for other Slips modules.
+
+It listens on the Redis channel `llm_request`, sends the request to the selected
+configured backend, and publishes the result on `llm_response`.
+
+For the full request and response format, backend configuration, and examples,
+see [LLM Module](llm_module.md).
+
+## Alert Summary Module
+
+The Alert Summary module is an analyst-facing consumer of the shared LLM
+service.
+
+It listens on `new_alert`, loads the evidence records referenced by the alert,
+sends that structured context to the shared `LLM` module, and writes one
+paragraph per alert to `output/alerts/alerts_summary.log`.
+
+The generated paragraph is meant to help a human analyst quickly judge whether
+the alert looks real, how strong the evidence is, and what operational risk it
+implies.
+
+For the full configuration, prompt behavior, and output format, see
+[Alert Summary Module](alert_summary_module.md).
+
+## Regex Generator Module
+
+The RegexGenerator module is a shared service for other Slips modules.
+
+It uses the shared LLM module to generate one regex at a time for DNS domains,
+URIs, filenames, TLS SNI, and certificate CN fields, tests that regex against
+a benign corpus, and stores accepted regexes in a local SQLite database.
+
+For the full configuration, acceptance pipeline, and DB helper usage, see
+[Regex Generator Module](regex_generator_module.md).
+
+## T Cell Module
+
+The T Cell module is a second-stage immune responder for Slips.
+
+It listens on `evidence_added`, uses the central `evidence_signal` field,
+extracts structured antigens from evidence and linked altflows, and checks
+those values against accepted regexes already stored by `RegexGenerator`.
+Depending on co-stimulation and context signals, it becomes tolerant,
+activates, requests containment over `new_blocking`, or stores memory in its
+own SQLite DB. Both `PAMP` and `DAMP` can create a recognized cell when a
+regex matches an extracted antigen, but `DAMP` primes a weaker cell with
+stricter later thresholds and a shorter wait window. Stored `DAMP`
+observations also raise the danger pressure used by co-stimulation and
+context.
+
+For the full state machine, formulas, DB schema, and configuration, see
+[T Cell Module](t_cell_module.md).
 
 ## HTTPS Anomaly Detection Module
 

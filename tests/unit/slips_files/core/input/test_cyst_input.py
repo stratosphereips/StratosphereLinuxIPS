@@ -3,6 +3,7 @@
 from unittest.mock import MagicMock
 from tests.module_factory import ModuleFactory
 from slips_files.common.input_type import InputType
+from slips_files.core.input.input import SUPPORTED_INPUT_HANDLERS
 
 
 def test_cyst_input_stops_on_stop_process_message():
@@ -13,6 +14,6 @@ def test_cyst_input_stops_on_stop_process_message():
     input_process.shutdown_gracefully = MagicMock(return_value=True)
     input_process.get_msg = MagicMock(return_value={"data": "stop_process"})
 
-    handler = input_process.input_handlers[InputType.CYST]
+    handler = SUPPORTED_INPUT_HANDLERS[InputType.CYST](input_process)
     assert handler.run() is True
     input_process.shutdown_gracefully.assert_called_once()

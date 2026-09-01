@@ -18,10 +18,16 @@ from slips_files.core.structures.alerts import (
 )
 from slips_files.core.structures.evidence import (
     Evidence,
+    EvidenceSignal,
     EvidenceType,
     Victim,
     IoCType,
     Attacker,
+    TimeWindow,
+)
+from slips_files.core.structures.risk_weights import (
+    RiskWeight,
+    convert_weight_to_risk_weight_enum_member,
 )
 
 
@@ -37,6 +43,8 @@ class AlertHandler:
     default_ttl: int
     width: float
     disabled_detections: Any
+    default_evidence_signal: str
+    evidence_signal_overrides: Dict[str, str]
     publish: Callable[..., Any]
     zadd_but_keep_n_entries: Callable[..., Any]
     get_tw_start_time: Callable[..., Any]
@@ -115,6 +123,19 @@ class AlertHandler:
         """
         return str(evidence_type) in self.disabled_detections
 
+    def _classify_evidence_signal(
+        self, evidence_type: EvidenceType
+    ) -> EvidenceSignal:
+        evidence_type_name = str(evidence_type).upper()
+        signal = self.evidence_signal_overrides.get(
+            evidence_type_name,
+            self.default_evidence_signal,
+        )
+        try:
+            return EvidenceSignal[str(signal).upper()]
+        except KeyError:
+            return EvidenceSignal.PAMP
+
     def set_flow_causing_evidence(self, uids: list, evidence_id):
         """
         Used to be able to add the "malicious" tag to the flows that caused
@@ -133,16 +154,6 @@ class AlertHandler:
     def get_flows_causing_evidence(self, evidence_id) -> list:
         uids = self.r.hget(self.constants.FLOWS_CAUSING_EVIDENCE, evidence_id)
         return json.loads(uids) if uids else []
-
-    def get_victim(self, profileid, attacker):
-        saddr = profileid.split("_")[-1]
-        if saddr not in attacker:
-            return saddr
-        # if the saddr is the attacker, then the victim should be
-        # passed as a param to this function
-        # there's no 1 victim in this case. for example in ARP scans,
-        # the victim is the whole network
-        return ""
 
     def set_blocked_ip(self, ip: str):
         """
@@ -188,25 +199,6 @@ class AlertHandler:
 
         twid_end_time: float = twid_start_time + self.width
         return twid_start_time, twid_end_time
-
-    def get_ti(self, to_lookup: Union[Victim, Attacker]) -> Optional[str]:
-        """
-        if the victim/attacker's ip/domain was part of a ti feed,
-        this function returns the name of the feed
-        """
-        if isinstance(to_lookup, Victim):
-            ioc_type = to_lookup.ioc_type.name
-        else:
-            ioc_type = to_lookup.ioc_type.name
-
-        cases = {
-            IoCType.IP.name: self.is_blacklisted_ip,
-            IoCType.DOMAIN.name: self.is_blacklisted_domain,
-        }
-        try:
-            return cases[ioc_type](to_lookup.value)["source"]
-        except (KeyError, TypeError):
-            return
 
     def _get_more_info_about_evidence(self, evidence) -> Evidence:
         """
@@ -261,6 +253,9 @@ class AlertHandler:
         self.add_profile(str(evidence.profile), evidence.timestamp)
         # normalize confidence, should range from 0 to 1
         evidence.confidence = min(evidence.confidence, 1)
+        evidence.evidence_signal = self._classify_evidence_signal(
+            evidence.evidence_type
+        )
 
         # Ignore evidence if it's disabled in the configuration file
         if self.is_detection_disabled(evidence.evidence_type):
@@ -405,6 +400,94 @@ class AlertHandler:
             self.constants.ACCUMULATED_THREAT_LEVELS, f"{profileid}_{twid}"
         )
         return accumulated_threat_lvl or 0
+
+    def _set_max_seen_risk_weight(
+        self, profileid: str | None, risk_weight: RiskWeight
+    ) -> None:
+        """
+        Store the given max seen risk weight across all profiles.
+        """
+        self.r.hset(
+            self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES,
+            mapping={
+                "risk_weight": risk_weight.weight,
+                "profile": profileid or "",
+            },
+        )
+
+    def get_max_seen_risk_weight(self) -> Dict[str, Union[RiskWeight, str]]:
+        """
+        Return the max seen risk weight across all profiles.
+
+        Return value:
+            Dictionary with risk_weight as a RiskWeight enum member and
+            profile as string.
+        """
+        current_risk_weight = self.r.hgetall(
+            self.constants.MAX_RISK_WEIGHT_OF_ALL_PROFILES
+        )
+        if not current_risk_weight:
+            return {
+                "risk_weight": RiskWeight.LOW,
+                "profile": "",
+            }
+        current_weight = float(current_risk_weight.get("risk_weight"))
+        return {
+            "risk_weight": convert_weight_to_risk_weight_enum_member(
+                current_weight
+            ),
+            "profile": current_risk_weight.get("profile", ""),
+        }
+
+    def update_max_seen_risk_weight(
+        self, profileid: str, candidate_risk_weight: RiskWeight
+    ) -> RiskWeight:
+        """
+        Compare trhe given candidate_risk_weight to the max risk weight in
+        the db, update the db if the candid is  grater than what was there.
+        Parameters:
+            profileid: Profile that owns the candidate risk weight.
+            candidate_risk_weight: Candidate risk weight.
+
+        Return value:
+            Max seen risk weight across all profiles.
+        """
+        max_seen_risk_weight = self.get_max_seen_risk_weight()
+        previous_risk_weight = max_seen_risk_weight["risk_weight"].weight
+
+        if previous_risk_weight < candidate_risk_weight.weight:
+            self._set_max_seen_risk_weight(profileid, candidate_risk_weight)
+            return candidate_risk_weight
+
+        return max_seen_risk_weight["risk_weight"]
+
+    def get_risk_weight_of_last_alert(
+        self, timewindow: TimeWindow
+    ) -> RiskWeight:
+        risk_weight: float = self.r.hget(
+            self.constants.RISK_WEIGHT_OF_LAST_ALERT, timewindow.number
+        )
+        if not risk_weight:
+            return {}
+
+        # risk levels are shared accross all profiles in the current
+        # timewindow.
+        return convert_weight_to_risk_weight_enum_member(risk_weight)
+
+    def set_risk_weight_of_last_alert(
+        self, risk_weight: RiskWeight, timewindow: TimeWindow
+    ):
+        self.r.hset(
+            self.constants.RISK_WEIGHT_OF_LAST_ALERT,
+            timewindow.number,
+            risk_weight.weight,
+        )
+
+        self.r.hexpire(
+            self.constants.RISK_WEIGHT_OF_LAST_ALERT,
+            self.default_ttl,
+            timewindow.number,
+        )
 
     def update_accumulated_threat_level(
         self, profileid: str, twid: str, update_val: float
