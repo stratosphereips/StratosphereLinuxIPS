@@ -96,7 +96,7 @@ def test_conf_file(
         # under CI's parallel pytest-xdist workers, otherwise it gets
         # killed mid-run before its graceful shutdown (and zeek files
         # cleanup) can happen
-        run_slips(command, timeout=600)
+        run_slips(command, timeout=800)
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Comparing profiles with expected profiles")
