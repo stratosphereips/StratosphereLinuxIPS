@@ -92,7 +92,11 @@ def test_conf_file(
         command = f"{command} > {output_file} 2>&1"
         print("running slips ...")
         # this function returns when slips is done
-        run_slips(command)
+        # this specific test needs more than the default 300s timeout
+        # under CI's parallel pytest-xdist workers, otherwise it gets
+        # killed mid-run before its graceful shutdown (and zeek files
+        # cleanup) can happen
+        run_slips(command, timeout=600)
         print("Slip is done, checking for errors in the output dir.")
         assert_no_errors(output_dir)
         print("Comparing profiles with expected profiles")
