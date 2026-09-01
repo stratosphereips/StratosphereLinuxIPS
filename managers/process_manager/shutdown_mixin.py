@@ -87,12 +87,6 @@ class ShutdownMixin:
             "press CTRL-C again to force-kill.\n"
         )
 
-        if Modules.FEEDS_UPDATE_MANAGER in pending_module_names:
-            self.main.print(
-                "feeds_update_manager may take several minutes "
-                "to finish updating 45+ TI files."
-            )
-
         self.warning_printed_once = True
         return True
 

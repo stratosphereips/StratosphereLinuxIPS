@@ -1012,3 +1012,39 @@ async def test_update_stops_early_when_termination_requested():
     # update() returned before any download was triggered
     update_manager.update_ti_file.assert_not_called()
     update_manager.print_duplicate_ip_summary.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_update_ti_file_runs_blocking_work_in_a_thread():
+    """update_ti_file() writes the feed to disk and parses it, both
+    blocking calls with no 'await' of their own. If that work ran
+    straight in the coroutine, every update_ti_file() task scheduled by
+    update() would run to completion one after the other instead of
+    overlapping, even though update() gathers them as concurrent tasks.
+    update_ti_file() must offload that work to a thread so multiple
+    feeds are actually processed at the same time."""
+    update_manager = ModuleFactory().create_update_manager_obj()
+    sleep_time = 0.2
+    call_threads = []
+
+    def slow_sync_update(link_to_download):
+        call_threads.append(threading.current_thread())
+        time.sleep(sleep_time)
+        return True
+
+    update_manager._update_ti_file_sync = Mock(side_effect=slow_sync_update)
+
+    start = time.time()
+    results = await asyncio.gather(
+        update_manager.update_ti_file("https://example.com/feed1.txt"),
+        update_manager.update_ti_file("https://example.com/feed2.txt"),
+        update_manager.update_ti_file("https://example.com/feed3.txt"),
+    )
+    elapsed = time.time() - start
+
+    assert results == [True, True, True]
+    assert update_manager._update_ti_file_sync.call_count == 3
+    # ran concurrently: far less than 3 * sleep_time (serial execution)
+    assert elapsed < sleep_time * 3
+    # the blocking work never ran on the event loop's own thread
+    assert threading.current_thread() not in call_threads
