@@ -9,6 +9,7 @@ import signal
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
@@ -776,5 +777,16 @@ class Main:
             # the system call was in progress
             # comes here if zeek terminates while slips is still working
             pass
+        except Exception:
+            # any other unexpected error must not skip the cleanup below,
+            # otherwise module processes already spawned above are never
+            # told to stop, and this process hangs forever in Python's
+            # default multiprocessing atexit cleanup waiting for them.
+            traceback.print_exc()
+            try:
+                self.proc_man.shutdown_gracefully()
+            except Exception:
+                traceback.print_exc()
+            raise
 
         self.proc_man.shutdown_gracefully()

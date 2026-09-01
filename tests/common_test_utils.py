@@ -11,6 +11,7 @@ import shutil
 import binascii
 import subprocess
 import base64
+import signal
 import sys
 import socket
 import threading
@@ -108,12 +109,26 @@ def do_nothing(*args):
     pass
 
 
-def run_slips(cmd):
-    """runs slips and waits for it to end"""
-    slips = subprocess.Popen(cmd, stdin=subprocess.PIPE, shell=True)
-    _, _ = slips.communicate(input=b"y\n")
-    return_code = slips.returncode
-    return return_code
+def run_slips(cmd, timeout=300):
+    """
+    runs slips and waits for it to end, or kills it after timeout
+    seconds (default 5 mins) so a hung slips process can't hang the
+    whole test suite. Raises subprocess.TimeoutExpired on timeout.
+    """
+    slips = subprocess.Popen(
+        cmd, stdin=subprocess.PIPE, shell=True, start_new_session=True
+    )
+    try:
+        slips.communicate(input=b"y\n", timeout=timeout)
+    except subprocess.TimeoutExpired:
+        # cmd runs in a shell, so killing slips.pid alone would only
+        # kill the shell and leave slips and its child processes
+        # running; kill the whole process group instead.
+        os.killpg(os.getpgid(slips.pid), signal.SIGKILL)
+        slips.communicate()
+        raise
+
+    return slips.returncode
 
 
 @contextmanager
