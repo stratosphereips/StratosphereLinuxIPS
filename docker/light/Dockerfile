@@ -20,9 +20,9 @@ RUN set -eux; \
         python3-certifi python3-dev python3-tzlocal python3-pip \
     && curl -O https://download.redis.io/redis-stable.tar.gz \
     && tar xzf redis-stable.tar.gz \
-    && cd redis-stable \
+    && cd redis-stable/src \
     && make distclean && make MALLOC=libc \
-    && cd .. && rm -rf redis-stable.tar.gz \
+    && cd ../.. && rm -rf redis-stable.tar.gz \
     && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' \
         | tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
