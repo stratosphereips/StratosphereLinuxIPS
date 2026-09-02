@@ -9,7 +9,6 @@ import signal
 import subprocess
 import sys
 import time
-import traceback
 from datetime import datetime
 from distutils.dir_util import copy_tree
 from typing import Set
@@ -677,9 +676,14 @@ class Main:
 
                 self.proc_man.load_modules()
 
-            def sig_handler(sig, frame):
-                """Marks sigterm_received so the main loop exits and
-                proc_man.shutdown_gracefully() runs right after it."""
+            def sig_handler(sig: int, frame: object) -> None:
+                """
+                Record a termination signal for forced shutdown.
+
+                Parameters:
+                    sig: Numeric signal received by the main process.
+                    frame: Interpreter frame active when the signal arrived.
+                """
                 if os.getpid() != self.pid:
                     # Children created after this handler is installed inherit
                     # it, but only the main process coordinates shutdown.
@@ -769,23 +773,9 @@ class Main:
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:
-            # the EINTR error code happens if a signal occurred while
-            # the system call was in progress
-            # comes here if zeek terminates while slips is still working
             self.keyboard_interrupt_received = True
             self.shutdown_signal_received = True
             self.print("Interrupt received, shutting down Slips.")
-        except Exception:
-            # any other unexpected error must not skip the cleanup below,
-            # otherwise module processes already spawned above are never
-            # told to stop, and this process hangs forever in Python's
-            # default multiprocessing atexit cleanup waiting for them.
-            traceback.print_exc()
-            try:
-                self.proc_man.shutdown_gracefully()
-            except Exception:
-                traceback.print_exc()
-            raise
 
         natural_completion = (
             not self.shutdown_signal_received

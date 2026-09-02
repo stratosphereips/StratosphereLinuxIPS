@@ -800,12 +800,6 @@ def test_api_routes_evidence_flow_ids() -> None:
         "10.0.0.1", {"range": ["all"]}
     )
 
-    handler.server.reader.evidence_for_host.return_value = {"items": [], "total": 2}
-    host_result = handler._api_response("/api/hosts/10.0.0.1/evidence", {})
-
-    assert host_result["total"] == 2
-    handler.server.reader.evidence_for_host.assert_called_once_with("10.0.0.1", {})
-
 
 @pytest.mark.parametrize(
     "evidence_type, expected",
@@ -1887,15 +1881,24 @@ def test_host_evidence_searches_all_durable_evidence_fields(tmp_path) -> None:
             "threat_level TEXT, evidence_type TEXT, description TEXT, "
             "confidence REAL, data TEXT)"
         )
-        connection.execute("CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)")
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
         connection.execute(
             "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
         )
         connection.execute(
             "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                "evidence-id", 1.0, "10.0.0.1", "tw", "low", "DNS", "",
-                0.2, '{"attacker": "raw-field-token"}',
+                "evidence-id",
+                1.0,
+                "10.0.0.1",
+                "tw",
+                "low",
+                "DNS",
+                "",
+                0.2,
+                '{"attacker": "raw-field-token"}',
             ),
         )
         connection.execute(

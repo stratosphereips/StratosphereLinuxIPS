@@ -2212,10 +2212,14 @@ class RunDataReader:
             grouped[uid]
             for uid in bounded_uids
             if uid in grouped
-            and (grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"])
+            and (
+                grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"]
+            )
         ]
         network_flow_total = sum(bool(item["network_flow"]) for item in items)
-        protocol_flow_total = sum(len(item["protocol_flows"]) for item in items)
+        protocol_flow_total = sum(
+            len(item["protocol_flows"]) for item in items
+        )
         return {
             "items": items,
             "total": len(items),
@@ -2575,6 +2579,7 @@ class RunDataReader:
                 )
         except sqlite3.Error:
             return 0
+
     def _ti_for_ip(self, ip: str) -> Dict[str, Any]:
         """Read cached threat-intelligence fields for an IP."""
         result: Dict[str, Any] = {}
@@ -3138,12 +3143,6 @@ class RunDataReader:
                     process.memory_info().rss / total_memory * 100
                     if running
                     else 0
-                )
-                memory_percent = (
-                    process.memory_info().rss / total_memory * 100 if running else 0
-                )
-                memory_percent = (
-                    process.memory_info().rss / total_memory * 100 if running else 0
                 )
                 cpu = process.cpu_percent(interval=None) if running else 0
             except (ValueError, psutil.Error):
@@ -4390,7 +4389,6 @@ class RunDataReader:
 
 
 class SlipsHTTPServer(ThreadingHTTPServer):
-
     """Concurrent HTTP server carrying the fixed run data reader."""
 
     daemon_threads = True
