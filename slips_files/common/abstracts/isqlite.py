@@ -6,7 +6,6 @@ from threading import Lock
 from time import sleep
 
 from slips_files.common.sqlite_flock import SQLiteFlock
-from slips_files.common.slips_utils import utils
 
 
 class ISQLite(ABC):
@@ -32,19 +31,12 @@ class ISQLite(ABC):
         :param main_pid: the pid of slips.py, used to create a lock file to
          make sure only 1 lockfile is created per slips run per sqlite db
         """
-        # when files are created by a non-root user, root and non-root can
-        # access them
-        # when they're created by root, non-root can access them
-        # so drop privs temporarily to create that file bc we need root and
-        # non root slips modules to use this lock. (because some modules
-        # drop privs when slips runs with -p and others dont)
-        current_user_uid = utils.drop_root_privs_temporarily()
-        self._init_flock(name, main_pid, current_user_uid)
-        if current_user_uid:
-            # because if drop_root_privs_temporarily didnt return a uid,
-            # it means we're not running as root, so we don't need to regain
-            utils.regain_root_privs()
-
+        # the lock file itself is created world read/write (see
+        # SQLiteFlock._ensure_lockfile) so that both root and non-root
+        # slips modules can use it regardless of which one creates it
+        # (because some modules drop privs when slips runs with -p and
+        # others dont), without needing to juggle process privileges here.
+        self._init_flock(name, main_pid)
         self.connect(db_file)
         self._enable_wal_mode()
 
@@ -55,21 +47,15 @@ class ISQLite(ABC):
                 db_file, check_same_thread=False, timeout=20
             )
 
-    def _init_flock(self, name: str, main_pid: int, current_user_uid: int):
+    def _init_flock(self, name: str, main_pid: int):
         """
         Initialize the lock file used for inter-process SQLite access.
 
         Parameters:
         name: Logical database name used in the lock file name.
         main_pid: Main Slips process PID used to namespace the lock file.
-        current_user_uid: Effective uid after temporarily dropping root
-            privileges, or None when no privilege drop happened.
         """
-        self.sqlite_flock = SQLiteFlock(
-            name=name,
-            main_pid=main_pid,
-            current_user_uid=current_user_uid,
-        )
+        self.sqlite_flock = SQLiteFlock(name=name, main_pid=main_pid)
         self.lockfile_path = self.sqlite_flock.lockfile_path
 
     def _enable_wal_mode(self):

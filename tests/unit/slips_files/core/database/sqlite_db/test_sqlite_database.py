@@ -24,7 +24,12 @@ def db(tmp_path):
     return SQLiteDB(logger, str(tmp_path), 12345)
 
 
-def test_sqlite_lockfile_is_owner_only_writable(tmp_path):
+def test_sqlite_lockfile_is_world_writable(tmp_path):
+    """The lock file must be openable by both root and non-root Slips
+    processes/modules regardless of which one created it, so it's created
+    world read/write (it's only ever used as an flock() mutex, never holds
+    sensitive data).
+    """
     logger = MagicMock()
     locks_dir = tmp_path / "locks"
     locks_dir.mkdir()
@@ -36,7 +41,7 @@ def test_sqlite_lockfile_is_owner_only_writable(tmp_path):
 
     assert locks_dir.exists()
     assert db.lockfile_path.endswith("sqlite_db.lock")
-    assert oct(os.stat(db.lockfile_path).st_mode & 0o777) == "0o600"
+    assert oct(os.stat(db.lockfile_path).st_mode & 0o777) == "0o666"
 
 
 def test_get_flow_uses_parameterized_query(db):
