@@ -207,7 +207,9 @@ class AlertHandler:
             blocked_at: Original Unix block timestamp, or now for a new rule.
         """
         timestamp = time.time() if blocked_at is None else float(blocked_at)
-        self.r.zadd(self.constants.BLOCKED_IPS, {ip: timestamp})
+        self.zadd_but_keep_n_entries(
+            self.constants.BLOCKED_IPS, {ip: timestamp}, max_entries=200
+        )
 
     def is_ip_blocked(self, ip: str) -> Optional[float]:
         ts = self.r.zscore(self.constants.BLOCKED_IPS, ip)
