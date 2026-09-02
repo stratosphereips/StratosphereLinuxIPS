@@ -150,42 +150,49 @@ class Blocking(IModule):
         result = result.stdout.decode("utf-8")
         return ip in result
 
-    def _block_ip(self, ip_to_block: str, flags: Dict[str, Any]) -> bool:
+    def _store_blocked_ip_ts_in_db(
+        self, ip_to_block: str, flags: Dict[str, Any]
+    ) -> None:
+        """Stores the blocking timestamp of the given ip in the db"""
+        blocked_at = flags.get("_blocked_at")
+        if blocked_at is None:
+            self.db.set_blocked_ip(ip_to_block)
+        else:
+            self.db.set_blocked_ip(ip_to_block, blocked_at)
+
+    def _handle_already_blocked_ip(
+        self, ip_to_block: str, flags: Dict[str, Any]
+    ) -> bool:
         """
-        This function determines the user's platform and firewall and calls
-        the appropriate function to add the rules to the used firewall.
-        By default this function blocks all traffic from and to the given ip.
-        and it Blocks private IPs on the given interface, and block public
-        IPs on all interfaces
-        returns true if the ip is successfully blocked
+        Updates the db and firewall recovery metadata for an ip that's
+        already blocked.
         """
+        # ensure the blocked ip has a ts in the db, might be blocked in a
+        # previous run so this run doesn't have a ts stored.
+        if self.db.get_blocking_timestamp(ip_to_block) is None:
+            self._store_blocked_ip_ts_in_db(ip_to_block, flags)
 
-        if self.firewall != "iptables":
-            return False
+        comment = flags.get("rule_comment", "")
+        if comment and not sync_slips_rule_comment(
+            self.sudo, ip_to_block, comment
+        ):
+            self.print(
+                f"Unable to update firewall recovery metadata for "
+                f"{ip_to_block}.",
+                0,
+                1,
+            )
+        return True
 
-        if not isinstance(ip_to_block, str):
-            return False
-
-        # Make sure ip isn't already blocked before blocking
-        if self._is_ip_already_blocked(ip_to_block):
-            if self.db.get_blocking_timestamp(ip_to_block) is None:
-                blocked_at = flags.get("_blocked_at")
-                if blocked_at is None:
-                    self.db.set_blocked_ip(ip_to_block)
-                else:
-                    self.db.set_blocked_ip(ip_to_block, blocked_at)
-            comment = flags.get("rule_comment")
-            if comment and not sync_slips_rule_comment(
-                self.sudo, ip_to_block, comment
-            ):
-                self.print(
-                    f"Unable to update firewall recovery metadata for "
-                    f"{ip_to_block}.",
-                    0,
-                    1,
-                )
-            return True
-
+    def _build_requested_rules(
+        self, ip_to_block: str, flags: Dict[str, Any]
+    ) -> list:
+        """
+        Builds the list of (iptables_flag, options, direction) tuples to
+        insert, based on the given flags. By default blocks all traffic
+        from and to the given ip, and blocks private IPs on the given
+        interface only.
+        """
         from_ = flags.get("from_")
         to = flags.get("to")
         dport = flags.get("dport")
@@ -195,7 +202,7 @@ class Blocking(IModule):
         # Set the default behaviour to block all traffic from and to an ip
         if from_ is None and to is None:
             from_, to = True, True
-        # This dictionary will be used to construct the rule
+
         options = {
             "protocol": f"-p {protocol}" if protocol is not None else "",
             "dport": f"--dport {dport}" if dport is not None else "",
@@ -212,9 +219,40 @@ class Blocking(IModule):
             requested_rules.append(("-s", source_options, "from"))
         if to:
             requested_rules.append(("-d", destination_options, "to"))
+        return requested_rules
 
+    def _rollback_inserted_rules(
+        self,
+        ip_to_block: str,
+        inserted_rules: list,
+        comment: str,
+    ) -> bool:
+        """Deletes previously inserted rules in reverse order"""
+        rollback_success = True
+        for inserted_flag, inserted_options in reversed(inserted_rules):
+            deleted = exec_iptables_command(
+                self.sudo,
+                action="delete",
+                ip_to_block=ip_to_block,
+                flag=inserted_flag,
+                options=inserted_options,
+                comment=comment,
+            )
+            rollback_success = deleted and rollback_success
+        return rollback_success
+
+    def _insert_rules(
+        self,
+        ip_to_block: str,
+        requested_rules: list,
+        comment: str,
+    ) -> list | None:
+        """
+        Inserts the given rules in the firewall, rolling back and logging
+        an error if any insertion fails.
+        Returns the list of inserted rules, or None on failure.
+        """
         inserted_rules = []
-        comment = flags.get("rule_comment", LEGACY_SLIPS_COMMENT)
         for rule_flag, rule_options, direction in requested_rules:
             if exec_iptables_command(
                 self.sudo,
@@ -227,17 +265,9 @@ class Blocking(IModule):
                 inserted_rules.append((rule_flag, rule_options))
                 continue
 
-            rollback_success = True
-            for inserted_flag, inserted_options in reversed(inserted_rules):
-                deleted = exec_iptables_command(
-                    self.sudo,
-                    action="delete",
-                    ip_to_block=ip_to_block,
-                    flag=inserted_flag,
-                    options=inserted_options,
-                    comment=comment,
-                )
-                rollback_success = deleted and rollback_success
+            rollback_success = self._rollback_inserted_rules(
+                ip_to_block, inserted_rules, comment
+            )
             message = f"Unable to block traffic {direction} {ip_to_block}."
             if inserted_rules:
                 rollback_result = (
@@ -248,15 +278,40 @@ class Blocking(IModule):
                 message = f"{message} {rollback_result}"
             self.print(message, 0, 1)
             self.log(message)
+            return None
+
+        return inserted_rules
+
+    def _block_ip(self, ip_to_block: str, flags: Dict[str, Any]) -> bool:
+        """
+        This function adds iptables rules to the user firewall.
+
+        By default this function
+        - blocks all traffic from and to the given ip.
+        - locks private IPs on the given interface
+        - blocks public IPs on all interfaces
+
+        returns true if the ip is successfully blocked
+        """
+
+        if self.firewall != "iptables":
             return False
 
+        if not isinstance(ip_to_block, str):
+            return False
+
+        if self._is_ip_already_blocked(ip_to_block):
+            return self._handle_already_blocked_ip(ip_to_block, flags)
+
+        requested_rules = self._build_requested_rules(ip_to_block, flags)
+        comment = flags.get("rule_comment", LEGACY_SLIPS_COMMENT)
+        inserted_rules = self._insert_rules(
+            ip_to_block, requested_rules, comment
+        )
         if not inserted_rules:
             return False
-        blocked_at = flags.get("_blocked_at")
-        if blocked_at is None:
-            self.db.set_blocked_ip(ip_to_block)
-        else:
-            self.db.set_blocked_ip(ip_to_block, blocked_at)
+
+        self._store_blocked_ip_ts_in_db(ip_to_block, flags)
         for _, _, direction in requested_rules:
             message = f"Blocked all traffic {direction}: {ip_to_block}"
             self.print(message)

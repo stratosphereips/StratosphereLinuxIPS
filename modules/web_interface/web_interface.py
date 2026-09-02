@@ -23,8 +23,8 @@ class WebInterface(IModule):
     """Keep a run-scoped local dashboard available during and after analysis."""
 
     name = "web_interface"
-    description = "Local technical web interface for the current Slips run"
-    authors = ["Stratosphere Laboratory"]
+    description = "Local dashboard for the current Slips run"
+    authors = ["Sebastian Garcia"]
     LOOPBACK_ADDRESS = "127.0.0.1"
 
     def init(self, **kwargs: object) -> None:

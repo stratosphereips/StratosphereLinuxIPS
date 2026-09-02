@@ -210,6 +210,15 @@ def list_slips_firewall_rules(sudo: str) -> List[Dict[str, Any]]:
 def sync_slips_rule_comment(sudo: str, ip: str, comment: str) -> bool:
     """Replace metadata comments on every managed rule for one IP.
 
+
+    Slips stores recoverable metadata inside each iptables rule's --comment
+    field (e.g. block reason, unblock timestamp) ,
+     so rules can be understood/recovered even by inspecting iptables directly
+      (e.g. after a Slips restart).
+    When an IP that's already blocked gets blocked again with new flags
+     (new reason, new expiry, etc.), Slips needs to update that embedded
+     comment on the existing rule rather than adding a duplicate rule.
+
     Parameters:
         sudo: Optional privilege-escalation command.
         ip: Address whose source and destination rules should be updated.
