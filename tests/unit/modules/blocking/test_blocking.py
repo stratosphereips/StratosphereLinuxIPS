@@ -391,7 +391,7 @@ def test_get_enforcement_timewindow_never_uses_stale_detection_window(
     blocking.db.get_timewindow.return_value = current_twid
 
     with patch("modules.blocking.blocking.time.time", return_value=100.0):
-        result = blocking._get_enforcement_timewindow("1.2.3.4", evidence_tw)
+        result = blocking._get_timewindow_to_block_in("1.2.3.4", evidence_tw)
 
     assert result == expected_tw
     blocking.db.get_timewindow.assert_called_once_with(

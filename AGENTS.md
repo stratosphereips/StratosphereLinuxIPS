@@ -64,6 +64,8 @@ These rules MUST be followed:
 - Avoid using environment variables, use variables from slips/config.yaml instead.
 - Use type annotations for all functions and methods parameters and return types.
 - Use utils.start_thread whenever you need to start a new thread.
+- Make sure no added redis keys grow unbounded or without a TTL
+- if cleanup of redis keys is to be done, do it in the cleanup mixing of the redis database
 
 ### Paths:
 - NEVER use absolute paths

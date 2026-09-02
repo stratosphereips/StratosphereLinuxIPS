@@ -49,6 +49,7 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 .tab:hover, .tab.active { color: var(--text); }
 .tab.active { border-color: var(--accent); }
 .badge { display: inline-block; min-width: 1.4rem; margin-left: .3rem; padding: .05rem .35rem; border-radius: 99px; background: var(--surface-2); font-size: .7rem; text-align: center; }
+.info-pill { display: inline-flex; align-items: center; margin-left: .6rem; padding: .15rem .55rem; border: 1px solid #43c7b533; border-radius: 99px; background: #43c7b518; color: var(--accent); font-size: .68rem; font-weight: 600; letter-spacing: .01em; vertical-align: middle; cursor: help; }
 main { max-width: 1900px; margin: auto; padding: 2rem 2.5rem 4rem; }
 .panel { display: none; }
 .panel.active { display: block; }
