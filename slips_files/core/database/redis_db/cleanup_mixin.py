@@ -18,6 +18,13 @@ class CleanupMixin:
 
     name = "cleanup_mixin"
 
+    def delete_p2p_message_counts(self, timewindow) -> None:
+        """
+        Deletes the p2p_message_counts hash of the given
+        timewindow so the counters don't accumulate forever.
+        """
+        self.r.delete(f"{self.constants.P2P_MESSAGE_COUNTS}_{timewindow}")
+
     def _del_all_profile_tw_keys(self, profileid: str, twid: str, pipe):
         """
         Deletes all keys that have the profileid and twid in them.
@@ -58,13 +65,13 @@ class CleanupMixin:
     def delete_past_timewindows(self, closed_profile_tw: str, pipe):
         """
         Does cleanup of old timewindows data in redis.
-        This is called when there's a tw that needs to be closed.
+        This is called when a tw is closed.
 
         Deletes the past timewindows data from redis, starting from the
         given tw-2 inclusive, so that redis only has info about the current
         timewindow and the one before it and deletes the rest.
 
-        Deleted keys follow the format:
+        Deletes keys follow the format:
         profileid_timewindowX (aka keys needed for the portscan module only)
 
         why do we keep 2 tws instead of the current one in redis? see PR
@@ -87,6 +94,11 @@ class CleanupMixin:
                 1,
             )
             return pipe
+
+        # p2p message counts aren't tied to a specific profile, so as
+        # soon as this tw is closed (regardless of the profile),
+        # delete its message counts so they don't accumulate forever
+        self.delete_p2p_message_counts(closed_tw)
 
         tws_to_keep = 2
 

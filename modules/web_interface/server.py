@@ -4176,9 +4176,12 @@ class RunDataReader:
         peer_seen = dict(
             self.redis.zrange("peers_strust", 0, -1, withscores=True)
         )
+        current_tw = self.redis.get("current_timewindow") or "1"
         counts = {
             key: int(value)
-            for key, value in self.redis.hgetall("p2p_message_counts").items()
+            for key, value in self.redis.hgetall(
+                f"p2p_message_counts_{current_tw}"
+            ).items()
         }
         activity = [
             self._loads(raw, {})

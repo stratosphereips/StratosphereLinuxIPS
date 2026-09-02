@@ -315,13 +315,20 @@ class P2PHandler:
         """
         message_type = str(message.get("message_type") or "unknown")
         record = {"direction": direction, "timestamp": time.time(), **message}
-        self.r.hincrby(
-            self.constants.P2P_MESSAGE_COUNTS,
-            f"{direction}:{message_type}",
-            1,
-        )
+        key = self._p2p_message_counts_key()
+        field = f"{direction}:{message_type}"
+        with self.r.pipeline() as pipe:
+            pipe.hincrby(key, field, 1)
+            # safety net in case the timewindow-end cleanup is ever missed
+            pipe.hexpire(key, self.default_ttl, field, nx=True)
+            pipe.execute()
         self.r.lpush(self.constants.P2P_MESSAGE_HISTORY, json.dumps(record))
         self.r.ltrim(self.constants.P2P_MESSAGE_HISTORY, 0, 999)
+
+    def _p2p_message_counts_key(self) -> str:
+        """Per-timewindow key so old counters don't accumulate forever."""
+        timewindow = self.get_current_timewindow() or 1
+        return f"{self.constants.P2P_MESSAGE_COUNTS}_{timewindow}"
 
     def get_p2p_message_telemetry(self) -> dict:
         """Return P2P message counters and newest bounded activity.
@@ -336,6 +343,6 @@ class P2PHandler:
             except (TypeError, ValueError):
                 continue
         return {
-            "counts": self.r.hgetall(self.constants.P2P_MESSAGE_COUNTS),
+            "counts": self.r.hgetall(self._p2p_message_counts_key()),
             "activity": records,
         }
