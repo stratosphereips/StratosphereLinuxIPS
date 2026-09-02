@@ -436,14 +436,16 @@ class Blocking(IModule):
             1,
         )
         self.log(
-            f"Recovered {len(rules_by_ip)} pre-existing firewall records "
+            f"Found {len(rules_by_ip)} pre-existing firewall records "
             "from iptables comments."
         )
         for ip, rules in rules_by_ip.items():
             state = self._recovery_state(rules, now)
+            self.db.set_firewall_block_state(ip, state)
+
             blocked_at = state.get("blocked_at", now)
             self.db.set_blocked_ip(ip, blocked_at)
-            self.db.set_firewall_block_state(ip, state)
+
             status = state["recovery_status"]
             self.print(
                 f"Recovered firewall rule for {ip}: {status}.",
@@ -463,25 +465,23 @@ class Blocking(IModule):
             self.db, self.sudo, self.should_stop, self.logger, self.log
         )
 
-    def _get_enforcement_timewindow(
-        self, ip: str, evidence_tw: int | None
-    ) -> int:
-        """Return the time window that must anchor firewall enforcement.
+    def _get_timewindow_to_block_in(self, evidence_tw: int | None) -> int:
+        """
+        Return the time window in which the given ip should be blocked
+        if there's a lag in slips for any reason, the given timewindow
+        might be older than the current tw. use the current instead to
+        ensure we're not blocking on an old timewindow
 
         Parameters:
-            ip: Address whose firewall rule is being scheduled.
-            evidence_tw: Historical time window carried by the detection.
+            evidence_tw: the given evidence time window
 
         Returns:
-            The later of the current processing and evidence time windows.
+            max(cur_tw, given_tw)
         """
-        current_twid: str = self.db.get_timewindow(
-            time.time(), f"profile_{ip}", add_to_db=False
-        )
-        current_tw = int(current_twid.replace("timewindow", ""))
+        current_twid = int(self.db.get_current_timewindow())
         if evidence_tw is None:
-            return current_tw
-        return max(current_tw, int(evidence_tw))
+            return current_twid
+        return max(current_twid, int(evidence_tw))
 
     def main(self):
         if msg := self.get_msg("new_blocking"):
@@ -507,7 +507,7 @@ class Blocking(IModule):
             data = json.loads(msg["data"])
             ip = data.get("ip")
             evidence_tw: int | None = data.get("tw")
-            tw = self._get_enforcement_timewindow(ip, evidence_tw)
+            tw = self._get_timewindow_to_block_in(evidence_tw)
             block = data.get("block")
 
             flags = {
