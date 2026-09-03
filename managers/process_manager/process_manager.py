@@ -10,6 +10,7 @@ from .module_loading_mixin import ModuleLoadingMixin
 from .reporting_mixin import ReportingMixin
 from .shutdown_mixin import ShutdownMixin
 from .startup_mixin import StartupMixin
+from .web_interface_shutdown_mixin import WebInterfaceShutdownMixin
 
 
 class ProcessManager(
@@ -18,6 +19,7 @@ class ProcessManager(
     StartupMixin,
     ModuleLoadingMixin,
     ShutdownMixin,
+    WebInterfaceShutdownMixin,
 ):
     """
     Responsible for starting and stopping all the slips processes and
