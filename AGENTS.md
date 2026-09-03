@@ -66,6 +66,7 @@ These rules MUST be followed:
 - Use utils.start_thread whenever you need to start a new thread.
 - Make sure no added redis keys grow unbounded or without a TTL
 - if cleanup of redis keys is to be done, do it in the cleanup mixing of the redis database
+- shutdown related logic should be put in the process_manager/, not in main.
 
 ### Paths:
 - NEVER use absolute paths
@@ -85,6 +86,7 @@ Docstrings MUST include:
 ## 4. Testing
 - Canonical test runner
 tests/run_all_tests.sh
+
 ## 5. Unit Test Update Workflow
 
 When instructed to "update unit tests", follow EXACTLY:
@@ -102,11 +104,11 @@ Update failing tests ONE BY ONE
 Do NOT batch fixes
 
 Step 4 — Add missing tests for new files
-For every new source file in the branch:
+For every new source file in the branch, evaluate if unit tests are needed, then:
 
 - Mirror its directory under tests/unit/
 
-- C/reate file:
+- Create file:
 test_<filename>.py
 - Add unit tests for that file
 

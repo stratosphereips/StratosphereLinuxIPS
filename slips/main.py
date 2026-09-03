@@ -5,7 +5,6 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -127,17 +126,6 @@ class Main:
             self.daemon.stop()
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)  # leaves any children started by slips as orphans
-
-    def is_forced_shutdown(self) -> bool:
-        """
-        Whether shutdown must proceed without any interactive prompts
-        (e.g. keep firewall rules? keep the web interface running?).
-
-        Returns:
-            True on an unattended SIGTERM, or when the user forced an
-            immediate shutdown with a second Ctrl-C.
-        """
-        return self.force_shutdown_requested or self.sigterm_received
 
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
@@ -682,36 +670,7 @@ class Main:
 
                 self.proc_man.load_modules()
 
-            def sig_handler(sig: int, frame: object) -> None:
-                """
-                Record a termination signal for forced shutdown.
-
-                Parameters:
-                    sig: Numeric signal received by the main process.
-                    frame: Interpreter frame active when the signal arrived.
-                """
-                if os.getpid() != self.pid:
-                    # Children created after this handler is installed inherit
-                    # it, but only the main process coordinates shutdown.
-                    return
-                if self.shutdown_signal_received:
-                    return
-                self.shutdown_signal_received = True
-                self.sigterm_received = sig == signal.SIGTERM
-                signal_name = signal.Signals(sig).name
-                self.print(f"{signal_name} received, shutting down Slips.")
-                self.print(
-                    "Slips is stopping without completing the analysis.",
-                    0,
-                    1,
-                )
-
-            for handled_signal in (
-                signal.SIGTERM,
-                signal.SIGHUP,
-                signal.SIGQUIT,
-            ):
-                signal.signal(handled_signal, sig_handler)
+            self.proc_man.install_shutdown_signal_handlers()
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
@@ -754,7 +713,7 @@ class Main:
                 )
 
             while (not self.proc_man.should_stop_slips()) and (
-                not self.shutdown_signal_received
+                not self.proc_man.shutdown_signal_received
             ):
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
@@ -779,14 +738,6 @@ class Main:
                     self.update_man.update_slips()
 
         except KeyboardInterrupt:
-            self.keyboard_interrupt_received = True
-            self.shutdown_signal_received = True
-            self.print("Interrupt received, shutting down Slips.")
+            self.proc_man.handle_keyboard_interrupt()
 
-        natural_completion = (
-            not self.shutdown_signal_received
-            and self.proc_man.shutdown_cause == "natural"
-        )
-        self.proc_man.shutdown_gracefully(
-            natural_completion=natural_completion
-        )
+        self.proc_man.shutdown_gracefully()
