@@ -57,7 +57,7 @@ class WebInterfaceShutdownMixin:
             total_modules=total_modules,
         )
 
-    def _ask_to_stop_web_interface(self) -> bool:
+    def _ask_user_to_stop_web_interface(self) -> bool:
         """
         Ask whether to stop the local web interface after analysis stops.
 
@@ -166,7 +166,8 @@ class WebInterfaceShutdownMixin:
         self, normal_completion: bool
     ) -> None:
         """
-        Prompt and wait after normal completion, or stop on forced shutdown.
+        Prompt the user and wait after normal completion
+         or force stop the web interface on forced shutdown.
 
         Parameters:
             normal_completion: Whether finite input completed without a stop signal.
@@ -186,7 +187,7 @@ class WebInterfaceShutdownMixin:
         # The first Ctrl-C stopped the analysis. It must not also cancel the
         # web-interface prompt; a later Ctrl-C remains a forced shutdown.
         self.shutdown_signal_received = False
-        if self._ask_to_stop_web_interface():
+        if self._ask_user_to_stop_web_interface():
             self._stop_web_interface(port)
             return
 
