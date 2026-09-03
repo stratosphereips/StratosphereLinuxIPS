@@ -46,25 +46,48 @@ def test_is_detection_disabled_accepts_canonical_and_legacy_names(
     )
 
 
-def test_get_alert_generation_lock_is_scoped_to_profile_and_timewindow() -> (
-    None
-):
-    """Verify workers for one profile and time window share a Redis lock."""
+@pytest.mark.parametrize(
+    "set_return_value, expected_result",
+    [
+        (True, True),
+        (None, False),
+    ],
+)
+def test_try_claim_alert_generation_is_scoped_to_profile_and_timewindow(
+    set_return_value: object,
+    expected_result: bool,
+) -> None:
+    """Verify the claim key is scoped per profile/tw and reflects SET NX."""
     alert_handler = ModuleFactory().create_alert_handler_obj()
-    expected_lock = Mock()
     alert_handler.r = MagicMock()
-    alert_handler.r.lock.return_value = expected_lock
+    alert_handler.r.set.return_value = set_return_value
 
-    result = alert_handler.get_alert_generation_lock(
+    result = alert_handler.try_claim_alert_generation(
         "profile_192.168.1.20",
         "timewindow4",
     )
 
-    assert result is expected_lock
-    alert_handler.r.lock.assert_called_once_with(
-        "alert_generation_lock:profile_192.168.1.20:timewindow4",
-        timeout=300,
-        blocking_timeout=None,
+    assert result is expected_result
+    alert_handler.r.set.assert_called_once_with(
+        "alert_claim:profile_192.168.1.20:timewindow4",
+        1,
+        nx=True,
+        px=300_000,
+    )
+
+
+def test_release_alert_claim_deletes_the_claim_key() -> None:
+    """Verify releasing a claim deletes the exact key it claimed."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+
+    alert_handler.release_alert_claim(
+        "profile_192.168.1.20",
+        "timewindow4",
+    )
+
+    alert_handler.r.delete.assert_called_once_with(
+        "alert_claim:profile_192.168.1.20:timewindow4"
     )
 
 

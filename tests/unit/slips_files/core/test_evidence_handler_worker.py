@@ -5,7 +5,6 @@ from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
-from redis.exceptions import LockNotOwnedError
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
@@ -303,17 +302,15 @@ def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
 def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     module_factory = ModuleFactory()
     worker = module_factory.create_evidence_handler_worker_obj()
-    critical_section_events = []
-    alert_generation_lock = MagicMock()
-    alert_generation_lock.acquire.side_effect = (
-        lambda: critical_section_events.append("lock_entered")
+    events = []
+    worker.db.try_claim_alert_generation = Mock(
+        side_effect=lambda *args: events.append("claim_won") or True
     )
-    alert_generation_lock.release.side_effect = (
-        lambda: critical_section_events.append("lock_released")
+    worker.db.release_alert_claim = Mock(
+        side_effect=lambda *args: events.append("claim_released")
     )
-    worker.db.get_alert_generation_lock.return_value = alert_generation_lock
     worker.db.mark_evidence_as_processed.side_effect = (
-        lambda *args: critical_section_events.append("evidence_processed")
+        lambda *args: events.append("evidence_processed")
     )
     evidence = Evidence(
         evidence_type=EvidenceType.ARP_SCAN,
@@ -351,9 +348,7 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
         )
     )
     worker.handle_new_alert = Mock(
-        side_effect=lambda *args: critical_section_events.append(
-            "alert_stored"
-        )
+        side_effect=lambda *args: events.append("alert_stored")
     )
     worker.detection_threshold_in_this_width = 10.0
 
@@ -366,15 +361,17 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
         str(evidence.timewindow),
         evidence.timestamp,
     )
-    worker.db.get_alert_generation_lock.assert_called_once_with(
+    worker.db.try_claim_alert_generation.assert_called_once_with(
         str(evidence.profile),
         str(evidence.timewindow),
     )
-    assert critical_section_events == [
-        "lock_entered",
+    # the alert claim is released only after the alert is stored, and
+    # mark_evidence_as_processed doesn't need a claim at all.
+    assert events == [
         "evidence_processed",
+        "claim_won",
         "alert_stored",
-        "lock_released",
+        "claim_released",
     ]
     logged_evidence = worker.add_evidence_to_json_log_file.call_args[0][0]
     assert logged_evidence.risk_level == RiskWeight.HIGH
@@ -383,8 +380,8 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     assert logged_alert.risk_level == RiskWeight.HIGH
 
 
-def test_handle_evidence_added_message_tolerates_expired_lock() -> None:
-    """Verify an expired Redis lock does not crash an evidence worker."""
+def test_generate_alert_if_threshold_crossed_skips_when_claim_lost() -> None:
+    """Verify losing the atomic claim skips alert generation entirely."""
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     evidence = Evidence(
         evidence_type=EvidenceType.ARP_SCAN,
@@ -401,32 +398,68 @@ def test_handle_evidence_added_message_tolerates_expired_lock() -> None:
         uid=["uid1"],
         timestamp="2024/10/04 15:45:30.123456+0000",
     )
-    alert_generation_lock = MagicMock()
-    alert_generation_lock.release.side_effect = LockNotOwnedError(
-        "Lock is no longer owned"
-    )
-    worker.db.get_alert_generation_lock.return_value = alert_generation_lock
-    worker._handle_evidence_added_under_lock = Mock()
-    worker.print = Mock()
+    worker.is_running_non_stop = False
+    worker.detection_threshold_in_this_width = 10.0
+    worker.db.try_claim_alert_generation = Mock(return_value=False)
+    worker.get_evidence_for_tw = Mock()
+    worker.handle_new_alert = Mock()
+    worker.db.release_alert_claim = Mock()
 
-    worker.handle_evidence_added_message(
-        {"data": json.dumps(utils.to_dict(evidence))}
+    worker._generate_alert_if_threshold_crossed(
+        evidence,
+        str(evidence.profile),
+        str(evidence.timewindow),
+        accumulated_threat_level=55.0,
+        risk_accumulated_threat_level=55.0,
+        current_risk_weight=RiskWeight.HIGH,
     )
 
-    worker._handle_evidence_added_under_lock.assert_called_once()
-    handled_evidence, handled_profileid, handled_twid = (
-        worker._handle_evidence_added_under_lock.call_args.args
-    )
-    assert handled_evidence.id == evidence.id
-    assert (handled_profileid, handled_twid) == (
+    worker.db.try_claim_alert_generation.assert_called_once_with(
         str(evidence.profile),
         str(evidence.timewindow),
     )
-    worker.print.assert_called_once_with(
-        "Warning: Alert-generation lock expired before release for "
-        f"{evidence.profile}/{evidence.timewindow}; evidence processing completed.",
-        1,
-        0,
+    worker.get_evidence_for_tw.assert_not_called()
+    worker.handle_new_alert.assert_not_called()
+    worker.db.release_alert_claim.assert_not_called()
+
+
+def test_generate_alert_if_threshold_crossed_releases_claim_on_error() -> None:
+    """Verify the claim is released even if alert generation raises."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    worker.is_running_non_stop = False
+    worker.detection_threshold_in_this_width = 10.0
+    worker.db.try_claim_alert_generation = Mock(return_value=True)
+    worker.get_evidence_for_tw = Mock(side_effect=RuntimeError("db error"))
+    worker.db.release_alert_claim = Mock()
+
+    with pytest.raises(RuntimeError):
+        worker._generate_alert_if_threshold_crossed(
+            evidence,
+            str(evidence.profile),
+            str(evidence.timewindow),
+            accumulated_threat_level=55.0,
+            risk_accumulated_threat_level=55.0,
+            current_risk_weight=RiskWeight.HIGH,
+        )
+
+    worker.db.release_alert_claim.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
     )
 
 
@@ -459,7 +492,7 @@ def test_disabled_evidence_message_is_deleted_without_processing() -> None:
         str(evidence.timewindow),
         evidence.id,
     )
-    worker.db.get_alert_generation_lock.assert_not_called()
+    worker.db.try_claim_alert_generation.assert_not_called()
     worker.db.mark_evidence_as_processed.assert_not_called()
 
 

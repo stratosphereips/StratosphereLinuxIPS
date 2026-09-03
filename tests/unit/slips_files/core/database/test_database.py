@@ -94,16 +94,28 @@ def test_set_info_for_domains():
     assert stored_data["threatintelligence"] == "sample data"
 
 
-def test_get_alert_generation_lock_forwards_to_redis() -> None:
-    """Verify DBManager exposes the Redis cross-process alert lock."""
+def test_try_claim_alert_generation_forwards_to_redis() -> None:
+    """Verify DBManager exposes the atomic cross-process alert claim."""
     db = ModuleFactory().create_db_manager_obj(6379)
-    expected_lock = Mock()
-    db.rdb.get_alert_generation_lock = Mock(return_value=expected_lock)
+    db.rdb.try_claim_alert_generation = Mock(return_value=True)
 
-    result = db.get_alert_generation_lock("profile_10.0.0.1", "timewindow2")
+    result = db.try_claim_alert_generation("profile_10.0.0.1", "timewindow2")
 
-    assert result is expected_lock
-    db.rdb.get_alert_generation_lock.assert_called_once_with(
+    assert result is True
+    db.rdb.try_claim_alert_generation.assert_called_once_with(
+        "profile_10.0.0.1",
+        "timewindow2",
+    )
+
+
+def test_release_alert_claim_forwards_to_redis() -> None:
+    """Verify DBManager exposes releasing the atomic cross-process claim."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.release_alert_claim = Mock()
+
+    db.release_alert_claim("profile_10.0.0.1", "timewindow2")
+
+    db.rdb.release_alert_claim.assert_called_once_with(
         "profile_10.0.0.1",
         "timewindow2",
     )
