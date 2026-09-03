@@ -2,6 +2,7 @@
 
 import shutil
 import subprocess
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -17,6 +18,12 @@ def test_python_pigeon_arguments_are_accepted_by_go_binary(tmp_path) -> None:
     if go_executable is None:
         pytest.skip("Go is required for the Python-to-Pigeon contract test")
 
+    repository_root = Path(__file__).resolve().parents[2]
+    pigeon_source = repository_root / "p2p4slips"
+    assert (pigeon_source / "go.mod").is_file(), (
+        "p2p4slips submodule is not initialized; CI must checkout "
+        "submodules recursively"
+    )
     pigeon_binary = tmp_path / "p2p4slips"
     build = subprocess.run(
         [
@@ -27,7 +34,7 @@ def test_python_pigeon_arguments_are_accepted_by_go_binary(tmp_path) -> None:
             str(pigeon_binary),
             ".",
         ],
-        cwd="p2p4slips",
+        cwd=pigeon_source,
         capture_output=True,
         check=False,
         text=True,
