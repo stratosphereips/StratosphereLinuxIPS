@@ -1572,8 +1572,11 @@ class DBManager:
     def get_tw_limits(self, *args, **kwargs):
         return self.rdb.get_tw_limits(*args, **kwargs)
 
-    def get_alert_generation_lock(self, *args, **kwargs):
-        return self.rdb.get_alert_generation_lock(*args, **kwargs)
+    def try_claim_alert_generation(self, *args, **kwargs):
+        return self.rdb.try_claim_alert_generation(*args, **kwargs)
+
+    def release_alert_claim(self, *args, **kwargs):
+        return self.rdb.release_alert_claim(*args, **kwargs)
 
     def close_sqlite(self, *args, **kwargs):
         # when stopping the daemon using -S, slips doesn't start the sqlite db

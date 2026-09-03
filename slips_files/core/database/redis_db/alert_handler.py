@@ -32,9 +32,6 @@ from slips_files.core.structures.risk_weights import (
 )
 
 
-ALERT_GENERATION_LOCK_TIMEOUT_SECONDS = 300
-
-
 class AlertHandler:
     """
     Helper class for the Redis class in database.py
@@ -64,23 +61,46 @@ class AlertHandler:
 
     name = "alert_handler_db"
 
-    def get_alert_generation_lock(self, profileid: str, twid: str) -> Any:
+    def try_claim_alert_generation(self, profileid: str, twid: str) -> bool:
         """
-        Create the cross-process lock for one profile and time window.
+        Atomically claim the right to generate an alert for one profile
+        and time window.
+
+        Multiple evidence-handler processes can independently observe
+        the same profile/tw crossing the detection threshold at
+        essentially the same time. this uses Redis's
+        atomic SET...NX so exactly one caller wins the claim; everyone
+        else gets False immediately and simply skips alert generation
+        for this evidence - no waiting involved.
 
         Parameters:
-            profileid: Profile whose accumulated threat level is being updated.
-            twid: Time window whose accumulated threat level is being updated.
+            profileid: Profile whose alert is being claimed.
+            twid: Time window whose alert is being claimed.
 
         Returns:
-            A Redis lock that serializes evidence scoring and alert creation.
+            True when this call won the claim, False when another
+            process already holds it.
         """
-        lock_name = f"alert_generation_lock:{profileid}:{twid}"
-        return self.r.lock(
-            lock_name,
-            timeout=ALERT_GENERATION_LOCK_TIMEOUT_SECONDS,
-            blocking_timeout=None,
-        )
+        claim_key = f"alert_claim:{profileid}:{twid}"
+        # expires after 0.3s
+        alert_claim_ttl_ms = 300_000
+        return bool(self.r.set(claim_key, 1, nx=True, px=alert_claim_ttl_ms))
+
+    def release_alert_claim(self, profileid: str, twid: str) -> None:
+        """
+        Release a previously won alert-generation claim.
+
+        set_alert() resets the profile/tw's accumulated threat level to
+        0, so evidence can legitimately re-cross the threshold and earn
+        a new alert before the claim's TTL would otherwise expire. Call
+        this right after persisting the alert so that next claim isn't
+        stuck waiting out the TTL.
+
+        Parameters:
+            profileid: Profile whose alert claim is being released.
+            twid: Time window whose alert claim is being released.
+        """
+        self.r.delete(f"alert_claim:{profileid}:{twid}")
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
