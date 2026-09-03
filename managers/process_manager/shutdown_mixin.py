@@ -503,7 +503,7 @@ class ShutdownMixin:
             end="",
             flush=True,
         )
-        while not getattr(self.main, "shutdown_signal_received", False):
+        while not self.main.shutdown_signal_received:
             try:
                 readable, _, _ = select.select([sys.stdin], [], [], 0.25)
             except (OSError, ValueError):
@@ -522,8 +522,8 @@ class ShutdownMixin:
             return
         forced = (
             self.main.mode == "daemonized"
-            or getattr(self.main, "force_shutdown_requested", False)
-            or getattr(self.main, "sigterm_received", False)
+            or self.main.force_shutdown_requested
+            or self.main.sigterm_received
         )
         if forced:
             self.main.print(
@@ -644,7 +644,6 @@ class ShutdownMixin:
                     graceful_shutdown = False
                     natural_completion = False
                     self.main.shutdown_signal_received = True
-
                     self.main.force_shutdown_requested = True
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
