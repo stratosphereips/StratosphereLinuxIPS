@@ -6,9 +6,7 @@ import os
 import shutil
 import json
 import subprocess
-import math
-from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict
 import time
 from threading import Lock
 
@@ -18,16 +16,16 @@ from .exec_iptables_cmd import (
     LEGACY_SLIPS_COMMENT,
     exec_iptables_command,
     format_slips_rule_comment,
-    list_slips_firewall_rules,
     sync_slips_rule_comment,
 )
 from modules.blocking.unblocker import Unblocker
+from modules.blocking.recovery import RecoveryMixin
 
 
 OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
 
 
-class Blocking(IModule):
+class Blocking(IModule, RecoveryMixin):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
 
@@ -317,142 +315,6 @@ class Blocking(IModule):
             self.print(message)
             self.log(message)
         return True
-
-    def _recovered_rule_flags(
-        self, rules: List[Dict[str, Any]]
-    ) -> Dict[str, Any]:
-        """Combine source, destination and transport state from saved rules.
-
-        Parameters:
-            rules: Existing managed iptables rules for one address.
-
-        Returns:
-            Flags suitable for later exact firewall removal.
-        """
-        flags: Dict[str, Any] = {
-            "from_": any(rule["from_"] for rule in rules),
-            "to": any(rule["to"] for rule in rules),
-        }
-        for key in ("dport", "sport", "protocol", "interface"):
-            values = {rule.get(key) for rule in rules if rule.get(key)}
-            flags[key] = values.pop() if len(values) == 1 else None
-        return flags
-
-    def _recovery_state(
-        self,
-        rules: List[Dict[str, Any]],
-        now: float,
-    ) -> Dict[str, Any]:
-        """Build Redis state from one address's persisted firewall rules.
-
-        Parameters:
-            rules: Managed source and destination rules for one address.
-            now: Current Unix time used to classify expiration.
-
-        Returns:
-            Serializable state including recovery and probation information.
-        """
-        valid_rules = [rule for rule in rules if rule["metadata_valid"]]
-        flags = self._recovered_rule_flags(rules)
-        if not valid_rules:
-            recovery_status = (
-                "legacy metadata"
-                if any(rule["legacy"] for rule in rules)
-                else "invalid metadata"
-            )
-            flags.update(
-                {
-                    "_recovered": True,
-                    "_recovery_status": recovery_status,
-                    "_origin_run": "unknown",
-                    "rule_comment": rules[0]["comment"],
-                }
-            )
-            return {
-                "unblock_at": None,
-                "remaining_timewindows": None,
-                "flags": flags,
-                "recovered": True,
-                "recovery_status": recovery_status,
-                "origin_run": "unknown",
-                "rule_comment": rules[0]["comment"],
-                "updated_at": now,
-            }
-
-        blocked_at = min(float(rule["blocked_at"]) for rule in valid_rules)
-        deadline = max(float(rule["unblock_at"]) for rule in valid_rules)
-        origin_runs = sorted({str(rule["run_id"]) for rule in valid_rules})
-        origin_run = ", ".join(origin_runs)
-        metadata_conflict = len({rule["comment"] for rule in rules}) > 1
-        if metadata_conflict:
-            recovery_status = "metadata conflict"
-        elif deadline <= now:
-            recovery_status = "expired; removal pending"
-        else:
-            recovery_status = "recovered"
-        width = max(1, int(self.conf.get_tw_width_in_seconds()))
-        remaining = max(0, math.ceil(max(0, deadline - now) / width) - 1)
-        unblock_at = datetime.fromtimestamp(deadline, timezone.utc).isoformat()
-        comment = max(valid_rules, key=lambda rule: float(rule["unblock_at"]))[
-            "comment"
-        ]
-        flags.update(
-            {
-                "_recovered": True,
-                "_recovery_status": recovery_status,
-                "_origin_run": origin_run,
-                "rule_comment": comment,
-            }
-        )
-        return {
-            "unblock_at": unblock_at,
-            "remaining_timewindows": remaining,
-            "flags": flags,
-            "recovered": True,
-            "recovery_status": recovery_status,
-            "origin_run": origin_run,
-            "rule_comment": comment,
-            "blocked_at": blocked_at,
-            "updated_at": now,
-        }
-
-    def _recover_firewall_rules(self) -> int:
-        """Import pre-existing Slips firewall rules into the current run.
-
-        Returns:
-            Number of distinct addresses recovered from iptables.
-        """
-        rules_by_ip: Dict[str, List[Dict[str, Any]]] = {}
-        for rule in list_slips_firewall_rules(self.sudo):
-            rules_by_ip.setdefault(rule["ip"], []).append(rule)
-        if not rules_by_ip:
-            return 0
-
-        now = time.time()
-        self.print(
-            f"WARNING: Found {len(rules_by_ip)} IPs in the existing "
-            "slipsBlocking chain. Recovering their firewall state.",
-            0,
-            1,
-        )
-        self.log(
-            f"Found {len(rules_by_ip)} pre-existing firewall records "
-            "from iptables comments."
-        )
-        for ip, rules in rules_by_ip.items():
-            state = self._recovery_state(rules, now)
-            self.db.set_firewall_block_state(ip, state)
-
-            blocked_at = state.get("blocked_at", now)
-            self.db.set_blocked_ip(ip, blocked_at)
-
-            status = state["recovery_status"]
-            self.print(
-                f"Recovered firewall rule for {ip}: {status}.",
-                0,
-                1,
-            )
-        return len(rules_by_ip)
 
     def shutdown_gracefully(self):
         self.unblocker.unblocker_thread.join(30)
