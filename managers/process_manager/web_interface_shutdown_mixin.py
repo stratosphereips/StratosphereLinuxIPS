@@ -41,7 +41,7 @@ class WebInterfaceShutdownMixin:
             return False
         if not self._is_web_interface_enabled():
             return False
-        if self.main.web_interface_shutdown:
+        if self.web_interface_shutdown:
             return False
         port = int(self.main.conf.web_interface_port)
         return WebInterface.is_verified_server_running(port)
@@ -75,7 +75,7 @@ class WebInterfaceShutdownMixin:
             end="",
             flush=True,
         )
-        while not self.main.shutdown_signal_received:
+        while not self.shutdown_signal_received:
             try:
                 readable, _, _ = select.select([sys.stdin], [], [], 0.25)
             except (OSError, ValueError):
@@ -96,7 +96,7 @@ class WebInterfaceShutdownMixin:
             port: Configured HTTP port.
         """
         if WebInterface.stop_verified_server(port):
-            self.main.web_interface_shutdown = True
+            self.web_interface_shutdown = True
             self._report_web_interface_stopped()
             return
         self.main.print(
@@ -106,24 +106,27 @@ class WebInterfaceShutdownMixin:
         )
 
     def _should_force_stop_web_interface(
-        self, natural_completion: bool
+        self, normal_completion: bool
     ) -> bool:
         """
         Decide whether the web interface must stop without prompting.
 
         Parameters:
-            natural_completion: Whether finite input completed without a stop signal.
+            normal_completion: Whether finite input completed without a stop signal.
 
         Returns:
             True when a forced or non-graceful shutdown requires an
             immediate stop.
         """
+        # normal_completion and keyboard_interrupt_received both mean a
+        # human is around to answer the "stop it too?" prompt (input just
+        # finished, or they pressed Ctrl-C once);
+        # a SIGTERM or a second Ctrl-C is treated as unattended shutdown of
+        # slips and skips straight to stopping it.
         keep_web_interface_available = (
-            natural_completion or self.main.keyboard_interrupt_received
+            normal_completion or self.keyboard_interrupt_received
         )
-        return (
-            self.main.is_forced_shutdown() or not keep_web_interface_available
-        )
+        return self.is_forced_shutdown() or not keep_web_interface_available
 
     def _get_web_interface_display_host(self) -> str:
         """
@@ -153,36 +156,36 @@ class WebInterfaceShutdownMixin:
         try:
             while (
                 WebInterface.is_verified_server_running(port)
-                and not self.main.shutdown_signal_received
+                and not self.shutdown_signal_received
             ):
                 time.sleep(0.5)
         except KeyboardInterrupt:
-            self.main.shutdown_signal_received = True
+            self.shutdown_signal_received = True
 
     def _handle_web_interface_after_analysis(
-        self, natural_completion: bool
+        self, normal_completion: bool
     ) -> None:
         """
         Prompt and wait after normal completion, or stop on forced shutdown.
 
         Parameters:
-            natural_completion: Whether finite input completed without a stop signal.
+            normal_completion: Whether finite input completed without a stop signal.
         """
         if not self._is_web_interface_enabled():
             return
         port = int(self.main.conf.web_interface_port)
         if not WebInterface.is_verified_server_running(port):
-            self.main.web_interface_shutdown = True
+            self.web_interface_shutdown = True
             self._report_web_interface_stopped()
             return
 
-        if self._should_force_stop_web_interface(natural_completion):
+        if self._should_force_stop_web_interface(normal_completion):
             self._stop_web_interface(port)
             return
 
         # The first Ctrl-C stopped the analysis. It must not also cancel the
         # web-interface prompt; a later Ctrl-C remains a forced shutdown.
-        self.main.shutdown_signal_received = False
+        self.shutdown_signal_received = False
         if self._ask_to_stop_web_interface():
             self._stop_web_interface(port)
             return

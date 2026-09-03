@@ -51,11 +51,6 @@ class Main:
         self.name = "main"
         self.parent_output_dir = "output/"
         self.mode = "interactive"
-        self.sigterm_received = False
-        self.shutdown_signal_received = False
-        self.web_interface_shutdown = False
-        self.keyboard_interrupt_received = False
-        self.force_shutdown_requested = False
         # objects to manage various functionality
         self.checker = Checker(self)
         self.redis_man = RedisManager(self)

@@ -113,6 +113,26 @@ class ProcessManager(
         self.core_module_failure = False
         self.shutdown_cause = ""
         self.disabled_warning_printed = False
+        # shutdown-related flags. shutdown_signal_received is the umbrella
+        # "something asked Slips to stop" flag, set by any of: SIGTERM,
+        # SIGHUP, SIGQUIT (sig_handler) or Ctrl-C (KeyboardInterrupt).
+        # the other 3 narrow down *which* signal it was, because the
+        # shutdown code (firewall/web interface prompts) behaves
+        # differently depending on the cause:
+        #  - sigterm_received: the signal was specifically SIGTERM (as
+        #    opposed to SIGHUP/SIGQUIT), treated as an unattended/service
+        #    shutdown that should skip interactive prompts.
+        #  - keyboard_interrupt_received: the user pressed Ctrl-C in the
+        #    main loop, treated like a normal completion since a human is
+        #    present to answer prompts.
+        #  - force_shutdown_requested: the user pressed Ctrl-C *again*
+        #    while Slips was already shutting down, requesting an
+        #    immediate, no-prompt cleanup.
+        self.sigterm_received = False
+        self.shutdown_signal_received = False
+        self.web_interface_shutdown = False
+        self.keyboard_interrupt_received = False
+        self.force_shutdown_requested = False
         # total number of detection modules plus core processes (main,
         # evidence handler, profiler, input) slips is starting, used to
         # show live "x/total" progress as each one announces itself.
