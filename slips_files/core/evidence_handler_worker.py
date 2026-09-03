@@ -8,7 +8,7 @@ import os
 import queue
 import sys
 from multiprocessing import Queue
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from redis.exceptions import LockNotOwnedError
 
@@ -546,33 +546,16 @@ class EvidenceHandlerWorker(IModule):
             self.db.delete_evidence(profileid, twid, evidence.id)
             return
 
-        # Multiple evidence-handler processes consume the same queue. Scoring,
-        # selecting correlated evidence, persisting the alert, and resetting
-        # the score must therefore be one cross-process operation per profile
-        # and time window.
-        lock = self.db.get_alert_generation_lock(profileid, twid)
-        lock.acquire()
-        try:
-            self._handle_evidence_added_under_lock(evidence, profileid, twid)
-        finally:
-            try:
-                lock.release()
-            except LockNotOwnedError:
-                self.print(
-                    "Warning: Alert-generation lock expired before release for "
-                    f"{profileid}/{twid}; evidence processing completed.",
-                    1,
-                    0,
-                )
+        self._handle_evidence_added(evidence, profileid, twid)
 
-    def _handle_evidence_added_under_lock(
+    def _handle_evidence_added(
         self,
         evidence: Evidence,
         profileid: str,
         twid: str,
     ) -> None:
         """
-        Process evidence while its profile and time window lock is held.
+        Process, log, score, and possibly alert on one piece of evidence.
 
         Parameters:
             evidence: Evidence to score and potentially turn into an alert.
@@ -602,18 +585,8 @@ class EvidenceHandlerWorker(IModule):
         )
         self.add_to_log_file(evidence_to_log)
 
-        accumulated_threat_level = self.get_accumulated_threat_level(
-            profileid, twid, evidence
-        )
-
-        current_risk_weight: RiskWeight = self.db.get_max_seen_risk_weight()[
-            "risk_weight"
-        ]
-        evidence.risk_level = current_risk_weight
-
-        # this is profile-specific RATL = ATL * RW
-        risk_accumulated_threat_level = (
-            accumulated_threat_level * current_risk_weight.weight
+        accumulated_threat_level, risk_accumulated_threat_level = (
+            self._score_evidence_and_maybe_alert(evidence, profileid, twid)
         )
 
         self.add_evidence_to_json_log_file(
@@ -628,12 +601,125 @@ class EvidenceHandlerWorker(IModule):
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
 
-        # Informational evidence has no threat contribution and therefore
-        # cannot be the event that opens an alert. It remains processed and
-        # may still be correlated with a later, score-contributing alert.
-        if evidence.threat_level == ThreatLevel.INFO:
-            return
+    def _score_evidence_and_maybe_alert(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> Tuple[float, float]:
+        """
+        Score evidence and raise an alert if it crosses the threshold.
 
+        Multiple evidence-handler processes consume the same queue.
+        Scoring and deciding/raising the alert must therefore be one
+        cross-process operation per profile and time window, so both
+        calls below run under a single acquisition of the per-(profile,
+        tw) lock.
+
+        Parameters:
+            evidence: Evidence to score and potentially turn into an
+                alert. Mutated in place with its resolved risk_level.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+
+        Returns:
+            The accumulated threat level and the risk-weighted
+            accumulated threat level computed for this evidence.
+        """
+        lock = self.db.get_alert_generation_lock(profileid, twid)
+        lock.acquire()
+        try:
+            (
+                accumulated_threat_level,
+                risk_accumulated_threat_level,
+                current_risk_weight,
+            ) = self._score_evidence(evidence, profileid, twid)
+
+            self._generate_alert_if_threshold_crossed(
+                evidence,
+                profileid,
+                twid,
+                accumulated_threat_level,
+                risk_accumulated_threat_level,
+                current_risk_weight,
+            )
+        finally:
+            try:
+                lock.release()
+            except LockNotOwnedError:
+                self.print(
+                    "Warning: Alert-generation lock expired before release for "
+                    f"{profileid}/{twid}; evidence processing completed.",
+                    1,
+                    0,
+                )
+        return accumulated_threat_level, risk_accumulated_threat_level
+
+    def _score_evidence(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> Tuple[float, float, RiskWeight]:
+        """
+        Update and read the profile/tw's accumulated threat level.
+
+        This is a read-modify-write on the profile/tw's shared score;
+        must be called with the profile/tw lock held, otherwise another
+        worker's update to the same score can be silently lost.
+
+        Parameters:
+            evidence: Evidence to score. Mutated in place with its
+                resolved risk_level.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+
+        Returns:
+            The accumulated threat level, the risk-weighted accumulated
+            threat level, and the risk weight used to compute it.
+        """
+        accumulated_threat_level = self.get_accumulated_threat_level(
+            profileid, twid, evidence
+        )
+        current_risk_weight: RiskWeight = self.db.get_max_seen_risk_weight()[
+            "risk_weight"
+        ]
+        evidence.risk_level = current_risk_weight
+        # this is profile-specific RATL = ATL * RW
+        risk_accumulated_threat_level = (
+            accumulated_threat_level * current_risk_weight.weight
+        )
+        return (
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+            current_risk_weight,
+        )
+
+    def _generate_alert_if_threshold_crossed(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+        accumulated_threat_level: float,
+        risk_accumulated_threat_level: float,
+        current_risk_weight: RiskWeight,
+    ) -> None:
+        """
+        Build and persist an alert once the detection threshold is
+        crossed. Must be called with the profile/tw lock held: without
+        it, two workers could both see the threshold crossed and each
+        raise a duplicate alert for the same profile/tw.
+
+        Parameters:
+            evidence: The evidence that triggered this check.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+            accumulated_threat_level: The profile/tw's accumulated
+                threat level.
+            risk_accumulated_threat_level: Risk-weighted accumulated
+                threat level.
+            current_risk_weight: Risk weight used to compute the RATL.
+        """
         # Informational evidence has no threat contribution and therefore
         # cannot be the event that opens an alert. It remains processed and
         # may still be correlated with a later, score-contributing alert.
