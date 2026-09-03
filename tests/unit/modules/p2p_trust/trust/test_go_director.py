@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from unittest.mock import Mock, patch
 import pytest
 from tests.module_factory import ModuleFactory
@@ -548,6 +549,50 @@ def test_process_go_update(data, expected_calls):
         assert actual_calls == expected_calls
 
 
+@pytest.mark.parametrize(
+    "connected, existing_peers, expected_peers",
+    [
+        (True, ["existing_peer"], ["existing_peer", "test_peer"]),
+        (False, ["existing_peer", "test_peer"], ["existing_peer"]),
+    ],
+)
+def test_process_go_update_publishes_live_peer_state(
+    connected: bool,
+    existing_peers: list[str],
+    expected_peers: list[str],
+) -> None:
+    """
+    Ensure Pigeon activation changes update the Redis state used by the web.
+
+    Parameters:
+        connected: Connectivity reported by Pigeon.
+        existing_peers: Connected peers already present in Redis.
+        expected_peers: Connected peers expected after processing.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.db.get_connected_peers.return_value = existing_peers
+    go_director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.168.1.1", "reliability": 0.4}
+    )
+
+    go_director.process_go_update(
+        {
+            "peerid": "test_peer",
+            "connected": connected,
+            "timestamp": 1649445643,
+        }
+    )
+
+    stored_state = json.loads(
+        go_director.db.store_peer_trust_data.call_args.args[1]
+    )
+    assert stored_state["connected"] is connected
+    assert stored_state["timestamp"] == 1649445643
+    go_director.db.store_connected_peers.assert_called_once_with(
+        expected_peers
+    )
+
+
 def test_respond_to_message_request_with_info():
     go_director = ModuleFactory().create_go_director_obj()
     key = "192.168.1.1"
@@ -608,3 +653,60 @@ def test_respond_to_message_request_without_info():
             go_director.print.assert_called_once_with(expected_print, 2, 0)
 
             mock_send_evaluation.assert_not_called()
+
+
+def test_connection_update_is_validated_and_recorded() -> None:
+    """Accept one authenticated exact-tuple lifecycle update from Pigeon."""
+    go_director = ModuleFactory().create_go_director_obj()
+    connection = {
+        "peer_id": "peer-a",
+        "protocol": "tcp",
+        "local_ip": "192.0.2.10",
+        "local_port": "6668",
+        "remote_ip": "198.51.100.20",
+        "remote_port": "51000",
+        "authenticated": True,
+        "connected": True,
+    }
+
+    go_director.handle_gopy_data(
+        {
+            "message_type": "connection_update",
+            "message_contents": connection,
+        }
+    )
+
+    go_director.db.record_p2p_message.assert_called_once_with(
+        "received",
+        {
+            "message_type": "connection_update",
+            "peer_id": "peer-a",
+            "connected": True,
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    "connection",
+    [
+        {},
+        {
+            "peer_id": "peer-a",
+            "protocol": "tcp",
+            "local_ip": "192.0.2.10",
+            "local_port": "6668",
+            "remote_ip": "198.51.100.20",
+            "remote_port": "51000",
+            "authenticated": False,
+            "connected": True,
+        },
+    ],
+)
+def test_connection_update_rejects_incomplete_or_unauthenticated_data(
+    connection: dict,
+) -> None:
+    """Reject lifecycle records that cannot authorize a flow exemption."""
+    go_director = ModuleFactory().create_go_director_obj()
+
+    with pytest.raises(ValueError):
+        go_director.process_connection_update(connection)

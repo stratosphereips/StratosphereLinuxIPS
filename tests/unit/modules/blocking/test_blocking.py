@@ -6,6 +6,7 @@ import json
 import subprocess
 from unittest.mock import call, patch
 
+from slips_files.core.structures.evidence import TimeWindow
 from tests.module_factory import ModuleFactory
 
 
@@ -87,7 +88,7 @@ def test_is_ip_already_blocked():
         ("192.168.1.10", {}, False, True, True, ["-s", "-d"]),  # normal
         ("192.168.1.10", {"from_": True}, False, True, True, ["-s"]),
         ("192.168.1.10", {"to": True}, False, True, True, ["-d"]),
-        ("192.168.1.10", {}, True, True, False, []),  # already blocked
+        ("192.168.1.10", {}, True, True, True, []),  # already blocked
         (None, {}, False, True, False, []),  # invalid ip type
     ],
 )
@@ -127,6 +128,7 @@ def test_block_ip(
                     ip_to_block=ip,
                     flag=flag,
                     options=options,
+                    comment="Slips rule",
                 )
                 for flag in expected_call_flags
             ]
@@ -134,6 +136,155 @@ def test_block_ip(
             assert mock_exec.call_count == len(expected_call_flags)
         else:
             mock_exec.assert_not_called()
+
+
+def test_block_ip_tracks_preexisting_firewall_rule() -> None:
+    """Track an iptables rule inherited without a Redis blocked timestamp."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.firewall = "iptables"
+    blocking.db.get_blocking_timestamp.return_value = None
+
+    with patch.object(blocking, "_is_ip_already_blocked", return_value=True):
+        result = blocking._block_ip("192.168.1.10", {})
+
+    assert result is True
+    blocking.db.set_blocked_ip.assert_called_once_with("192.168.1.10")
+
+
+def test_block_ip_uses_direction_specific_private_interfaces() -> None:
+    """Use input matching for source rules and output matching for targets."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.firewall = "iptables"
+    flags = {
+        "from_": True,
+        "to": True,
+        "interface": "eth0",
+    }
+
+    with (
+        patch.object(blocking, "_is_ip_already_blocked", return_value=False),
+        patch(
+            "modules.blocking.blocking.exec_iptables_command",
+            return_value=True,
+        ) as execute,
+        patch.object(blocking, "print"),
+        patch.object(blocking, "log"),
+    ):
+        result = blocking._block_ip("192.168.1.10", flags)
+
+    assert result is True
+    execute.assert_has_calls(
+        [
+            call(
+                blocking.sudo,
+                action="insert",
+                ip_to_block="192.168.1.10",
+                flag="-s",
+                options={
+                    "protocol": "",
+                    "dport": "",
+                    "sport": "",
+                    "interface": "-i eth0",
+                },
+                comment="Slips rule",
+            ),
+            call(
+                blocking.sudo,
+                action="insert",
+                ip_to_block="192.168.1.10",
+                flag="-d",
+                options={
+                    "protocol": "",
+                    "dport": "",
+                    "sport": "",
+                    "interface": "-o eth0",
+                },
+                comment="Slips rule",
+            ),
+        ]
+    )
+
+
+def test_block_ip_rolls_back_partial_rule_insertion() -> None:
+    """Remove an inserted source rule when destination insertion fails."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.firewall = "iptables"
+
+    with (
+        patch.object(blocking, "_is_ip_already_blocked", return_value=False),
+        patch(
+            "modules.blocking.blocking.exec_iptables_command",
+            side_effect=[True, False, True],
+        ) as execute,
+        patch.object(blocking, "print"),
+        patch.object(blocking, "log"),
+        patch.object(blocking.db, "set_blocked_ip") as set_blocked,
+    ):
+        result = blocking._block_ip("192.168.1.10", {})
+
+    assert result is False
+    assert [item.kwargs["action"] for item in execute.call_args_list] == [
+        "insert",
+        "insert",
+        "delete",
+    ]
+    assert [item.kwargs["flag"] for item in execute.call_args_list] == [
+        "-s",
+        "-d",
+        "-s",
+    ]
+    set_blocked.assert_not_called()
+
+
+def test_main_does_not_schedule_unblock_after_insertion_failure() -> None:
+    """Do not persist an unblock deadline for a rule that was never added."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.parent_output_dir = "output/test-firewall-run"
+    blocking_data = {
+        "ip": "1.2.3.4",
+        "tw": 5,
+        "block": True,
+        "from": True,
+        "to": False,
+    }
+    request = {
+        "tw_to_unblock": TimeWindow(
+            number=6,
+            end_time="2026-08-28T12:00:00+00:00",
+        ),
+        "block_this_ip_for": 1,
+        "flags": {
+            "from_": True,
+            "to": False,
+            "dport": None,
+            "sport": None,
+            "protocol": None,
+            "interface": None,
+        },
+    }
+    blocking.db.get_blocking_timestamp.return_value = None
+
+    with (
+        patch.object(
+            blocking,
+            "get_msg",
+            return_value={"data": json.dumps(blocking_data)},
+        ),
+        patch.object(blocking, "_block_ip", return_value=False),
+        patch.object(
+            blocking.unblocker,
+            "prepare_unblock_request",
+            return_value=request,
+        ),
+        patch.object(
+            blocking.unblocker, "register_unblock_request"
+        ) as register,
+        patch.object(blocking, "print"),
+        patch("modules.blocking.blocking.time.time", return_value=100.0),
+    ):
+        blocking.main()
+
+    register.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -160,47 +311,217 @@ def test_main_blocking_logic(block, expected_block_called):
     msg_block = {"data": json.dumps(blocking_data)}
     msg_tw_closed = None
 
-    with patch.object(
-        blocking, "get_msg", side_effect=[msg_block, msg_tw_closed]
+    flags = {
+        "from_": True,
+        "to": False,
+        "dport": 80,
+        "sport": 12345,
+        "protocol": "tcp",
+        "interface": "eth0",
+    }
+    request = {
+        "tw_to_unblock": TimeWindow(
+            number=6,
+            end_time="2026-08-28T12:00:00+00:00",
+        ),
+        "block_this_ip_for": 1,
+        "flags": dict(flags),
+    }
+    blocking.parent_output_dir = "output/test-firewall-run"
+    blocking.db.get_blocking_timestamp.return_value = None
+    blocking.db.get_timewindow.return_value = "timewindow23"
+
+    with (
+        patch.object(
+            blocking, "get_msg", side_effect=[msg_block, msg_tw_closed]
+        ),
+        patch.object(blocking, "_block_ip") as mock_block,
+        patch.object(
+            blocking.unblocker,
+            "prepare_unblock_request",
+            return_value=request,
+        ) as mock_prepare,
+        patch.object(
+            blocking.unblocker, "register_unblock_request"
+        ) as mock_register,
+        patch.object(blocking.unblocker, "update_requests") as mock_update,
+        patch("modules.blocking.blocking.time.time", return_value=100.0),
     ):
-        with (
-            patch.object(blocking, "_block_ip") as mock_block,
-            patch.object(
-                blocking.unblocker, "unblock_request"
-            ) as mock_unblock_req,
-            patch.object(blocking.unblocker, "update_requests") as mock_update,
-        ):
 
-            blocking.main()
+        blocking.main()
 
-            if expected_block_called:
-                mock_block.assert_called_once_with(
-                    "1.2.3.4",
-                    {
-                        "from_": True,
-                        "to": False,
-                        "dport": 80,
-                        "sport": 12345,
-                        "protocol": "tcp",
-                        "interface": "eth0",
-                    },
-                )
-            else:
-                mock_block.assert_not_called()
+        if expected_block_called:
+            mock_block.assert_called_once_with("1.2.3.4", request["flags"])
+        else:
+            mock_block.assert_not_called()
 
-            mock_unblock_req.assert_called_once_with(
-                "1.2.3.4",
-                5,
-                {
-                    "from_": True,
-                    "to": False,
-                    "dport": 80,
-                    "sport": 12345,
-                    "protocol": "tcp",
-                    "interface": "eth0",
-                },
-            )
-            mock_update.assert_not_called()
+        mock_prepare.assert_called_once_with("1.2.3.4", 23, flags)
+        mock_register.assert_called_once_with("1.2.3.4", request)
+        mock_update.assert_not_called()
+
+    assert request["flags"]["_blocked_at"] == 100.0
+    assert request["flags"]["_origin_run"] == "test-firewall-run"
+    assert request["flags"]["rule_comment"].startswith(
+        "Slips run=test-firewall-run blocked=1970-01-01T00:01:40Z delete="
+    )
+
+
+@pytest.mark.parametrize(
+    "evidence_tw,current_twid,expected_tw",
+    [
+        (4, "timewindow23", 23),
+        (23, "timewindow23", 23),
+        (24, "timewindow23", 24),
+        (None, "timewindow23", 23),
+    ],
+)
+def test_get_enforcement_timewindow_never_uses_stale_detection_window(
+    evidence_tw: int | None,
+    current_twid: str,
+    expected_tw: int,
+) -> None:
+    """Anchor firewall expiration to processing time, not delayed evidence.
+
+    Parameters:
+        evidence_tw: Time window carried by the block request.
+        current_twid: Current wall-clock time window returned by the database.
+        expected_tw: Window that must anchor the firewall schedule.
+    """
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.db.get_timewindow.return_value = current_twid
+
+    with patch("modules.blocking.blocking.time.time", return_value=100.0):
+        result = blocking._get_timewindow_to_block_in("1.2.3.4", evidence_tw)
+
+    assert result == expected_tw
+    blocking.db.get_timewindow.assert_called_once_with(
+        100.0, "profile_1.2.3.4", add_to_db=False
+    )
+
+
+def test_recover_firewall_rules_restores_schedule() -> None:
+    """Restore block ownership and deadline from iptables metadata."""
+    blocking = ModuleFactory().create_blocking_obj()
+    comment = (
+        "Slips run=old-run blocked=1970-01-01T00:01:40Z "
+        "delete=1970-01-01T00:05:00Z"
+    )
+    common = {
+        "ip": "1.2.3.4",
+        "dport": None,
+        "sport": None,
+        "protocol": None,
+        "interface": None,
+        "comment": comment,
+        "metadata_valid": True,
+        "legacy": False,
+        "blocked_at": 100.0,
+        "unblock_at": 300.0,
+        "run_id": "old-run",
+    }
+    rules = [
+        {**common, "from_": True, "to": False},
+        {**common, "from_": False, "to": True},
+    ]
+    blocking.conf.get_tw_width_in_seconds.return_value = 60
+
+    with (
+        patch(
+            "modules.blocking.blocking.list_slips_firewall_rules",
+            return_value=rules,
+        ),
+        patch.object(blocking, "log"),
+        patch("modules.blocking.blocking.time.time", return_value=200.0),
+    ):
+        recovered = blocking._recover_firewall_rules()
+
+    assert recovered == 1
+    blocking.db.set_blocked_ip.assert_called_once_with("1.2.3.4", 100.0)
+    state = blocking.db.set_firewall_block_state.call_args.args[1]
+    assert state["recovered"] is True
+    assert state["recovery_status"] == "recovered"
+    assert state["origin_run"] == "old-run"
+    assert state["remaining_timewindows"] == 1
+    assert state["flags"]["from_"] is True
+    assert state["flags"]["to"] is True
+
+
+def test_recover_expired_firewall_rule_queues_removal() -> None:
+    """Classify a recovered past deadline for immediate unblocker work."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.conf.get_tw_width_in_seconds.return_value = 60
+    rule = {
+        "ip": "1.2.3.4",
+        "from_": True,
+        "to": False,
+        "dport": None,
+        "sport": None,
+        "protocol": None,
+        "interface": None,
+        "comment": (
+            "Slips run=old-run blocked=1970-01-01T00:01:40Z "
+            "delete=1970-01-01T00:02:30Z"
+        ),
+        "metadata_valid": True,
+        "legacy": False,
+        "blocked_at": 100.0,
+        "unblock_at": 150.0,
+        "run_id": "old-run",
+    }
+
+    state = blocking._recovery_state([rule], now=200.0)
+
+    assert state["recovery_status"] == "expired; removal pending"
+    assert state["remaining_timewindows"] == 0
+    assert state["unblock_at"] == "1970-01-01T00:02:30+00:00"
+
+
+@pytest.mark.parametrize(
+    "comment, legacy, expected_status",
+    [
+        ("Slips rule", True, "legacy metadata"),
+        ("Slips run=broken", False, "invalid metadata"),
+    ],
+)
+def test_recover_firewall_rules_marks_unsafe_metadata_stale(
+    comment: str,
+    legacy: bool,
+    expected_status: str,
+) -> None:
+    """Retain rules without a trustworthy deadline and identify them."""
+    blocking = ModuleFactory().create_blocking_obj()
+    rules = [
+        {
+            "ip": "5.6.7.8",
+            "from_": True,
+            "to": False,
+            "dport": None,
+            "sport": None,
+            "protocol": None,
+            "interface": None,
+            "comment": comment,
+            "metadata_valid": False,
+            "legacy": legacy,
+            "blocked_at": None,
+            "unblock_at": None,
+            "run_id": None,
+        }
+    ]
+
+    with (
+        patch(
+            "modules.blocking.blocking.list_slips_firewall_rules",
+            return_value=rules,
+        ),
+        patch.object(blocking, "log"),
+        patch("modules.blocking.blocking.time.time", return_value=200.0),
+    ):
+        blocking._recover_firewall_rules()
+
+    state = blocking.db.set_firewall_block_state.call_args.args[1]
+    assert state["recovery_status"] == expected_status
+    assert state["unblock_at"] is None
+    assert state["recovered"] is True
 
 
 @pytest.mark.parametrize(

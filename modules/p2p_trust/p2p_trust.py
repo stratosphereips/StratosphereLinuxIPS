@@ -11,7 +11,7 @@ from typing import Dict, Optional, Tuple
 import json
 import socket
 
-from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -100,12 +100,15 @@ class Trust(IModule):
         self.p2p_trust_runtime_dir = self.db.get_p2p_trust_dir()
         self.sql_db_name = self.db.get_p2p_trust_db_path()
 
-        self.port = self.get_available_port()
+        self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
+        # Older Pigeon binaries did not add the Slips version to messages.
+        # Only this local, dedicated Go-to-Python channel accepts that format.
+        self.unversioned_channels = frozenset({self.gopy_channel})
         self.storage_name = self.db.constants.IPS_INFO
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
@@ -159,6 +162,11 @@ class Trust(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
+        self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.p2p_connection_ttl: int = conf.p2p_connection_ttl()
+        self.p2p_handshake_pending_seconds: float = (
+            conf.p2p_handshake_pending_seconds()
+        )
 
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -166,19 +174,6 @@ class Trust(IModule):
         local_ip = s.getsockname()[0]
         s.close()
         return local_ip
-
-    def get_available_port(self) -> int:
-        for port in range(32768, 65535):
-            if port == self.redis_port:
-                continue
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.bind((IPV4_ANY, port))
-                sock.close()
-                return port
-            except Exception:
-                # port is in use
-                continue
 
     def _configure(self):
         self.trust_db = self.db.trust_db
@@ -660,6 +655,11 @@ class Trust(IModule):
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
+            "-slips-version": self.slips_version,
+            "-connection-ttl": str(self.p2p_connection_ttl),
+            "-flow-grace-period": str(
+                max(1, int(self.p2p_handshake_pending_seconds) + 1)
+            ),
         }
         self.print(f"P2P is listening on {self.host} port {self.port}.")
         executable = [self.pigeon_binary] + [
@@ -702,15 +702,55 @@ class Trust(IModule):
                 )
 
     def shutdown_gracefully(self):
-        if hasattr(self, "pigeon") and self.pigeon is not None:
-            self.pigeon.send_signal(signal.SIGINT)
+        self._stop_pigeon()
+        self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
+
+    def _stop_pigeon(self) -> None:
+        """
+        Stop the p2p4slips child and wait until it has exited.
+
+        This method is idempotent so it can run during both normal cleanup and
+        the final safeguard around an unexpected module exit.
+        """
+        pigeon = getattr(self, "pigeon", None)
+        if pigeon is None:
+            return
+
+        if pigeon.poll() is None:
+            pigeon.send_signal(signal.SIGINT)
+            try:
+                pigeon.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.print(
+                    "Warning: p2p4slips did not stop after SIGINT; "
+                    "terminating it."
+                )
+                pigeon.terminate()
+                try:
+                    pigeon.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.print(
+                        "Warning: p2p4slips did not terminate; killing it."
+                    )
+                    pigeon.kill()
+                    pigeon.wait()
+
+        self.pigeon = None
+
+    def run(self) -> None:
+        """Run p2p_trust and guarantee its Go child cannot be orphaned."""
+        try:
+            super().run()
+        finally:
+            self._stop_pigeon()
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
@@ -738,7 +778,15 @@ class Trust(IModule):
             self.data_request_callback(msg)
 
         if msg := self.get_msg(self.gopy_channel):
-            self.gopy_callback(msg)
+            try:
+                self.gopy_callback(msg)
+            except Exception as error:
+                self.print(
+                    "Warning: Ignoring malformed p2p_gopy message after "
+                    f"processing failed: {error}",
+                    0,
+                    1,
+                )
 
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):

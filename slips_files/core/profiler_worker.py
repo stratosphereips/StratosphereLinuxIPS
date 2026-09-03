@@ -31,6 +31,8 @@ from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.structures.flow_attributes import Role
 
+SLIPS_P2P_FLOW_TAG = "slips-p2p"
+
 
 class ProfilerWorker(IModule):
     name = "profiler_worker"
@@ -99,6 +101,17 @@ class ProfilerWorker(IModule):
         self.analysis_direction = self.conf.analysis_direction()
         self.label = self.conf.label()
         self.width = self.conf.get_tw_width_in_seconds()
+        self.local_p2p_enabled = self.conf.use_local_p2p() is True
+        try:
+            self.p2p_listen_port = int(self.conf.p2p_listen_port())
+        except (TypeError, ValueError):
+            self.p2p_listen_port = 6668
+        try:
+            self.p2p_handshake_pending_seconds = max(
+                0.0, float(self.conf.p2p_handshake_pending_seconds())
+            )
+        except (TypeError, ValueError):
+            self.p2p_handshake_pending_seconds = 2.0
         self.generate_performance_plots = (
             self.conf.generate_performance_plots() is True
         )
@@ -504,6 +517,48 @@ class ProfilerWorker(IModule):
             flow.starttime is not None and flow.type_ in supported_types
         )
 
+    def _is_p2p_handshake_candidate(self, flow) -> bool:
+        """Check whether a flow could be using the dedicated P2P listener.
+
+        Parameters:
+            flow: Parsed flow object.
+
+        Returns:
+            True for TCP flows touching the configured P2P listener port.
+        """
+        return bool(
+            self.local_p2p_enabled
+            and getattr(flow, "type_", "") == "conn"
+            and str(getattr(flow, "proto", "")).lower() == "tcp"
+            and str(self.p2p_listen_port)
+            in {
+                str(getattr(flow, "sport", "")),
+                str(getattr(flow, "dport", "")),
+            }
+        )
+
+    def _tag_authenticated_p2p_flow(self, flow) -> bool:
+        """Tag an exact authenticated P2P tuple, allowing handshake time.
+
+        Parameters:
+            flow: Parsed connection flow object.
+
+        Returns:
+            True when the authenticated connection registry matched the flow.
+        """
+        if not self._is_p2p_handshake_candidate(flow):
+            return False
+
+        deadline = time.monotonic() + self.p2p_handshake_pending_seconds
+        while True:
+            if self.db.is_authenticated_p2p_flow(flow, include_recent=True):
+                if SLIPS_P2P_FLOW_TAG not in flow.flow_tags:
+                    flow.flow_tags.append(SLIPS_P2P_FLOW_TAG)
+                return True
+            if not self.is_running_non_stop or time.monotonic() >= deadline:
+                return False
+            time.sleep(min(0.05, max(0.0, deadline - time.monotonic())))
+
     def add_flow_to_profile(self, flow):
         """
         This is the main function that takes the columns of a flow
@@ -526,6 +581,7 @@ class ProfilerWorker(IModule):
         flow_starttime = self.convert_starttime_to_unix_ts(flow.starttime)
         self._log_flow_latency(flow, flow_starttime)
 
+        self._tag_authenticated_p2p_flow(flow)
         self.get_gateway_info(flow)
         # Check if the flow is whitelisted and we should not process it
         if self.whitelist.is_whitelisted_flow(flow):

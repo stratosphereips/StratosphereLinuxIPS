@@ -65,16 +65,14 @@ class HorizontalPortscan:
         confidence = utils.calculate_confidence(evidence["pkts_sent"])
         srcip = evidence["profileid"].split("_")[-1]
 
-        attacker = Attacker(
-            direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
-        )
-        portproto = f'{evidence["dport"]}/{evidence["protocol"]}'
+        attacker = Attacker(direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip)
+        portproto = f"{evidence['dport']}/{evidence['protocol']}"
         port_info = self.db.get_port_info(portproto) or ""
         description = (
             f"Horizontal port scan to port {port_info} {portproto}. "
-            f'From {srcip} to {evidence["amount_of_dips"]} '
+            f"From {srcip} to {evidence['amount_of_dips']} "
             f"unique destination IPs. "
-            f'Total packets sent: {evidence["pkts_sent"]}. '
+            f"Total packets sent: {evidence['pkts_sent']}. "
             f"Confidence: {confidence}. by Slips"
         )
 
@@ -86,9 +84,7 @@ class HorizontalPortscan:
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(
-                number=int(str_twid.replace("timewindow", ""))
-            ),
+            timewindow=TimeWindow(number=int(str_twid.replace("timewindow", ""))),
             uid=evidence["uids"],
             timestamp=evidence["first_timestamp"],  # TODO use last_timestamp
             proto=Proto(evidence["protocol"].lower()),
@@ -143,17 +139,18 @@ class HorizontalPortscan:
                     # scanned port from this attacker
                     self.db.mark_ip_as_port_scanner(profileid.ip, str(twid))
 
-                if self.should_set_evidence(
-                    amount_of_dstips, profileid, twid, dport
-                ):
+                if self.should_set_evidence(amount_of_dstips, profileid, twid, dport):
                     first_timestamp = self.db.get_attack_starttime(
+                        profileid, twid, protocol, dport
+                    )
+                    uids = self.db.get_uids_for_horizontal_portscan(
                         profileid, twid, protocol, dport
                     )
                     evidence = {
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),
                         "twid": str(twid),
-                        "uids": [],
+                        "uids": uids,
                         "dport": dport,
                         "pkts_sent": total_pkts,
                         "first_timestamp": first_timestamp,

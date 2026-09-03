@@ -14,6 +14,7 @@ def test_imodule_exposes_slips_version():
     ip_info = ModuleFactory().create_ip_info_obj()
 
     assert ip_info.slips_version == utils.get_slips_version()
+    assert ip_info.db.source_module == "ip_info"
 
 
 @pytest.mark.parametrize(
@@ -133,3 +134,32 @@ def test_get_msg_accepts_messages_with_current_version():
     ip_info.db.incr_msgs_received_in_channel.assert_called_once_with(
         ip_info.name, "new_ip"
     )
+
+
+@pytest.mark.parametrize(
+    "unversioned_channels, expected",
+    [(frozenset(), None), (frozenset({"new_ip"}), "message")],
+)
+def test_get_msg_limits_unversioned_compatibility_to_explicit_channels(
+    unversioned_channels: frozenset[str], expected: str | None
+) -> None:
+    """
+    Ensure only dedicated compatibility channels accept unversioned JSON.
+
+    Parameters:
+        unversioned_channels: Channels explicitly allowed by the module.
+        expected: Whether the message should be returned.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.channels = {"new_ip": "channel_obj"}
+    ip_info.channel_tracker = ip_info.init_channel_tracker()
+    ip_info.unversioned_channels = unversioned_channels
+    message = {
+        "channel": "new_ip",
+        "data": json.dumps({"text": "1.2.3.4"}),
+    }
+    ip_info.db.get_message.return_value = message
+
+    result = ip_info.get_msg("new_ip")
+
+    assert result == (message if expected else None)

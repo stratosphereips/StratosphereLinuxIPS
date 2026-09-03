@@ -209,10 +209,6 @@ class ScanDetectionsHandler:
         }
 
         for ip_state, ip in cases.items():
-            # to avoid asking about the same ip so many times
-            if not self._should_ask_modules_about_ip(ip):
-                continue
-
             if ip in self.our_ips:
                 # dont ask p2p or other modules about your own ip
                 continue
@@ -270,16 +266,36 @@ class ScanDetectionsHandler:
         returns (amount_of_dports, total_pkts_sent_to_all_dports)
         """
         str_proto = proto.name.lower()
-        key = f"{profileid}_{twid}:{str_proto}:not_estab:" f"{dstip}:dstports"
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:dstports"
         amount_of_dports = self.r.hlen(key) or 0
 
-        key = (
-            f"{profileid}_{twid}:{str_proto}:not_estab:"
-            f"{dstip}:dstports:tot_pkts_sum"
-        )
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:dstports:tot_pkts_sum"
         total_pkts_sent_to_all_dports = self.r.get(key) or 0
 
         return amount_of_dports, total_pkts_sent_to_all_dports
+
+    def get_uids_for_vertical_portscan(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dstip: str,
+    ) -> list[str]:
+        """
+        Return connection UIDs contributing to a vertical port scan.
+
+        Parameters:
+            profileid: Profile that originated the connections.
+            twid: Time window containing the scan.
+            proto: Transport protocol used by the scan.
+            dstip: Host whose ports were scanned.
+
+        Returns:
+            Flow UIDs ordered by their first-seen timestamp.
+        """
+        str_proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{dstip}:uids"
+        return list(self.r.zrange(key, 0, -1))
 
     def get_dstports_of_not_established_flows(
         self,
@@ -289,8 +305,7 @@ class ScanDetectionsHandler:
     ) -> Iterator[Tuple[str, int]]:
         str_proto = proto.name.lower()
         key = (
-            f"{profileid}_{twid}:"
-            f"{str_proto}:not_estab:dstports:total_packets"
+            f"{profileid}_{twid}:{str_proto}:not_estab:dstports:total_packets"
         )
         yield from self._hscan(key)
 
@@ -320,6 +335,29 @@ class ScanDetectionsHandler:
         except TypeError:
             amount_of_dstips = 0
         return amount_of_dstips
+
+    def get_uids_for_horizontal_portscan(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        proto: Protocol,
+        dport: int,
+    ) -> list[str]:
+        """
+        Return connection UIDs contributing to a horizontal port scan.
+
+        Parameters:
+            profileid: Profile that originated the connections.
+            twid: Time window containing the scan.
+            proto: Transport protocol used by the scan.
+            dport: Destination port scanned across hosts.
+
+        Returns:
+            Flow UIDs ordered by their first-seen timestamp.
+        """
+        str_proto = proto.name.lower()
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:dstport:{dport}:uids"
+        return list(self.r.zrange(key, 0, -1))
 
     def get_attack_starttime(
         self,
@@ -410,10 +448,7 @@ class ScanDetectionsHandler:
         # this hash is needed for vertical portscans detections
         # hash:
         # profile_tw:[tcp|udp]:Not_estab:<ip>:dstports <port> <tot_pkts>
-        key = (
-            f"{profileid}_{twid}"
-            f":{str_proto}:not_estab:{target_ip}:dstports"
-        )
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{target_ip}:dstports"
         pipe.hincrby(key, flow.dport, int(flow.pkts))
         # increment the total pkts sent to this target ip on this
         # proto so slips can retreieve it in O(1) when setting and
@@ -424,6 +459,9 @@ class ScanDetectionsHandler:
             f"{target_ip}:dstports:tot_pkts_sum"
         )
         pipe.incrby(key, int(flow.spkts))
+
+        key = f"{profileid}_{twid}:{str_proto}:not_estab:{target_ip}:uids"
+        pipe.zadd(key, {flow.uid: flow.starttime}, nx=True)
 
         # we keep an index hash of target_ips to be able to access the
         # diff variants of the key above using them
@@ -441,10 +479,7 @@ class ScanDetectionsHandler:
             # HASH:
             # profile_tw:[tcp|udp]:not_estab:dstports:total_packets
             # <dport> <tot_pkts>
-            key = (
-                f"{profileid}_{twid}:"
-                f"{str_proto}:not_estab:dstports:total_packets"
-            )
+            key = f"{profileid}_{twid}:{str_proto}:not_estab:dstports:total_packets"
             pipe.hincrby(key, flow.dport, int(flow.pkts))
 
             # ZSET
@@ -460,6 +495,9 @@ class ScanDetectionsHandler:
             # To make sure the stored ts is the first seen ts of this
             # daddr, we use nx=True, so if a daddr is present we dont zadd
             pipe.zadd(key, {flow.daddr: flow.starttime}, nx=True)
+
+            key = f"{profileid}_{twid}:{str_proto}:not_estab:dstport:{flow.dport}:uids"
+            pipe.zadd(key, {flow.uid: flow.starttime}, nx=True)
 
         return pipe
 
@@ -725,7 +763,7 @@ class ScanDetectionsHandler:
         except Exception:
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
-                f"Error in getFinalStateFromFlags()" f" line {exception_line}",
+                f"Error in getFinalStateFromFlags() line {exception_line}",
                 0,
                 1,
             )

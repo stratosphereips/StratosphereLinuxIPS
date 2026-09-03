@@ -89,6 +89,153 @@ class P2PHandler:
         self.r.zrem(self.constants.P2P_TRUST_SET, peer_id)
         self.r.hdel(self.constants.P2P_PEER_INFO_HASH, peer_id)
 
+    def store_authenticated_p2p_connection(
+        self,
+        connection_id: str,
+        connection: dict,
+        ttl: int,
+        active: bool = True,
+    ) -> None:
+        """Store one exact authenticated P2P TCP connection with a TTL.
+
+        Parameters:
+            connection_id: Stable identifier for the connection tuple.
+            connection: Peer identity and local/remote endpoint data.
+            ttl: Number of seconds before the record expires without activity.
+            active: Whether to store this in the live or recent-flow registry.
+        """
+        index = (
+            self.constants.P2P_ACTIVE_CONNECTIONS
+            if active
+            else self.constants.P2P_RECENT_CONNECTIONS
+        )
+        prefix = (
+            self.constants.P2P_ACTIVE_CONNECTION_PREFIX
+            if active
+            else self.constants.P2P_RECENT_CONNECTION_PREFIX
+        )
+        self.r.sadd(index, connection_id)
+        self.r.set(
+            f"{prefix}{connection_id}",
+            json.dumps(connection),
+            ex=max(1, int(ttl)),
+        )
+
+    def remove_authenticated_p2p_connection(self, connection_id: str) -> None:
+        """Delete a connection from the live authenticated registry.
+
+        Parameters:
+            connection_id: Stable identifier for the connection tuple.
+        """
+        self.r.srem(self.constants.P2P_ACTIVE_CONNECTIONS, connection_id)
+        self.r.delete(
+            f"{self.constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}"
+        )
+
+    def _read_p2p_connection_registry(
+        self, index: str, prefix: str
+    ) -> List[dict]:
+        """Read a P2P tuple registry and prune expired index members.
+
+        Parameters:
+            index: Redis set containing connection identifiers.
+            prefix: Prefix used by expiring connection records.
+
+        Returns:
+            Valid decoded authenticated connection records.
+        """
+        connections = []
+        for raw_id in self.r.smembers(index):
+            connection_id = (
+                raw_id.decode(errors="replace")
+                if isinstance(raw_id, bytes)
+                else str(raw_id)
+            )
+            raw = self.r.get(f"{prefix}{connection_id}")
+            if raw is None:
+                self.r.srem(index, connection_id)
+                continue
+            try:
+                connection = json.loads(raw)
+            except (TypeError, ValueError):
+                self.r.srem(index, connection_id)
+                self.r.delete(f"{prefix}{connection_id}")
+                continue
+            if connection.get("authenticated") is True:
+                connections.append(connection)
+        return connections
+
+    def get_authenticated_p2p_connections(
+        self, include_recent: bool = False
+    ) -> List[dict]:
+        """Return exact live authenticated tuples and optional recent tuples.
+
+        Parameters:
+            include_recent: Include the short post-disconnect flow grace set.
+
+        Returns:
+            Authenticated P2P connection records whose Redis TTL is live.
+        """
+        connections = self._read_p2p_connection_registry(
+            self.constants.P2P_ACTIVE_CONNECTIONS,
+            self.constants.P2P_ACTIVE_CONNECTION_PREFIX,
+        )
+        if include_recent:
+            connections.extend(
+                self._read_p2p_connection_registry(
+                    self.constants.P2P_RECENT_CONNECTIONS,
+                    self.constants.P2P_RECENT_CONNECTION_PREFIX,
+                )
+            )
+        return connections
+
+    def is_authenticated_p2p_flow(
+        self, flow, include_recent: bool = True
+    ) -> bool:
+        """Match a flow against an exact authenticated P2P TCP 5-tuple.
+
+        Parameters:
+            flow: Parsed connection flow object or dictionary.
+            include_recent: Include tuples retained briefly after disconnect.
+
+        Returns:
+            True only for an exact tuple match in the authenticated registry.
+        """
+        get_value = (
+            flow.get
+            if isinstance(flow, dict)
+            else lambda key: getattr(flow, key, None)
+        )
+        if str(get_value("proto") or "").lower() != "tcp":
+            return False
+        flow_tuple = (
+            str(get_value("saddr") or ""),
+            str(get_value("sport") or ""),
+            str(get_value("daddr") or ""),
+            str(get_value("dport") or ""),
+        )
+        reverse_tuple = (
+            flow_tuple[2],
+            flow_tuple[3],
+            flow_tuple[0],
+            flow_tuple[1],
+        )
+        for connection in self.get_authenticated_p2p_connections(
+            include_recent=include_recent
+        ):
+            connection_tuple = (
+                str(connection.get("local_ip") or ""),
+                str(connection.get("local_port") or ""),
+                str(connection.get("remote_ip") or ""),
+                str(connection.get("remote_port") or ""),
+            )
+            if (
+                flow_tuple == connection_tuple
+                or reverse_tuple == connection_tuple
+            ):
+                return True
+        return False
+
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         cache_key = f"{self.constants.FIDES_CACHE_KEY}:{target}"
 
@@ -158,3 +305,44 @@ class P2PHandler:
         if trust:
             return float(trust)
         return None
+
+    def record_p2p_message(self, direction: str, message: dict) -> None:
+        """Record one bounded P2P send or receive event for observability.
+
+        Parameters:
+            direction: Either ``sent`` or ``received``.
+            message: JSON-serializable message metadata.
+        """
+        message_type = str(message.get("message_type") or "unknown")
+        record = {"direction": direction, "timestamp": time.time(), **message}
+        key = self._p2p_message_counts_key()
+        field = f"{direction}:{message_type}"
+        with self.r.pipeline() as pipe:
+            pipe.hincrby(key, field, 1)
+            # safety net in case the timewindow-end cleanup is ever missed
+            pipe.hexpire(key, self.default_ttl, field, nx=True)
+            pipe.execute()
+        self.r.lpush(self.constants.P2P_MESSAGE_HISTORY, json.dumps(record))
+        self.r.ltrim(self.constants.P2P_MESSAGE_HISTORY, 0, 999)
+
+    def _p2p_message_counts_key(self) -> str:
+        """Per-timewindow key so old counters don't accumulate forever."""
+        timewindow = self.get_current_timewindow() or 1
+        return f"{self.constants.P2P_MESSAGE_COUNTS}_{timewindow}"
+
+    def get_p2p_message_telemetry(self) -> dict:
+        """Return P2P message counters and newest bounded activity.
+
+        Returns:
+            Message counters and decoded recent message records.
+        """
+        records = []
+        for raw in self.r.lrange(self.constants.P2P_MESSAGE_HISTORY, 0, 199):
+            try:
+                records.append(json.loads(raw))
+            except (TypeError, ValueError):
+                continue
+        return {
+            "counts": self.r.hgetall(self._p2p_message_counts_key()),
+            "activity": records,
+        }

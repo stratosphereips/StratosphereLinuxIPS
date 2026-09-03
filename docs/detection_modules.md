@@ -401,14 +401,22 @@ Refer to the [Flowalerts section of the docs](https://stratospherelinuxips.readt
 
 ## Disabled alerts
 
-All Slips detections are turned on by default, You can configure which alerts you want to enable/disable in ```config/slips.yaml```
+All Slips detections are turned on by default. Configure the detections to
+disable in `config/slips.yaml` before starting Slips.
 
 Slips support disabling unwanted alerts, simply add the detection you want to disable in
 the ```disabled_detections``` list and slips will not generate any alerts of this type.
 
-for example:
+For example, to disable connections without DNS resolution:
 
-    disabled_detections = [MaliciousJA3, DataExfiltration, SelfSignedCertificate]
+```yaml
+DisabledAlerts:
+  disabled_detections: [CONNECTION_WITHOUT_DNS]
+```
+
+Use the uppercase `EvidenceType` names listed in the comments above this
+setting in `config/slips.yaml`. Legacy CamelCase names remain accepted. The
+setting is applied when a Slips run starts, so restart Slips after changing it.
 
 
 Supported detections are:

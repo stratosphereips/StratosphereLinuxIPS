@@ -116,11 +116,9 @@ terminal interface.
 
 ##### Web interface
 
-    ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir -w
+    ./slips.py -e 1 -f dataset/test7-malicious.pcap -w
 
-Then navigate to ```http://localhost:55000/``` from your browser.
-
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px">
+Then navigate to `http://localhost:55000/`. The interface is read-only, localhost-only, and fixed to this run's Redis database, SQLite flow database, and output logs. It shows runtime and module health, alerts, all evidence, triggering flows, and host context. It can also be enabled with `web_interface.enabled: true` in `config/slips.yaml`.
 
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 

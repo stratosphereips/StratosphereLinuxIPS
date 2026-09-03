@@ -6,6 +6,8 @@ export {
     type Info: record {
                     ## Timestamp
                     ts: time &log;
+                    ## Unique identifier for this ARP record.
+                    uid: string &log;
                     ## The requestor's MAC address.
                     ## The type of operation: request or reply
                     operation: string &log &optional;
@@ -43,6 +45,7 @@ event arp_request(src_mac: string, dst_mac: string, orig_h: addr, SHA: string, r
 {
     local info: Info;
 		info$ts        = network_time();
+        info$uid       = unique_id("A");
         info$operation = "request";
 		info$src_mac   = src_mac;
 		info$dst_mac   = dst_mac;
@@ -60,6 +63,7 @@ event arp_reply(src_mac: string, dst_mac: string, orig_h: addr, SHA: string, res
 {
     local info: Info;
         info$ts        = network_time();
+        info$uid       = unique_id("A");
         info$operation = "reply";
         info$src_mac   = src_mac;
         info$dst_mac   = dst_mac;

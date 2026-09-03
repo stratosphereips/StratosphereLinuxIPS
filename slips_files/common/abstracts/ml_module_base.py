@@ -469,6 +469,7 @@ class MLBaseDetection(IModule, ABC):
                 "detailed_ground_truth_label",
                 "label",
                 "module_labels",
+                "flow_tags",
             ],
             axis=1,
             errors="ignore",
@@ -725,7 +726,7 @@ class MLBaseDetection(IModule, ABC):
     def process_flow(self, flow_to_process: dict):
         """Convert one raw flow dict into processed single-row dataframe."""
         try:
-            raw_flow = pd.DataFrame(flow_to_process, index=[0])
+            raw_flow = pd.DataFrame([flow_to_process])
             dflow = self.process_features(raw_flow)
             if dflow.empty:
                 return None
@@ -965,6 +966,9 @@ class MLBaseDetection(IModule, ABC):
             self.twid = msg["twid"]
             self.profileid = msg["profileid"]
             self.flow = msg["flow"]
+
+            if "slips-p2p" in self.flow.get("flow_tags", []):
+                return
 
             self.flow.update(
                 {

@@ -17,6 +17,7 @@ from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.structures.risk_weights import RiskWeight
+from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
 
 
@@ -60,6 +61,27 @@ flow = Conn(
 )
 
 
+@pytest.mark.parametrize(
+    "method_name",
+    [
+        "get_uids_for_vertical_portscan",
+        "get_uids_for_horizontal_portscan",
+    ],
+)
+def test_portscan_uid_methods_forward_to_redis(method_name):
+    """Expose contributing scan-flow UID queries through DBManager."""
+    module_factory = ModuleFactory()
+    db = module_factory.create_db_manager_obj(6379)
+    expected = ["uid-1", "uid-2"]
+    redis_method = Mock(return_value=expected)
+    setattr(db.rdb, method_name, redis_method)
+
+    result = getattr(db, method_name)("profile", "tw", "tcp", "target")
+
+    assert result == expected
+    redis_method.assert_called_once_with("profile", "tw", "tcp", "target")
+
+
 def test_set_info_for_domains():
     """tests set_info_for_domains, setNewDomain and get_domain_data"""
     db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
@@ -70,6 +92,87 @@ def test_set_info_for_domains():
     stored_data = db.get_domain_data(domain)
     assert "threatintelligence" in stored_data
     assert stored_data["threatintelligence"] == "sample data"
+
+
+def test_get_alert_generation_lock_forwards_to_redis() -> None:
+    """Verify DBManager exposes the Redis cross-process alert lock."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    expected_lock = Mock()
+    db.rdb.get_alert_generation_lock = Mock(return_value=expected_lock)
+
+    result = db.get_alert_generation_lock("profile_10.0.0.1", "timewindow2")
+
+    assert result is expected_lock
+    db.rdb.get_alert_generation_lock.assert_called_once_with(
+        "profile_10.0.0.1",
+        "timewindow2",
+    )
+
+
+def test_db_manager_refreshes_singleton_disabled_detections() -> None:
+    """Verify every DBManager applies its process-local active config."""
+    db = ModuleFactory().create_db_manager_obj(
+        6379,
+        disabled_detections=["CONNECTION_WITHOUT_DNS"],
+    )
+
+    # Reproduce another DBManager overwriting the per-port Redis singleton.
+    db.rdb.disabled_detections = []
+
+    assert db.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS)
+    assert db.rdb.disabled_detections == ["CONNECTION_WITHOUT_DNS"]
+
+    evidence = Mock(evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS)
+    db.rdb.set_evidence = Mock()
+    db.sqlite = Mock()
+
+    assert db.set_evidence(evidence) is False
+    db.rdb.set_evidence.assert_not_called()
+    db.sqlite.add_evidence.assert_not_called()
+
+
+def test_set_evidence_records_the_producing_module() -> None:
+    """Attach the owning module name before evidence is serialized."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.source_module = "conn_analyzer"
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.is_detection_disabled = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="eth0")
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.sqlite = Mock()
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS,
+        source_module="",
+        uid=["flow-1"],
+        attacker=Mock(profile="profile_10.0.0.1"),
+        threat_level="medium",
+        confidence=0.8,
+    )
+
+    assert db.set_evidence(evidence) is True
+    assert evidence.source_module == "conn_analyzer"
+    db.rdb.set_evidence.assert_called_once_with(evidence)
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+
+
+@pytest.mark.parametrize(
+    "redis_output, caller_output, expected",
+    [
+        ("output/run/", "output/run", True),
+        ("output/old-run", "output/new-run", False),
+        (None, "output/new-run", False),
+    ],
+)
+def test_redis_belongs_to_run(
+    redis_output: str | None, caller_output: str, expected: bool
+) -> None:
+    """Verify producer ownership uses the Redis run identity."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.get_output_dir = Mock(return_value=redis_output)
+
+    assert db.belongs_to_run(caller_output) is expected
 
 
 def test_subscribe():
@@ -284,8 +387,7 @@ def test_get_mac_vendor_from_profile_falls_back_to_slips_utils(mocker):
     db.rdb.get_mac_addr_from_profile = Mock(return_value=mac_addr)
     db.rdb.set_mac_vendor_to_profile = Mock()
     mock_get_vendor = mocker.patch(
-        "slips_files.core.database.database_manager.utils."
-        "get_mac_vendor_from_mac_addr",
+        "slips_files.core.database.database_manager.utils.get_mac_vendor_from_mac_addr",
         return_value=vendor,
     )
 

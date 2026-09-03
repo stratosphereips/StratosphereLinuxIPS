@@ -40,9 +40,7 @@ def enough_dstips_to_reach_the_threshold():
     res = {dport: {"dstips": {"8.8.8.8": {"dstports": random_ports}}}}
 
     for _ in range(amount_of_dstips + 1):
-        res[dport]["dstips"].update(
-            {generate_random_ip(): {"dstports": random_ports}}
-        )
+        res[dport]["dstips"].update({generate_random_ip(): {"dstports": random_ports}})
 
     return res
 
@@ -117,16 +115,12 @@ def not_enough_dstips_to_reach_the_threshold():
     module = ModuleFactory().create_horizontal_portscan_obj()
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dstips: int = random.randint(
-        0, module.minimum_dstips_to_set_evidence - 1
-    )
+    amount_of_dstips: int = random.randint(0, module.minimum_dstips_to_set_evidence - 1)
     dport = 5555
     res = {dport: {"dstips": {"8.8.8.8": {"dstports": random_ports}}}}
 
     for _ in range(amount_of_dstips - 1):
-        res[dport]["dstips"].update(
-            {generate_random_ip(): {"dstports": random_ports}}
-        )
+        res[dport]["dstips"].update({generate_random_ip(): {"dstports": random_ports}})
 
     return res
 
@@ -152,9 +146,7 @@ def test_set_evidence_horizontal_portscan_empty_port_info():
 
     horizontal_ps.db.set_evidence.assert_called_once()
     call_args = horizontal_ps.db.set_evidence.call_args[0][0]
-    assert call_args.description.startswith(
-        "Horizontal port scan to port  80/TCP."
-    )
+    assert call_args.description.startswith("Horizontal port scan to port  80/TCP.")
 
 
 def test_set_evidence_horizontal_portscan():
@@ -181,9 +173,7 @@ def test_set_evidence_horizontal_portscan():
     assert call_args.evidence_type == EvidenceType.HORIZONTAL_PORT_SCAN
     assert call_args.attacker.value == "1.1.1.1"
     assert call_args.confidence == 1
-    assert call_args.description.startswith(
-        "Horizontal port scan to port HTTP 80/TCP."
-    )
+    assert call_args.description.startswith("Horizontal port scan to port HTTP 80/TCP.")
     assert call_args.profile.ip == "1.1.1.1"
     assert call_args.timewindow.number == 0
     assert set(call_args.uid) == {"uid2", "uid1"}
@@ -226,10 +216,19 @@ def test_check_valid_scan():
         (dport, total_pkts),
     ]
     horizontal_ps.should_set_evidence = Mock(return_value=True)
+    horizontal_ps.db.get_uids_for_horizontal_portscan.return_value = [
+        "scan-flow-1",
+        "scan-flow-2",
+    ]
 
     horizontal_ps.check(profileid, twid)
     # once for each proto
     assert horizontal_ps.set_evidence_horizontal_portscan.call_count == 2
+    for call_args in horizontal_ps.set_evidence_horizontal_portscan.call_args_list:
+        assert call_args.args[0]["uids"] == [
+            "scan-flow-1",
+            "scan-flow-2",
+        ]
 
 
 def test_check_invalid_profileid():
@@ -260,12 +259,8 @@ def test_check_does_not_set_evidence_when_should_set_evidence_is_false():
     profileid = ProfileID(ip=ip)
     twid = TimeWindow(number=0)
 
-    horizontal_ps.db.get_dstports_of_not_established_flows.return_value = [
-        (80, 100)
-    ]
-    horizontal_ps.db.get_total_dstips_for_not_estab_flows_on_port.return_value = (
-        999
-    )
+    horizontal_ps.db.get_dstports_of_not_established_flows.return_value = [(80, 100)]
+    horizontal_ps.db.get_total_dstips_for_not_estab_flows_on_port.return_value = 999
 
     horizontal_ps.check(profileid, twid)
 

@@ -206,6 +206,7 @@ class WorkerManagerMixin:
             self.store_flows_read_per_second()
             self._check_if_high_throughput_and_add_workers()
             self._check_if_stabled_throughput_and_remove_workers()
+            self.did_all_workers_stop.wait(timeout=1)
 
     def _check_if_stabled_throughput_and_remove_workers(self) -> None:
         """

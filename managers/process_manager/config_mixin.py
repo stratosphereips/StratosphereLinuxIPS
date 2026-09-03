@@ -22,6 +22,7 @@ class ConfigMixin:
         (Modules.LLM_PROXY, "llm_enabled"),
         (Modules.ALERT_SUMMARY, "alert_summary_enabled"),
         (Modules.REGEX_GENERATOR, "regex_generator_enabled"),
+        (Modules.WEB_INTERFACE, "web_interface_enabled"),
     )
 
     def read_config(self) -> None:
@@ -204,6 +205,12 @@ class ConfigMixin:
         """
         disabled_modules: Set[Modules] = set()
         for module_name, accessor_name in self.FEATURE_TOGGLED_MODULES:
+            if (
+                module_name == Modules.WEB_INTERFACE
+                and getattr(self.main.args, "webinterface", False) is True
+            ):
+                continue
+
             accessor = getattr(self.main.conf, accessor_name, None)
             if not callable(accessor):
                 continue

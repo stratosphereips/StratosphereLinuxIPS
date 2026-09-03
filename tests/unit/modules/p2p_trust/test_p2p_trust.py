@@ -2,12 +2,17 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import errno
+import json
+import signal
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 import pytest
 
 from modules.p2p_trust.p2p_trust import Trust
+from modules.p2p_trust.utils.utils import get_ip_info_from_slips
+from slips_files.common.abstracts.imodule import IModule
+from tests.module_factory import ModuleFactory
 
 
 def create_trust():
@@ -27,6 +32,9 @@ def create_trust():
     trust.parent_output_dir = "output"
     trust.pigeon_binary_dir = "p2p4slips"
     trust.pigeon_binary = "p2p4slips/p2p4slips"
+    trust.slips_version = "1.2.3"
+    trust.p2p_connection_ttl = 30
+    trust.p2p_handshake_pending_seconds = 2
     return trust
 
 
@@ -148,6 +156,12 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert executable[key_index + 1] == "pigeonpeer1.keys"
     assert "--redis-db" in executable
     assert f"localhost:{trust.redis_port}" in executable
+    ttl_index = executable.index("-connection-ttl")
+    assert executable[ttl_index + 1] == "30"
+    grace_index = executable.index("-flow-grace-period")
+    assert executable[grace_index + 1] == "3"
+    version_index = executable.index("-slips-version")
+    assert executable[version_index + 1] == trust.slips_version
     assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"
 
 
@@ -225,3 +239,101 @@ def test_start_pigeon_reports_start_errors_without_retry():
         "Warning: Failed to start p2p4slips. Error: "
         "[Errno 13] Permission denied"
     )
+
+
+@pytest.mark.parametrize(
+    "ip_info",
+    [
+        {},
+        {"score": None, "confidence": 0.8},
+        {"score": "invalid", "confidence": 0.8},
+        {"score": 0.5},
+        {"score": 0.5, "confidence": None},
+        {"score": 0.5, "confidence": "invalid"},
+        {"threat_level": "invalid", "confidence": 0.8},
+    ],
+)
+def test_get_ip_info_rejects_missing_or_malformed_values(
+    ip_info: dict,
+) -> None:
+    """
+    Return no opinion when a stored score or confidence cannot be converted.
+
+    Parameters:
+        ip_info: Simulated IP metadata returned by Redis.
+    """
+    module_factory = ModuleFactory()
+    db = module_factory.create_go_director_obj().db
+    db.get_ip_info.side_effect = lambda _ip, field: ip_info.get(field)
+
+    assert get_ip_info_from_slips("192.0.2.1", db) == (None, None)
+
+
+def test_main_continues_after_one_malformed_gopy_message() -> None:
+    """Process the next Go message after one malformed message is ignored."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.create_p2p_logfile = False
+    trust.p2p_data_request_channel = "p2p_data_request"
+    trust.gopy_channel = "p2p_gopy"
+    trust.pigeon = Mock()
+    trust.pigeon.poll.return_value = None
+    trust.mutliaddress_printed = True
+    valid_data = {
+        "message_type": "peer_update",
+        "message_contents": {"peerid": "peer-1"},
+    }
+    trust.get_msg = Mock(
+        side_effect=[
+            None,
+            None,
+            {"data": "malformed"},
+            None,
+            None,
+            {"data": json.dumps(valid_data)},
+        ]
+    )
+    trust.go_director = Mock()
+    trust.gopy_callback = Mock(wraps=trust.gopy_callback)
+
+    trust.main()
+    trust.main()
+
+    assert trust.gopy_callback.call_count == 2
+    trust.go_director.handle_gopy_data.assert_called_once_with(valid_data)
+    warning = trust.print.call_args.args
+    assert warning[0].startswith(
+        "Warning: Ignoring malformed p2p_gopy message after processing failed:"
+    )
+    assert warning[1:] == (0, 1)
+
+
+def test_stop_pigeon_waits_for_child_exit() -> None:
+    """Signal the Go child and wait for it before clearing the process handle."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.pigeon = Mock()
+    trust.pigeon.poll.return_value = None
+    pigeon = trust.pigeon
+
+    trust._stop_pigeon()
+
+    pigeon.send_signal.assert_called_once_with(signal.SIGINT)
+    pigeon.wait.assert_called_once_with(timeout=5)
+    assert trust.pigeon is None
+
+
+def test_run_stops_pigeon_after_unexpected_module_exit() -> None:
+    """Stop the Go child even when the common module runner exits on error."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust._stop_pigeon = Mock()
+
+    with patch.object(IModule, "run", side_effect=RuntimeError("boom")):
+        with pytest.raises(RuntimeError, match="boom"):
+            trust.run()
+
+    trust._stop_pigeon.assert_called_once_with()

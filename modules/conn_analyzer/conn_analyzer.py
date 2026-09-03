@@ -27,6 +27,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.structures.evidence import EvidenceType
 
 
 NOT_ESTAB = "Not Established"
@@ -236,7 +237,7 @@ class ConnAnalyzer(IAsyncModule):
 
         if (
             "icmp" not in proto
-            and not self.is_p2p(flow)
+            and "slips-p2p" not in getattr(flow, "flow_tags", [])
             and not self.db.is_ftp_port(flow.dport)
         ):
             # we don't have info about this port
@@ -601,6 +602,9 @@ class ConnAnalyzer(IAsyncModule):
         Checks if there's a connection to a dstip that has no cached DNS
         answer
         """
+        if self.db.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS):
+            return False
+
         if self.should_ignore_conn_without_dns(flow):
             return False
 
@@ -1069,12 +1073,15 @@ class ConnAnalyzer(IAsyncModule):
             self.check_different_localnet_usage(
                 twid, flow, what_to_check="srcip"
             )
-            self.create_task(
-                self.check_connection_without_dns_resolution,
-                profileid,
-                twid,
-                flow,
-            )
+            if not self.db.is_detection_disabled(
+                EvidenceType.CONNECTION_WITHOUT_DNS
+            ):
+                self.create_task(
+                    self.check_connection_without_dns_resolution,
+                    profileid,
+                    twid,
+                    flow,
+                )
             self.detect_connection_to_multiple_ports(profileid, twid, flow)
             self.check_data_upload(profileid, twid, flow)
             self.check_tor_exit_node(twid, flow)

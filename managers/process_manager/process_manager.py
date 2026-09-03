@@ -81,6 +81,7 @@ class ProcessManager(
         # shutdown at the very end of all other slips modules.
         self.evidence_handler_termination_event = Event()
         self.stopped_modules: List[str] = []
+        self.deferred_stopped_modules: Set[str] = set()
         # used to stop slips when these 2 are done
         # since the semaphore count is zero, slips.py will wait until another
         # thread (input and profiler)
@@ -108,6 +109,7 @@ class ProcessManager(
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
+        self.shutdown_cause = ""
         self.disabled_warning_printed = False
         # total number of detection modules plus core processes (main,
         # evidence handler, profiler, input) slips is starting, used to

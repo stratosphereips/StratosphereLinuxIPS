@@ -13,7 +13,9 @@ from unittest.mock import (
 import pytest
 from ipaddress import ip_address
 from slips_files.common.input_type import InputType
+from slips_files.core.structures.evidence import EvidenceType
 from tests.unit.common_test_utils import get_mock_coro
+from slips_files.core.structures.evidence import EvidenceType
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -23,6 +25,43 @@ timestamp = 1635765895.037696
 saddr = "192.168.1.1"
 daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
+
+
+@pytest.mark.asyncio
+async def test_connection_without_dns_disabled_in_config() -> None:
+    """Do not run or emit connection-without-DNS evidence when disabled."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Conn(
+        starttime=timestamp,
+        uid=uid,
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="12345",
+        dport="443",
+        spkts=1,
+        dpkts=1,
+        sbytes=60,
+        dbytes=60,
+        smac="",
+        dmac="",
+        state="Established",
+        history="ShADadf",
+    )
+    conn.db.is_detection_disabled = Mock(return_value=True)
+    conn.set_evidence.conn_without_dns = Mock()
+
+    result = await conn.check_connection_without_dns_resolution(
+        profileid, twid, flow
+    )
+
+    assert result is False
+    conn.db.is_detection_disabled.assert_called_once_with(
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    )
+    conn.set_evidence.conn_without_dns.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -1651,3 +1690,34 @@ async def test_main_new_flow_msg_checks_non_ssl_port_443_conns(mocker):
 
     called_funcs = [call.args[0] for call in mock_create_task.call_args_list]
     assert conn.check_non_ssl_port_443_conns in called_funcs
+
+
+def test_unknown_port_ignores_only_authenticated_p2p_tag(mocker) -> None:
+    """Suppress UNKNOWN_PORT for a centrally tagged exact P2P flow."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="p2p-flow",
+        saddr="192.168.1.1",
+        daddr="198.51.100.20",
+        dur=1,
+        proto="tcp",
+        appproto="",
+        sport="51000",
+        dport="6668",
+        spkts=1,
+        dpkts=1,
+        sbytes=60,
+        dbytes=60,
+        state="Established",
+        history="Sh",
+        flow_tags=["slips-p2p"],
+    )
+    conn.db.is_a_port_scanner.return_value = False
+    conn.db.get_port_info.return_value = None
+    conn.db.is_ftp_port.return_value = False
+    mocker.patch.object(conn, "port_belongs_to_an_org", return_value=False)
+    evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
+
+    assert conn.check_unknown_port(profileid, twid, flow) is None
+    evidence.assert_not_called()

@@ -759,3 +759,41 @@ def test_main_logs_exception():
     profiler.main()
 
     profiler.print.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "authenticated, expected_tagged",
+    [(True, True), (False, False)],
+)
+def test_p2p_handshake_flow_is_tagged_only_after_authentication(
+    authenticated: bool, expected_tagged: bool
+) -> None:
+    """Hold a listener flow only long enough to confirm exact authentication."""
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.local_p2p_enabled = True
+    profiler.p2p_listen_port = 6668
+    profiler.p2p_handshake_pending_seconds = 0
+    profiler.is_running_non_stop = True
+    profiler.db.is_authenticated_p2p_flow.return_value = authenticated
+    candidate = make_conn(
+        proto="tcp", sport="51000", dport="6668", flow_tags=[]
+    )
+
+    assert profiler._tag_authenticated_p2p_flow(candidate) is expected_tagged
+    assert ("slips-p2p" in candidate.flow_tags) is expected_tagged
+
+
+def test_unrelated_flow_from_connected_peer_is_not_considered_p2p() -> None:
+    """Do not query or tag traffic that does not touch the dedicated port."""
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.local_p2p_enabled = True
+    profiler.p2p_listen_port = 6668
+    profiler.p2p_handshake_pending_seconds = 0
+    profiler.is_running_non_stop = True
+    candidate = make_conn(
+        proto="tcp", sport="51000", dport="443", flow_tags=[]
+    )
+
+    assert profiler._tag_authenticated_p2p_flow(candidate) is False
+    assert candidate.flow_tags == []
+    profiler.db.is_authenticated_p2p_flow.assert_not_called()

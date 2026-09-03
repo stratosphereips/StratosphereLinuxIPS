@@ -26,6 +26,49 @@ from slips_files.core.structures.risk_weights import RiskWeight
 
 
 @pytest.mark.parametrize(
+    "configured_name",
+    [
+        "CONNECTION_WITHOUT_DNS",
+        "ConnectionWithoutDNS",
+        "EvidenceType.CONNECTION_WITHOUT_DNS",
+        "connection-without-dns",
+    ],
+)
+def test_is_detection_disabled_accepts_canonical_and_legacy_names(
+    configured_name: str,
+) -> None:
+    """Verify disabled detections survive enum and config-name migrations."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.disabled_detections = [configured_name]
+
+    assert alert_handler.is_detection_disabled(
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    )
+
+
+def test_get_alert_generation_lock_is_scoped_to_profile_and_timewindow() -> (
+    None
+):
+    """Verify workers for one profile and time window share a Redis lock."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    expected_lock = Mock()
+    alert_handler.r = MagicMock()
+    alert_handler.r.lock.return_value = expected_lock
+
+    result = alert_handler.get_alert_generation_lock(
+        "profile_192.168.1.20",
+        "timewindow4",
+    )
+
+    assert result is expected_lock
+    alert_handler.r.lock.assert_called_once_with(
+        "alert_generation_lock:profile_192.168.1.20:timewindow4",
+        timeout=300,
+        blocking_timeout=None,
+    )
+
+
+@pytest.mark.parametrize(
     "all_evidence, expected_result, side_effect",
     [
         # Testcase 1: All evidence is whitelisted
@@ -735,3 +778,44 @@ def test_get_evidence_causing_alert(profileid, twid, alert_id, expected_alert):
         f"{profileid}_{twid}", "alerts"
     )
     assert result == expected_alert
+
+
+@pytest.mark.parametrize(
+    "existing_start, known_windows, first_start, fallback_time, expected_start",
+    [
+        (0.0, [], None, None, 0.0),
+        (None, [(b"timewindow5", 500.0)], None, None, 380.0),
+        (None, [], 100.0, None, 220.0),
+        (None, [], None, "350.5", 350.5),
+        (
+            None,
+            [],
+            None,
+            "2024/10/04 15:45:30.123456+0000",
+            1728056730.123456,
+        ),
+    ],
+)
+def test_get_tw_limits_recovers_when_redis_anchor_is_missing(
+    existing_start: float | None,
+    known_windows: list[tuple[bytes, float]],
+    first_start: float | None,
+    fallback_time: object,
+    expected_start: float,
+) -> None:
+    """Test time-window limits survive expired Redis window metadata."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.width = 60.0
+    alert_handler.get_tw_start_time = Mock(return_value=existing_start)
+    alert_handler.r.zrange.return_value = known_windows
+    alert_handler.get_first_flow_time = Mock(return_value=first_start)
+
+    start, end = alert_handler.get_tw_limits(
+        "profile_10.0.0.1",
+        "timewindow3",
+        fallback_time,
+    )
+
+    assert start == expected_start
+    assert end == expected_start + alert_handler.width

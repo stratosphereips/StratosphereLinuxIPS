@@ -47,6 +47,13 @@ This setup ensures that threats are identified in real time and contained at the
 
 8. Blocked IPs get unblocked automatically once the blocking period is over only if no more evidence are found for them. 
 
+Every managed iptables rule records its Slips run, installation time, and
+scheduled deletion time in the rule comment. A later Slips run can therefore
+recover active blocks and their remaining probation period directly from
+iptables. Expired recovered rules are removed by the unblocker; legacy rules
+without a recoverable deadline are reported as stale and retained for manual
+review.
+
 
 More details about how unblocking works here <https://stratospherelinuxips.readthedocs.io/en/develop/immune/arp_poisoning.html#unblocking>
 
@@ -59,6 +66,11 @@ https://github.com/stratosphereips/StratosphereLinuxIPS/tree/develop/modules/blo
 ## Logs
 
 Slips stores the blocking and unblocking logs in `blocking.log `in the used output directory.
+
+During interactive shutdown, Slips asks whether installed firewall rules
+should be kept or deleted. Keeping is the default. Forced and non-interactive
+shutdowns retain the rules; the next firewall-enabled run recovers them from
+their comments.
 
 
 ## Requirements

@@ -79,6 +79,20 @@ The P2P module is disabled by default in Slips.
 
 To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```config/slips.yaml```
 
+Local Pigeon uses the dedicated TCP port configured by
+```local_p2p.listen_port``` (default ```6668```). It no longer scans the
+ephemeral port range for an available listener. ```connection_ttl``` controls
+how long an authenticated libp2p connection remains live without successful
+P2P activity, and ```handshake_pending_seconds``` gives an arriving listener
+flow a brief period in which authentication can complete.
+
+Only the exact TCP 5-tuple of an authenticated, live libp2p connection is
+tagged as ```slips-p2p```. The tag is refreshed by successful P2P activity and
+removed from live state immediately on disconnect; a very short recent-tuple
+grace lets the closing Zeek flow retain the tag. UNKNOWN_PORT, ML inference,
+and alert scoring/blocking ignore that tagged control flow only. Other ports
+and connections from the same peer IP continue through normal analysis.
+
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
 You don't have to do anything in particular for the P2P module to work, just enable it and Slips will:
@@ -165,6 +179,10 @@ you can enable p2p.log in slips.yaml by setting ```create_p2p_logfile``` to ```y
 and a ```p2p.log``` will be available in the output dir
 
 Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past day only.
+
+When the local web interface is enabled, its **P2P** tab shows live peer
+connectivity, local identity, bounded message activity, reports received in the
+current run, and persistent peer trust and reliability evolution.
 
 
 ## Limitations

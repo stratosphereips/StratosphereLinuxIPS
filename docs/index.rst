@@ -15,6 +15,8 @@ This documentation gives an overview how Slips works, how to use it and how to h
 
 - **Usage**. Instructions and examples how to run Slips with different type of files and analyze the traffic using Slips and its web interface or the optional Kalipso submodule. See :doc:`Usage <usage>`.
 
+- **Local web interface**. Run-scoped overview, alert/evidence/flow drill-down, and host inventory. See :doc:`Local web interface <web_interface>`.
+
 - **Detection modules**. Explanation of detection modules in Slips, types of input and output. See :doc:`Detection modules <detection_modules>`.
 
 - **brute_force_detector**. Dedicated documentation for the SSH brute force detector module. See :doc:`brute_force_detector <brute_force_detector>`.
@@ -59,6 +61,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    self
    installation
    usage
+   web_interface
    architecture
    detection_modules
    brute_force_detector

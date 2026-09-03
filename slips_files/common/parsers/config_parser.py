@@ -46,6 +46,7 @@ class ConfigParser(object):
             "172.16.0.0/12",
             "10.0.0.0/8",
         )
+
         self.home_network_ranges = list(
             map(ipaddress.ip_network, self.home_network_ranges)
         )
@@ -120,6 +121,33 @@ class ConfigParser(object):
             return int(port)
         except Exception:
             return 55000
+
+    @property
+    def web_interface_bind(self) -> str:
+        """Read where the web interface accepts connections.
+
+        Returns:
+            ``localhost`` or ``interface``; invalid values use localhost.
+        """
+        value = self.read_configuration("web_interface", "bind", "localhost")
+        normalized = str(value).strip().lower()
+        return (
+            normalized
+            if normalized in {"localhost", "interface"}
+            else "localhost"
+        )
+
+    def web_interface_enabled(self) -> bool:
+        """
+        Check whether the local web interface is enabled in configuration.
+
+        Returns:
+            True when web_interface.enabled is enabled.
+        """
+        value = self.read_configuration("web_interface", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def get_entropy_threshold(self):
         """
@@ -409,6 +437,33 @@ class ConfigParser(object):
         return self.read_configuration(
             "local_p2p", "create_p2p_logfile", False
         )
+
+    def p2p_listen_port(self) -> int:
+        """Return the dedicated TCP port used by the local P2P listener."""
+        value = self.read_configuration("local_p2p", "listen_port", 6668)
+        try:
+            port = int(value)
+        except (TypeError, ValueError):
+            return 6668
+        return port if 1 <= port <= 65535 else 6668
+
+    def p2p_connection_ttl(self) -> int:
+        """Return the lifetime of an authenticated P2P connection record."""
+        value = self.read_configuration("local_p2p", "connection_ttl", 30)
+        try:
+            return max(5, int(value))
+        except (TypeError, ValueError):
+            return 30
+
+    def p2p_handshake_pending_seconds(self) -> float:
+        """Return how long ingestion waits for P2P authentication."""
+        value = self.read_configuration(
+            "local_p2p", "handshake_pending_seconds", 2
+        )
+        try:
+            return max(0.0, float(value))
+        except (TypeError, ValueError):
+            return 2.0
 
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
