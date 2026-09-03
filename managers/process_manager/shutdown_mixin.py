@@ -14,6 +14,7 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from modules.blocking.recovery import clear_firewall_recovery_state
 from modules.blocking.slips_chain_manager import (
     del_slips_blocking_chain,
     has_slips_firewall_rules,
@@ -593,26 +594,28 @@ class ShutdownMixin:
         """Keep or remove managed firewall rules after an interactive run."""
         if not has_slips_firewall_rules():
             return
-        forced = self.main.mode == "daemonized" or self.is_forced_shutdown()
-        if forced:
+
+        cant_ask_user = (
+            self.main.mode == "daemonized" or self.is_forced_shutdown()
+        )
+        if cant_ask_user:
             self.main.print(
                 "Slips firewall rules remain installed after forced shutdown."
             )
             return
+
         # The first Ctrl-C initiated graceful shutdown and must not cancel this
         # explicit keep/delete decision.
         self.shutdown_signal_received = False
         if self._ask_to_keep_firewall_rules():
             self.main.print("Keeping Slips firewall rules after shutdown.")
             return
+
         if not del_slips_blocking_chain():
             self.main.print("Unable to delete the Slips firewall rules.", 0, 1)
             return
-        states = self.main.db.get_firewall_block_states()
-        if isinstance(states, dict):
-            for ip in states:
-                self.main.db.del_firewall_block_state(ip)
-                self.main.db.del_blocked_ip(ip)
+
+        clear_firewall_recovery_state(self.main.db)
         self.main.print("Deleted Slips firewall rules and recovery state.")
 
     def _generate_plots(self) -> None:

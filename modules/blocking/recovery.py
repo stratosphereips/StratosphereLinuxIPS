@@ -8,6 +8,25 @@ from typing import Any, Dict, List
 from .exec_iptables_cmd import list_slips_firewall_rules
 
 
+def clear_firewall_recovery_state(db) -> None:
+    """
+    Delete every persisted firewall block state and blocked-IP record.
+
+    Called after the managed iptables chain itself has been deleted, so
+    a future run's _recover_firewall_rules() doesn't recover stale
+    state for rules that no longer exist.
+
+    Parameters:
+        db: Database manager used to read and clear the block states.
+    """
+    states = db.get_firewall_block_states()
+    if not isinstance(states, dict):
+        return
+    for ip in states:
+        db.del_firewall_block_state(ip)
+        db.del_blocked_ip(ip)
+
+
 class RecoveryMixin:
     """
     Recovers pre-existing Slips firewall rules into a fresh run.
