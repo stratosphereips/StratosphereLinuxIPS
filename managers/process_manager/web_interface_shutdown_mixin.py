@@ -122,9 +122,7 @@ class WebInterfaceShutdownMixin:
             natural_completion or self.main.keyboard_interrupt_received
         )
         return (
-            self.main.force_shutdown_requested
-            or self.main.sigterm_received
-            or not keep_web_interface_available
+            self.main.is_forced_shutdown() or not keep_web_interface_available
         )
 
     def _get_web_interface_display_host(self) -> str:

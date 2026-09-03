@@ -521,9 +521,7 @@ class ShutdownMixin:
         if not has_slips_firewall_rules():
             return
         forced = (
-            self.main.mode == "daemonized"
-            or self.main.force_shutdown_requested
-            or self.main.sigterm_received
+            self.main.mode == "daemonized" or self.main.is_forced_shutdown()
         )
         if forced:
             self.main.print(

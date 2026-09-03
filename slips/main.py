@@ -133,6 +133,17 @@ class Main:
         if not self.conf.get_cpu_profiler_enable():
             sys.exit(0)  # leaves any children started by slips as orphans
 
+    def is_forced_shutdown(self) -> bool:
+        """
+        Whether shutdown must proceed without any interactive prompts
+        (e.g. keep firewall rules? keep the web interface running?).
+
+        Returns:
+            True on an unattended SIGTERM, or when the user forced an
+            immediate shutdown with a second Ctrl-C.
+        """
+        return self.force_shutdown_requested or self.sigterm_received
+
     def was_running_zeek(self) -> bool:
         """returns true if zeek was used in this run"""
         return (
