@@ -10,8 +10,6 @@ import sys
 from multiprocessing import Queue
 from typing import Dict, List, Optional, Tuple
 
-from redis.exceptions import LockNotOwnedError
-
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -609,13 +607,6 @@ class EvidenceHandlerWorker(IModule):
     ) -> Tuple[float, float]:
         """
         Score evidence and raise an alert if it crosses the threshold.
-
-        Multiple evidence-handler processes consume the same queue.
-        Scoring and deciding/raising the alert must therefore be one
-        cross-process operation per profile and time window, so both
-        calls below run under a single acquisition of the per-(profile,
-        tw) lock.
-
         Parameters:
             evidence: Evidence to score and potentially turn into an
                 alert. Mutated in place with its resolved risk_level.
@@ -626,33 +617,20 @@ class EvidenceHandlerWorker(IModule):
             The accumulated threat level and the risk-weighted
             accumulated threat level computed for this evidence.
         """
-        lock = self.db.get_alert_generation_lock(profileid, twid)
-        lock.acquire()
-        try:
-            (
-                accumulated_threat_level,
-                risk_accumulated_threat_level,
-                current_risk_weight,
-            ) = self._score_evidence(evidence, profileid, twid)
+        (
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+            current_risk_weight,
+        ) = self._score_evidence(evidence, profileid, twid)
 
-            self._generate_alert_if_threshold_crossed(
-                evidence,
-                profileid,
-                twid,
-                accumulated_threat_level,
-                risk_accumulated_threat_level,
-                current_risk_weight,
-            )
-        finally:
-            try:
-                lock.release()
-            except LockNotOwnedError:
-                self.print(
-                    "Warning: Alert-generation lock expired before release for "
-                    f"{profileid}/{twid}; evidence processing completed.",
-                    1,
-                    0,
-                )
+        self._generate_alert_if_threshold_crossed(
+            evidence,
+            profileid,
+            twid,
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+            current_risk_weight,
+        )
         return accumulated_threat_level, risk_accumulated_threat_level
 
     def _score_evidence(
@@ -663,10 +641,6 @@ class EvidenceHandlerWorker(IModule):
     ) -> Tuple[float, float, RiskWeight]:
         """
         Update and read the profile/tw's accumulated threat level.
-
-        This is a read-modify-write on the profile/tw's shared score;
-        must be called with the profile/tw lock held, otherwise another
-        worker's update to the same score can be silently lost.
 
         Parameters:
             evidence: Evidence to score. Mutated in place with its
@@ -706,9 +680,7 @@ class EvidenceHandlerWorker(IModule):
     ) -> None:
         """
         Build and persist an alert once the detection threshold is
-        crossed. Must be called with the profile/tw lock held: without
-        it, two workers could both see the threshold crossed and each
-        raise a duplicate alert for the same profile/tw.
+        crossed.
 
         Parameters:
             evidence: The evidence that triggered this check.
@@ -736,28 +708,41 @@ class EvidenceHandlerWorker(IModule):
         if score < self.detection_threshold_in_this_width:
             return
 
-        tw_evidence = self.get_evidence_for_tw(profileid, twid)
-        if not tw_evidence:
+        if not self.db.try_claim_alert_generation(profileid, twid):
+            # another worker already won the claim for this profile/tw
+            # and is generating the alert; nothing left to do here.
             return
 
-        tw_start, tw_end = self.db.get_tw_limits(
-            profileid,
-            twid,
-            evidence.timestamp,
-        )
-        evidence.timewindow.start_time = tw_start
-        evidence.timewindow.end_time = tw_end
+        try:
+            tw_evidence = self.get_evidence_for_tw(profileid, twid)
+            if not tw_evidence:
+                return
 
-        alert = Alert(
-            profile=evidence.profile,
-            timewindow=evidence.timewindow,
-            last_evidence=evidence,
-            accumulated_threat_level=accumulated_threat_level,
-            accumulated_ratl=risk_accumulated_threat_level,
-            correl_id=list(tw_evidence.keys()),
-            risk_level=current_risk_weight,
-        )
-        self.handle_new_alert(alert, tw_evidence)
+            tw_start, tw_end = self.db.get_tw_limits(
+                profileid,
+                twid,
+                evidence.timestamp,
+            )
+            evidence.timewindow.start_time = tw_start
+            evidence.timewindow.end_time = tw_end
+
+            alert = Alert(
+                profile=evidence.profile,
+                timewindow=evidence.timewindow,
+                last_evidence=evidence,
+                accumulated_threat_level=accumulated_threat_level,
+                accumulated_ratl=risk_accumulated_threat_level,
+                correl_id=list(tw_evidence.keys()),
+                risk_level=current_risk_weight,
+            )
+            self.handle_new_alert(alert, tw_evidence)
+        finally:
+            # set_alert() (called from handle_new_alert) resets the
+            # profile/tw's accumulated threat level to 0, so evidence
+            # can legitimately earn a new alert soon after; release the
+            # claim now instead of leaving the next one waiting out
+            # the TTL.
+            self.db.release_alert_claim(profileid, twid)
 
     def handle_new_blame_message(self, msg: dict):
         data = msg["data"]
