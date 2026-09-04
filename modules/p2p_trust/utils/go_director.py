@@ -149,15 +149,12 @@ class GoDirector:
             "local_port",
             "remote_ip",
             "remote_port",
-            "authenticated",
             "connected",
         }
         if not isinstance(connection, dict) or not required.issubset(
             connection
         ):
             raise ValueError("Incomplete authenticated P2P connection update")
-        if connection["authenticated"] is not True:
-            raise ValueError("Unauthenticated P2P connection update")
         self.db.record_p2p_message(
             "received",
             {

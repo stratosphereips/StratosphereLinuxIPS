@@ -65,7 +65,9 @@ class HorizontalPortscan:
         confidence = utils.calculate_confidence(evidence["pkts_sent"])
         srcip = evidence["profileid"].split("_")[-1]
 
-        attacker = Attacker(direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip)
+        attacker = Attacker(
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
+        )
         portproto = f"{evidence['dport']}/{evidence['protocol']}"
         port_info = self.db.get_port_info(portproto) or ""
         description = (
@@ -84,7 +86,9 @@ class HorizontalPortscan:
             confidence=confidence,
             description=description,
             profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=int(str_twid.replace("timewindow", ""))),
+            timewindow=TimeWindow(
+                number=int(str_twid.replace("timewindow", ""))
+            ),
             uid=evidence["uids"],
             timestamp=evidence["first_timestamp"],  # TODO use last_timestamp
             proto=Proto(evidence["protocol"].lower()),
@@ -139,13 +143,30 @@ class HorizontalPortscan:
                     # scanned port from this attacker
                     self.db.mark_ip_as_port_scanner(profileid.ip, str(twid))
 
-                if self.should_set_evidence(amount_of_dstips, profileid, twid, dport):
+                if self.should_set_evidence(
+                    amount_of_dstips, profileid, twid, dport
+                ):
                     first_timestamp = self.db.get_attack_starttime(
                         profileid, twid, protocol, dport
                     )
                     uids = self.db.get_uids_for_horizontal_portscan(
                         profileid, twid, protocol, dport
                     )
+                    # ok why are we excluding p2p related flows here
+                    # instead of excluding them early before storing them
+                    # in the db? because the latter would require checking
+                    # of p2p related flows in the hot path (the hot path is
+                    # the path the flow takes from the minute it arrives to
+                    # slips until its distributed to the modules)
+                    # any heavy checking in this hot path causes severe
+                    # latency in slips, it should be as fast as possible
+                    # and has minimum checks as possible.
+                    p2p_uids = utils.p2p_related_uids(uids, self.db)
+                    uids = [uid for uid in uids if uid not in p2p_uids]
+                    if not uids:
+                        # every contributing flow is Slips's own
+                        # P2P traffic, not an actual scan
+                        continue
                     evidence = {
                         "protocol": protocol.name.lower(),
                         "profileid": str(profileid),

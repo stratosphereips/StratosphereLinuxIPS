@@ -60,7 +60,9 @@ class VerticalPortscan:
             f"Confidence: {confidence}. by Slips"
         )
 
-        attacker = Attacker(direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr)
+        attacker = Attacker(
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
+        )
         victim = Victim(
             direction=Direction.DST,
             ioc_type=IoCType.IP,
@@ -147,7 +149,9 @@ class VerticalPortscan:
             ) in self.db.get_dstips_with_not_established_flows(
                 profileid, twid, protocol
             ):
-                if not (utils.are_detection_modules_interested_in_this_ip(dstip)):
+                if not (
+                    utils.are_detection_modules_interested_in_this_ip(dstip)
+                ):
                     continue
                 # Get the total amount of pkts sent to all
                 # ports on the same host
@@ -179,6 +183,21 @@ class VerticalPortscan:
                     uids = self.db.get_uids_for_vertical_portscan(
                         profileid, twid, protocol, dstip
                     )
+                    # ok why are we excluding p2p related flows here
+                    # instead of excluding them early before storing them
+                    # in the db? because the latter would require checking
+                    # of p2p related flows in the hot path (the hot path is
+                    # the path the flow takes from the minute it arrives to
+                    # slips until its distributed to the modules)
+                    # any heavy checking in this hot path causes severe
+                    # latency in slips, it should be as fast as possible
+                    # and has minimum checks as possible.
+                    p2p_uids = utils.p2p_related_uids(uids, self.db)
+                    uids = [uid for uid in uids if uid not in p2p_uids]
+                    if not uids:
+                        # every contributing flow is Slips's own
+                        # P2P traffic, not an actual scan
+                        continue
                     evidence_details = {
                         "timestamp": first_seen_ts,
                         "pkts_sent": total_pkts_sent_to_all_dports,
