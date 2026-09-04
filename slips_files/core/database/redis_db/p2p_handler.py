@@ -4,6 +4,8 @@ from typing import (
     List,
     Any,
     Callable,
+    Sequence,
+    Tuple,
 )
 
 
@@ -89,152 +91,65 @@ class P2PHandler:
         self.r.zrem(self.constants.P2P_TRUST_SET, peer_id)
         self.r.hdel(self.constants.P2P_PEER_INFO_HASH, peer_id)
 
-    def store_authenticated_p2p_connection(
-        self,
-        connection_id: str,
-        connection: dict,
-        ttl: int,
-        active: bool = True,
-    ) -> None:
-        """Store one exact authenticated P2P TCP connection with a TTL.
+    def is_p2p_related_flow(self, srcip, sport, dstip, dport, proto) -> bool:
+        """Check whether a flow's 5-tuple matches a known P2P connection.
+
+        Single-flow convenience wrapper around
+        :meth:`is_p2p_related_flow_batch`. Prefer the batch method when
+        checking more than one flow, since it costs one redis round trip
+        total instead of one per flow.
 
         Parameters:
-            connection_id: Stable identifier for the connection tuple.
-            connection: Peer identity and local/remote endpoint data.
-            ttl: Number of seconds before the record expires without activity.
-            active: Whether to store this in the live or recent-flow registry.
-        """
-        index = (
-            self.constants.P2P_ACTIVE_CONNECTIONS
-            if active
-            else self.constants.P2P_RECENT_CONNECTIONS
-        )
-        prefix = (
-            self.constants.P2P_ACTIVE_CONNECTION_PREFIX
-            if active
-            else self.constants.P2P_RECENT_CONNECTION_PREFIX
-        )
-        self.r.sadd(index, connection_id)
-        self.r.set(
-            f"{prefix}{connection_id}",
-            json.dumps(connection),
-            ex=max(1, int(ttl)),
-        )
-
-    def remove_authenticated_p2p_connection(self, connection_id: str) -> None:
-        """Delete a connection from the live authenticated registry.
-
-        Parameters:
-            connection_id: Stable identifier for the connection tuple.
-        """
-        self.r.srem(self.constants.P2P_ACTIVE_CONNECTIONS, connection_id)
-        self.r.delete(
-            f"{self.constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}"
-        )
-
-    def _read_p2p_connection_registry(
-        self, index: str, prefix: str
-    ) -> List[dict]:
-        """Read a P2P tuple registry and prune expired index members.
-
-        Parameters:
-            index: Redis set containing connection identifiers.
-            prefix: Prefix used by expiring connection records.
+            srcip: Source IP of the flow.
+            sport: Source port of the flow.
+            dstip: Destination IP of the flow.
+            dport: Destination port of the flow.
+            proto: Transport protocol of the flow (e.g. "tcp").
 
         Returns:
-            Valid decoded authenticated connection records.
+            True if the flow matches a stored P2P connection tuple.
         """
-        connections = []
-        for raw_id in self.r.smembers(index):
-            connection_id = (
-                raw_id.decode(errors="replace")
-                if isinstance(raw_id, bytes)
-                else str(raw_id)
-            )
-            raw = self.r.get(f"{prefix}{connection_id}")
-            if raw is None:
-                self.r.srem(index, connection_id)
-                continue
-            try:
-                connection = json.loads(raw)
-            except (TypeError, ValueError):
-                self.r.srem(index, connection_id)
-                self.r.delete(f"{prefix}{connection_id}")
-                continue
-            if connection.get("authenticated") is True:
-                connections.append(connection)
-        return connections
+        return self.is_p2p_related_flow_batch(
+            [(srcip, sport, dstip, dport, proto)]
+        )[0]
 
-    def get_authenticated_p2p_connections(
-        self, include_recent: bool = False
-    ) -> List[dict]:
-        """Return exact live authenticated tuples and optional recent tuples.
+    def is_p2p_related_flow_batch(self, flows: Sequence[Tuple]) -> List[bool]:
+        """Check many flow 5-tuples against known P2P connections at once.
+
+        The p2p4slips Go daemon stores each authenticated P2P TCP
+        connection it holds directly in the ``p2p:connections`` redis
+        set, as ``"{protocol}|{local_ip}|{local_port}|{remote_ip}|
+        {remote_port}"`` entries. A flow matches if its tuple (or the
+        reverse of it, since either side of the flow may be the local
+        or remote endpoint) is a member of that set.
+
+        All ``SISMEMBER`` checks for every flow are sent in a single
+        pipelined round trip, instead of one round trip per flow (or
+        per flow per direction), to keep the cost of checking many
+        flows (e.g. every uid behind one evidence) close to the cost
+        of a single redis call.
 
         Parameters:
-            include_recent: Include the short post-disconnect flow grace set.
+            flows: Sequence of (srcip, sport, dstip, dport, proto) tuples.
 
         Returns:
-            Authenticated P2P connection records whose Redis TTL is live.
+            One bool per input flow, in the same order, True where the
+            flow matches a stored P2P connection tuple.
         """
-        connections = self._read_p2p_connection_registry(
-            self.constants.P2P_ACTIVE_CONNECTIONS,
-            self.constants.P2P_ACTIVE_CONNECTION_PREFIX,
-        )
-        if include_recent:
-            connections.extend(
-                self._read_p2p_connection_registry(
-                    self.constants.P2P_RECENT_CONNECTIONS,
-                    self.constants.P2P_RECENT_CONNECTION_PREFIX,
-                )
-            )
-        return connections
-
-    def is_authenticated_p2p_flow(
-        self, flow, include_recent: bool = True
-    ) -> bool:
-        """Match a flow against an exact authenticated P2P TCP 5-tuple.
-
-        Parameters:
-            flow: Parsed connection flow object or dictionary.
-            include_recent: Include tuples retained briefly after disconnect.
-
-        Returns:
-            True only for an exact tuple match in the authenticated registry.
-        """
-        get_value = (
-            flow.get
-            if isinstance(flow, dict)
-            else lambda key: getattr(flow, key, None)
-        )
-        if str(get_value("proto") or "").lower() != "tcp":
-            return False
-        flow_tuple = (
-            str(get_value("saddr") or ""),
-            str(get_value("sport") or ""),
-            str(get_value("daddr") or ""),
-            str(get_value("dport") or ""),
-        )
-        reverse_tuple = (
-            flow_tuple[2],
-            flow_tuple[3],
-            flow_tuple[0],
-            flow_tuple[1],
-        )
-        for connection in self.get_authenticated_p2p_connections(
-            include_recent=include_recent
-        ):
-            connection_tuple = (
-                str(connection.get("local_ip") or ""),
-                str(connection.get("local_port") or ""),
-                str(connection.get("remote_ip") or ""),
-                str(connection.get("remote_port") or ""),
-            )
-            if (
-                flow_tuple == connection_tuple
-                or reverse_tuple == connection_tuple
-            ):
-                return True
-        return False
+        if not flows:
+            return []
+        pipe = self.r.pipeline(transaction=False)
+        for srcip, sport, dstip, dport, proto in flows:
+            proto = str(proto or "").lower()
+            entry = f"{proto}|{srcip}|{sport}|{dstip}|{dport}"
+            reverse_entry = f"{proto}|{dstip}|{dport}|{srcip}|{sport}"
+            pipe.sismember(self.constants.P2P_CONNECTIONS, entry)
+            pipe.sismember(self.constants.P2P_CONNECTIONS, reverse_entry)
+        results = pipe.execute()
+        return [
+            bool(results[i] or results[i + 1])
+            for i in range(0, len(results), 2)
+        ]
 
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         cache_key = f"{self.constants.FIDES_CACHE_KEY}:{target}"
