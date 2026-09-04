@@ -447,24 +447,6 @@ class ConfigParser(object):
             return 6668
         return port if 1 <= port <= 65535 else 6668
 
-    def p2p_connection_ttl(self) -> int:
-        """Return the lifetime of an authenticated P2P connection record."""
-        value = self.read_configuration("local_p2p", "connection_ttl", 30)
-        try:
-            return max(5, int(value))
-        except (TypeError, ValueError):
-            return 30
-
-    def p2p_handshake_pending_seconds(self) -> float:
-        """Return how long ingestion waits for P2P authentication."""
-        value = self.read_configuration(
-            "local_p2p", "handshake_pending_seconds", 2
-        )
-        try:
-            return max(0.0, float(value))
-        except (TypeError, ValueError):
-            return 2.0
-
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
 

@@ -237,7 +237,9 @@ class ConnAnalyzer(IAsyncModule):
 
         if (
             "icmp" not in proto
-            and "slips-p2p" not in getattr(flow, "flow_tags", [])
+            and not self.db.is_p2p_related_flow(
+                flow.saddr, flow.sport, flow.daddr, flow.dport, flow.proto
+            )
             and not self.db.is_ftp_port(flow.dport)
         ):
             # we don't have info about this port

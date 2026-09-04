@@ -17,7 +17,6 @@ class BaseFlow:
     """A base class for zeek flows, containing common fields."""
 
     interface: str = field(default="default")
-    flow_tags: List[str] = field(default_factory=list)
 
 
 @dataclass(kw_only=True)

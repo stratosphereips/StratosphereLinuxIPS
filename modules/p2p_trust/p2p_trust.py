@@ -163,10 +163,6 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
         self.p2p_listen_port: int = conf.p2p_listen_port()
-        self.p2p_connection_ttl: int = conf.p2p_connection_ttl()
-        self.p2p_handshake_pending_seconds: float = (
-            conf.p2p_handshake_pending_seconds()
-        )
 
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -656,10 +652,6 @@ class Trust(IModule):
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
             "-slips-version": self.slips_version,
-            "-connection-ttl": str(self.p2p_connection_ttl),
-            "-flow-grace-period": str(
-                max(1, int(self.p2p_handshake_pending_seconds) + 1)
-            ),
         }
         self.print(f"P2P is listening on {self.host} port {self.port}.")
         executable = [self.pigeon_binary] + [
