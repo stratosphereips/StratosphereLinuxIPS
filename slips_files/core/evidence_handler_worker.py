@@ -284,31 +284,18 @@ class EvidenceHandlerWorker(IModule):
         return filtered_evidence
 
     def is_slips_p2p_evidence(self, evidence: Evidence) -> bool:
-        """Check whether every triggering flow is authenticated P2P control traffic.
+        """Check whether every triggering flow is Slips's own P2P traffic.
 
         Parameters:
             evidence: Evidence whose flow identifiers should be checked.
 
         Returns:
-            True only when every referenced flow carries the slips-p2p tag.
+            True only when every referenced flow matches a known P2P
+            connection.
         """
         if not evidence.uid:
             return False
-        for uid in evidence.uid:
-            stored = self.db.get_flow(uid)
-            if not isinstance(stored, dict):
-                return False
-            flow = stored.get(uid)
-            if isinstance(flow, str):
-                try:
-                    flow = json.loads(flow)
-                except (TypeError, ValueError):
-                    return False
-            if not isinstance(flow, dict):
-                return False
-            if "slips-p2p" not in flow.get("flow_tags", []):
-                return False
-        return True
+        return utils.all_uids_p2p_related(evidence.uid, self.db)
 
     def is_filtered_evidence(
         self, evidence: Evidence, past_evidence_ids: List[str]
