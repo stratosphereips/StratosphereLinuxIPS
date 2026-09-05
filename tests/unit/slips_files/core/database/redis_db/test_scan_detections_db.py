@@ -78,6 +78,9 @@ def test_store_portscan_flow_uid(scan_kind):
         )
 
     pipe.zadd.assert_any_call(expected_key, {"scan-flow": 123.5}, nx=True)
+    pipe.zremrangebyrank.assert_any_call(
+        expected_key, handler.max_uids_per_portscan, -1
+    )
 
 
 def test_add_ips():

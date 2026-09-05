@@ -3,7 +3,7 @@
 from typing import Dict
 
 import pytest
-from unittest.mock import MagicMock, call, Mock
+from unittest.mock import MagicMock, Mock
 import json
 from unittest.mock import ANY
 
@@ -89,41 +89,6 @@ def test_release_alert_claim_deletes_the_claim_key() -> None:
     alert_handler.r.delete.assert_called_once_with(
         "alert_claim:profile_192.168.1.20:timewindow4"
     )
-
-
-@pytest.mark.parametrize(
-    "all_evidence, expected_result, side_effect",
-    [
-        # Testcase 1: All evidence is whitelisted
-        (
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            {},
-            [True, True, True],
-        ),
-        # Testcase 2: No evidence is whitelisted
-        (
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            [False, False, False],
-        ),
-        # Testcase 3: Some evidence is whitelisted
-        (
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            {"ev2": "evidence2", "ev3": "evidence3"},
-            [True, False, False],
-        ),
-    ],
-)
-def test_remove_whitelisted_evidence(
-    all_evidence, expected_result, side_effect
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.sismember.side_effect = side_effect
-
-    result = alert_handler.remove_whitelisted_evidence(all_evidence)
-
-    assert result == expected_result
 
 
 @pytest.mark.parametrize(
@@ -297,30 +262,6 @@ def test_delete_evidence():
 
 
 @pytest.mark.parametrize(
-    "evidence_id, expected_calls",
-    [
-        # Testcase 1: Evidence ID is cached
-        ("evidence_123", [call("whitelisted_evidence", "evidence_123")]),
-        # Testcase 2: Evidence ID is already cached
-        ("evidence_456", [call("whitelisted_evidence", "evidence_456")]),
-    ],
-)
-def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler.cache_whitelisted_evidence_id(evidence_id)
-
-    assert alert_handler.r.sadd.call_count == len(expected_calls)
-    alert_handler.r.sadd.assert_has_calls(expected_calls)
-    alert_handler.r.expire.assert_called_once_with(
-        alert_handler.constants.WHITELISTED_EVIDENCE,
-        alert_handler.default_ttl,
-        nx=True,
-    )
-
-
-@pytest.mark.parametrize(
     "initial_value, expected_value",
     [
         # Testcase 1: No previous value
@@ -342,11 +283,10 @@ def test_init_evidence_number(initial_value, expected_value):
 
 
 @pytest.mark.parametrize(
-    "evidence_exists, whitelisted, expected",
+    "evidence_exists, expected",
     [
-        (None, False, True),  # new evidence, not whitelisted → added
-        ("{}", False, False),  # already exists → ignored
-        (None, True, False),  # whitelisted → ignored
+        (None, True),  # new evidence → added
+        ("{}", False),  # already exists → ignored
     ],
 )
 @pytest.mark.parametrize(
@@ -359,7 +299,6 @@ def test_init_evidence_number(initial_value, expected_value):
 )
 def test_set_evidence(
     evidence_exists,
-    whitelisted,
     expected,
     evidence_type,
     expected_signal,
@@ -368,7 +307,6 @@ def test_set_evidence(
 
     db.add_profile = Mock()
     db.is_detection_disabled = Mock(return_value=False)
-    db.is_whitelisted_evidence = Mock(return_value=whitelisted)
     db.publish = Mock()
     db.set_flow_causing_evidence = Mock()
     db._get_more_info_about_evidence = Mock(side_effect=lambda e: e)
@@ -517,30 +455,6 @@ def test_get_accumulated_threat_level(profileid, twid, expected_result):
     assert result == expected_result
     alert_handler.r.zscore.assert_called_once_with(
         "accumulated_threat_levels", f"{profileid}_{twid}"
-    )
-
-
-@pytest.mark.parametrize(
-    "evidence_id, sismember_return_value, expected_result",
-    [
-        # Testcase 1: Evidence ID is whitelisted
-        ("evidence_123", True, True),
-        # Testcase 2: Evidence ID is not whitelisted
-        ("evidence_456", False, False),
-    ],
-)
-def test_is_whitelisted_evidence(
-    evidence_id, sismember_return_value, expected_result
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.sismember.return_value = sismember_return_value
-
-    result = alert_handler.is_whitelisted_evidence(evidence_id)
-
-    assert result == expected_result
-    alert_handler.r.sismember.assert_called_once_with(
-        "whitelisted_evidence", evidence_id
     )
 
 

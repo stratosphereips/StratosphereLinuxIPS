@@ -250,3 +250,53 @@ def test_whitelist_decision_is_persisted_with_evidence(db) -> None:
     columns = db.get_columns("evidence")
     record = dict(zip(columns, db.select("evidence")[0]))
     assert record["whitelisted"] == 1
+
+
+def test_get_whitelisted_evidence_ids_in_tw_scopes_by_ip_and_twid(
+    db,
+) -> None:
+    """Resolve whitelisted evidence for one profile+timewindow in one query."""
+    profile = SimpleNamespace(ip="10.0.0.1")
+    other_profile = SimpleNamespace(ip="10.0.0.2")
+
+    def make_evidence(evidence_id, profile, timewindow):
+        return SimpleNamespace(
+            id=evidence_id,
+            timestamp=datetime.now(),
+            profile=profile,
+            timewindow=timewindow,
+            threat_level="low",
+            evidence_type="UNKNOWN_PORT",
+            description="d",
+            confidence=1.0,
+            uid=[],
+        )
+
+    with patch(
+        "slips_files.core.database.sqlite_db.database.utils.to_dict",
+        side_effect=lambda ev: {"id": ev.id},
+    ):
+        db.add_evidence(make_evidence("ev1", profile, "timewindow1"))
+        db.add_evidence(make_evidence("ev2", profile, "timewindow1"))
+        # same evidence id space, different timewindow -> must not leak in
+        db.add_evidence(make_evidence("ev3", profile, "timewindow2"))
+        # same timewindow, different ip -> must not leak in
+        db.add_evidence(make_evidence("ev4", other_profile, "timewindow1"))
+
+    db.mark_evidence_whitelisted("ev1")
+    db.mark_evidence_whitelisted("ev3")
+    db.mark_evidence_whitelisted("ev4")
+
+    assert db.get_whitelisted_evidence_ids_in_tw(
+        "10.0.0.1", "timewindow1"
+    ) == {"ev1"}
+    assert db.get_whitelisted_evidence_ids_in_tw(
+        "10.0.0.1", "timewindow2"
+    ) == {"ev3"}
+    assert db.get_whitelisted_evidence_ids_in_tw(
+        "10.0.0.2", "timewindow1"
+    ) == {"ev4"}
+    assert (
+        db.get_whitelisted_evidence_ids_in_tw("10.0.0.3", "timewindow1")
+        == set()
+    )

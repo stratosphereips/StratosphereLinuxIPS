@@ -152,6 +152,7 @@ def test_set_evidence_records_the_producing_module() -> None:
     db._get_evidence_interface = Mock(return_value="eth0")
     db.rdb.set_evidence = Mock(return_value=True)
     db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
     db.update_threat_level = Mock()
     evidence = Mock(
         evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS,

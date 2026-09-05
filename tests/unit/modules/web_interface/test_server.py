@@ -336,9 +336,6 @@ def test_whitelisted_evidence_reports_matching_victim_rule() -> None:
     """Explain why Slips retained evidence but did not add it to the score."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
-    reader.redis = Mock()
-    pipeline = reader.redis.pipeline.return_value
-    pipeline.execute.return_value = [True]
     reader._runtime_whitelist_rules = Mock(
         return_value=[
             {
@@ -353,6 +350,8 @@ def test_whitelisted_evidence_reports_matching_victim_rule() -> None:
     items = [
         {
             "id": "evidence-1",
+            # persisted by Evidence Handler in SQLite's evidence.whitelisted
+            "whitelisted": 1,
             "attacker": {
                 "value": "91.231.89.211",
                 "ioc_type": "IP",
