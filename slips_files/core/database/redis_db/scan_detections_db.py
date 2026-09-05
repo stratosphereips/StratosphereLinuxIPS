@@ -70,6 +70,9 @@ class ScanDetectionsHandler:
     mark_profile_tw_as_modified: Callable[..., Any]
 
     name = "scan_detections_handler_db"
+    # max amount of uids to keep per portscan uids zset, to avoid
+    # unbounded memory growth on long-running/high-volume scans
+    max_uids_per_portscan = 20
 
     def setup(self, *args, **kwargs):
         self.use_local_p2p: bool = self.conf.use_local_p2p()
@@ -462,6 +465,8 @@ class ScanDetectionsHandler:
 
         key = f"{profileid}_{twid}:{str_proto}:not_estab:{target_ip}:uids"
         pipe.zadd(key, {flow.uid: flow.starttime}, nx=True)
+        # keep only the earliest max_uids_per_portscan uids
+        pipe.zremrangebyrank(key, self.max_uids_per_portscan, -1)
 
         # we keep an index hash of target_ips to be able to access the
         # diff variants of the key above using them
@@ -498,6 +503,8 @@ class ScanDetectionsHandler:
 
             key = f"{profileid}_{twid}:{str_proto}:not_estab:dstport:{flow.dport}:uids"
             pipe.zadd(key, {flow.uid: flow.starttime}, nx=True)
+            # keep only the earliest max_uids_per_portscan uids
+            pipe.zremrangebyrank(key, self.max_uids_per_portscan, -1)
 
         return pipe
 
