@@ -595,46 +595,25 @@ class RunDataReader:
         """
         Attach Slips' whitelist decision and matching entities to evidence.
 
+        The whitelist decision is durably persisted in SQLite's
+        `evidence.whitelisted` column by Evidence Handler as soon as it
+        excludes an evidence, so there's no separate "live" source to
+        reconcile here.
+
         Parameters:
             items: Individual or grouped evidence API records.
         """
         if not items:
             return
-        identifiers: List[str] = []
-        for item in items:
-            grouped = item.get("_evidence_ids")
-            if isinstance(grouped, list):
-                identifiers.extend(str(value) for value in grouped)
-            elif item.get("id"):
-                identifiers.append(str(item["id"]))
-        live_members: set[str] = set()
-        try:
-            pipeline = self.redis.pipeline(transaction=False)
-            for evidence_id in identifiers:
-                pipeline.sismember("whitelisted_evidence", evidence_id)
-            live_members = {
-                evidence_id
-                for evidence_id, member in zip(identifiers, pipeline.execute())
-                if member is True or member == 1
-            }
-        except (redis.RedisError, StopIteration, TypeError):
-            pass
         rules = self._runtime_whitelist_rules()
         for item in items:
             grouped_ids = item.pop("_evidence_ids", None)
             if isinstance(grouped_ids, list):
-                live_count = sum(
-                    evidence_id in live_members for evidence_id in grouped_ids
+                item["whitelisted"] = (
+                    int(item.get("whitelisted_count") or 0) > 0
                 )
-                count = max(
-                    int(item.get("whitelisted_count") or 0), live_count
-                )
-                item["whitelisted"] = count > 0
-                item["whitelisted_count"] = count
                 continue
-            persisted = item.get("whitelisted") in (True, 1, "1")
-            evidence_id = str(item.get("id") or "")
-            item["whitelisted"] = persisted or evidence_id in live_members
+            item["whitelisted"] = item.get("whitelisted") in (True, 1, "1")
             item["whitelist_matches"] = (
                 self._whitelist_matches_for_record(item, rules)
                 if item["whitelisted"]

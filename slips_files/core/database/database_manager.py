@@ -964,10 +964,17 @@ class DBManager:
 
     def get_twid_evidence(self, profileid: str, twid: str) -> Dict[str, dict]:
         evidence: Dict[str, dict] = self.rdb.get_twid_evidence(profileid, twid)
+        if not evidence:
+            return evidence
+
+        ip = profileid.split("_")[-1]
+        whitelisted_ids = self.sqlite.get_whitelisted_evidence_ids_in_tw(
+            ip, twid
+        )
         return {
             evidence_id: ev
             for evidence_id, ev in evidence.items()
-            if not self.sqlite.is_evidence_whitelisted(evidence_id)
+            if evidence_id not in whitelisted_ids
         }
 
     def update_threat_level(

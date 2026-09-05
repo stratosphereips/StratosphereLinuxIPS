@@ -133,6 +133,8 @@ class SQLiteDB(ISQLite):
             "ON evidence(evidence_time DESC, evidence_id)",
             "CREATE INDEX IF NOT EXISTS evidence_profile_time_idx "
             "ON evidence(profile_ip, evidence_time DESC, evidence_id)",
+            "CREATE INDEX IF NOT EXISTS evidence_whitelisted_tw_idx "
+            "ON evidence(profile_ip, timewindow, whitelisted)",
             "CREATE INDEX IF NOT EXISTS evidence_type_idx "
             "ON evidence(evidence_type, evidence_time DESC)",
             "CREATE INDEX IF NOT EXISTS evidence_threat_idx "
@@ -509,6 +511,21 @@ class SQLiteDB(ISQLite):
             limit=1,
         )
         return bool(res) and res[0] == 1
+
+    def get_whitelisted_evidence_ids_in_tw(
+        self, profile_ip: str, twid: str
+    ) -> set:
+        """
+        Returns the IDs of all evidence marked as whitelisted for the given
+        profile IP and timewindow, in a single indexed query.
+        """
+        res = self.select(
+            "evidence",
+            columns="evidence_id",
+            condition="profile_ip = ? AND timewindow = ? AND whitelisted = 1",
+            params=(profile_ip, twid),
+        )
+        return {row[0] for row in res} if res else set()
 
     def add_alert(self, alert: Alert) -> None:
         """
