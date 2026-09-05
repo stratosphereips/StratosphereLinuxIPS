@@ -36,6 +36,42 @@ def test_check_includes_contributing_flow_uids():
         assert call_args.args[0]["uid"] == ["scan-flow-1", "scan-flow-2"]
 
 
+def test_check_excludes_p2p_related_uids_from_evidence():
+    """Drop P2P-related flow uids before they reach scan evidence."""
+    module_factory = ModuleFactory()
+    vertical_ps = module_factory.create_vertical_portscan_obj()
+    profileid = ProfileID(ip="10.0.0.1")
+    twid = TimeWindow(number=0)
+    vertical_ps.db.get_dstips_with_not_established_flows.return_value = [
+        ("8.8.8.8", 1234.5)
+    ]
+    vertical_ps.db.get_info_about_not_established_flows.return_value = (10, 20)
+    vertical_ps.db.get_uids_for_vertical_portscan.return_value = [
+        "p2p-flow",
+        "scan-flow-2",
+    ]
+    vertical_ps.db.get_flow.side_effect = lambda uid: {
+        uid: (
+            '{"saddr": "1.1.1.1", "sport": "6668", "daddr": "2.2.2.2", '
+            '"dport": "51000", "proto": "tcp"}'
+            if uid == "p2p-flow"
+            else '{"saddr": "3.3.3.3", "sport": "1", "daddr": "4.4.4.4", '
+            '"dport": "2", "proto": "tcp"}'
+        )
+    }
+    vertical_ps.db.is_p2p_related_flow_batch.side_effect = lambda flows: [
+        saddr == "1.1.1.1" for saddr, sport, daddr, dport, proto in flows
+    ]
+    vertical_ps.should_set_evidence = Mock(return_value=True)
+    vertical_ps.set_evidence_vertical_portscan = Mock()
+
+    vertical_ps.check(profileid, twid)
+
+    assert vertical_ps.set_evidence_vertical_portscan.call_count == 2
+    for call_args in vertical_ps.set_evidence_vertical_portscan.call_args_list:
+        assert call_args.args[0]["uid"] == ["scan-flow-2"]
+
+
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode("utf-8")
 
@@ -49,7 +85,9 @@ def not_enough_dports_to_reach_the_threshold():
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(0, module.minimum_dports_to_set_evidence - 1)
+    amount_of_dports: int = random.randint(
+        0, module.minimum_dports_to_set_evidence - 1
+    )
 
     ip: str = "8.8.8.8"
     res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
@@ -72,7 +110,9 @@ def enough_dports_to_reach_the_threshold():
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(module.minimum_dports_to_set_evidence, 100)
+    amount_of_dports: int = random.randint(
+        module.minimum_dports_to_set_evidence, 100
+    )
 
     ip: str = "8.8.8.8"
     res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}
@@ -97,7 +137,9 @@ def not_enough_dports_to_combine_1_evidence():
 
     # get a random list of ints(ports) that are below the threshold
     # Generate a random number between 0 and threshold
-    amount_of_dports: int = random.randint(module.minimum_dports_to_set_evidence, 100)
+    amount_of_dports: int = random.randint(
+        module.minimum_dports_to_set_evidence, 100
+    )
 
     ip: str = "8.8.8.8"
     res = {ip: {"stime": "1700828217.314165", "uid": [], "dstports": {}}}

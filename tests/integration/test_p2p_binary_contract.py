@@ -53,8 +53,6 @@ def test_python_pigeon_arguments_are_accepted_by_go_binary(tmp_path) -> None:
     trust.pygo_channel_raw = "p2p_pygo"
     trust.gopy_channel_raw = "p2p_gopy"
     trust.slips_version = "contract-test"
-    trust.p2p_connection_ttl = 30
-    trust.p2p_handshake_pending_seconds = 2
     trust.create_p2p_logfile = False
     trust.p2p_trust_runtime_dir = str(tmp_path)
     trust._rebuild_pigeon_binary_after_slips_update = lambda: True

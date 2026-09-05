@@ -93,16 +93,18 @@ def base_module():
 
 
 class TestMLBaseModule:
-    def test_process_flow_accepts_empty_flow_tags(self, base_module) -> None:
-        """Treat an empty flow tag list as one cell in a one-row dataframe."""
+    def test_process_flow_accepts_arbitrary_list_field(
+        self, base_module
+    ) -> None:
+        """Treat an arbitrary list field as one cell in a one-row dataframe."""
         _module_factory = ModuleFactory()
-        flow = {"dur": 1.0, "flow_tags": []}
+        flow = {"dur": 1.0, "extra_field": []}
 
         processed_flow = base_module.process_flow(flow)
 
         assert processed_flow is not None
         assert len(processed_flow.index) == 1
-        assert processed_flow.iloc[0]["flow_tags"] == []
+        assert processed_flow.iloc[0]["extra_field"] == []
 
     def test_drop_labels_removes_known_label_columns(self, base_module):
         raw = pd.DataFrame(
@@ -112,7 +114,6 @@ class TestMLBaseModule:
                 "detailed_ground_truth_label": [BENIGN],
                 "label": [BENIGN],
                 "module_labels": [{"m": BENIGN}],
-                "flow_tags": [["slips-p2p"]],
             }
         )
         cleaned = base_module.drop_labels(raw)
@@ -124,15 +125,18 @@ class TestMLBaseModule:
         assert base_module.fit_calls[0]["classes"] == [MALICIOUS, BENIGN]
 
 
-def test_main_ignores_authenticated_p2p_flow(base_module) -> None:
-    """Do not submit a centrally tagged P2P control flow to an ML detector."""
+def test_main_ignores_p2p_related_flow(base_module) -> None:
+    """Do not submit a known P2P control flow to an ML detector."""
     _module_factory = ModuleFactory()
     base_module.get_msg = Mock(
         return_value={
             "data": '{"twid":"timewindow1","profileid":"profile_1",'
-            '"flow":{"flow_tags":["slips-p2p"]}}'
+            '"flow":{"saddr":"1.1.1.1","sport":"6668",'
+            '"daddr":"2.2.2.2","dport":"51000","proto":"tcp"}}'
         }
     )
+    base_module.db = Mock()
+    base_module.db.is_p2p_related_flow.return_value = True
     base_module.run_test_on_flow = Mock()
     base_module.mode = "test"
 

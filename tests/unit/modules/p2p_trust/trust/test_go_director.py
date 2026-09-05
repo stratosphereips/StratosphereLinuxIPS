@@ -665,7 +665,6 @@ def test_connection_update_is_validated_and_recorded() -> None:
         "local_port": "6668",
         "remote_ip": "198.51.100.20",
         "remote_port": "51000",
-        "authenticated": True,
         "connected": True,
     }
 
@@ -684,6 +683,38 @@ def test_connection_update_is_validated_and_recorded() -> None:
             "connected": True,
         },
     )
+    go_director.db.store_authenticated_p2p_connection.assert_called_once_with(
+        "tcp|192.0.2.10|6668|198.51.100.20|51000",
+        {**connection, "authenticated": True},
+        go_director.ACTIVE_P2P_CONNECTION_TTL,
+    )
+    go_director.db.remove_authenticated_p2p_connection.assert_not_called()
+
+
+def test_connection_update_removes_connection_on_disconnect() -> None:
+    """Drop a connection from the live registry once Go reports it closed."""
+    go_director = ModuleFactory().create_go_director_obj()
+    connection = {
+        "peer_id": "peer-a",
+        "protocol": "tcp",
+        "local_ip": "192.0.2.10",
+        "local_port": "6668",
+        "remote_ip": "198.51.100.20",
+        "remote_port": "51000",
+        "connected": False,
+    }
+
+    go_director.handle_gopy_data(
+        {
+            "message_type": "connection_update",
+            "message_contents": connection,
+        }
+    )
+
+    go_director.db.remove_authenticated_p2p_connection.assert_called_once_with(
+        "tcp|192.0.2.10|6668|198.51.100.20|51000",
+    )
+    go_director.db.store_authenticated_p2p_connection.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -696,16 +727,14 @@ def test_connection_update_is_validated_and_recorded() -> None:
             "local_ip": "192.0.2.10",
             "local_port": "6668",
             "remote_ip": "198.51.100.20",
-            "remote_port": "51000",
-            "authenticated": False,
-            "connected": True,
+            # missing remote_port and connected
         },
     ],
 )
-def test_connection_update_rejects_incomplete_or_unauthenticated_data(
+def test_connection_update_rejects_incomplete_data(
     connection: dict,
 ) -> None:
-    """Reject lifecycle records that cannot authorize a flow exemption."""
+    """Reject lifecycle records missing required tuple fields."""
     go_director = ModuleFactory().create_go_director_obj()
 
     with pytest.raises(ValueError):

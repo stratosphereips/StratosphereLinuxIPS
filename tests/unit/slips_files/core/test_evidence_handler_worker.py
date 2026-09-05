@@ -856,7 +856,7 @@ def test_log_alert(
 
 
 def test_p2p_tagged_evidence_is_excluded_from_scoring_and_blocking() -> None:
-    """Filter evidence only when all of its triggering flows are tagged P2P."""
+    """Filter evidence only when all of its triggering flows are P2P."""
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     evidence = Mock(
         id="p2p-evidence",
@@ -864,8 +864,19 @@ def test_p2p_tagged_evidence_is_excluded_from_scoring_and_blocking() -> None:
         attacker=Mock(direction="SRC"),
     )
     worker.db.get_flow.side_effect = lambda uid: {
-        uid: json.dumps({"flow_tags": ["slips-p2p"]})
+        uid: json.dumps(
+            {
+                "saddr": "1.1.1.1",
+                "sport": "6668",
+                "daddr": "2.2.2.2",
+                "dport": "51000",
+                "proto": "tcp",
+            }
+        )
     }
+    worker.db.is_p2p_related_flow_batch.side_effect = lambda flows: [
+        True
+    ] * len(flows)
 
     assert worker.is_filtered_evidence(evidence, []) is True
 
@@ -880,8 +891,17 @@ def test_mixed_p2p_and_unrelated_evidence_is_not_filtered() -> None:
     )
     worker.db.get_flow.side_effect = lambda uid: {
         uid: json.dumps(
-            {"flow_tags": ["slips-p2p"] if uid == "p2p-flow" else []}
+            {
+                "saddr": "1.1.1.1" if uid == "p2p-flow" else "3.3.3.3",
+                "sport": "6668",
+                "daddr": "2.2.2.2",
+                "dport": "51000",
+                "proto": "tcp",
+            }
         )
     }
+    worker.db.is_p2p_related_flow_batch.side_effect = lambda flows: [
+        saddr == "1.1.1.1" for saddr, sport, daddr, dport, proto in flows
+    ]
 
     assert worker.is_filtered_evidence(evidence, []) is False
