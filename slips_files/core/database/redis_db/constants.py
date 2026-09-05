@@ -124,8 +124,6 @@ class Constants:
     P2P_CONNECTIONS_LAST_SEEN = "p2p:connections:last_seen"
     P2P_ACTIVE_CONNECTIONS = "p2p:active_connections"
     P2P_ACTIVE_CONNECTION_PREFIX = "p2p:active_connection:"
-    P2P_RECENT_CONNECTIONS = "p2p:recent_connections"
-    P2P_RECENT_CONNECTION_PREFIX = "p2p:recent_connection:"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
     FLOWS_PER_MINUTE = "flows_per_minute"
