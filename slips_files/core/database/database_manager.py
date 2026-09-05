@@ -887,6 +887,11 @@ class DBManager:
         if self.conf.disabled_detections(evidence.evidence_type):
             return
 
+        # whitelisted evidence are deleted from the db, so we need to check
+        # that we're not re-adding a deleted evidence
+        if self.sqlite.is_evidence_whitelisted(evidence.id):
+            return False
+
         if not getattr(evidence, "source_module", ""):
             evidence.source_module = self.source_module
 
@@ -949,20 +954,21 @@ class DBManager:
         return self.rdb.delete_evidence(*args, **kwargs)
 
     def cache_whitelisted_evidence_id(self, *args, **kwargs):
-        self.sqlite.mark_evidence_whitelisted(*args, **kwargs)
-        return self.rdb.cache_whitelisted_evidence_id(*args, **kwargs)
+        return self.sqlite.mark_evidence_whitelisted(*args, **kwargs)
 
     def is_whitelisted_evidence(self, *args, **kwargs):
-        return self.rdb.is_whitelisted_evidence(*args, **kwargs)
-
-    def remove_whitelisted_evidence(self, *args, **kwargs):
-        return self.rdb.remove_whitelisted_evidence(*args, **kwargs)
+        return self.sqlite.is_evidence_whitelisted(*args, **kwargs)
 
     def get_profileid_twid_alerts(self, *args, **kwargs):
         return self.rdb.get_profileid_twid_alerts(*args, **kwargs)
 
-    def get_twid_evidence(self, *args, **kwargs):
-        return self.rdb.get_twid_evidence(*args, **kwargs)
+    def get_twid_evidence(self, profileid: str, twid: str) -> Dict[str, dict]:
+        evidence: Dict[str, dict] = self.rdb.get_twid_evidence(profileid, twid)
+        return {
+            evidence_id: ev
+            for evidence_id, ev in evidence.items()
+            if not self.sqlite.is_evidence_whitelisted(evidence_id)
+        }
 
     def update_threat_level(
         self, profileid: str, threat_level: str, confidence: float

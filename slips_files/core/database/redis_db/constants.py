@@ -24,7 +24,6 @@ class Constants:
     FLOWS_CAUSING_EVIDENCE = "flows_causing_evidence"
     PROCESSED_EVIDENCE = "processed_evidence"
     NUMBER_OF_EVIDENCE = "number_of_evidence"
-    WHITELISTED_EVIDENCE = "whitelisted_evidence"
     SRCIPS_SEEN_IN_CONN_LOG = "srcips_seen_in_connlog"
     PASSIVE_DNS = "passiveDNS"
     # called for every IP in the timeline view

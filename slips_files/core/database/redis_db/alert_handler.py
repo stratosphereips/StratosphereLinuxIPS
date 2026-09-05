@@ -383,15 +383,9 @@ class AlertHandler:
         )
         if evidence_exists:
             return False
-        if self.is_whitelisted_evidence(evidence.id):
-            return False
 
         self.r.hset(evidence_hash, evidence.id, evidence_to_send)
         self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-        # note that publishing HAS TO be done after adding the evidence
-        # to the db
-        # whitelisted evidence are deleted from the db, so we need to check
-        # that we're not re-adding a deleted evidence
         self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
         return True
 
@@ -434,42 +428,6 @@ class AlertHandler:
         self.r.hdel(f"{profileid}_{twid}_evidence", evidence_id)
         self.r.decr(self.constants.NUMBER_OF_EVIDENCE)
 
-    def cache_whitelisted_evidence_id(self, evidence_id: str):
-        """
-        Keep track of whitelisted evidence IDs to avoid showing them in
-        alerts later
-        """
-        # without this function, slips gets the stored evidence id from the db,
-        # before deleteEvidence is called, so we need to keep track of
-        # whitelisted evidence ids
-        self.r.sadd(self.constants.WHITELISTED_EVIDENCE, evidence_id)
-        self.r.expire(
-            self.constants.WHITELISTED_EVIDENCE, self.default_ttl, nx=True
-        )
-
-    def is_whitelisted_evidence(self, evidence_id: str):
-        """
-        Check if we have the evidence ID as whitelisted in the db to
-        avoid showing it in alerts
-        """
-        return self.r.sismember(
-            self.constants.WHITELISTED_EVIDENCE, evidence_id
-        )
-
-    def remove_whitelisted_evidence(self, all_evidence: dict) -> dict:
-        """
-        param all_evidence serialized json dict
-        returns a dict
-        """
-        # remove whitelisted evidence from the given evidence
-        # all_evidence = json.loads(all_evidence)
-        tw_evidence = {}
-        for evidence_id, evidence in all_evidence.items():
-            if self.is_whitelisted_evidence(evidence_id):
-                continue
-            tw_evidence[evidence_id] = evidence
-        return tw_evidence
-
     def get_profileid_twid_alerts(
         self, profileid, twid
     ) -> Dict[str, List[str]]:
@@ -488,13 +446,7 @@ class AlertHandler:
         evidence: Dict[str, dict] = self.r.hgetall(
             f"{profileid}_{twid}_evidence"
         )
-        if evidence:
-            evidence: Dict[str, dict] = self.remove_whitelisted_evidence(
-                evidence
-            )
-            return evidence
-
-        return {}
+        return evidence or {}
 
     def set_max_threat_level(self, profileid: str, threat_level: str):
         self.set_profileid_field(
