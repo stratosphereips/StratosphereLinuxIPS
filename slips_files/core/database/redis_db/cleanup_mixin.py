@@ -14,6 +14,7 @@ class CleanupMixin:
     r: Any
     constants: Any
     get_blocked_timewindows_of_profile: Callable[..., Any]
+    prune_stale_p2p_connections: Callable[..., Any]
     print: Callable[..., Any]
 
     name = "cleanup_mixin"
@@ -95,10 +96,12 @@ class CleanupMixin:
             )
             return pipe
 
-        # p2p message counts aren't tied to a specific profile, so as
-        # soon as this tw is closed (regardless of the profile),
-        # delete its message counts so they don't accumulate forever
+        # p2p message counts and the p2p connections registry aren't tied
+        # to a specific profile, so as soon as this tw is closed
+        # (regardless of the profile), clean them up so they don't
+        # accumulate forever
         self.delete_p2p_message_counts(closed_tw)
+        self.prune_stale_p2p_connections()
 
         tws_to_keep = 2
 

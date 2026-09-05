@@ -120,6 +120,8 @@ class Constants:
     P2P_PEER_INFO_HASH = "peer_info"
     P2P_MESSAGE_COUNTS = "p2p_message_counts"
     P2P_MESSAGE_HISTORY = "p2p_message_history"
+    P2P_CONNECTIONS = "p2p:connections"
+    P2P_CONNECTIONS_LAST_SEEN = "p2p:connections:last_seen"
     P2P_ACTIVE_CONNECTIONS = "p2p:active_connections"
     P2P_ACTIVE_CONNECTION_PREFIX = "p2p:active_connection:"
     P2P_RECENT_CONNECTIONS = "p2p:recent_connections"
