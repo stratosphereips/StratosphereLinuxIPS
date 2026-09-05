@@ -11,9 +11,8 @@ import sys
 import inspect
 from multiprocessing import Queue
 from unittest.mock import patch
-from slips_files.core.database.database_manager import DBManager
-from slips_files.core.output import Output
 from slips_files.core.flows.zeek import Conn
+from slips_files.common.parsers.config_parser import ConfigParser
 import logging
 
 # add parent dir to path for imports to work
@@ -28,8 +27,7 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"  # 3 = ERROR
 # TensorFlow logs oneDNN messages even with TF_CPP_MIN_LOG_LEVEL=3.
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 
-import tensorflow as tf
-
+import tensorflow as tf  # noqa: E402 - configure TensorFlow before importing it
 
 # Suppress Python-based TensorFlow logs
 tf.get_logger().setLevel(logging.ERROR)
@@ -66,6 +64,7 @@ def profiler_queue():
     profiler_queue.put = do_nothing
     return profiler_queue
 
+
 @pytest.fixture
 def flow():
     """returns a dummy flow for testing"""
@@ -93,7 +92,10 @@ def flow():
 
 # Define a fixture to run before each test
 @pytest.fixture(autouse=True)
-def setup_teardown_before_each_test(request):
+def setup_teardown_before_each_test(request, monkeypatch):
+    # Some parser tests replace the singleton's entire configuration. Give each
+    # test its own instance so subsequent tests still read the real defaults.
+    monkeypatch.setattr(ConfigParser, "_instance", None)
     # Code to run before each test
     print(f"\nSetting up for test: {request.node.name}")
     #
