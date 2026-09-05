@@ -82,7 +82,8 @@ Docstrings MUST include:
 - Parameters (if applicable)
 - Return value (if applicable). if the return value is None, it should not be explicitly stated in the docstring, just add it as a type annotation.
 - newly added functions in database_manager.py should never have a docstring, and should always have (*args, **kwargs) as args and should always forward these (*args, **kwargs) to the function it calls.
-
+- the database manager's role is a facade, which forwards code to other databases (e.g self.rdb, self.sqlite etc.). the only allowed code implementations in the database manager's functions is code that requires passing the output of one database to another, like this function set_evidence(), which uses the rdb to decide whether to use sqlite or not.
+-
 ## 4. Testing
 - Canonical test runner
 tests/run_all_tests.sh

@@ -838,13 +838,6 @@ class DBManager:
     def get_evidence_by_id(self, *args, **kwargs):
         return self.rdb.get_evidence_by_id(*args, **kwargs)
 
-    def is_detection_disabled(self, *args, **kwargs):
-        # RedisDB is shared per port and its instance attributes can be
-        # overwritten by another DBManager in this worker. Refresh the active
-        # process configuration immediately before every decision.
-        self.rdb.disabled_detections = self.conf.disabled_detections()
-        return self.rdb.is_detection_disabled(*args, **kwargs)
-
     def set_flow_causing_evidence(self, *args, **kwargs):
         return self.rdb.set_flow_causing_evidence(*args, **kwargs)
 
@@ -890,8 +883,9 @@ class DBManager:
         # into the Redis database now owned by another run.
         if not self.rdb.belongs_to_run(self.output_dir):
             return False
-        if self.is_detection_disabled(evidence.evidence_type):
-            return False
+
+        if self.conf.disabled_detections(evidence.evidence_type):
+            return
 
         if not getattr(evidence, "source_module", ""):
             evidence.source_module = self.source_module

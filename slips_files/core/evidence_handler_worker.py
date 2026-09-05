@@ -680,7 +680,7 @@ class EvidenceHandlerWorker(IModule):
             current_risk_weight: Risk weight used to compute the RATL.
         """
         # Informational evidence has no threat contribution and therefore
-        # cannot be the event that opens an alert. It remains processed and
+        # cannot be the event that triggers an alert. It remains processed and
         # may still be correlated with a later, score-contributing alert.
         if evidence.threat_level == ThreatLevel.INFO:
             return
