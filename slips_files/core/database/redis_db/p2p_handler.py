@@ -91,6 +91,162 @@ class P2PHandler:
         self.r.zrem(self.constants.P2P_TRUST_SET, peer_id)
         self.r.hdel(self.constants.P2P_PEER_INFO_HASH, peer_id)
 
+    def store_authenticated_p2p_connection(
+        self,
+        connection_id: str,
+        connection: dict,
+        ttl: int,
+        active: bool = True,
+    ) -> None:
+        """Store one exact authenticated P2P TCP connection with a TTL.
+
+        This is what the web interface's live P2P connections panel
+        reads to show currently/recently connected peers.
+
+        Parameters:
+            connection_id: Stable identifier for the connection tuple.
+            connection: Peer identity and local/remote endpoint data.
+            ttl: Number of seconds before the record expires without activity.
+            active: Whether to store this in the live or recent-flow registry.
+        """
+        index = (
+            self.constants.P2P_ACTIVE_CONNECTIONS
+            if active
+            else self.constants.P2P_RECENT_CONNECTIONS
+        )
+        prefix = (
+            self.constants.P2P_ACTIVE_CONNECTION_PREFIX
+            if active
+            else self.constants.P2P_RECENT_CONNECTION_PREFIX
+        )
+        self.r.sadd(index, connection_id)
+        self.r.set(
+            f"{prefix}{connection_id}",
+            json.dumps(connection),
+            ex=max(1, int(ttl)),
+        )
+        if active:
+            # connection_id matches the exact entry format the go peer
+            # daemon uses in P2P_CONNECTIONS, so this heartbeat is what
+            # prune_stale_p2p_connections() uses to know it's still alive.
+            self.r.zadd(
+                self.constants.P2P_CONNECTIONS_LAST_SEEN,
+                {connection_id: time.time()},
+            )
+
+    def remove_authenticated_p2p_connection(self, connection_id: str) -> None:
+        """Delete a connection from the live authenticated registry.
+
+        Also drops it from the go peer daemon's flow-matching set
+        (:attr:`Constants.P2P_CONNECTIONS`) and its heartbeat tracker, so
+        a disconnect the go daemon fails to clean up itself (e.g. a crash)
+        doesn't leave the tuple matching flows forever.
+
+        Parameters:
+            connection_id: Stable identifier for the connection tuple.
+        """
+        self.r.srem(self.constants.P2P_ACTIVE_CONNECTIONS, connection_id)
+        self.r.delete(
+            f"{self.constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}"
+        )
+        self.r.srem(self.constants.P2P_CONNECTIONS, connection_id)
+        self.r.zrem(self.constants.P2P_CONNECTIONS_LAST_SEEN, connection_id)
+
+    #: A connection with no heartbeat in this many seconds is stale.
+    STALE_P2P_CONNECTION_AGE = 600
+
+    def del_stale_p2p_connections(
+        self, max_age: int = STALE_P2P_CONNECTION_AGE
+    ) -> None:
+        """Drop P2P_CONNECTIONS entries with no recent heartbeat.
+
+        The go peer daemon adds to :attr:`Constants.P2P_CONNECTIONS` on
+        connect and removes on a clean disconnect, but that set has no TTL
+        of its own, so a connection whose disconnect notification never
+        arrives (peer crash, dropped pubsub message, ...) would otherwise
+        sit there forever, matching flows it no longer represents. Call
+        this periodically (e.g. on timewindow close) to bound its size.
+
+        Parameters:
+            max_age: Seconds since the last heartbeat before an entry is
+                considered stale and removed.
+        """
+        cutoff = time.time() - max_age
+        stale = self.r.zrangebyscore(
+            self.constants.P2P_CONNECTIONS_LAST_SEEN, "-inf", cutoff
+        )
+        if not stale:
+            return
+        with self.r.pipeline(transaction=False) as pipe:
+            for connection_id in stale:
+                connection_id = (
+                    connection_id.decode(errors="replace")
+                    if isinstance(connection_id, bytes)
+                    else str(connection_id)
+                )
+                pipe.srem(self.constants.P2P_CONNECTIONS, connection_id)
+                pipe.zrem(
+                    self.constants.P2P_CONNECTIONS_LAST_SEEN, connection_id
+                )
+            pipe.execute()
+
+    def _read_p2p_connection_registry(
+        self, index: str, prefix: str
+    ) -> List[dict]:
+        """Read a P2P tuple registry and prune expired index members.
+
+        Parameters:
+            index: Redis set containing connection identifiers.
+            prefix: Prefix used by expiring connection records.
+
+        Returns:
+            Valid decoded authenticated connection records.
+        """
+        connections = []
+        for raw_id in self.r.smembers(index):
+            connection_id = (
+                raw_id.decode(errors="replace")
+                if isinstance(raw_id, bytes)
+                else str(raw_id)
+            )
+            raw = self.r.get(f"{prefix}{connection_id}")
+            if raw is None:
+                self.r.srem(index, connection_id)
+                continue
+            try:
+                connection = json.loads(raw)
+            except (TypeError, ValueError):
+                self.r.srem(index, connection_id)
+                self.r.delete(f"{prefix}{connection_id}")
+                continue
+            if connection.get("authenticated") is True:
+                connections.append(connection)
+        return connections
+
+    def get_authenticated_p2p_connections(
+        self, include_recent: bool = False
+    ) -> List[dict]:
+        """Return exact live authenticated tuples and optional recent tuples.
+
+        Parameters:
+            include_recent: Include the short post-disconnect flow grace set.
+
+        Returns:
+            Authenticated P2P connection records whose Redis TTL is live.
+        """
+        connections = self._read_p2p_connection_registry(
+            self.constants.P2P_ACTIVE_CONNECTIONS,
+            self.constants.P2P_ACTIVE_CONNECTION_PREFIX,
+        )
+        if include_recent:
+            connections.extend(
+                self._read_p2p_connection_registry(
+                    self.constants.P2P_RECENT_CONNECTIONS,
+                    self.constants.P2P_RECENT_CONNECTION_PREFIX,
+                )
+            )
+        return connections
+
     def is_p2p_related_flow(self, srcip, sport, dstip, dport, proto) -> bool:
         """Check whether a flow's 5-tuple matches a known P2P connection.
 

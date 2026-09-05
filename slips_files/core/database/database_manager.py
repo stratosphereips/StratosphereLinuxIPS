@@ -1618,6 +1618,18 @@ class DBManager:
     def get_p2p_message_telemetry(self, *args, **kwargs):
         return self.rdb.get_p2p_message_telemetry(*args, **kwargs)
 
+    def store_authenticated_p2p_connection(self, *args, **kwargs):
+        return self.rdb.store_authenticated_p2p_connection(*args, **kwargs)
+
+    def remove_authenticated_p2p_connection(self, *args, **kwargs):
+        return self.rdb.remove_authenticated_p2p_connection(*args, **kwargs)
+
+    def get_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.get_authenticated_p2p_connections(*args, **kwargs)
+
+    def del_stale_p2p_connections(self, *args, **kwargs):
+        return self.rdb.del_stale_p2p_connections(*args, **kwargs)
+
     def is_p2p_related_flow(self, *args, **kwargs):
         return self.rdb.is_p2p_related_flow(*args, **kwargs)
 

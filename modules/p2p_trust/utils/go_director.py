@@ -136,8 +136,14 @@ class GoDirector:
                 1,
             )
 
+    #: Seconds an active P2P connection record survives without a refresh.
+    ACTIVE_P2P_CONNECTION_TTL = 300
+
     def process_connection_update(self, connection: dict) -> None:
         """Record one authenticated P2P connection lifecycle update.
+
+        This also keeps the live/recently-connected P2P registry that the
+        web interface's P2P dashboard reads up to date.
 
         Parameters:
             connection: Peer identity and exact TCP endpoint tuple from Go.
@@ -155,12 +161,31 @@ class GoDirector:
             connection
         ):
             raise ValueError("Incomplete authenticated P2P connection update")
+        connected = connection["connected"] is True
+        connection_id = "|".join(
+            str(connection[field])
+            for field in (
+                "protocol",
+                "local_ip",
+                "local_port",
+                "remote_ip",
+                "remote_port",
+            )
+        )
+        if connected:
+            self.db.store_authenticated_p2p_connection(
+                connection_id,
+                {**connection, "authenticated": True},
+                self.ACTIVE_P2P_CONNECTION_TTL,
+            )
+        else:
+            self.db.remove_authenticated_p2p_connection(connection_id)
         self.db.record_p2p_message(
             "received",
             {
                 "message_type": "connection_update",
                 "peer_id": str(connection["peer_id"]),
-                "connected": connection["connected"] is True,
+                "connected": connected,
             },
         )
 
