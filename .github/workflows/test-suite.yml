@@ -177,6 +177,7 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
           lfs: true
+          submodules: recursive
 
       - name: Run ${{ inputs.test_suite_name }} for ${{ matrix.test_file }}
         uses: ./.github/workflows/reusable/run-test-file

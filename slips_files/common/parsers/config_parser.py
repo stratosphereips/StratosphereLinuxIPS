@@ -480,9 +480,10 @@ class ConfigParser(object):
         return twid_width
 
     def disabled_detections(self) -> list:
-        return self.read_configuration(
+        value = self.read_configuration(
             "DisabledAlerts", "disabled_detections", []
         )
+        return value if isinstance(value, list) else []
 
     def evidence_signal_default(self) -> str:
         value = self.read_configuration(
