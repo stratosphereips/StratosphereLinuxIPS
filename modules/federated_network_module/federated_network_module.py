@@ -2021,23 +2021,66 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _get_simulated_gt(self, flow: dict) -> Optional[str]:
         """
-        Derive ground-truth label from Slips flow metadata.
+        Derive ground-truth label for simulation/testing.
 
-        Falls back through: ground_truth_label -> label -> None.
-        Additionally, in simulation/testing contexts, labels any flow involving
-        the attacker IP as MALICIOUS regardless of Slips metadata.
-        Remove this block in production deployments.
+        Resolution order (first hit wins):
+          1. Netflow-labeler standard: a zeek-flow ``ground_truth_label`` (or the
+             detailed variant) present in the flow dict — the canonical way to
+             feed labeled flows / runtime-labeled flows into Slips.
+          2. Runtime attack-IP allow-list injected by the experiment runtime at
+             ``/opt/network-setup/simulated_attackers.txt`` (one IPv4 per line;
+             re-read on file mtime change so the experiment runner can plug the
+             static attacker + aracne pivot address in live, no restart).
+          3. Otherwise BENIGN.
         """
-        # --- MONKEYPATCH: simulation-only attacker IP ---
-        # TODO: Remove before production deployment
+        gt = flow.get("ground_truth_label") or flow.get(
+            "detailed_ground_truth_label"
+        )
+        if gt:
+            low = str(gt).strip().lower()
+            if low.startswith(("mal", "attack")):
+                return MALICIOUS
+            if low.startswith(("ben", "norm")):
+                return BENIGN
+
         saddr = str(flow.get("saddr", ""))
         daddr = str(flow.get("daddr", ""))
-        return (
-            MALICIOUS
-            if (saddr == "172.20.1.4" or daddr == "172.20.1.4")
-            else BENIGN
-        )
-        # --- END MONKEYPATCH ---
+        for ip in self._simulated_attackers():
+            if saddr == ip or daddr == ip:
+                return MALICIOUS
+        return BENIGN
+
+    _SIM_ATTACKERS_PATH = "/opt/network-setup/simulated_attackers.txt"
+
+    def _simulated_attackers(self):
+        """Read the runtime attack-IP allow-list, cached on file mtime.
+
+        Path can be overridden via env FL_SIM_ATTACKERS. Missing file -> no
+        extra rules (matches pre-runtime behavior, benign by default).
+        """
+        import os
+
+        path = os.environ.get("FL_SIM_ATTACKERS", self._SIM_ATTACKERS_PATH)
+        try:
+            mtime = os.path.getmtime(path)
+        except OSError:
+            return ()
+        cache = getattr(self, "_sim_attackers_cache", None)
+        if cache and cache[0] == mtime and cache[1] == path:
+            return cache[2]
+        ips = []
+        try:
+            with open(path, "r") as fh:
+                for line in fh:
+                    token = line.strip()
+                    if not token or token.startswith("#"):
+                        continue
+                    ips.append(token.split()[0])
+        except OSError:
+            return ()
+        frozen = tuple(ips)
+        self._sim_attackers_cache = (mtime, path, frozen)
+        return frozen
 
     def _get_flow_id(self, flow: dict) -> str:
         """Generate unique flow ID. Prefer Zeek uid, fallback to 5-tuple + time."""
