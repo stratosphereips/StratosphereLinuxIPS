@@ -5,6 +5,7 @@ from datetime import timedelta
 import os
 import sys
 from slips_files.common.input_type import InputType
+from slips_files.common.ips import LOCALHOST_HOSTNAME
 import ipaddress
 from typing import (
     List,
@@ -1491,3 +1492,603 @@ class ConfigParser(object):
             "bootstrapping_modules",
             ["fides", "iris"],
         )
+
+    # ---- BEGIN borrowed-from-develop config accessors (f43a2b07f gap fix) ----
+    def alert_summary_allowed_backends(self) -> list:
+        value = self.read_configuration(
+            "alert_summary", "allowed_backends", []
+        )
+        if not isinstance(value, list):
+            return []
+        return [
+            str(backend).strip() for backend in value if str(backend).strip()
+        ]
+
+    def alert_summary_enabled(self) -> bool:
+        value = self.read_configuration("alert_summary", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_history_enabled(self) -> bool:
+        value = self.read_configuration(
+            "alert_summary", "history_enabled", False
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def alert_summary_history_max_alerts(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "history_max_alerts", 3
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 3
+        return max(0, value)
+
+    def alert_summary_history_max_tokens(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "history_max_tokens", 700
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 700
+        return max(0, value)
+
+    def alert_summary_history_patterns_per_alert(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "history_patterns_per_alert", 2
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 2
+        return max(0, value)
+
+    def alert_summary_llm_max_tokens(self) -> int:
+        value = self.read_configuration("alert_summary", "llm_max_tokens", 220)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 220
+        return max(1, value)
+
+    def alert_summary_llm_response_timeout_seconds(self) -> int:
+        value = self.read_configuration(
+            "alert_summary", "llm_response_timeout_seconds", 120
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 120
+        return max(0, value)
+
+    def alert_summary_llm_temperature(self) -> float:
+        value = self.read_configuration(
+            "alert_summary", "llm_temperature", 0.2
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.2
+        return max(0.0, value)
+
+    def alert_summary_log_verbosity(self) -> int:
+        value = self.read_configuration("alert_summary", "log_verbosity", 2)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 2
+        return min(max(value, 0), 3)
+
+    def evidence_signal_default(self) -> str:
+        value = self.read_configuration(
+            "EvidenceSignals", "default_signal", "PAMP"
+        )
+        if not isinstance(value, str):
+            return "PAMP"
+        value = value.strip().upper()
+        if value not in ("PAMP", "DAMP"):
+            return "PAMP"
+        return value
+
+    def evidence_signal_overrides(self) -> dict:
+        overrides = self.read_configuration("EvidenceSignals", "overrides", {})
+        if not isinstance(overrides, dict):
+            return {}
+
+        sanitized = {}
+        for evidence_type, signal in overrides.items():
+            if not isinstance(evidence_type, str):
+                continue
+            if not isinstance(signal, str):
+                continue
+            normalized_signal = signal.strip().upper()
+            if normalized_signal not in ("PAMP", "DAMP"):
+                continue
+            sanitized[evidence_type.strip().upper()] = normalized_signal
+        return sanitized
+
+    def idmef_manager_client_certificate(self):
+        return self.idmef_manager_config().get("client_certificate", "")
+
+    def idmef_manager_client_private_key(self):
+        return self.idmef_manager_config().get("client_private_key", "")
+
+    def idmef_manager_config(self) -> dict:
+        """
+        Returns the nested 'idmef_manager' mapping from the exporting_alerts
+        section (url, client_certificate, client_private_key, trusted_ca,
+        timeout), or an empty dict if it's not configured.
+        """
+        conf = self.read_configuration("exporting_alerts", "idmef_manager", {})
+        return conf if isinstance(conf, dict) else {}
+
+    def idmef_manager_timeout(self):
+        timeout = self.idmef_manager_config().get("timeout", 10)
+        try:
+            timeout = float(timeout)
+        except (ValueError, TypeError):
+            timeout = 10
+        return max(1.0, timeout)
+
+    def idmef_manager_trusted_ca(self):
+        return self.idmef_manager_config().get("trusted_ca", "")
+
+    def idmef_manager_url(self):
+        return self.idmef_manager_config().get(
+            "url", f"https://{LOCALHOST_HOSTNAME}:8443/"
+        )
+
+    def llm_backends(self) -> dict:
+        backends = self.read_configuration("llm_proxy", "backends", {})
+        return backends if isinstance(backends, dict) else {}
+
+    def llm_default_backend(self) -> str:
+        value = self.read_configuration("llm_proxy", "default_backend", "")
+        return str(value or "").strip()
+
+    def llm_enabled(self) -> bool:
+        value = self.read_configuration("llm_proxy", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def llm_queue_size(self) -> int:
+        value = self.read_configuration("llm_proxy", "queue_size", 100)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 100
+        return max(1, value)
+
+    def llm_worker_threads(self) -> int:
+        value = self.read_configuration("llm_proxy", "worker_threads", 2)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 2
+        return max(1, value)
+
+    def regex_generator_allowed_backends(self) -> list:
+        value = self.read_configuration(
+            "regex_generator", "allowed_backends", []
+        )
+        if not isinstance(value, list):
+            return []
+        return [
+            str(backend).strip() for backend in value if str(backend).strip()
+        ]
+
+    def regex_generator_benign_match_strength_threshold(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "benign_match_strength_threshold", 75
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 75.0
+        return max(0.0, min(100.0, value))
+
+    def regex_generator_create_log_file(self) -> bool:
+        value = self.read_configuration(
+            "regex_generator", "create_log_file", False
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def regex_generator_enabled(self) -> bool:
+        value = self.read_configuration("regex_generator", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def regex_generator_generation_interval_seconds(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "generation_interval_seconds", 5
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 5
+        return max(0.0, value)
+
+    def regex_generator_llm_max_tokens(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "llm_max_tokens", 80
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 80
+        return max(1, value)
+
+    def regex_generator_llm_response_timeout_seconds(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "llm_response_timeout_seconds", 90
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 90
+        return max(0, value)
+
+    def regex_generator_llm_temperature(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "llm_temperature", 1.2
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 1.2
+        return max(0.0, value)
+
+    def regex_generator_max_regex_length(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "max_regex_length", 180
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 180
+        return max(1, value)
+
+    def regex_generator_recent_history_size(self) -> int:
+        value = self.read_configuration(
+            "regex_generator", "recent_history_size", 0
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 0
+        return max(0, value)
+
+    def regex_generator_regex_validation_timeout_seconds(self) -> float:
+        value = self.read_configuration(
+            "regex_generator", "regex_validation_timeout_seconds", 2
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 2.0
+        return max(0.0, value)
+
+    def regex_generator_type_weights(self) -> dict:
+        default_weights = {
+            "dns_domain": 1,
+            "uri": 1,
+            "filename": 1,
+            "tls_sni": 1,
+            "certificate_cn": 1,
+        }
+        value = self.read_configuration(
+            "regex_generator", "type_weights", default_weights
+        )
+        if not isinstance(value, dict):
+            return default_weights
+
+        sanitized_weights = {}
+        for regex_type, default_weight in default_weights.items():
+            raw_weight = value.get(regex_type, default_weight)
+            try:
+                raw_weight = float(raw_weight)
+            except (TypeError, ValueError):
+                raw_weight = default_weight
+            sanitized_weights[regex_type] = max(0.0, raw_weight)
+
+        if not any(sanitized_weights.values()):
+            return default_weights
+        return sanitized_weights
+
+    def t_cell_anergy_ttl_seconds(self) -> int:
+        value = self.read_configuration("t_cell", "anergy_ttl_seconds", 21600)
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 21600
+        return max(0, value)
+
+    def t_cell_co_stimulation_threshold(self) -> float:
+        value = self.read_configuration(
+            "t_cell", "co_stimulation_threshold", 0.65
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.65
+        return max(0.0, min(1.0, value))
+
+    def t_cell_co_stimulation_weights(self) -> dict:
+        default_weights = {
+            "confidence": 0.35,
+            "related_pamps": 0.25,
+            "danger": 0.40,
+        }
+        value = self.read_configuration(
+            "t_cell", "co_stimulation_weights", default_weights
+        )
+        if not isinstance(value, dict):
+            return default_weights
+
+        sanitized_weights = {}
+        for weight_name, default_weight in default_weights.items():
+            raw_weight = value.get(weight_name, default_weight)
+            try:
+                raw_weight = float(raw_weight)
+            except (TypeError, ValueError):
+                raw_weight = default_weight
+            sanitized_weights[weight_name] = max(0.0, raw_weight)
+
+        if not any(sanitized_weights.values()):
+            return default_weights
+        return sanitized_weights
+
+    def t_cell_context_recent_window_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "context_recent_window_seconds", 1800
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 1800
+        return max(1, value)
+
+    def t_cell_create_log_file(self) -> bool:
+        value = self.read_configuration("t_cell", "create_log_file", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_damp_danger_weight(self) -> float:
+        value = self.read_configuration("t_cell", "damp_danger_weight", 1.5)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 1.5
+        return max(0.0, value)
+
+    def t_cell_danger_saturation(self) -> float:
+        value = self.read_configuration("t_cell", "danger_saturation", 2.5)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 2.5
+        return max(0.01, value)
+
+    def t_cell_decision_trace_file(self) -> str:
+        value = self.read_configuration(
+            "t_cell", "decision_trace_file", "t_cell_trace.jsonl"
+        )
+        if not isinstance(value, str) or not value.strip():
+            return "t_cell_trace.jsonl"
+        return value.strip()
+
+    def t_cell_decision_trace_max_evidence(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "decision_trace_max_evidence", 10
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 10
+        return max(1, value)
+
+    def t_cell_decision_trace_mode(self) -> int:
+        value = self.read_configuration("t_cell", "decision_trace_mode", "off")
+        if isinstance(value, bool):
+            return 1 if value else 0
+        if isinstance(value, (int, float)):
+            return max(0, min(2, int(value)))
+
+        normalized = str(value).strip().lower()
+        named_levels = {
+            "off": 0,
+            "disabled": 0,
+            "none": 0,
+            "transitions": 1,
+            "transition": 1,
+            "state_changes": 1,
+            "changes": 1,
+            "all": 2,
+            "full": 2,
+            "debug": 2,
+        }
+        if normalized in named_levels:
+            return named_levels[normalized]
+        try:
+            return max(0, min(2, int(normalized)))
+        except (TypeError, ValueError):
+            return 0
+
+    def t_cell_effector_cooldown_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "effector_cooldown_seconds", 1800
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 1800
+        return max(0, value)
+
+    def t_cell_effector_min_related_count(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "effector_min_related_count", 4
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 4
+        return max(1, value)
+
+    def t_cell_effector_threshold(self) -> float:
+        value = self.read_configuration("t_cell", "effector_threshold", 0.70)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.70
+        return max(0.0, min(1.0, value))
+
+    def t_cell_enabled(self) -> bool:
+        value = self.read_configuration("t_cell", "enabled", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_log_colors(self) -> bool:
+        value = self.read_configuration("t_cell", "log_colors", True)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def t_cell_log_verbosity(self) -> int:
+        value = self.read_configuration("t_cell", "log_verbosity", 1)
+        if isinstance(value, bool):
+            return 1
+        if isinstance(value, (int, float)):
+            value = int(value)
+        else:
+            normalized = str(value).strip().lower()
+            named_levels = {
+                "summary": 1,
+                "decision": 2,
+                "decisions": 2,
+                "debug": 3,
+            }
+            if normalized in named_levels:
+                value = named_levels[normalized]
+            else:
+                try:
+                    value = int(normalized)
+                except (TypeError, ValueError):
+                    value = 1
+        return max(1, min(3, int(value)))
+
+    def t_cell_memory_min_related_count(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "memory_min_related_count", 3
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 3
+        return max(1, value)
+
+    def t_cell_memory_threshold(self) -> float:
+        value = self.read_configuration("t_cell", "memory_threshold", 0.60)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.60
+        return max(0.0, min(1.0, value))
+
+    def t_cell_memory_trend_ratio_max(self) -> float:
+        value = self.read_configuration(
+            "t_cell", "memory_trend_ratio_max", 0.60
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 0.60
+        return max(0.0, value)
+
+    def t_cell_novelty_window_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "novelty_window_seconds", 86400
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 86400
+        return max(1, value)
+
+    def t_cell_observation_retention_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "observation_retention_seconds", 604800
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 604800
+        return max(0, value)
+
+    def t_cell_priming_profiles(self) -> dict:
+        default_profiles = {
+            "PAMP": {
+                "strength": 1.0,
+                "co_stimulation_threshold_offset": 0.0,
+                "effector_threshold_offset": 0.0,
+                "memory_threshold_offset": 0.0,
+                "state_wait_timeout_factor": 1.0,
+                "effector_min_related_count_offset": 0,
+                "memory_min_related_count_offset": 0,
+            },
+            "DAMP": {
+                "strength": 0.6,
+                "co_stimulation_threshold_offset": 0.15,
+                "effector_threshold_offset": 0.10,
+                "memory_threshold_offset": 0.05,
+                "state_wait_timeout_factor": 0.5,
+                "effector_min_related_count_offset": 1,
+                "memory_min_related_count_offset": 1,
+            },
+        }
+        value = self.read_configuration(
+            "t_cell", "priming_profiles", default_profiles
+        )
+        if not isinstance(value, dict):
+            return default_profiles
+        return value
+
+    def t_cell_related_lookback_seconds(self) -> int:
+        value = self.read_configuration(
+            "t_cell", "related_lookback_seconds", 3600
+        )
+        try:
+            value = int(value)
+        except (TypeError, ValueError):
+            value = 3600
+        return max(1, value)
+
+    def t_cell_related_pamps_saturation(self) -> float:
+        value = self.read_configuration(
+            "t_cell", "related_pamps_saturation", 5
+        )
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            value = 5.0
+        return max(0.01, value)
+
+    def t_cell_simulate_effector_without_blocking(self) -> bool:
+        value = self.read_configuration(
+            "t_cell", "simulate_effector_without_blocking", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    # ---- END borrowed-from-develop config accessors ----

@@ -161,11 +161,22 @@ class Trust(IModule):
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
 
     def get_local_IP(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+        # Preferred: learn the primary local IP by opening a UDP socket toward a
+        # public address (no packets are sent). This needs a default route.
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            return local_ip
+        except OSError:
+            # Air-gapped/offline networks have no default route, so the UDP
+            # "connect" fails. Fall back to the hostname's address (Docker's
+            # embedded DNS maps the peer hostname to its eth0 IP), then loopback.
+            try:
+                return socket.gethostbyname(socket.gethostname())
+            except OSError:
+                return "127.0.0.1"
 
     def get_available_port(self) -> int:
         for port in range(32768, 65535):
