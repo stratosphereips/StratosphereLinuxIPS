@@ -26,27 +26,6 @@ from slips_files.core.structures.risk_weights import RiskWeight
 
 
 @pytest.mark.parametrize(
-    "configured_name",
-    [
-        "CONNECTION_WITHOUT_DNS",
-        "ConnectionWithoutDNS",
-        "EvidenceType.CONNECTION_WITHOUT_DNS",
-        "connection-without-dns",
-    ],
-)
-def test_is_detection_disabled_accepts_canonical_and_legacy_names(
-    configured_name: str,
-) -> None:
-    """Verify disabled detections survive enum and config-name migrations."""
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.disabled_detections = [configured_name]
-
-    assert alert_handler.is_detection_disabled(
-        EvidenceType.CONNECTION_WITHOUT_DNS
-    )
-
-
-@pytest.mark.parametrize(
     "set_return_value, expected_result",
     [
         (True, True),
@@ -306,7 +285,7 @@ def test_set_evidence(
     db = ModuleFactory().create_alert_handler_obj()
 
     db.add_profile = Mock()
-    db.is_detection_disabled = Mock(return_value=False)
+    db.conf.disabled_detections = Mock(return_value=[])
     db.publish = Mock()
     db.set_flow_causing_evidence = Mock()
     db._get_more_info_about_evidence = Mock(side_effect=lambda e: e)

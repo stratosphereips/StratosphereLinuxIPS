@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import json
-import re
 from typing import (
     List,
     Tuple,
@@ -43,7 +42,7 @@ class AlertHandler:
     channels: Any
     default_ttl: int
     width: float
-    disabled_detections: Any
+    conf: Any
     default_evidence_signal: str
     evidence_signal_overrides: Dict[str, str]
     publish: Callable[..., Any]
@@ -158,32 +157,6 @@ class AlertHandler:
             if evidence_details.get("ID") == evidence_id:
                 # found an evidence that has a matching ID
                 return evidence_details
-
-    def is_detection_disabled(self, evidence_type: EvidenceType) -> bool:
-        """
-        Check whether the configured disabled list contains a detection.
-
-        Parameters:
-            evidence_type: Detection type about to enter the evidence pipeline.
-
-        Returns:
-            True when the detection is disabled in the active configuration.
-        """
-        configured_detections = self.disabled_detections or []
-        if isinstance(configured_detections, str):
-            configured_detections = [configured_detections]
-
-        evidence_name = str(evidence_type).rsplit(".", 1)[-1].upper()
-        for configured_detection in configured_detections:
-            configured_name = str(configured_detection).strip()
-            configured_name = configured_name.rsplit(".", 1)[-1]
-            configured_name = re.sub(
-                r"(?<=[a-z0-9])(?=[A-Z])", "_", configured_name
-            )
-            configured_name = re.sub(r"[^A-Za-z0-9]+", "_", configured_name)
-            if configured_name.strip("_").upper() == evidence_name:
-                return True
-        return False
 
     def _classify_evidence_signal(
         self, evidence_type: EvidenceType
@@ -367,7 +340,7 @@ class AlertHandler:
         )
 
         # Ignore evidence if it's disabled in the configuration file
-        if self.is_detection_disabled(evidence.evidence_type):
+        if evidence.evidence_type in self.conf.disabled_detections():
             return False
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)

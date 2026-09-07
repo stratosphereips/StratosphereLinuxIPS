@@ -82,10 +82,6 @@ class DBManager:
         self.rdb = RedisDB(
             self.logger, redis_port, output_dir, start_redis_server, **kwargs
         )
-        # RedisDB is a per-port singleton. Module processes may inherit or
-        # reuse that object, so refresh process-local configuration from the
-        # ConfigParser instance that belongs to this DBManager.
-        self.rdb.disabled_detections = self.conf.disabled_detections()
         self.constants = self.rdb.constants
 
         self.trust_db = None
@@ -879,12 +875,10 @@ class DBManager:
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
-        # A process from a completed/replaced run must never publish evidence
-        # into the Redis database now owned by another run.
         if not self.rdb.belongs_to_run(self.output_dir):
             return False
 
-        if self.conf.disabled_detections(evidence.evidence_type):
+        if evidence.evidence_type in self.conf.disabled_detections():
             return
 
         # whitelisted evidence are deleted from the db, so we need to check

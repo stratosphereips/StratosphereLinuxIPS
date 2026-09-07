@@ -91,9 +91,13 @@ class ModuleFactory:
         )
         conf.regex_generator_persistent_store_dir = Mock(return_value="")
         conf.regex_generator_store_rejected_regexes = Mock(return_value=False)
-        conf.regex_generator_max_stored_rejected_regexes = Mock(return_value=10000)
+        conf.regex_generator_max_stored_rejected_regexes = Mock(
+            return_value=10000
+        )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
-        conf.t_cell_store_dir = Mock(return_value=os.path.join(output_dir, "t_cell"))
+        conf.t_cell_store_dir = Mock(
+            return_value=os.path.join(output_dir, "t_cell")
+        )
         conf.t_cell_persistent_store_dir = Mock(return_value="")
         conf.tranco_top_benign_limit = Mock(return_value=1000)
 
@@ -219,14 +223,22 @@ class ModuleFactory:
         conf.regex_generator_enabled = Mock(return_value=True)
         conf.regex_generator_create_log_file = Mock(return_value=False)
         conf.regex_generator_generation_interval_seconds = Mock(return_value=5)
-        conf.regex_generator_allowed_backends = Mock(return_value=["local_qwen"])
+        conf.regex_generator_allowed_backends = Mock(
+            return_value=["local_qwen"]
+        )
         conf.regex_generator_llm_temperature = Mock(return_value=1.2)
         conf.regex_generator_llm_max_tokens = Mock(return_value=80)
-        conf.regex_generator_llm_response_timeout_seconds = Mock(return_value=90)
+        conf.regex_generator_llm_response_timeout_seconds = Mock(
+            return_value=90
+        )
         conf.regex_generator_recent_history_size = Mock(return_value=0)
         conf.regex_generator_max_regex_length = Mock(return_value=180)
-        conf.regex_generator_regex_validation_timeout_seconds = Mock(return_value=2)
-        conf.regex_generator_benign_match_strength_threshold = Mock(return_value=75)
+        conf.regex_generator_regex_validation_timeout_seconds = Mock(
+            return_value=2
+        )
+        conf.regex_generator_benign_match_strength_threshold = Mock(
+            return_value=75
+        )
         conf.regex_generator_type_weights = Mock(
             return_value={
                 "dns_domain": 1,
@@ -239,7 +251,9 @@ class ModuleFactory:
         conf.regex_generator_store_dir = Mock(return_value=store_dir)
         conf.regex_generator_persistent_store_dir = Mock(return_value="")
         conf.regex_generator_store_rejected_regexes = Mock(return_value=False)
-        conf.regex_generator_max_stored_rejected_regexes = Mock(return_value=10000)
+        conf.regex_generator_max_stored_rejected_regexes = Mock(
+            return_value=10000
+        )
         conf.regex_generator_seed_benign_samples = Mock(return_value=True)
         conf.tranco_top_benign_limit = Mock(return_value=1000)
         conf.rotation = Mock(return_value=True)
@@ -275,7 +289,9 @@ class ModuleFactory:
         conf.alert_summary_log_verbosity = Mock(return_value=2)
         conf.alert_summary_llm_temperature = Mock(return_value=0.2)
         conf.alert_summary_llm_max_tokens = Mock(return_value=220)
-        conf.alert_summary_llm_response_timeout_seconds = Mock(return_value=120)
+        conf.alert_summary_llm_response_timeout_seconds = Mock(
+            return_value=120
+        )
         conf.alert_summary_history_enabled = Mock(return_value=True)
         conf.alert_summary_history_max_alerts = Mock(return_value=3)
         conf.alert_summary_history_max_tokens = Mock(return_value=700)
@@ -325,7 +341,9 @@ class ModuleFactory:
         conf.t_cell_log_colors = Mock(return_value=True)
         conf.t_cell_log_verbosity = Mock(return_value=1)
         conf.t_cell_decision_trace_mode = Mock(return_value=0)
-        conf.t_cell_decision_trace_file = Mock(return_value="t_cell_trace.jsonl")
+        conf.t_cell_decision_trace_file = Mock(
+            return_value="t_cell_trace.jsonl"
+        )
         conf.t_cell_decision_trace_max_evidence = Mock(return_value=10)
         conf.get_tw_width_in_seconds = Mock(return_value=3600.0)
         conf.t_cell_store_dir = Mock(return_value="dummy_output_dir/t_cell")
@@ -374,7 +392,9 @@ class ModuleFactory:
         conf.t_cell_memory_threshold = Mock(return_value=0.60)
         conf.t_cell_memory_trend_ratio_max = Mock(return_value=0.60)
         conf.t_cell_memory_min_related_count = Mock(return_value=3)
-        conf.t_cell_simulate_effector_without_blocking = Mock(return_value=True)
+        conf.t_cell_simulate_effector_without_blocking = Mock(
+            return_value=True
+        )
 
         args = Mock()
         args.interface = None
@@ -407,7 +427,9 @@ class ModuleFactory:
         from modules.fides.fides import FidesModule
 
         db_path = os.path.join("permanent", "databases", "fides_p2p_db.sqlite")
-        config_path = os.path.join("modules", "fides", "config", "fides.conf.yml")
+        config_path = os.path.join(
+            "modules", "fides", "config", "fides.conf.yml"
+        )
 
         def get_permanent_database_path(_filename):
             os.makedirs(os.path.dirname(db_path), exist_ok=True)
@@ -454,7 +476,9 @@ class ModuleFactory:
     def create_arp_obj(self, mock_db):
         from modules.arp.arp import ARP
 
-        with patch("modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()):
+        with patch(
+            "modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()
+        ):
             arp = ARP(
                 logger=self.logger,
                 output_dir="dummy_output_dir",
@@ -552,7 +576,9 @@ class ModuleFactory:
 
         with (
             patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
-            patch("slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"),
+            patch(
+                "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
+            ),
         ):
             trust_db = TrustDB(
                 logger=self.logger,
@@ -617,7 +643,9 @@ class ModuleFactory:
                 "modules.blocking.blocking.shutil.which",
                 return_value="/sbin/iptables",
             ),
-            patch.object(Blocking, "_init_chains_in_firewall", return_value=None),
+            patch.object(
+                Blocking, "_init_chains_in_firewall", return_value=None
+            ),
         ):
             blocking = Blocking(
                 logger=self.logger,
@@ -639,7 +667,9 @@ class ModuleFactory:
     def create_unblocker_obj(self, mock_db):
         from modules.blocking.unblocker import Unblocker
 
-        with patch.object(Unblocker, "_start_checker_thread", return_value=None):
+        with patch.object(
+            Unblocker, "_start_checker_thread", return_value=None
+        ):
             unblocker = Unblocker(
                 mock_db,
                 "",  # sudo
@@ -785,7 +815,9 @@ class ModuleFactory:
         return ip_info
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_input_obj(self, input_information, input_type, mock_db, line_type=False):
+    def create_input_obj(
+        self, input_information, input_type, mock_db, line_type=False
+    ):
         from slips_files.core.input import Input
         from slips_files.core.output import Output
 
@@ -1012,7 +1044,9 @@ class ModuleFactory:
         symbol = SymbolHandler(self.logger, mock_db)
         profileid = "profile_id"
         twid = "timewindow1"
-        flow_handler = FlowHandler(mock_db, symbol, flow, profileid, twid, False)
+        flow_handler = FlowHandler(
+            mock_db, symbol, flow, profileid, twid, False
+        )
         return flow_handler
 
     @patch(DB_MANAGER, name="mock_db")
@@ -1264,6 +1298,7 @@ class ModuleFactory:
 
         worker.db = mock_db
         worker.print = Mock()
+        worker.conf.disabled_detections = Mock(return_value=[])
         return worker
 
     def create_evidence_loggr_obj(self):
@@ -1284,7 +1319,9 @@ class ModuleFactory:
                 "slips_files.core.evidence_logger.ConfigParser",
                 return_value=conf,
             ),
-            patch("slips_files.core.evidence_logger.utils.change_logfiles_ownership"),
+            patch(
+                "slips_files.core.evidence_logger.utils.change_logfiles_ownership"
+            ),
             patch.object(
                 EvidenceLogger,
                 "clean_file",
@@ -1316,7 +1353,9 @@ class ModuleFactory:
         )
         cesnet.db = mock_db
         cesnet.wclient = MagicMock()
-        cesnet.node_info = [{"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}]
+        cesnet.node_info = [
+            {"Name": "TestNode", "Type": ["IPS"], "SW": ["Slips"]}
+        ]
 
         cesnet.print = MagicMock()
         return cesnet
@@ -1382,6 +1421,8 @@ class ModuleFactory:
         from slips_files.core.database.redis_db.constants import Constants
 
         alert_handler = AlertHandler()
+        alert_handler.conf = Mock()
+        alert_handler.conf.disabled_detections = Mock(return_value=[])
         alert_handler.constants = Constants()
         alert_handler.default_ttl = 3600
         alert_handler.extended_ttl = 3600
@@ -1479,14 +1520,18 @@ class ModuleFactory:
             ),
             "conf": MagicMock(
                 enable_metadata=MagicMock(return_value=True),
-                whitelist_path=MagicMock(return_value="/path/to/whitelist.conf"),
+                whitelist_path=MagicMock(
+                    return_value="/path/to/whitelist.conf"
+                ),
                 export_to=MagicMock(return_value=[]),
                 use_local_p2p=MagicMock(return_value=False),
                 use_global_p2p=MagicMock(return_value=False),
                 send_to_warden=MagicMock(return_value=False),
                 receive_from_warden=MagicMock(return_value=False),
                 read_configuration=MagicMock(
-                    side_effect=(lambda section, name, default_value: default_value)
+                    side_effect=(
+                        lambda section, name, default_value: default_value
+                    )
                 ),
                 evidence_detection_threshold=MagicMock(return_value=0.5),
             ),

@@ -527,7 +527,7 @@ class EvidenceHandlerWorker(IModule):
         twid = str(evidence.timewindow)
         # Do not trust publishers to enforce this setting. A delayed process
         # from a replaced run can still publish briefly while shutting down.
-        if self.db.is_detection_disabled(evidence.evidence_type) is True:
+        if evidence.evidence_type in self.conf.disabled_detections():
             self.db.delete_evidence(profileid, twid, evidence.id)
             return
 

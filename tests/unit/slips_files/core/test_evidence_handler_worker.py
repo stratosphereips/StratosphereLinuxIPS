@@ -481,7 +481,9 @@ def test_disabled_evidence_message_is_deleted_without_processing() -> None:
         uid=["uid-disabled"],
         timestamp="2024/10/04 15:45:30.123456+0000",
     )
-    worker.db.is_detection_disabled.return_value = True
+    worker.conf.disabled_detections.return_value = [
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    ]
 
     worker.handle_evidence_added_message(
         {"data": json.dumps(utils.to_dict(evidence))}

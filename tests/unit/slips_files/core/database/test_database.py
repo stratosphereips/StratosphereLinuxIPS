@@ -121,24 +121,19 @@ def test_release_alert_claim_forwards_to_redis() -> None:
     )
 
 
-def test_db_manager_refreshes_singleton_disabled_detections() -> None:
-    """Verify every DBManager applies its process-local active config."""
+def test_set_evidence_skips_disabled_detections() -> None:
+    """Verify set_evidence ignores evidence types disabled in the config."""
     db = ModuleFactory().create_db_manager_obj(
         6379,
-        disabled_detections=["CONNECTION_WITHOUT_DNS"],
+        disabled_detections=[EvidenceType.CONNECTION_WITHOUT_DNS],
     )
 
-    # Reproduce another DBManager overwriting the per-port Redis singleton.
-    db.rdb.disabled_detections = []
-
-    assert db.is_detection_disabled(EvidenceType.CONNECTION_WITHOUT_DNS)
-    assert db.rdb.disabled_detections == ["CONNECTION_WITHOUT_DNS"]
-
     evidence = Mock(evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS)
+    db.rdb.belongs_to_run = Mock(return_value=True)
     db.rdb.set_evidence = Mock()
     db.sqlite = Mock()
 
-    assert db.set_evidence(evidence) is False
+    assert db.set_evidence(evidence) is None
     db.rdb.set_evidence.assert_not_called()
     db.sqlite.add_evidence.assert_not_called()
 
@@ -148,7 +143,6 @@ def test_set_evidence_records_the_producing_module() -> None:
     db = ModuleFactory().create_db_manager_obj(6379)
     db.source_module = "conn_analyzer"
     db.rdb.belongs_to_run = Mock(return_value=True)
-    db.is_detection_disabled = Mock(return_value=False)
     db._get_evidence_interface = Mock(return_value="eth0")
     db.rdb.set_evidence = Mock(return_value=True)
     db.sqlite = Mock()
