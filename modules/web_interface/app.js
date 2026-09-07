@@ -1240,6 +1240,9 @@ async function loadFirewall() {
   const payload = await api("firewall", `/api/firewall?${params}`);
   if (!payload) return;
   byId("firewall-badge").textContent = compact(payload.total);
+  byId("firewall-disabled").hidden = payload.enabled;
+  byId("firewall-stats").hidden = !payload.enabled;
+  if (!payload.enabled) return;
   byId("firewall-count").textContent = `${payload.page_size} active enforcement record${payload.page_size === 1 ? "" : "s"}`;
   const impact = payload.impact || {};
   setSummaryCards([
@@ -1336,9 +1339,13 @@ async function loadArpPoisoning() {
   const counts = payload.counts || {};
   const module = payload.module || {};
   byId("arp-poisoning-badge").textContent = compact(counts.active);
-  byId("arp-poisoning-status").textContent = module.enabled
-    ? `arp_poisoner is ${module.state}${module.pid ? ` · PID ${module.pid}` : ""}.`
-    : "arp_poisoner did not start in this run.";
+  byId("arp-poisoning-disabled").hidden = module.enabled;
+  byId("arp-poisoning-stats").hidden = !module.enabled;
+  if (!module.enabled) {
+    byId("arp-poisoning-status").textContent = "ARP poisoning not enabled in this run.";
+    return;
+  }
+  byId("arp-poisoning-status").textContent = `arp_poisoner is ${module.state}${module.pid ? ` · PID ${module.pid}` : ""}.`;
   setSummaryCards([
     ["Module", module.state || "not started"],
     ["Poisoned now", compact(counts.active)],
@@ -1393,9 +1400,15 @@ async function loadP2P() {
   if (!payload) return;
   const counts = payload.counts || {};
   byId("p2p-badge").textContent = compact(counts.connected);
-  byId("p2p-status").textContent = payload.enabled
-    ? (counts.connected ? `${counts.connected} peer${counts.connected === 1 ? "" : "s"} connected now.` : "P2P is running and listening; no peers are connected now.")
-    : "P2P is not running for this Slips run.";
+  byId("p2p-disabled").hidden = payload.enabled;
+  byId("p2p-stats").hidden = !payload.enabled;
+  if (!payload.enabled) {
+    byId("p2p-status").textContent = "P2P not enabled in this run.";
+    return;
+  }
+  byId("p2p-status").textContent = counts.connected
+    ? `${counts.connected} peer${counts.connected === 1 ? "" : "s"} connected now.`
+    : "P2P is running and listening; no peers are connected now.";
   setSummaryCards([
     ["Connected peers", compact(counts.connected)],
     ["Known peers", compact(counts.known)],
@@ -2841,4 +2854,5 @@ window.addEventListener("beforeunload", () => {
 initDrawerResize();
 window.setInterval(renderHeaderUptime, 1000);
 loadOverview().then(schedulePoll).catch(schedulePoll);
+loadWhitelists().catch(() => {});
 scheduleBackendStatusPoll();

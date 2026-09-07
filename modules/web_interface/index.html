@@ -124,53 +124,62 @@
 
     <section id="firewall" class="panel" aria-labelledby="firewall-title">
       <div class="section-heading"><div><p class="eyebrow">ENFORCEMENT</p><h2 id="firewall-title">Firewall blocks</h2><p>Confirmed active blocks, final probation windows, and durable rule transitions.</p></div><button class="secondary refresh-list" data-target="firewall">Refresh</button></div>
-      <article class="surface">
-        <h3>Estimated attacks stopped</h3>
-        <p class="muted">Run-wide traffic observed from blocked IPs during recorded enforcement intervals. These packets were visible at capture time but are estimated to have been dropped before reaching a service.</p>
-        <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
-      </article>
-      <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Rule origin</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
-      <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
-      <div id="firewall-history-pager" class="pager"></div>
+      <article id="firewall-disabled" class="surface empty-state" hidden><p>Firewall not enabled in this run.</p></article>
+      <div id="firewall-stats">
+        <article class="surface">
+          <h3>Estimated attacks stopped</h3>
+          <p class="muted">Run-wide traffic observed from blocked IPs during recorded enforcement intervals. These packets were visible at capture time but are estimated to have been dropped before reaching a service.</p>
+          <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
+        </article>
+        <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Rule origin</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
+        <div id="firewall-history-pager" class="pager"></div>
+      </div>
     </section>
 
     <section id="arp-poisoning" class="panel" aria-labelledby="arp-poisoning-title">
       <div class="section-heading"><div><p class="eyebrow">LOCAL ISOLATION</p><h2 id="arp-poisoning-title">ARP poisoning</h2><p id="arp-poisoning-status">Loading ARP detector and isolation state…</p></div><button class="secondary refresh-list" data-target="arp-poisoning">Refresh</button></div>
-      <div id="arp-poisoning-summary" class="summary-grid"></div>
-      <div class="toolbar"><input id="arp-poisoning-search" type="search" placeholder="Search IP, MAC, state, TW, or evidence…"><span id="arp-poisoning-count" class="result-count"></span></div>
-      <article class="surface table-surface">
-        <div class="table-heading"><div><h3>Isolation state</h3><p>Hosts currently poisoned or previously released in this run.</p></div></div>
-        <div class="table-wrap"><table id="arp-poisoning-hosts-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="poisoned_at">Poisoned since</th><th data-sort="unblock_at">Release at</th><th data-sort="released_at">Released at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="mac">MAC</th></tr></thead><tbody></tbody></table></div>
-      </article>
-      <article class="surface table-surface">
-        <div class="table-heading"><div><h3>Poison / release history</h3><p>Newest module transitions from arp_poisoning.log.</p></div></div>
-        <div class="table-wrap"><table id="arp-poisoning-events-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="ip">IP</th><th data-sort="action">Action</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="unblock_at">Release at</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="details">Details</th></tr></thead><tbody></tbody></table></div>
-      </article>
-      <article class="surface table-surface">
-        <div class="table-heading"><div><h3>ARP detections</h3><p>Latest durable evidence generated by the arp module.</p></div></div>
-        <div class="table-wrap"><table id="arp-poisoning-evidence-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="profile_ip">Host</th><th data-sort="threat_level">Threat</th><th data-sort="evidence_type">Type</th><th data-sort="confidence">Confidence</th><th data-sort="flow_count">Flows</th><th data-sort="alert_count">Alert links</th><th data-sort="description">Description</th></tr></thead><tbody></tbody></table></div>
-      </article>
+      <article id="arp-poisoning-disabled" class="surface empty-state" hidden><p>ARP poisoning not enabled in this run.</p></article>
+      <div id="arp-poisoning-stats">
+        <div id="arp-poisoning-summary" class="summary-grid"></div>
+        <div class="toolbar"><input id="arp-poisoning-search" type="search" placeholder="Search IP, MAC, state, TW, or evidence…"><span id="arp-poisoning-count" class="result-count"></span></div>
+        <article class="surface table-surface">
+          <div class="table-heading"><div><h3>Isolation state</h3><p>Hosts currently poisoned or previously released in this run.</p></div></div>
+          <div class="table-wrap"><table id="arp-poisoning-hosts-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="poisoned_at">Poisoned since</th><th data-sort="unblock_at">Release at</th><th data-sort="released_at">Released at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="mac">MAC</th></tr></thead><tbody></tbody></table></div>
+        </article>
+        <article class="surface table-surface">
+          <div class="table-heading"><div><h3>Poison / release history</h3><p>Newest module transitions from arp_poisoning.log.</p></div></div>
+          <div class="table-wrap"><table id="arp-poisoning-events-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="ip">IP</th><th data-sort="action">Action</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="unblock_at">Release at</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="details">Details</th></tr></thead><tbody></tbody></table></div>
+        </article>
+        <article class="surface table-surface">
+          <div class="table-heading"><div><h3>ARP detections</h3><p>Latest durable evidence generated by the arp module.</p></div></div>
+          <div class="table-wrap"><table id="arp-poisoning-evidence-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="profile_ip">Host</th><th data-sort="threat_level">Threat</th><th data-sort="evidence_type">Type</th><th data-sort="confidence">Confidence</th><th data-sort="flow_count">Flows</th><th data-sort="alert_count">Alert links</th><th data-sort="description">Description</th></tr></thead><tbody></tbody></table></div>
+        </article>
+      </div>
     </section>
 
     <section id="p2p" class="panel" aria-labelledby="p2p-title">
-      <div class="section-heading"><div><p class="eyebrow">COLLABORATIVE INTELLIGENCE</p><h2 id="p2p-title">P2P network <span class="info-pill" title="Message counts (reports and requests sent/received) reset at the start of each timewindow">per timewindow</span></h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div><button class="secondary refresh-list" data-target="p2p">Refresh</button></div>
-      <div id="p2p-summary" class="summary-grid"></div>
-      <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
-      <article class="surface p2p-trust-history">
-        <div class="table-heading p2p-chart-heading">
-          <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model; current computed trust is shown in the peers table.</p></div>
-          <select id="p2p-range" class="range-select" aria-label="Peer trust history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
+      <div class="section-heading"><div><p class="eyebrow">COLLABORATIVE INTELLIGENCE</p><h2 id="p2p-title">P2P network <span class="info-pill" title="Message counts (reports and requests sent/received) reset at the start of each timewindow">stast per timewindow</span></h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div><button class="secondary refresh-list" data-target="p2p">Refresh</button></div>
+      <article id="p2p-disabled" class="surface empty-state" hidden><p>P2P not enabled in this run.</p></article>
+      <div id="p2p-stats">
+        <div id="p2p-summary" class="summary-grid"></div>
+        <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
+        <article class="surface p2p-trust-history">
+          <div class="table-heading p2p-chart-heading">
+            <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model; current computed trust is shown in the peers table.</p></div>
+            <select id="p2p-range" class="range-select" aria-label="Peer trust history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
+          </div>
+          <div id="p2p-trust-legend" class="p2p-trust-legend"></div>
+          <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
+        </article>
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
+        <div class="split-grid">
+          <article class="surface table-surface"><div class="table-heading"><div><h3>Trust evolution</h3><p>Newest persistent reliability changes.</p></div></div><div class="table-wrap"><table id="p2p-trust-table"><thead><tr><th>Time</th><th>Peer</th><th>Reliability</th></tr></thead><tbody></tbody></table></div></article>
+          <article class="surface table-surface"><div class="table-heading"><div><h3>Reports received</h3><p>Peer opinions received during this run.</p></div></div><div class="table-wrap"><table id="p2p-reports-table"><thead><tr><th>Time</th><th>Peer</th><th>Target</th><th>Score</th><th>Confidence</th></tr></thead><tbody></tbody></table></div></article>
         </div>
-        <div id="p2p-trust-legend" class="p2p-trust-legend"></div>
-        <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
-      </article>
-      <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
-      <div class="split-grid">
-        <article class="surface table-surface"><div class="table-heading"><div><h3>Trust evolution</h3><p>Newest persistent reliability changes.</p></div></div><div class="table-wrap"><table id="p2p-trust-table"><thead><tr><th>Time</th><th>Peer</th><th>Reliability</th></tr></thead><tbody></tbody></table></div></article>
-        <article class="surface table-surface"><div class="table-heading"><div><h3>Reports received</h3><p>Peer opinions received during this run.</p></div></div><div class="table-wrap"><table id="p2p-reports-table"><thead><tr><th>Time</th><th>Peer</th><th>Target</th><th>Score</th><th>Confidence</th></tr></thead><tbody></tbody></table></div></article>
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Recent message activity</h3><p>Bounded send/receive telemetry from this run.</p></div></div><div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th>Time</th><th>Direction</th><th>Type</th><th>Peer</th><th>Target</th></tr></thead><tbody></tbody></table></div></article>
       </div>
-      <article class="surface table-surface"><div class="table-heading"><div><h3>Recent message activity</h3><p>Bounded send/receive telemetry from this run.</p></div></div><div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th>Time</th><th>Direction</th><th>Type</th><th>Peer</th><th>Target</th></tr></thead><tbody></tbody></table></div></article>
     </section>
 
     <section id="configuration" class="panel" aria-labelledby="configuration-title">

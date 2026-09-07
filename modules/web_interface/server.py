@@ -3824,7 +3824,7 @@ class RunDataReader:
         )
         return {
             "module": {
-                "enabled": bool(pid or log_exists),
+                "enabled": bool(raw_pid),
                 "state": module_state,
                 "pid": pid,
             },
@@ -4012,6 +4012,7 @@ class RunDataReader:
         history_page = history[history_offset : history_offset + MAX_PAGE_SIZE]
         history_next = history_offset + len(history_page)
         return {
+            "enabled": bool(self.redis.hget("PIDs", "blocking")),
             "items": records[:MAX_PAGE_SIZE],
             "total": len(records),
             "full_total": len(records),
@@ -4348,9 +4349,7 @@ class RunDataReader:
                 pass
         current_reports = [item for item in reports if item["this_run"]]
         return {
-            "enabled": bool(self.redis.hget("PIDs", "p2p_trust"))
-            or bool(listener)
-            or p2p_log.exists(),
+            "enabled": bool(self.redis.hget("PIDs", "p2p_trust")),
             "listener": listener,
             "local_peer_id": local_peer_id,
             "peers": peers,
