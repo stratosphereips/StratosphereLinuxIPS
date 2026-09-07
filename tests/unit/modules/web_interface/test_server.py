@@ -1347,7 +1347,7 @@ def test_arp_poisoning_summarizes_current_module_state(tmp_path: Path) -> None:
     result = reader.arp_poisoning()
 
     assert result["module"] == {
-        "enabled": True,
+        "enabled": False,
         "state": "stopped",
         "pid": None,
     }

@@ -715,6 +715,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     process_manager.main.input_information = "test_input"
     process_manager.main.conf.wait_for_modules_to_finish.return_value = 1
     process_manager.main.conf.export_labeled_flows.return_value = False
+    process_manager.main.conf.web_interface_enabled.return_value = False
     process_manager.main.db.get_flows_count.return_value = 42
     process_manager.main.db.check_tw_to_close = Mock()
     process_manager.main.db.close_all_dbs = Mock()

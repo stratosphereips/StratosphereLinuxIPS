@@ -329,7 +329,7 @@ def test_main_blocking_logic(block, expected_block_called):
     }
     blocking.parent_output_dir = "output/test-firewall-run"
     blocking.db.get_blocking_timestamp.return_value = None
-    blocking.db.get_timewindow.return_value = "timewindow23"
+    blocking.db.get_current_timewindow.return_value = "23"
 
     with (
         patch.object(
@@ -369,10 +369,10 @@ def test_main_blocking_logic(block, expected_block_called):
 @pytest.mark.parametrize(
     "evidence_tw,current_twid,expected_tw",
     [
-        (4, "timewindow23", 23),
-        (23, "timewindow23", 23),
-        (24, "timewindow23", 24),
-        (None, "timewindow23", 23),
+        (4, "23", 23),
+        (23, "23", 23),
+        (24, "23", 24),
+        (None, "23", 23),
     ],
 )
 def test_get_enforcement_timewindow_never_uses_stale_detection_window(
@@ -384,19 +384,16 @@ def test_get_enforcement_timewindow_never_uses_stale_detection_window(
 
     Parameters:
         evidence_tw: Time window carried by the block request.
-        current_twid: Current wall-clock time window returned by the database.
+        current_twid: Current time window returned by the database.
         expected_tw: Window that must anchor the firewall schedule.
     """
     blocking = ModuleFactory().create_blocking_obj()
-    blocking.db.get_timewindow.return_value = current_twid
+    blocking.db.get_current_timewindow.return_value = current_twid
 
-    with patch("modules.blocking.blocking.time.time", return_value=100.0):
-        result = blocking._get_timewindow_to_block_in("1.2.3.4", evidence_tw)
+    result = blocking._get_timewindow_to_block_in(evidence_tw)
 
     assert result == expected_tw
-    blocking.db.get_timewindow.assert_called_once_with(
-        100.0, "profile_1.2.3.4", add_to_db=False
-    )
+    blocking.db.get_current_timewindow.assert_called_once_with()
 
 
 def test_recover_firewall_rules_restores_schedule() -> None:
@@ -427,11 +424,11 @@ def test_recover_firewall_rules_restores_schedule() -> None:
 
     with (
         patch(
-            "modules.blocking.blocking.list_slips_firewall_rules",
+            "modules.blocking.recovery.list_slips_firewall_rules",
             return_value=rules,
         ),
         patch.object(blocking, "log"),
-        patch("modules.blocking.blocking.time.time", return_value=200.0),
+        patch("modules.blocking.recovery.time.time", return_value=200.0),
     ):
         recovered = blocking._recover_firewall_rules()
 
@@ -510,11 +507,11 @@ def test_recover_firewall_rules_marks_unsafe_metadata_stale(
 
     with (
         patch(
-            "modules.blocking.blocking.list_slips_firewall_rules",
+            "modules.blocking.recovery.list_slips_firewall_rules",
             return_value=rules,
         ),
         patch.object(blocking, "log"),
-        patch("modules.blocking.blocking.time.time", return_value=200.0),
+        patch("modules.blocking.recovery.time.time", return_value=200.0),
     ):
         blocking._recover_firewall_rules()
 

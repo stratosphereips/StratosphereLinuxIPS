@@ -136,7 +136,7 @@ def test_set_evidence_causing_alert(
     )
     alert_handler.set_evidence_causing_alert(alert)
 
-    alert_handler.r.incr.assert_called_once_with("number_of_alerts", 1)
+    alert_handler.r.incr.assert_not_called()
     alert_handler.r.hset.assert_called_once_with(
         f"profile_{profile_ip}_timewindow{twid}", "alerts", ANY
     )
@@ -146,6 +146,50 @@ def test_set_evidence_causing_alert(
         assert alert_id in alerts_added
         added_evidence_list = json.loads(alerts_added[alert_id])
         assert sorted(expected_evidence_list) == sorted(added_evidence_list)
+
+
+def test_set_alert_increments_number_of_alerts_once_published():
+    """set_alert() must only count the alert after it's published."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hget.return_value = None
+    alert_handler.set_evidence_causing_alert = Mock()
+    alert_handler._set_accumulated_threat_level = Mock()
+    alert_handler.publish = Mock()
+    alert_handler.channels = Mock()
+    alert_handler.channels.NEW_ALERT = "new_alert"
+    alert = Alert(
+        id="1234",
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(
+            1,
+            start_time="2024-10-04T18:46:50+03:00",
+            end_time="2024-10-04T19:46:50+03:00",
+        ),
+        last_evidence=Evidence(
+            evidence_type=EvidenceType.ARP_SCAN,
+            description="ARP scan detected",
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value="192.168.1.20",
+            ),
+            threat_level=ThreatLevel.INFO,
+            profile=ProfileID("192.168.1.20"),
+            timewindow=TimeWindow(1),
+            uid=[],
+            timestamp="1728417813.8868346",
+        ),
+        accumulated_threat_level=30,
+        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
+        correl_id=["ev1"],
+    )
+
+    alert_handler.set_alert(alert)
+
+    alert_handler.set_evidence_causing_alert.assert_called_once_with(alert)
+    alert_handler.publish.assert_called_once()
+    alert_handler.r.incr.assert_called_once_with("number_of_alerts", 1)
 
 
 @pytest.mark.parametrize(
