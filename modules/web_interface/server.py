@@ -3588,7 +3588,9 @@ class RunDataReader:
         Returns:
             Host state and newest-first transition records for this run.
         """
-        log_path = self.output_dir / Modules.ARP_POISONER / "arp_poisoning.log"
+        log_path = (
+            self.output_dir / Modules.ARP_POISONER.value / "arp_poisoning.log"
+        )
         try:
             lines = log_path.read_text(errors="replace").splitlines()
         except OSError:
@@ -3802,7 +3804,7 @@ class RunDataReader:
             raw_pid = None
             analysis_complete = False
         log_exists = (
-            self.output_dir / Modules.ARP_POISONER / "arp_poisoning.log"
+            self.output_dir / Modules.ARP_POISONER.value / "arp_poisoning.log"
         ).exists()
         module_state = "not started"
         pid = int(raw_pid) if str(raw_pid or "").isdigit() else None
@@ -4035,7 +4037,7 @@ class RunDataReader:
         Returns:
             Newest-first firewall transition records for this run.
         """
-        log_path = self.output_dir / Modules.BLOCKING / "blocking.log"
+        log_path = self.output_dir / Modules.BLOCKING.value / "blocking.log"
         try:
             lines = log_path.read_text(errors="replace").splitlines()
         except OSError:
@@ -4327,7 +4329,7 @@ class RunDataReader:
                 item["peer_id"],
             )
         )
-        p2p_log = self.output_dir / Modules.P2P_TRUST / "p2p.log"
+        p2p_log = self.output_dir / Modules.P2P_TRUST.value / "p2p.log"
         listener = ""
         local_peer_id = ""
         multiaddress = str(self.redis.get("multiAddress") or "").strip()
