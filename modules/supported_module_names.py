@@ -43,6 +43,7 @@ class Modules(str, Enum):
     THREAT_INTELLIGENCE = "threat_intelligence"
     TIMELINE = "timeline"
     VIRUSTOTAL = "virustotal"
+    WEB_INTERFACE = "web_interface"
     EVIDENCE_HANDLER_WORKER = "evidence_handler_worker"
     PROFILER_WORKER = "profiler_worker"
 

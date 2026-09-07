@@ -846,3 +846,63 @@ def test_to_json_serializable(input_obj, expected_json):
     utils = ModuleFactory().create_utils_obj()
     result = utils.to_json_serializable(input_obj)
     assert json.dumps(result) == expected_json
+
+
+def _fake_flow(saddr="1.1.1.1", sport="1", daddr="2.2.2.2", dport="2"):
+    return json.dumps(
+        {
+            "saddr": saddr,
+            "sport": sport,
+            "daddr": daddr,
+            "dport": dport,
+            "proto": "tcp",
+        }
+    )
+
+
+class _FakeDb:
+    """db double recording is_p2p_related_flow_batch call sizes."""
+
+    def __init__(self, p2p_uids):
+        self.p2p_uids = p2p_uids
+        self.batch_call_sizes = []
+
+    def get_flow(self, uid, twid=False):
+        return {uid: _fake_flow(saddr=uid)}
+
+    def is_p2p_related_flow_batch(self, flows):
+        self.batch_call_sizes.append(len(flows))
+        return [saddr in self.p2p_uids for saddr, *_ in flows]
+
+
+def test_p2p_related_uids_returns_matching_subset():
+    utils = ModuleFactory().create_utils_obj()
+    db = _FakeDb(p2p_uids={"p2p-1", "p2p-2"})
+
+    result = utils.p2p_related_uids(["p2p-1", "other", "p2p-2"], db)
+
+    assert result == {"p2p-1", "p2p-2"}
+    # one pipelined batch call for all uids, not one call per uid
+    assert db.batch_call_sizes == [3]
+
+
+def test_all_uids_p2p_related_true_when_every_uid_matches():
+    utils = ModuleFactory().create_utils_obj()
+    uids = [f"uid-{i}" for i in range(5)]
+    db = _FakeDb(p2p_uids=set(uids))
+
+    assert utils.all_uids_p2p_related(uids, db) is True
+
+
+def test_all_uids_p2p_related_exits_on_first_non_matching_chunk():
+    """A non-match anywhere in a large uid list is found within the
+    first chunk, without checking every remaining uid."""
+    utils = ModuleFactory().create_utils_obj()
+    # only the very first uid is p2p-related; the rest, none of which
+    # should ever need to be checked, are deliberately not registered
+    uids = [f"uid-{i}" for i in range(500)]
+    db = _FakeDb(p2p_uids={"uid-0"})
+
+    assert utils.all_uids_p2p_related(uids, db, chunk_size=10) is False
+    # only the first 10-uid chunk was ever checked
+    assert db.batch_call_sizes == [10]

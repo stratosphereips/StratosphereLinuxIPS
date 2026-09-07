@@ -78,6 +78,20 @@ class RedisManager:
         # server up after the analysis to avoid losing the analysis
         return not self.saved_redis_dump
 
+    def _is_web_interface_enabled(self) -> bool:
+        """
+        Check whether CLI or configuration enabled the local interface.
+
+        Returns:
+            True when the current run must remain readable by the interface.
+        """
+        if self.main.proc_man.web_interface_shutdown:
+            return False
+        if getattr(self.main.args, "webinterface", False) is True:
+            return True
+        accessor = getattr(self.main.conf, "web_interface_enabled", None)
+        return callable(accessor) and accessor() is True
+
     def _should_save_redis_db_after_analysis(self) -> bool:
         """
         Decide whether Slips should persist Redis after this analysis.
@@ -88,7 +102,7 @@ class RedisManager:
         if self.main.args.save:
             return True
 
-        return not self.main.args.webinterface
+        return not self._is_web_interface_enabled()
 
     def decide_on_saving_and_killing_the_redis_db(self) -> bool:
         """
@@ -109,7 +123,7 @@ class RedisManager:
         saved = bool(self.main.db.save(rdb_filepath))
         if saved:
             self.main.print(
-                f"The redis database is saved to " f"{rdb_filepath}.rdb"
+                f"The redis database is saved to {rdb_filepath}.rdb"
             )
         else:
             self.main.print("Failed to save the redis database.")
@@ -117,8 +131,8 @@ class RedisManager:
 
     def _print_reason_for_not_killing_redis(self):
         reason = ""
-        if self.main.args.webinterface:
-            reason = "the web interface is running."
+        if self._is_web_interface_enabled():
+            reason = "the web interface is running"
         elif self.main.redis_port == 6379:
             reason = (
                 "the default redis port should always stay up"
@@ -442,10 +456,7 @@ class RedisManager:
         Returns a dict {counter: (used_port,pid) }
         """
         open_servers = {}
-        to_print = (
-            "Choose which one to kill [0,1,2 etc..]\n"
-            "[0] Close all Redis servers\n"
-        )
+        to_print = "Choose which one to kill [0,1,2 etc..]\n[0] Close all Redis servers\n"
         there_are_ports_to_print = False
         try:
             with open(self.running_logfile, "r") as f:
@@ -562,8 +573,7 @@ class RedisManager:
                     client, DEFAULT_REDIS_PORT, "overwrite"
                 ):
                     print(
-                        f"Stopping. User cancelled overwriting of port "
-                        f"{redis_port}."
+                        f"Stopping. User cancelled overwriting of port {redis_port}."
                     )
                     self.main.terminate_slips()
             # allow main DBManager to reconnect and flush if needed
@@ -810,8 +820,7 @@ class RedisManager:
 
         except AlreadyKilledErr:
             print(
-                f"{base_msg} is already killed or you don't have "
-                f"permission to kill it."
+                f"{base_msg} is already killed or you don't have permission to kill it."
             )
             self.remove_server_from_log(port)
 

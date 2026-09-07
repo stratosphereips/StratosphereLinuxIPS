@@ -10,6 +10,7 @@ from .module_loading_mixin import ModuleLoadingMixin
 from .reporting_mixin import ReportingMixin
 from .shutdown_mixin import ShutdownMixin
 from .startup_mixin import StartupMixin
+from .web_interface_shutdown_mixin import WebInterfaceShutdownMixin
 
 
 class ProcessManager(
@@ -18,6 +19,7 @@ class ProcessManager(
     StartupMixin,
     ModuleLoadingMixin,
     ShutdownMixin,
+    WebInterfaceShutdownMixin,
 ):
     """
     Responsible for starting and stopping all the slips processes and
@@ -81,6 +83,7 @@ class ProcessManager(
         # shutdown at the very end of all other slips modules.
         self.evidence_handler_termination_event = Event()
         self.stopped_modules: List[str] = []
+        self.deferred_stopped_modules: Set[str] = set()
         # used to stop slips when these 2 are done
         # since the semaphore count is zero, slips.py will wait until another
         # thread (input and profiler)
@@ -108,7 +111,28 @@ class ProcessManager(
         self.read_config()
         self.all_children_started = False
         self.core_module_failure = False
+        self.shutdown_cause = ""
         self.disabled_warning_printed = False
+        # shutdown-related flags. shutdown_signal_received is the umbrella
+        # "something asked Slips to stop" flag, set by any of: SIGTERM,
+        # SIGHUP, SIGQUIT (sig_handler) or Ctrl-C (KeyboardInterrupt).
+        # the other 3 narrow down *which* signal it was, because the
+        # shutdown code (firewall/web interface prompts) behaves
+        # differently depending on the cause:
+        #  - sigterm_received: the signal was specifically SIGTERM (as
+        #    opposed to SIGHUP/SIGQUIT), treated as an unattended/service
+        #    shutdown that should skip interactive prompts.
+        #  - keyboard_interrupt_received: the user pressed Ctrl-C in the
+        #    main loop, treated like a normal completion since a human is
+        #    present to answer prompts.
+        #  - force_shutdown_requested: the user pressed Ctrl-C *again*
+        #    while Slips was already shutting down, requesting an
+        #    immediate, no-prompt cleanup.
+        self.sigterm_received = False
+        self.shutdown_signal_received = False
+        self.web_interface_shutdown = False
+        self.keyboard_interrupt_received = False
+        self.force_shutdown_requested = False
         # total number of detection modules plus core processes (main,
         # evidence handler, profiler, input) slips is starting, used to
         # show live "x/total" progress as each one announces itself.

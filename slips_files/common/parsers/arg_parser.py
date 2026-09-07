@@ -287,7 +287,7 @@ class ArgumentParser(argparse.ArgumentParser):
             "--webinterface",
             action="store_true",
             required=False,
-            help="Start Slips web interface automatically",
+            help="Enable the local web interface for this Slips run",
         )
         self.add_argument(
             "-V",

@@ -369,6 +369,8 @@ def test_check_arp_scan_alerts_once_per_profileid_twid():
 
     _trigger_arp_scan_threshold(arp, profileid, twid)
     assert arp.db.set_evidence.call_count == 1
+    evidence = arp.db.set_evidence.call_args.args[0]
+    assert len(evidence.uid) == arp.arp_scan_threshold
     assert arp.alerted_once_arp_scan[f"{profileid}_{twid}"] is True
 
     # more requests for the same profileid_twid after already alerting,

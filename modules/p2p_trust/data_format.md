@@ -33,10 +33,14 @@ Slips sends data to go in json. The Json object has two fields: `message` and `r
 
 The message is the base64 encoded string that the modules are exchanging, This is not unpacked in the transporting layer. The `recipient` field is the peerID of the peer the message is sent to. Use `*` to send the message to all peers.
 
-## The channel from Go to Slips `p2p_pygo`
+## The channel from Go to Slips `p2p_gopy`
 
 The go library sends several types of messages to the core. The messages in the channel always start with a command,
 followed by a space and then data. The command is a string without spaces, and the data is json.
+
+Every Go-to-Slips JSON object includes a top-level `version` containing the
+running Slips version. Slips accepts legacy unversioned objects only on this
+dedicated local Pigeon channel.
 
 ### Data forwarded from other peers: `go_data`
 
@@ -52,6 +56,7 @@ more reports at the same time.
 
 ```json
 {
+  "version": "1.1.22",
   "message_type": "go_data",
   "message_contents":
     {
@@ -64,21 +69,26 @@ more reports at the same time.
 
 ### Peer data update `peer_update`
 
-When the reliability of a peer changes, the go layer should notify the Python layer. The update must contain the peerID
-of the peer in question. The update message can be used to update reliability as well as IP address of the peer. At
-least one of the parameters `ip` and `reliability` should be provided.
+The go layer notifies Python when a peer connects or disconnects and when its
+reliability or IP address changes. The update must contain the peer ID and a
+Unix timestamp. `connected` is always present in current messages; `ip` and
+`reliability` are included when known. Legacy updates without `connected` are
+treated as connected.
 
 Unlike go data, peer updates are expected to be sent separately, therefore a the dictionary type is required instead of
 a list.
 
 ```json
 {
+  "version": "1.1.22",
   "message_type": "peer_update",
   "message_contents":
     {
       "peerid": "QmYyQSo1c1Ym7orWxLYvCrM2EmxFTANf8wXmmE7DWjhx5N",
       "ip": "1.2.3.40",
-      "reliability": "0.3"
+      "reliability": 0.3,
+      "connected": true,
+      "timestamp": 154900000
     }
 }
 ```

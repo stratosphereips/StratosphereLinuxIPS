@@ -354,11 +354,38 @@ def test_dict_to_evidence_preserves_risk_level() -> None:
         id="d4afbe1a-1cb9-4db4-9fac-74f2da6f5f34",
         confidence=0.8,
         risk_level=RiskWeight.MEDIUM,
+        source_module="arp",
     )
 
     restored_evidence = dict_to_evidence(utils.to_dict(evidence))
 
     assert restored_evidence.risk_level == RiskWeight.MEDIUM
+    assert restored_evidence.source_module == "arp"
+
+
+def test_dict_to_evidence_defaults_missing_source_module() -> None:
+    """Keep evidence written before source provenance was added readable."""
+    module_factory = ModuleFactory()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=module_factory.create_attacker_obj(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.1",
+        ),
+        threat_level=ThreatLevel.LOW,
+        profile=module_factory.create_profileid_obj(ip="192.168.1.1"),
+        timewindow=module_factory.create_timewindow_obj(number=1),
+        uid=["flow1"],
+        timestamp="2023/10/26 10:10:10.000000+0000",
+    )
+    serialized = utils.to_dict(evidence)
+    serialized.pop("source_module")
+
+    restored_evidence = dict_to_evidence(serialized)
+
+    assert restored_evidence.source_module == ""
 
 
 def test_validate_timestamp():

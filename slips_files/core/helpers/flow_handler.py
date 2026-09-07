@@ -3,6 +3,7 @@
 import json
 from dataclasses import asdict
 from typing import Tuple
+from uuid import uuid4
 
 from slips_files.core.flows.suricata import SuricataFile
 from slips_files.common.slips_utils import utils
@@ -167,7 +168,12 @@ class FlowHandler:
         self.db.publish("new_downloaded_file", to_send)
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
-    def handle_arp(self):
+    def handle_arp(self) -> None:
+        """Publish and persist an ARP record with a unique identifier."""
+        # The bundled Zeek script provides this UID. Keep a fallback for
+        # legacy and external arp.log files that do not contain the field.
+        if not self.flow.uid:
+            self.flow.uid = str(uuid4())
         to_send = {
             "flow": asdict(self.flow),
             "profileid": self.profileid,

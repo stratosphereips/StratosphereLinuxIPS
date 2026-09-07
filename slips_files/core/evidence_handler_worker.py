@@ -8,7 +8,7 @@ import os
 import queue
 import sys
 from multiprocessing import Queue
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.idmefv2 import IDMEFv2
@@ -137,6 +137,7 @@ class EvidenceHandlerWorker(IModule):
             )
             note.update(
                 {
+                    "evidence_type": str(evidence.evidence_type),
                     "uids": evidence.uid,
                     "accumulated_threat_level": accumulated_threat_level,
                     "risk_accumulated_threat_level": risk_accumulated_threat_level,
@@ -146,6 +147,7 @@ class EvidenceHandlerWorker(IModule):
                     ),
                     "timewindow": evidence.timewindow.number,
                     "immune_type": evidence.immune_type,
+                    "source_module": evidence.source_module,
                 }
             )
             idmef_evidence.update({"Note": json.dumps(note)})
@@ -215,7 +217,7 @@ class EvidenceHandlerWorker(IModule):
         now = utils.get_human_readable_datetime()
 
         alert_description = (
-            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+            f"{alert.last_flow_datetime}: Src IP {alert.profile.ip:26}. "
         )
         if blocked:
             alert_description += "Is blocked "
@@ -229,7 +231,7 @@ class EvidenceHandlerWorker(IModule):
             f"{alert.timewindow.number}. (real time: {now})"
         )
         if self.is_running_non_stop:
-            alert_description += f" (risk weight:" f" {current_risk_weight})"
+            alert_description += f" (risk weight: {current_risk_weight})"
 
         self.add_to_log_file(alert_description)
         self.add_alert_to_json_log_file(alert)
@@ -281,10 +283,27 @@ class EvidenceHandlerWorker(IModule):
 
         return filtered_evidence
 
+    def is_slips_p2p_evidence(self, evidence: Evidence) -> bool:
+        """Check whether every triggering flow is Slips's own P2P traffic.
+
+        Parameters:
+            evidence: Evidence whose flow identifiers should be checked.
+
+        Returns:
+            True only when every referenced flow matches a known P2P
+            connection.
+        """
+        if not evidence.uid:
+            return False
+        return utils.all_uids_p2p_related(evidence.uid, self.db)
+
     def is_filtered_evidence(
         self, evidence: Evidence, past_evidence_ids: List[str]
     ):
         if evidence.id in past_evidence_ids:
+            return True
+
+        if self.is_slips_p2p_evidence(evidence):
             return True
 
         if self.is_evidence_done_by_others(evidence):
@@ -506,6 +525,28 @@ class EvidenceHandlerWorker(IModule):
 
         profileid = str(evidence.profile)
         twid = str(evidence.timewindow)
+        # Do not trust publishers to enforce this setting. A delayed process
+        # from a replaced run can still publish briefly while shutting down.
+        if evidence.evidence_type in self.conf.disabled_detections():
+            self.db.delete_evidence(profileid, twid, evidence.id)
+            return
+
+        self._handle_evidence_added(evidence, profileid, twid)
+
+    def _handle_evidence_added(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> None:
+        """
+        Process, log, score, and possibly alert on one piece of evidence.
+
+        Parameters:
+            evidence: Evidence to score and potentially turn into an alert.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+        """
         timestamp = evidence.timestamp
 
         self.db.mark_evidence_as_processed(evidence.id, profileid, twid)
@@ -529,18 +570,8 @@ class EvidenceHandlerWorker(IModule):
         )
         self.add_to_log_file(evidence_to_log)
 
-        accumulated_threat_level = self.get_accumulated_threat_level(
-            profileid, twid, evidence
-        )
-
-        current_risk_weight: RiskWeight = self.db.get_max_seen_risk_weight()[
-            "risk_weight"
-        ]
-        evidence.risk_level = current_risk_weight
-
-        # this is profile-specific RATL = ATL * RW
-        risk_accumulated_threat_level = (
-            accumulated_threat_level * current_risk_weight.weight
+        accumulated_threat_level, risk_accumulated_threat_level = (
+            self._score_evidence_and_maybe_alert(evidence, profileid, twid)
         )
 
         self.add_evidence_to_json_log_file(
@@ -555,6 +586,105 @@ class EvidenceHandlerWorker(IModule):
                 "report_to_peers", json.dumps(utils.to_dict(evidence))
             )
 
+    def _score_evidence_and_maybe_alert(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> Tuple[float, float]:
+        """
+        Score evidence and raise an alert if it crosses the threshold.
+        Parameters:
+            evidence: Evidence to score and potentially turn into an
+                alert. Mutated in place with its resolved risk_level.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+
+        Returns:
+            The accumulated threat level and the risk-weighted
+            accumulated threat level computed for this evidence.
+        """
+        (
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+            current_risk_weight,
+        ) = self._score_evidence(evidence, profileid, twid)
+
+        self._generate_alert_if_threshold_crossed(
+            evidence,
+            profileid,
+            twid,
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+            current_risk_weight,
+        )
+        return accumulated_threat_level, risk_accumulated_threat_level
+
+    def _score_evidence(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+    ) -> Tuple[float, float, RiskWeight]:
+        """
+        Update and read the profile/tw's accumulated threat level.
+
+        Parameters:
+            evidence: Evidence to score. Mutated in place with its
+                resolved risk_level.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+
+        Returns:
+            The accumulated threat level, the risk-weighted accumulated
+            threat level, and the risk weight used to compute it.
+        """
+        accumulated_threat_level = self.get_accumulated_threat_level(
+            profileid, twid, evidence
+        )
+        current_risk_weight: RiskWeight = self.db.get_max_seen_risk_weight()[
+            "risk_weight"
+        ]
+        evidence.risk_level = current_risk_weight
+        # this is profile-specific RATL = ATL * RW
+        risk_accumulated_threat_level = (
+            accumulated_threat_level * current_risk_weight.weight
+        )
+        return (
+            accumulated_threat_level,
+            risk_accumulated_threat_level,
+            current_risk_weight,
+        )
+
+    def _generate_alert_if_threshold_crossed(
+        self,
+        evidence: Evidence,
+        profileid: str,
+        twid: str,
+        accumulated_threat_level: float,
+        risk_accumulated_threat_level: float,
+        current_risk_weight: RiskWeight,
+    ) -> None:
+        """
+        Build and persist an alert once the detection threshold is
+        crossed.
+
+        Parameters:
+            evidence: The evidence that triggered this check.
+            profileid: Canonical profile identifier for the evidence.
+            twid: Canonical time-window identifier for the evidence.
+            accumulated_threat_level: The profile/tw's accumulated
+                threat level.
+            risk_accumulated_threat_level: Risk-weighted accumulated
+                threat level.
+            current_risk_weight: Risk weight used to compute the RATL.
+        """
+        # Informational evidence has no threat contribution and therefore
+        # cannot be the event that triggers an alert. It remains processed and
+        # may still be correlated with a later, score-contributing alert.
+        if evidence.threat_level == ThreatLevel.INFO:
+            return
+
         if self.is_running_non_stop:
             # here we use the RATL to dynamically change the risk weight of
             # slips
@@ -565,24 +695,41 @@ class EvidenceHandlerWorker(IModule):
         if score < self.detection_threshold_in_this_width:
             return
 
-        tw_evidence = self.get_evidence_for_tw(profileid, twid)
-        if not tw_evidence:
+        if not self.db.try_claim_alert_generation(profileid, twid):
+            # another worker already won the claim for this profile/tw
+            # and is generating the alert; nothing left to do here.
             return
 
-        tw_start, tw_end = self.db.get_tw_limits(profileid, twid)
-        evidence.timewindow.start_time = tw_start
-        evidence.timewindow.end_time = tw_end
+        try:
+            tw_evidence = self.get_evidence_for_tw(profileid, twid)
+            if not tw_evidence:
+                return
 
-        alert = Alert(
-            profile=evidence.profile,
-            timewindow=evidence.timewindow,
-            last_evidence=evidence,
-            accumulated_threat_level=accumulated_threat_level,
-            accumulated_ratl=risk_accumulated_threat_level,
-            correl_id=list(tw_evidence.keys()),
-            risk_level=current_risk_weight,
-        )
-        self.handle_new_alert(alert, tw_evidence)
+            tw_start, tw_end = self.db.get_tw_limits(
+                profileid,
+                twid,
+                evidence.timestamp,
+            )
+            evidence.timewindow.start_time = tw_start
+            evidence.timewindow.end_time = tw_end
+
+            alert = Alert(
+                profile=evidence.profile,
+                timewindow=evidence.timewindow,
+                last_evidence=evidence,
+                accumulated_threat_level=accumulated_threat_level,
+                accumulated_ratl=risk_accumulated_threat_level,
+                correl_id=list(tw_evidence.keys()),
+                risk_level=current_risk_weight,
+            )
+            self.handle_new_alert(alert, tw_evidence)
+        finally:
+            # set_alert() (called from handle_new_alert) resets the
+            # profile/tw's accumulated threat level to 0, so evidence
+            # can legitimately earn a new alert soon after; release the
+            # claim now instead of leaving the next one waiting out
+            # the TTL.
+            self.db.release_alert_claim(profileid, twid)
 
     def handle_new_blame_message(self, msg: dict):
         data = msg["data"]

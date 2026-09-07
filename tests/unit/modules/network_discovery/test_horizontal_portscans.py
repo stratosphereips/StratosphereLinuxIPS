@@ -226,10 +226,61 @@ def test_check_valid_scan():
         (dport, total_pkts),
     ]
     horizontal_ps.should_set_evidence = Mock(return_value=True)
+    horizontal_ps.db.get_uids_for_horizontal_portscan.return_value = [
+        "scan-flow-1",
+        "scan-flow-2",
+    ]
 
     horizontal_ps.check(profileid, twid)
     # once for each proto
     assert horizontal_ps.set_evidence_horizontal_portscan.call_count == 2
+    for (
+        call_args
+    ) in horizontal_ps.set_evidence_horizontal_portscan.call_args_list:
+        assert call_args.args[0]["uids"] == [
+            "scan-flow-1",
+            "scan-flow-2",
+        ]
+
+
+def test_check_excludes_p2p_related_uids_from_evidence():
+    """Drop P2P-related flow uids before they reach scan evidence."""
+    horizontal_ps = ModuleFactory().create_horizontal_portscan_obj()
+    horizontal_ps.set_evidence_horizontal_portscan = Mock()
+    dport = 5555
+    total_pkts = 20
+    ip = "10.0.0.1"
+
+    profileid = ProfileID(ip=ip)
+    twid = TimeWindow(number=0)
+    horizontal_ps.db.get_dstports_of_not_established_flows.return_value = [
+        (dport, total_pkts),
+    ]
+    horizontal_ps.should_set_evidence = Mock(return_value=True)
+    horizontal_ps.db.get_uids_for_horizontal_portscan.return_value = [
+        "p2p-flow",
+        "scan-flow-2",
+    ]
+    horizontal_ps.db.get_flow.side_effect = lambda uid: {
+        uid: (
+            '{"saddr": "1.1.1.1", "sport": "6668", "daddr": "2.2.2.2", '
+            '"dport": "51000", "proto": "tcp"}'
+            if uid == "p2p-flow"
+            else '{"saddr": "3.3.3.3", "sport": "1", "daddr": "4.4.4.4", '
+            '"dport": "2", "proto": "tcp"}'
+        )
+    }
+    horizontal_ps.db.is_p2p_related_flow_batch.side_effect = lambda flows: [
+        saddr == "1.1.1.1" for saddr, sport, daddr, dport, proto in flows
+    ]
+
+    horizontal_ps.check(profileid, twid)
+
+    assert horizontal_ps.set_evidence_horizontal_portscan.call_count == 2
+    for (
+        call_args
+    ) in horizontal_ps.set_evidence_horizontal_portscan.call_args_list:
+        assert call_args.args[0]["uids"] == ["scan-flow-2"]
 
 
 def test_check_invalid_profileid():

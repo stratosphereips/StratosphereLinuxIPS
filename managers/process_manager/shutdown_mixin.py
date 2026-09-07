@@ -4,6 +4,7 @@
 # and final cleanup for ProcessManager.
 import multiprocessing
 import os
+import select
 import signal
 import sys
 import time
@@ -13,6 +14,11 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from modules.blocking.recovery import clear_firewall_recovery_state
+from modules.blocking.slips_chain_manager import (
+    del_slips_blocking_chain,
+    has_slips_firewall_rules,
+)
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
@@ -54,12 +60,18 @@ class ShutdownMixin:
                 # by slips.py, we don't have it stored in
                 # the db so just skip it
                 continue
-            if module_name in self.stopped_modules:
+            if (
+                module_name in self.stopped_modules
+                or module_name in self.deferred_stopped_modules
+            ):
                 # already stopped
                 continue
 
             process.join(3)
             self.kill_process_tree(process.pid)
+            if self._should_defer_web_interface_stopped_message(module_name):
+                self.deferred_stopped_modules.add(module_name)
+                continue
             self.print_stopped_module(module_name)
 
     def warn_about_pending_modules(
@@ -162,6 +174,10 @@ class ShutdownMixin:
             if process.is_alive():
                 # reached timeout
                 alive_processes.append(process)
+            elif self._should_defer_web_interface_stopped_message(
+                process.name
+            ):
+                self.deferred_stopped_modules.add(str(process.name))
             else:
                 self.print_stopped_module(process.name)
 
@@ -191,6 +207,7 @@ class ShutdownMixin:
         if self.is_slips_live_updating_event.is_set():
             # slips is auto updating this version of slips should stop and
             # the updated one will start soon
+            self.shutdown_cause = "live_update"
             return True
 
         if not self.all_children_started:
@@ -202,12 +219,80 @@ class ShutdownMixin:
 
         if self._did_a_core_module_fail():
             self.core_module_failure = True
+            self.shutdown_cause = "core_failure"
             return True
 
-        if self.is_stop_msg_received() or self.is_done_receiving_new_flows():
+        if self.is_stop_msg_received():
+            self.shutdown_cause = "control"
+            return True
+
+        if self.is_done_receiving_new_flows():
+            self.shutdown_cause = "natural"
             return True
 
         return False
+
+    def install_shutdown_signal_handlers(self) -> None:
+        """
+        Install handlers for SIGTERM, SIGHUP, and SIGQUIT so Slips starts
+        a graceful shutdown instead of dying immediately.
+        """
+        main_pid = self.main.pid
+
+        def sig_handler(sig: int, frame: object) -> None:
+            """
+            Record a termination signal for forced shutdown.
+
+            Parameters:
+                sig: Numeric signal received by the main process.
+                frame: Interpreter frame active when the signal arrived.
+            """
+            if os.getpid() != main_pid:
+                # Children created after this handler is installed inherit
+                # it, but only the main process coordinates shutdown.
+                return
+
+            if self.shutdown_signal_received:
+                return
+
+            self.shutdown_signal_received = True
+            self.sigterm_received = sig == signal.SIGTERM
+            signal_name = signal.Signals(sig).name
+            self.main.print(f"{signal_name} received, shutting down Slips.")
+            self.main.print(
+                "Slips is stopping without completing the analysis.",
+                0,
+                1,
+            )
+
+        for handled_signal in (
+            signal.SIGTERM,
+            signal.SIGHUP,
+            signal.SIGQUIT,
+        ):
+            signal.signal(handled_signal, sig_handler)
+
+    def handle_keyboard_interrupt(self) -> None:
+        """
+        Record that shutdown was triggered by an interactive Ctrl-C in
+        the main loop.
+        """
+        self.keyboard_interrupt_received = True
+        self.shutdown_signal_received = True
+        self.main.print("Interrupt received, shutting down Slips.")
+
+    def _did_slips_finish_normally(self) -> bool:
+        """
+        Decide whether analysis finished on its own, without a shutdown
+        signal (Ctrl-C, SIGTERM, SIGHUP, SIGQUIT) cutting it short.
+
+        Returns:
+            True when the finite input ran to completion undisturbed.
+        """
+        return (
+            not self.shutdown_signal_received
+            and self.shutdown_cause == "natural"
+        )
 
     def _did_a_core_module_fail(self) -> bool:
         """
@@ -400,8 +485,7 @@ class ShutdownMixin:
 
         self.stopped_modules.append(str(Modules.LLM_PROXY))
         self.main.print(
-            "Stopping modules because llm_proxy stopped: "
-            f"{stopped_module_names}"
+            f"Stopping modules because llm_proxy stopped: {stopped_module_names}"
         )
 
     def health_check_modules(self):
@@ -465,6 +549,75 @@ class ShutdownMixin:
             self.kill_process_tree(int(pid))
             self.print_stopped_module(module_name, total_modules=len(children))
 
+    def _ask_to_keep_firewall_rules(self) -> bool:
+        """Ask whether managed firewall rules should survive Slips shutdown.
+
+        Returns:
+            True when rules should remain installed, false when deleted.
+        """
+        if not sys.stdin or not sys.stdin.isatty():
+            self.main.print(
+                "No interactive console is available; keeping Slips "
+                "firewall rules."
+            )
+            return True
+        print(
+            "Slips is stopping. Keep the installed firewall rules? [Y/n] ",
+            end="",
+            flush=True,
+        )
+        while not self.shutdown_signal_received:
+            try:
+                readable, _, _ = select.select([sys.stdin], [], [], 0.25)
+            except (OSError, ValueError):
+                return True
+            if not readable:
+                continue
+            response = sys.stdin.readline()
+            if response == "":
+                return True
+            return response.strip().lower() not in {"n", "no", "d", "delete"}
+        return True
+
+    def is_forced_shutdown(self) -> bool:
+        """
+        Whether shutdown must proceed without any interactive prompts
+        (e.g. keep firewall rules? keep the web interface running?).
+
+        Returns:
+            True on an unattended SIGTERM, or when the user forced an
+            immediate shutdown with a second Ctrl-C.
+        """
+        return self.force_shutdown_requested or self.sigterm_received
+
+    def _handle_firewall_after_analysis(self) -> None:
+        """Keep or remove managed firewall rules after an interactive run."""
+        if not has_slips_firewall_rules():
+            return
+
+        cant_ask_user = (
+            self.main.mode == "daemonized" or self.is_forced_shutdown()
+        )
+        if cant_ask_user:
+            self.main.print(
+                "Slips firewall rules remain installed after forced shutdown."
+            )
+            return
+
+        # The first Ctrl-C initiated graceful shutdown and must not cancel this
+        # explicit keep/delete decision.
+        self.shutdown_signal_received = False
+        if self._ask_to_keep_firewall_rules():
+            self.main.print("Keeping Slips firewall rules after shutdown.")
+            return
+
+        if not del_slips_blocking_chain():
+            self.main.print("Unable to delete the Slips firewall rules.", 0, 1)
+            return
+
+        clear_firewall_recovery_state(self.main.db)
+        self.main.print("Deleted Slips firewall rules and recovery state.")
+
     def _generate_plots(self) -> None:
         """
         Generate performance plots after analysis finishes.
@@ -490,6 +643,7 @@ class ShutdownMixin:
         Returns:
             False when interrupted during shutdown, otherwise None.
         """
+        normal_completion = self._did_slips_finish_normally()
         try:
             print = self.get_print_function()
 
@@ -556,19 +710,24 @@ class ShutdownMixin:
                         "User pressed ctr+c or Slips was killed by the OS"
                     )
                     graceful_shutdown = False
-
+                    normal_completion = False
+                    self.shutdown_signal_received = True
+                    self.force_shutdown_requested = True
                 if time.time() - method_start_time >= timeout:
                     # getting here means we're killing them bc of the timeout
                     # not getting here means we're killing them bc of double
                     # ctr+c OR they terminated successfully
-                    shutdown_reason = (
-                        f"Killing modules that took more than {timeout}"
-                        f" mins to finish."
-                    )
+                    shutdown_reason = f"Killing modules that took more than {timeout} mins to finish."
                     print(shutdown_reason)
                     graceful_shutdown = False
+                    normal_completion = False
 
                 self.kill_all_children()
+
+            analysis_time, end_date = self.get_analysis_time()
+            self.main.metadata_man.set_analysis_end_date(end_date)
+            self._handle_firewall_after_analysis()
+            self._handle_web_interface_after_analysis(normal_completion)
 
             if not self.is_slips_live_updating_event.is_set():
                 self.main.redis_man.decide_on_saving_and_killing_the_redis_db()
@@ -579,9 +738,6 @@ class ShutdownMixin:
 
                 self.main.store_zeek_dir_copy()
                 self.main.delete_zeek_files()
-
-            analysis_time, end_date = self.get_analysis_time()
-            self.main.metadata_man.set_analysis_end_date(end_date)
 
             self.main.profilers_manager.cpu_profiler_release()
             self.main.profilers_manager.memory_profiler_release()
@@ -594,5 +750,9 @@ class ShutdownMixin:
                 graceful_shutdown, analysis_time, shutdown_reason, print
             )
         except KeyboardInterrupt:
+            self.shutdown_signal_received = True
+            if self._is_web_interface_enabled():
+                port = int(self.main.conf.web_interface_port)
+                self._stop_web_interface(port)
             return False
         return None

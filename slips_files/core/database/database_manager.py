@@ -24,7 +24,7 @@ from slips_files.common.output_paths import (
     get_this_filepath_inside_permanent_dir,
 )
 from slips_files.common.performance_paths import get_performance_csv_path
-from slips_files.core.structures.evidence import Evidence
+from slips_files.core.structures.evidence import Evidence, EvidenceType
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.output import Output
 
@@ -70,6 +70,7 @@ class DBManager:
         self.main_pid = main_pid
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
+        self.source_module: str = ""
         self.regex_generator_storage = None
         self.t_cell_storage = None
         # only the main process should ever flush the Redis DB. to avoid
@@ -163,8 +164,7 @@ class DBManager:
         if os.path.exists(db_path):
             if self.is_db_malformed(db_path):
                 self.print(
-                    "trustdb.db is malformed. Backing it up and "
-                    "creating another one..."
+                    "trustdb.db is malformed. Backing it up and creating another one..."
                 )
                 self.backup_db(db_path)
             if not self.has_write_access_to_sqlite(db_path):
@@ -520,9 +520,10 @@ class DBManager:
         self, csv_path: str, old_header: List[str], new_header: List[str]
     ):
         tmp_path = f"{csv_path}.tmp"
-        with open(csv_path, newline="") as handle, open(
-            tmp_path, "w", newline=""
-        ) as out_handle:
+        with (
+            open(csv_path, newline="") as handle,
+            open(tmp_path, "w", newline="") as out_handle,
+        ):
             reader = csv.reader(handle)
             writer = csv.writer(out_handle)
             next(reader, None)
@@ -833,9 +834,6 @@ class DBManager:
     def get_evidence_by_id(self, *args, **kwargs):
         return self.rdb.get_evidence_by_id(*args, **kwargs)
 
-    def is_detection_disabled(self, *args, **kwargs):
-        return self.rdb.is_detection_disabled(*args, **kwargs)
-
     def set_flow_causing_evidence(self, *args, **kwargs):
         return self.rdb.set_flow_causing_evidence(*args, **kwargs)
 
@@ -877,10 +875,31 @@ class DBManager:
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
+        if not self.rdb.belongs_to_run(self.output_dir):
+            return False
+
+        if evidence.evidence_type in self.conf.disabled_detections():
+            return
+
+        # whitelisted evidence are deleted from the db, so we need to check
+        # that we're not re-adding a deleted evidence
+        if self.sqlite.is_evidence_whitelisted(evidence.id):
+            return False
+
+        if not getattr(evidence, "source_module", ""):
+            evidence.source_module = self.source_module
+
+        if evidence.evidence_type in {
+            EvidenceType.HORIZONTAL_PORT_SCAN,
+            EvidenceType.VERTICAL_PORT_SCAN,
+        }:
+            evidence.uid = evidence.uid[:20]
+
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
         evidence_set = self.rdb.set_evidence(evidence)
         if evidence_set:
+            self.sqlite.add_evidence(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
             self.update_threat_level(
@@ -929,19 +948,28 @@ class DBManager:
         return self.rdb.delete_evidence(*args, **kwargs)
 
     def cache_whitelisted_evidence_id(self, *args, **kwargs):
-        return self.rdb.cache_whitelisted_evidence_id(*args, **kwargs)
+        return self.sqlite.mark_evidence_whitelisted(*args, **kwargs)
 
     def is_whitelisted_evidence(self, *args, **kwargs):
-        return self.rdb.is_whitelisted_evidence(*args, **kwargs)
-
-    def remove_whitelisted_evidence(self, *args, **kwargs):
-        return self.rdb.remove_whitelisted_evidence(*args, **kwargs)
+        return self.sqlite.is_evidence_whitelisted(*args, **kwargs)
 
     def get_profileid_twid_alerts(self, *args, **kwargs):
         return self.rdb.get_profileid_twid_alerts(*args, **kwargs)
 
-    def get_twid_evidence(self, *args, **kwargs):
-        return self.rdb.get_twid_evidence(*args, **kwargs)
+    def get_twid_evidence(self, profileid: str, twid: str) -> Dict[str, dict]:
+        evidence: Dict[str, dict] = self.rdb.get_twid_evidence(profileid, twid)
+        if not evidence:
+            return evidence
+
+        ip = profileid.split("_")[-1]
+        whitelisted_ids = self.sqlite.get_whitelisted_evidence_ids_in_tw(
+            ip, twid
+        )
+        return {
+            evidence_id: ev
+            for evidence_id, ev in evidence.items()
+            if evidence_id not in whitelisted_ids
+        }
 
     def update_threat_level(
         self, profileid: str, threat_level: str, confidence: float
@@ -1081,6 +1109,9 @@ class DBManager:
     def get_info_about_not_established_flows(self, *args, **kwargs):
         return self.rdb.get_info_about_not_established_flows(*args, **kwargs)
 
+    def get_uids_for_vertical_portscan(self, *args, **kwargs):
+        return self.rdb.get_uids_for_vertical_portscan(*args, **kwargs)
+
     def is_there_estab_tcp_flows(self, *args, **kwargs):
         return self.rdb.is_there_estab_tcp_flows(*args, **kwargs)
 
@@ -1125,6 +1156,9 @@ class DBManager:
         return self.rdb.get_total_dstips_for_not_estab_flows_on_port(
             *args, **kwargs
         )
+
+    def get_uids_for_horizontal_portscan(self, *args, **kwargs):
+        return self.rdb.get_uids_for_horizontal_portscan(*args, **kwargs)
 
     def get_timewindow(self, *args, **kwargs):
         return self.rdb.get_timewindow(*args, **kwargs)
@@ -1341,6 +1375,15 @@ class DBManager:
     def del_blocked_ip(self, *args, **kwargs):
         return self.rdb.del_blocked_ip(*args, **kwargs)
 
+    def set_firewall_block_state(self, *args, **kwargs):
+        return self.rdb.set_firewall_block_state(*args, **kwargs)
+
+    def get_firewall_block_states(self, *args, **kwargs):
+        return self.rdb.get_firewall_block_states(*args, **kwargs)
+
+    def del_firewall_block_state(self, *args, **kwargs):
+        return self.rdb.del_firewall_block_state(*args, **kwargs)
+
     def set_ipv6_of_profile(self, *args, **kwargs):
         return self.rdb.set_ipv6_of_profile(*args, **kwargs)
 
@@ -1530,6 +1573,12 @@ class DBManager:
     def get_tw_limits(self, *args, **kwargs):
         return self.rdb.get_tw_limits(*args, **kwargs)
 
+    def try_claim_alert_generation(self, *args, **kwargs):
+        return self.rdb.try_claim_alert_generation(*args, **kwargs)
+
+    def release_alert_claim(self, *args, **kwargs):
+        return self.rdb.release_alert_claim(*args, **kwargs)
+
     def close_sqlite(self, *args, **kwargs):
         # when stopping the daemon using -S, slips doesn't start the sqlite db
         if self.sqlite:
@@ -1563,6 +1612,30 @@ class DBManager:
 
     def get_peer_trust_data(self, id: str):
         return self.rdb.get_peer_td(id)
+
+    def record_p2p_message(self, *args, **kwargs):
+        return self.rdb.record_p2p_message(*args, **kwargs)
+
+    def get_p2p_message_telemetry(self, *args, **kwargs):
+        return self.rdb.get_p2p_message_telemetry(*args, **kwargs)
+
+    def store_authenticated_p2p_connection(self, *args, **kwargs):
+        return self.rdb.store_authenticated_p2p_connection(*args, **kwargs)
+
+    def remove_authenticated_p2p_connection(self, *args, **kwargs):
+        return self.rdb.remove_authenticated_p2p_connection(*args, **kwargs)
+
+    def get_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.get_authenticated_p2p_connections(*args, **kwargs)
+
+    def del_stale_p2p_connections(self, *args, **kwargs):
+        return self.rdb.del_stale_p2p_connections(*args, **kwargs)
+
+    def is_p2p_related_flow(self, *args, **kwargs):
+        return self.rdb.is_p2p_related_flow(*args, **kwargs)
+
+    def is_p2p_related_flow_batch(self, *args, **kwargs):
+        return self.rdb.is_p2p_related_flow_batch(*args, **kwargs)
 
     def cache_network_opinion(self, target: str, opinion: dict, time: float):
         self.rdb.cache_network_opinion(target, opinion, time)

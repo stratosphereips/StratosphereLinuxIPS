@@ -64,6 +64,10 @@ These rules MUST be followed:
 - Avoid using environment variables, use variables from slips/config.yaml instead.
 - Use type annotations for all functions and methods parameters and return types.
 - Use utils.start_thread whenever you need to start a new thread.
+- Make sure no added redis keys grow unbounded or without a TTL
+- if cleanup of redis keys is to be done, do it in the cleanup mixing of the redis database
+- shutdown related logic should be put in the process_manager/, not in main.
+- always use modules/supported_module_names.py instead of hardcoding module names.
 
 ### Paths:
 - NEVER use absolute paths
@@ -79,10 +83,12 @@ Docstrings MUST include:
 - Parameters (if applicable)
 - Return value (if applicable). if the return value is None, it should not be explicitly stated in the docstring, just add it as a type annotation.
 - newly added functions in database_manager.py should never have a docstring, and should always have (*args, **kwargs) as args and should always forward these (*args, **kwargs) to the function it calls.
-
+- the database manager's role is a facade, which forwards code to other databases (e.g self.rdb, self.sqlite etc.). the only allowed code implementations in the database manager's functions is code that requires passing the output of one database to another, like this function set_evidence(), which uses the rdb to decide whether to use sqlite or not.
+-
 ## 4. Testing
 - Canonical test runner
 tests/run_all_tests.sh
+
 ## 5. Unit Test Update Workflow
 
 When instructed to "update unit tests", follow EXACTLY:
@@ -100,11 +106,11 @@ Update failing tests ONE BY ONE
 Do NOT batch fixes
 
 Step 4 — Add missing tests for new files
-For every new source file in the branch:
+For every new source file in the branch, evaluate if unit tests are needed, then:
 
 - Mirror its directory under tests/unit/
 
-- C/reate file:
+- Create file:
 test_<filename>.py
 - Add unit tests for that file
 

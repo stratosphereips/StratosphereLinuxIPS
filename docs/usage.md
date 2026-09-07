@@ -165,17 +165,7 @@ However, all instance share 1 cached redis database on redis://localhost:6379 DB
 
 Both redis servers, the main sever (DB 0) and the cache server (DB 1) are opened automatically by Slips.
 
-When using the web interface, you can select among the active Redis-backed analyses:
-
-    To close all unused redis servers, run slips with --killall
-    You have 3 open redis servers, Choose which one to use [1,2,3 etc..]
-    [1] wlp3s0 - port 55879
-    [2] dataset/test7-malicious.pcap - port 59324
-
-You can choose the corresponding file or interface from the web interface.
-You can also use the `Browse redis database` button in the web interface to
-load a saved `.rdb` file directly. The upload accepts only files with the
-`.rdb` extension.
+The local web interface is intentionally not a multi-instance viewer. Do not enable `-w` on several concurrent runs. It stays connected only to the Redis port and output directory of the Slips process that launched it.
 
 Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
 
@@ -252,49 +242,19 @@ analysis and detected malicious behaviour can be analyzed as following:
 
 ### The Web Interface
 
-You can use Slips' web interface by running Slips with ```-w```:
+Enable the run-specific local interface with `-w`:
 
-   ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir -w
+```bash
+./slips.py -e 1 -f dataset/test7-malicious.pcap -w
+```
 
-Then navigate to ```http://localhost:55000/``` from your browser.
+Then open `http://localhost:55000/`. You can also enable it with `web_interface.enabled: true` in `config/slips.yaml` and change `web_interface.port`.
 
+The interface is read-only, binds only to `127.0.0.1`, and shows exactly the run that launched it. It is not a receiver for remote Slips systems and is not a multi-instance database selector. It reads this run's Redis database, `output/<run>/databases/flows.sqlite`, `output/<run>/error.log`, and current process metrics. Its own operational log is `output/<run>/web_interface/server.log`.
 
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px" title="Web Interface">
+The Overview, Alerts, Evidence, and Hosts tabs provide sorting, search, filters, module health, alert-to-evidence-to-flow drill-down, all evidence including records outside alerts, and host identity/DNS/TI/traffic context. See [Local web interface](web_interface.md) for exact data sources and behavior.
 
-Use `Change DB` to switch between active Redis server. Use
-`Browse redis database` to upload and inspect a saved Redis `.rdb` file. If the
-file is not a Redis RDB file or Redis cannot load it, the web interface shows a
-warning and keeps the current database selected.
-
-On the right column, you can see a list of all the IPs seen in your traffic.
-
-The traffic of IP is splitted into time windows. each time window is 1h long of traffic.
-
-IPs and timewindows that are marked in red are considered malicious in Slips.
-
-You can view the traffic of each time window by clicking on it
-
-* The timeline button shows the zeek logs formatted into a human readable format by Slips' timeline module
-* The flows button shows the raw flows as seen in the input file, of by zeek in case of running Slips on a PCAP or on you rinterface
-* The outgoing button shows flow sent from this IP/profile to other IPs only. it doesn't show traffic sent to the profile.
-* The incoming button shows flow sent to this IP/profile to other IPs only. It doesn't show traffic sent from the profile.
-* The Alerts button shows the alerts Slips saw for this IP, each alert is a bunch of evidence that the given profile is malicious. Slips decides to block the IP if an alert is generated for it (if running with -p). Clicking on each alert expands the evidence that resulted in the alert.
-* The Evidence button shows all the evidence of the timewindow whether they were part of an alert or not.
-
----
-
-If you're running slips in docker you will need to add one of the following
-parameters to docker to be able to use the web interface:
-
-Use the host network by adding ```--net=host```, for example:
-
-    docker run -it --rm --net=host --cap-add=NET_ADMIN --name slips stratosphereips/slips:latest
-
-
-Use port mapping to access the container's port to the host's port by adding ```-p 55000:55000```, for example:
-
-    docker run -it --rm -p 55000:55000 --name slips stratosphereips/slips:latest
-
+On Linux, a Docker container must use `--net=host` to reach the intentionally loopback-only listener. Ordinary Docker port publishing cannot forward to a service bound to the container's own loopback address.
 
 ## Saving the database
 
@@ -310,9 +270,9 @@ Note: If you try to save the same file twice using ```-s``` the old backup will 
 
 You can load it again using ```-d```, For example:
 
-```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb -w```
+```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb```
 
-Then navigate to ```http://localhost:55000/``` and select the entry on port 32850 to view the loaded database.
+The local interface does not upload, browse, or switch saved Redis databases; loading an `.rdb` remains a separate Slips operation.
 
 Note: saving and loading the database requires **root privileges** and is only supported in linux.
 
@@ -817,7 +777,7 @@ this file can be used for training Slips RNN module.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
-- ```-w``` or  ```--webinterface``` Start Slips web interface automatically
+- ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
 - ```-ap``` or  ```--access-point``` Used for reading packets from two interfaces when Slips is running as an access point.
