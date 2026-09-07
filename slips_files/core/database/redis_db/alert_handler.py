@@ -128,7 +128,6 @@ class AlertHandler:
             self.constants.ALERTS,
             profileid_twid_alerts,
         )
-        self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
 
     def get_number_of_alerts_so_far(self):
         return self.r.get(self.constants.NUMBER_OF_ALERTS)
@@ -367,6 +366,7 @@ class AlertHandler:
         # reset the accumulated threat level now that an alert is generated
         self._set_accumulated_threat_level(alert, 0)
         self.publish(self.channels.NEW_ALERT, json.dumps(alert_to_dict(alert)))
+        self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
 
     def init_evidence_number(self):
         """used when the db starts to initialize number of
