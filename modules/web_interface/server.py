@@ -24,6 +24,7 @@ import psutil
 import redis
 import yaml
 
+from modules.supported_module_names import Modules
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
@@ -57,42 +58,42 @@ METRIC_RANGES = {
 }
 # pragma: allowlist secret
 EVIDENCE_MODULE = {
-    "ARP_SCAN": "arp",
-    "ARP_OUTSIDE_LOCALNET": "arp",
-    "UNSOLICITED_ARP": "arp",
-    "MITM_ARP_ATTACK": "arp",
-    "PASSWORD_GUESSING": "brute_force_detector",
-    "ANOMALOUS_FLOW": "anomaly_detection_https",
-    "SUSPICIOUS_USER_AGENT": "http_analyzer",
-    "EMPTY_CONNECTIONS": "http_analyzer",
-    "INCOMPATIBLE_USER_AGENT": "http_analyzer",
-    "EXECUTABLE_MIME_TYPE": "http_analyzer",
-    "MULTIPLE_USER_AGENT": "http_analyzer",
-    "HTTP_TRAFFIC": "http_analyzer",
-    "MALICIOUS_JARM": "ip_info",
-    "NETWORK_GPS_LOCATION_LEAKED": "leak_detector",
-    "HORIZONTAL_PORT_SCAN": "network_discovery",
-    "VERTICAL_PORT_SCAN": "network_discovery",
-    "ICMP_TIMESTAMP_SCAN": "network_discovery",
-    "ICMP_ADDRESS_SCAN": "network_discovery",
-    "ICMP_ADDRESS_MASK_SCAN": "network_discovery",
-    "DHCP_SCAN": "network_discovery",
-    "COMMAND_AND_CONTROL_CHANNEL": "rnn_cc_detection",
-    "MALICIOUS_IP_FROM_P2P_NETWORK": "p2p_trust",
-    "P2P_REPORT": "p2p_trust",
+    "ARP_SCAN": Modules.ARP,
+    "ARP_OUTSIDE_LOCALNET": Modules.ARP,
+    "UNSOLICITED_ARP": Modules.ARP,
+    "MITM_ARP_ATTACK": Modules.ARP,
+    "PASSWORD_GUESSING": Modules.BRUTE_FORCE_DETECTOR,
+    "ANOMALOUS_FLOW": Modules.ANOMALY_DETECTION_HTTPS,
+    "SUSPICIOUS_USER_AGENT": Modules.HTTP_ANALYZER,
+    "EMPTY_CONNECTIONS": Modules.HTTP_ANALYZER,
+    "INCOMPATIBLE_USER_AGENT": Modules.HTTP_ANALYZER,
+    "EXECUTABLE_MIME_TYPE": Modules.HTTP_ANALYZER,
+    "MULTIPLE_USER_AGENT": Modules.HTTP_ANALYZER,
+    "HTTP_TRAFFIC": Modules.HTTP_ANALYZER,
+    "MALICIOUS_JARM": Modules.IP_INFO,
+    "NETWORK_GPS_LOCATION_LEAKED": Modules.LEAK_DETECTOR,
+    "HORIZONTAL_PORT_SCAN": Modules.NETWORK_DISCOVERY,
+    "VERTICAL_PORT_SCAN": Modules.NETWORK_DISCOVERY,
+    "ICMP_TIMESTAMP_SCAN": Modules.NETWORK_DISCOVERY,
+    "ICMP_ADDRESS_SCAN": Modules.NETWORK_DISCOVERY,
+    "ICMP_ADDRESS_MASK_SCAN": Modules.NETWORK_DISCOVERY,
+    "DHCP_SCAN": Modules.NETWORK_DISCOVERY,
+    "COMMAND_AND_CONTROL_CHANNEL": Modules.RNN_CC_DETECTION,
+    "MALICIOUS_IP_FROM_P2P_NETWORK": Modules.P2P_TRUST,
+    "P2P_REPORT": Modules.P2P_TRUST,
 }  # pragma: allowlist secret
 MODULE_BY_EVIDENCE_PREFIX = {
-    "ARP_": "arp",
-    "HTTP_": "http_analyzer",
-    "ML_LINEAR_": "ml_linear_model",
-    "ML_ONLINE_": "ml_online_model",
-    "PORT_SCAN": "network_discovery",
-    "VERTICAL_PORT_SCAN": "network_discovery",
-    "HORIZONTAL_PORT_SCAN": "network_discovery",
-    "RNN_": "rnn_cc_detection",
-    "LEAK": "leak_detector",
-    "MALICIOUS_JARM": "ip_info",
-    "THREAT_INTELLIGENCE": "threat_intelligence",
+    "ARP_": Modules.ARP,
+    "HTTP_": Modules.HTTP_ANALYZER,
+    "ML_LINEAR_": Modules.ML_LINEAR_MODEL,
+    "ML_ONLINE_": Modules.ML_ONLINE_MODEL,
+    "PORT_SCAN": Modules.NETWORK_DISCOVERY,
+    "VERTICAL_PORT_SCAN": Modules.NETWORK_DISCOVERY,
+    "HORIZONTAL_PORT_SCAN": Modules.NETWORK_DISCOVERY,
+    "RNN_": Modules.RNN_CC_DETECTION,
+    "LEAK": Modules.LEAK_DETECTOR,
+    "MALICIOUS_JARM": Modules.IP_INFO,
+    "THREAT_INTELLIGENCE": Modules.THREAT_INTELLIGENCE,
 }
 TI_FIELDS = (
     "geocountry",
@@ -3587,7 +3588,7 @@ class RunDataReader:
         Returns:
             Host state and newest-first transition records for this run.
         """
-        log_path = self.output_dir / "arp_poisoner" / "arp_poisoning.log"
+        log_path = self.output_dir / Modules.ARP_POISONER / "arp_poisoning.log"
         try:
             lines = log_path.read_text(errors="replace").splitlines()
         except OSError:
@@ -3793,7 +3794,7 @@ class RunDataReader:
         parsed = self._arp_poisoning_events()
         evidence = self._arp_evidence()
         try:
-            raw_pid = self.redis.hget("PIDs", "arp_poisoner")
+            raw_pid = self.redis.hget("PIDs", Modules.ARP_POISONER)
             analysis_complete = bool(
                 self.redis.hget("analysis", "analysis_end")
             )
@@ -3801,7 +3802,7 @@ class RunDataReader:
             raw_pid = None
             analysis_complete = False
         log_exists = (
-            self.output_dir / "arp_poisoner" / "arp_poisoning.log"
+            self.output_dir / Modules.ARP_POISONER / "arp_poisoning.log"
         ).exists()
         module_state = "not started"
         pid = int(raw_pid) if str(raw_pid or "").isdigit() else None
@@ -4012,7 +4013,7 @@ class RunDataReader:
         history_page = history[history_offset : history_offset + MAX_PAGE_SIZE]
         history_next = history_offset + len(history_page)
         return {
-            "enabled": bool(self.redis.hget("PIDs", "blocking")),
+            "enabled": bool(self.redis.hget("PIDs", Modules.BLOCKING)),
             "items": records[:MAX_PAGE_SIZE],
             "total": len(records),
             "full_total": len(records),
@@ -4034,7 +4035,7 @@ class RunDataReader:
         Returns:
             Newest-first firewall transition records for this run.
         """
-        log_path = self.output_dir / "blocking" / "blocking.log"
+        log_path = self.output_dir / Modules.BLOCKING / "blocking.log"
         try:
             lines = log_path.read_text(errors="replace").splitlines()
         except OSError:
@@ -4326,7 +4327,7 @@ class RunDataReader:
                 item["peer_id"],
             )
         )
-        p2p_log = self.output_dir / "p2p_trust" / "p2p.log"
+        p2p_log = self.output_dir / Modules.P2P_TRUST / "p2p.log"
         listener = ""
         local_peer_id = ""
         multiaddress = str(self.redis.get("multiAddress") or "").strip()
@@ -4349,7 +4350,7 @@ class RunDataReader:
                 pass
         current_reports = [item for item in reports if item["this_run"]]
         return {
-            "enabled": bool(self.redis.hget("PIDs", "p2p_trust")),
+            "enabled": bool(self.redis.hget("PIDs", Modules.P2P_TRUST)),
             "listener": listener,
             "local_peer_id": local_peer_id,
             "peers": peers,

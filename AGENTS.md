@@ -67,6 +67,7 @@ These rules MUST be followed:
 - Make sure no added redis keys grow unbounded or without a TTL
 - if cleanup of redis keys is to be done, do it in the cleanup mixing of the redis database
 - shutdown related logic should be put in the process_manager/, not in main.
+- always use modules/supported_module_names.py instead of hardcoding module names.
 
 ### Paths:
 - NEVER use absolute paths

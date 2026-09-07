@@ -1102,6 +1102,10 @@ async function loadEvidence() {
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
+  byId("evidence-summary").textContent = `Total Evidence (including whitelisted): ${compact(payload.full_total)}. `
+    + (grouped
+      ? `Evidence grouped by host and type: ${compact(payload.total)}.`
+      : `Individual durable evidence: ${compact(payload.total)}.`);
   if (grouped) {
     renderTable("evidence-table", payload.items, [
       (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
