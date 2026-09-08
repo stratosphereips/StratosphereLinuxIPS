@@ -57,6 +57,72 @@ Check the alerts slips generated
 
 #### MacOS Hosts
 
+##### Native installation
+
+Run the following commands from the repository root. Use Python 3.11 in a
+virtual environment: the pinned scientific dependencies in
+`install/requirements.txt` were verified with this version on Apple Silicon.
+Do not use the system's default Python 3.14 with these dependency pins.
+
+```bash
+brew install python@3.11 redis zeek yara
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r install/requirements.txt
+python slips.py -h
+python slips.py -e 1 -f dataset/test7-malicious.pcap -o output/macos-test
+```
+
+Slips starts its local Redis cache when needed. Zeek is needed for PCAPs and
+interfaces; existing Zeek logs can also be analyzed with `-f`. YARA enables
+the leak detector; extracting details from a matching packet additionally
+requires Wireshark's `tshark` command. Building `netifaces` requires Apple's
+command-line developer tools if they are not already installed.
+
+The native process implementation uses macOS's default `spawn` method.
+Do not force `fork` or disable Apple's fork-safety checks. Modules, database
+connections, and background threads are initialized in their child processes.
+
+Foreground file and stdin analysis, growing Zeek logs, and a local two-peer
+Iris exchange are covered by the [native macOS investigation](macos.md).
+Live interfaces need permission to capture through macOS BPF devices. Live
+capture, daemon mode, Intel Macs, and other optional integrations have not
+been validated by this change. Firewall
+blocking and the Linux access-point workflow remain Linux-specific.
+
+Alerts are written to `output/macos-test/alerts/`; diagnostic output is in
+`output/macos-test/slips.log` and `output/macos-test/errors.log`. Remote feed
+updates can delay shutdown while downloads finish; that is separate from
+process compatibility.
+
+##### Native global P2P (Iris)
+
+The bundled Iris executable targets Linux. Build a native executable from
+the checked-out Iris submodule and select it in your Slips configuration:
+
+```bash
+brew install go
+mkdir -p output/bin
+go -C iris build -buildvcs=false -o ../output/bin/iris cmd/peercli.go
+```
+
+```yaml
+global_p2p:
+  use_global_p2p: true
+  iris_conf: config/iris_config.yaml
+  iris_binary: output/bin/iris
+```
+
+Merge these settings into the existing configuration. Paths are relative to
+the repository root. Global P2P still requires an interface (`-i`, optionally
+with `-g` for growing Zeek logs). The verification used two loopback peers
+with external bootstrapping disabled; it does not establish public-network or
+Fides reputation correctness. The separate `local_p2p`/`p2p4slips` backend
+still fails to build with Go 1.25.1 because of its old networking dependencies.
+See [macos.md](macos.md) for the remaining work and exact validation scope.
+
+##### Docker
+
 ###### Analyse your own traffic
     docker run --platform linux/amd64 --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
 
