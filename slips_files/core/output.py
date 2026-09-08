@@ -37,41 +37,7 @@ class Output(IObserver):
     """
 
     name = "output"
-    # Output is instantiated once in the main process before any of
-    # slips' child processes are forked, so these multiprocessing locks
-    # are inherited by every child and actually serialize writes to the
-    # shared stdout/logfiles across processes. threading.Lock() would not
-    # do that, since each forked process gets its own independent copy of
-    # it, letting concurrent prints from different processes interleave
-    # and corrupt each other's output (e.g. a partial in-place \r update
-    # from one process landing in the middle of another process' line).
-    slips_logfile_lock = multiprocessing.Lock()
-    errors_logfile_lock = multiprocessing.Lock()
-    cli_lock = multiprocessing.Lock()
-    # set while a single-line, in-place-refreshing status line (e.g. the
-    # "Total analyzed IPs" summary) is left on screen without a trailing
-    # newline. shared across all forked processes so that any of them
-    # printing a normal line first closes it out with a newline instead
-    # of overwriting/merging with it.
-    _cli_has_dangling_line = multiprocessing.Value("b", False)
-
-    # While slips' processes/modules are still announcing their startup
-    # (see begin_startup_announcements()), every OTHER printed message
-    # is held here instead of going straight to the cli/logfiles, so it
-    # can't land in the middle of the startup progress report and break
-    # up its lines. Nothing is delayed except the printing itself - the
-    # code that queued the message keeps running normally. Queued
-    # messages are flushed, in the order they arrived, as soon as the
-    # last process/module announces itself.
-    _startup_queue = multiprocessing.Queue()
-    _startup_in_progress = multiprocessing.Value("b", False)
-    _startup_queue_lock = multiprocessing.Lock()
-    # monotonic-clock deadline after which queued messages are
-    # force-flushed even if the expected total was never reached - a
-    # safety net for the case where a module dies/errors out before
-    # announcing itself, which would otherwise stall all cli/logfile
-    # output for the rest of the run
-    _startup_deadline = multiprocessing.Value("d", 0.0)
+    # Each run explicitly shares its logger locks and startup queue with children.
     STARTUP_QUEUE_TIMEOUT_SECS = 120
 
     def __init__(
@@ -86,6 +52,16 @@ class Output(IObserver):
         slips_args=None,
     ):
         super().__init__()
+        # Instance attributes travel with the logger under spawn/forkserver.
+        # Class attributes alone would be recreated independently in children.
+        self.slips_logfile_lock = multiprocessing.Lock()
+        self.errors_logfile_lock = multiprocessing.Lock()
+        self.cli_lock = multiprocessing.Lock()
+        self._cli_has_dangling_line = multiprocessing.Value("b", False)
+        self._startup_queue = multiprocessing.Queue()
+        self._startup_in_progress = multiprocessing.Value("b", False)
+        self._startup_queue_lock = multiprocessing.Lock()
+        self._startup_deadline = multiprocessing.Value("d", 0.0)
         # a fresh Output() means a fresh run for whichever process
         # constructed it - no startup announcements are in progress yet
         self._startup_in_progress.value = False
