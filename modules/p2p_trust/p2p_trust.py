@@ -5,11 +5,11 @@ import os
 import shutil
 import signal
 import subprocess
+import netifaces
 import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
-import socket
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
@@ -163,13 +163,31 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
         self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.rendezvous: str = conf.read_configuration(
+            "local_p2p", "rendezvous", "slips"
+        )
 
-    def get_local_IP(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+    def get_local_IP(self) -> str:
+        """Return the capture interface's IPv4 address without Internet access.
+
+        Returns:
+            IPv4 address on the selected interface or default-route interface.
+        """
+        interface = self.args.interface
+        if not interface:
+            gateway = (
+                netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+            )
+            interface = gateway[1] if gateway else None
+        if interface:
+            for address in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                if address.get("addr"):
+                    return address["addr"]
+        raise ValueError(
+            "Local P2P requires an interface with an IPv4 address."
+        )
 
     def _configure(self):
         self.trust_db = self.db.trust_db
@@ -394,6 +412,27 @@ class Trust(IModule):
         self.go_director.handle_gopy_data(data)
         # except Exception as e:
         #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
+
+    def is_msg_version_compatible(self, message: dict) -> bool:
+        """Validate Go envelopes separately from versioned Slips messages.
+
+        Parameters:
+            message: Redis message from a subscribed channel.
+
+        Returns:
+            Whether the message matches the channel's expected protocol.
+        """
+        if message and message.get("channel") == self.gopy_channel:
+            try:
+                payload = json.loads(message["data"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            return (
+                isinstance(payload, dict)
+                and payload.get("message_type") in ("peer_update", "go_data")
+                and isinstance(payload.get("message_contents"), dict)
+            )
+        return super().is_msg_version_compatible(message)
 
     # def update_callback(self, msg: Dict):
     #     try:
@@ -647,6 +686,7 @@ class Trust(IModule):
         params = {
             "-port": str(self.port),
             "-host": self.host,
+            "-rendezvous": self.rendezvous,
             "-key-file": self.pigeon_key_file,
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
             "-redis-channel-pygo": self.pygo_channel_raw,
@@ -693,7 +733,8 @@ class Trust(IModule):
                     f"Error: {retry_error}"
                 )
 
-    def shutdown_gracefully(self):
+    def shutdown_gracefully(self) -> None:
+        """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
