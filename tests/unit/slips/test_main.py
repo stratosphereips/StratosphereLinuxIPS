@@ -354,12 +354,14 @@ def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
 
     with (
         patch.object(main, "was_running_zeek", return_value=True),
-        patch(f"{main.__class__.__module__}.copy_tree") as mock_copy_tree,
+        patch("shutil.copytree") as mock_copy_tree,
         patch("builtins.print"),
     ):
         main.store_zeek_dir_copy()
 
-    mock_copy_tree.assert_called_once_with("zeek_dir", "output/zeek_files")
+    mock_copy_tree.assert_called_once_with(
+        "zeek_dir", "output/zeek_files", dirs_exist_ok=True
+    )
 
 
 # TODO should be moved to utils unit tests after the PR is merged
