@@ -33,7 +33,7 @@ def test_iris_protocol_version(
         "channel": "iris_internal",
         "data": json.dumps({"version": version, "type": kind}),
     }
-    assert iris.is_msg_version_compatible(message) is expected
+    assert iris.is_msg_version_compatible(message, "iris_internal") is expected
 
 
 def test_iris_translates_versions_at_protocol_boundary() -> None:

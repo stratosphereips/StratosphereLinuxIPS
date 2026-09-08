@@ -183,16 +183,17 @@ class Iris(IModule):
                 self.print(f"iris_internal: {msg}")
             # else: pass, message was just an echo from F -> I forwarding
 
-    def is_msg_version_compatible(self, message: dict) -> bool:
+    def is_msg_version_compatible(self, message: dict, channel: str) -> bool:
         """Accept Iris protocol messages and validate internal Slips versions.
 
         Parameters:
             message: Redis message from one of this module's channels.
+            channel: Channel on which the message was received.
 
         Returns:
             Whether the message matches its channel's protocol version.
         """
-        if message and message.get("channel") == "iris_internal":
+        if message and channel == "iris_internal":
             try:
                 payload = json.loads(message["data"])
             except (KeyError, TypeError, ValueError):
@@ -202,7 +203,7 @@ class Iris(IModule):
                 and payload.get("version") == 1
                 and str(payload.get("type", "")).startswith("nl2tl_")
             )
-        return super().is_msg_version_compatible(message)
+        return super().is_msg_version_compatible(message, channel)
 
     def _check_iris_status(self):
         if self.process.poll() is None:

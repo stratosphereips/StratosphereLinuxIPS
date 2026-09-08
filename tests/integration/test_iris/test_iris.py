@@ -8,6 +8,7 @@ import signal
 import shutil
 from pathlib import PosixPath
 
+import netifaces
 import redis
 
 from tests.common_test_utils import (
@@ -110,18 +111,42 @@ def wait_for_file(file_path, timeout_seconds):
     return os.path.exists(file_path)
 
 
-def get_default_interface():
+def get_default_interface() -> str | None:
     """
-    Get the default network interface.
+    Get an IPv4 network interface without Linux-specific route files.
 
     Returns:
-        str: Name of the default network interface.
+        Default-route interface, another IPv4 interface, or None.
     """
-    with open("/proc/net/route") as f:
-        for line in f.readlines()[1:]:
-            fields = line.strip().split()
-            if fields[1] == "00000000":  # default route
-                return fields[0]
+    default_gateway = (
+        netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+    )
+    if default_gateway:
+        return str(default_gateway[1])
+
+    for interface in netifaces.interfaces():
+        addresses = netifaces.ifaddresses(interface).get(
+            netifaces.AF_INET, []
+        )
+        if any(address.get("addr") for address in addresses):
+            return interface
+    return None
+
+
+def get_iris_binary_path() -> str:
+    """Return the Iris executable appropriate for the current platform.
+
+    Returns:
+        Repository-relative path to the Iris executable.
+    """
+    if sys.platform == "darwin":
+        native_binary = Path("output/bin/iris")
+        assert native_binary.is_file(), (
+            "Build native Iris first: go -C iris build -buildvcs=false "
+            "-o ../output/bin/iris cmd/peercli.go"
+        )
+        return str(native_binary)
+    return "modules/iris/iris"
 
 
 def extract_connection_string(log_file_first_iris):
@@ -329,6 +354,7 @@ def prepare_and_start_peer1(
             "global_p2p": {
                 "use_global_p2p": True,
                 "iris_conf": str(peer1_iris_config_path),
+                "iris_binary": get_iris_binary_path(),
             },
             "modules": {"disable": ["template", "feeds_update_manager"]},
         },
@@ -408,6 +434,7 @@ def prepare_and_start_peer2(
             "global_p2p": {
                 "use_global_p2p": True,
                 "iris_conf": str(peer2_iris_config_path),
+                "iris_binary": get_iris_binary_path(),
             },
             "modules": {"disable": ["template", "feeds_update_manager"]},
         },

@@ -413,16 +413,17 @@ class Trust(IModule):
         # except Exception as e:
         #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
 
-    def is_msg_version_compatible(self, message: dict) -> bool:
+    def is_msg_version_compatible(self, message: dict, channel: str) -> bool:
         """Validate Go envelopes separately from versioned Slips messages.
 
         Parameters:
             message: Redis message from a subscribed channel.
+            channel: Channel on which the message was received.
 
         Returns:
             Whether the message matches the channel's expected protocol.
         """
-        if message and message.get("channel") == self.gopy_channel:
+        if message and channel == self.gopy_channel:
             try:
                 payload = json.loads(message["data"])
             except (KeyError, TypeError, ValueError):
@@ -432,7 +433,7 @@ class Trust(IModule):
                 and payload.get("message_type") in ("peer_update", "go_data")
                 and isinstance(payload.get("message_contents"), dict)
             )
-        return super().is_msg_version_compatible(message)
+        return super().is_msg_version_compatible(message, channel)
 
     # def update_callback(self, msg: Dict):
     #     try:

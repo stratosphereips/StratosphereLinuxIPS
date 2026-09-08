@@ -4,6 +4,7 @@
 # and final cleanup for ProcessManager.
 import multiprocessing
 import os
+import platform
 import select
 import signal
 import sys
@@ -603,6 +604,8 @@ class ShutdownMixin:
 
     def _handle_firewall_after_analysis(self) -> None:
         """Keep or remove managed firewall rules after an interactive run."""
+        if platform.system() != "Linux":
+            return
         if not has_slips_firewall_rules():
             return
 

@@ -904,6 +904,10 @@ def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
 
     with (
         patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value="Linux",
+        ),
+        patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
             return_value=True,
@@ -941,6 +945,10 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
 
     with (
         patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value="Linux",
+        ),
+        patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
             return_value=True,
@@ -958,6 +966,30 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
+
+
+@pytest.mark.parametrize("system", ["Darwin", "Windows"])
+def test_firewall_shutdown_skips_non_linux_systems(system: str) -> None:
+    """Avoid invoking Linux firewall commands on unsupported systems.
+
+    Parameters:
+        system: Non-Linux operating-system name reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
 
 
 @pytest.mark.parametrize("finished", [False, True])

@@ -33,6 +33,7 @@ def create_trust():
     trust.pigeon_binary_dir = "p2p4slips"
     trust.pigeon_binary = "p2p4slips/p2p4slips"
     trust.slips_version = "1.2.3"
+    trust.rendezvous = "slips"
     return trust
 
 
@@ -154,6 +155,8 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert executable[key_index + 1] == "pigeonpeer1.keys"
     assert "--redis-db" in executable
     assert f"localhost:{trust.redis_port}" in executable
+    rendezvous_index = executable.index("-rendezvous")
+    assert executable[rendezvous_index + 1] == trust.rendezvous
     version_index = executable.index("-slips-version")
     assert executable[version_index + 1] == trust.slips_version
     assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"
