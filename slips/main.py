@@ -11,7 +11,6 @@ import sys
 import time
 import traceback
 from datetime import datetime
-from distutils.dir_util import copy_tree
 from typing import Set
 import logging
 
@@ -40,7 +39,6 @@ from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.helpers.checker import Checker
-
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -146,7 +144,7 @@ class Main:
                 return
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
-            copy_tree(zeek_dir, dest_zeek_dir)
+            shutil.copytree(zeek_dir, dest_zeek_dir, dirs_exist_ok=True)
             print(f"[Main] Stored a copy of zeek files to {dest_zeek_dir}")
 
     def delete_zeek_files(self):
