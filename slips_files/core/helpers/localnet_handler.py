@@ -112,7 +112,9 @@ class LocalnetHandler:
         if not self._should_set_localnet(flow):
             return
 
-        if self.is_running_non_stop:
+        if self.is_running_non_stop and (
+            self.profiler.args.interface or self.profiler.args.access_point
+        ):
             local_nets: Dict[str, str] = (
                 self._get_localnet_of_given_interfaces_using_netifaces()
             )
