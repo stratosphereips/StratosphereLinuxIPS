@@ -5,7 +5,7 @@ setuptools<81
 river
 numpy==1.26.4
 watchdog==5.0.0
-redis==5.2.1
+redis==8.0.0
 urllib3==2.7.0
 pandas==2.3.3
 tzlocal==5.3.1
