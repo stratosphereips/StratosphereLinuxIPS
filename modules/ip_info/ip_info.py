@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from multiprocessing.synchronize import SEM_VALUE_MAX
 from typing import (
     Union,
     Optional,
@@ -55,7 +56,9 @@ class IPInfo(IAsyncModule):
     def init(self):
         """This will be called when initializing this module"""
         # 30MBs max size of this queue to avoid growing forever in mem
-        self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
+        self.pending_mac_queries = multiprocessing.Queue(
+            maxsize=min(30000000, SEM_VALUE_MAX)
+        )
         self.lookup_executor = ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="ip-info"
         )
