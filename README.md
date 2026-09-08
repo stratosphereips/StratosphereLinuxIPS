@@ -61,7 +61,7 @@ Slips is a powerful endpoint behavioral intrusion prevention and detection syste
 Slips is the first free software behavioral machine learning-based IDS/IPS for endpoints. It was created in 2012 by Sebastian Garcia at the Stratosphere Laboratory, AIC, FEE, Czech Technical University in Prague. The goal was to offer a local IDS/IPS that leverages machine learning to detect network attacks using behavioral analysis.
 
 
-Slips is supported on Linux, MacOS, and windows dockers only. The blocking features of Slips are only supported on Linux
+Slips runs on Linux and supports native macOS foreground analysis; Windows uses Docker. See the [native macOS setup and validation scope](docs/installation.md#macos-hosts). The blocking features of Slips are only supported on Linux.
 
 Slips is Python-based and relies on [Zeek network analysis framework](https://zeek.org/get-zeek/) for capturing live traffic and analyzing PCAPs. and relies on
 Redis >= 7.0.4 for interprocess communication.
