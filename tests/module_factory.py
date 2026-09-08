@@ -38,6 +38,23 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_module_process_obj(
+        self, module: type | str, *args: object, **kwargs: object
+    ) -> object:
+        """Create an unstarted module process for process-boundary tests.
+
+        Parameters:
+            module: Module class or import path.
+            args: Module constructor arguments.
+            kwargs: Module constructor keyword arguments.
+
+        Returns:
+            Process that initializes the module in its child.
+        """
+        from slips_files.core.module_process import ModuleProcess
+
+        return ModuleProcess(module, *args, **kwargs)
+
     def __init__(self):
         self.profiler_queue = Queue()
         self.input_queue = Queue()
@@ -46,6 +63,14 @@ class ModuleFactory:
     def get_default_db(self):
         """default is o port 6379, this is the one we're using in conftest"""
         return self.create_db_manager_obj(6379)
+
+    def create_redis_publisher_obj(self) -> object:
+        """Return a Redis publisher with a mocked client and no connection."""
+        from slips_files.core.database.redis_db.database import RedisDB
+
+        db = object.__new__(RedisDB)
+        db.r = Mock()
+        return db
 
     def mocked_init_flock(self):
         self.lockfile_path = "/tmp/fake.lock"
@@ -636,6 +661,10 @@ class ModuleFactory:
 
         with (
             patch(
+                "modules.blocking.blocking.platform.system",
+                return_value="Linux",
+            ),
+            patch(
                 "modules.blocking.blocking.utils.get_sudo_according_to_env",
                 return_value="",
             ),
@@ -882,7 +911,8 @@ class ModuleFactory:
         return leak_detector
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_profiler_obj(self, mock_db):
+    @patch("slips_files.core.profiler.AIDManager")
+    def create_profiler_obj(self, mock_aid: Mock, mock_db: Mock) -> object:
         from slips_files.core.profiler import Profiler
 
         slips_args = Mock()
@@ -1393,6 +1423,32 @@ class ModuleFactory:
         )
         risk_iq.db = mock_db
         return risk_iq
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_iris_obj(self, mock_db: Mock) -> object:
+        """Create an Iris adapter with mocked database resources.
+
+        Parameters:
+            mock_db: Patched database constructor.
+
+        Returns:
+            Iris adapter ready for isolated protocol tests.
+        """
+        from modules.iris.iris import Iris
+
+        iris = Iris(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        iris.db = mock_db
+        iris.print = Mock()
+        return iris
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):
