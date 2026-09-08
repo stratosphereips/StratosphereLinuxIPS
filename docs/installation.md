@@ -355,37 +355,114 @@ After these steps, if you need optional submodules, initialize them with
 their own READMEs.
 
 
-## Installing Slips on a Raspberry PI
+
+
+----------
+----------
+----------
+# Installing Slips on a Raspberry PI
 
 The recommended way to install Slips on the RPI is using docker.
 
 If you're using the 64-bit (arm64) version of the RPI,
 follow the official docker [installation instructions for Debian](https://docs.docker.com/engine/install/debian/).
 
-Slips now supports a native linux/arm64 docker image, you can pull it using
+## Enabling the memory protection for Docker
+The default raspbian image disables by default the memory protection that Docker needs.
 
-    docker pull stratosphereips/slips:latest
+To test if your rpi is correctly configured you can do 
 
-To enable P2P, make sure of the following:
-* You run Slips docker with --net=host
-* You don't have redis running on the host and occupying Redis' default IP/Port 127.0.0.1:6379.
+	grep -qw memory /sys/fs/cgroup/cgroup.controllers && echo "PASS: memory cgroups enabled" || echo "FAIL: memory cgroups disabled"
 
-### Protect your local network with Slips on the RPI
+If your rpi is not correctly configured, you can correctly configured it with
 
-By installing Slips on your RPI and using it as an access point,
-you can extend its protection to your other connected devices.
+	sudo sed -i.bak '/cgroup_enable=memory/! s/[[:space:]]*$/ cgroup_enable=memory/' /boot/firmware/cmdline.txt
+	reboot
 
-Once Slips detects a malicious device, it will block all traffic to and from it using iptables.
-Meaning it wil kick out the malicious device from the AP.
+## Running Slips' Docker in the Pi
+
+This command 
+
+	docker run --restart unless-stopped -d --cpu-shares "700" --memory="14g" --memory-swap="40g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output --name slips_rpi stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eth0 -w -p -c config/slips.yaml -o output/slips_rpi
+
+The meaning of the parameters are:
+
+  - --restart unless-stopped
+    Restarts the container if it crashes, exits, Docker restarts, or the Pi reboots. It remains stopped if you explicitly stop it with docker stop.
+
+  - -d
+    Runs the container in detached/background mode. View its output with: `docker logs -f slips_rpi`
+
+  - --cpu-shares "700"
+    Gives the container a relative CPU weight of 700; Docker’s default is 1024. This is only a priority during CPU contention—it does not cap CPU consumption.
+
+  - --memory="14g"
+    Limits the container to 14 GiB of physical memory. If your Pi has 8GB of Mem, use 7g.
+
+  - --memory-swap="26g"
+    Allows 26 GiB total memory plus swap (this is not 40 GiB of swap). The theoretical swap allowance is roughtly double the memory you allowed.
+
+  - --net=host
+    Makes the container share the Pi’s network namespace instead of receiving a separate container IP. This allows Slips to monitor the host’s eth0 interface directly.
+
+  - --cap-add=NET_ADMIN
+    Allows processes inside the container to modify networking and firewall configuration. Slips needs this for -p blocking with the iptables firewall.
+
+  - -v $(pwd)/output:/StratosphereLinuxIPS/output
+    Creates a bind mount:
+      - $(pwd) expands to the current host directory.
+      - $(pwd)/output is the directory on the Pi.
+      - /StratosphereLinuxIPS/output is where it appears inside the container.
+
+    Slips results therefore survive container replacement. If you run the command from /home/pi, the host directory is /home/pi/output.
+
+  - --name slips_rpi
+    Names the container slips_rpi.
+
+  - stratosphereips/slips:latest
+    The Docker image.
+
+  Specific Slips command and options:
+
+  - /StratosphereLinuxIPS/slips.py
+    The program Docker launches inside the container.
+
+  - -i eth0
+    Captures and analyzes live traffic from eth0.
+
+  - -w
+    Starts the Slips web interface automatically.
+
+  - -p
+    Enables active blocking of malicious IP addresses. This is also required if you want ARP poisoning isolation of attackers, but it should also be enabled in the configuration.
+
+  - -c config/slips.yaml
+    Loads settings from /StratosphereLinuxIPS/config/slips.yaml inside the container.
+
+  - -o output/slips_rpi
+    Writes SLIPS results to /StratosphereLinuxIPS/output/slips_rpi. Because the parent output directory is bind-mounted, the files appear on the Pi at: $(pwd)/output/slips_rpi
+
+
+## Keep Slips always running in the Rpi
+To be sure that Slips starts every time your Pi boots, remember to run it with `--restart unless-stopped` and the to run
+
+	`sudo systemctl enable docker`
+
+
+
+
+--------------
+## Protect your local network with Slips on the RPI
+Optionally, Slips can be run in the Pi with a WiFi access point. Then your local devices can connect to that Wifi and be better protected by Slips since it can actively block attackers to your devices.
 
 ![](images/immune/rpi_as_an_acces_point.jpeg)
 
-
-1. Connect your RPI to your router using an ethernet cable
+Configuration:
+1. Connect your RPI to your router using an ethernet cable (since the WiFi will be used for the AP)
 2. Install [linux-wifi-hotspot](https://github.com/lakinduakash/linux-wifi-hotspot/blob/master/src/scripts/README.md)
 3. Start the access point (in NAT mode)
 
-  `sudo create_ap wlan0 eth0 rpi_wifi mysecurepassword -c 40`
+  `sudo create_ap wlan0 eth0 rpi_wifi changemysecurepassword -c 40`
 
 where `wlan0` is the wifi interface of your RPI, `eth0` is the ethernet interface and `-c 40` is the channel of the access point.
 
@@ -399,18 +476,10 @@ If all goes well you should see `wlan0: AP-ENABLED` in the output of the command
 Check the [Debugging common AP errors](https://stratospherelinuxips.readthedocs.io/en/develop/immune/installing_slips_in_the_rpi.html#debugging-common-ap-errors) section if you have any issues.
 
 
-
 4. Run Slips in the RPI using the command below to listen to the traffic from the access point.
 
 ```bash
-./slips.py -i wlan0
+docker run --restart unless-stopped -d --cpu-shares "700" --memory="14g" --memory-swap="40g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output --name slips_rpi stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i wlan0 -w -p -c config/slips.yaml -o output/slips_rpi
 ```
 
-5. (Optional) If you want to block malicious devices, run Slips with the `-p` parameter. Using this parameter will
-block all traffic to and from the malicious device when slips sets an alert.
-
-```bash
-./slips.py -i wlan0 -p
-```
-
-Now connect your devices to the rpi_wifi with "mysecurepassword" as the password, and enjoy the protection of Slips.
+Now connect your devices to the rpi_wifi with "changemysecurepassword" as the password, and enjoy the protection of Slips.
