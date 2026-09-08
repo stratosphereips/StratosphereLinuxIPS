@@ -100,12 +100,18 @@ class Iris(IModule):
         Initializations that run only once before the main() function runs in a loop
         """
 
-        iris_exe_path = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)), "iris"
-        )
         conf = ConfigParser()
-        iris_conf_path = self.make_relative_path(
-            iris_exe_path, conf.get_iris_config_location()
+        full_cwd = Path("modules") / "iris"
+        iris_exe_path = os.path.relpath(
+            conf.read_configuration(
+                "global_p2p", "iris_binary", "modules/iris/iris"
+            ),
+            full_cwd,
+        )
+        if not iris_exe_path.startswith("."):
+            iris_exe_path = f"./{iris_exe_path}"
+        iris_conf_path = os.path.relpath(
+            conf.get_iris_config_location(), full_cwd
         )
 
         self.irip = self._iris_configurator(
@@ -135,8 +141,6 @@ class Iris(IModule):
         self.log_file = open(self.log_file_path, "w")
         self.log_file.write(f"Running Iris using command: {command_str}")
 
-        full_cwd = Path.cwd() / "modules" / "iris"
-
         try:
             # Start the subprocess, redirecting stdout and stderr to the same file
             self.process = subprocess.Popen(
@@ -161,7 +165,11 @@ class Iris(IModule):
         if msg := self.get_msg("fides2network"):
             # Fides send something to the network (Iris)
             # FORWARD to Iris
-            self.db.publish("iris_internal", msg["data"])
+            payload = json.loads(msg["data"])
+            payload["version"] = 1
+            self.db.publish(
+                "iris_internal", json.dumps(payload), add_version=False
+            )
             self.print(f"fides2network: {msg}")
 
         if msg := self.get_msg("iris_internal"):
@@ -174,6 +182,27 @@ class Iris(IModule):
                 self.db.publish("network2fides", msg["data"])
                 self.print(f"iris_internal: {msg}")
             # else: pass, message was just an echo from F -> I forwarding
+
+    def is_msg_version_compatible(self, message: dict) -> bool:
+        """Accept Iris protocol messages and validate internal Slips versions.
+
+        Parameters:
+            message: Redis message from one of this module's channels.
+
+        Returns:
+            Whether the message matches its channel's protocol version.
+        """
+        if message and message.get("channel") == "iris_internal":
+            try:
+                payload = json.loads(message["data"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            return (
+                isinstance(payload, dict)
+                and payload.get("version") == 1
+                and str(payload.get("type", "")).startswith("nl2tl_")
+            )
+        return super().is_msg_version_compatible(message)
 
     def _check_iris_status(self):
         if self.process.poll() is None:
