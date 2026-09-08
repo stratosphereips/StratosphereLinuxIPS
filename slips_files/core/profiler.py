@@ -15,6 +15,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
+from multiprocessing.synchronize import SEM_VALUE_MAX
 import queue
 import multiprocessing
 import time
@@ -111,8 +112,10 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self.is_input_failed_event: Optional[Event] = is_input_failed_event
         self.input_handler_obj = None
         self.init_worker_manager()
-        # 30MBs max size of this queue to avoid growing forever in mem
-        self.aid_queue = multiprocessing.Queue(maxsize=30000000)
+        # Bound the number of queued tasks to the platform semaphore limit.
+        self.aid_queue = multiprocessing.Queue(
+            maxsize=min(30000000, SEM_VALUE_MAX)
+        )
         # This starts a process that handles calculatng aid hash and stores
         # the conn fows in the db. why? because it's cpu intensive so we dont
         # want it to block the profiler workers
@@ -156,7 +159,11 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             return InputType.ZEEK_TABS
         elif input_type == InputType.STDIN:
             # ok we're reading flows from stdin, but what type of flows?
-            return line["line_type"]
+            return (
+                InputType.BINETFLOW
+                if line["line_type"] == "argus"
+                else InputType.coerce(line["line_type"])
+            )
         else:
             # if it's none of the above cases
             # it's probably one of the following:
@@ -232,7 +239,6 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             # wait for all flows to be processed by the profiler processes.
             self.stop_profiler_workers()
 
-            self.aid_queue.put("stop")
             self.aid_manager.shutdown()
 
             used_queues = [
