@@ -22,12 +22,48 @@ class AIDManager:
         self._aid_queue: Queue = _aid_queue
 
         self._process = Process(
-            target=self._worker_loop,
-            args=(self._aid_queue, self.db),
+            target=self._run_worker,
+            args=(
+                self._aid_queue,
+                {
+                    "logger": db.logger,
+                    "output_dir": db.output_dir,
+                    "redis_port": db.redis_port,
+                    "conf": db.conf,
+                    "main_pid": db.main_pid,
+                    "start_redis_server": False,
+                    "flush_db": False,
+                },
+            ),
             name="aid_manager",
             daemon=True,
         )
         utils.start_process(self._process, self.db)
+
+    @classmethod
+    def for_queue(cls, aid_queue: Queue) -> "AIDManager":
+        """Return a submission-only client for an existing AID worker.
+
+        Parameters:
+            aid_queue: Queue consumed by the existing worker.
+
+        Returns:
+            Client containing only the shared task queue.
+        """
+        client = cls.__new__(cls)
+        client._aid_queue = aid_queue
+        return client
+
+    @staticmethod
+    def _run_worker(aid_queue: Queue, database_options: dict) -> None:
+        """Open a child-local database and consume AID tasks.
+
+        Parameters:
+            aid_queue: Queue of flow-storage tasks.
+            database_options: Serializable database connection settings.
+        """
+        db = DBManager(**database_options)
+        AIDManager.for_queue(aid_queue)._worker_loop(aid_queue, db)
 
     def _worker_loop(self, aid_queue, db: DBManager):
         """
@@ -70,3 +106,4 @@ class AIDManager:
         Gracefully stop the background process.
         """
         self._aid_queue.put("stop")  # sentinel
+        self._process.join()
