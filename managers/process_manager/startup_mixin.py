@@ -3,6 +3,9 @@
 # StartupMixin groups construction and startup of core processes and shared
 # runtime helpers used by ProcessManager.
 import threading
+import sys
+from multiprocessing import Process
+from multiprocessing.reduction import DupFd
 from typing import Optional
 
 from managers.update_manager import UpdateManager
@@ -67,14 +70,14 @@ class StartupMixin:
         self.slips_logfile = output_process.slips_logfile
         return output_process
 
-    def start_profiler_process(self) -> Profiler:
+    def start_profiler_process(self) -> Process:
         """
         Start the profiler process.
 
         Returns:
             Started profiler process.
         """
-        profiler_process = Profiler(
+        profiler_process = Profiler.create_process(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -109,14 +112,14 @@ class StartupMixin:
         self.profiler_process = profiler_process
         return profiler_process
 
-    def start_evidence_process(self) -> EvidenceHandler:
+    def start_evidence_process(self) -> Process:
         """
         Start the evidence handler process.
 
         Returns:
             Started evidence handler process.
         """
-        evidence_process = EvidenceHandler(
+        evidence_process = EvidenceHandler.create_process(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -138,14 +141,14 @@ class StartupMixin:
         self.evidence_process = evidence_process
         return evidence_process
 
-    def start_input_process(self) -> Input:
+    def start_input_process(self) -> Process:
         """
         Start the input process.
 
         Returns:
             Started input process.
         """
-        input_process = Input(
+        input_process = Input.create_process(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -161,6 +164,11 @@ class StartupMixin:
             cli_packet_filter=self.main.args.pcapfilter,
             zeek_or_bro=self.main.zeek_bro,
             line_type=self.main.line_type,
+            stdin_descriptor=(
+                DupFd(sys.stdin.fileno())
+                if self.main.input_type == InputType.STDIN
+                else None
+            ),
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
             is_input_failed_event=self.is_input_failed_event,
