@@ -19,6 +19,7 @@ from modules.blocking.slips_chain_manager import (
     del_slips_blocking_chain,
     has_slips_firewall_rules,
 )
+from slips_files.common.input_type import InputType
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
@@ -311,7 +312,11 @@ class ShutdownMixin:
 
         failed_modules: List[Tuple[str, Optional[int]]] = []
 
-        if self.main.db.is_running_non_stop():
+        stdin_finished = (
+            self.main.input_type == InputType.STDIN
+            and self.is_input_done_event.is_set()
+        )
+        if self.main.db.is_running_non_stop() and not stdin_finished:
             # Slips is continuously receiving flows,
             # none of these modules should stop or "finish"
             if not input_running:
@@ -375,7 +380,13 @@ class ShutdownMixin:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input
         # process this module should handle the stopping of slips
-        return self.is_debugger_active() or self.main.db.is_running_non_stop()
+        stdin_finished = (
+            self.main.input_type == InputType.STDIN
+            and self.is_input_done_event.is_set()
+        )
+        return self.is_debugger_active() or (
+            self.main.db.is_running_non_stop() and not stdin_finished
+        )
 
     def shutdown_interactive(
         self, to_kill_first: List[Process], to_kill_last: List[Process]
@@ -646,6 +657,7 @@ class ShutdownMixin:
         normal_completion = self._did_slips_finish_normally()
         try:
             print = self.get_print_function()
+            self.main.logger._flush_startup_queue()
 
             self._generate_plots()
 
