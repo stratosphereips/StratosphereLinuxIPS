@@ -43,6 +43,15 @@ repos:
           args: ["-d", "{rules: {line-length: {max: 160}}}"]
           files: "slips.yaml"
 
+-     repo: https://github.com/pypa/pip-audit
+      rev: v2.9.0
+      hooks:
+        - id: pip-audit
+          name: pip-audit dependency vulnerability check
+          args: ['-r', 'install/requirements.txt']
+          files: ^install/requirements\.txt$
+          pass_filenames: false
+
 - repo: local
   hooks:
     - id: vulture
