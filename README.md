@@ -26,6 +26,7 @@ Slips v1.1.23
 
 <hr>
 
+The official wepage of Slips is in: https://slips.stratosphereips.org/
 
 # Table of Contents
 
