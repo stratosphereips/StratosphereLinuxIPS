@@ -68,6 +68,20 @@ def test_update_host_ip_should_update(
 
 
 @patch("netifaces.ifaddresses")
+def test_get_host_ips_without_interface(mock_ifaddresses: Mock) -> None:
+    """Allow stdin and module input without a capture interface.
+
+    Parameters:
+        mock_ifaddresses: Mock interface lookup, which must not be used.
+    """
+    host_ip_man = ModuleFactory().create_host_ip_manager_obj()
+    host_ip_man.main.args.interface = None
+    host_ip_man.main.args.access_point = None
+    assert host_ip_man._get_host_ips() == {}
+    mock_ifaddresses.assert_not_called()
+
+
+@patch("netifaces.ifaddresses")
 def test_get_host_ips_single_interface(mock_ifaddresses):
     """Test _get_host_ips when using a single interface via -i."""
     host_ip_man = ModuleFactory().create_host_ip_manager_obj()
