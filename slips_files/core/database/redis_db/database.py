@@ -199,8 +199,8 @@ class RedisDB(
 
             # By default the slips internal time is
             # 0 until we receive something
-            cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
+                cls.set_slips_internal_time(0)
                 cls._set_slips_start_time()
 
         return cls.instances[cls.redis_port]
@@ -595,11 +595,14 @@ class RedisDB(
             msg.update({"version": VERSION})
         return msg
 
-    def publish(self, channel, msg, pipeline=None):
+    def publish(self, channel, msg, pipeline=None, add_version: bool = True):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
-        the pipeline"""
-        msg = self._add_version_to_msg(msg)
+        the pipeline. Set add_version=False only for external protocols
+        whose version field is not Slips's software version."""
+        # External protocols such as Iris carry their own version field.
+        if add_version:
+            msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:
