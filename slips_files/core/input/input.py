@@ -40,7 +40,6 @@ from slips_files.core.input.zeek.zeek_dir_input import ZeekDirInput
 from slips_files.core.input.zeek.zeek_log_file_input import ZeekLogFileInput
 from slips_files.core.input.zeek.utils.zeek_input_utils import ZeekInputUtils
 
-
 SUPPORTED_INPUT_HANDLERS = {
     InputType.STDIN: StdinInput,
     InputType.ZEEK_FOLDER: ZeekDirInput,
@@ -70,6 +69,7 @@ class Input(ICore):
         cli_packet_filter=None,
         zeek_or_bro=None,
         line_type=None,
+        stdin_descriptor: object = None,
         is_profiler_done_event: multiprocessing.Event = None,
         is_input_done_event: multiprocessing.Event = None,
         is_input_failed_event: multiprocessing.Event = None,
@@ -81,6 +81,7 @@ class Input(ICore):
         # in case of reading from stdin, the user must tell slips what
         # type of lines is the input using -f <type>
         self.line_type: str = line_type
+        self.stdin_descriptor = stdin_descriptor
         # entire path
         self.given_path: str = input_information
         self.zeek_or_bro: str = zeek_or_bro
