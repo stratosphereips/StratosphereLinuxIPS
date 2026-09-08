@@ -12,7 +12,7 @@ from typing import (
     Any,
 )
 import validators
-from multiprocessing import Queue
+from queue import Queue
 from threading import Thread, Event
 
 
@@ -654,7 +654,6 @@ class DNS(IFlowalertsAnalyzer):
         )
 
     def shutdown_gracefully(self):
-        self.check_dns_without_connection_of_all_pending_flows()
         self.stop_event.set()
         self.dns_without_connection_timeout_checker_thread.join(30)
         if self.dns_without_connection_timeout_checker_thread.is_alive():
@@ -665,16 +664,9 @@ class DNS(IFlowalertsAnalyzer):
                 f"{self.flowalerts.should_stop()}"
             )
 
-        # close the queue
-        # without this, queues are left in memory and flowalerts keeps
-        # waiting for them forever
-        # to exit the process quickly without blocking on the queue's cleanup
-        self.dns_msgs.cancel_join_thread()
-        self.dns_msgs.close()
-
-        self.pending_dns_without_conn.cancel_join_thread()
-
-        self.pending_dns_without_conn.close()
+        # Thread queues have no feeder processes to close or join. Drain
+        # pending flows after the checker stops adding entries.
+        self.check_dns_without_connection_of_all_pending_flows()
 
     def pre_analyze(self):
         """Code that shouldnt be run in a loop. runs only once in
