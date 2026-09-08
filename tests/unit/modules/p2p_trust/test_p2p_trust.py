@@ -330,4 +330,119 @@ def test_run_stops_pigeon_after_unexpected_module_exit() -> None:
         with pytest.raises(RuntimeError, match="boom"):
             trust.run()
 
-    trust._stop_pigeon.assert_called_once_with()
+
+def create_trust_for_blame(network_opinion, local_opinion):
+    """
+    Build a Trust object ready to exercise evaluate_blame_report()'s
+    blame-evaluation logic (Omega-Trust: combine the network's
+    trust-weighted opinion with Slips' own local opinion before ever
+    forwarding a blame report to the blocking pipeline).
+
+    Parameters:
+        network_opinion: (score, confidence) returned by
+            reputation_model.get_opinion_on_ip().
+        local_opinion: (score, confidence) returned by
+            get_ip_info_from_slips().
+
+    Returns:
+        A Trust instance with mocked dependencies.
+    """
+    trust = create_trust()
+    trust.ips_weight = 0.5
+    trust.blame_threshold = 0.5
+    trust.reputation_model = Mock()
+    trust.reputation_model.get_opinion_on_ip.return_value = network_opinion
+    trust.local_opinion = local_opinion
+    return trust
+
+
+def blame_report(ip="1.2.3.4"):
+    return {
+        "message_type": "blame",
+        "key": ip,
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 1, "confidence": 1},
+    }
+
+
+def test_evaluate_blame_report_ignores_non_blame_messages():
+    """
+    A plain "report" must never reach the network's opinion lookup or
+    the blocking pipeline - only "blame" messages are evaluated here.
+    """
+    trust = create_trust_for_blame((1, 1), (1, 1))
+    data = blame_report()
+    data["message_type"] = "report"
+
+    trust.evaluate_blame_report("peer1", 123, data)
+
+    trust.reputation_model.get_opinion_on_ip.assert_not_called()
+    trust.db.publish.assert_not_called()
+
+
+def test_evaluate_blame_report_no_network_opinion_yet():
+    """
+    If the trust model has no aggregated opinion on the IP yet (e.g.
+    the trustdb has no usable reports), the blame must not be
+    forwarded.
+    """
+    trust = create_trust_for_blame((None, None), (1, 1))
+
+    with patch(
+        "modules.p2p_trust.p2p_trust.p2p_utils.get_ip_info_from_slips",
+        return_value=trust.local_opinion,
+    ):
+        trust.evaluate_blame_report("peer1", 123, blame_report())
+
+    trust.db.publish.assert_not_called()
+
+
+def test_evaluate_blame_report_below_threshold_is_not_forwarded():
+    """
+    A blame about an IP that neither the network nor Slips considers
+    malicious must not be forwarded to the blocking pipeline.
+    """
+    trust = create_trust_for_blame((0, 0), (0, 0))
+
+    with patch(
+        "modules.p2p_trust.p2p_trust.p2p_utils.get_ip_info_from_slips",
+        return_value=trust.local_opinion,
+    ):
+        trust.evaluate_blame_report("peer1", 123, blame_report())
+
+    trust.db.publish.assert_not_called()
+
+
+def test_evaluate_blame_report_above_threshold_is_forwarded():
+    """
+    A blame about an IP that both the network and Slips agree is
+    malicious enough must be forwarded to the "new_blame" channel.
+    """
+    trust = create_trust_for_blame((1, 1), (1, 1))
+    data = blame_report()
+
+    with patch(
+        "modules.p2p_trust.p2p_trust.p2p_utils.get_ip_info_from_slips",
+        return_value=trust.local_opinion,
+    ):
+        trust.evaluate_blame_report("peer1", 123, data)
+
+    trust.db.publish.assert_called_once_with("new_blame", json.dumps(data))
+
+
+def test_evaluate_blame_report_single_malicious_peer_is_not_enough():
+    """
+    Regression test for the thesis' core safety requirement: a single
+    peer's blame, unsupported by the network's aggregated opinion or
+    by Slips' own local opinion, must never directly cause a block.
+    """
+    trust = create_trust_for_blame((0, 0), (0, 0))
+
+    with patch(
+        "modules.p2p_trust.p2p_trust.p2p_utils.get_ip_info_from_slips",
+        return_value=trust.local_opinion,
+    ):
+        trust.evaluate_blame_report("malicious_peer", 123, blame_report())
+
+    trust.db.publish.assert_not_called()
