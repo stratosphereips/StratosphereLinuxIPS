@@ -644,8 +644,8 @@ def test_get_cidr_of_private_ip(input_ip, expected_cidr):
         ),
     ],
 )
-@patch("os.setresgid")
-@patch("os.setresuid")
+@patch("os.setresgid", create=True)
+@patch("os.setresuid", create=True)
 @patch("os.getenv")
 def test_drop_root_privs(
     mock_getenv,
@@ -655,9 +655,10 @@ def test_drop_root_privs(
     setresuid_calls,
     setresgid_calls,
 ):
-    mock_getenv.side_effect = side_effect
     utils = ModuleFactory().create_utils_obj()
-    utils.drop_root_privs_permanently()
+    mock_getenv.side_effect = side_effect
+    with patch("platform.system", return_value="Linux"):
+        utils.drop_root_privs_permanently()
 
     assert mock_setresuid.call_args_list == setresuid_calls
     assert mock_setresgid.call_args_list == setresgid_calls
