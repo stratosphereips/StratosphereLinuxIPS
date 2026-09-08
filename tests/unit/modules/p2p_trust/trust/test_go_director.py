@@ -133,6 +133,31 @@ def test_handle_gopy_data_error_cases(data_dict, expected_print_args):
                 },
             ],
         ),
+        # Test case 3: A "blame" message must go through the same
+        # validated path as a regular report, NOT straight to
+        # report_func - it should never bypass validation.
+        (
+            {
+                "reporter": "test_reporter",
+                "report_time": 1649445643,
+                "message": "eyJtZXNzYWdlX3R5cGUiOiAiYmxhbWUiLCAia2V5IjogIjE"
+                "5Mi4xNjguMS4xIiwgImtleV90eXBlIjogImlwIiwgImV2YWx1YXRpb25"
+                "fdHlwZSI6ICJzY29yZV9jb25maWRlbmNlIiwgImV2YWx1YXRpb24iOi"
+                "B7InNjb3JlIjogMC41LCAiY29uZmlkZW5jZSI6IDAuOH19",
+            },
+            "process_message_report",
+            [
+                "test_reporter",
+                1649445643,
+                {
+                    "message_type": "blame",
+                    "key": "192.168.1.1",
+                    "key_type": "ip",
+                    "evaluation_type": "score_confidence",
+                    "evaluation": {"score": 0.5, "confidence": 0.8},
+                },
+            ],
+        ),
     ],
 )
 def test_process_go_data(report, expected_method, expected_args):
@@ -141,6 +166,90 @@ def test_process_go_data(report, expected_method, expected_args):
     with patch.object(go_director, expected_method) as mock_method:
         go_director.process_go_data(report)
         mock_method.assert_called_once_with(*expected_args)
+
+
+def test_process_message_report_forwards_blame_to_blame_evaluator():
+    """
+    A validated "blame" message must be stored like any other report
+    AND handed to blame_evaluator (Trust.evaluate_blame_report), so
+    the trust model gets to decide whether to act on it - it must
+    never be forwarded without first being validated and stored.
+    report_func (the unrelated override_p2p escape hatch) must be
+    left untouched.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.report_func = Mock()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+
+    data = {
+        "message_type": "blame",
+        "key": "192.168.1.1",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.5, "confidence": 0.8},
+    }
+
+    go_director.process_message_report("test_reporter", 1649445643, data)
+
+    go_director.evaluation_processors["score_confidence"].assert_called_once()
+    go_director.blame_evaluator.assert_called_once_with(
+        "test_reporter", 1649445643, data
+    )
+    go_director.report_func.assert_not_called()
+
+
+def test_process_message_report_does_not_forward_plain_reports():
+    """
+    A regular "report" (not a blame) must be stored, but must NOT be
+    handed to blame_evaluator - only blame messages need the trust
+    model's blocking decision.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+
+    data = {
+        "message_type": "report",
+        "key": "192.168.1.1",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.5, "confidence": 0.8},
+    }
+
+    go_director.process_message_report("test_reporter", 1649445643, data)
+
+    go_director.evaluation_processors["score_confidence"].assert_called_once()
+    go_director.blame_evaluator.assert_not_called()
+
+
+def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluator():
+    """
+    The override_p2p escape hatch is a separate mechanism from blame
+    evaluation: when set, it must hand the (still-validated) data to
+    report_func instead of ever touching storage or blame_evaluator.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.override_p2p = True
+    go_director.report_func = Mock()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+
+    data = {
+        "message_type": "blame",
+        "key": "192.168.1.1",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.5, "confidence": 0.8},
+    }
+
+    go_director.process_message_report("test_reporter", 1649445643, data)
+
+    go_director.report_func.assert_called_once_with(
+        "test_reporter", 1649445643, data
+    )
+    go_director.blame_evaluator.assert_not_called()
+    go_director.evaluation_processors["score_confidence"].assert_not_called()
 
 
 @pytest.mark.parametrize(

@@ -81,6 +81,16 @@ class Trust(IModule):
     p2p_data_request_channel = "p2p_data_request"
     gopy_channel_raw = "p2p_gopy"
     pygo_channel_raw = "p2p_pygo"
+    # weight given to Slips' own local opinion of an IP, vs. the
+    # network's, when deciding whether to act on a peer's blame report.
+    # 1 means the network's blame is ignored completely, 0 means only
+    # the network's opinion matters.
+    ips_weight = 0.5
+    # the minimum combined (local + network) opinion an IP has to reach
+    # before a blame report is forwarded to the blocking module. Uses
+    # the same 0 (benign) to 1 (malicious) scale as evidence threat
+    # levels.
+    blame_threshold = 0.5
     start_pigeon = True
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
@@ -183,8 +193,9 @@ class Trust(IModule):
             self.db,
             self.storage_name,
             override_p2p=self.override_p2p,
-            report_func=self.process_message_report,
+            report_func=self.evaluate_blame_report,
             request_func=self.respond_to_message_request,
+            blame_evaluator=self.evaluate_blame_report,
             gopy_channel=self.gopy_channel,
             pygo_channel=self.pygo_channel,
             p2p_reports_logfile=self.p2p_reports_logfile,
@@ -608,19 +619,87 @@ class Trust(IModule):
         """
         pass
 
-    def process_message_report(
+    def evaluate_blame_report(
         self, reporter: str, report_time: int, data: dict
     ):
         """
-        Handle a report received from a peer
+        Decide whether a peer's "blame" (a request to block an IP)
+        should be forwarded to the blocking module.
+
+        - Implements the trust model from the original Dovecot/Omega-Trust
+        thesis (Hollmannova, 2020): a single peer's report is never enough
+        on its own to trigger a block.
+
+        - called only after a "blame" message has been validated and stored in the
+        trust db like any other report, so it already counts towards
+        the network's opinion on this IP.
+
+
+        We combine Slips' own local opinion of the IP with the
+        network's trust-weighted opinion (Omega-score * Omega-confidence,
+        aggregated over every peer that has reported on this IP so
+        far, weighted by how much we trust each reporter):
+            prediction = ips_weight * local_opinion
+                         + (1 - ips_weight) * network_opinion
+        and only forward the blame to the blocking pipeline if that
+        combined prediction reaches blame_threshold.
+
         :param reporter: The peer that sent the report
         :param report_time: Time of receiving the report, provided by the go part
         :param data: Report data
         """
-        # All keys and data sent to this function is validated in go_director.py
-        data = json.dumps(data)
+        if data.get("message_type") != "blame":
+            return
+
+        key = data["key"]
+
+        # the network's trust-weighted opinion on this IP, aggregated
+        # over every peer that reported on it so far (not just this
+        # one reporter)
+        network_score, network_confidence = (
+            self.reputation_model.get_opinion_on_ip(key)
+        )
+        if network_score is None or network_confidence is None:
+            self.print(
+                f"No aggregated network opinion on {key} yet. "
+                f"Not forwarding this blame report.",
+                0,
+                2,
+            )
+            return
+        network_opinion = network_score * network_confidence
+
+        local_score, local_confidence = p2p_utils.get_ip_info_from_slips(
+            key, self.db
+        )
+        local_opinion = (
+            0 if local_score is None else local_score * local_confidence
+        )
+
+        prediction = (
+            self.ips_weight * local_opinion
+            + (1 - self.ips_weight) * network_opinion
+        )
+
+        if prediction < self.blame_threshold:
+            self.print(
+                f"Blame report about {key} from {reporter} doesn't meet "
+                f"the blame_threshold ({prediction} < "
+                f"{self.blame_threshold}). Not blocking it.",
+                0,
+                2,
+            )
+            return
+
+        self.print(
+            f"Blame report about {key} confirmed by the network "
+            f"(prediction={prediction}). Forwarding {key} to the blocking "
+            f"module.",
+            0,
+            2,
+        )
         # give the report to evidenceProcess to decide whether to block or not
-        self.db.publish("new_blame", data)
+        self.db.publish("new_blame", json.dumps(data))
 
     def _start_pigeon(self) -> None:
         """
