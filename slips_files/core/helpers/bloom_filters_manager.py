@@ -33,6 +33,27 @@ class BFManager:
         )
         self.org_filters = {}
 
+    def __getstate__(self) -> dict:
+        """Return filter data and connection settings without live databases."""
+        return {key: value for key, value in vars(self).items() if key != "db"}
+
+    def __setstate__(self, state: dict) -> None:
+        """Restore filter data and open a child-local database from state.
+
+        Parameters:
+            state: Serialized filter data and connection settings.
+        """
+        self.__dict__.update(state)
+        self.db = DBManager(
+            self.logger,
+            self.output_dir,
+            self.redis_port,
+            self.conf,
+            self.ppid,
+            start_redis_server=False,
+            flush_db=False,
+        )
+
     def initialize_filter(self):
         self._init_whitelisted_iocs_bf()
         self._init_whitelisted_orgs_bf()
