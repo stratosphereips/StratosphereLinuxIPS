@@ -613,3 +613,20 @@ def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
         "persistent_state", "p2p_trust_runtime", "trustdb.db"
     )
     assert os.path.isdir(os.path.join("persistent_state", "p2p_trust_runtime"))
+
+
+@pytest.mark.parametrize("add_version", [True, False])
+def test_publish_preserves_external_protocol_version(
+    add_version: bool,
+) -> None:
+    """Allow protocol adapters to preserve their external wire version.
+
+    Parameters:
+        add_version: Whether publishing should add Slips's version metadata.
+    """
+    db = ModuleFactory().create_redis_publisher_obj()
+    payload = json.dumps({"type": "tl2nl_alert", "version": 1, "data": {}})
+    db.publish("iris_internal", payload, add_version=add_version)
+    sent = json.loads(db.r.publish.call_args.args[1])
+    expected = Path("VERSION").read_text().strip() if add_version else 1
+    assert sent["version"] == expected
