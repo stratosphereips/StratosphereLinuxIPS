@@ -20,6 +20,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
 
+from multiprocessing.synchronize import SEM_VALUE_MAX
 import json
 import multiprocessing
 import threading
@@ -43,7 +44,6 @@ from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
 )
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
-
 
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
@@ -81,12 +81,16 @@ class EvidenceHandler(ICore):
         # read from there, in that case all workers will process the same
         # msg. instead we use a queue, so that each worker processes a
         # unique msg.
-        self.evidence_worker_queue = multiprocessing.Queue(maxsize=30000000)
+        self.evidence_worker_queue = multiprocessing.Queue(
+            maxsize=min(30000000, SEM_VALUE_MAX)
+        )
         self.evidence_worker_child_processes: List[Process] = []
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue(maxsize=30000000)
+        self.evidence_logger_q = multiprocessing.Queue(
+            maxsize=min(30000000, SEM_VALUE_MAX)
+        )
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
@@ -279,7 +283,7 @@ class EvidenceHandler(ICore):
 
     def start_evidence_worker(self, worker_id: int = None):
         worker_name = f"evidence_handler_worker_process_{worker_id}"
-        worker = EvidenceHandlerWorker(
+        worker = EvidenceHandlerWorker.create_process(
             logger=self.logger,
             output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
