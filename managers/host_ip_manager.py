@@ -21,7 +21,11 @@ class HostIPManager:
         interfaces: List[str] = (
             [self.main.args.interface]
             if self.main.args.interface
-            else self.main.args.access_point.split(",")
+            else (
+                self.main.args.access_point.split(",")
+                if self.main.args.access_point
+                else []
+            )
         )
         found_ips = {}
         for iface in interfaces:
