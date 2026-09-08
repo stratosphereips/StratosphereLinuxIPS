@@ -116,7 +116,9 @@ def test_stop_evidence_workers():
     handler.print.assert_called_once()
 
 
-@patch("slips_files.core.evidence_handler.EvidenceHandlerWorker")
+@patch(
+    "slips_files.core.evidence_handler.EvidenceHandlerWorker.create_process"
+)
 def test_start_evidence_worker(mock_worker_cls):
     handler = ModuleFactory().create_evidence_handler_obj()
     worker = mock_worker_cls.return_value
