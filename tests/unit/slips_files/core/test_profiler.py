@@ -188,7 +188,7 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.shutdown_gracefully()
 
     profiler.stop_profiler_workers.assert_called_once()
-    profiler.aid_queue.put.assert_called_once_with("stop")
+    profiler.aid_queue.put.assert_not_called()
     profiler.aid_manager.shutdown.assert_called_once()
     profiler.profiler_queue.cancel_join_thread.assert_called_once()
     profiler.profiler_queue.close.assert_called_once()
@@ -240,7 +240,7 @@ def test_notify_observers_with_correct_message():
     observer_mock.update.assert_called_once_with(test_msg)
 
 
-@patch("slips_files.core.worker_manager_mixin.ProfilerWorker")
+@patch("slips_files.core.worker_manager_mixin.ProfilerWorker.create_process")
 def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     profiler = ModuleFactory().create_profiler_obj()
     worker = mock_worker_cls.return_value
@@ -254,6 +254,8 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
 
     profiler.start_profiler_worker(7)
 
+    submitted_aid_client = mock_worker_cls.call_args.kwargs["aid_manager"]
+    assert vars(submitted_aid_client) == {"_aid_queue": profiler.aid_queue}
     mock_worker_cls.assert_called_once_with(
         logger=profiler.logger,
         output_dir=profiler.parent_output_dir,
@@ -265,9 +267,12 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
         bloom_filters_manager=profiler.bloom_filters,
         name="profiler_worker_process_7",
         profiler_queue=profiler.profiler_queue,
-        input_handler=profiler.input_handler_obj,
+        input_handler=(
+            type(profiler.input_handler_obj),
+            vars(profiler.input_handler_obj),
+        ),
         aid_queue=profiler.aid_queue,
-        aid_manager=profiler.aid_manager,
+        aid_manager=submitted_aid_client,
         is_input_done_event=profiler.is_input_done_event,
         total_processes_to_start=profiler.total_processes_to_start,
     )
@@ -276,3 +281,22 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     assert profiler.workers == [worker]
     assert profiler.active_profiler_workers == 1
     profiler.db.increment_profiler_workers_started.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "line_type,expected",
+    [("argus", "binetflow"), ("zeek", "zeek"), ("suricata", "suricata")],
+)
+def test_stdin_selects_registered_parser(
+    line_type: str, expected: str
+) -> None:
+    """Map stdin's public format names to registered input parsers.
+
+    Parameters:
+        line_type: Format requested on the command line.
+        expected: Registered parser key.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    assert (
+        profiler.get_input_type({"line_type": line_type}, "stdin") == expected
+    )
