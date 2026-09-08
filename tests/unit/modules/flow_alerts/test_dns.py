@@ -7,6 +7,7 @@ from dataclasses import asdict
 from slips_files.core.flows.zeek import DNS
 from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
+
 from numpy import arange
 from unittest.mock import (
     patch,
@@ -1002,3 +1003,23 @@ def test_check_pending_flows_timeout():
         "profile5678", "twid_123", dns_flow_to_check, waited_for_the_conn=False
     )
     assert back_to_queue == []
+
+
+def test_shutdown_drains_thread_queue() -> None:
+    """Finish pending DNS checks without multiprocessing queue cleanup."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.dns_without_connection_timeout_checker_thread = Mock()
+    dns.dns_without_connection_timeout_checker_thread.is_alive.return_value = (
+        False
+    )
+    dns.check_dns_without_connection = Mock()
+    flow = Mock()
+    dns.pending_dns_without_conn.put(("profile_1", "timewindow1", flow))
+
+    dns.shutdown_gracefully()
+
+    assert dns.stop_event.is_set()
+    assert dns.pending_dns_without_conn.empty()
+    dns.check_dns_without_connection.assert_called_once_with(
+        "profile_1", "timewindow1", flow, waited_for_the_conn=True
+    )
