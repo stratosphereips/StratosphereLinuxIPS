@@ -670,3 +670,22 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
     mock_wait.assert_called_once_with([pending_process])
     mock_warn.assert_called_once_with([pending_process, last_process])
     mock_set.assert_not_called()
+
+
+@pytest.mark.parametrize("finished", [False, True])
+def test_stdin_eof_allows_normal_shutdown(finished: bool) -> None:
+    """Keep stdin live until EOF, then allow normal input/profiler completion.
+
+    Parameters:
+        finished: Whether the input process has signalled end of input.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = InputType.STDIN
+    process_manager.main.db.is_running_non_stop.return_value = True
+    process_manager.is_input_done_event.is_set = Mock(return_value=finished)
+    process_manager.is_debugger_active = Mock(return_value=False)
+    process_manager.input_process = Mock(exitcode=0)
+    process_manager.profiler_process = Mock(exitcode=0)
+    process_manager.evidence_process = Mock(exitcode=None)
+    assert process_manager.should_run_non_stop() is not finished
+    assert process_manager._did_a_core_module_fail() is not finished
