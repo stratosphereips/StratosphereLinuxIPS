@@ -4416,8 +4416,8 @@ class RequestHandler(BaseHTTPRequestHandler):
     def _send_json(
         self, payload: Any, status: HTTPStatus = HTTPStatus.OK
     ) -> None:
-        self.send_response(status)
         """Send a JSON response with local-interface security headers."""
+        self.send_response(status)
         body = json.dumps(payload, default=str).encode("utf-8")
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
@@ -4428,8 +4428,12 @@ class RequestHandler(BaseHTTPRequestHandler):
             "Content-Security-Policy",
             "default-src 'self'; style-src 'self'; script-src 'self'",
         )
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.end_headers()
+            self.wfile.write(body)
+        except ConnectionError:
+            # Browsers may cancel an in-flight request when refreshing data.
+            return
 
     def _send_asset(self, filename: str | Path, content_type: str) -> None:
         """Send one allow-listed interface asset.
