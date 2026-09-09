@@ -506,6 +506,30 @@ def test_get_gateway_ip_if_interface_args_interface(
     )
 
 
+@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
+def test_gateway_discovery_skips_invalid_addresses(
+    mocker, gateway: str | None
+) -> None:
+    """Ignore interfaces for which the OS reports no valid gateway.
+
+    Parameters:
+        mocker: Pytest mock fixture.
+        gateway: Missing or malformed gateway returned by the OS.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.is_running_non_stop = True
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.get_all_interfaces",
+        return_value=["en0"],
+    )
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.get_gateway_for_iface",
+        return_value=gateway,
+    )
+
+    assert ip_info.get_gateway_ip_if_interface() == {}
+
+
 # def test_get_gateway_ip_if_interface_args_access_point():
 
 
@@ -692,6 +716,23 @@ def test_mac_found_in_db_or_not(ip_info, gw_ips, mac_in_db, expected):
     result = ip_info.get_gateway_mac(gw_ips)
 
     assert result == expected
+
+
+@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
+def test_gateway_mac_skips_invalid_addresses(gateway: str | None) -> None:
+    """Do not query gateway data or OS neighbor tools for invalid addresses.
+
+    Parameters:
+        gateway: Missing or malformed gateway value.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info._get_mac_using_ip_neigh = Mock()
+    ip_info._get_mac_using_arp_cache = Mock()
+
+    assert ip_info.get_gateway_mac({"en0": gateway}) is None
+    ip_info.db.get_mac_addr_from_profile.assert_not_called()
+    ip_info._get_mac_using_ip_neigh.assert_not_called()
+    ip_info._get_mac_using_arp_cache.assert_not_called()
 
 
 def test_non_stop_false_skips_mac_lookup():

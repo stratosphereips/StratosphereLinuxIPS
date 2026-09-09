@@ -460,8 +460,9 @@ class IPInfo(IAsyncModule):
         for interface in interfaces:
             try:
                 gw_ip = utils.get_gateway_for_iface(interface)
-                gw_ips.update({interface: gw_ip})
-            except KeyError:
+                ipaddress.ip_address(gw_ip)
+                gw_ips[interface] = gw_ip
+            except (KeyError, TypeError, ValueError):
                 pass
         return gw_ips
 
@@ -481,10 +482,9 @@ class IPInfo(IAsyncModule):
         # dict.
         return self.db.get_wifi_interface()
 
-    def _get_mac_using_ip_neigh(self, gw_ip) -> str | None:
+    def _get_mac_using_ip_neigh(self, gw_ip: str | None) -> str | None:
         try:
-            if not ipaddress.ip_address(gw_ip):
-                return
+            ipaddress.ip_address(gw_ip)
 
             ip_output = subprocess.run(
                 ["ip", "neigh", "show", gw_ip],
@@ -494,7 +494,13 @@ class IPInfo(IAsyncModule):
             ).stdout
             mac = ip_output.split()[-2]
             return mac
-        except (subprocess.CalledProcessError, IndexError, FileNotFoundError):
+        except (
+            subprocess.CalledProcessError,
+            IndexError,
+            FileNotFoundError,
+            TypeError,
+            ValueError,
+        ):
             return
 
     def _get_mac_using_arp_cache(self, gw_ip) -> str | None:
@@ -514,6 +520,11 @@ class IPInfo(IAsyncModule):
 
         gw_macs = {}
         for interface, gw_ip in gw_ips.items():
+            try:
+                ipaddress.ip_address(gw_ip)
+            except (TypeError, ValueError):
+                continue
+
             # we keep a cache of the macs and their IPs
             # In case of a zeek dir or a pcap,
             # check if we have the mac of this ip already saved in the db.
