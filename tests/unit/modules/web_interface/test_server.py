@@ -61,6 +61,35 @@ def test_idle_connection_does_not_block_page_requests() -> None:
         server_thread.join(timeout=10)
 
 
+@pytest.mark.parametrize("failure_point", ["headers", "body"])
+@pytest.mark.parametrize(
+    "disconnect_error", [BrokenPipeError, ConnectionResetError]
+)
+def test_json_response_ignores_client_disconnect(
+    failure_point: str, disconnect_error: type[ConnectionError]
+) -> None:
+    """Stop sending JSON when the requesting client disconnects.
+
+    Parameters:
+        failure_point: Response operation interrupted by the client.
+        disconnect_error: Socket exception raised for the disconnection.
+    """
+    _module_factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.send_response = Mock()
+    handler.send_header = Mock()
+    handler.end_headers = Mock()
+    handler.wfile = Mock()
+    if failure_point == "headers":
+        handler.end_headers.side_effect = disconnect_error
+    else:
+        handler.wfile.write.side_effect = disconnect_error
+
+    handler._send_json({"status": "ready"})
+
+    handler.send_response.assert_called_once_with(200)
+
+
 @pytest.mark.parametrize(
     "value, expected",
     [
