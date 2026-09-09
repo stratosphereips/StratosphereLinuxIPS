@@ -73,15 +73,35 @@ class WebInterface(IModule):
         """
         try:
             connections = psutil.net_connections(kind="tcp")
-        except psutil.Error:
-            return None
+        except (psutil.Error, OSError):
+            connections = []
         for connection in connections:
             if (
                 connection.status == psutil.CONN_LISTEN
                 and connection.laddr
                 and connection.laddr.port == port
+                and connection.pid
             ):
                 return connection.pid
+
+        # macOS can expose system-wide listeners without their owning PID to
+        # an unprivileged process. Same-user per-process inspection still
+        # provides the PID and lets the caller verify the command safely.
+        try:
+            for process in psutil.process_iter(["pid"]):
+                try:
+                    process_connections = process.net_connections(kind="tcp")
+                except (psutil.Error, OSError, AttributeError):
+                    continue
+                for connection in process_connections:
+                    if (
+                        connection.status == psutil.CONN_LISTEN
+                        and connection.laddr
+                        and connection.laddr.port == port
+                    ):
+                        return process.pid
+        except (psutil.Error, OSError):
+            return None
         return None
 
     def _bind_address(self, mode: str) -> Optional[str]:
