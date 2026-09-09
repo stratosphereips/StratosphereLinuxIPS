@@ -4140,6 +4140,27 @@ class RunDataReader:
             return []
         return connections
 
+    def _legacy_connected_p2p_peers(
+        self, peer_info: Dict[str, Dict[str, Any]]
+    ) -> set[str]:
+        """Read connected peers reported by legacy Pigeon binaries.
+
+        Parameters:
+            peer_info: Decoded peer state indexed by peer ID.
+
+        Returns:
+            Peer IDs that both legacy connectivity records mark connected.
+        """
+        raw_connected = self._loads(self.redis.get("connected_peers"), [])
+        if not isinstance(raw_connected, (list, tuple, set)):
+            return set()
+        connected = {str(peer_id) for peer_id in raw_connected}
+        return {
+            peer_id
+            for peer_id in connected
+            if peer_info.get(peer_id, {}).get("connected") is True
+        }
+
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -4155,6 +4176,7 @@ class RunDataReader:
             peer_id: self._loads(raw, {})
             for peer_id, raw in self.redis.hgetall("peer_info").items()
         }
+        connected.update(self._legacy_connected_p2p_peers(peer_info))
         peer_trust = self.redis.hgetall("peer_trust")
         peer_seen = dict(
             self.redis.zrange("peers_strust", 0, -1, withscores=True)
