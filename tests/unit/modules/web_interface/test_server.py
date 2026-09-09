@@ -2398,6 +2398,77 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     ]
 
 
+@pytest.mark.parametrize(
+    "connected_peers,peer_state,expected",
+    [
+        (["QmPeer"], {"connected": True}, {"QmPeer"}),
+        (["QmPeer"], {"connected": False}, set()),
+        (["QmPeer"], {}, set()),
+        ("invalid", {"connected": True}, set()),
+    ],
+)
+def test_legacy_connected_p2p_peers_require_consistent_state(
+    connected_peers: object,
+    peer_state: dict,
+    expected: set[str],
+) -> None:
+    """Use compatible connectivity only when both legacy records agree.
+
+    Parameters:
+        connected_peers: Decoded legacy connected-peer registry.
+        peer_state: Legacy state stored for the peer.
+        expected: Peer IDs considered connected.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.get.return_value = connected_peers
+
+    result = reader._legacy_connected_p2p_peers({"QmPeer": peer_state})
+
+    assert result == expected
+
+
+def test_p2p_uses_legacy_connectivity_without_connection_updates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Show active peers reported by the bundled legacy macOS Pigeon."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: {
+        "connected_peers": json.dumps(["QmLegacyPeer"]),
+    }.get(key)
+    reader.redis.smembers.return_value = set()
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": "2026-08-25T23:07:20"},
+        "peer_info": {
+            "QmLegacyPeer": json.dumps(
+                {
+                    "connected": True,
+                    "ip": "192.0.2.20",
+                    "reliability": 1.0,
+                    "timestamp": 1649445643,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["connected"] == 1
+    assert result["peers"][0]["peer_id"] == "QmLegacyPeer"
+    assert result["peers"][0]["connected"] is True
+    assert result["peers"][0]["connections"] == []
+
+
 def test_p2p_report_counter_is_not_limited_to_latest_500(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
