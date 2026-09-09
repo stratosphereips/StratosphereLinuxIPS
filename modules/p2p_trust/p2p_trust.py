@@ -648,6 +648,54 @@ class Trust(IModule):
         """
         pass
 
+    def _pigeon_supports_flag(self, flag: str) -> bool:
+        """Check whether the installed Pigeon binary accepts a CLI flag.
+
+        Parameters:
+            flag: Command-line flag to look for in Pigeon's help output.
+
+        Returns:
+            True when the binary advertises the flag, otherwise False.
+        """
+        try:
+            result = subprocess.run(
+                [str(self.pigeon_binary), "-help"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return flag in f"{result.stdout}\n{result.stderr}"
+
+    def _get_pigeon_command(self) -> list[str]:
+        """Build a command compatible with the installed Pigeon binary.
+
+        Returns:
+            Sanitized Pigeon command and arguments.
+        """
+        params = {
+            "-port": str(self.port),
+            "-host": self.host,
+            "-rendezvous": self.rendezvous,
+            "-key-file": self.pigeon_key_file,
+            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
+            "-redis-channel-pygo": self.pygo_channel_raw,
+            "-redis-channel-gopy": self.gopy_channel_raw,
+        }
+        if self._pigeon_supports_flag("-slips-version"):
+            params["-slips-version"] = self.slips_version
+        else:
+            self.print(
+                "Warning: The installed p2p4slips binary does not support "
+                "-slips-version; starting in legacy compatibility mode."
+            )
+
+        return [str(self.pigeon_binary)] + [
+            utils.sanitize(item) for pair in params.items() for item in pair
+        ]
+
     def process_message_report(
         self, reporter: str, report_time: int, data: dict
     ):
@@ -684,29 +732,20 @@ class Trust(IModule):
             )
             return
 
-        params = {
-            "-port": str(self.port),
-            "-host": self.host,
-            "-rendezvous": self.rendezvous,
-            "-key-file": self.pigeon_key_file,
-            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
-            "-redis-channel-pygo": self.pygo_channel_raw,
-            "-redis-channel-gopy": self.gopy_channel_raw,
-            "-slips-version": self.slips_version,
-        }
-        self.print(f"P2P is listening on {self.host} port {self.port}.")
-        executable = [self.pigeon_binary] + [
-            utils.sanitize(item) for pair in params.items() for item in pair
-        ]
+        executable = self._get_pigeon_command()
 
         if self.create_p2p_logfile:
-            outfile = open(self.pigeon_logfile, "+w")
+            pigeon_log_path = self.pigeon_logfile
         else:
-            outfile = open(os.devnull, "+w")
+            pigeon_log_path = os.devnull
+        outfile = open(pigeon_log_path, "+w")
 
         try:
             self.pigeon = subprocess.Popen(
-                executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
+                executable,
+                cwd=self.p2p_trust_runtime_dir,
+                stdout=outfile,
+                stderr=subprocess.STDOUT,
             )
         except OSError as error:
             if error.errno != errno.ENOEXEC:
@@ -723,16 +762,31 @@ class Trust(IModule):
                 return
 
             try:
+                executable = self._get_pigeon_command()
                 self.pigeon = subprocess.Popen(
                     executable,
                     cwd=self.p2p_trust_runtime_dir,
                     stdout=outfile,
+                    stderr=subprocess.STDOUT,
                 )
             except OSError as retry_error:
                 self.print(
                     "Warning: Failed to start p2p4slips after rebuilding. "
                     f"Error: {retry_error}"
                 )
+                return
+
+        time.sleep(0.1)
+        return_code = self.pigeon.poll()
+        if return_code is not None:
+            self.print(
+                "Warning: p2p4slips exited during startup with return code "
+                f"{return_code}. Check {pigeon_log_path}."
+            )
+            self.pigeon = None
+            return
+
+        self.print(f"P2P is listening on {self.host} port {self.port}.")
 
     def shutdown_gracefully(self) -> None:
         """Stop and reap the Go peer before closing its trust database."""
