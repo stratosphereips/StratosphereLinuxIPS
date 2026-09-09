@@ -175,6 +175,61 @@ def test_main_reports_stopped_server() -> None:
     assert "exit code 7" in module.print.call_args.args[0]
 
 
+def test_listener_pid_falls_back_to_per_process_connections() -> None:
+    """Find a macOS listener when the system-wide result omits its PID."""
+    module_factory = ModuleFactory()
+    module = module_factory.create_web_interface_obj()
+    system_connection = Mock(
+        status="LISTEN",
+        laddr=Mock(port=55000),
+        pid=None,
+    )
+    process_connection = Mock(
+        status="LISTEN",
+        laddr=Mock(port=55000),
+    )
+    process = Mock(pid=1234)
+    process.net_connections.return_value = [process_connection]
+
+    with (
+        patch(
+            "modules.web_interface.web_interface.psutil.net_connections",
+            return_value=[system_connection],
+        ),
+        patch(
+            "modules.web_interface.web_interface.psutil.process_iter",
+            return_value=[process],
+        ),
+    ):
+        result = module._listener_pid(55000)
+
+    assert result == 1234
+    process.net_connections.assert_called_once_with(kind="tcp")
+
+
+def test_listener_pid_handles_denied_system_connection_list() -> None:
+    """Use process inspection when macOS denies the global socket list."""
+    module_factory = ModuleFactory()
+    module = module_factory.create_web_interface_obj()
+    connection = Mock(status="LISTEN", laddr=Mock(port=55000))
+    process = Mock(pid=1234)
+    process.net_connections.return_value = [connection]
+
+    with (
+        patch(
+            "modules.web_interface.web_interface.psutil.net_connections",
+            side_effect=PermissionError,
+        ),
+        patch(
+            "modules.web_interface.web_interface.psutil.process_iter",
+            return_value=[process],
+        ),
+    ):
+        result = module._listener_pid(55000)
+
+    assert result == 1234
+
+
 @pytest.mark.parametrize(
     "owned_server, expected",
     [
