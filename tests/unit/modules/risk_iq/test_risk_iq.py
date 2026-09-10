@@ -47,7 +47,6 @@ def test_get_passive_dns(mock_get, ip, api_response, expected_result):
         "https://api.riskiq.net/pt/v2/dns/passive",
         params={"query": ip},
         timeout=5,
-        verify=False,
         auth=HTTPBasicAuth("test@example.com", "testkey"),
     )
 

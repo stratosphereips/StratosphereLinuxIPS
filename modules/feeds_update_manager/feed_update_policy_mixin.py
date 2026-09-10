@@ -27,9 +27,7 @@ class FeedUpdatePolicyMixin:
         # Retry 5 times to get the TI file if an error occurred.
         for _try in range(5):
             try:
-                response = requests.get(
-                    file_to_download, timeout=5, verify=False
-                )
+                response = requests.get(file_to_download, timeout=5)
                 if response.status_code != 200:
                     error = (
                         f"An error occurred while downloading the file {file_to_download}."

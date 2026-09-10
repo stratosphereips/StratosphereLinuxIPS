@@ -201,7 +201,7 @@ def test_download_file(
     mock_requests.return_value.text = "file content"
     response = update_manager.download_file(url)
 
-    mock_requests.assert_called_once_with(url, timeout=5, verify=False)
+    mock_requests.assert_called_once_with(url, timeout=5)
     assert response.text == "file content"
 
 
