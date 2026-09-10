@@ -194,9 +194,16 @@ git submodule init && git submodule update && cd p2p4slips && go build -buildvcs
 
 exit_on_cmd_failure
 
+# generate the shared redis password (persisted at permanent/redis_auth.conf,
+# mode 600) before starting the long-lived TI-cache redis-server on 6379.
+print_green "Generating the Redis authentication password in permanent/redis_auth.conf"
+python3 -m slips_files.core.database.redis_db.redis_auth
+
+exit_on_cmd_failure
+
 # running slips for the first time
 print_green "Executing 'redis-server --daemonize yes'"
-redis-server --daemonize yes
+redis-server permanent/redis_auth.conf --port 6379 --daemonize yes
 
 exit_on_cmd_failure
 
