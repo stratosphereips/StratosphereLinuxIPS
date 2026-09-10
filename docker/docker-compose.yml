@@ -8,6 +8,10 @@ services:
                 volumes:
                   - $PWD/config:/StratosphereLinuxIPS/config/
                   - $PWD/dataset:/StratosphereLinuxIPS/dataset/
+                  # persists the generated redis auth password (and web
+                  # login hash) across `docker compose down`/`up`, so the
+                  # long-lived TI-cache redis-server keeps working after a
+                  # container recreation.
+                  - $PWD/permanent:/StratosphereLinuxIPS/permanent/
                 network_mode: "host"
                 entrypoint: ["/bin/bash"]
-               
