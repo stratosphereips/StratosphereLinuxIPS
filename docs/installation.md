@@ -177,6 +177,14 @@ Before building the docker locally from the Dockerfile, first you should clone S
 
 **NOTE**: you have to be in the main Slips directory to build this.
 
+**NOTE**: the ML modules' models (`modules/ml_linear_model` and `modules/ml_online_model`)
+are stored using [git LFS](https://git-lfs.com). Make sure `git-lfs` is installed
+*before* cloning (`sudo apt install git-lfs && git lfs install`), otherwise those
+files are checked out as small pointer text files instead of the real models, and
+building the Docker image from them will fail with an explicit error at build time.
+If you already cloned without git-lfs installed, install it then run `git lfs pull`
+in the repo to fetch the real files.
+
 If you cloned Slips in '~/StratosphereLinuxIPS', then you can build the Docker image with:
 
 	cd ~/StratosphereLinuxIPS
