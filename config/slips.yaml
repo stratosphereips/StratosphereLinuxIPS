@@ -1116,6 +1116,10 @@ web_interface:
   bind: localhost
   # Define the port to use
   port: 55000
+  # Require the shared redis/web password to log in before granting access.
+  # Only disable this for CI/tests - never on a machine reachable beyond
+  # localhost, especially when bind is set to "interface".
+  require_password: true
 
 #############################
 global_p2p:
