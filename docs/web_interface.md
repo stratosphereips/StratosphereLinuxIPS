@@ -17,6 +17,7 @@ web_interface:
   enabled: true
   bind: localhost
   port: 55000
+  require_password: true
 ```
 
 The `-w` flag enables the module even when `enabled` is false. `bind` accepts:
@@ -24,7 +25,22 @@ The `-w` flag enables the module even when `enabled` is false. `bind` accepts:
 - `localhost` — default; listens only on `127.0.0.1`.
 - `interface` — listens only on the IPv4 address of the interface Slips is monitoring. Slips reports the resulting URL in the console. This mode fails closed if no monitored IPv4 interface is available.
 
-The interface mode exposes run data to hosts that can reach that network interface. The server has no login layer; use host firewall rules or a trusted network.
+### Login
+
+The web interface requires a password before it shows any run data. By
+default this is the same password slips generates for Redis (see
+[installation.md](installation.md), section "Redis authentication") -
+retrieve it with `cat permanent/redis_auth.conf`. Submitting it on the
+login page issues a signed session cookie valid for 8 hours.
+
+`require_password: false` disables this password. Only use it for local
+testing/CI - never on a machine reachable beyond localhost, and especially
+never combined with `bind: interface`.
+
+`bind: interface` exposes run data, and the login password, to any host that
+can reach that network interface over plain HTTP (no TLS).
+Prefer `bind: localhost` plus an SSH port-forward (`ssh -L 55000:localhost:55000
+<host>`) for remote access instead.
 
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
