@@ -317,6 +317,27 @@ curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.g
 
 Please remember to add /redis-stable/src to your PATH for slips to be able to use it.
 
+#### Redis authentication
+
+Slips requires every redis-server it starts to authenticate. The first time
+it needs one, it generates a random password and stores it at
+`permanent/redis_auth.conf` (mode `600`, readable only by the user running
+slips).
+
+This password is persistent across runs, it's what lets the
+long-lived cache database on port 6379 (below) keep working across
+restarts, and it's also the password used to log in to the web interface.
+
+You can retrieve it at any time with:
+
+```
+cat permanent/redis_auth.conf
+```
+
+Keep this file safe: anyone with read access to it can connect to any of
+your slips redis instances.
+
+
 #### Running Slips for the First Time
 
 
