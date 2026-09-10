@@ -14,7 +14,7 @@ import time
 import traceback
 from datetime import datetime
 from collections import Counter, defaultdict
-from http import HTTPStatus
+from http import HTTPStatus, cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -30,6 +30,22 @@ from modules.web_interface.history import (
     BACKEND_HEARTBEAT_KEY,
     connect_history,
     initialize_history,
+)
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_web_password_matches_redis_password,
+    redis_auth_kwargs,
+    verify_web_password,
+)
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.web_auth import (
+    SESSION_COOKIE_NAME,
+    SESSION_TTL_SECONDS,
+    is_locked_out,
+    issue_token,
+    login_page_html,
+    record_failed_login,
+    record_successful_login,
+    validate_token,
 )
 
 LOOPBACK_ADDRESS = "127.0.0.1"
@@ -168,6 +184,7 @@ class RunDataReader:
             db=0,
             decode_responses=True,
             socket_timeout=2,
+            **redis_auth_kwargs(),
         )
         self.cache = redis.Redis(
             host=LOOPBACK_ADDRESS,
@@ -175,6 +192,7 @@ class RunDataReader:
             db=1,
             decode_responses=True,
             socket_timeout=2,
+            **redis_auth_kwargs(),
         )
         self._processes: Dict[int, psutil.Process] = {}
         initialize_history(self.history_path)
@@ -4431,6 +4449,30 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _send_html(
+        self, body_str: str, status: HTTPStatus = HTTPStatus.OK, headers=None
+    ) -> None:
+        """Send a small HTML response (login form, redirects)."""
+        body = body_str.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _session_ok(self) -> bool:
+        """Checks the request's session cookie against the shared password."""
+        header = self.headers.get("Cookie")
+        if not header:
+            return False
+        jar = cookies.SimpleCookie()
+        jar.load(header)
+        morsel = jar.get(SESSION_COOKIE_NAME)
+        return bool(morsel) and validate_token(morsel.value)
+
     def _send_asset(self, filename: str | Path, content_type: str) -> None:
         """Send one allow-listed interface asset.
 
@@ -4521,9 +4563,39 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload.update(reader.response_metadata())
         return payload
 
+    UNAUTHENTICATED_PATHS = {
+        "/login",
+        "/style.css",
+        "/favicon.svg",
+        "/slips-logo.png",
+    }
+
+    def _require_password(self) -> bool:
+        return ConfigParser().web_interface_require_password()
+
     def do_GET(self) -> None:
         """Serve an allow-listed static asset or API response."""
         parsed = urlparse(self.path)
+
+        if parsed.path == "/login":
+            self._send_html(login_page_html(None))
+            return
+
+        if (
+            self._require_password()
+            and parsed.path not in self.UNAUTHENTICATED_PATHS
+            and not self._session_ok()
+        ):
+            if parsed.path.startswith("/api/"):
+                self._send_json(
+                    {"error": "login required"}, HTTPStatus.UNAUTHORIZED
+                )
+            else:
+                self._send_html(
+                    "", HTTPStatus.FOUND, headers={"Location": "/login"}
+                )
+            return
+
         assets = {
             "/": ("index.html", "text/html; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
@@ -4576,6 +4648,54 @@ class RequestHandler(BaseHTTPRequestHandler):
                 },
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
+
+    MAX_LOGIN_BODY_BYTES = 1024
+
+    def do_POST(self) -> None:
+        """Only /login is a valid POST target - everything else is 405."""
+        parsed = urlparse(self.path)
+        if parsed.path != "/login":
+            self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
+            return
+
+        ensure_web_password_matches_redis_password()
+        client_ip = self.client_address[0]
+
+        try:
+            length = int(self.headers.get("Content-Length", 0))
+        except ValueError:
+            length = -1
+        if length < 0 or length > self.MAX_LOGIN_BODY_BYTES:
+            self.send_error(HTTPStatus.BAD_REQUEST)
+            return
+        body = self.rfile.read(length).decode("utf-8", errors="replace")
+
+        if is_locked_out(client_ip):
+            self._send_html(
+                login_page_html("Too many attempts, try again shortly."),
+                HTTPStatus.TOO_MANY_REQUESTS,
+            )
+            return
+
+        password = parse_qs(body).get("password", [""])[0]
+        if not verify_web_password(password):
+            record_failed_login(client_ip)
+            self._send_html(
+                login_page_html("Incorrect password."),
+                HTTPStatus.UNAUTHORIZED,
+            )
+            return
+
+        record_successful_login(client_ip)
+        cookie_header = (
+            f"{SESSION_COOKIE_NAME}={issue_token()}; HttpOnly; "
+            f"SameSite=Strict; Max-Age={SESSION_TTL_SECONDS}; Path=/"
+        )
+        self._send_html(
+            "",
+            HTTPStatus.FOUND,
+            headers={"Location": "/", "Set-Cookie": cookie_header},
+        )
 
 
 def ipv4_address(value: str) -> str:

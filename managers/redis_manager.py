@@ -13,6 +13,9 @@ from typing import Dict, Union
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.database.redis_db.redis_auth import (
+    try_connect_with_and_without_password,
+)
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
@@ -303,7 +306,8 @@ class RedisManager:
         """
         Clear cache database
         """
-        rcache = redis.StrictRedis(
+        rcache = try_connect_with_and_without_password(
+            redis.StrictRedis,
             host=redis_host,
             port=redis_port,
             db=1,
@@ -366,7 +370,8 @@ class RedisManager:
         """
         client = None
         try:
-            client = redis.StrictRedis(
+            client = try_connect_with_and_without_password(
+                redis.StrictRedis,
                 host=LOCALHOST,
                 port=port,
                 socket_connect_timeout=0.2,
