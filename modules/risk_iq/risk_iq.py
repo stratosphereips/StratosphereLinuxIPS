@@ -51,7 +51,6 @@ class RiskIQ(IModule):
                 "https://api.riskiq.net/pt/v2/dns/passive",
                 params=params,
                 timeout=5,
-                verify=False,
                 auth=HTTPBasicAuth(self.riskiq_email, self.riskiq_key),
             )
         except (
