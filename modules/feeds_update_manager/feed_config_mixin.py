@@ -77,6 +77,10 @@ class FeedConfigMixin:
         return
          a dict with feed info
         """
+        # without this, a disabled feed can hang
+        # reading stdin or crash with "Bad file descriptor"
+        if not feeds_path or not isinstance(feeds_path, (str, os.PathLike)):
+            return {}
         try:
             with open(feeds_path, "r") as feeds_file:
                 feeds: str = feeds_file.read()

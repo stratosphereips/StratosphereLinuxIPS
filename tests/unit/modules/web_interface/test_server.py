@@ -6,7 +6,7 @@ import sqlite3
 import threading
 import time
 from pathlib import Path
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 from unittest.mock import Mock, patch
 
 import pytest
@@ -20,7 +20,15 @@ from modules.web_interface.server import (
     SlipsHTTPServer,
     ipv4_address,
 )
+from slips_files.common.web_auth import SESSION_COOKIE_NAME, issue_token
 from tests.module_factory import ModuleFactory
+
+
+def _authenticated_request(url: str) -> Request:
+    """A request carrying a valid session cookie, for gated pages."""
+    return Request(
+        url, headers={"Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}"}
+    )
 
 
 def test_idle_connection_does_not_block_page_requests() -> None:
@@ -33,7 +41,9 @@ def test_idle_connection_does_not_block_page_requests() -> None:
     idle_connection = socket.create_connection(("127.0.0.1", port), timeout=5)
 
     try:
-        with urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
+        with urlopen(
+            _authenticated_request(f"http://127.0.0.1:{port}/"), timeout=10
+        ) as response:
             assert response.status == 200
             page = response.read()
             assert b"Slips" in page
