@@ -28,6 +28,11 @@ from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 from slips_files.core.database.redis_db.cleanup_mixin import CleanupMixin
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_redis_password,
+    get_redis_auth_conf_path,
+    try_connect_with_and_without_password,
+)
 
 import os
 import redis
@@ -277,7 +282,7 @@ class RedisDB(
         cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
-        cls._options = {}
+        template_options = {}
         with open(cls._conf_file, "r") as f:
             for line in f:
                 line = line.strip()
@@ -285,7 +290,15 @@ class RedisDB(
                     continue
                 if " " in line:
                     key, value = line.split(None, 1)
-                    cls._options[key] = value
+                    template_options[key] = value
+
+        # `include` must come first so nothing in the template can override
+        # the shared requirepass. never write requirepass directly into
+        # this per-run conf file: it lives inside the user's -o output dir,
+        # which gets shared/archived, unlike the permissioned auth conf.
+        ensure_redis_password()
+        cls._options = {"include": get_redis_auth_conf_path()}
+        cls._options.update(template_options)
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
@@ -429,7 +442,8 @@ class RedisDB(
         # retried once, if the retry is successful, it will return
         # normally; if it fails, an exception will be thrown
 
-        return redis.StrictRedis(
+        return try_connect_with_and_without_password(
+            redis.StrictRedis,
             host=LOCALHOST,
             port=port,
             db=db,
