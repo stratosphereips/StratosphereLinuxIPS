@@ -1,0 +1,79 @@
+# Scans the p2p4slips Go module (the local P2P peer daemon, "Pigeon") for
+# known-vulnerable dependencies and toolchain versions with govulncheck, and
+# for insecure code patterns with gosec.
+#
+# govulncheck reads the Go vulnerability database, so a module version that
+# was fine when merged can start failing later once a CVE is published for
+# it.
+
+name: go-security
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+    paths:
+      - 'p2p4slips/**'
+      - '.gitmodules'
+      - '.github/workflows/go-security.yml'
+  pull_request:
+    paths:
+      - 'p2p4slips/**'
+      - '.gitmodules'
+      - '.github/workflows/go-security.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  govulncheck:
+    name: govulncheck p2p4slips
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+
+      - name: Fetch the p2p4slips submodule
+        run: git submodule update --init p2p4slips
+
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@032d45514ae346b1db93c04b0c90b841c370344f # v1.1.0
+        with:
+          # the checkout above already fetched the submodule; the action's
+          # own checkout would drop it
+          repo-checkout: false
+          work-dir: p2p4slips
+          go-package: ./...
+          # scan with the latest stable Go so standard-library advisories are
+          # judged against a patched toolchain, the same one the Docker
+          # image builds with
+          go-version-input: stable
+          check-latest: true
+          cache-dependency-path: p2p4slips/go.sum
+
+  gosec:
+    name: gosec p2p4slips
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: false
+
+      - name: Fetch the p2p4slips submodule
+        run: git submodule update --init p2p4slips
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version: stable
+          check-latest: true
+          cache-dependency-path: p2p4slips/go.sum
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+
+      - name: Run gosec
+        working-directory: p2p4slips
+        run: gosec ./...
