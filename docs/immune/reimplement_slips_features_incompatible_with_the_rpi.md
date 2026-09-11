@@ -24,14 +24,6 @@ Docker can run amd64 images on arm devices using emulation, but this method come
 
 So we decided to go for an ARM docker image specifically for ARM devices and the RPI. This is doable without maintaining 2 different Dockerfiles one for each architechture thanks to docker buildx multiplatform support.
 
-**Note**: the ML modules' models (`modules/ml_linear_model` and `modules/ml_online_model`)
-are stored using git LFS. Make sure the checkout used as the build context actually
-has the real model files and not LFS pointer text files (`git lfs install && git lfs pull`
-in the clone before building), otherwise the build fails fast with an explicit error,
-and if it didn't, the resulting image would crash those modules on the RPI with
-`_pickle.UnpicklingError: invalid load key, 'v'.`. Our CI (`publish-slips-images.yml`)
-already checks out with `lfs: true` for this reason.
-
 **Commands for building one multi-architecture image (supporting AMD and ARM)**
 ```
 docker buildx create --name slips\_builder
