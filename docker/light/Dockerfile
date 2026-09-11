@@ -38,6 +38,22 @@ COPY . ${SLIPS_DIR}
 
 WORKDIR ${SLIPS_DIR}
 
+# ml_linear_model/ml_online_model artifacts are stored with git LFS. If the
+# build context was checked out without pulling LFS objects (missing
+# git-lfs, or a clone/checkout that didn't fetch them), these files are
+# left as LFS pointer text files instead of the real pickled models, which
+# crashes those modules at runtime with "invalid load key, 'v'.". Fail the
+# build early instead of shipping a broken image.
+RUN for f in \
+        modules/ml_linear_model/artifacts/model.bin \
+        modules/ml_online_model/artifacts/model.bin; do \
+        if head -c 7 "$f" | grep -q "version"; then \
+            echo "ERROR: $f is a git-lfs pointer file, not the real model." >&2; \
+            echo "Run 'git lfs install && git lfs pull' in your clone before building this image." >&2; \
+            exit 1; \
+        fi; \
+    done
+
 RUN cd modules \
     && rm -rf \
         rnn_cc_detection/ \
