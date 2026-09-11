@@ -34,6 +34,8 @@ and receive packets you should use ```--cap-add=NET_ADMIN```
 
 1. download and install go:
 
+- Go 1.21 or newer is needed; (`install/install.sh` installs Go for you when the system one is too old).
+
 ```
 apt install golang
 ```
@@ -41,7 +43,7 @@ apt install golang
 or by hand
 
 ```
-curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz
+curl https://go.dev/dl/go1.26.8.linux-amd64.tar.gz --output go.tar.gz
 rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 ```

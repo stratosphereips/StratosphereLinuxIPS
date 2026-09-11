@@ -16,6 +16,9 @@ from slips_files.common.style import green
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.database.redis_db.redis_auth import (
+    get_redis_auth_conf_path,
+)
 import modules.p2p_trust.trust.base_model as reputation_model
 import modules.p2p_trust.utils.utils as p2p_utils
 from modules.p2p_trust.utils.go_director import GoDirector
@@ -728,6 +731,9 @@ class Trust(IModule):
             "-host": self.host,
             "-key-file": self.pigeon_key_file,
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
+            # slips starts every redis-server with the shared requirepass
+            # from this conf, so the pigeon reads its password from it too
+            "-redis-auth-conf": get_redis_auth_conf_path(),
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
             "-slips-version": self.slips_version,
