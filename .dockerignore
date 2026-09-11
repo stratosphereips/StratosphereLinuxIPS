@@ -25,6 +25,8 @@ ENV/*
 env/*
 .venv/
 venv/
+# local task scratch dirs (gitignored, can hold GBs of results)
+tasks/
 p2ptrust_runtime/
 peer*_demo/
 

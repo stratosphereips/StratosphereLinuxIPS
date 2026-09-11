@@ -22,7 +22,8 @@ daemon/
 # Ignore private AGENTS.md, may contain private paths
 private/AGENTS.md
 scripts/
-tasks/
+tasks/*
+
 # Ignore the results folders
 2019-
 2020-
