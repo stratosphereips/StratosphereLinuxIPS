@@ -159,6 +159,41 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"
 
 
+def test_start_pigeon_passes_redis_auth_conf_to_go():
+    """
+    Ensure the Go Pigeon process is told where slips' redis
+    `requirepass` conf lives, so it can authenticate to redis.
+
+    Returns:
+        None.
+    """
+    trust = create_trust()
+    trust.port = 32769
+    trust.host = "172.16.2.4"
+    trust.redis_port = 32768
+    trust.pygo_channel_raw = "p2p_pygo"
+    trust.gopy_channel_raw = "p2p_gopy"
+    trust.create_p2p_logfile = False
+    trust.p2p_trust_runtime_dir = "permanent/p2p_trust_runtime"
+    trust.pigeon_key_file = "pigeon.keys"
+    trust._rebuild_pigeon_binary_after_slips_update = Mock(return_value=True)
+    auth_conf = "/slips/permanent/redis_auth.conf"
+
+    with (
+        patch("modules.p2p_trust.p2p_trust.shutil.which", return_value=True),
+        patch(
+            "modules.p2p_trust.p2p_trust.get_redis_auth_conf_path",
+            return_value=auth_conf,
+        ),
+        patch("modules.p2p_trust.p2p_trust.subprocess.Popen") as mock_popen,
+    ):
+        trust._start_pigeon()
+
+    executable = mock_popen.call_args.args[0]
+    conf_index = executable.index("-redis-auth-conf")
+    assert executable[conf_index + 1] == auth_conf
+
+
 def test_start_pigeon_rebuilds_and_retries_on_exec_format_error():
     """
     Ensure incompatible p2p4slips binaries are rebuilt and retried.
