@@ -189,6 +189,52 @@ exit_on_cmd_failure
 
 
 print_green "Installing p2p4slips"
+
+# p2p4slips/go.mod pins the Go toolchain it builds with (its "toolchain"
+# line). Any Go >= 1.21 downloads that toolchain by itself on the first
+# build, but the "golang" apt package on Ubuntu 22.04 is 1.18, which can't.
+# In that case (or with no Go at all) install the official toolchain into
+# /usr/local/go, the same way docs/P2P.md describes.
+ensure_go_toolchain() {
+    local min_minor=21
+    local go_version="1.26.8"
+
+    if command -v go >/dev/null 2>&1; then
+        local minor
+        minor=$(go version | sed -E 's/.*go1\.([0-9]+).*/\1/')
+        if [ "${minor:-0}" -ge "$min_minor" ]; then
+            return 0
+        fi
+        print_green "System $(go version | awk '{print $3}') is older than go1.${min_minor}, installing go${go_version} to /usr/local/go"
+    else
+        print_green "Go not found, installing go${go_version} to /usr/local/go"
+    fi
+
+    local arch
+    case "$(uname -m)" in
+        x86_64) arch="amd64" ;;
+        aarch64|arm64) arch="arm64" ;;
+        armv6l|armv7l) arch="armv6l" ;;
+        *)
+            echo "Unsupported CPU architecture $(uname -m), install Go ${go_version} by hand"
+            return 1
+            ;;
+    esac
+
+    local tarball="go${go_version}.linux-${arch}.tar.gz"
+    curl -fsSL "https://go.dev/dl/${tarball}" -o "/tmp/${tarball}" \
+        && sudo rm -rf /usr/local/go \
+        && sudo tar -C /usr/local -xzf "/tmp/${tarball}" \
+        && rm -f "/tmp/${tarball}" || return 1
+
+    export PATH="$PATH:/usr/local/go/bin"
+    add_line_if_missing 'export PATH="$PATH:/usr/local/go/bin"' ~/.bashrc
+}
+
+ensure_go_toolchain
+
+exit_on_cmd_failure
+
 # build the pigeon and Add pigeon to path
 git submodule init && git submodule update && cd p2p4slips && go build -buildvcs=false && export PATH=$PATH:$(pwd) >> ~/.bashrc && cd ..
 
