@@ -11,6 +11,7 @@ import numpy
 import pandas as pd
 
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.ml_safe_unpickler import safe_pickle_load
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -778,11 +779,23 @@ class MLBaseDetection(IModule, ABC):
             preprocess_file.write(pickle.dumps(self.preprocessor))
 
     def _read_pickle_or_none(self, path: str) -> Optional[Any]:
-        """Load a pickle artifact or return None when missing/empty."""
+        """Load a pickle artifact or return None when missing/empty.
+
+        Uses a restricted unpickler so a tampered/malicious artifact
+        file cannot achieve arbitrary code execution on load.
+        """
         try:
             with open(path, "rb") as file_handler:
-                return pickle.load(file_handler)
+                return safe_pickle_load(file_handler)
         except (FileNotFoundError, EOFError):
+            return None
+        except pickle.UnpicklingError as exc:
+            self.print(
+                f"Refusing to load unsafe/corrupted ML artifact at "
+                f"{path}: {exc}",
+                0,
+                1,
+            )
             return None
 
     def read_model(self):
