@@ -76,6 +76,47 @@ jobs:
           # real binaries, breaking those models in the published images
           lfs: true
 
+      # actions/checkout's lfs:true fetch/smudge can silently leave LFS
+      # pointer text files in place instead of the real binaries (e.g. after
+      # a transient LFS download hiccup) without failing the step. Retry the
+      # pull until every LFS-tracked file is materialized, and hard-fail
+      # before the image is built if it never resolves, so we never publish
+      # an image with pointer files instead of real ml_online_model /
+      # ml_linear_model artifacts.
+      - name: Ensure git-lfs files are fully materialized
+        run: |
+          set -euo pipefail
+
+          is_pointer() {
+            head -c 40 "$1" 2>/dev/null | grep -q "^version https://git-lfs"
+          }
+
+          max_attempts=5
+          attempt=1
+          while :; do
+            pending=$(git lfs ls-files -n | while IFS= read -r f; do
+              [ -n "$f" ] && is_pointer "$f" && echo "$f"
+              true
+            done)
+
+            if [ -z "$pending" ]; then
+              echo "All LFS-tracked files are materialized."
+              break
+            fi
+
+            if [ "$attempt" -gt "$max_attempts" ]; then
+              echo "::error::The following LFS-tracked files are still pointer files after $max_attempts attempts:"
+              echo "$pending"
+              exit 1
+            fi
+
+            echo "Attempt $attempt/$max_attempts: re-pulling unresolved LFS file(s):"
+            echo "$pending"
+            git lfs pull || true
+            attempt=$((attempt + 1))
+            sleep $((attempt * 10))
+          done
+
       - name: Login to DockerHub
         uses: docker/login-action@v4.5.2
         with:
