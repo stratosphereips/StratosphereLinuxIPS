@@ -97,12 +97,19 @@ WORKDIR ${SLIPS_DIR}
 # later inside a running container also resolves LFS-tracked files
 # (ml_linear_model/ml_online_model) correctly instead of leaving pointer
 # text files behind.
+# Also fetches master/develop as real remote-tracking branches (not just
+# the target ref, which may be a detached commit/PR SHA) so that
+# `git checkout develop` (or master) done later inside a running container
+# resolves directly via git's normal branch checkout instead of failing
+# with "pathspec did not match any file(s)".
 RUN apt-get update -o Acquire::Retries=5 \
     && apt-get install -y --no-install-recommends git git-lfs ca-certificates \
     && git init . \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && git fetch --depth 1 origin "${SLIPS_GIT_REF}" \
     && git checkout FETCH_HEAD \
+    && git fetch --depth 1 origin master:refs/remotes/origin/master \
+    && git fetch --depth 1 origin develop:refs/remotes/origin/develop \
     && git lfs install \
     && git lfs pull \
     && apt-get clean \
