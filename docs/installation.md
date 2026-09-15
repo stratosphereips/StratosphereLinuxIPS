@@ -46,14 +46,18 @@ For more advanced users, you can:
 
 #### Linux And Windows Hosts
 
-###### Analyse your own traffic
-	docker run --rm -it --cpu-shares "700" --memory="16g" --memory-swap="16g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
+###### Analyze your own traffic
+
+	docker run -d --restart=unless-stopped --cpus=5 --cpu-shares "700" --memory="16g" --memory-swap="16g" --net=host --cap-add=NET_ADMIN -v /var/log/slips:/StratosphereLinuxIPS/output --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output/eno1
 
 
-Please change the name of the interface for your own.
-Check the alert slips generated
+- Please change the name of the interface on `-i` for your own.
+- Slips stores the alerts, logs, DB, and flows in the shared volume `/var/log/slips/`
+- This container has limits for memory and CPU
 
-      tail -f output/eno1*/alerts.log
+Check the alerts slips generated that are stored in the host:
+
+      tail -f /var/log/slips/eno1/alerts.log
 
 
 #### MacOS Hosts
