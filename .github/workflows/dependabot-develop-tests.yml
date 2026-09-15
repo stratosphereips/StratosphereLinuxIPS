@@ -25,11 +25,15 @@ jobs:
       docker_image_artifact_name: ${{ steps.image.outputs.artifact_name }}
       docker_image_tag: ${{ steps.image.outputs.image_tag }}
     steps:
+      # lfs:true isn't needed here: this checkout only needs to provide the
+      # local ./.github/workflows/reusable/build-docker-image action files.
+      # That composite action does its own checkout (with submodules) and
+      # docker/Dockerfile now clones + git-lfs-pulls the exact commit being
+      # tested directly from GitHub at build time.
       - uses: actions/checkout@v7
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
-          lfs: true
 
       - name: Prepare Docker image metadata
         id: image
