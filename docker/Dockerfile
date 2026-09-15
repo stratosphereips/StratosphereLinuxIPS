@@ -81,9 +81,33 @@ ENV SLIPS_DIR=/StratosphereLinuxIPS
 # Use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 
+# Git ref (branch, tag, or full commit SHA) to build Slips from. Passed by
+# CI as the exact commit being tested/published; defaults to master for
+# manual/local builds.
+ARG SLIPS_GIT_REF=master
+
 WORKDIR ${SLIPS_DIR}
 
-COPY . ${SLIPS_DIR}
+# Clone Slips directly from GitHub instead of COPYing the host build
+# context. This guarantees the image is always built from a clean,
+# correctly-checked-out tree regardless of what's sitting in the local
+# working directory (uncommitted changes, stray/sensitive files, a host
+# clone that never ran `git lfs pull`, ...), and it leaves a real .git repo
+# with git-lfs available in the final image so `git checkout <branch>` done
+# later inside a running container also resolves LFS-tracked files
+# (ml_linear_model/ml_online_model) correctly instead of leaving pointer
+# text files behind.
+RUN apt-get update -o Acquire::Retries=5 \
+    && apt-get install -y --no-install-recommends git git-lfs ca-certificates \
+    && git init . \
+    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
+    && git fetch --depth 1 origin "${SLIPS_GIT_REF}" \
+    && git checkout FETCH_HEAD \
+    && git lfs install \
+    && git lfs pull \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY --from=build-iris /artifacts/iris ./modules/iris/iris
 COPY --from=build-p2p /artifacts/p2p4slips ./p2p4slips/p2p4slips
 COPY --from=build-p2p /usr/local/go /usr/local/go
@@ -129,8 +153,6 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
 RUN pip3 install --no-cache-dir --upgrade pip \
     && pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
-    && git init \
-    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && apt-get purge -y \
     build-essential \
     python3-dev \
