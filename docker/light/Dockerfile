@@ -9,8 +9,18 @@ ENV SLIPS_DIR=/StratosphereLinuxIPS
 # use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 
+# With Docker BuildKit/buildx, TARGETARCH is automatically set based on the
+# platform currently being built.
+ARG TARGETARCH
+
 # Install wget and add Zeek and redis repositories to our sources.
 # set -eux for safer builds (stop on error, show commands)
+#
+# On amd64, install Redis 8 from the official apt repo (it ships jemalloc,
+# which is fine there). On arm/arm64 (e.g. Raspberry Pi), the apt build's
+# jemalloc assumes the x86_64 default page size, which doesn't match the
+# Pi's page size and breaks Redis at runtime, so build Redis from source
+# there with libc malloc instead.
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates gnupg wget curl \
@@ -18,11 +28,24 @@ RUN set -eux; \
         git lsb-release software-properties-common \
         build-essential file lsof iproute2 tshark whois yara net-tools less unzip \
         python3-certifi python3-dev python3-tzlocal python3-pip \
-    && curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
-    && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
-    $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list \
-    && apt-get update && apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1* \
+    && if [ "$TARGETARCH" = "arm64" ] || [ "$TARGETARCH" = "arm" ]; then \
+        echo "Building Redis for $TARGETARCH from source with libc malloc"; \
+        curl -fsSLO https://download.redis.io/redis-stable.tar.gz; \
+        tar xzf redis-stable.tar.gz; \
+        cd redis-stable; \
+        make distclean; \
+        make build core MALLOC=libc -j"$(nproc)"; \
+        make install; \
+        cd ..; \
+        rm -rf redis-stable redis-stable.tar.gz; \
+    else \
+        curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg; \
+        chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg; \
+        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
+        $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1*; \
+    fi \
     && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' \
         | tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \

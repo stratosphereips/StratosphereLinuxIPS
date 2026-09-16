@@ -111,11 +111,33 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
-    && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
-    $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list \
-    && apt-get update && apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1* \
+# With Docker BuildKit/buildx, TARGETARCH is automatically set based on the
+# platform currently being built.
+ARG TARGETARCH
+
+# On amd64, install Redis 8 from the official apt repo (it ships jemalloc,
+# which is fine there). On arm/arm64 (e.g. Raspberry Pi), the apt build's
+# jemalloc assumes the x86_64 default page size, which doesn't match the
+# Pi's page size and breaks Redis at runtime, so build Redis from source
+# there with libc malloc instead.
+RUN if [ "$TARGETARCH" = "arm64" ] || [ "$TARGETARCH" = "arm" ]; then \
+        echo "Building Redis for $TARGETARCH from source with libc malloc" \
+        && curl -fsSLO https://download.redis.io/redis-stable.tar.gz \
+        && tar xzf redis-stable.tar.gz \
+        && cd redis-stable \
+        && make distclean \
+        && make build core MALLOC=libc -j"$(nproc)" \
+        && make install \
+        && cd .. \
+        && rm -rf redis-stable redis-stable.tar.gz; \
+    else \
+        curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
+        && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
+        && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
+        $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list \
+        && apt-get update \
+        && apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1*; \
+    fi \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
