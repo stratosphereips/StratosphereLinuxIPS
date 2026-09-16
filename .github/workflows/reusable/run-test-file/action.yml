@@ -57,10 +57,26 @@ runs:
       # the prebuilt stratosphereips/slips_dependencies image only has
       # whatever install/requirements.txt looked like when it was last
       # built, so if this PR changed that file, install the PR's version
-      # over it instead of silently testing against the stale one.
+      # over it instead of silently testing against the stale one. That
+      # image may also still be on an older Python than the PR's
+      # requirements need (e.g. a Python-version bump landing before the
+      # image is rebuilt on the next push to master), so make sure a
+      # matching python3.12 is available and prepend a venv built from it
+      # to PATH, instead of assuming the image's system python will do.
       if: ${{ inputs.execution_mode == 'runner' && inputs.install_pr_requirements == 'true' }}
       shell: bash
-      run: python3 -m pip install --no-cache-dir -r install/requirements.txt
+      run: |
+        if ! command -v python3.12 >/dev/null; then
+          apt-get update
+          apt-get install -y --no-install-recommends software-properties-common
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y --no-install-recommends python3.12 python3.12-venv
+        fi
+        python3.12 -m venv /tmp/pr-requirements-venv
+        /tmp/pr-requirements-venv/bin/python3 -m pip install --upgrade pip
+        /tmp/pr-requirements-venv/bin/python3 -m pip install --no-cache-dir -r install/requirements.txt
+        echo "/tmp/pr-requirements-venv/bin" >> "$GITHUB_PATH"
 
     - name: Run ${{ inputs.test_file }}
       if: ${{ inputs.execution_mode == 'runner' }}
