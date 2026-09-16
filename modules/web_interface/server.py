@@ -4477,6 +4477,30 @@ class RequestHandler(BaseHTTPRequestHandler):
         morsel = jar.get(SESSION_COOKIE_NAME)
         return bool(morsel) and validate_token(morsel.value)
 
+    def _send_html(
+        self, body_str: str, status: HTTPStatus = HTTPStatus.OK, headers=None
+    ) -> None:
+        """Send a small HTML response (login form, redirects)."""
+        body = body_str.encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        for name, value in (headers or {}).items():
+            self.send_header(name, value)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _session_ok(self) -> bool:
+        """Checks the request's session cookie against the shared password."""
+        header = self.headers.get("Cookie")
+        if not header:
+            return False
+        jar = cookies.SimpleCookie()
+        jar.load(header)
+        morsel = jar.get(SESSION_COOKIE_NAME)
+        return bool(morsel) and validate_token(morsel.value)
+
     def _send_asset(self, filename: str | Path, content_type: str) -> None:
         """Send one allow-listed interface asset.
 

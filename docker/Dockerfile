@@ -197,6 +197,11 @@ ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips:/usr/local/go/bin"
 # wrong ownership/permissions.
 RUN mkdir -p ${SLIPS_DIR}/permanent && chmod 700 ${SLIPS_DIR}/permanent
 
+# pre-create the dir that holds the generated redis auth password so a
+# first run against a bind-mounted ./permanent doesn't create it with the
+# wrong ownership/permissions.
+RUN mkdir -p ${SLIPS_DIR}/permanent && chmod 700 ${SLIPS_DIR}/permanent
+
 WORKDIR ${SLIPS_DIR}
 
 CMD /bin/bash
