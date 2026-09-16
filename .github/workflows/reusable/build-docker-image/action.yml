@@ -22,15 +22,6 @@ outputs:
 runs:
   using: "composite"
   steps:
-    # This checkout only needs to provide the Dockerfile itself and the
-    # iris/p2p4slips submodules (needed by docker/Dockerfile's go build
-    # stages, validated below). It no longer needs lfs:true or a separate
-    # LFS-materialization retry loop: docker/Dockerfile and
-    # docker/light/Dockerfile now `git clone` + `git lfs pull` the exact
-    # commit being tested directly from GitHub at build time (see the
-    # SLIPS_GIT_REF build-arg passed below), so the rest of the source tree,
-    # including git-lfs-tracked ml_linear_model/ml_online_model artifacts,
-    # is fetched there instead of from this checkout.
     - name: Checkout repository with submodules
       uses: actions/checkout@v7
       with:

@@ -64,17 +64,6 @@ jobs:
 
       # clone slips and checkout branch
       # By default it checks out only one commit
-      #
-      # This checkout only needs to provide the Dockerfiles themselves (for
-      # build-push-action's `file:`/`context:`) and the iris/p2p4slips
-      # submodules (needed by docker/Dockerfile's go build stages). The rest
-      # of the Slips source tree, including git-lfs-tracked ml_linear_model /
-      # ml_online_model artifacts, is no longer read from this checkout: both
-      # docker/Dockerfile and docker/light/Dockerfile now `git clone` +
-      # `git lfs pull` the exact commit being published directly from GitHub
-      # at build time (see the SLIPS_GIT_REF build-arg below), so this
-      # checkout doesn't need lfs:true or a separate LFS-materialization
-      # retry loop anymore.
       - uses: actions/checkout@v7
         with:
           ref: 'master'

@@ -89,19 +89,8 @@ ARG SLIPS_GIT_REF=master
 WORKDIR ${SLIPS_DIR}
 
 # Clone Slips directly from GitHub instead of COPYing the host build
-# context. This guarantees the image is always built from a clean,
-# correctly-checked-out tree regardless of what's sitting in the local
-# working directory (uncommitted changes, stray/sensitive files, a host
-# clone that never ran `git lfs pull`, ...), and it leaves a real .git repo
-# with git-lfs available in the final image so `git checkout <branch>` done
-# later inside a running container also resolves LFS-tracked files
-# (ml_linear_model/ml_online_model) correctly instead of leaving pointer
-# text files behind.
-# Also fetches master/develop as real remote-tracking branches (not just
-# the target ref, which may be a detached commit/PR SHA) so that
-# `git checkout develop` (or master) done later inside a running container
-# resolves directly via git's normal branch checkout instead of failing
-# with "pathspec did not match any file(s)".
+# context. avoid accedinatelly pushing tmp files to docker images, easier to checkout diff branches, and makes it the
+# dockerfile's responsibility to install git-lfs instead of the builder.
 RUN apt-get update -o Acquire::Retries=5 \
     && apt-get install -y --no-install-recommends git git-lfs ca-certificates \
     && git init . \
