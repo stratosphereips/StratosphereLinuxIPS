@@ -68,6 +68,8 @@ These rules MUST be followed:
 - if cleanup of redis keys is to be done, do it in the cleanup mixing of the redis database
 - shutdown related logic should be put in the process_manager/, not in main.
 - always use modules/supported_module_names.py instead of hardcoding module names.
+- when creating a new branch use the following format: my_name/fix_x.
+- be brief and avoid being verbose with comments in the code, .yml files, Dockerfiles etc. unless absolutely necessary.
 
 ### Paths:
 - NEVER use absolute paths

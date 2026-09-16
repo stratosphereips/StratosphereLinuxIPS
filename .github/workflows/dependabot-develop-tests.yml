@@ -29,7 +29,6 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
-          lfs: true
 
       - name: Prepare Docker image metadata
         id: image

@@ -105,14 +105,36 @@ jobs:
     timeout-minutes: 120
     outputs:
       test_files: ${{ steps.list.outputs.test_files }}
+      requirements_changed: ${{ steps.requirements-check.outputs.changed }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - id: list
         uses: ./.github/workflows/reusable/list-tests-dir
         with:
           test_dir: ${{ inputs.test_dir }}
           output_prefix: ${{ inputs.output_prefix }}
+
+      # dependency-image-tests runs PR code inside the prebuilt
+      # stratosphereips/slips_dependencies image, which only has whatever
+      # install/requirements.txt looked like when that image was last built.
+      # If this PR changes install/requirements.txt, that job needs to
+      # install the PR's version instead of trusting the stale image.
+      - id: requirements-check
+        shell: bash
+        run: |
+          changed=false
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            if ! git diff --quiet \
+                "${{ github.event.pull_request.base.sha }}" \
+                "${{ github.event.pull_request.head.sha }}" \
+                -- install/requirements.txt; then
+              changed=true
+            fi
+          fi
+          echo "changed=$changed" >> "$GITHUB_OUTPUT"
 
   build-docker-image:
     name: Build Docker image
@@ -127,7 +149,6 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
-          lfs: true
 
       - name: Prepare Docker image metadata
         id: image
@@ -189,6 +210,7 @@ jobs:
           output_path: ${{ inputs.output_path }}
           artifact_name: ${{ inputs.artifact_name_prefix && format('{0}{1}', inputs.artifact_name_prefix, strategy.job-index) || '' }}
           artifact_name_suffix: ${{ inputs.artifact_name_suffix }}
+          install_pr_requirements: ${{ needs.list-tests.outputs.requirements_changed }}
 
 
   dockerfile-image-tests:

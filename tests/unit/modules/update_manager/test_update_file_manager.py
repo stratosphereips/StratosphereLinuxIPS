@@ -172,6 +172,29 @@ def test_get_feed_details(mocker, mock_data, expected_feeds):
 
 
 @pytest.mark.parametrize(
+    "feeds_path",
+    [
+        # ti_files()/ja3_feeds()/ssl_feeds() return False when unconfigured.
+        False,
+        None,
+        "",
+    ],
+)
+def test_get_feed_details_with_unconfigured_path(mocker, feeds_path):
+    """
+    open() accepts a bool/int as a raw file descriptor instead of raising,
+    so an unconfigured feeds_path (False/None/"") must short-circuit before
+    reaching open() -- otherwise False opens stdin (fd 0) and can hang
+    forever reading it.
+    """
+    update_manager = ModuleFactory().create_update_manager_obj()
+    mock_open_call = mocker.patch("builtins.open")
+    feeds = update_manager.get_feed_details(feeds_path)
+    assert feeds == {}
+    mock_open_call.assert_not_called()
+
+
+@pytest.mark.parametrize(
     "message",
     [
         # Testcase1: Log a simple message.

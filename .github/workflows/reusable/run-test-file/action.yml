@@ -41,6 +41,10 @@ inputs:
     description: "Create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it (docker execution mode only)"
     required: false
     default: "false"
+  install_pr_requirements:
+    description: "Install the PR's install/requirements.txt before running tests (runner execution mode only). Use when the PR changed that file, since the runner mode reuses a prebuilt dependency image that may predate the change."
+    required: false
+    default: "false"
 
 runs:
   using: "composite"
@@ -48,6 +52,15 @@ runs:
     - name: Start Redis
       if: ${{ inputs.execution_mode == 'runner' }}
       uses: ./.github/workflows/reusable/start-redis
+
+    - name: Install PR's install/requirements.txt
+      # the prebuilt stratosphereips/slips_dependencies image only has
+      # whatever install/requirements.txt looked like when it was last
+      # built, so if this PR changed that file, install the PR's version
+      # over it instead of silently testing against the stale one.
+      if: ${{ inputs.execution_mode == 'runner' && inputs.install_pr_requirements == 'true' }}
+      shell: bash
+      run: python3 -m pip install --no-cache-dir -r install/requirements.txt
 
     - name: Run ${{ inputs.test_file }}
       if: ${{ inputs.execution_mode == 'runner' }}

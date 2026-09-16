@@ -9,8 +9,18 @@ ENV SLIPS_DIR=/StratosphereLinuxIPS
 # use bash instead of sh
 SHELL ["/bin/bash", "-c"]
 
+# With Docker BuildKit/buildx, TARGETARCH is automatically set based on the
+# platform currently being built.
+ARG TARGETARCH
+
 # Install wget and add Zeek and redis repositories to our sources.
 # set -eux for safer builds (stop on error, show commands)
+#
+# On amd64, install Redis 8 from the official apt repo (it ships jemalloc,
+# which is fine there). On arm/arm64 (e.g. Raspberry Pi), the apt build's
+# jemalloc assumes the x86_64 default page size, which doesn't match the
+# Pi's page size and breaks Redis at runtime, so build Redis from source
+# there with libc malloc instead.
 RUN set -eux; \
     apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates gnupg wget curl \
@@ -18,25 +28,55 @@ RUN set -eux; \
         git lsb-release software-properties-common \
         build-essential file lsof iproute2 tshark whois yara net-tools less unzip \
         python3-certifi python3-dev python3-tzlocal python3-pip \
-    && curl -O https://download.redis.io/redis-stable.tar.gz \
-    && tar xzf redis-stable.tar.gz \
-    && cd redis-stable/src \
-    && make distclean && make MALLOC=libc \
-    && cd ../.. && rm -rf redis-stable.tar.gz \
+    && if [ "$TARGETARCH" = "arm64" ] || [ "$TARGETARCH" = "arm" ]; then \
+        echo "Building Redis for $TARGETARCH from source with libc malloc"; \
+        curl -fsSLO https://download.redis.io/redis-stable.tar.gz; \
+        tar xzf redis-stable.tar.gz; \
+        cd redis-stable; \
+        make distclean; \
+        make build core MALLOC=libc -j"$(nproc)"; \
+        make install; \
+        cd ..; \
+        rm -rf redis-stable redis-stable.tar.gz; \
+    else \
+        curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg; \
+        chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg; \
+        echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
+        $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1*; \
+    fi \
     && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' \
         | tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
         | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-    && apt-get update && apt-get install -y --no-install-recommends --fix-missing zeek-8.0  \
+    && apt-get update && apt-get install -y --no-install-recommends --fix-missing zeek-lts  \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-ENV PATH="$PATH:/redis-stable/src"
-
-COPY . ${SLIPS_DIR}
+# Git ref (branch, tag, or full commit SHA) to build Slips from. Passed by
+# CI as the exact commit being tested/published; defaults to master for
+# manual/local builds.
+ARG SLIPS_GIT_REF=master
 
 WORKDIR ${SLIPS_DIR}
+
+# Clone Slips directly from GitHub instead of COPYing the host build
+# context. avoid accedinatelly pushing tmp files to docker images, easier to checkout diff branches, and makes it the
+# dockerfile's responsibility to install git-lfs instead of the builder.
+RUN apt-get update -o Acquire::Retries=5 \
+    && apt-get install -y --no-install-recommends git-lfs ca-certificates \
+    && git init . \
+    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
+    && git fetch --depth 1 origin "${SLIPS_GIT_REF}" \
+    && git checkout FETCH_HEAD \
+    && git fetch --depth 1 origin master:refs/remotes/origin/master \
+    && git fetch --depth 1 origin develop:refs/remotes/origin/develop \
+    && git lfs install \
+    && git lfs pull \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # ml_linear_model/ml_online_model artifacts are stored with git LFS. If the
 # build context was checked out without pulling LFS objects (missing
@@ -76,8 +116,6 @@ RUN cd modules \
 RUN python3 docker/light/generate_requirements.py \
     && pip3 install --no-cache-dir --upgrade pip  \
     && pip install --ignore-installed --no-cache-dir -r docker/light/requirements.txt \
-    && chmod 774 slips.py \
-    && git init \
-    && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git
+    && chmod 774 slips.py
 
 CMD /bin/bash
