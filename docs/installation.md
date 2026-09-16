@@ -23,36 +23,41 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 ## Requirements
 
 - Python 3.10.12
-- 5 GBs of disk space (for the docker image)
+- 5 GBs of disk space (for the Docker image)
 - at least 4 GBs of RAM
 
 ## Slips in Docker
 
-Slips can be run inside a Docker. Either using our docker image with from DockerHub (recommended)
+Slips can be run inside a Docker. Either using our Docker image from DockerHub (recommended)
 or building Slips image from the Dockerfile for more advanced users.
 
 In both cases, you need to have the Docker platform installed in your computer.
-For instructions how to install Docker check https://docs.docker.com/get-docker/.
+For instructions on how to install Docker, check https://docs.docker.com/get-docker/.
 
 The recommended way of using slips would be to
 * Run Slips from Dockerhub
 
 For more advanced users, you can:
-* [Run Slips using docker compose](#Running-Slips-using-docker-compose)
-* [Build Slips using the dockerfile](#Running-Slips-using-the-dockerfile)
+* [Run Slips using Docker Compose](#Running-Slips-using-docker-compose)
+* [Build Slips using the Dockerfile](#Running-Slips-using-the-dockerfile)
 
 
 ### Running Slips from DockerHub
 
 #### Linux And Windows Hosts
 
-###### Analyse your own traffic
-    docker run --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
+###### Analyze your own traffic
 
-Please change the name of the interface for your own.
-Check the alerts slips generated
+	docker run -d --restart=unless-stopped --cpus=5 --cpu-shares "700" --memory="16g" --memory-swap="16g" --net=host --cap-add=NET_ADMIN -v /var/log/slips:/StratosphereLinuxIPS/output --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1 -o output/eno1
 
-      tail -f output/eno1*/alerts.log
+
+- Please change the name of the interface on `-i` for your own.
+- Slips stores the alerts, logs, DB, and flows in the shared volume `/var/log/slips/`
+- This container has limits for memory and CPU
+
+Check the alerts slips generated that are stored in the host:
+
+      tail -f /var/log/slips/eno1/alerts.log
 
 
 #### MacOS Hosts
