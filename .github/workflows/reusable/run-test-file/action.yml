@@ -78,6 +78,21 @@ runs:
         /tmp/pr-requirements-venv/bin/python3 -m pip install --no-cache-dir -r install/requirements.txt
         echo "/tmp/pr-requirements-venv/bin" >> "$GITHUB_PATH"
 
+    - name: Install a Go toolchain matching p2p4slips's go.mod
+      # the dependency image's apt-installed go is old enough that it can't
+      # even parse a go.mod requiring a newer go/toolchain directive (fails
+      # with "invalid go version: must match format 1.23"), so p2p-related
+      # tests need a current official Go toolchain ahead of it on PATH.
+      if: ${{ inputs.execution_mode == 'runner' && contains(inputs.test_file, 'p2p') }}
+      shell: bash
+      run: |
+        GO_VERSION=1.26.8
+        curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+        rm -rf /tmp/go-toolchain
+        mkdir -p /tmp/go-toolchain
+        tar -C /tmp/go-toolchain -xzf /tmp/go.tar.gz
+        echo "/tmp/go-toolchain/go/bin" >> "$GITHUB_PATH"
+
     - name: Run ${{ inputs.test_file }}
       if: ${{ inputs.execution_mode == 'runner' }}
       shell: bash

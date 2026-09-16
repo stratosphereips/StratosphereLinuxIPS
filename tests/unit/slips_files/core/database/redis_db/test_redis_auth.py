@@ -1,8 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """Tests for redis password generation/storage and the anti-leak invariant."""
+import os
 import shlex
 import stat
+import time
 from unittest.mock import MagicMock
 
 import pytest
@@ -42,6 +44,33 @@ def test_ensure_redis_password_is_reused_across_calls(tmp_path):
     assert first == second
 
 
+def test_ensure_redis_password_waits_out_a_slow_writer(tmp_path, monkeypatch):
+    """
+    the winner of the creation race creates the file (O_CREAT|O_EXCL)
+    before it writes the requirepass line, so a concurrent reader can see
+    the file exist but still be empty. it must wait for the write instead
+    of raising immediately.
+    """
+    conf_path = tmp_path / redis_auth.REDIS_AUTH_CONF_FILENAME
+    conf_path.touch()
+    os.chmod(conf_path, 0o600)
+
+    real_read = redis_auth._read_password_from_conf
+    calls = {"n": 0}
+
+    def flaky_read(path):
+        calls["n"] += 1
+        if calls["n"] < 3:
+            return None
+        conf_path.write_text("requirepass eventually-written\n")
+        return real_read(path)
+
+    monkeypatch.setattr(redis_auth, "_read_password_from_conf", flaky_read)
+    monkeypatch.setattr(time, "sleep", lambda _seconds: None)
+
+    assert redis_auth.ensure_redis_password() == "eventually-written"
+
+
 def test_ensure_redis_password_survives_creation_race(tmp_path):
     """
     if the file already exists when we try to create it (another slips
@@ -50,8 +79,6 @@ def test_ensure_redis_password_survives_creation_race(tmp_path):
     """
     conf_path = tmp_path / redis_auth.REDIS_AUTH_CONF_FILENAME
     conf_path.write_text("requirepass someone-elses-password\n")
-    import os
-
     os.chmod(conf_path, 0o600)
 
     assert redis_auth.ensure_redis_password() == "someone-elses-password"

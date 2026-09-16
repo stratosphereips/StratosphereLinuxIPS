@@ -13,6 +13,7 @@ import hmac
 import json
 import os
 import secrets
+import time
 from typing import Dict, Optional
 
 import redis
@@ -87,7 +88,16 @@ def ensure_redis_password() -> str:
             pass
 
     os.chmod(conf_path, 0o600)
-    password = _read_password_from_conf(conf_path)
+    # the winner of the creation race creates the file with O_CREAT|O_EXCL
+    # before it writes the requirepass line, so a concurrent reader can
+    # observe the file existing but still empty. Wait briefly for the
+    # write to land instead of failing outright.
+    password = None
+    for _ in range(50):
+        password = _read_password_from_conf(conf_path)
+        if password:
+            break
+        time.sleep(0.1)
     if not password:
         raise RuntimeError(
             f"redis_auth: {conf_path} exists but has no requirepass line"
