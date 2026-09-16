@@ -18,11 +18,11 @@ RUN set -eux; \
         git lsb-release software-properties-common \
         build-essential file lsof iproute2 tshark whois yara net-tools less unzip \
         python3-certifi python3-dev python3-tzlocal python3-pip \
-    && curl -O https://download.redis.io/redis-stable.tar.gz \
-    && tar xzf redis-stable.tar.gz \
-    && cd redis-stable/src \
-    && make distclean && make MALLOC=libc \
-    && cd ../.. && rm -rf redis-stable.tar.gz \
+    && curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyrings/redis-archive-keyring.gpg \
+    && chmod 644 /usr/share/keyrings/redis-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/redis-archive-keyring.gpg] https://packages.redis.io/deb \
+    $(lsb_release -cs) main" | tee /etc/apt/sources.list.d/redis.list \
+    && apt-get update && apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1* \
     && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' \
         | tee /etc/apt/sources.list.d/security:zeek.list \
     && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
@@ -31,8 +31,6 @@ RUN set -eux; \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
-ENV PATH="$PATH:/redis-stable/src"
 
 # Git ref (branch, tag, or full commit SHA) to build Slips from. Passed by
 # CI as the exact commit being tested/published; defaults to master for

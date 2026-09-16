@@ -14,14 +14,22 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
-from modules.blocking.recovery import clear_firewall_recovery_state
-from modules.blocking.slips_chain_manager import (
-    del_slips_blocking_chain,
-    has_slips_firewall_rules,
-)
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
+
+try:
+    # the blocking module isn't shipped in every build (e.g. the light
+    # Docker image), in which case there are no firewall rules to manage
+    from modules.blocking.recovery import clear_firewall_recovery_state
+    from modules.blocking.slips_chain_manager import (
+        del_slips_blocking_chain,
+        has_slips_firewall_rules,
+    )
+except ImportError:
+    clear_firewall_recovery_state = None
+    del_slips_blocking_chain = None
+    has_slips_firewall_rules = None
 
 
 class ShutdownMixin:
@@ -592,7 +600,7 @@ class ShutdownMixin:
 
     def _handle_firewall_after_analysis(self) -> None:
         """Keep or remove managed firewall rules after an interactive run."""
-        if not has_slips_firewall_rules():
+        if has_slips_firewall_rules is None or not has_slips_firewall_rules():
             return
 
         cant_ask_user = (
