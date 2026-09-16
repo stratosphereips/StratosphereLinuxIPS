@@ -71,7 +71,7 @@ runs:
           apt-get install -y --no-install-recommends software-properties-common
           add-apt-repository -y ppa:deadsnakes/ppa
           apt-get update
-          apt-get install -y --no-install-recommends python3.12 python3.12-venv
+          apt-get install -y --no-install-recommends python3.12 python3.12-venv python3.12-dev
         fi
         python3.12 -m venv /tmp/pr-requirements-venv
         /tmp/pr-requirements-venv/bin/python3 -m pip install --upgrade pip
