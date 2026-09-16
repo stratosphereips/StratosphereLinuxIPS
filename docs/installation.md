@@ -22,7 +22,7 @@ There are two ways to install and run Slips: inside a Docker or in your own comp
 
 ## Requirements
 
-- Python 3.10.12
+- Python 3.12.3
 - 5 GBs of disk space (for the Docker image)
 - at least 4 GBs of RAM
 
@@ -213,7 +213,7 @@ You can read more about it [here](https://stratospherelinuxips.readthedocs.io/en
 
 Slips depends on three major elements:
 
-- Python 3.10.12
+- Python 3.12.3
 - Zeek 8.0.0
 - Redis database v8
 
@@ -244,7 +244,7 @@ Install apt dependencies:
 
     cat install/apt_dependencies.txt | xargs apt-get -y install
 
-Even though we just installed pip3, the package installer for Python (3.10.12), we need to upgrade it to its latest version:
+Even though we just installed pip3, the package installer for Python (3.12.3), we need to upgrade it to its latest version:
 
 	python3 -m pip install --upgrade pip
 

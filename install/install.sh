@@ -151,7 +151,7 @@ if ! check_zeek_or_bro; then
   # Add the repository to the sources list
   sudo echo "deb http://${ZEEK_REPO_URL}/ /" | sudo tee /etc/apt/sources.list.d/security:zeek.list \
   && curl -fsSL "https://${ZEEK_REPO_URL}/Release.key" | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
-  && sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek-8.0
+  && sudo apt update && sudo apt install -y --no-install-recommends --fix-missing zeek-lts
 
   # create a symlink to zeek so that slips can find it
   sudo ln -s /opt/zeek/bin/zeek /usr/local/bin/bro
@@ -181,9 +181,9 @@ exit_on_cmd_failure
 
 print_green "Installing Python requirements"
 
-python3 -m pip install --upgrade pip \
-&& pip3 install --ignore-installed -r install/requirements.txt \
-&& pip3 install --ignore-installed six
+python3 -m pip install --break-system-packages --ignore-installed --upgrade pip \
+&& pip3 install --ignore-installed --break-system-packages -r install/requirements.txt \
+&& pip3 install --ignore-installed --break-system-packages six
 
 exit_on_cmd_failure
 

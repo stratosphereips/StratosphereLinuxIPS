@@ -94,7 +94,7 @@ on:
         default: ""
         type: string
       setup_venv:
-        description: "Inside the test container, create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it"
+        description: "Inside the test container, create a fresh python3.12 venv, install install/requirements.txt into it, and run the tests with it"
         required: false
         default: false
         type: boolean
@@ -139,7 +139,7 @@ jobs:
   build-docker-image:
     name: Build Docker image
     if: ${{ inputs.build_dockerfile }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     outputs:
       artifact_name: ${{ steps.image.outputs.artifact_name }}
@@ -169,7 +169,7 @@ jobs:
     name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (dependency image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name == '' && inputs.docker_image_tag == '' }}
     needs: list-tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     container:
@@ -220,7 +220,7 @@ jobs:
     needs:
       - list-tests
       - build-docker-image
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     env:
@@ -266,7 +266,7 @@ jobs:
     name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (prebuilt image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name != '' && inputs.docker_image_tag != '' }}
     needs: list-tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     env:

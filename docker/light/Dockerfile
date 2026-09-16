@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
@@ -114,8 +114,8 @@ RUN cd modules \
       conftest.py
 
 RUN python3 docker/light/generate_requirements.py \
-    && pip3 install --no-cache-dir --upgrade pip  \
-    && pip install --ignore-installed --no-cache-dir -r docker/light/requirements.txt \
+    && pip3 install --no-cache-dir --break-system-packages --ignore-installed --upgrade pip  \
+    && pip install --ignore-installed --break-system-packages --no-cache-dir -r docker/light/requirements.txt \
     && chmod 774 slips.py
 
 CMD /bin/bash

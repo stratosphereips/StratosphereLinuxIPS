@@ -38,7 +38,7 @@ inputs:
     required: false
     default: "0"
   setup_venv:
-    description: "Create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it (docker execution mode only)"
+    description: "Create a fresh python3.12 venv, install install/requirements.txt into it, and run the tests with it (docker execution mode only)"
     required: false
     default: "false"
   install_pr_requirements:
@@ -115,8 +115,8 @@ runs:
               # Validate this PR against a fresh venv built only from the PRs
               # install/requirements.txt, rather than the image-baked packages.
               apt-get update
-              apt-get install -y --no-install-recommends python3.10-venv
-              python3.10 -m venv /tmp/slips-venv
+              apt-get install -y --no-install-recommends python3.12-venv
+              python3.12 -m venv /tmp/slips-venv
               . /tmp/slips-venv/bin/activate
               python3 -m pip install --upgrade pip
               python3 -m pip install -r install/requirements.txt

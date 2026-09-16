@@ -137,7 +137,7 @@ See the installation docs for native setup details.
 
 # Requirements
 
-Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
+Slips requires Python 3.12.3 and at least 4 GBs of RAM to run smoothly.
 
 ---
 
