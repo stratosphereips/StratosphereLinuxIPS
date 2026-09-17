@@ -12,10 +12,17 @@ single-user, per-analysis tool, so one shared password behind a signed,
 time-limited session cookie is the right amount of protection.
 """
 import hmac
+import os
+import pwd
 import secrets
 import time
 from hashlib import sha256
+from html import escape
 from typing import Dict, Optional, Tuple
+
+from slips_files.core.database.redis_db.redis_auth import (
+    get_redis_auth_conf_path,
+)
 
 SESSION_COOKIE_NAME = "slips_session"
 SESSION_TTL_SECONDS = 8 * 60 * 60
@@ -78,24 +85,68 @@ def record_successful_login(client_ip: str) -> None:
     _login_attempts.pop(client_ip, None)
 
 
+def _password_hint() -> str:
+    """
+    text shown on the login page pointing the analyst at the file
+    holding the shared redis/web password, and who on the host owns it.
+    """
+    path = get_redis_auth_conf_path()
+    try:
+        owner = pwd.getpwuid(os.stat(path).st_uid).pw_name
+    except (OSError, KeyError):
+        owner = "the user who started Slips"
+    return f"check {path} for {owner}'s password."
+
+
 def login_page_html(error: Optional[str], post_path: str = "/login") -> str:
     """one minimal, self-contained login form shared by both dashboards"""
-    error_html = f'<p style="color:#c0392b">{error}</p>' if error else ""
+    error_html = f'<p style="color:var(--danger)">{error}</p>' if error else ""
     return f"""<!doctype html>
 <html><head><title>Slips - login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-body {{ font-family: sans-serif; display:flex; justify-content:center;
-        align-items:center; height:100vh; margin:0; background:#1b1f23; }}
-form {{ background:#fff; padding:2rem; border-radius:8px; min-width:280px; }}
-input {{ width:100%; padding:.5rem; margin:.5rem 0; box-sizing:border-box; }}
-button {{ width:100%; padding:.5rem; }}
+:root {{
+  color-scheme: dark;
+  --bg: #091017;
+  --surface: #101a23;
+  --line: #263a49;
+  --text: #e6edf3;
+  --muted: #8da2b2;
+  --accent: #43c7b5;
+  --danger: #ef6b73;
+}}
+* {{ box-sizing: border-box; }}
+body {{ font-family: Inter, ui-sans-serif, system-ui, -apple-system,
+        BlinkMacSystemFont, "Segoe UI", sans-serif; display:flex;
+        justify-content:center; align-items:center; height:100vh; margin:0;
+        background:var(--bg); color:var(--text); }}
+form {{ background:var(--surface); border:1px solid var(--line);
+        padding:2rem; border-radius:10px; min-width:280px; }}
+.login-brand {{ display:flex; flex-direction:column; align-items:center;
+        gap:.6rem; margin-bottom:1.3rem; }}
+.login-logo {{ width:64px; height:64px; object-fit:contain; }}
+h2 {{ margin:0; font-size:.95rem; font-weight:850; letter-spacing:.14em;
+      text-transform:uppercase; text-align:center; }}
+.password-hint {{ margin-top:.35rem; color:var(--muted); font-size:.72rem;
+      text-align:center; overflow-wrap:anywhere; }}
+input {{ width:100%; padding:.6rem; margin:.5rem 0; box-sizing:border-box;
+         border:1px solid var(--line); border-radius:7px;
+         background:var(--bg); color:var(--text); }}
+input::placeholder {{ color:var(--muted); }}
+button {{ width:100%; padding:.6rem; margin-top:.4rem; border:1px solid var(--accent);
+          border-radius:7px; background:var(--accent); color:#04211c;
+          font-weight:650; cursor:pointer; }}
+button:hover {{ opacity:.9; }}
 </style></head>
 <body>
 <form method="post" action="{post_path}">
+<div class="login-brand">
+<img class="login-logo" src="/slips-logo.png" alt="Slips">
 <h2>Slips</h2>
+<p class="password-hint">{escape(_password_hint())}</p>
+</div>
 {error_html}
-<input type="password" name="password" placeholder="Redis / web password"
+<input type="password" name="password" placeholder="Redis Database Password"
  autofocus required>
 <button type="submit">Log in</button>
 </form>
