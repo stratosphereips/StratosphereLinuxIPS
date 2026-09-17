@@ -6,6 +6,9 @@ from pathlib import Path
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.ips import IPV4_LOCALHOST
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_redis_password,
+)
 import json
 import os
 import subprocess
@@ -46,40 +49,58 @@ class Iris(IModule):
 
         return relative_path
 
+    def _write_runtime_config(self, config: dict) -> str:
+        """
+        Write the iris config slips built for this run to a 0600 file
+        inside this module's output dir, so the redis password in it
+        never lands in the tracked config/iris_config.yaml.
+
+        Parameters:
+            config: iris config dict to dump as yaml.
+
+        Returns:
+            path of the written runtime config.
+        """
+        path = self.get_module_specific_output_path("iris_config.yaml")
+        fd = os.open(path, os.O_CREAT | os.O_TRUNC | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w") as file:
+            yaml.dump(config, file, default_flow_style=False, sort_keys=False)
+        os.chmod(path, 0o600)
+        return path
+
     def _iris_configurator(self, config_path: str, redis_port: int):
+        """
+        Read the user's iris config, fill in the redis and server
+        settings for this run and write the result to a runtime copy.
+
+        Parameters:
+            config_path: path of the user's iris config yaml.
+            redis_port: port of the redis server slips started.
+
+        Returns:
+            path of the runtime config to pass to iris, or None on error.
+        """
         try:
             # Read the YAML configuration
             with open(config_path, "r") as file:
-                config = yaml.safe_load(file)
+                config = yaml.safe_load(file) or {}
 
             wifi_interface = self.db.get_wifi_interface()
             # Ensure the Redis section exists and update the port
-            if "Redis" in config:
-                config["Redis"]["Port"] = redis_port
-                config["Redis"]["Host"] = IPV4_LOCALHOST
-                config["Redis"]["Tl2NlChannel"] = "iris_internal"
-            else:
-                config["Redis"] = {
-                    "Host": IPV4_LOCALHOST,
-                    "Port": redis_port,
-                    "Tl2NlChannel": "iris_internal",
-                }
-            if "Server" in config:
-                # config["Server"]["Port"] = 9010
-                config["Server"]["Host"] = self.db.get_host_ip(wifi_interface)
-                config["Server"]["DhtServerMode"] = "true"
-            else:
-                config["Redis"] = {
-                    "Port": 6644,
-                    "Host": self.db.get_host_ip(wifi_interface),
-                    "DhtServerMode": "true",
-                }
+            config.setdefault("Redis", {})
+            config["Redis"]["Port"] = redis_port
+            config["Redis"]["Host"] = IPV4_LOCALHOST
+            config["Redis"]["Tl2NlChannel"] = "iris_internal"
+            # slips starts every redis-server with the shared requirepass,
+            # so iris' go redis client needs the same password
+            config["Redis"]["Password"] = ensure_redis_password()
 
-            # Write the updated configuration back to the file
-            with open(config_path, "w") as file:
-                yaml.dump(
-                    config, file, default_flow_style=False, sort_keys=False
-                )
+            config.setdefault("Server", {})
+            # config["Server"]["Port"] = 9010
+            config["Server"]["Host"] = self.db.get_host_ip(wifi_interface)
+            config["Server"]["DhtServerMode"] = "true"
+
+            return self._write_runtime_config(config)
 
         except FileNotFoundError:
             # Handle the case when the file doesn't exist
@@ -93,7 +114,6 @@ class Iris(IModule):
             # Catch any other unexpected errors
             self.print(f"An unexpected error occurred: {e}")
             return None
-        return config["Server"]["Port"]
 
     def pre_main(self):
         """
@@ -104,16 +124,13 @@ class Iris(IModule):
             os.path.dirname(os.path.abspath(__file__)), "iris"
         )
         conf = ConfigParser()
-        iris_conf_path = self.make_relative_path(
-            iris_exe_path, conf.get_iris_config_location()
-        )
-
-        self.irip = self._iris_configurator(
+        runtime_conf = self._iris_configurator(
             conf.get_iris_config_location(), self.redis_port
         )
-        if self.irip is None:
+        if runtime_conf is None:
             self.stopFlag = True
             return
+        iris_conf_path = self.make_relative_path(iris_exe_path, runtime_conf)
 
         command = [
             iris_exe_path,
