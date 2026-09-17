@@ -33,9 +33,11 @@ from modules.web_interface.history import (
 )
 from slips_files.core.database.redis_db.redis_auth import (
     ensure_web_password_matches_redis_password,
-    redis_auth_kwargs,
+    try_connect_with_and_without_password,
     verify_web_password,
 )
+
+
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.web_auth import (
     SESSION_COOKIE_NAME,
@@ -178,21 +180,21 @@ class RunDataReader:
         self.history_path = (
             self.output_dir / "web_interface" / "history.sqlite"
         )
-        self.redis = redis.Redis(
+        self.redis = try_connect_with_and_without_password(
+            redis.Redis,
             host=LOOPBACK_ADDRESS,
             port=redis_port,
             db=0,
             decode_responses=True,
             socket_timeout=2,
-            **redis_auth_kwargs(),
         )
-        self.cache = redis.Redis(
+        self.cache = try_connect_with_and_without_password(
+            redis.Redis,
             host=LOOPBACK_ADDRESS,
             port=6379,
             db=1,
             decode_responses=True,
             socket_timeout=2,
-            **redis_auth_kwargs(),
         )
         self._processes: Dict[int, psutil.Process] = {}
         initialize_history(self.history_path)

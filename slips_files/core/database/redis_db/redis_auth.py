@@ -15,7 +15,7 @@ import os
 import secrets
 import time
 from typing import Dict, Optional
-
+from slips_files.common.style import red, green
 import redis
 
 from slips_files.common.output_paths import (
@@ -77,10 +77,12 @@ def ensure_redis_password() -> str:
             with os.fdopen(fd, "w") as f:
                 f.write(f"{REQUIREPASS_PREFIX}{password}\n")
             print(
-                "Generated a new Redis password, stored at "
-                f"{conf_path} (permissions 600). Keep this file safe: "
-                "it's required to connect to redis and to log in to the "
-                "web interface."
+                red(
+                    "Generated a new Redis password, stored at "
+                    f"{green(conf_path)} (permissions 600). Keep this file safe: "
+                    "it's required to connect to redis and to log in to the "
+                    "web interface."
+                )
             )
         except FileExistsError:
             # another slips process won the creation race, fall through
@@ -145,11 +147,6 @@ def try_connect_with_and_without_password(
         error_text = str(e).lower()
         if not any(m in error_text for m in NO_PASSWORD_NEEDED_MARKERS):
             raise
-        print(
-            "Warning: connected to a Redis server started before "
-            "authentication was added. Consider restarting it "
-            "(./slips.py -k) so it picks up the new password."
-        )
         return connect(*args, **kwargs)
 
 
