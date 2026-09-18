@@ -152,9 +152,12 @@ jobs:
 
       - name: Prepare Docker image metadata
         id: image
+        # inputs go through env so a crafted value can't become script content
+        env:
+          IMAGE_TAG_PREFIX: ${{ inputs.image_tag_prefix }}
         run: |
-          image_tag="${{ inputs.image_tag_prefix }}:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          artifact_name="${{ inputs.image_tag_prefix }}-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image_tag="${IMAGE_TAG_PREFIX}:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          artifact_name="${IMAGE_TAG_PREFIX}-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
