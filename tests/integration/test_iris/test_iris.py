@@ -16,6 +16,9 @@ from tests.common_test_utils import (
     assert_no_errors,
     modify_yaml_config,
 )
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_redis_password,
+)
 import pytest
 import os
 import subprocess
@@ -42,8 +45,12 @@ def countdown(seconds, message):
 
 
 def message_send(port, channel, message):
-    # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    # connect to redis database 0. the test-started redis-server requires
+    # the same shared password every slips-managed redis-server does
+    # (see start_test_redis_server).
+    redis_client = redis.StrictRedis(
+        host="localhost", port=port, db=0, password=ensure_redis_password()
+    )
 
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
@@ -552,10 +559,16 @@ def test_messaging(
     # can't be opened, another port is allocated and the server is opened
     # there instead.
     redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir, port_label="peer1 redis"
+        integration_port_factory,
+        output_dir,
+        port_label="peer1 redis",
+        require_auth=True,
     )
     peer_redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir_peer, port_label="peer2 redis"
+        integration_port_factory,
+        output_dir_peer,
+        port_label="peer2 redis",
+        require_auth=True,
     )
     peer2_key_path = None
     success = False
