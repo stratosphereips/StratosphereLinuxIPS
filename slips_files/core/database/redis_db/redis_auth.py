@@ -26,6 +26,14 @@ REDIS_AUTH_CONF_FILENAME = "redis_auth.conf"
 WEB_AUTH_FILENAME = "web_auth.json"
 REQUIREPASS_PREFIX = "requirepass "
 
+# different redis-server versions phrase this differently: pre-ACL servers
+# (<6) say "no password is set", ACL-based servers (>=6) say "without any
+# password configured".
+NO_PASSWORD_NEEDED_MARKERS = (
+    "no password is set",
+    "without any password configured",
+)
+
 _cached_password: Optional[str] = None
 
 
@@ -128,14 +136,6 @@ def try_connect_with_and_without_password(
     :param connect: a callable that builds a redis client, e.g.
         redis.StrictRedis
     """
-    # different redis-server versions phrase this differently: pre-ACL
-    # servers (<6) say "no password is set", ACL-based servers (>=6) say
-    # "without any password configured".
-    NO_PASSWORD_NEEDED_MARKERS = (
-        "no password is set",
-        "without any password configured",
-    )
-
     client = connect(*args, password=ensure_redis_password(), **kwargs)
     try:
         client.ping()
