@@ -124,21 +124,32 @@ def get_default_interface():
                 return fields[0]
 
 
-def extract_connection_string(log_file_first_iris):
+def extract_connection_string(log_file_first_iris, timeout_seconds=30):
     """
     Extract the first peer connection string from the Iris log file.
 
+    Iris keeps writing to this log file after it is created, so the
+    connection string line may not be there yet even though the file
+    already exists. Poll until it shows up or the timeout elapses.
+
     Parameters:
         log_file_first_iris: Path to the first peer Iris log file.
+        timeout_seconds: Maximum number of seconds to wait for the line.
 
     Returns:
         str: The extracted connection string.
     """
-    with open(log_file_first_iris, "r") as log:
-        for line in log:
-            match = re.search(r"connection string:\s+'(.+)'", line)
-            if match:
-                return match.group(1)
+    deadline = time.time() + timeout_seconds
+    while True:
+        with open(log_file_first_iris, "r") as log:
+            for line in log:
+                match = re.search(r"connection string:\s+'(.+)'", line)
+                if match:
+                    return match.group(1)
+
+        if time.time() >= deadline:
+            break
+        time.sleep(1)
 
     print("No connection string found in log file.")
     exit(1)

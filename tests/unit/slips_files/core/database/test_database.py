@@ -468,8 +468,8 @@ def test_current_timewindow_wrappers_delegate_to_redis_db():
 
 def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
     """Test Tranco whitelist storage preserves order and supports limits."""
-    with patch.object(DBManager, "get_used_redis_port", return_value=6379):
-        db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    with patch.object(DBManager, "get_used_redis_port", return_value=6390):
+        db = ModuleFactory().create_db_manager_obj(6390, flush_db=True)
 
     db.store_tranco_whitelisted_domains(
         ["example.com", "google.com", "github.com"],
@@ -484,8 +484,8 @@ def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
 
 def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
     """Test Tranco cache reads recover from legacy non-sorted-set keys."""
-    with patch.object(DBManager, "get_used_redis_port", return_value=6379):
-        db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    with patch.object(DBManager, "get_used_redis_port", return_value=6391):
+        db = ModuleFactory().create_db_manager_obj(6391, flush_db=True)
 
     key = db.rdb.constants.TRANCO_WHITELISTED_DOMAINS
     db.rdb.rcache.set(key, "legacy-cache-value")
