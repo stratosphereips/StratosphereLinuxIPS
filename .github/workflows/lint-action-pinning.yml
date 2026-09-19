@@ -1,0 +1,29 @@
+# Fails CI if any GitHub Actions workflow references an external action by a
+# mutable tag (e.g. @v7) instead of a pinned 40-character commit SHA.
+# Guards against SLP-015 (GitHub Actions use mutable version tags) regressing.
+
+name: lint-action-pinning
+
+on:
+  push:
+    branches:
+      - master
+      - develop
+    paths:
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  check-pinned-actions:
+    name: Ensure GitHub Actions are pinned to commit SHAs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check that every external action is pinned to a full commit SHA
+        run: python3 .github/ci/check_action_pinning.py

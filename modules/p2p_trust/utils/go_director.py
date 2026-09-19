@@ -49,6 +49,7 @@ class GoDirector:
         override_p2p: bool = False,
         report_func=None,
         request_func=None,
+        blame_evaluator=None,
         gopy_channel: str = "p2p_gopy",
         pygo_channel: str = "p2p_pygo",
         p2p_reports_logfile: str = "p2p_reports.log",
@@ -65,8 +66,16 @@ class GoDirector:
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
+        # only used when override_p2p is set: replaces our own
+        # validation/storage of "report" messages entirely, handing
+        # the validated data straight to this function instead.
         self.report_func = report_func
         self.request_func = request_func
+        # called for "blame" messages after they've been validated and
+        # stored like any other report, so the trust model can decide -
+        # from the network's trust-weighted opinion whether to forward it
+        # to the blocking module. runs for all recvd blames.
+        self.blame_evaluator = blame_evaluator
         # clear the logfile
         utils.initialize_logfile(
             p2p_reports_logfile, is_slips_started_by_an_update
@@ -251,11 +260,15 @@ class GoDirector:
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == "blame":
-            # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
-            # self.print("blame is not implemented yet", 0, 2)
-            # calls process_message_report in p2p_trust.py
-            # which gives the report to evidenceProcess to decide whether to block or not
-            self.report_func(reporter, report_time, data)
+            # a peer blaming an IP (i.e. asking us to block it).
+            # Validate it the same way as a regular report before it's
+            # ever allowed near the trust model: a blame is just a report
+            # that, once validated and stored, is also handed to
+            # blame_evaluator (Trust.evaluate_blame_report) to decide -
+            # based on the network's trust-weighted opinion, not on
+            # this one peer's say-so - whether it's worth forwarding
+            # to the blocking pipeline.
+            self.process_message_report(reporter, report_time, data)
 
         else:
             # TODO: lower reputation
@@ -436,7 +449,8 @@ class GoDirector:
         # pass the report to p2p_trust module
         # to decide what to do with it
         if self.override_p2p:
-            # calls process_message_report in p2p_trust.py
+            # override_p2p replaces our own validation/storage of this
+            # report entirely, handing it straight to report_func.
             self.report_func(reporter, report_time, data)
             return
 
@@ -454,6 +468,14 @@ class GoDirector:
             self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
+
+        if data.get("message_type") == "blame" and self.blame_evaluator:
+            # the report is now stored like any other, so it will be
+            # counted in the network's aggregated opinion on this IP.
+            # blame_evaluator decides, from that trust-weighted
+            # opinion, whether to forward this to the blocking
+            # pipeline.
+            self.blame_evaluator(reporter, report_time, data)
 
     def process_evaluation_score_confidence(
         self,

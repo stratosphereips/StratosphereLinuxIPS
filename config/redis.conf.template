@@ -1,5 +1,11 @@
 # For reference: https://raw.githubusercontent.com/redis/redis/7.0/redis.conf
 daemonize yes
+# refuse unauthenticated connections from non-loopback addresses. slips
+# also sets `requirepass` via an `include` of a generated, permissioned
+# config file (see slips_files/core/database/redis_db/redis_auth.py) -
+# never add a requirepass line to this template, it's a shared, git
+# tracked file.
+protected-mode yes
 stop-writes-on-bgsave-error no
 save ""
 appendonly no

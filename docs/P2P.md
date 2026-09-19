@@ -19,6 +19,8 @@ Pigeon binary is included in the module for convenience.
 Pigeon uses the JSON format to communicate with the module or with other Pigeons. For details on the communication
 format, see the thesis.
 
+***Version compatibility***: pigeons older than 1.1.24 use a different mDNS wire protocol than newer ones, so old and new pigeons cannot discover each other on the network. All peers must be upgraded together.
+
 ## Docker direct use
 You can use Slips with P2P directly in a special docker image by doing:
 
@@ -34,6 +36,8 @@ and receive packets you should use ```--cap-add=NET_ADMIN```
 
 1. download and install go:
 
+- Go 1.21 or newer is needed; (`install/install.sh` installs Go for you when the system one is too old).
+
 ```
 apt install golang
 ```
@@ -41,7 +45,7 @@ apt install golang
 or by hand
 
 ```
-curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz
+curl https://go.dev/dl/go1.26.8.linux-amd64.tar.gz --output go.tar.gz
 rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 ```

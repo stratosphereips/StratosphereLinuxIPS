@@ -261,7 +261,9 @@ def is_tcp_port_open(port: int) -> bool:
     return True
 
 
-def start_test_redis_server(redis_port: int, output_dir) -> None:
+def start_test_redis_server(
+    redis_port: int, output_dir, require_auth: bool = False
+) -> None:
     """
     Start the Redis server used by an integration test.
 
@@ -271,6 +273,12 @@ def start_test_redis_server(redis_port: int, output_dir) -> None:
     :param redis_port: Redis port allocated for the test
     :param output_dir: Test output directory, redis logs/data are stored in
         an output_dir/redis subdirectory
+    :param require_auth: Include the shared redis_auth.conf (see
+        slips_files/core/database/redis_db/redis_auth.py) so the server
+        requires the same password every slips-managed redis-server does.
+        Needed by tests exercising modules (e.g. Iris) whose redis client
+        always authenticates and can't fall back to a password-less
+        connection.
     :raises RuntimeError: When the server fails to start or never listens
     """
     output_dir = Path(output_dir)
@@ -291,6 +299,15 @@ def start_test_redis_server(redis_port: int, output_dir) -> None:
         "--logfile",
         f"redis-server-port-{redis_port}.log",
     ]
+
+    if require_auth:
+        from slips_files.core.database.redis_db.redis_auth import (
+            ensure_redis_password,
+            get_redis_auth_conf_path,
+        )
+
+        ensure_redis_password()
+        command[2:2] = ["--include", get_redis_auth_conf_path()]
 
     process = subprocess.run(
         command,
@@ -321,6 +338,7 @@ def allocate_started_redis_port(
     output_dir,
     port_label: str = "redis",
     max_attempts: int = 5,
+    require_auth: bool = False,
 ) -> int:
     """
     Allocate a Redis port, start a Redis server on it, and retry with a new
@@ -336,6 +354,7 @@ def allocate_started_redis_port(
     :param output_dir: Test output directory used to store redis logs/data
     :param port_label: Label describing the allocated port
     :param max_attempts: Maximum number of Redis startup attempts
+    :param require_auth: See start_test_redis_server.
     :return: Redis port that was successfully started
     :raises RuntimeError: When no server could be started after max_attempts
     """
@@ -344,7 +363,9 @@ def allocate_started_redis_port(
     for _ in range(max_attempts):
         redis_port = integration_port_factory(port_label)
         try:
-            start_test_redis_server(redis_port, output_dir)
+            start_test_redis_server(
+                redis_port, output_dir, require_auth=require_auth
+            )
             return redis_port
         except RuntimeError as error:
             last_error = error

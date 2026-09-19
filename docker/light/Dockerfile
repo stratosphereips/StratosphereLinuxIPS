@@ -1,4 +1,4 @@
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using sudo
@@ -46,9 +46,9 @@ RUN set -eux; \
         apt-get update; \
         apt-get install -y --no-install-recommends redis-tools=6:8.4.0-1* redis-server=6:8.4.0-1*; \
     fi \
-    && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' \
+    && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_24.04/ /' \
         | tee /etc/apt/sources.list.d/security:zeek.list \
-    && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
+    && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_24.04/Release.key \
         | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
     && apt-get update && apt-get install -y --no-install-recommends --fix-missing zeek-lts  \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
@@ -114,8 +114,8 @@ RUN cd modules \
       conftest.py
 
 RUN python3 docker/light/generate_requirements.py \
-    && pip3 install --no-cache-dir --upgrade pip  \
-    && pip install --ignore-installed --no-cache-dir -r docker/light/requirements.txt \
+    && pip3 install --no-cache-dir --break-system-packages --ignore-installed --upgrade pip  \
+    && pip install --ignore-installed --break-system-packages --no-cache-dir -r docker/light/requirements.txt \
     && chmod 774 slips.py
 
 CMD /bin/bash

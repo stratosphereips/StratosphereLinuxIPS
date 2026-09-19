@@ -33,7 +33,41 @@ COPY p2p4slips ./
 RUN go build -buildvcs=false -o /artifacts/p2p4slips
 
 
-FROM ubuntu:22.04 AS final
+FROM ubuntu:24.04 AS build-redis
+
+# With Docker BuildKit/buildx, TARGETARCH is automatically set based on the
+# platform currently being built.
+ARG TARGETARCH
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+SHELL ["/bin/bash", "-c"]
+
+WORKDIR /
+
+RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
+    && apt-get install -y --no-install-recommends --fix-broken --fix-missing \
+    ca-certificates \
+    curl \
+    build-essential \
+    && curl -fsSLO https://download.redis.io/redis-stable.tar.gz \
+    && tar xzf redis-stable.tar.gz \
+    && cd redis-stable \
+    && make distclean \
+    && if [[ "$TARGETARCH" == "arm64" || "$TARGETARCH" == "arm" ]]; then \
+           echo "Building Redis for $TARGETARCH with libc malloc"; \
+           make build redis MALLOC=libc -j"$(nproc)"; \
+       else \
+           echo "Building Redis for $TARGETARCH with jemalloc"; \
+           make build redis MALLOC=jemalloc -j"$(nproc)"; \
+       fi \
+    && ./src/redis-server --version \
+    && rm -f /redis-stable.tar.gz \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
+
+FROM ubuntu:24.04 AS final
 
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
@@ -102,8 +136,8 @@ RUN apt-get update -o Acquire::Retries=5 -o Acquire::https::No-Cache=True \
     nano \
     tree \
     tmux \
-    && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list \
-    && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
+    && echo 'deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_24.04/ /' | tee /etc/apt/sources.list.d/security:zeek.list \
+    && curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_24.04/Release.key | gpg --dearmor | tee /etc/apt/trusted.gpg.d/security_zeek.gpg > /dev/null \
     && apt-get update \
     && apt-get install -y --no-install-recommends --fix-missing \
     zeek-lts \
@@ -141,8 +175,8 @@ RUN if [ "$TARGETARCH" = "arm64" ] || [ "$TARGETARCH" = "arm" ]; then \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
-RUN pip3 install --no-cache-dir --upgrade pip \
-    && pip install --ignore-installed --no-cache-dir -r install/requirements.txt \
+RUN pip3 install --no-cache-dir --break-system-packages --ignore-installed --upgrade pip \
+    && pip install --ignore-installed --break-system-packages --no-cache-dir -r install/requirements.txt \
     && chmod 774 slips.py \
     && apt-get purge -y \
     build-essential \
@@ -157,6 +191,11 @@ RUN pip3 install --no-cache-dir --upgrade pip \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 ENV PATH="$PATH:/StratosphereLinuxIPS/p2p4slips:/usr/local/go/bin"
+
+# pre-create the dir that holds the generated redis auth password so a
+# first run against a bind-mounted ./permanent doesn't create it with the
+# wrong ownership/permissions.
+RUN mkdir -p ${SLIPS_DIR}/permanent && chmod 700 ${SLIPS_DIR}/permanent
 
 WORKDIR ${SLIPS_DIR}
 

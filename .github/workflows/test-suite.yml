@@ -94,7 +94,7 @@ on:
         default: ""
         type: string
       setup_venv:
-        description: "Inside the test container, create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it"
+        description: "Inside the test container, create a fresh python3.12 venv, install install/requirements.txt into it, and run the tests with it"
         required: false
         default: false
         type: boolean
@@ -107,7 +107,7 @@ jobs:
       test_files: ${{ steps.list.outputs.test_files }}
       requirements_changed: ${{ steps.requirements-check.outputs.changed }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
@@ -139,22 +139,25 @@ jobs:
   build-docker-image:
     name: Build Docker image
     if: ${{ inputs.build_dockerfile }}
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     outputs:
       artifact_name: ${{ steps.image.outputs.artifact_name }}
       image_tag: ${{ steps.image.outputs.image_tag }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
       - name: Prepare Docker image metadata
         id: image
+        # inputs go through env so a crafted value can't become script content
+        env:
+          IMAGE_TAG_PREFIX: ${{ inputs.image_tag_prefix }}
         run: |
-          image_tag="${{ inputs.image_tag_prefix }}:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          artifact_name="${{ inputs.image_tag_prefix }}-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          image_tag="${IMAGE_TAG_PREFIX}:${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          artifact_name="${IMAGE_TAG_PREFIX}-image-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
           echo "artifact_name=$artifact_name" >> "$GITHUB_OUTPUT"
 
@@ -169,7 +172,7 @@ jobs:
     name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (dependency image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name == '' && inputs.docker_image_tag == '' }}
     needs: list-tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     container:
@@ -193,7 +196,7 @@ jobs:
           apt-get install -y --no-install-recommends git-lfs
           git lfs install
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
@@ -220,7 +223,7 @@ jobs:
     needs:
       - list-tests
       - build-docker-image
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     env:
@@ -233,14 +236,14 @@ jobs:
         include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
           lfs: true
 
       - name: Download Docker Image
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ needs.build-docker-image.outputs.artifact_name }}
 
@@ -266,7 +269,7 @@ jobs:
     name: "${{ matrix.display_name && format('{0} / {1}', inputs.test_suite_name, matrix.display_name) || format('{0} (prebuilt image)', inputs.test_suite_name) }}"
     if: ${{ !inputs.build_dockerfile && inputs.docker_image_artifact_name != '' && inputs.docker_image_tag != '' }}
     needs: list-tests
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: ${{ inputs.timeout_minutes }}
 
     env:
@@ -279,14 +282,14 @@ jobs:
         include: ${{ fromJson(needs.list-tests.outputs.test_files) }}
 
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
           lfs: true
 
       - name: Download Docker Image
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: ${{ inputs.docker_image_artifact_name }}
 

@@ -38,7 +38,7 @@ inputs:
     required: false
     default: "0"
   setup_venv:
-    description: "Create a fresh python3.10 venv, install install/requirements.txt into it, and run the tests with it (docker execution mode only)"
+    description: "Create a fresh python3.12 venv, install install/requirements.txt into it, and run the tests with it (docker execution mode only)"
     required: false
     default: "false"
   install_pr_requirements:
@@ -57,10 +57,41 @@ runs:
       # the prebuilt stratosphereips/slips_dependencies image only has
       # whatever install/requirements.txt looked like when it was last
       # built, so if this PR changed that file, install the PR's version
-      # over it instead of silently testing against the stale one.
+      # over it instead of silently testing against the stale one. That
+      # image may also still be on an older Python than the PR's
+      # requirements need (e.g. a Python-version bump landing before the
+      # image is rebuilt on the next push to master), so make sure a
+      # matching python3.12 is available and prepend a venv built from it
+      # to PATH, instead of assuming the image's system python will do.
       if: ${{ inputs.execution_mode == 'runner' && inputs.install_pr_requirements == 'true' }}
       shell: bash
-      run: python3 -m pip install --no-cache-dir -r install/requirements.txt
+      run: |
+        if ! command -v python3.12 >/dev/null; then
+          apt-get update
+          apt-get install -y --no-install-recommends software-properties-common
+          add-apt-repository -y ppa:deadsnakes/ppa
+          apt-get update
+          apt-get install -y --no-install-recommends python3.12 python3.12-venv python3.12-dev
+        fi
+        python3.12 -m venv /tmp/pr-requirements-venv
+        /tmp/pr-requirements-venv/bin/python3 -m pip install --upgrade pip
+        /tmp/pr-requirements-venv/bin/python3 -m pip install --no-cache-dir -r install/requirements.txt
+        echo "/tmp/pr-requirements-venv/bin" >> "$GITHUB_PATH"
+
+    - name: Install a Go toolchain matching p2p4slips's go.mod
+      # the dependency image's apt-installed go is old enough that it can't
+      # even parse a go.mod requiring a newer go/toolchain directive (fails
+      # with "invalid go version: must match format 1.23"), so p2p-related
+      # tests need a current official Go toolchain ahead of it on PATH.
+      if: ${{ inputs.execution_mode == 'runner' && contains(inputs.test_file, 'p2p') }}
+      shell: bash
+      run: |
+        GO_VERSION=1.26.8
+        curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-amd64.tar.gz" -o /tmp/go.tar.gz
+        rm -rf /tmp/go-toolchain
+        mkdir -p /tmp/go-toolchain
+        tar -C /tmp/go-toolchain -xzf /tmp/go.tar.gz
+        echo "/tmp/go-toolchain/go/bin" >> "$GITHUB_PATH"
 
     - name: Run ${{ inputs.test_file }}
       if: ${{ inputs.execution_mode == 'runner' }}
@@ -115,8 +146,8 @@ runs:
               # Validate this PR against a fresh venv built only from the PRs
               # install/requirements.txt, rather than the image-baked packages.
               apt-get update
-              apt-get install -y --no-install-recommends python3.10-venv
-              python3.10 -m venv /tmp/slips-venv
+              apt-get install -y --no-install-recommends python3.12-venv
+              python3.12 -m venv /tmp/slips-venv
               . /tmp/slips-venv/bin/activate
               python3 -m pip install --upgrade pip
               python3 -m pip install -r install/requirements.txt
@@ -149,7 +180,7 @@ runs:
 
     - name: Upload Artifacts
       if: always()
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ${{ steps.artifact-name.outputs.name }}
         path: |

@@ -396,6 +396,7 @@ def test_clear_redis_cache_database(mock_db):
             db=1,
             charset="utf-8",
             decode_responses=True,
+            password=ANY,
         )
         mock_redis_instance.flushdb.assert_called_once()
         assert result
@@ -474,6 +475,7 @@ def test_get_pid_of_redis_server_uses_redis_process_id(mock_db):
         port=32768,
         socket_connect_timeout=0.2,
         socket_timeout=0.2,
+        password=ANY,
     )
     mock_client.info.assert_called_once_with(section="server")
     mock_client.connection_pool.disconnect.assert_called_once()

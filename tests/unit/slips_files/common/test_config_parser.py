@@ -234,6 +234,36 @@ def test_web_interface_bind(configured: object, expected: str) -> None:
 
 
 @pytest.mark.parametrize(
+    "configured, expected",
+    [
+        (True, True),
+        (False, False),
+        ("yes", True),
+        ("off", False),
+        (None, False),
+    ],
+)
+def test_web_interface_require_password(
+    configured: object, expected: bool
+) -> None:
+    parser = object.__new__(ConfigParser)
+    parser.read_configuration = Mock(return_value=configured)
+
+    assert parser.web_interface_require_password() is expected
+    parser.read_configuration.assert_called_once_with(
+        "web_interface", "require_password", True
+    )
+
+
+def test_web_interface_require_password_defaults_to_true_when_unset() -> None:
+    """Unset config must stay secure-by-default: password required."""
+    parser = object.__new__(ConfigParser)
+    parser.config = {}
+
+    assert parser.web_interface_require_password() is True
+
+
+@pytest.mark.parametrize(
     "setting, value, expected",
     [
         ("listen_port", "7777", 7777),

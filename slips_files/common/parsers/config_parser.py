@@ -149,6 +149,23 @@ class ConfigParser(object):
             return value
         return str(value).strip().lower() in ("true", "1", "yes", "on")
 
+    def web_interface_require_password(self) -> bool:
+        """
+        Check whether the web interface requires the shared redis/web
+        password to log in before granting access. Defaults to True; only
+        meant to be disabled for CI/tests, never on a machine reachable
+        beyond localhost.
+
+        Returns:
+            True unless web_interface.require_password is explicitly false.
+        """
+        value = self.read_configuration(
+            "web_interface", "require_password", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
     def get_entropy_threshold(self):
         """
         gets the shannon entropy used in detecting C&C over DNS TXT records from slips.conf/slips.yaml
