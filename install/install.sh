@@ -180,7 +180,7 @@ add_redis_path
 exit_on_cmd_failure
 
 # Returning to repo root before running root-relative steps
-cd - || exit
+cd "$(dirname "${BASH_SOURCE[0]}")/.." || exit
 
 print_green "Installing Python requirements"
 
