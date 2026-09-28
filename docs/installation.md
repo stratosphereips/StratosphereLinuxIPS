@@ -309,7 +309,7 @@ Install redis v8 from source as it's not available it their official repositorie
 ```
 curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.gz \
     && mkdir -p /redis-stable \
-    && tar xzf redis-stable.tar.gz -C / \
+    && tar xzf /tmp/redis-stable.tar.gz -C / \
     && cd /redis-stable \
     && make distclean \
     && make MALLOC=libc
