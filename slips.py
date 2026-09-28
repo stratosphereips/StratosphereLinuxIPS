@@ -23,6 +23,8 @@ from __future__ import print_function
 
 import os
 import sys
+import multiprocessing
+multiprocessing.set_start_method('fork', force=True)
 import time
 import warnings
 

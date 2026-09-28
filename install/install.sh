@@ -169,7 +169,7 @@ fi
 print_green "Installing Redis"
 curl -L https://download.redis.io/redis-stable.tar.gz -o /tmp/redis-stable.tar.gz \
     && mkdir -p /redis-stable \
-    && tar xzf redis-stable.tar.gz -C / \
+    && tar xzf /tmp/redis-stable.tar.gz -C / \
     && cd /redis-stable \
     && make distclean \
     && make MALLOC=libc
@@ -178,6 +178,9 @@ add_redis_path
 
 
 exit_on_cmd_failure
+
+# Returning to repo root before running root-relative steps
+cd - || exit
 
 print_green "Installing Python requirements"
 
