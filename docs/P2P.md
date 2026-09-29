@@ -30,38 +30,23 @@ docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips
 For the p2p to be able to listen on the network interfaces
 and receive packets you should use ```--cap-add=NET_ADMIN```
 
-## Installation:
+## Installation
 
-1. download and install go:
+Install Go before building Pigeon. On macOS, you can use `brew install go`.
+The pinned `p2p4slips/go.mod` requires Go 1.25.7 and requests the Go 1.26.8
+toolchain; Go may download that toolchain during the first build.
 
-```
-apt install golang
-```
-
-or by hand
-
-```
-curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-```
-
-2. build the pigeon:
-
-- if you installed slips with the submodules using
-```
-git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS -j4
-```
-
-then you should only build the pigeon using:
-```cd p2p4slips && go build -buildvcs=false```
-- If you installed Slips without the submodules then you should download and build the pigeon using:
+From the Slips repository root, check out the pinned submodule revision and
+build its binary:
 
 ```
-git submodule init && git submodule update && cd p2p4slips && go build -buildvcs=false
+git submodule update --init p2p4slips
+go -C p2p4slips build -buildvcs=false
 ```
 
-The p2p binary should now be in ```p2p4slips/``` dir and slips will be able to find it.
+Rebuild after updating the submodule, then restart Slips to run the new binary.
+`git submodule update` changes the source files but does not replace a compiled
+`p2p4slips/p2p4slips` binary.
 
 ***NOTE***
 
