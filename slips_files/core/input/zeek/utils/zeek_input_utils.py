@@ -293,7 +293,7 @@ class ZeekInputUtils:
             # It may happen that we check all the files in the folder,
             # and there is still no files for us.
             # To cover this case, just refresh the list of files
-            self.zeek_files = self.input.db.get_all_zeek_files()
+            self.refresh_zeek_files()
             return False, False
 
         # comes here if we're done with all conn.log flows and it's time to
@@ -318,7 +318,7 @@ class ZeekInputUtils:
         log files
         """
         try:
-            self.zeek_files = self.input.db.get_all_zeek_files()
+            self.refresh_zeek_files(force=True)
             self.open_file_handles = {}
             # stores zeek_log_file_name: timestamp of the last flow read from
             # that file
@@ -339,7 +339,7 @@ class ZeekInputUtils:
                     # continues.
                     self._print_update_msg()
                     self.shutdown_zeek_runtime()
-                    self.zeek_files = self.input.db.get_all_zeek_files()
+                    self.refresh_zeek_files(force=True)
                     is_draining = True
 
                 if self.input.should_stop() and not is_draining:
@@ -357,7 +357,7 @@ class ZeekInputUtils:
                 # beacause slips supports reading multiple interfaces)
 
                 if is_draining:
-                    self.zeek_files = self.input.db.get_all_zeek_files()
+                    self.refresh_zeek_files(force=True)
 
                 cached_new_line = False
                 for filename, interface in self.zeek_files.items():
@@ -385,7 +385,10 @@ class ZeekInputUtils:
                     self.get_earliest_line()
                 )
                 if not file_with_earliest_flow:
+                    self.wait_for_new_lines()
                     continue
+
+                self.idle_wait = self.min_idle_wait
 
                 # self.print('\t> Sent Line: {}'.format(earliest_line), 0, 3)
                 self.input.give_profiler(earliest_line)
@@ -402,7 +405,7 @@ class ZeekInputUtils:
 
                 # Get the new list of files. Since new files may have been
                 # created by Zeek while we were processing them.
-                self.zeek_files = self.input.db.get_all_zeek_files()
+                self.refresh_zeek_files()
             self.close_all_handles()
         except KeyboardInterrupt:
             pass
