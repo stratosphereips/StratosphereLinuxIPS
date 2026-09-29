@@ -8,6 +8,7 @@ from tests.common_test_utils import (
     assert_no_errors,
     get_total_analyzed_ips_from_output,
     get_slips_test_command,
+    create_config_without_ti_update,
     skip_if_missing_runtime_dependencies,
 )
 import pytest
@@ -145,6 +146,7 @@ def test_zeek_conn_log(
     expected_evidence,
     output_dir,
     integration_port_factory,
+    tmp_path,
 ):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
@@ -156,8 +158,10 @@ def test_zeek_conn_log(
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
+        config_file = create_config_without_ti_update(tmp_path)
         command = get_slips_test_command(
-            f"-e 1 -t -f {conn_log_path} -o {output_dir} -P {redis_port}"
+            f"-e 1 -t -f {conn_log_path} -o {output_dir} "
+            f"-c {config_file} -P {redis_port}"
         )
         command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done
