@@ -283,13 +283,13 @@ class ZeekInputUtils:
         earliest ts
         """
         # Now read lines in order. The line with the earliest timestamp first
-        files_sorted_by_ts = sorted(self.file_time, key=self.file_time.get)
-
         try:
             # get the file that has the earliest flow
-            file_with_earliest_flow = files_sorted_by_ts[0]
-        except IndexError:
-            # No more sorted keys. Just loop waiting for more lines
+            file_with_earliest_flow = min(
+                self.file_time, key=self.file_time.get
+            )
+        except ValueError:
+            # No more keys. Just loop waiting for more lines
             # It may happen that we check all the files in the folder,
             # and there is still no files for us.
             # To cover this case, just refresh the list of files
