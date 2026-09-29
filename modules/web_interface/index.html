@@ -204,7 +204,7 @@
       <div id="hosts-list-view">
         <div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2 id="hosts-title">Hosts</h2><p>Current and last-known identity with indexed historical activity.</p></div><button class="secondary refresh-list" data-target="hosts">Refresh</button></div>
         <div class="toolbar">
-          <input id="hosts-search" type="search" placeholder="Search IP, MAC, hostname, DNS…">
+          <input id="hosts-search" type="search" placeholder="Search IP, MAC, vendor, hostname, DNS…">
           <select id="hosts-scope"><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
           <select id="hosts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
           <select id="hosts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
@@ -212,7 +212,7 @@
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
           <span id="hosts-count" class="result-count"></span>
         </div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th>MAC vendor</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
         <div id="hosts-pager" class="pager"></div>
       </div>
 
