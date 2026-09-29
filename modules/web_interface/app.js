@@ -1467,6 +1467,7 @@ async function loadHosts() {
     (row) => contextName(row),
     (row) => tiFeeds(row),
     (row) => text("code", row.mac || "—"),
+    (row) => row.mac_vendor || "—",
     (row) => threat(row.max_threat_level),
     (row) => slipsScore(row),
     (row) => pastPeakSlipsScore(row),
