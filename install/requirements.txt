@@ -52,3 +52,4 @@ vulture==2.16
 detect-secrets==1.5.0
 idmefv2==0.8
 httpx==0.28.1
+ijson==3.5.1
