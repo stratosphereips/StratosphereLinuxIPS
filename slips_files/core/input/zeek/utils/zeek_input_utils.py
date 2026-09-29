@@ -39,6 +39,14 @@ class ZeekInputUtils:
         self.print = self.input.print
         self.update_msg_printed = False
         self.is_running_non_stop = self.input.db.is_running_non_stop()
+        # bounds (in seconds) of the wait between read passes when no new
+        # zeek lines are available. it doubles on every idle pass.
+        self.min_idle_wait = 0.01
+        self.max_idle_wait = 0.1
+        self.idle_wait = self.min_idle_wait
+        # seconds before the list of zeek files is re-read from the db
+        self.zeek_files_refresh_interval = 1
+        self.next_zeek_files_refresh = 0.0
 
     def check_if_time_to_del_rotated_files(self) -> bool:
         """
@@ -245,6 +253,27 @@ class ZeekInputUtils:
             for file, handle in handles:
                 self.input.print(f"Closing file {file}", 2, 0)
                 handle.close()
+
+    def refresh_zeek_files(self, force: bool = False) -> None:
+        """
+        re-reads the zeek files from the db, at most once every
+        zeek_files_refresh_interval seconds unless forced.
+
+        :param force: refresh even if the interval didn't pass
+        """
+        now = time.monotonic()
+        if not force and now < self.next_zeek_files_refresh:
+            return
+        self.zeek_files = self.input.db.get_all_zeek_files()
+        self.next_zeek_files_refresh = now + self.zeek_files_refresh_interval
+
+    def wait_for_new_lines(self) -> None:
+        """
+        sleeps between read passes that found no new lines, with an
+        exponential backoff up to max_idle_wait, to avoid busy waiting.
+        """
+        time.sleep(self.idle_wait)
+        self.idle_wait = min(self.idle_wait * 2, self.max_idle_wait)
 
     def get_earliest_line(
         self,
