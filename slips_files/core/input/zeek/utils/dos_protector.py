@@ -17,6 +17,10 @@ class DoSProtector:
         # returning to normal (aka before going back to reading all flows)
         self.sampling_time_window = 60
         self._is_now_sampling = False
+        # the decision is cached to avoid a redis lookup on every read. 1s
+        self.decision_cache_time = 1
+        self._decision_valid_until = 0.0
+        self._cached_flows_to_skip = 0
 
     def _get_input_flows_per_min(self) -> int:
         input_flows_per_s = (
@@ -95,6 +99,20 @@ class DoSProtector:
         return False
 
     def get_number_of_flows_to_skip(self) -> int:
+        """
+        returns the number of flows to skip before reading the next one.
+        the result is cached for decision_cache_time seconds because the
+        underlying flows/min value is only updated once per minute.
+        """
+        now = time.monotonic()
+        if now < self._decision_valid_until:
+            return self._cached_flows_to_skip
+
+        self._cached_flows_to_skip = self._compute_number_of_flows_to_skip()
+        self._decision_valid_until = now + self.decision_cache_time
+        return self._cached_flows_to_skip
+
+    def _compute_number_of_flows_to_skip(self) -> int:
         if not self._should_run():
             return 0
 
