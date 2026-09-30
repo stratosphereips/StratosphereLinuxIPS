@@ -13,6 +13,7 @@ from tests.common_test_utils import (
     assert_no_errors,
     get_total_analyzed_ips_from_output,
     get_slips_test_command,
+    create_config_without_ti_update,
     skip_if_missing_runtime_dependencies,
 )
 import pytest
@@ -64,6 +65,7 @@ def test_binetflow(
     expected_evidence,
     output_dir,
     integration_port_factory,
+    tmp_path,
 ):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
@@ -75,8 +77,10 @@ def test_binetflow(
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
+        config_file = create_config_without_ti_update(tmp_path)
         command = get_slips_test_command(
-            f"-e 1 -t -o {output_dir} -P {redis_port} -f {binetflow_path}"
+            f"-e 1 -t -o {output_dir} -P {redis_port} "
+            f"-c {config_file} -f {binetflow_path}"
         )
         command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done
@@ -114,6 +118,7 @@ def test_suricata(
     output_dir,
     expected_evidence,
     integration_port_factory,
+    tmp_path,
 ):
     skip_if_missing_runtime_dependencies(
         python_modules=("termcolor",), binaries=("redis-server",)
@@ -125,8 +130,10 @@ def test_suricata(
     success = False
     try:
         output_file = os.path.join(output_dir, "slips_output.txt")
+        config_file = create_config_without_ti_update(tmp_path)
         command = get_slips_test_command(
-            f"-e 1 -t -f {suricata_path} -o {output_dir} -P {redis_port}"
+            f"-e 1 -t -f {suricata_path} -o {output_dir} "
+            f"-c {config_file} -P {redis_port}"
         )
         command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done
@@ -156,7 +163,12 @@ def test_suricata(
     "nfdump_path,  output_dir",
     [("dataset/test1-malicious.nfdump", "test1/")],
 )
-def test_nfdump(nfdump_path, output_dir, integration_port_factory):
+def test_nfdump(
+    nfdump_path,
+    output_dir,
+    integration_port_factory,
+    tmp_path,
+):
     """
     checks that slips is reading nfdump no issue,
      the file is not malicious so there's no evidence that should be present
@@ -173,8 +185,10 @@ def test_nfdump(nfdump_path, output_dir, integration_port_factory):
         # expected_evidence = 'Connection to unknown destination port 902/TCP'
 
         output_file = os.path.join(output_dir, "slips_output.txt")
+        config_file = create_config_without_ti_update(tmp_path)
         command = get_slips_test_command(
-            f"-e 1 -t -f {nfdump_path} -o {output_dir} -P {redis_port}"
+            f"-e 1 -t -f {nfdump_path} -o {output_dir} "
+            f"-c {config_file} -P {redis_port}"
         )
         command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done
