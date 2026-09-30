@@ -47,12 +47,12 @@ Save as merged_N model
 artifacts/
 ├── random_projection.bin      # Shared base (frozen, distributed to all peers)
 ├── scaler.bin                  # Local scaler state
-├── latest_local_fc1.bin        # Current local fc1 weights
+├── latest_local_state.bin      # Current local model state_dict (any registry model)
 ├── latest_local_head.bin       # Current local head weights
 └── merged/
-    ├── merged_1_fc1.bin        # First merge result
+    ├── merged_1_state.bin      # First merge result (state_dict)
     ├── merged_1_head.bin
-    ├── merged_2_fc1.bin        # Second merge result
+    ├── merged_2_state.bin      # Second merge result (state_dict)
     └── ...
 ```
 

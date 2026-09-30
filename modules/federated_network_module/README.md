@@ -24,9 +24,16 @@ input(18) -> RandomProjection(256, frozen, He init) -> /√256 -> fc1(256->16)+R
 
 1. **Training Buffer**: Populated incrementally across deferred alerts/twcloses. Only cleared after successful training (≥30 flows). Tracks buffered flow IDs to prevent duplicates.
 
-2. **Alignment Buffer**: Mirrors the training buffer. Used for head-only fine-tuning during FedAvg model merging. Cleared alongside training buffer.
+2. **Alignment Buffer**: Mirrors the training buffer. Used for head-only fine-tuning during weight-averaging merging. Cleared alongside training buffer.
 
 ## Training Flow
+
+> **Windowing note (2026-09-10):** the trigger described below as "alert or
+> sub-window close" is implemented as **wall-clock training windows**
+> (default 5 minutes) with a deterministic per-peer offset. On each window
+> close the module labels everything buffered during the window and trains
+> once. Buffered alerts are consumed together at window close (no
+> per-alert training trigger).
 
 ### 1. Local Training (on Alert or Sub-Window Close)
 
@@ -51,24 +58,31 @@ input(18) -> RandomProjection(256, frozen, He init) -> /√256 -> fc1(256->16)+R
 
 ### 2. Model Merging (Event-Based)
 
-1. Receive peer models via P2P → aggregate fc1 using **AVERAGE**
-2. Freeze fc1, retrain head on alignment buffer (same data as last training batch)
+1. Receive peer models via P2P → aggregated with the configured **merge rule**
+2. Freeze the shared layers, fine-tune the head on the alignment buffer (same data as last training batch)
 3. Save as `merged_N` model
 4. Merged models NOT reused in future merges
+
+### Merge rules (registry-selected)
+
+`federated_network_module.merge_rule` in slips yaml picks HOW merged weights
+are computed from own + peer models (independent of WHEN a merge fires).
+Functions are pure: `merge_<name>(own_shared, peer_models, shared_keys) ->
+dict`; add your own in the registry in the module file.
+
+| rule | computation |
+|------|-------------|
+| `average` (default) | plain mean of own + peers, per shared tensor |
+| `trust_weighted` | weighted mean: peer weights scale with their **SLIPS trust** (score × confidence, clipped to [0,1]; unknown-trusted peer = weight 0, own = 1). The module reads the classic p2p trust sqlite read-only and hands the map to the merge function — trust is *visible to merge rules*, scoped per merge. Empty trust map (warm-up) → falls back to plain averaging |
+| `blending` | adopt the **single real model** (own or peer) whose flat shared params are closest to the plain mean — the other models sit out |
 
 ## Model Sharing Protocol
 
 ### Sending Models
 After each local training event (alert or window close), call `send_model_to_peers()`:
-- Sends fc1 and head weights (not random projection - shared base)
-- Published via P2P module's `p2p_model_outgoing` channel
-- Includes timestamp and peer ID
-
-### Receiving Models
-When `p2p_model_received` channel message arrives:
-- Parse peer_id and model weights
-- Store in `peer_models[peer_id]` dictionary
-- Overwrite previous model from same peer (keep only latest)
+- Sends the model's **shared weights** (`weights_for_sharing()` — any tensors the class declares; head never shared)
+- Published via the P2P module (p2p_pygo channel)
+- Includes `model_class`, `n_params`, timestamp and peer ID
 
 ### Merge Trigger
 Merge occurs only when:
@@ -77,7 +91,7 @@ Merge occurs only when:
 ## Model Loading on Startup
 
 On init, if `train_from_scratch: false` in config and local artifacts exist:
-- Load `latest_local_fc1.bin` + bias, `latest_local_head.bin` + bias, `latest_local_scaler.bin`
+- Load `latest_local_state.bin` (full state_dict, any registry model) + `latest_local_scaler.bin`
 - Restore model and scaler state
 - Print confirmation log
 
@@ -88,20 +102,105 @@ If `train_from_scratch: true` or artifacts missing, training starts from scratch
 All paths are hardcoded in `init()`. They are NOT configurable via `slips.yaml`.
 
 ### Base Artifacts (Shared Across All Peers)
-- `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to all)
+- `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to the default model only)
 
 ### Local Model (Own Training Only)
-- `artifacts/latest_local_fc1.bin` - fc1 weights
-- `artifacts/latest_local_fc1_bias.bin` - fc1 bias
-- `artifacts/latest_local_head.bin` - head weights
-- `artifacts/latest_local_head_bias.bin` - head bias
+- `artifacts/latest_local_state.bin` - full model `state_dict` (class-driven: any registry model)
 - `artifacts/latest_local_scaler.bin` - scaler state (pickle)
 
 ### Merged Models (Aggregated)
-- `artifacts/merged/merged_1_fc1.bin`, `merged_1_fc1_bias.bin` - First merge
-- `artifacts/merged/merged_1_head.bin`, `merged_1_head_bias.bin`
-- `artifacts/merged/merged_2_*` - Second merge
-- etc.
+- `artifacts/merged/merged_N_state.bin` - full `state_dict` per merge N
+
+### Final merged model (configured paths)
+At **every merge end and at graceful shutdown** the module also persists the
+latest merged model to the configured store paths, so those always hold the
+final state: `model_store_path` (dict `{state_dict, model_class, merge_count}`)
+and `preprocess_store_path` (scaler pickle). All other numbered artifacts stay
+at the hardcoded paths above. The `model_load_path` / `preprocess_load_path`
+keys are read but intentionally unused (warm-load keeps the hardcoded
+`latest_local_state.bin`, gated by `train_from_scratch`).
+
+## Choosing / adding a network (federation protocol)
+
+`federated_network_module.model_class` in slips yaml selects which neural
+network instance runs (default `random_projection_mlp`). The module talks to a
+model ONLY through this protocol; anything implementing it works untouched
+(channels, wall-clock windows, merge policy, dual testing, artifacts,
+telemetry, plots):
+
+| method / attribute | meaning |
+|---|---|
+| `forward(X) -> logits` | training/testing |
+| `weights_for_sharing()` / `set_shared_weights(dict)` | the FEDERATED tensors averaged with peers — **any count, any shapes** |
+| `get_head_weights()` / `set_head_weights(w, b)` | non-shared trainable tail (identical fine-tune around merges) |
+| `set_shared_frozen(b)` / `set_head_frozen(b)` | stage freezing |
+| `USE_CLASS_WEIGHTING` | class-level flag: `True` → per-batch class-weighted CE; `False` → plain CE (the deliberately-simple models) |
+
+Shipped classes (MODEL_REGISTRY):
+
+| `model_class` | architecture | federated | class-weighted |
+|---|---|---|---|
+| `random_projection_mlp` (default) | RP(18→256, frozen) → fc1 256→16 → head 16→2 | fc1 | yes |
+| `simple_mlp` | Linear 18→64 → Linear 64→32 → head 32→2 (no projection) | fc1 + fc2 | no |
+| `random_projection_two_layer` | RP(18→256, frozen, same seed) → fc1 256→64 → fc2 64→32 → head 32→2 | fc1 + fc2 | no |
+
+Training is identical for all: 15 full epochs + 5-local-head + 5-merged-head
+fine-tunes on flows labeled from SLIPS alerts at each wall-clock window close
+(`time_window_width`). To add your own model: implement the protocol (copy
+`SimpleMLP3Layer`), add a `_build_<name>` fn + a line in `MODEL_REGISTRY`,
+set `model_class: <name>` — peers warn loudly (not crash) on class mismatch.
+
+## Analysis Outputs (telemetry in the slips output dir)
+
+(The artifacts above live inside the container module install dir; the
+following is what lands on the host via the mounted output dir.)
+
+Everything below is written under `<slips_output>/federated_network_module/`,
+which the experiment topology bind-mounts to the host in real time. All
+metric computation (norms, cosine, PCA, rates) happens downstream; the
+module only serializes what it already holds in memory.
+
+Training metrics (one batch per training run, epochs inside):
+
+| File | Content |
+|------|---------|
+| `local_train.log` | `--- window_N | M mal, B ben ---` + 15 epoch lines + final batch `TP/FP/TN/FN` (full local training) |
+| `local_head_train.log` | same shape, head fine-tune after local full training |
+| `merged_train.log` | `--- merge_N | k peers: ... + own ---` + 5 epoch lines + final batch |
+
+Testing vs ground truth (cumulative per-flow `GT(Mal/Ben)` / pred / Acc lines
+under `--- New local model (window_N) ---` headers):
+
+| File | Model under test |
+|------|-----------------|
+| `local_test.log` | local-only model (the frozen snapshot from the last full local training; from the first merge on, this stream is driven by the dual-testing second forward pass) |
+| `merged_test.log` | merged model (active once a merge is done) |
+
+> Dual testing (2026-09-10): after every full local training the local-only
+> weights are deep-copied; while a merged model is active, EVERY flow is
+> classified by **both** models (the legacy path writes merged_test.log, the
+> second stream writes local_test.log). Cost: one extra forward pass per flow
+> when merged. Before the first merge, local_test.log is produced by the
+> legacy active-model path as before.
+
+Label evidence comparisons (windowed `--- window_N | A alerts ... ---` headers
+and/or bare `... vs GT: N samples | ... | TP/FP/TN/FN: ... | Acc: ...` rows):
+
+| File | Comparison |
+|------|-----------|
+| `comp_inferred_gt.log` | inferred train labels vs GT |
+| `comp_test_inferred.log` | local model predictions vs inferred (train) labels |
+| `comp_test_gt.log` | local model predictions vs GT |
+| `comp_merged_inferred_gt.log` | merged model predictions vs inferred (train) labels |
+| `comp_merged_test_gt.log` | merged model predictions vs GT |
+
+Federation internals:
+
+| File | Content |
+|------|---------|
+| `merging_data.log` | per merge: `peer=<name> | L2_dist | L2_norm | n_params`, plus `merged_vs_own | L2_dist | L2_norm | differs` |
+| `training_network.log` | timeline events (`TRAIN_START/DONE`, `MODEL_SENT`, `MERGE_START`, `ALERT`) |
+| `weights/merge_XXXX.npz` | per merge: flat fc1 vectors (`float32`) — `own` (pre-merge), `merged`, `peer_<name>` per received model (+ biases); consumed by the UI for weight norms, cosine correlations and 3D-PCA trajectories |
 
 ## Configuration (slips.yaml)
 
@@ -249,7 +348,7 @@ The default AVERAGE aggregation can be replaced by modifying `trigger_merge()`:
 ```python
 def trigger_merge(self):
     # Current: Simple average
-    merged_fc1_weight = torch.stack(all_fc1_weights).mean(dim=0)
+    merged[key] = torch.stack([own[key]] + [m[key] for peers]).mean(dim=0)  # per shared key
 
     # Alternative: Weighted average (by peer reliability)
     # weights = torch.tensor([peer_reliability[p] for p in peer_ids])

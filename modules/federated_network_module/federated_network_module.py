@@ -38,11 +38,13 @@ Artifact Paths:
 - Merged: artifacts/merged_N_fc1.bin, merged_N_head.bin (N = merge count)
 """
 
+import collections
 import ipaddress
 import json
 import os
 import pickle
 import random
+import copy
 import shutil
 import time
 import traceback
@@ -72,6 +74,10 @@ class SimpleFederatedNet(nn.Module):
     """
 
     FIXED_INPUT_DIM = 18  # Must match len(feature_order) in process_features
+
+    # Class weighting per batch is a property of THIS model only; other models
+    # in the registry set USE_CLASS_WEIGHTING = False and train on plain CE.
+    USE_CLASS_WEIGHTING = True
 
     def __init__(
         self,
@@ -190,6 +196,274 @@ class SimpleFederatedNet(nn.Module):
         for param in self.head.parameters():
             param.requires_grad = True
 
+    # ---- federation protocol ------------------------------------------- #
+    # Every model usable by this module implements:
+    #   forward(X)                      -> logits
+    #   weights_for_sharing()           -> {'key': tensor, ...}   (FEDERATED part; any count)
+    #   set_shared_weights(dict)        <- {'key': tensor, ...}
+    #   get_head_weights()/set_head_weights(w, b)                 (non-shared trainable tail)
+    #   set_shared_frozen(bool) / set_head_frozen(bool)           (for stage freezing)
+    # Everything below (send/merge/artifacts/telemetry/plots) is driven purely
+    # by this protocol, never by a model's internals.
+    def weights_for_sharing(self) -> dict:
+        """Federated weights for this model: fc1 weight + bias (protocol)."""
+        fc1_w, fc1_b = self.get_fc1_weights()
+        return {"fc1_weight": fc1_w, "fc1_bias": fc1_b}
+
+    def set_shared_weights(self, weights: dict):
+        """Apply averaged federated weights back (protocol)."""
+        self.set_fc1_weights(weights["fc1_weight"], weights["fc1_bias"])
+
+    def set_shared_frozen(self, frozen: bool):
+        """Freeze/unfreeze the FEDERATED params for head-only stages."""
+        self.freeze_fc1() if frozen else self.unfreeze_fc1()
+
+    def set_head_frozen(self, frozen: bool):
+        """Freeze/unfreeze the non-shared tail for fc1-only stages."""
+        self.freeze_head() if frozen else self.unfreeze_head()
+
+
+class SimpleMLP3Layer(nn.Module):
+    """Model 1: plain 3-layer perceptron, NO random projection.
+
+        input(18) -> Linear(18->64) -> ReLU -> Linear(64->32) -> ReLU -> head(32->2)
+
+    Federated: BOTH hidden linears (fc1 + fc2, 4 tensors); head stays local
+    (fine-tuned around merges). No class weighting, no projection magic —
+    deliberately simple (USE_CLASS_WEIGHTING = False).
+    """
+
+    USE_CLASS_WEIGHTING = False
+
+    def __init__(self, input_dim: int = 18):
+        super().__init__()
+        self.fc1 = nn.Linear(input_dim, 64)
+        self.fc2 = nn.Linear(64, 32)
+        self.head = nn.Linear(32, 2)
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.fc2(x))
+        return self.head(x)
+
+    def weights_for_sharing(self) -> dict:
+        return {
+            "fc1_weight": self.fc1.weight.data.clone(),
+            "fc1_bias": self.fc1.bias.data.clone(),
+            "fc2_weight": self.fc2.weight.data.clone(),
+            "fc2_bias": self.fc2.bias.data.clone(),
+        }
+
+    def set_shared_weights(self, weights: dict):
+        with torch.no_grad():
+            self.fc1.weight.data.copy_(weights["fc1_weight"])
+            self.fc1.bias.data.copy_(weights["fc1_bias"])
+            self.fc2.weight.data.copy_(weights["fc2_weight"])
+            self.fc2.bias.data.copy_(weights["fc2_bias"])
+
+    def get_head_weights(self) -> tuple:
+        return self.head.weight.data.clone(), self.head.bias.data.clone()
+
+    def set_head_weights(self, weight: torch.Tensor, bias: torch.Tensor):
+        with torch.no_grad():
+            self.head.weight.data.copy_(weight)
+            self.head.bias.data.copy_(bias)
+
+    def set_shared_frozen(self, frozen: bool):
+        for layer in (self.fc1, self.fc2):
+            for param in layer.parameters():
+                param.requires_grad = not frozen
+
+    def set_head_frozen(self, frozen: bool):
+        for param in self.head.parameters():
+            param.requires_grad = not frozen
+
+
+class RandomProjectionTwoLayerNet(SimpleFederatedNet):
+    """Model 3: RP + 2 federated linears + head.
+
+        input(18) -> RP(18->256, frozen, He) -> /sqrt(256) -> Linear(256->64) -> ReLU
+        -> Linear(64->32) -> ReLU -> head(32->2)
+
+    Federated: BOTH linears (fc1 256->64 and fc2 64->32); head fine-tuned
+    around merges exactly like the base model. Shares the same frozen
+    projection as the base class (same seed -> same weights, required for
+    peers to agree on the projection). No class weighting.
+    """
+
+    USE_CLASS_WEIGHTING = False
+
+    def __init__(
+        self,
+        input_dim: int,
+        rp_path: Optional[str] = None,
+        seed: int = 1111,
+        hidden1: int = 256,
+        hidden2: int = 64,
+        mid2: int = 32,
+    ):
+        super().__init__(
+            input_dim,
+            hidden1=hidden1,
+            hidden2=hidden2,
+            rp_path=rp_path,
+            seed=seed,
+        )
+        self.lin2 = nn.Linear(hidden2, mid2)
+        self.head = nn.Linear(mid2, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.random_projection(x)
+        x = x / self.projection_scale
+        x = self.relu(self.fc1(x))
+        x = self.relu(self.lin2(x))
+        return self.head(x)
+
+    def weights_for_sharing(self) -> dict:
+        own = super().weights_for_sharing()
+        own["fc2_weight"] = self.lin2.weight.data.clone()
+        own["fc2_bias"] = self.lin2.bias.data.clone()
+        return own
+
+    def set_shared_weights(self, weights: dict):
+        super().set_shared_weights(
+            {
+                "fc1_weight": weights["fc1_weight"],
+                "fc1_bias": weights["fc1_bias"],
+            }
+        )
+        with torch.no_grad():
+            self.lin2.weight.data.copy_(weights["fc2_weight"])
+            self.lin2.bias.data.copy_(weights["fc2_bias"])
+
+    def set_shared_frozen(self, frozen: bool):
+        for layer in (self.fc1, self.lin2):
+            for param in layer.parameters():
+                param.requires_grad = not frozen
+
+
+def _build_random_projection_mlp(module):
+    """Builder for the default model (registry entry)."""
+    module.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
+    return SimpleFederatedNet(
+        module.input_dim, rp_path=module.rp_path, seed=module.seed
+    )
+
+
+def _build_simple_mlp(module):
+    """Builder for the plain 3-layer perceptron (no random projection)."""
+    # getattr(..., default) returns None because module.input_dim EXISTS as
+    # None before the first preprocess; mirror the other builders instead.
+    module.input_dim = module.input_dim or SimpleFederatedNet.FIXED_INPUT_DIM
+    return SimpleMLP3Layer(module.input_dim)
+
+
+def _build_random_projection_two_layer(module):
+    """Builder for the RP + 2 federated linears model."""
+    module.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
+    return RandomProjectionTwoLayerNet(
+        module.input_dim, rp_path=module.rp_path, seed=module.seed
+    )
+
+
+# Model registry: yaml `federated_network_module.model_class` selects the
+# network instance this module trains/merges/serializes. To add your own:
+#   1. write your class above (see ExampleNewNet scaffold),
+#   2. add a _build_<name> fn and a registry line below,
+#   3. set `model_class: <name>` in the peer's slips yaml (baked image).
+# Everything else — channels, wall-clock windows, merge policy, dual testing,
+# artifacts, telemetry, plots — works unchanged for any protocol-conforming model.
+MODEL_REGISTRY = {
+    "random_projection_mlp": _build_random_projection_mlp,
+    "simple_mlp": _build_simple_mlp,
+    "random_projection_two_layer": _build_random_projection_two_layer,
+    # "my_new_net": _build_my_new_net,
+}
+
+
+# ----------------------------------------------------------------------
+# Merge rules (how the merged model is computed from peer models)
+# ----------------------------------------------------------------------
+# Pure functions: merge_<name>(own_shared, peer_models, shared_keys) -> dict.
+#   own_shared:   {key: tensor}            own model's federated weights
+#   peer_models:  {peer_id: {key: tensor}} received federated weights
+#   shared_keys:  sorted list of shared tensor keys to merge
+# Returns: {key: tensor} — the merged federated weights.
+# yaml `federated_network_module.merge_rule` selects the rule (default average).
+# Add a rule below and a registry line — nothing else to touch.
+def merge_average(
+    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
+) -> dict:
+    """Plain average of own + every peer, per shared key (current behavior)."""
+    merged = {}
+    for key in shared_keys:
+        stack = [own_shared[key]] + [m[key] for m in peer_models.values()]
+        merged[key] = torch.stack(stack).mean(dim=0)
+    return merged
+
+
+def merge_blending(
+    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
+) -> dict:
+    """Blending selection: compute the plain mean, then adopt the single model
+    (own or a peer's) whose flat shared params are closest to it. One real
+    model wins; the rest is left unblended."""
+
+    def _flat(ws):
+        return torch.cat([ws[k].detach().reshape(-1) for k in shared_keys])
+
+    candidates = {"own": own_shared}
+    candidates.update(peer_models)
+    mean = merge_average(own_shared, peer_models, shared_keys)
+    mean_flat = _flat(mean)
+    best = min(
+        candidates,
+        key=lambda cid: torch.norm(_flat(candidates[cid]) - mean_flat).item(),
+    )
+    return {k: candidates[best][k].clone() for k in shared_keys}
+
+
+def merge_trust_weighted(
+    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
+) -> dict:
+    """Trust-weighted average: peer weights scale with their SLIPS trust
+    (score * confidence, clipped to [0,1]; unknown trust = weight 0, own = 1).
+    `trust` maps peer_id -> {"score": float, "confidence": float} collected by
+    the module from the classic p2p trust db. When every weight is 0 (no
+    trust data available yet), falls back to plain averaging."""
+    trust = trust or {}
+    if not trust:
+        # no trust data at all (system warm-up) -> treat everyone equally
+        return merge_average(own_shared, peer_models, shared_keys)
+    weights = {"own": 1.0}
+    for pid in peer_models:
+        t = trust.get(pid)
+        if not t:
+            weights[pid] = 0.0
+        else:
+            weights[pid] = max(0.0, t.get("score", 0.0)) * max(
+                0.0, t.get("confidence", 0.0)
+            )
+    total = sum(weights.values())
+    if total <= 0:
+        return merge_average(own_shared, peer_models, shared_keys)
+    merged = {}
+    for key in shared_keys:
+        acc = weights["own"] * own_shared[key]
+        for pid, m in peer_models.items():
+            acc = acc + weights[pid] * m[key]
+        merged[key] = acc / total
+    return merged
+
+
+MERGE_REGISTRY = {
+    "average": merge_average,
+    "trust_weighted": merge_trust_weighted,
+    "blending": merge_blending,
+    # "my_rule": merge_my_rule,
+}
+
 
 class ModuleLogger:
     """Centralized logging for training, testing, and label comparison."""
@@ -305,9 +579,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     Federated network ML detector with model sharing and merging.
 
     Training triggers:
-    1. New alert: Label connected flows malicious, rest benign -> Train fc1+head ONCE
-    2. Time window closed: All remaining benign -> Train fc1+head ONCE
-    3. Merge event: Aggregate peer models -> Retrain head ONCE on alignment buffer
+    1. Window close: flows enter a small ring; alerts (evidence-UID + IP
+       touches) are matched against ALL ring cells — so *late* alerts still
+       label their window's flows. When a cell is older than
+       `label_finalize_delay_windows` (default 2) it is finalized and trained
+       exactly once (matched→MALICIOUS, rest→BENIGN). 0 = legacy immediate
+       labeling.
+    2. Merge event: Aggregate peer models -> Retrain head ONCE on alignment buffer
     """
 
     name = "federated_network_module"
@@ -348,11 +626,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
         os.makedirs(artifacts_dir, exist_ok=True)
         self.rp_path = os.path.join(artifacts_dir, "random_projection.bin")
-        self.local_fc1_path = os.path.join(
-            artifacts_dir, "latest_local_fc1.bin"
-        )
-        self.local_head_path = os.path.join(
-            artifacts_dir, "latest_local_head.bin"
+        # Model artifacts are stored as FULL state dicts so any model class
+        # in the registry round-trips identically (class-driven persistence).
+        self.local_state_path = os.path.join(
+            artifacts_dir, "latest_local_state.bin"
         )
         self.local_scaler_path = os.path.join(
             artifacts_dir, "latest_local_scaler.bin"
@@ -364,7 +641,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.input_dim: Optional[int] = None
 
         # Initialize model (in memory)
-        self.model: Optional[SimpleFederatedNet] = None
+        self.model = None
 
         # Preprocessor
         self.scaler = StandardScaler()
@@ -425,12 +702,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Training counters
         self.training_count_alert: int = 0
+        # Alerts whose attacker party resolved to our own IP, dropped as
+        # identity inconsistencies (self-attack reports of p2p trust).
+        self.self_referential_alerts_dropped: int = 0
         self.training_count_twclose: int = 0
         self.training_count_window: int = 0
         self._training_trigger: str = ""
 
         # Track whether current model is merged (affects testing log target)
         self._using_merged_model: bool = False
+
+        # Dual-stream testing (L1): the last fully-local-trained model is
+        # deep-copied after every full local train, so during the merged
+        # phase BOTH models evaluate each incoming flow — merged stream goes
+        # to merged_test.log via the legacy path, local stream accumulates in
+        # _local_test and lands in local_test.log.
+        self._local_only_model = None
+        self._local_test: dict = self._blank_test_statistics()
+        self._local_stream_used: bool = False
 
         # Store test-time predictions per flow for comparison against alert labels
         self.test_time_predictions: dict = {}  # flow_id -> predicted_label
@@ -458,6 +747,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "time_window_width", default=1200
         )
 
+        # Alert-labelling FINALIZATION delay in training windows.
+        # Flows sit in a small ring for N windows so *late* alerts can still
+        # match them; on exit they are labeled MALICIOUS only if some alert
+        # (evidence-UID or attacker/victim IP) connected, else BENIGN — and
+        # trained exactly once with their final label. 0 = immediate labeling
+        # (legacy behavior). Config key: label_finalize_delay_windows
+        self.label_finalize_delay_windows = self._read_module_config_int(
+            "label_finalize_delay_windows", default=2
+        )
+        self._flow_ring = (
+            collections.deque()
+        )  # ring cells: {"flows": dict, "mal_ids": set}
+
         # Deterministic per-instance sub-window offset (0–5 minutes).
         # Uses hostname hash to avoid all peers getting the same offset
         # when containers start simultaneously (same system-time random seed).
@@ -478,6 +780,27 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Wall-clock training window tracking (independent of Slips global windows)
         # First trigger is offset by _time_offset so peers train out of phase.
         self.training_window_start: float = time.time() - self._time_offset
+
+        # Which neural network instance this module runs (registry-selected,
+        # config is the source of truth).
+        self.model_class_name = str(
+            conf.read_configuration(
+                section, "model_class", "random_projection_mlp"
+            )
+        )
+        self.print(f"model_class: {self.model_class_name}", 0, 2)
+
+        # Which aggregation rule merges own + peer models into the merged
+        # model (registry-selected; what computes the merge, not when).
+        self.merge_rule = str(
+            conf.read_configuration(section, "merge_rule", "average")
+        )
+        if self.merge_rule not in MERGE_REGISTRY:
+            raise ValueError(
+                f"unknown merge_rule '{self.merge_rule}' "
+                f"(known: {sorted(MERGE_REGISTRY)})"
+            )
+        self.print(f"merge_rule: {self.merge_rule}", 0, 2)
 
         # Load existing local model if present and not training from scratch
         train_from_scratch = self._read_module_config_bool(
@@ -536,11 +859,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         return self._to_bool(value, default)
 
     def _load_local_model(self):
-        """Load fc1, head, and scaler from disk if artifacts exist."""
+        """Load local model (full state dict) and scaler from artifacts."""
         try:
-            if not os.path.exists(self.local_fc1_path):
-                return
-            if not os.path.exists(self.local_head_path):
+            if not os.path.exists(self.local_state_path):
                 return
             if not os.path.exists(self.local_scaler_path):
                 return
@@ -549,19 +870,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.model = self.create_empty_model().to(self.device)
                 self.optimizer = None  # manual Adam, fork-safe
 
-            fc1_w = torch.load(self.local_fc1_path, weights_only=True)
-            fc1_b = torch.load(
-                self.local_fc1_path.replace("_fc1", "_fc1_bias"),
+            state = torch.load(
+                self.local_state_path,
+                map_location=self.device,
                 weights_only=True,
             )
-            head_w = torch.load(self.local_head_path, weights_only=True)
-            head_b = torch.load(
-                self.local_head_path.replace("_head", "_head_bias"),
-                weights_only=True,
-            )
-
-            self.model.set_fc1_weights(fc1_w, fc1_b)
-            self.model.set_head_weights(head_w, head_b)
+            self.model.load_state_dict(state)
 
             with open(self.local_scaler_path, "rb") as f:
                 loaded_scaler = pickle.load(f)
@@ -585,13 +899,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
             )
 
-    def create_empty_model(self) -> SimpleFederatedNet:
-        """Create model with FIXED input dimension (18 features)."""
-        # Always use fixed input dimension - don't rely on runtime detection
-        self.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
-        return SimpleFederatedNet(
-            self.input_dim, rp_path=self.rp_path, seed=self.seed
+    def create_empty_model(self):
+        """Instantiate the model class selected by yaml `model_class`
+        (registry-driven; protocol objects only)."""
+        builder = MODEL_REGISTRY.get(self.model_class_name)
+        if builder is None:
+            raise ValueError(
+                f"unknown model_class '{self.model_class_name}' "
+                f"(known: {sorted(MODEL_REGISTRY)})"
+            )
+        model = builder(self)
+        # Class weighting default is model-declared (USE_CLASS_WEIGHTING);
+        # yaml `class_weighting` overrides it per experiment (A/B runs).
+        model.USE_CLASS_WEIGHTING = self._read_module_config_bool(
+            "class_weighting", getattr(model, "USE_CLASS_WEIGHTING", True)
         )
+        return model
 
     def create_empty_preprocessor(self) -> StandardScaler:
         """Create untrained scaler."""
@@ -855,14 +1178,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
         if freeze_fc1:
-            self.model.freeze_fc1()
-            self.model.unfreeze_head()
+            self.model.set_shared_frozen(True)
+            self.model.set_head_frozen(False)
         elif freeze_head:
-            self.model.unfreeze_fc1()
-            self.model.freeze_head()
+            self.model.set_shared_frozen(False)
+            self.model.set_head_frozen(True)
         else:
-            self.model.unfreeze_fc1()
-            self.model.unfreeze_head()
+            self.model.set_shared_frozen(False)
+            self.model.set_head_frozen(False)
         self.optimizer = None  # manual Adam, fork-safe
 
         self.print(
@@ -876,18 +1199,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             [0 if y == BENIGN else 1 for y in y_train]
         ).to(self.device)
 
-        # Per-batch class weights: weight = total / (2 * max(class_count, 1))
+        # Class weighting is a MODEL-declared training detail (USE_CLASS_WEIGHTING
+        # on the net class): the original model weights batches per class; the
+        # deliberately-simple models use a plain CrossEntropyLoss.
         mal_count = int((y_tensor == 1).sum().item())
         ben_count = int((y_tensor == 0).sum().item())
         total_count = mal_count + ben_count
-        class_weight = torch.tensor(
-            [
-                total_count / (2.0 * max(ben_count, 1)),
-                total_count / (2.0 * max(mal_count, 1)),
-            ],
-            device=self.device,
-        )
-        criterion = nn.CrossEntropyLoss(weight=class_weight)
+        if getattr(self.model, "USE_CLASS_WEIGHTING", True):
+            class_weight = torch.tensor(
+                [
+                    total_count / (2.0 * max(ben_count, 1)),
+                    total_count / (2.0 * max(mal_count, 1)),
+                ],
+                device=self.device,
+            )
+            criterion = nn.CrossEntropyLoss(weight=class_weight)
+        else:
+            criterion = nn.CrossEntropyLoss()
 
         self.model.train()
 
@@ -1048,6 +1376,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         self.test_time_predictions[self._get_flow_id(flow)] = (
                             predicted
                         )
+                        # Second testing stream (L1): while merged, also
+                        # evaluate with the frozen last-locally-trained model.
+                        if (
+                            self._using_merged_model
+                            and self._local_only_model is not None
+                        ):
+                            local_pred = self._predict_with(
+                                self._local_only_model, flow
+                            )
+                            if local_pred is not None:
+                                self._store_local_stream(gt_label, local_pred)
 
             if msg := self.get_msg("new_alert"):
                 self.handle_new_alert(json.loads(msg["data"]))
@@ -1153,9 +1492,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Alert structure:
         - profile: {"ip": "..."}
         - timewindow: {"number": N, ...}
-        - last_evidence: {"attacker": {"ip": "..."}, "victim": {"ip": "..."}, "ID": "..."}
+        - last_evidence: {"attacker": {"direction": ..., "ioc_type": ...,
+                          "value": "<ip/domain/url>", ...},
+                          "victim": {"value": "...", ...} | None, "ID": "..."}
         - correl_id: [list of evidence IDs]
         - id: alert ID
+
+        Note: SLIPS serializes the Evidence dataclasses with the address in
+        the field "value" (utils.to_dict = asdict passthrough). "ip" is kept
+        as a fallback for hypothetical older payloads; "value" is what this
+        SLIPS lineage (>=2023-12) actually emits.
         """
         try:
             self.print("Alert received, buffering evidence", 1, 1)
@@ -1186,16 +1532,29 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.print("No evidence IDs in alert, skipping", 1, 1)
                 return
 
-            attacker_ip = (
-                last_evidence.get("attacker", {}).get("ip")
-                if isinstance(last_evidence.get("attacker"), dict)
-                else None
-            )
-            victim_ip = (
-                last_evidence.get("victim", {}).get("ip")
-                if isinstance(last_evidence.get("victim"), dict)
-                else None
-            )
+            def _party_ip(party: str) -> Optional[str]:
+                """Address of the attacker/victim from last_evidence.
+
+                :param party: "attacker" or "victim"
+                :return: the ip/domain string, or None when absent
+                """
+                node = last_evidence.get(party)
+                if isinstance(node, dict):
+                    # SLIPS serializes Attacker/Victim with the address in
+                    # "value"; "ip" lived only in this module's old docstring
+                    return node.get("value") or node.get("ip")
+                return node if isinstance(node, str) else None
+
+            attacker_ip = _party_ip("attacker")
+            victim_ip = _party_ip("victim")
+
+            if attacker_ip and attacker_ip in self._local_ips():
+                # Self-referential report (p2p trust rings flag the local
+                # node at bootstrap, see p2p-self-alerts.md): an identity
+                # inconsistency, not attack evidence. Dropping it here keeps
+                # it from tagging our own flows malicious in the ring.
+                self.self_referential_alerts_dropped += 1
+                attacker_ip = None
 
             self.pending_alerts.append(
                 {
@@ -1274,6 +1633,97 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             len(self.pending_alerts),
             len(all_evidence_ids),
         )
+
+    def _collect_alert_signatures(self):
+        """Aggregate matching material from pending alerts: evidence-connected
+        flow UIDs (via SLIPS db) plus attacker/victim IP sets. Same semantics
+        as the legacy inline matcher in _label_window_flows."""
+        matched_uids: set = set()
+        attacker_ips: set = set()
+        victim_ips: set = set()
+        evidence_ids: set = set()
+        for alert in list(self.pending_alerts):
+            for evid_id in alert.get("evidence_ids", []):
+                evidence_ids.add(evid_id)
+                try:
+                    uids = self.db.get_flows_causing_evidence(evid_id)
+                except Exception:  # noqa: BLE001
+                    uids = None
+                if uids:
+                    matched_uids.update(uids)
+            attacker_ip = alert.get("attacker_ip")
+            victim_ip = alert.get("victim_ip")
+            if attacker_ip:
+                attacker_ips.add(attacker_ip)
+            if victim_ip:
+                victim_ips.add(victim_ip)
+        return matched_uids, attacker_ips, victim_ips, len(evidence_ids)
+
+    def _flow_matches(self, flow, matched_uids, attacker_ips, victim_ips):
+        """One matching rule for both immediate and ring modes."""
+        uid = (flow.get("uid") or "").strip()
+        if uid and uid in matched_uids:
+            return True
+        saddr = str(flow.get("saddr", ""))
+        daddr = str(flow.get("daddr", ""))
+        return (
+            saddr in attacker_ips
+            or daddr in attacker_ips
+            or saddr in victim_ips
+            or daddr in victim_ips
+        )
+
+    def _label_ring_then_finalize(self):
+        """Delay-then-finalize labelling.
+
+        Push this window's flows onto the ring, match alerts against ALL ring
+        cells (late arrivals still land), then finalize the oldest cell when
+        the ring is longer than the configured delay. Returns the finalized
+        lists (may be None when still warming up) plus bookkeeping stats.
+        """
+        cell = {"flows": dict(self.window_flows), "mal_ids": set()}
+        self._flow_ring.append(cell)
+
+        matched_uids, attacker_ips, victim_ips, evidence_count = (
+            self._collect_alert_signatures()
+        )
+        new_hits = 0
+        for ring_cell in self._flow_ring:
+            for fid, flow in ring_cell["flows"].items():
+                if fid in ring_cell["mal_ids"]:
+                    continue
+                if self._flow_matches(
+                    flow, matched_uids, attacker_ips, victim_ips
+                ):
+                    ring_cell["mal_ids"].add(fid)
+                    new_hits += 1
+
+        alert_count = len(self.pending_alerts)
+        finalized = None
+        if len(self._flow_ring) > self.label_finalize_delay_windows:
+            finalized = self._flow_ring.popleft()
+
+        stats = {
+            "ring_cells": len(self._flow_ring),
+            "new_hits": new_hits,
+            "alert_count": alert_count,
+            "evidence_count": evidence_count,
+        }
+        if finalized is None:
+            return None, None, None, stats
+        malicious_flows = [
+            f
+            for fid, f in finalized["flows"].items()
+            if fid in finalized["mal_ids"]
+        ]
+        benign_flows = [
+            f
+            for fid, f in finalized["flows"].items()
+            if fid not in finalized["mal_ids"]
+        ]
+        stats["finalized_mal"] = len(malicious_flows)
+        stats["finalized_ben"] = len(benign_flows)
+        return malicious_flows, benign_flows, finalized["mal_ids"], stats
 
     def _add_flows_to_buffers(self, flows: list, label: str):
         """
@@ -1432,13 +1882,39 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Training window {window_n} closed, preparing batch", 1, 1
             )
 
-            (
-                malicious_flows,
-                benign_flows,
-                malicious_flow_ids,
-                alert_count,
-                evidence_count,
-            ) = self._label_window_flows()
+            ring_stats = None
+            if self.label_finalize_delay_windows > 0:
+                (
+                    malicious_flows,
+                    benign_flows,
+                    malicious_flow_ids,
+                    ring_stats,
+                ) = self._label_ring_then_finalize()
+                alert_count = ring_stats["alert_count"]
+                evidence_count = ring_stats["evidence_count"]
+                if malicious_flows is None:
+                    # ring warming up; finalize nothing this window
+                    self.print(
+                        f"Window {window_n}: ring warm-up "
+                        f"({ring_stats['ring_cells']}/{self.label_finalize_delay_windows} cells), "
+                        f"no finalized batch; {alert_count} alerts"
+                        f" -> {ring_stats['new_hits']} ring matches",
+                        1,
+                        1,
+                    )
+                    self.window_flows.clear()
+                    self.pending_alerts.clear()
+                    self.test_time_predictions.clear()
+                    self.training_window_start += self.window_size_seconds
+                    return
+            else:
+                (
+                    malicious_flows,
+                    benign_flows,
+                    malicious_flow_ids,
+                    alert_count,
+                    evidence_count,
+                ) = self._label_window_flows()
 
             self.print(
                 f"Window {window_n}: {len(malicious_flows)} malicious, "
@@ -1471,6 +1947,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._log_window_comparisons(
                 malicious_flows, benign_flows, malicious_flow_ids, header
             )
+            if ring_stats:
+                # approved audit marker: finalization lag is visible directly
+                # in local_train.log next to the batch lines
+                self.logger.log_comp_header(
+                    "local_train",
+                    f"ring | pending {ring_stats['ring_cells']} cells | "
+                    f"finalized mal {ring_stats['finalized_mal']} ben "
+                    f"{ring_stats['finalized_ben']} | "
+                    f"ring matches {ring_stats['new_hits']} | alerts "
+                    f"{ring_stats['alert_count']}",
+                )
 
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
@@ -1487,6 +1974,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     target,
                     f"New local model ({self._training_trigger}_{window_n})",
                 )
+
+                # Dual testing stream closeout: flush the local-only stream's
+                # window tail, mark its new model version, reset its counters
+                # (mirrors the legacy active-stream bookkeeping above).
+                if self._local_stream_used:
+                    self._flush_local_stream()
+                    self.logger.log_test_marker(
+                        "local_test",
+                        f"New local model ({self._training_trigger}_{window_n})",
+                    )
+                    self._local_test = self._blank_test_statistics()
+                    self._local_stream_used = False
 
             self.window_flows.clear()
             self.pending_alerts.clear()
@@ -1519,13 +2018,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if not peer_id:
                 return
 
+            if (
+                model_data.get("model_class")
+                and model_data["model_class"] != self.model_class_name
+            ):
+                self.print(
+                    f"WARNING: peer {peer_id} runs model_class "
+                    f"'{model_data['model_class']}', we run '{self.model_class_name}'",
+                    0,
+                    1,
+                )
+
+            shared_in = model_data.get("shared") or {}
             self.peer_models[peer_id] = {
-                "fc1_weight": torch.tensor(model_data["fc1_weight"]),
-                "fc1_bias": torch.tensor(model_data["fc1_bias"]),
-                "head_weight": torch.tensor(model_data["head_weight"]),
-                "head_bias": torch.tensor(model_data["head_bias"]),
-                "timestamp": model_data.get("timestamp", time.time()),
+                k: torch.tensor(v) for k, v in shared_in.items()
             }
+            self.peer_models[peer_id]["timestamp"] = model_data.get(
+                "timestamp", time.time()
+            )
 
             self.print(
                 f"Received model from peer {peer_id}, stashed ({len(self.peer_models)} total)",
@@ -1620,6 +2130,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self._save_local_model()
 
+            # Snapshot the fresh local-only model for the dual testing stream
+            # (small model; deep copy keeps it frozen while self.model merges).
+            try:
+                self._local_only_model = copy.deepcopy(self.model)
+            except Exception:
+                self.print(
+                    "local-only model snapshot failed: "
+                    + traceback.format_exc(),
+                    0,
+                    1,
+                )
+
             self._using_merged_model = False
             self._is_fitted = True
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
@@ -1647,6 +2169,111 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print(
                 f"Error in _train_batch: {traceback.format_exc()}", 1, 1
             )
+
+    _TRUST_CACHE_TTL_S = 60
+
+    def _local_ips(self) -> set:
+        """Best-effort set of this node's own IPs (cached).
+
+        Used to drop self-referential alerts: p2p trust rings report the
+        local node as its own attacker during bootstrap, and without an
+        identity check those reports would tag this peer's own flows as
+        malicious labeling material.
+
+        :return: set of IP strings (may be empty when unresolved)
+        """
+        cached = getattr(self, "_local_ips_cache", None)
+        if cached is not None:
+            return cached
+        ips = set()
+        try:
+            import socket
+
+            for cand in {socket.gethostname(), self.my_peer_id} - {
+                None,
+                "unknown",
+            }:
+                try:
+                    ip = socket.gethostbyname(cand)
+                    if ip and not ip.startswith("127."):
+                        ips.add(ip)
+                except Exception:  # noqa: BLE001
+                    pass
+        except Exception:  # noqa: BLE001
+            pass
+        self._local_ips_cache = ips
+        return ips
+
+    def _resolve_peer_ip(self, peer_id: str) -> Optional[str]:
+        """Best-effort hostname -> topology IP via docker DNS (cached)."""
+        cache = getattr(self, "_peer_ip_cache", None) or {}
+        if peer_id in cache:
+            return cache[peer_id]
+        ip = None
+        try:
+            import socket
+
+            ip = socket.gethostbyname(peer_id)
+        except Exception:
+            pass
+        cache[peer_id] = ip
+        self._peer_ip_cache = cache
+        return ip
+
+    def _collect_peer_trust(self, peer_ids) -> dict:
+        """SLIPS classic p2p trust for merge functions, read-only, cached 60s.
+
+        Returns {peer_id: {"score", "confidence", "network_score", "ip"}} with
+        peers missing a trust entry omitted. The trust sqlite lives inside the
+        p2p trust module's permanent dir (visible to this module's container);
+        we open it read-only (mode=ro) so we never disturb the writer.
+        """
+        if (
+            time.time() - getattr(self, "_trust_cache_ts", 0)
+            < self._TRUST_CACHE_TTL_S
+        ):
+            cached = getattr(self, "_trust_cache_map", None) or {}
+            return {p: cached.get(p) for p in peer_ids if cached.get(p)}
+        out = {}
+        try:
+            path = self.db.get_p2p_trust_db_path()
+        except Exception:
+            path = getattr(self.db, "trust_db_path", None)
+        if path and os.path.exists(path):
+            try:
+                import sqlite3
+
+                conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+                cur = conn.cursor()
+                for pid in set(peer_ids):
+                    ip = self._resolve_peer_ip(pid)
+                    for key in (("ip", ip), ("ip", pid)):
+                        if not key[1]:
+                            continue
+                        cur.execute(
+                            "SELECT score, confidence, network_score, update_time "
+                            "FROM opinion_cache WHERE key_type=? AND reported_key=? "
+                            "ORDER BY update_time DESC LIMIT 1",
+                            key,
+                        )
+                        row = cur.fetchone()
+                        if row:
+                            out[pid] = {
+                                "score": row[0],
+                                "confidence": row[1],
+                                "network_score": row[2],
+                                "ts": row[3],
+                                "ip": ip,
+                            }
+                            break
+                conn.close()
+            except Exception as exc:  # noqa: BLE001
+                self.print(
+                    f"trust db read failed (keeping empty map): {exc}", 0, 1
+                )
+        self._trust_cache_ts = time.time()
+        self._trust_cache_map = out
+        return out
 
     def trigger_merge(
         self,
@@ -1692,50 +2319,125 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"merge_{self.merge_count + 1} | {len(self.peer_models)} peers: {','.join(self.peer_models.keys())} + own",
             )
 
-            all_fc1_weights = [
-                m["fc1_weight"] for m in self.peer_models.values()
-            ]
-            all_fc1_biases = [m["fc1_bias"] for m in self.peer_models.values()]
+            # Protocol-driven merge: average every shared tensor across own +
+            # peers; distances/dumps use the flat concatenation of the shared
+            # parameters (key order fixed) — works for ANY model class.
+            own_shared = self.model.weights_for_sharing() if self.model else {}
+            shared_keys = sorted(own_shared)
+            usable = {
+                pid: m
+                for pid, m in self.peer_models.items()
+                if all(isinstance(m.get(k), torch.Tensor) for k in shared_keys)
+            }
+            skipped = [pid for pid in self.peer_models if pid not in usable]
+            if skipped:
+                self.print(
+                    f"trigger_merge: skipping incompatible peer payload(s): {skipped}",
+                    0,
+                    1,
+                )
 
-            if self.model:
-                own_fc1_w, own_fc1_b = self.model.get_fc1_weights()
-                all_fc1_weights.append(own_fc1_w)
-                all_fc1_biases.append(own_fc1_b)
+            def _flat_all(ws):
+                return torch.cat(
+                    [ws[k].detach().reshape(-1) for k in shared_keys]
+                )
 
-            merged_fc1_weight = torch.stack(all_fc1_weights).mean(dim=0)
-            merged_fc1_bias = torch.stack(all_fc1_biases).mean(dim=0)
+            # Trust visibility: merge functions receive the SLIPS trust map
+            # (collected only when the selected rule consumes it).
+            trust_map = {}
+            if self.merge_rule == "trust_weighted":
+                trust_map = self._collect_peer_trust(list(usable))
+                if not trust_map:
+                    self.print(
+                        "merge_rule=trust_weighted: no trust data available; "
+                        "falling back to equal weights",
+                        0,
+                        1,
+                    )
+
+            merged_shared = MERGE_REGISTRY[self.merge_rule](
+                own_shared, usable, shared_keys, trust_map
+            )
+            self.print(
+                f"trigger_merge: applied merge_rule={self.merge_rule} "
+                f"over {len(usable)} peers + own",
+                1,
+                1,
+            )
+
+            numel = sum(t.numel() for t in merged_shared.values())
 
             # Log peer weight distances for analysis
-            if self.model and own_fc1_w is not None:
+            if self.model and shared_keys:
+                own_flat = _flat_all(own_shared)
+                merged_flat = _flat_all(merged_shared)
                 merge_label = f"merge_{self.merge_count + 1}"
                 self.logger._write(
                     "merging_data",
-                    f"--- {merge_label} | {len(self.peer_models)} peers ---",
+                    f"--- {merge_label} | {len(usable)} peers ---",
                 )
-                for peer_id, m in self.peer_models.items():
-                    pw = m["fc1_weight"]
-                    l2_norm = torch.norm(pw - own_fc1_w).item()
-                    numel = pw.numel()
+                self.logger._write(
+                    "merging_data", f"  merge_rule={self.merge_rule}"
+                )
+                for peer_id, m in usable.items():
+                    l2_norm = torch.norm(_flat_all(m) - own_flat).item()
                     l2_normalized = l2_norm / (numel**0.5)
+                    trust_note = ""
+                    t = trust_map.get(peer_id)
+                    if t:
+                        trust_note = f" | trust={t.get('score', 0.0) * t.get('confidence', 0.0):.4f}"
                     self.logger._write(
                         "merging_data",
-                        f"  peer={peer_id} | L2_dist={l2_norm:.6f} | L2_norm={l2_normalized:.6f} | n_params={numel}",
+                        f"  peer={peer_id} | L2_dist={l2_norm:.6f} | L2_norm={l2_normalized:.6f} | n_params={numel}{trust_note}",
                     )
-                merged_l2 = torch.norm(merged_fc1_weight - own_fc1_w).item()
+                merged_l2 = torch.norm(merged_flat - own_flat).item()
                 merged_l2_norm = merged_l2 / (numel**0.5)
                 merged_differs = merged_l2 > 1e-8
                 self.logger._write(
                     "merging_data",
                     f"  merged_vs_own | L2_dist={merged_l2:.6f} | L2_norm={merged_l2_norm:.6f} | differs={merged_differs}",
                 )
+                # Persist flat shared-param vectors per merge for offline analysis.
+                # Norms/cosine/PCA are computed downstream (UI); the module
+                # only serializes what it already holds in memory here.
+                try:
+                    vec_dir = os.path.join(self.output_dir, "weights")
+                    os.makedirs(vec_dir, exist_ok=True)
+
+                    def _flat_np(ws) -> np.ndarray:
+                        return _flat_all(ws).cpu().numpy().astype(np.float32)
+
+                    vecs = {
+                        "own": _flat_np(own_shared),
+                        "merged": _flat_np(merged_shared),
+                    }
+                    for peer_id, m in usable.items():
+                        tag = "".join(
+                            ch if ch.isalnum() or ch in "-_" else "_"
+                            for ch in str(peer_id)
+                        )
+                        vecs[f"peer_{tag}"] = _flat_np(m)
+                    np.savez_compressed(
+                        os.path.join(
+                            vec_dir, f"merge_{self.merge_count + 1:04d}.npz"
+                        ),
+                        **vecs,
+                    )
+                except Exception:
+                    self.print(
+                        "trigger_merge: weight snapshot failed: "
+                        + traceback.format_exc(),
+                        0,
+                        1,
+                    )
             self.print(
-                f"trigger_merge: merging fc1 from {len(self.peer_models)} peers",
+                f"trigger_merge: merging {len(usable)} peers over {numel} shared params",
                 1,
                 1,
             )
 
             if self.model:
-                self.model.set_fc1_weights(merged_fc1_weight, merged_fc1_bias)
+                self.model.set_shared_weights(merged_shared)
 
             # Start merge head fine-tuning from the same head used for local
             # head fine-tuning, so local and merged differ only in fc1 origin.
@@ -1750,6 +2452,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.merge_count += 1
             self._save_merged_model(self.merge_count)
+            self._save_final_merged_model()
 
             self.print(
                 f"trigger_merge: exiting, merged_{self.merge_count} saved",
@@ -1816,17 +2519,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if self.model is None:
                 return
 
-            fc1_w, fc1_b = self.model.get_fc1_weights()
-            head_w, head_b = self.model.get_head_weights()
+            shared = self.model.weights_for_sharing()
+            n_params = sum(t.numel() for t in shared.values())
 
-            self.print(f"send_model_to_peers: fc1_w shape={fc1_w.shape}", 1, 1)
+            self.print(
+                f"send_model_to_peers: {len(shared)} shared tensors, {n_params} params",
+                1,
+                1,
+            )
 
             model_data = {
                 "message_type": "model",
-                "fc1_weight": fc1_w.cpu().numpy().tolist(),
-                "fc1_bias": fc1_b.cpu().numpy().tolist(),
-                "head_weight": head_w.cpu().numpy().tolist(),
-                "head_bias": head_b.cpu().numpy().tolist(),
+                "model_class": self.model_class_name,
+                "shared": {
+                    k: t.cpu().numpy().tolist() for k, t in shared.items()
+                },
+                "n_params": n_params,
                 "timestamp": time.time(),
                 "peer_id": getattr(self, "my_peer_id", "unknown"),
             }
@@ -1852,7 +2560,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "send_model_to_peers: published to p2p_pygo, result=True",
                     self.logger.log_timeline(
                         "MODEL_SENT",
-                        f"peer={getattr(self, 'my_peer_id', '?' )} fc1_shape={fc1_w.shape}",
+                        f"peer={getattr(self, 'my_peer_id', '?' )} n_params={n_params}",
                     ),
                     1,
                     1,
@@ -2096,21 +2804,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         return correct / len(y) if len(y) > 0 else 0.0
 
     def _save_local_model(self):
-        """Save latest local model weights."""
+        """Save latest local model (full state dict + scaler)."""
         try:
             if self.model is None:
                 return
 
-            fc1_w, fc1_b = self.model.get_fc1_weights()
-            head_w, head_b = self.model.get_head_weights()
-
-            torch.save(fc1_w, self.local_fc1_path)
-            torch.save(fc1_b, self.local_fc1_path.replace("_fc1", "_fc1_bias"))
-            torch.save(head_w, self.local_head_path)
-            torch.save(
-                head_b, self.local_head_path.replace("_head", "_head_bias")
-            )
-
+            torch.save(self.model.state_dict(), self.local_state_path)
             with open(self.local_scaler_path, "wb") as f:
                 pickle.dump(self.scaler, f)
 
@@ -2119,28 +2818,55 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Error saving local model: {traceback.format_exc()}", 0, 1
             )
 
+    def _save_final_merged_model(self) -> None:
+        """Persist the current (latest) MERGED model + scaler to the
+        configured store paths (model_store_path / preprocess_store_path,
+        resolved by the base class into self.model_path / self.preprocess_path).
+        Called at the end of every merge and at graceful shutdown so the
+        configured path always holds the FINAL merged weights; numbered
+        per-merge artifacts stay at their hardcoded module paths."""
+        try:
+            if self.model is None or self.merge_count <= 0:
+                return
+            store_path = getattr(self, "model_path", None)
+            prep_path = getattr(self, "preprocess_path", None)
+            if not store_path or not prep_path:
+                return
+            os.makedirs(os.path.dirname(store_path), exist_ok=True)
+            torch.save(
+                {
+                    "state_dict": self.model.state_dict(),
+                    "model_class": self.model_class_name,
+                    "merge_count": self.merge_count,
+                },
+                store_path,
+            )
+            os.makedirs(os.path.dirname(prep_path), exist_ok=True)
+            with open(prep_path, "wb") as fh:
+                pickle.dump(self.scaler, fh)
+            self.print(
+                f"final merged model -> {store_path} (merge {self.merge_count})",
+                0,
+                2,
+            )
+        except Exception:
+            self.print(
+                "final merged model save failed: " + traceback.format_exc(),
+                0,
+                1,
+            )
+
     def _save_merged_model(self, merge_count: int):
-        """Save merged model weights."""
+        """Save merged model (full state dict; class-driven persistence)."""
         try:
             if self.model is None:
                 return
 
-            fc1_w, fc1_b = self.model.get_fc1_weights()
-            head_w, head_b = self.model.get_head_weights()
-
-            prefix = f"merged_{merge_count}"
             torch.save(
-                fc1_w, os.path.join(self.merged_dir, f"{prefix}_fc1.bin")
-            )
-            torch.save(
-                fc1_b, os.path.join(self.merged_dir, f"{prefix}_fc1_bias.bin")
-            )
-            torch.save(
-                head_w, os.path.join(self.merged_dir, f"{prefix}_head.bin")
-            )
-            torch.save(
-                head_b,
-                os.path.join(self.merged_dir, f"{prefix}_head_bias.bin"),
+                self.model.state_dict(),
+                os.path.join(
+                    self.merged_dir, f"merged_{merge_count}_state.bin"
+                ),
             )
 
         except Exception:
@@ -2156,6 +2882,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._save_local_model()
         if self.merge_count > 0:
             self._save_merged_model(self.merge_count)
+            self._save_final_merged_model()
 
     def train(self, sum_labeled_flows):
         """Train entrypoint - delegates to base class."""
@@ -2177,6 +2904,89 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         except Exception:
             self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
+
+    @staticmethod
+    def _blank_test_statistics() -> dict:
+        """Fresh counters for one testing stream (cumulative within a window)."""
+        return {
+            "tp": 0,
+            "fp": 0,
+            "tn": 0,
+            "fn": 0,
+            "gt_mal": 0,
+            "gt_ben": 0,
+            "pred_mal": 0,
+            "pred_ben": 0,
+            "flows_since_snapshot": 0,
+        }
+
+    def _predict_with(self, model, flow):
+        """Classify one flow with an arbitrary frozen model instance.
+
+        Uses the module's own feature extraction, scaler and device; callers
+        pass a deep-copied (frozen) model so the ACTIVE model is untouched.
+        Returns  MALICIOUS/BENIGN or None.
+        """
+        if model is None or not self._is_fitted:
+            return None
+        try:
+            features = self._extract_flow_features(flow)
+            if features is None:
+                return None
+            X = np.array([features], dtype=np.float32)
+            X_scaled = self.scaler.transform(X)
+            model.eval()
+            with torch.no_grad():
+                outputs = model(torch.FloatTensor(X_scaled).to(self.device))
+                probs = torch.softmax(outputs, dim=1)
+                return (
+                    MALICIOUS
+                    if int(torch.argmax(probs, dim=1).item()) == 1
+                    else BENIGN
+                )
+        except Exception:
+            return None
+
+    def _store_local_stream(self, gt_label: str, predicted: str) -> None:
+        """Accumulate local-only (pre-merge snapshot) testing counters."""
+        self._local_stream_used = True
+        st = self._local_test
+        st["flows_since_snapshot"] += 1
+        if gt_label == MALICIOUS:
+            st["gt_mal"] += 1
+        else:
+            st["gt_ben"] += 1
+        if predicted == MALICIOUS:
+            st["pred_mal"] += 1
+        else:
+            st["pred_ben"] += 1
+        if gt_label == MALICIOUS and predicted == MALICIOUS:
+            st["tp"] += 1
+        elif gt_label != MALICIOUS and predicted == MALICIOUS:
+            st["fp"] += 1
+        elif gt_label == MALICIOUS:
+            st["fn"] += 1
+        else:
+            st["tn"] += 1
+        if st["flows_since_snapshot"] >= self.testing_log_batch_size:
+            self._flush_local_stream()
+
+    def _flush_local_stream(self) -> None:
+        """Write the pending local-only testing snapshot to local_test.log."""
+        st = self._local_test
+        if st["flows_since_snapshot"] <= 0:
+            return
+        total = st["tp"] + st["fp"] + st["tn"] + st["fn"]
+        acc = (st["tp"] + st["tn"]) / total if total else 0.0
+        self.logger._write(
+            "local_test",
+            f"  flows={total} | "
+            f"GT(Mal/Ben): {st['gt_mal']}/{st['gt_ben']} | "
+            f"Pred(Mal/Ben): {st['pred_mal']}/{st['pred_ben']} | "
+            f"TP/FP/TN/FN: {st['tp']}/{st['fp']}/{st['tn']}/{st['fn']} | "
+            f"Acc={acc:.4f}",
+        )
+        st["flows_since_snapshot"] = 0
 
     def _write_testing_snapshot(self, batch_flows: int) -> None:
         """Write cumulative TP/FP/TN/FN/Acc snapshot (tests against GT)."""

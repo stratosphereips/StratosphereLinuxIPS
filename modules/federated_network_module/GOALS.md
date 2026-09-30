@@ -1,9 +1,58 @@
 # Federated Network Module - Implementation Goals & Status
 
-## Current State
-- **Base**: `origin/ml_modules_refactor` with `fl_module_jan` branch
-- **Status**: Feature-complete for training, testing, and model saving. P2P merge tested only in code path (no live peers in test).
-- **Branch**: `fl_module_jan`
+## Current State (2026-09-10)
+- **Branch**: `fl_module_jan_rebased` (thesis `slips/slips.Dockerfile` pins `d1637bf81`)
+- **Status**: Live-tested end-to-end with 3 peers in the stratocyberlab
+  federation topology (local train → P2P send → receive → weight-averaging merge →
+  merged head fine-tune → merged-vs-GT evaluations) across multiple runs.
+- **Imaging**: the federation image is baked by `thesis_project/slips/slips.Dockerfile`;
+  runtime deviations from the pinned commit ship via `thesis_project/slips/patches/`
+  (`config_parser.py` risk-weight accessors + `detection.low_risk_weight` defaults,
+  `supported_module_names.py` FEDERATED enum, `p2p_trust.py` hostname fallback,
+  `federated_network_module.py` weight snapshots).
+
+### Landed since the last status update
+- Wall-clock 5-minute training windows (deterministic per-peer offset) replacing
+  the alert/sub-window-trigger descriptions below (historic sections kept).
+- Comparable local/merged models: both fine-tune head-only from the same
+  head-before state; only fc1 origin differs. Merged models are NOT reused.
+- Runtime attacker ground truth: the experiment runner injects per-peer
+  `attacker_ips` GT rules into the netflow labeler (no hardcoded monkeypatch).
+- Telemetry for the experiments UI (all computed downstream, module only
+  serializes): `merging_data.log` (`L2_dist`/`L2_norm`/`n_params`/merged-vs-own),
+  `comp_merged_{inferred_gt,test_gt}.log`, and per-merge flat fc1 weight
+  vectors `weights/merge_XXXX.npz` (own, merged, per-received-peer).
+- Dual model testing: the last fully-local-trained model is deep-copied after
+  each local train; when merged, every flow is evaluated by BOTH models —
+  `merged_test.log` (legacy path) + `local_test.log` (local-only stream).
+- Configured store path: the final merged model + scaler are saved to
+  yaml `model_store_path` / `preprocess_store_path` at **every merge end** and
+  at shutdown (`_save_final_merged_model()`); load paths are read but unused.
+  All other numbered artifacts stay at their hardcoded module paths.
+- Protocol-driven model registry (2026-09-14): a model class implements
+  `forward` + `weights_for_sharing`/`set_shared_weights` +
+  `get/set_head_weights` + `set_shared/head_frozen`; a `MODEL_REGISTRY`
+  maps yaml `model_class` to builders; send/merge/artifacts/vector-dumps are
+  fully key/shape-agnostic (works for ANY layer count/shapes). All artifacts
+  are full `state_dict`s (`latest_local_state.bin`, `merged_N_state.bin`,
+  final-store `{state_dict, model_class, merge_count}`). Working scaffold:
+  `random_projection_two_layer` (RP + fc1 + fc2 federated, unweighted CE).
+  Model set (2026-09-15): `random_projection_mlp` (base, RP→fc1→head,
+  class-weighted CE), `simple_mlp` (plain 3-layer MLP, no RP, fc1+fc2
+  federated, plain CE), `random_projection_two_layer` (RP→fc1→fc2→head,
+  fc1+fc2 federated, plain CE). Class weighting is a per-model declared flag
+  (`USE_CLASS_WEIGHTING`).
+- Merge-rule registry (2026-09-14): yaml `merge_rule` selects HOW peer models
+  are combined (never WHEN): `average` (plain mean of shared weights, default), `trust_weighted`
+  (weighted by SLIPS classic p2p trust score×confidence — trust is passed to
+  the merge functions per merge; own=1, unknown peer=0, empty map → average),
+  `blending` (adopt the single model closest to the mean) — pure functions in
+  the module, add-and-register to extend. Merges also log
+  `merge_rule=<name>` + per-peer `trust=` into merging_data.log.
+- Aracne-side config contract: `summarizer_source`/`summarizer_model` must
+  exist in the baked config even with `summarizing: false` (loader reads them
+  unconditionally; missing keys = instant boot crash — fixed in the runner's
+  `aracne/aracne-config.yaml`).
 
 ---
 
@@ -44,7 +93,7 @@
 
 ### 6. Model Loading on Startup
 - Read `train_from_scratch` config (default false)
-- If false and artifacts exist, load `latest_local_fc1/head/scaler` from disk
+- If false and artifacts exist, load `latest_local_state.bin` (state_dict) + `latest_local_scaler.bin` from disk
 - Warm-start model and scaler state
 
 ### 7. Two-Buffer Design
@@ -82,7 +131,7 @@ Five log targets:
 
 ### Config Path Inconsistency
 - Config `model_load_path` / `preprocess_load_path` point to non-existent `model.bin` / `scaler.bin`
-- Module actually uses hardcoded paths: `latest_local_fc1/head/scaler.bin`
+- Module uses hardcoded paths: `latest_local_state.bin` (class-driven state_dict) + `latest_local_scaler.bin`
 - Config keys are effectively unused for the federated module
 
 ---
@@ -125,4 +174,6 @@ Five log targets:
 - **Model paths are hardcoded** - not configurable via slips.yaml
 - **Merge is event-based only** - no `merge_interval_seconds` timer
 - **Label comparison shows alert noise** - this is expected and logged
-- **Single-node testing** - P2P merge path only exercised in code, no live peers
+- **Multi-peer live testing** - 3-peer federation runs end-to-end in the
+  stratocyberlab topology; telemetry is consumed live by the experiment-runner
+  UI (see `Analysis Outputs` in README.md)
