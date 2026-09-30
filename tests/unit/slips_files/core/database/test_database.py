@@ -191,7 +191,8 @@ def test_subscribe():
 
 
 def test_get_available_llm_backends_returns_empty_dict_when_unset():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    with patch.object(DBManager, "get_used_redis_port", return_value=6392):
+        db = ModuleFactory().create_db_manager_obj(6392, flush_db=True)
     db.r.delete(db.rdb.constants.AVAILABLE_LLM_BACKENDS)
 
     assert db.get_available_llm_backends() == {
@@ -201,7 +202,8 @@ def test_get_available_llm_backends_returns_empty_dict_when_unset():
 
 
 def test_set_and_get_available_llm_backends():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    with patch.object(DBManager, "get_used_redis_port", return_value=6393):
+        db = ModuleFactory().create_db_manager_obj(6393, flush_db=True)
 
     db.set_available_llm_backends(
         {
