@@ -17,6 +17,9 @@ class FeedUpdatePolicyMixin:
     def download_file(self, file_to_download: str) -> requests.Response | bool:
         """Download a remote feed with retries.
 
+        The body is streamed, so only the headers are read here. The caller
+        must consume the body (iter_content) or close the response.
+
         Parameters:
             file_to_download: Remote feed URL to download.
 
@@ -28,9 +31,10 @@ class FeedUpdatePolicyMixin:
         for _try in range(5):
             try:
                 response = requests.get(
-                    file_to_download, timeout=5, verify=False
+                    file_to_download, timeout=5, stream=True
                 )
                 if response.status_code != 200:
+                    response.close()
                     error = (
                         f"An error occurred while downloading the file {file_to_download}."
                         f"status code: {response.status_code}. Aborting"
@@ -96,8 +100,6 @@ class FeedUpdatePolicyMixin:
         """
         Decides whether to update or not based on the update period and e-tag.
         Used for remote files that are updated periodically
-        the response will be stored in self.responses if the file is old
-        and needs to be updated
         :param file_to_download: url that contains the file to download
         :param update_period: after how many seconds do we need to update
         this file?
@@ -114,8 +116,8 @@ class FeedUpdatePolicyMixin:
 
         # Update only if the e-tag is different
         try:
-            # response will be used to get e-tag, and if the file was updated
-            # the same response will be used to update the content in our db
+            # only the headers are needed to decide. The body is never read
+            # here, update_ti_file() downloads it if the feed changed.
             response = self.download_file(file_to_download)
             if not response:
                 # couldn't reach the feed after all retries. record this
@@ -126,6 +128,7 @@ class FeedUpdatePolicyMixin:
                     file_to_download, time.time()
                 )
                 return False
+            response.close()
 
             # Get the E-TAG of this file to compare with current files
             ti_file_info: dict = self.db.get_ti_feed_info(file_to_download)
@@ -147,7 +150,6 @@ class FeedUpdatePolicyMixin:
 
                 # use last modified date instead of e-tag
                 if new_last_modified != cached_last_modified:
-                    self.responses[file_to_download] = response
                     return True
                 else:
                     self._mark_feed_as_updated(file_to_download)
@@ -156,7 +158,6 @@ class FeedUpdatePolicyMixin:
             if old_e_tag != new_e_tag:
                 # Our TI file is old. Download the new one.
                 # we'll be storing this e-tag in our database
-                self.responses[file_to_download] = response
                 return True
 
             else:

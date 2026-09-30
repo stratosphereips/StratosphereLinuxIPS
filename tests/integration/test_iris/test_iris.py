@@ -16,6 +16,9 @@ from tests.common_test_utils import (
     assert_no_errors,
     modify_yaml_config,
 )
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_redis_password,
+)
 import pytest
 import os
 import subprocess
@@ -42,8 +45,12 @@ def countdown(seconds, message):
 
 
 def message_send(port, channel, message):
-    # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    # connect to redis database 0. the test-started redis-server requires
+    # the same shared password every slips-managed redis-server does
+    # (see start_test_redis_server).
+    redis_client = redis.StrictRedis(
+        host="localhost", port=port, db=0, password=ensure_redis_password()
+    )
 
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
@@ -124,21 +131,32 @@ def get_default_interface():
                 return fields[0]
 
 
-def extract_connection_string(log_file_first_iris):
+def extract_connection_string(log_file_first_iris, timeout_seconds=30):
     """
     Extract the first peer connection string from the Iris log file.
 
+    Iris keeps writing to this log file after it is created, so the
+    connection string line may not be there yet even though the file
+    already exists. Poll until it shows up or the timeout elapses.
+
     Parameters:
         log_file_first_iris: Path to the first peer Iris log file.
+        timeout_seconds: Maximum number of seconds to wait for the line.
 
     Returns:
         str: The extracted connection string.
     """
-    with open(log_file_first_iris, "r") as log:
-        for line in log:
-            match = re.search(r"connection string:\s+'(.+)'", line)
-            if match:
-                return match.group(1)
+    deadline = time.time() + timeout_seconds
+    while True:
+        with open(log_file_first_iris, "r") as log:
+            for line in log:
+                match = re.search(r"connection string:\s+'(.+)'", line)
+                if match:
+                    return match.group(1)
+
+        if time.time() >= deadline:
+            break
+        time.sleep(1)
 
     print("No connection string found in log file.")
     exit(1)
@@ -541,10 +559,16 @@ def test_messaging(
     # can't be opened, another port is allocated and the server is opened
     # there instead.
     redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir, port_label="peer1 redis"
+        integration_port_factory,
+        output_dir,
+        port_label="peer1 redis",
+        require_auth=True,
     )
     peer_redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir_peer, port_label="peer2 redis"
+        integration_port_factory,
+        output_dir_peer,
+        port_label="peer2 redis",
+        require_auth=True,
     )
     peer2_key_path = None
     success = False

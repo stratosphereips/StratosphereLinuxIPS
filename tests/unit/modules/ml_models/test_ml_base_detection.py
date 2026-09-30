@@ -1,6 +1,9 @@
 import numpy
 import pandas as pd
 import pytest
+from unittest.mock import Mock
+
+from tests.module_factory import ModuleFactory
 
 from slips_files.common.abstracts.ml_module_base import (
     BENIGN,
@@ -90,6 +93,19 @@ def base_module():
 
 
 class TestMLBaseModule:
+    def test_process_flow_accepts_arbitrary_list_field(
+        self, base_module
+    ) -> None:
+        """Treat an arbitrary list field as one cell in a one-row dataframe."""
+        _module_factory = ModuleFactory()
+        flow = {"dur": 1.0, "extra_field": []}
+
+        processed_flow = base_module.process_flow(flow)
+
+        assert processed_flow is not None
+        assert len(processed_flow.index) == 1
+        assert processed_flow.iloc[0]["extra_field"] == []
+
     def test_drop_labels_removes_known_label_columns(self, base_module):
         raw = pd.DataFrame(
             {
@@ -104,8 +120,26 @@ class TestMLBaseModule:
         assert list(cleaned.columns) == ["dur"]
 
     def test_train_default_passes_both_classes_on_first_fit(self, base_module):
-        base_module._train_default(
-            sum_labeled_flows=2
-        )
+        base_module._train_default(sum_labeled_flows=2)
         assert len(base_module.fit_calls) == 1
         assert base_module.fit_calls[0]["classes"] == [MALICIOUS, BENIGN]
+
+
+def test_main_ignores_p2p_related_flow(base_module) -> None:
+    """Do not submit a known P2P control flow to an ML detector."""
+    _module_factory = ModuleFactory()
+    base_module.get_msg = Mock(
+        return_value={
+            "data": '{"twid":"timewindow1","profileid":"profile_1",'
+            '"flow":{"saddr":"1.1.1.1","sport":"6668",'
+            '"daddr":"2.2.2.2","dport":"51000","proto":"tcp"}}'
+        }
+    )
+    base_module.db = Mock()
+    base_module.db.is_p2p_related_flow.return_value = True
+    base_module.run_test_on_flow = Mock()
+    base_module.mode = "test"
+
+    base_module.main()
+
+    base_module.run_test_on_flow.assert_not_called()

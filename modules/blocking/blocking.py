@@ -6,20 +6,26 @@ import os
 import shutil
 import json
 import subprocess
-from typing import Dict
+from typing import Any, Dict
 import time
 from threading import Lock
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
-from .exec_iptables_cmd import exec_iptables_command
+from .exec_iptables_cmd import (
+    LEGACY_SLIPS_COMMENT,
+    exec_iptables_command,
+    format_slips_rule_comment,
+    sync_slips_rule_comment,
+)
 from modules.blocking.unblocker import Unblocker
+from modules.blocking.recovery import RecoveryMixin
 
 
 OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
 
 
-class Blocking(IModule):
+class Blocking(IModule, RecoveryMixin):
     """Data should be passed to this module as a json encoded python dict,
     by default this module flushes all slipsBlocking chains before it starts"""
 
@@ -142,26 +148,49 @@ class Blocking(IModule):
         result = result.stdout.decode("utf-8")
         return ip in result
 
-    def _block_ip(self, ip_to_block: str, flags: Dict[str, str]) -> bool:
+    def _store_blocked_ip_ts_in_db(
+        self, ip_to_block: str, flags: Dict[str, Any]
+    ) -> None:
+        """Stores the blocking timestamp of the given ip in the db"""
+        blocked_at = flags.get("_blocked_at")
+        if blocked_at is None:
+            self.db.set_blocked_ip(ip_to_block)
+        else:
+            self.db.set_blocked_ip(ip_to_block, blocked_at)
+
+    def _handle_already_blocked_ip(
+        self, ip_to_block: str, flags: Dict[str, Any]
+    ) -> bool:
         """
-        This function determines the user's platform and firewall and calls
-        the appropriate function to add the rules to the used firewall.
-        By default this function blocks all traffic from and to the given ip.
-        and it Blocks private IPs on the given interface, and block public
-        IPs on all interfaces
-        returns true if the ip is successfully blocked
+        Updates the db and firewall recovery metadata for an ip that's
+        already blocked.
         """
+        # ensure the blocked ip has a ts in the db, might be blocked in a
+        # previous run so this run doesn't have a ts stored.
+        if self.db.get_blocking_timestamp(ip_to_block) is None:
+            self._store_blocked_ip_ts_in_db(ip_to_block, flags)
 
-        if self.firewall != "iptables":
-            return
+        comment = flags.get("rule_comment", "")
+        if comment and not sync_slips_rule_comment(
+            self.sudo, ip_to_block, comment
+        ):
+            self.print(
+                f"Unable to update firewall recovery metadata for "
+                f"{ip_to_block}.",
+                0,
+                1,
+            )
+        return True
 
-        if not isinstance(ip_to_block, str):
-            return False
-
-        # Make sure ip isn't already blocked before blocking
-        if self._is_ip_already_blocked(ip_to_block):
-            return False
-
+    def _build_requested_rules(
+        self, ip_to_block: str, flags: Dict[str, Any]
+    ) -> list:
+        """
+        Builds the list of (iptables_flag, options, direction) tuples to
+        insert, based on the given flags. By default blocks all traffic
+        from and to the given ip, and blocks private IPs on the given
+        interface only.
+        """
         from_ = flags.get("from_")
         to = flags.get("to")
         dport = flags.get("dport")
@@ -171,51 +200,121 @@ class Blocking(IModule):
         # Set the default behaviour to block all traffic from and to an ip
         if from_ is None and to is None:
             from_, to = True, True
-        # This dictionary will be used to construct the rule
+
         options = {
-            "protocol": f" -p {protocol}" if protocol is not None else "",
-            "dport": f" --dport {dport}" if dport is not None else "",
-            "sport": f" --sport {sport}" if sport is not None else "",
+            "protocol": f"-p {protocol}" if protocol is not None else "",
+            "dport": f"--dport {dport}" if dport is not None else "",
+            "sport": f"--sport {sport}" if sport is not None else "",
         }
-
+        source_options = dict(options)
+        destination_options = dict(options)
         if utils.is_private_ip(ip_to_block) and interface:
-            # block all ingoing AND outgoing packet on the given interface
-            options.update(
-                {
-                    "interface": f" -i {interface} -o {interface}",
-                }
-            )
+            source_options["interface"] = f"-i {interface}"
+            destination_options["interface"] = f"-o {interface}"
 
-        blocked = False
+        requested_rules = []
         if from_:
-            # Add rule to block traffic from source ip_to_block (-s)
-            blocked = exec_iptables_command(
-                self.sudo,
-                action="insert",
-                ip_to_block=ip_to_block,
-                flag="-s",
-                options=options,
-            )
-            if blocked:
-                txt = f"Blocked all traffic from: {ip_to_block}"
-                self.print(txt)
-                self.log(txt)
-
+            requested_rules.append(("-s", source_options, "from"))
         if to:
-            # Add rule to block traffic to ip_to_block (-d)
-            blocked = exec_iptables_command(
+            requested_rules.append(("-d", destination_options, "to"))
+        return requested_rules
+
+    def _rollback_inserted_rules(
+        self,
+        ip_to_block: str,
+        inserted_rules: list,
+        comment: str,
+    ) -> bool:
+        """Deletes previously inserted rules in reverse order"""
+        rollback_success = True
+        for inserted_flag, inserted_options in reversed(inserted_rules):
+            deleted = exec_iptables_command(
+                self.sudo,
+                action="delete",
+                ip_to_block=ip_to_block,
+                flag=inserted_flag,
+                options=inserted_options,
+                comment=comment,
+            )
+            rollback_success = deleted and rollback_success
+        return rollback_success
+
+    def _insert_rules(
+        self,
+        ip_to_block: str,
+        requested_rules: list,
+        comment: str,
+    ) -> list | None:
+        """
+        Inserts the given rules in the firewall, rolling back and logging
+        an error if any insertion fails.
+        Returns the list of inserted rules, or None on failure.
+        """
+        inserted_rules = []
+        for rule_flag, rule_options, direction in requested_rules:
+            if exec_iptables_command(
                 self.sudo,
                 action="insert",
                 ip_to_block=ip_to_block,
-                flag="-d",
-                options=options,
+                flag=rule_flag,
+                options=rule_options,
+                comment=comment,
+            ):
+                inserted_rules.append((rule_flag, rule_options))
+                continue
+
+            rollback_success = self._rollback_inserted_rules(
+                ip_to_block, inserted_rules, comment
             )
-            if blocked:
-                txt = f"Blocked all traffic to: {ip_to_block}"
-                self.print(txt)
-                self.log(f"Blocked all traffic to: {ip_to_block}")
-                self.db.set_blocked_ip(ip_to_block)
-        return blocked
+            message = f"Unable to block traffic {direction} {ip_to_block}."
+            if inserted_rules:
+                rollback_result = (
+                    "Inserted rules were rolled back."
+                    if rollback_success
+                    else "Unable to roll back every inserted rule."
+                )
+                message = f"{message} {rollback_result}"
+            self.print(message, 0, 1)
+            self.log(message)
+            return None
+
+        return inserted_rules
+
+    def _block_ip(self, ip_to_block: str, flags: Dict[str, Any]) -> bool:
+        """
+        This function adds iptables rules to the user firewall.
+
+        By default this function
+        - blocks all traffic from and to the given ip.
+        - locks private IPs on the given interface
+        - blocks public IPs on all interfaces
+
+        returns true if the ip is successfully blocked
+        """
+
+        if self.firewall != "iptables":
+            return False
+
+        if not isinstance(ip_to_block, str):
+            return False
+
+        if self._is_ip_already_blocked(ip_to_block):
+            return self._handle_already_blocked_ip(ip_to_block, flags)
+
+        requested_rules = self._build_requested_rules(ip_to_block, flags)
+        comment = flags.get("rule_comment", LEGACY_SLIPS_COMMENT)
+        inserted_rules = self._insert_rules(
+            ip_to_block, requested_rules, comment
+        )
+        if not inserted_rules:
+            return False
+
+        self._store_blocked_ip_ts_in_db(ip_to_block, flags)
+        for _, _, direction in requested_rules:
+            message = f"Blocked all traffic {direction}: {ip_to_block}"
+            self.print(message)
+            self.log(message)
+        return True
 
     def shutdown_gracefully(self):
         self.unblocker.unblocker_thread.join(30)
@@ -223,9 +322,28 @@ class Blocking(IModule):
             self.print("Problem shutting down unblocker thread.")
 
     def pre_main(self):
+        self._recover_firewall_rules()
         self.unblocker = Unblocker(
             self.db, self.sudo, self.should_stop, self.logger, self.log
         )
+
+    def _get_timewindow_to_block_in(self, evidence_tw: int | None) -> int:
+        """
+        Return the time window in which the given ip should be blocked
+        if there's a lag in slips for any reason, the given timewindow
+        might be older than the current tw. use the current instead to
+        ensure we're not blocking on an old timewindow
+
+        Parameters:
+            evidence_tw: the given evidence time window
+
+        Returns:
+            max(cur_tw, given_tw)
+        """
+        current_twid = int(self.db.get_current_timewindow())
+        if evidence_tw is None:
+            return current_twid
+        return max(current_twid, int(evidence_tw))
 
     def main(self):
         if msg := self.get_msg("new_blocking"):
@@ -250,7 +368,8 @@ class Blocking(IModule):
 
             data = json.loads(msg["data"])
             ip = data.get("ip")
-            tw: int = data.get("tw")
+            evidence_tw: int | None = data.get("tw")
+            tw = self._get_timewindow_to_block_in(evidence_tw)
             block = data.get("block")
 
             flags = {
@@ -261,12 +380,30 @@ class Blocking(IModule):
                 "protocol": data.get("protocol"),
                 "interface": data.get("interface"),
             }
+            request = self.unblocker.prepare_unblock_request(ip, tw, flags)
+            blocking_timestamp = self.db.get_blocking_timestamp(ip)
+            blocked_at = blocking_timestamp or time.time()
+            run_id = os.path.basename(os.path.normpath(self.parent_output_dir))
+            request_flags = request["flags"]
+            request_flags["_blocked_at"] = blocked_at
+            request_flags["_origin_run"] = run_id
+            request_flags["rule_comment"] = format_slips_rule_comment(
+                blocked_at,
+                request["tw_to_unblock"].end_time,
+                run_id,
+            )
             if block:
-                self._block_ip(ip, flags)
-            # whether this ip is blocked now, or was already blocked, make an
-            # unblocking request to either extend its
-            # blocking period, or block it until the next timewindow is over.
-            self.unblocker.unblock_request(ip, tw, flags)
+                if not self._block_ip(ip, request_flags):
+                    self.print(
+                        f"Firewall rule insertion failed for {ip}; "
+                        "no unblock request was registered.",
+                        0,
+                        1,
+                    )
+                    return
+            # Whether this IP was newly blocked or already present, retain its
+            # latest deletion deadline and update the iptables comments.
+            self.unblocker.register_unblock_request(ip, request)
 
         if msg := self.get_msg("tw_closed"):
             # this channel receives requests for closed tws for every ip

@@ -9,6 +9,32 @@ from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from tests.module_factory import ModuleFactory
 
 
+def test_zeek_json_preserves_arp_uid() -> None:
+    """Test that the UID emitted by the ARP Zeek script reaches the flow."""
+    module_factory = ModuleFactory()
+    parser = ZeekJSON(module_factory.logger)
+    flow, err = parser.process_line(
+        {
+            "type": "arp.log",
+            "interface": "eth0",
+            "data": {
+                "ts": 1774173495.641272,
+                "uid": "AWUueS9mPGij",
+                "operation": "request",
+                "src_mac": "2c:cf:67:5a:2e:bd",
+                "dst_mac": "ff:ff:ff:ff:ff:ff",
+                "orig_h": "192.168.1.185",
+                "resp_h": "192.168.1.132",
+                "orig_hw": "2c:cf:67:5a:2e:bd",
+                "resp_hw": "00:00:00:00:00:00",
+            },
+        }
+    )
+
+    assert err == ""
+    assert flow.uid == "AWUueS9mPGij"
+
+
 def test_zeek_json_maps_software_type_and_banner_fields():
     parser = ZeekJSON(Mock())
     flow, err = parser.process_line(

@@ -18,9 +18,12 @@ runs:
   steps:
     - id: set-matrix
       shell: bash
+      # inputs go through env so a crafted value can't become script content
+      env:
+        TEST_DIR: ${{ inputs.test_dir }}
+        PREFIX: ${{ inputs.output_prefix }}
       run: |
-        PREFIX="${{ inputs.output_prefix }}"
-        FILES=$(find "${{ inputs.test_dir }}" -name "test_*.py" -printf "%P\n" | jq -R -s -c --arg prefix "$PREFIX" '
+        FILES=$(find "$TEST_DIR" -name "test_*.py" -printf "%P\n" | jq -R -s -c --arg prefix "$PREFIX" '
           split("\n")[:-1]
           | map({
               test_file: ($prefix + .),

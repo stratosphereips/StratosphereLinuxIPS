@@ -240,6 +240,7 @@ def test_add_evidence_to_json_log_file_maps_confidence_to_string(
         timewindow=TimeWindow(1),
         uid=["uid1"],
         timestamp="2024/10/04 15:45:30.123456+0000",
+        source_module="arp",
     )
 
     worker.add_evidence_to_json_log_file(evidence)
@@ -248,6 +249,7 @@ def test_add_evidence_to_json_log_file_maps_confidence_to_string(
     note = logged_evidence["Note"]
     assert '"confidence":' in note
     assert f'"confidence": "{expected_output}"' in note
+    assert '"source_module": "arp"' in note
 
 
 @pytest.mark.parametrize(
@@ -294,11 +296,22 @@ def test_add_evidence_to_json_log_file_adds_accumulated_ratl(
     assert note["accumulated_threat_level"] == accumulated_threat_level
     assert note["risk_accumulated_threat_level"] == accumulated_ratl
     assert note["risk_level"] == "medium"
+    assert note["evidence_type"] == str(evidence.evidence_type)
 
 
 def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
     module_factory = ModuleFactory()
     worker = module_factory.create_evidence_handler_worker_obj()
+    events = []
+    worker.db.try_claim_alert_generation = Mock(
+        side_effect=lambda *args: events.append("claim_won") or True
+    )
+    worker.db.release_alert_claim = Mock(
+        side_effect=lambda *args: events.append("claim_released")
+    )
+    worker.db.mark_evidence_as_processed.side_effect = (
+        lambda *args: events.append("evidence_processed")
+    )
     evidence = Evidence(
         evidence_type=EvidenceType.ARP_SCAN,
         description="ARP scan detected",
@@ -334,18 +347,197 @@ def test_handle_evidence_added_message_sets_risk_level_on_objects() -> None:
             "2024-10-04T16:00:00+00:00",
         )
     )
-    worker.handle_new_alert = Mock()
+    worker.handle_new_alert = Mock(
+        side_effect=lambda *args: events.append("alert_stored")
+    )
     worker.detection_threshold_in_this_width = 10.0
 
     worker.handle_evidence_added_message(
         {"data": json.dumps(utils.to_dict(evidence))}
     )
 
+    worker.db.get_tw_limits.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+        evidence.timestamp,
+    )
+    worker.db.try_claim_alert_generation.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+    )
+    # the alert claim is released only after the alert is stored, and
+    # mark_evidence_as_processed doesn't need a claim at all.
+    assert events == [
+        "evidence_processed",
+        "claim_won",
+        "alert_stored",
+        "claim_released",
+    ]
     logged_evidence = worker.add_evidence_to_json_log_file.call_args[0][0]
     assert logged_evidence.risk_level == RiskWeight.HIGH
 
     logged_alert = worker.handle_new_alert.call_args[0][0]
     assert logged_alert.risk_level == RiskWeight.HIGH
+
+
+def test_generate_alert_if_threshold_crossed_skips_when_claim_lost() -> None:
+    """Verify losing the atomic claim skips alert generation entirely."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    worker.is_running_non_stop = False
+    worker.detection_threshold_in_this_width = 10.0
+    worker.db.try_claim_alert_generation = Mock(return_value=False)
+    worker.get_evidence_for_tw = Mock()
+    worker.handle_new_alert = Mock()
+    worker.db.release_alert_claim = Mock()
+
+    worker._generate_alert_if_threshold_crossed(
+        evidence,
+        str(evidence.profile),
+        str(evidence.timewindow),
+        accumulated_threat_level=55.0,
+        risk_accumulated_threat_level=55.0,
+        current_risk_weight=RiskWeight.HIGH,
+    )
+
+    worker.db.try_claim_alert_generation.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+    )
+    worker.get_evidence_for_tw.assert_not_called()
+    worker.handle_new_alert.assert_not_called()
+    worker.db.release_alert_claim.assert_not_called()
+
+
+def test_generate_alert_if_threshold_crossed_releases_claim_on_error() -> None:
+    """Verify the claim is released even if alert generation raises."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.ARP_SCAN,
+        description="ARP scan detected",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="192.168.1.20",
+        ),
+        threat_level=ThreatLevel.MEDIUM,
+        confidence=0.8,
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(1),
+        uid=["uid1"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    worker.is_running_non_stop = False
+    worker.detection_threshold_in_this_width = 10.0
+    worker.db.try_claim_alert_generation = Mock(return_value=True)
+    worker.get_evidence_for_tw = Mock(side_effect=RuntimeError("db error"))
+    worker.db.release_alert_claim = Mock()
+
+    with pytest.raises(RuntimeError):
+        worker._generate_alert_if_threshold_crossed(
+            evidence,
+            str(evidence.profile),
+            str(evidence.timewindow),
+            accumulated_threat_level=55.0,
+            risk_accumulated_threat_level=55.0,
+            current_risk_weight=RiskWeight.HIGH,
+        )
+
+    worker.db.release_alert_claim.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+    )
+
+
+def test_disabled_evidence_message_is_deleted_without_processing() -> None:
+    """Reject disabled evidence even when a stale publisher sent it."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.CONNECTION_WITHOUT_DNS,
+        description="Connection without DNS",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.0.1",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=0.8,
+        profile=ProfileID("10.0.0.1"),
+        timewindow=TimeWindow(1),
+        uid=["uid-disabled"],
+        timestamp="2024/10/04 15:45:30.123456+0000",
+    )
+    worker.conf.disabled_detections.return_value = [
+        EvidenceType.CONNECTION_WITHOUT_DNS
+    ]
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    worker.db.delete_evidence.assert_called_once_with(
+        str(evidence.profile),
+        str(evidence.timewindow),
+        evidence.id,
+    )
+    worker.db.try_claim_alert_generation.assert_not_called()
+    worker.db.mark_evidence_as_processed.assert_not_called()
+
+
+def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
+    """Verify zero-weight evidence never becomes an alert threshold trigger."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=EvidenceType.HTTP_TRAFFIC,
+        description="Unencrypted HTTP traffic",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.66.100",
+        ),
+        threat_level=ThreatLevel.INFO,
+        confidence=1.0,
+        profile=ProfileID("10.0.66.100"),
+        timewindow=TimeWindow(1),
+        uid=["uid-http"],
+        timestamp="2023/02/16 17:46:13.000000+0000",
+    )
+    worker.whitelist.is_whitelisted_evidence.return_value = False
+    worker.is_running_non_stop = False
+    worker.formatter.add_threat_level_to_evidence_description = Mock(
+        return_value=evidence
+    )
+    worker.formatter.get_evidence_to_log = Mock(return_value="evidence_log")
+    worker.add_to_log_file = Mock()
+    worker.get_accumulated_threat_level = Mock(return_value=55.0)
+    worker.db.get_max_seen_risk_weight = Mock(
+        return_value={"risk_weight": RiskWeight.HIGH, "profile": ""}
+    )
+    worker.add_evidence_to_json_log_file = Mock()
+    worker.give_evidence_to_exporting_modules = Mock()
+    worker.get_evidence_for_tw = Mock()
+    worker.handle_new_alert = Mock()
+
+    worker.handle_evidence_added_message(
+        {"data": json.dumps(utils.to_dict(evidence))}
+    )
+
+    worker.get_evidence_for_tw.assert_not_called()
+    worker.handle_new_alert.assert_not_called()
 
 
 def test_escalate_risk_level_stores_current_weight_for_first_alert() -> None:
@@ -663,3 +855,55 @@ def test_log_alert(
     worker.add_alert_to_json_log_file.assert_called_once()
     assert flow_datetime in worker.add_to_log_file.call_args[0][0]
     assert str(twid) in worker.add_to_log_file.call_args[0][0]
+
+
+def test_p2p_tagged_evidence_is_excluded_from_scoring_and_blocking() -> None:
+    """Filter evidence only when all of its triggering flows are P2P."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Mock(
+        id="p2p-evidence",
+        uid=["flow-a", "flow-b"],
+        attacker=Mock(direction="SRC"),
+    )
+    worker.db.get_flow.side_effect = lambda uid: {
+        uid: json.dumps(
+            {
+                "saddr": "1.1.1.1",
+                "sport": "6668",
+                "daddr": "2.2.2.2",
+                "dport": "51000",
+                "proto": "tcp",
+            }
+        )
+    }
+    worker.db.is_p2p_related_flow_batch.side_effect = lambda flows: [
+        True
+    ] * len(flows)
+
+    assert worker.is_filtered_evidence(evidence, []) is True
+
+
+def test_mixed_p2p_and_unrelated_evidence_is_not_filtered() -> None:
+    """Keep blocking eligible when any triggering traffic is unrelated."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Mock(
+        id="mixed-evidence",
+        uid=["p2p-flow", "other-flow"],
+        attacker=Mock(direction="SRC"),
+    )
+    worker.db.get_flow.side_effect = lambda uid: {
+        uid: json.dumps(
+            {
+                "saddr": "1.1.1.1" if uid == "p2p-flow" else "3.3.3.3",
+                "sport": "6668",
+                "daddr": "2.2.2.2",
+                "dport": "51000",
+                "proto": "tcp",
+            }
+        )
+    }
+    worker.db.is_p2p_related_flow_batch.side_effect = lambda flows: [
+        saddr == "1.1.1.1" for saddr, sport, daddr, dport, proto in flows
+    ]
+
+    assert worker.is_filtered_evidence(evidence, []) is False

@@ -3,7 +3,7 @@
 from typing import Dict
 
 import pytest
-from unittest.mock import MagicMock, call, Mock
+from unittest.mock import MagicMock, Mock
 import json
 from unittest.mock import ANY
 
@@ -26,38 +26,48 @@ from slips_files.core.structures.risk_weights import RiskWeight
 
 
 @pytest.mark.parametrize(
-    "all_evidence, expected_result, side_effect",
+    "set_return_value, expected_result",
     [
-        # Testcase 1: All evidence is whitelisted
-        (
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            {},
-            [True, True, True],
-        ),
-        # Testcase 2: No evidence is whitelisted
-        (
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            [False, False, False],
-        ),
-        # Testcase 3: Some evidence is whitelisted
-        (
-            {"ev1": "evidence1", "ev2": "evidence2", "ev3": "evidence3"},
-            {"ev2": "evidence2", "ev3": "evidence3"},
-            [True, False, False],
-        ),
+        (True, True),
+        (None, False),
     ],
 )
-def test_remove_whitelisted_evidence(
-    all_evidence, expected_result, side_effect
-):
+def test_try_claim_alert_generation_is_scoped_to_profile_and_timewindow(
+    set_return_value: object,
+    expected_result: bool,
+) -> None:
+    """Verify the claim key is scoped per profile/tw and reflects SET NX."""
     alert_handler = ModuleFactory().create_alert_handler_obj()
     alert_handler.r = MagicMock()
-    alert_handler.r.sismember.side_effect = side_effect
+    alert_handler.r.set.return_value = set_return_value
 
-    result = alert_handler.remove_whitelisted_evidence(all_evidence)
+    result = alert_handler.try_claim_alert_generation(
+        "profile_192.168.1.20",
+        "timewindow4",
+    )
 
-    assert result == expected_result
+    assert result is expected_result
+    alert_handler.r.set.assert_called_once_with(
+        "alert_claim:profile_192.168.1.20:timewindow4",
+        1,
+        nx=True,
+        px=300_000,
+    )
+
+
+def test_release_alert_claim_deletes_the_claim_key() -> None:
+    """Verify releasing a claim deletes the exact key it claimed."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+
+    alert_handler.release_alert_claim(
+        "profile_192.168.1.20",
+        "timewindow4",
+    )
+
+    alert_handler.r.delete.assert_called_once_with(
+        "alert_claim:profile_192.168.1.20:timewindow4"
+    )
 
 
 @pytest.mark.parametrize(
@@ -126,7 +136,7 @@ def test_set_evidence_causing_alert(
     )
     alert_handler.set_evidence_causing_alert(alert)
 
-    alert_handler.r.incr.assert_called_once_with("number_of_alerts", 1)
+    alert_handler.r.incr.assert_not_called()
     alert_handler.r.hset.assert_called_once_with(
         f"profile_{profile_ip}_timewindow{twid}", "alerts", ANY
     )
@@ -136,6 +146,50 @@ def test_set_evidence_causing_alert(
         assert alert_id in alerts_added
         added_evidence_list = json.loads(alerts_added[alert_id])
         assert sorted(expected_evidence_list) == sorted(added_evidence_list)
+
+
+def test_set_alert_increments_number_of_alerts_once_published():
+    """set_alert() must only count the alert after it's published."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.r.hget.return_value = None
+    alert_handler.set_evidence_causing_alert = Mock()
+    alert_handler._set_accumulated_threat_level = Mock()
+    alert_handler.publish = Mock()
+    alert_handler.channels = Mock()
+    alert_handler.channels.NEW_ALERT = "new_alert"
+    alert = Alert(
+        id="1234",
+        profile=ProfileID("192.168.1.20"),
+        timewindow=TimeWindow(
+            1,
+            start_time="2024-10-04T18:46:50+03:00",
+            end_time="2024-10-04T19:46:50+03:00",
+        ),
+        last_evidence=Evidence(
+            evidence_type=EvidenceType.ARP_SCAN,
+            description="ARP scan detected",
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value="192.168.1.20",
+            ),
+            threat_level=ThreatLevel.INFO,
+            profile=ProfileID("192.168.1.20"),
+            timewindow=TimeWindow(1),
+            uid=[],
+            timestamp="1728417813.8868346",
+        ),
+        accumulated_threat_level=30,
+        last_flow_datetime="2024/10/04 15:45:30.123456+0000",
+        correl_id=["ev1"],
+    )
+
+    alert_handler.set_alert(alert)
+
+    alert_handler.set_evidence_causing_alert.assert_called_once_with(alert)
+    alert_handler.publish.assert_called_once()
+    alert_handler.r.incr.assert_called_once_with("number_of_alerts", 1)
 
 
 @pytest.mark.parametrize(
@@ -231,30 +285,6 @@ def test_delete_evidence():
 
 
 @pytest.mark.parametrize(
-    "evidence_id, expected_calls",
-    [
-        # Testcase 1: Evidence ID is cached
-        ("evidence_123", [call("whitelisted_evidence", "evidence_123")]),
-        # Testcase 2: Evidence ID is already cached
-        ("evidence_456", [call("whitelisted_evidence", "evidence_456")]),
-    ],
-)
-def test_cache_whitelisted_evidence_id(evidence_id, expected_calls):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-
-    alert_handler.cache_whitelisted_evidence_id(evidence_id)
-
-    assert alert_handler.r.sadd.call_count == len(expected_calls)
-    alert_handler.r.sadd.assert_has_calls(expected_calls)
-    alert_handler.r.expire.assert_called_once_with(
-        alert_handler.constants.WHITELISTED_EVIDENCE,
-        alert_handler.default_ttl,
-        nx=True,
-    )
-
-
-@pytest.mark.parametrize(
     "initial_value, expected_value",
     [
         # Testcase 1: No previous value
@@ -276,11 +306,10 @@ def test_init_evidence_number(initial_value, expected_value):
 
 
 @pytest.mark.parametrize(
-    "evidence_exists, whitelisted, expected",
+    "evidence_exists, expected",
     [
-        (None, False, True),  # new evidence, not whitelisted → added
-        ("{}", False, False),  # already exists → ignored
-        (None, True, False),  # whitelisted → ignored
+        (None, True),  # new evidence → added
+        ("{}", False),  # already exists → ignored
     ],
 )
 @pytest.mark.parametrize(
@@ -293,7 +322,6 @@ def test_init_evidence_number(initial_value, expected_value):
 )
 def test_set_evidence(
     evidence_exists,
-    whitelisted,
     expected,
     evidence_type,
     expected_signal,
@@ -301,8 +329,7 @@ def test_set_evidence(
     db = ModuleFactory().create_alert_handler_obj()
 
     db.add_profile = Mock()
-    db.is_detection_disabled = Mock(return_value=False)
-    db.is_whitelisted_evidence = Mock(return_value=whitelisted)
+    db.conf.disabled_detections = Mock(return_value=[])
     db.publish = Mock()
     db.set_flow_causing_evidence = Mock()
     db._get_more_info_about_evidence = Mock(side_effect=lambda e: e)
@@ -451,30 +478,6 @@ def test_get_accumulated_threat_level(profileid, twid, expected_result):
     assert result == expected_result
     alert_handler.r.zscore.assert_called_once_with(
         "accumulated_threat_levels", f"{profileid}_{twid}"
-    )
-
-
-@pytest.mark.parametrize(
-    "evidence_id, sismember_return_value, expected_result",
-    [
-        # Testcase 1: Evidence ID is whitelisted
-        ("evidence_123", True, True),
-        # Testcase 2: Evidence ID is not whitelisted
-        ("evidence_456", False, False),
-    ],
-)
-def test_is_whitelisted_evidence(
-    evidence_id, sismember_return_value, expected_result
-):
-    alert_handler = ModuleFactory().create_alert_handler_obj()
-    alert_handler.r = MagicMock()
-    alert_handler.r.sismember.return_value = sismember_return_value
-
-    result = alert_handler.is_whitelisted_evidence(evidence_id)
-
-    assert result == expected_result
-    alert_handler.r.sismember.assert_called_once_with(
-        "whitelisted_evidence", evidence_id
     )
 
 
@@ -735,3 +738,44 @@ def test_get_evidence_causing_alert(profileid, twid, alert_id, expected_alert):
         f"{profileid}_{twid}", "alerts"
     )
     assert result == expected_alert
+
+
+@pytest.mark.parametrize(
+    "existing_start, known_windows, first_start, fallback_time, expected_start",
+    [
+        (0.0, [], None, None, 0.0),
+        (None, [(b"timewindow5", 500.0)], None, None, 380.0),
+        (None, [], 100.0, None, 220.0),
+        (None, [], None, "350.5", 350.5),
+        (
+            None,
+            [],
+            None,
+            "2024/10/04 15:45:30.123456+0000",
+            1728056730.123456,
+        ),
+    ],
+)
+def test_get_tw_limits_recovers_when_redis_anchor_is_missing(
+    existing_start: float | None,
+    known_windows: list[tuple[bytes, float]],
+    first_start: float | None,
+    fallback_time: object,
+    expected_start: float,
+) -> None:
+    """Test time-window limits survive expired Redis window metadata."""
+    alert_handler = ModuleFactory().create_alert_handler_obj()
+    alert_handler.r = MagicMock()
+    alert_handler.width = 60.0
+    alert_handler.get_tw_start_time = Mock(return_value=existing_start)
+    alert_handler.r.zrange.return_value = known_windows
+    alert_handler.get_first_flow_time = Mock(return_value=first_start)
+
+    start, end = alert_handler.get_tw_limits(
+        "profile_10.0.0.1",
+        "timewindow3",
+        fallback_time,
+    )
+
+    assert start == expected_start
+    assert end == expected_start + alert_handler.width

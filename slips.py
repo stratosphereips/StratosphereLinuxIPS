@@ -57,7 +57,7 @@ if __name__ == "__main__":
             print(daemon_status["error"])
 
     elif slips.args.daemon:
-        print("Slips daemon starting..")
+        print("Slips daemon starting..", flush=True)
         Daemon(slips).start()
     else:
         # interactive mode

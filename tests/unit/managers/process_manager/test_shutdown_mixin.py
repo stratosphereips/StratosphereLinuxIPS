@@ -316,14 +316,16 @@ def test_stop_llm_stack_if_llm_module_stopped_kills_dependents() -> None:
         Modules.ALERT_SUMMARY: 102,
     }.get(module_name)
 
-    with patch(
-        "managers.process_manager.shutdown_mixin.os.kill",
-        side_effect=ProcessLookupError,
-    ), patch.object(
-        process_manager, "kill_process_tree"
-    ) as mock_kill_process_tree, patch.object(
-        process_manager.main, "print"
-    ) as mock_print:
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.os.kill",
+            side_effect=ProcessLookupError,
+        ),
+        patch.object(
+            process_manager, "kill_process_tree"
+        ) as mock_kill_process_tree,
+        patch.object(process_manager.main, "print") as mock_print,
+    ):
         process_manager._stop_llm_stack_if_llm_module_stopped()
 
     assert mock_kill_process_tree.call_args_list == [call(101), call(102)]
@@ -363,21 +365,22 @@ def test_stop_llm_stack_if_llm_module_stopped_skips_unneeded_shutdown(
     }.get(module_name)
     process_manager.stopped_modules = stopped_modules
 
-    with patch(
-        "managers.process_manager.shutdown_mixin.os.kill",
-        side_effect=os_kill_side_effect,
-    ), patch.object(
-        process_manager, "kill_process_tree"
-    ) as mock_kill_process_tree, patch.object(
-        process_manager.main, "print"
-    ) as mock_print:
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.os.kill",
+            side_effect=os_kill_side_effect,
+        ),
+        patch.object(
+            process_manager, "kill_process_tree"
+        ) as mock_kill_process_tree,
+        patch.object(process_manager.main, "print") as mock_print,
+    ):
         process_manager._stop_llm_stack_if_llm_module_stopped()
 
     if llm_enabled and os_kill_side_effect is ProcessLookupError:
         mock_kill_process_tree.assert_called_once_with(101)
         mock_print.assert_called_once_with(
-            "Stopping modules because llm_proxy stopped: "
-            "['Modules.REGEX_GENERATOR']"
+            "Stopping modules because llm_proxy stopped: ['Modules.REGEX_GENERATOR']"
         )
     else:
         mock_kill_process_tree.assert_not_called()
@@ -385,16 +388,20 @@ def test_stop_llm_stack_if_llm_module_stopped_skips_unneeded_shutdown(
 
 
 @pytest.mark.parametrize(
-    "live_update, stop_received, done_receiving, expected_result",
+    "live_update, stop_received, done_receiving, expected_result, expected_cause",
     [
-        (True, False, False, True),
-        (False, True, False, True),
-        (False, False, True, True),
-        (False, False, False, False),
+        (True, False, False, True, "live_update"),
+        (False, True, False, True, "control"),
+        (False, False, True, True, "natural"),
+        (False, False, False, False, ""),
     ],
 )
 def test_should_stop_slips(
-    live_update, stop_received, done_receiving, expected_result
+    live_update,
+    stop_received,
+    done_receiving,
+    expected_result,
+    expected_cause,
 ):
     """
     Test whether Slips should stop for live updates, stop messages, or done input.
@@ -404,6 +411,7 @@ def test_should_stop_slips(
     stop_received: Whether a stop message was received.
     done_receiving: Whether input and profiler finished processing.
     expected_result: Expected stop decision.
+    expected_cause: Expected recorded shutdown cause.
 
     Return:
     None.
@@ -420,6 +428,165 @@ def test_should_stop_slips(
     process_manager.all_children_started = True
 
     assert process_manager.should_stop_slips() == expected_result
+    assert process_manager.shutdown_cause == expected_cause
+
+
+def test_install_signal_handlers_registers_sigterm_sighup_sigquit() -> None:
+    """Register the shutdown handler for every signal Slips reacts to."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.pid = 1234
+
+    with patch(
+        "managers.process_manager.shutdown_mixin.signal.signal"
+    ) as mock_signal:
+        process_manager.install_shutdown_signal_handlers()
+
+    registered_signals = [call.args[0] for call in mock_signal.call_args_list]
+    assert registered_signals == [
+        signal.SIGTERM,
+        signal.SIGHUP,
+        signal.SIGQUIT,
+    ]
+    # every registration uses the same handler function
+    handlers = {call.args[1] for call in mock_signal.call_args_list}
+    assert len(handlers) == 1
+
+
+@pytest.mark.parametrize(
+    "sig, expected_sigterm_received",
+    [
+        (signal.SIGTERM, True),
+        (signal.SIGHUP, False),
+        (signal.SIGQUIT, False),
+    ],
+)
+def test_signal_handler_records_the_shutdown_signal(
+    sig: int, expected_sigterm_received: bool
+) -> None:
+    """The installed handler records the signal and prints a notice."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.pid = 1234
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.signal.signal"
+        ) as mock_signal,
+        patch(
+            "managers.process_manager.shutdown_mixin.os.getpid",
+            return_value=1234,
+        ),
+    ):
+        process_manager.install_shutdown_signal_handlers()
+        installed_handler = mock_signal.call_args_list[0].args[1]
+        installed_handler(sig, None)
+
+    assert process_manager.shutdown_signal_received is True
+    assert process_manager.sigterm_received is expected_sigterm_received
+    process_manager.main.print.assert_any_call(
+        f"{signal.Signals(sig).name} received, shutting down Slips."
+    )
+
+
+def test_signal_handler_ignores_signals_in_child_processes() -> None:
+    """Only the main process coordinates shutdown, not its children."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.pid = 1234
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.signal.signal"
+        ) as mock_signal,
+        patch(
+            "managers.process_manager.shutdown_mixin.os.getpid",
+            return_value=5678,
+        ),
+    ):
+        process_manager.install_shutdown_signal_handlers()
+        installed_handler = mock_signal.call_args_list[0].args[1]
+        installed_handler(signal.SIGTERM, None)
+
+    assert process_manager.shutdown_signal_received is False
+
+
+def test_signal_handler_ignores_repeated_signals() -> None:
+    """A second signal doesn't overwrite the already-recorded cause."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.pid = 1234
+    process_manager.shutdown_signal_received = True
+    process_manager.sigterm_received = True
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.signal.signal"
+        ) as mock_signal,
+        patch(
+            "managers.process_manager.shutdown_mixin.os.getpid",
+            return_value=1234,
+        ),
+    ):
+        process_manager.install_shutdown_signal_handlers()
+        installed_handler = mock_signal.call_args_list[0].args[1]
+        installed_handler(signal.SIGHUP, None)
+
+    # sigterm_received keeps its original value, not overwritten by SIGHUP
+    assert process_manager.sigterm_received is True
+
+
+def test_handle_keyboard_interrupt_sets_shutdown_flags() -> None:
+    """Record an interactive Ctrl-C as a shutdown request."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+
+    process_manager.handle_keyboard_interrupt()
+
+    assert process_manager.keyboard_interrupt_received is True
+    assert process_manager.shutdown_signal_received is True
+    process_manager.main.print.assert_called_once_with(
+        "Interrupt received, shutting down Slips."
+    )
+
+
+@pytest.mark.parametrize(
+    "shutdown_signal_received, shutdown_cause, expected_result",
+    [
+        (False, "natural", True),
+        (True, "natural", False),
+        (False, "control", False),
+        (False, "core_failure", False),
+    ],
+)
+def test_did_slips_finish_normally(
+    shutdown_signal_received: bool,
+    shutdown_cause: str,
+    expected_result: bool,
+) -> None:
+    """Analysis completed normally only if undisturbed and input-driven."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.shutdown_signal_received = shutdown_signal_received
+    process_manager.shutdown_cause = shutdown_cause
+
+    assert process_manager._did_slips_finish_normally() is expected_result
+
+
+@pytest.mark.parametrize(
+    "force_shutdown_requested, sigterm_received, expected_result",
+    [
+        (False, False, False),
+        (True, False, True),
+        (False, True, True),
+        (True, True, True),
+    ],
+)
+def test_is_forced_shutdown(
+    force_shutdown_requested: bool,
+    sigterm_received: bool,
+    expected_result: bool,
+) -> None:
+    """A forced shutdown is a SIGTERM or a user-forced immediate stop."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.force_shutdown_requested = force_shutdown_requested
+    process_manager.sigterm_received = sigterm_received
+
+    assert process_manager.is_forced_shutdown() is expected_result
 
 
 @pytest.mark.parametrize(
@@ -529,6 +696,7 @@ def test_should_stop_slips_sets_core_module_failure() -> None:
 
     assert process_manager.should_stop_slips() is True
     assert process_manager.core_module_failure is True
+    assert process_manager.shutdown_cause == "core_failure"
     process_manager.is_stop_msg_received.assert_not_called()
     process_manager.is_done_receiving_new_flows.assert_not_called()
 
@@ -547,6 +715,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     process_manager.main.input_information = "test_input"
     process_manager.main.conf.wait_for_modules_to_finish.return_value = 1
     process_manager.main.conf.export_labeled_flows.return_value = False
+    process_manager.main.conf.web_interface_enabled.return_value = False
     process_manager.main.db.get_flows_count.return_value = 42
     process_manager.main.db.check_tw_to_close = Mock()
     process_manager.main.db.close_all_dbs = Mock()
@@ -573,8 +742,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
     process_manager.main.print.assert_any_call(
-        "[Process Manager] Slips didn't shutdown gracefully - "
-        "Core module failure.\n",
+        "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
 
@@ -588,11 +756,14 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
         "module_two": 789,
     }
 
-    with patch.object(
-        process_manager, "kill_process_tree"
-    ) as mock_kill_process_tree, patch.object(
-        process_manager, "print_stopped_module"
-    ) as mock_print_stopped_module:
+    with (
+        patch.object(
+            process_manager, "kill_process_tree"
+        ) as mock_kill_process_tree,
+        patch.object(
+            process_manager, "print_stopped_module"
+        ) as mock_print_stopped_module,
+    ):
         process_manager.kill_daemon_children()
 
     assert mock_kill_process_tree.call_args_list == [call(123), call(789)]
@@ -610,10 +781,13 @@ def test_kill_process_tree_kills_descendants_before_parent():
     child_children = Mock()
     child_children.read.return_value = ""
 
-    with patch(
-        "managers.process_manager.shutdown_mixin.os.popen",
-        side_effect=[parent_children, child_children],
-    ), patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill:
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.os.popen",
+            side_effect=[parent_children, child_children],
+        ),
+        patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill,
+    ):
         process_manager.kill_process_tree(123)
 
     assert mock_kill.call_args_list == [
@@ -628,13 +802,16 @@ def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop(
     first_process = Mock()
     last_process = Mock()
 
-    with patch.object(
-        process_manager,
-        "wait_for_processes_to_finish",
-        side_effect=[[], []],
-    ) as mock_wait, patch.object(
-        process_manager.evidence_handler_termination_event, "set"
-    ) as mock_set:
+    with (
+        patch.object(
+            process_manager,
+            "wait_for_processes_to_finish",
+            side_effect=[[], []],
+        ) as mock_wait,
+        patch.object(
+            process_manager.evidence_handler_termination_event, "set"
+        ) as mock_set,
+    ):
         result = process_manager.shutdown_interactive(
             [first_process], [last_process]
         )
@@ -653,15 +830,19 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
     pending_process = Mock()
     last_process = Mock()
 
-    with patch.object(
-        process_manager,
-        "wait_for_processes_to_finish",
-        return_value=[pending_process],
-    ) as mock_wait, patch.object(
-        process_manager, "warn_about_pending_modules"
-    ) as mock_warn, patch.object(
-        process_manager.evidence_handler_termination_event, "set"
-    ) as mock_set:
+    with (
+        patch.object(
+            process_manager,
+            "wait_for_processes_to_finish",
+            return_value=[pending_process],
+        ) as mock_wait,
+        patch.object(
+            process_manager, "warn_about_pending_modules"
+        ) as mock_warn,
+        patch.object(
+            process_manager.evidence_handler_termination_event, "set"
+        ) as mock_set,
+    ):
         result = process_manager.shutdown_interactive(
             [pending_process], [last_process]
         )
@@ -670,3 +851,110 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
     mock_wait.assert_called_once_with([pending_process])
     mock_warn.assert_called_once_with([pending_process, last_process])
     mock_set.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "response, expected_keep",
+    [
+        ("y\n", True),
+        ("\n", True),
+        ("n\n", False),
+        ("delete\n", False),
+    ],
+)
+def test_ask_to_keep_firewall_rules(
+    response: str,
+    expected_keep: bool,
+) -> None:
+    """Interpret the interactive firewall shutdown decision.
+
+    Parameters:
+        response: Console response to the prompt.
+        expected_keep: Whether Slips should leave the rules installed.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    stdin = Mock()
+    stdin.isatty.return_value = True
+    stdin.readline.return_value = response
+    process_manager.shutdown_signal_received = False
+
+    with (
+        patch("managers.process_manager.shutdown_mixin.sys.stdin", stdin),
+        patch(
+            "managers.process_manager.shutdown_mixin.select.select",
+            return_value=([stdin], [], []),
+        ),
+    ):
+        result = process_manager._ask_to_keep_firewall_rules()
+
+    assert result is expected_keep
+
+
+def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
+    """Delete inherited rules and every corresponding Redis record."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.mode = "interactive"
+    process_manager.force_shutdown_requested = False
+    process_manager.sigterm_received = False
+    process_manager.shutdown_signal_received = True
+    process_manager.main.db.get_firewall_block_states.return_value = {
+        "1.2.3.4": {},
+        "5.6.7.8": {},
+    }
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules",
+            return_value=True,
+        ),
+        patch.object(
+            process_manager,
+            "_ask_to_keep_firewall_rules",
+            return_value=False,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "del_slips_blocking_chain",
+            return_value=True,
+        ) as delete_chain,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    delete_chain.assert_called_once_with()
+    assert process_manager.main.db.del_firewall_block_state.call_args_list == [
+        call("1.2.3.4"),
+        call("5.6.7.8"),
+    ]
+    assert process_manager.main.db.del_blocked_ip.call_args_list == [
+        call("1.2.3.4"),
+        call("5.6.7.8"),
+    ]
+
+
+def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
+    """Retain managed rules when the operator accepts the default choice."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.mode = "interactive"
+    process_manager.force_shutdown_requested = False
+    process_manager.sigterm_received = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules",
+            return_value=True,
+        ),
+        patch.object(
+            process_manager,
+            "_ask_to_keep_firewall_rules",
+            return_value=True,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "del_slips_blocking_chain"
+        ) as delete_chain,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    delete_chain.assert_not_called()

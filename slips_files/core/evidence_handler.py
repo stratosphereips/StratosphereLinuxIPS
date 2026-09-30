@@ -56,6 +56,7 @@ class EvidenceHandler(ICore):
     is_evidence_done_by_others = (
         EvidenceHandlerWorker.is_evidence_done_by_others
     )
+    is_slips_p2p_evidence = EvidenceHandlerWorker.is_slips_p2p_evidence
     is_filtered_evidence = EvidenceHandlerWorker.is_filtered_evidence
     get_threat_level = EvidenceHandlerWorker.get_threat_level
     send_to_exporting_module = EvidenceHandlerWorker.send_to_exporting_module
@@ -176,6 +177,7 @@ class EvidenceHandler(ICore):
                 {
                     "Note": json.dumps(
                         {
+                            "evidence_type": str(evidence.evidence_type),
                             # this is all the uids of the flows that cause
                             # this evidence
                             "uids": evidence.uid,
@@ -183,6 +185,7 @@ class EvidenceHandler(ICore):
                             "threat_level": str(evidence.threat_level),
                             "evidence_signal": str(evidence.evidence_signal),
                             "timewindow": evidence.timewindow.number,
+                            "source_module": evidence.source_module,
                         }
                     )
                 }
@@ -219,7 +222,7 @@ class EvidenceHandler(ICore):
         now = utils.get_human_readable_datetime()
 
         alert_description = (
-            f"{alert.last_flow_datetime}: " f"Src IP {alert.profile.ip:26}. "
+            f"{alert.last_flow_datetime}: Src IP {alert.profile.ip:26}. "
         )
         if blocked:
             # Add to log files that this srcip is being blocked

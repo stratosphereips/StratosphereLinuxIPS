@@ -317,6 +317,7 @@ def test_add_evidence_to_json_log_file_includes_evidence_signal():
         uid=["uid-1"],
         timestamp="2024/10/04 15:45:30.123456+0000",
         evidence_signal=EvidenceSignal.DAMP,
+        source_module="anomaly_detection_https",
     )
 
     evidence_handler.add_evidence_to_json_log_file(
@@ -330,6 +331,7 @@ def test_add_evidence_to_json_log_file_includes_evidence_signal():
     assert note["evidence_signal"] == "DAMP"
     assert note["threat_level"] == "high"
     assert note["timewindow"] == 1
+    assert note["source_module"] == "anomaly_detection_https"
 
 
 def test_show_popup():

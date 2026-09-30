@@ -4,13 +4,35 @@ import secrets
 from pathlib import Path
 from typing import Set, Tuple
 
-from flask import Flask, abort, jsonify, render_template, request
+from flask import (
+    Flask,
+    abort,
+    jsonify,
+    make_response,
+    redirect,
+    render_template,
+    request,
+)
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
 from werkzeug.utils import secure_filename
 
 from slips_files.common.ips import IPV4_LOCALHOST
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_web_password_matches_redis_password,
+    verify_web_password,
+)
+from slips_files.common.web_auth import (
+    SESSION_COOKIE_NAME,
+    SESSION_TTL_SECONDS,
+    is_locked_out,
+    issue_token,
+    login_page_html,
+    record_failed_login,
+    record_successful_login,
+    validate_token,
+)
 from .database.database import db, db_obj
 from .database.signals import message_sent
 from .analysis.analysis import analysis
@@ -21,6 +43,8 @@ from .utils import (
     has_rdb_extension,
     is_redis_rdb_file,
 )
+
+UNAUTHENTICATED_PATHS = {"/login", "/favicon.ico"}
 
 MAX_RDB_UPLOAD_SIZE = 512 * 1024 * 1024
 RDB_UPLOAD_DIR = "webinterface/uploaded_rdb"
@@ -41,6 +65,65 @@ def create_app() -> Flask:
 
 app = create_app()
 CSRF_TOKEN = secrets.token_hex(32)
+
+
+def _is_unauthenticated_path(path: str) -> bool:
+    """login page and static assets (css/js/images) never require a session"""
+    return path in UNAUTHENTICATED_PATHS or "/static/" in path
+
+
+@app.before_request
+def _require_login():
+    """
+    Gate every request behind the shared redis/web password, unless the
+    admin explicitly disabled it in config/slips.yaml (web_interface:
+    require_password: false) - kept as an escape hatch for CI/tests, not
+    meant to be disabled on a machine reachable beyond localhost.
+    """
+    if not ConfigParser().web_interface_require_password():
+        return None
+    if _is_unauthenticated_path(request.path):
+        return None
+    if validate_token(request.cookies.get(SESSION_COOKIE_NAME)):
+        return None
+    if request.path.startswith(
+        ("/redis", "/db/", "/info", "/analysis/", "/general/")
+    ):
+        return jsonify({"ok": False, "warning": "login required"}), 401
+    return redirect("/login")
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    """
+    Serves the shared login form and issues a signed session cookie once
+    the redis/web password is submitted correctly.
+    """
+    ensure_web_password_matches_redis_password()
+    client_ip = request.remote_addr or "unknown"
+
+    if request.method == "GET":
+        return login_page_html(None)
+
+    if is_locked_out(client_ip):
+        return login_page_html("Too many attempts, try again shortly."), 429
+
+    password = request.form.get("password", "")
+    if not verify_web_password(password):
+        record_failed_login(client_ip)
+        return login_page_html("Incorrect password."), 401
+
+    record_successful_login(client_ip)
+    resp = make_response(redirect("/"))
+    resp.set_cookie(
+        SESSION_COOKIE_NAME,
+        issue_token(),
+        httponly=True,
+        samesite="Strict",
+        max_age=SESSION_TTL_SECONDS,
+        path="/",
+    )
+    return resp
 
 
 def get_csrf_token() -> str:

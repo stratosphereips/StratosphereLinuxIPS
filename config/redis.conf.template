@@ -1,5 +1,11 @@
 # For reference: https://raw.githubusercontent.com/redis/redis/7.0/redis.conf
 daemonize yes
+# refuse unauthenticated connections from non-loopback addresses. slips
+# also sets `requirepass` via an `include` of a generated, permissioned
+# config file (see slips_files/core/database/redis_db/redis_auth.py) -
+# never add a requirepass line to this template, it's a shared, git
+# tracked file.
+protected-mode yes
 stop-writes-on-bgsave-error no
 save ""
 appendonly no
@@ -29,3 +35,9 @@ maxmemory 3gb
 maxmemory-policy volatile-lru
 # supported only in amd arch
 activedefrag no
+# Redis refuses to start on arm64 (e.g. Raspberry Pi) kernels it thinks are
+# affected by a fork()/madvise COW bug that could corrupt a background save,
+# even when background saving is disabled. This check is known to
+# false-positive under virtualization/containers and many real Pi kernels,
+# which otherwise makes Redis unusable there. No-op on non-arm64 hosts.
+ignore-warnings ARM64-COW-BUG

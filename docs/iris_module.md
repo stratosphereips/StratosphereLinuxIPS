@@ -29,6 +29,8 @@ Slips needs to be running on an interface or a growing Zeek directory. The Iris 
 ## Configuration
 Identity, trusted organisations, peer discovery, and other configuration is located in [iris/config.yml](https://github.com/stratosphereips/iris/blob/main/config.yaml)
 
+At startup Slips copies that file to `<output_dir>/iris/iris_config.yaml` (mode 600), fills in the redis host, port and the shared redis password from `redis_auth.conf`, and starts Iris with that copy. The tracked config file is never modified.
+
 ## Usage in Slips
 
 Iris will be inactive by default because Fides is inactive by default in Slips.

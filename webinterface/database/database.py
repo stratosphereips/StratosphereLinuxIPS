@@ -19,6 +19,11 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_redis_password,
+    get_redis_auth_conf_path,
+    try_connect_with_and_without_password,
+)
 from .signals import message_sent
 from webinterface.utils import (
     get_open_redis_ports_in_order,
@@ -182,9 +187,18 @@ class Database(object):
         Tuple of success flag and warning message.
         """
         rdb = Path(rdb_path)
+        ensure_redis_password()
+        conf_path = os.path.join(output_dir, "redis.conf")
+        with open(conf_path, "w") as f:
+            # `include` must come first so the shared requirepass can't be
+            # overridden by anything in the template.
+            f.write(f"include {get_redis_auth_conf_path()}\n")
+            f.write(
+                f"include {os.path.abspath('config/redis.conf.template')}\n"
+            )
         cmd = [
             "redis-server",
-            "config/redis.conf.template",
+            conf_path,
             "--port",
             str(port),
             "--bind",
@@ -229,16 +243,17 @@ class Database(object):
         Return:
         True when Redis responds to PING before the timeout.
         """
-        client = redis.StrictRedis(
-            host=LOCALHOST,
-            port=port,
-            db=0,
-            socket_connect_timeout=0.2,
-            socket_timeout=0.2,
-        )
         deadline = time.time() + timeout
         while time.time() < deadline:
             try:
+                client = try_connect_with_and_without_password(
+                    redis.StrictRedis,
+                    host=LOCALHOST,
+                    port=port,
+                    db=0,
+                    socket_connect_timeout=0.2,
+                    socket_timeout=0.2,
+                )
                 return bool(client.ping())
             except redis.exceptions.RedisError:
                 time.sleep(0.2)
@@ -284,7 +299,9 @@ class Database(object):
         None.
         """
         try:
-            client = redis.StrictRedis(host=LOCALHOST, port=port, db=0)
+            client = try_connect_with_and_without_password(
+                redis.StrictRedis, host=LOCALHOST, port=port, db=0
+            )
             client.shutdown(save=False)
         except redis.exceptions.RedisError:
             return

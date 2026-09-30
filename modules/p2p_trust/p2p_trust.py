@@ -11,11 +11,14 @@ from typing import Dict, Optional, Tuple
 import json
 import socket
 
-from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.database.redis_db.redis_auth import (
+    get_redis_auth_conf_path,
+)
 import modules.p2p_trust.trust.base_model as reputation_model
 import modules.p2p_trust.utils.utils as p2p_utils
 from modules.p2p_trust.utils.go_director import GoDirector
@@ -81,6 +84,16 @@ class Trust(IModule):
     p2p_data_request_channel = "p2p_data_request"
     gopy_channel_raw = "p2p_gopy"
     pygo_channel_raw = "p2p_pygo"
+    # weight given to Slips' own local opinion of an IP, vs. the
+    # network's, when deciding whether to act on a peer's blame report.
+    # 1 means the network's blame is ignored completely, 0 means only
+    # the network's opinion matters.
+    ips_weight = 0.5
+    # the minimum combined (local + network) opinion an IP has to reach
+    # before a blame report is forwarded to the blocking module. Uses
+    # the same 0 (benign) to 1 (malicious) scale as evidence threat
+    # levels.
+    blame_threshold = 0.5
     start_pigeon = True
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
@@ -100,12 +113,15 @@ class Trust(IModule):
         self.p2p_trust_runtime_dir = self.db.get_p2p_trust_dir()
         self.sql_db_name = self.db.get_p2p_trust_db_path()
 
-        self.port = self.get_available_port()
+        self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
         self.pygo_channel = self.pygo_channel_raw + str_port
+        # Older Pigeon binaries did not add the Slips version to messages.
+        # Only this local, dedicated Go-to-Python channel accepts that format.
+        self.unversioned_channels = frozenset({self.gopy_channel})
         self.storage_name = self.db.constants.IPS_INFO
         if self.rename_redis_ip_info:
             self.storage_name += str(self.port)
@@ -159,6 +175,7 @@ class Trust(IModule):
     def read_configuration(self):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
+        self.p2p_listen_port: int = conf.p2p_listen_port()
 
     def get_local_IP(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -166,19 +183,6 @@ class Trust(IModule):
         local_ip = s.getsockname()[0]
         s.close()
         return local_ip
-
-    def get_available_port(self) -> int:
-        for port in range(32768, 65535):
-            if port == self.redis_port:
-                continue
-            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            try:
-                sock.bind((IPV4_ANY, port))
-                sock.close()
-                return port
-            except Exception:
-                # port is in use
-                continue
 
     def _configure(self):
         self.trust_db = self.db.trust_db
@@ -192,8 +196,9 @@ class Trust(IModule):
             self.db,
             self.storage_name,
             override_p2p=self.override_p2p,
-            report_func=self.process_message_report,
+            report_func=self.evaluate_blame_report,
             request_func=self.respond_to_message_request,
+            blame_evaluator=self.evaluate_blame_report,
             gopy_channel=self.gopy_channel,
             pygo_channel=self.pygo_channel,
             p2p_reports_logfile=self.p2p_reports_logfile,
@@ -617,19 +622,87 @@ class Trust(IModule):
         """
         pass
 
-    def process_message_report(
+    def evaluate_blame_report(
         self, reporter: str, report_time: int, data: dict
     ):
         """
-        Handle a report received from a peer
+        Decide whether a peer's "blame" (a request to block an IP)
+        should be forwarded to the blocking module.
+
+        - Implements the trust model from the original Dovecot/Omega-Trust
+        thesis (Hollmannova, 2020): a single peer's report is never enough
+        on its own to trigger a block.
+
+        - called only after a "blame" message has been validated and stored in the
+        trust db like any other report, so it already counts towards
+        the network's opinion on this IP.
+
+
+        We combine Slips' own local opinion of the IP with the
+        network's trust-weighted opinion (Omega-score * Omega-confidence,
+        aggregated over every peer that has reported on this IP so
+        far, weighted by how much we trust each reporter):
+            prediction = ips_weight * local_opinion
+                         + (1 - ips_weight) * network_opinion
+        and only forward the blame to the blocking pipeline if that
+        combined prediction reaches blame_threshold.
+
         :param reporter: The peer that sent the report
         :param report_time: Time of receiving the report, provided by the go part
         :param data: Report data
         """
-        # All keys and data sent to this function is validated in go_director.py
-        data = json.dumps(data)
+        if data.get("message_type") != "blame":
+            return
+
+        key = data["key"]
+
+        # the network's trust-weighted opinion on this IP, aggregated
+        # over every peer that reported on it so far (not just this
+        # one reporter)
+        network_score, network_confidence = (
+            self.reputation_model.get_opinion_on_ip(key)
+        )
+        if network_score is None or network_confidence is None:
+            self.print(
+                f"No aggregated network opinion on {key} yet. "
+                f"Not forwarding this blame report.",
+                0,
+                2,
+            )
+            return
+        network_opinion = network_score * network_confidence
+
+        local_score, local_confidence = p2p_utils.get_ip_info_from_slips(
+            key, self.db
+        )
+        local_opinion = (
+            0 if local_score is None else local_score * local_confidence
+        )
+
+        prediction = (
+            self.ips_weight * local_opinion
+            + (1 - self.ips_weight) * network_opinion
+        )
+
+        if prediction < self.blame_threshold:
+            self.print(
+                f"Blame report about {key} from {reporter} doesn't meet "
+                f"the blame_threshold ({prediction} < "
+                f"{self.blame_threshold}). Not blocking it.",
+                0,
+                2,
+            )
+            return
+
+        self.print(
+            f"Blame report about {key} confirmed by the network "
+            f"(prediction={prediction}). Forwarding {key} to the blocking "
+            f"module.",
+            0,
+            2,
+        )
         # give the report to evidenceProcess to decide whether to block or not
-        self.db.publish("new_blame", data)
+        self.db.publish("new_blame", json.dumps(data))
 
     def _start_pigeon(self) -> None:
         """
@@ -658,8 +731,12 @@ class Trust(IModule):
             "-host": self.host,
             "-key-file": self.pigeon_key_file,
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
+            # slips starts every redis-server with the shared requirepass
+            # from this conf, so the pigeon reads its password from it too
+            "-redis-auth-conf": get_redis_auth_conf_path(),
             "-redis-channel-pygo": self.pygo_channel_raw,
             "-redis-channel-gopy": self.gopy_channel_raw,
+            "-slips-version": self.slips_version,
         }
         self.print(f"P2P is listening on {self.host} port {self.port}.")
         executable = [self.pigeon_binary] + [
@@ -702,15 +779,55 @@ class Trust(IModule):
                 )
 
     def shutdown_gracefully(self):
-        if hasattr(self, "pigeon") and self.pigeon is not None:
-            self.pigeon.send_signal(signal.SIGINT)
+        self._stop_pigeon()
+        self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
+
+    def _stop_pigeon(self) -> None:
+        """
+        Stop the p2p4slips child and wait until it has exited.
+
+        This method is idempotent so it can run during both normal cleanup and
+        the final safeguard around an unexpected module exit.
+        """
+        pigeon = getattr(self, "pigeon", None)
+        if pigeon is None:
+            return
+
+        if pigeon.poll() is None:
+            pigeon.send_signal(signal.SIGINT)
+            try:
+                pigeon.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.print(
+                    "Warning: p2p4slips did not stop after SIGINT; "
+                    "terminating it."
+                )
+                pigeon.terminate()
+                try:
+                    pigeon.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    self.print(
+                        "Warning: p2p4slips did not terminate; killing it."
+                    )
+                    pigeon.kill()
+                    pigeon.wait()
+
+        self.pigeon = None
+
+    def run(self) -> None:
+        """Run p2p_trust and guarantee its Go child cannot be orphaned."""
+        try:
+            super().run()
+        finally:
+            self._stop_pigeon()
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
         if self.start_pigeon and self.pigeon is None:
@@ -738,7 +855,15 @@ class Trust(IModule):
             self.data_request_callback(msg)
 
         if msg := self.get_msg(self.gopy_channel):
-            self.gopy_callback(msg)
+            try:
+                self.gopy_callback(msg)
+            except Exception as error:
+                self.print(
+                    "Warning: Ignoring malformed p2p_gopy message after "
+                    f"processing failed: {error}",
+                    0,
+                    1,
+                )
 
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):

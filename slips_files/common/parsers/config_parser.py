@@ -46,6 +46,7 @@ class ConfigParser(object):
             "172.16.0.0/12",
             "10.0.0.0/8",
         )
+
         self.home_network_ranges = list(
             map(ipaddress.ip_network, self.home_network_ranges)
         )
@@ -120,6 +121,50 @@ class ConfigParser(object):
             return int(port)
         except Exception:
             return 55000
+
+    @property
+    def web_interface_bind(self) -> str:
+        """Read where the web interface accepts connections.
+
+        Returns:
+            ``localhost`` or ``interface``; invalid values use localhost.
+        """
+        value = self.read_configuration("web_interface", "bind", "localhost")
+        normalized = str(value).strip().lower()
+        return (
+            normalized
+            if normalized in {"localhost", "interface"}
+            else "localhost"
+        )
+
+    def web_interface_enabled(self) -> bool:
+        """
+        Check whether the local web interface is enabled in configuration.
+
+        Returns:
+            True when web_interface.enabled is enabled.
+        """
+        value = self.read_configuration("web_interface", "enabled", False)
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
+
+    def web_interface_require_password(self) -> bool:
+        """
+        Check whether the web interface requires the shared redis/web
+        password to log in before granting access. Defaults to True; only
+        meant to be disabled for CI/tests, never on a machine reachable
+        beyond localhost.
+
+        Returns:
+            True unless web_interface.require_password is explicitly false.
+        """
+        value = self.read_configuration(
+            "web_interface", "require_password", True
+        )
+        if isinstance(value, bool):
+            return value
+        return str(value).strip().lower() in ("true", "1", "yes", "on")
 
     def get_entropy_threshold(self):
         """
@@ -410,6 +455,15 @@ class ConfigParser(object):
             "local_p2p", "create_p2p_logfile", False
         )
 
+    def p2p_listen_port(self) -> int:
+        """Return the dedicated TCP port used by the local P2P listener."""
+        value = self.read_configuration("local_p2p", "listen_port", 6668)
+        try:
+            port = int(value)
+        except (TypeError, ValueError):
+            return 6668
+        return port if 1 <= port <= 65535 else 6668
+
     def ts_format(self):
         return self.read_configuration("timestamp", "format", None)
 
@@ -443,9 +497,10 @@ class ConfigParser(object):
         return twid_width
 
     def disabled_detections(self) -> list:
-        return self.read_configuration(
+        value = self.read_configuration(
             "DisabledAlerts", "disabled_detections", []
         )
+        return value if isinstance(value, list) else []
 
     def evidence_signal_default(self) -> str:
         value = self.read_configuration(

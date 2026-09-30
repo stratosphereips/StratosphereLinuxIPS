@@ -325,6 +325,8 @@ class Evidence:
         },
     )
     evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
+    # Canonical name of the module that submitted this evidence.
+    source_module: str = field(default="")
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -355,6 +357,7 @@ class Evidence:
             f"  Risk Level: {self.risk_level},\n"
             f"  Related ID: {self.rel_id}\n"
             f"  Evidence Signal: {self.evidence_signal}\n"
+            f"  Source Module: {self.source_module}\n"
             f")"
         )
 
@@ -408,6 +411,7 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         ),
         "method": Method[evidence["method"].upper()],
         "evidence_signal": evidence_signal,
+        "source_module": str(evidence.get("source_module", "")),
     }
 
     return Evidence(**evidence_attributes)

@@ -7,6 +7,7 @@ from unittest.mock import Mock, call
 from slips_files.core.flows.zeek import DHCP
 import json
 from dataclasses import asdict
+from uuid import UUID
 
 
 def test_handle_dns():
@@ -203,6 +204,7 @@ def test_handle_files(flow):
 # testing handle_arp
 def test_handle_arp(flow):
     flow_handler = ModuleFactory().create_flow_handler_obj(flow)
+    flow.uid = ""
     flow.dmac = "aa:bb:cc:dd:ee:ff"
     flow.smac = "ff:ee:dd:cc:bb:aa"
     flow.daddr = "192.168.1.1"
@@ -210,6 +212,8 @@ def test_handle_arp(flow):
     flow.interface = "eth0"
 
     flow_handler.handle_arp()
+
+    assert UUID(flow.uid).version == 4
 
     expected_payload = {
         "flow": asdict(flow),

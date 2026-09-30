@@ -28,6 +28,12 @@ from slips_files.core.database.redis_db.alert_handler import AlertHandler
 from slips_files.core.database.redis_db.profile_handler import ProfileHandler
 from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 from slips_files.core.database.redis_db.cleanup_mixin import CleanupMixin
+from slips_files.core.database.redis_db.redis_auth import (
+    ensure_redis_password,
+    get_redis_auth_conf_path,
+    try_connect_with_and_without_password,
+    NO_PASSWORD_NEEDED_MARKERS,
+)
 
 import os
 import redis
@@ -277,7 +283,7 @@ class RedisDB(
         cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
-        cls._options = {}
+        template_options = {}
         with open(cls._conf_file, "r") as f:
             for line in f:
                 line = line.strip()
@@ -285,7 +291,15 @@ class RedisDB(
                     continue
                 if " " in line:
                     key, value = line.split(None, 1)
-                    cls._options[key] = value
+                    template_options[key] = value
+
+        # `include` must come first so nothing in the template can override
+        # the shared requirepass. never write requirepass directly into
+        # this per-run conf file: it lives inside the user's -o output dir,
+        # which gets shared/archived, unlike the permissioned auth conf.
+        ensure_redis_password()
+        cls._options = {"include": get_redis_auth_conf_path()}
+        cls._options.update(template_options)
 
         # because slips may use different redis ports at the same time,
         # logs should be port specific
@@ -327,7 +341,6 @@ class RedisDB(
         # Should we delete the previously stored data in the DB when we start?
         # By default False. Meaning we don't DELETE the DB by default.
         cls.config_flush_db: bool = conf.delete_prev_db()
-        cls.disabled_detections: List[str] = conf.disabled_detections()
         cls.default_evidence_signal: str = conf.evidence_signal_default()
         cls.evidence_signal_overrides: dict = conf.evidence_signal_overrides()
         cls.width = conf.get_tw_width_in_seconds()
@@ -430,7 +443,8 @@ class RedisDB(
         # retried once, if the retry is successful, it will return
         # normally; if it fails, an exception will be thrown
 
-        return redis.StrictRedis(
+        return try_connect_with_and_without_password(
+            redis.StrictRedis,
             host=LOCALHOST,
             port=port,
             db=db,
@@ -460,8 +474,7 @@ class RedisDB(
 
         # If we reach here, port never opened
         return False, (
-            f"_confirm_redis_is_listening: Redis failed to start on "
-            f"{cls.redis_port}"
+            f"_confirm_redis_is_listening: Redis failed to start on {cls.redis_port}"
         )
 
     @classmethod
@@ -563,9 +576,7 @@ class RedisDB(
         # format is client hard_limit soft_limit
         client.config_set(
             "client-output-buffer-limit",
-            "normal 0 0 0 "
-            "slave 268435456 67108864 60 "
-            "pubsub 4294967296 2147483648 600",
+            "normal 0 0 0 slave 268435456 67108864 60 pubsub 4294967296 2147483648 600",
         )
 
     @classmethod
@@ -668,8 +679,7 @@ class RedisDB(
             if self.connection_retry >= self.max_retries:
                 self.publish_stop()
                 self.print(
-                    f"Stopping slips due to "
-                    f"redis.exceptions.ConnectionError: {ex}",
+                    f"Stopping slips due to redis.exceptions.ConnectionError: {ex}",
                     1,
                     1,
                 )
@@ -991,6 +1001,24 @@ class RedisDB(
         """
         return self.r.hget(
             self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR
+        )
+
+    def belongs_to_run(self, output_dir: str) -> bool:
+        """
+        Check whether Redis belongs to the requested Slips run.
+        # A process from a completed/replaced run must never publish evidence
+        # into the Redis database now owned by another run.
+        Parameters:
+            output_dir: Output directory owned by the caller.
+
+        Returns:
+            True only when Redis advertises the same output directory.
+        """
+        redis_output_dir = self.get_output_dir()
+        if not redis_output_dir:
+            return False
+        return os.path.normpath(str(redis_output_dir)) == os.path.normpath(
+            os.fspath(output_dir)
         )
 
     def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
@@ -1955,8 +1983,7 @@ class RedisDB(
         valid_types = {"IPs", "domains", "macs"}
         if type_ not in valid_types:
             raise ValueError(
-                f"Unsupported whitelist type: {type_}. "
-                f"Must be one of {valid_types}."
+                f"Unsupported whitelist type: {type_}. Must be one of {valid_types}."
             )
 
         key = f"{self.constants.WHITELIST}_{type_}"
@@ -2030,19 +2057,31 @@ class RedisDB(
         True if redis-cli created the requested RDB file, False otherwise.
         """
         safe_port = utils.validate_port(self.redis_port)
+        command = [
+            "redis-cli",
+            "-h",
+            LOCALHOST,
+            "-p",
+            str(safe_port),
+            "--rdb",
+            backup_rdb,
+        ]
+
+        # REDISCLI_AUTH (rather than a -a CLI arg) keeps the password out
+        # of the process list. Every redis-server slips itself starts
+        # requires it; fall back to no auth for the rare pre-existing
+        # server started before slips supported auth.
+        env = dict(os.environ, REDISCLI_AUTH=ensure_redis_password())
         result = subprocess.run(
-            [
-                "redis-cli",
-                "-h",
-                LOCALHOST,
-                "-p",
-                str(safe_port),
-                "--rdb",
-                backup_rdb,
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, env=env
         )
+        if result.returncode != 0:
+            stderr = result.stderr.decode(errors="ignore").lower()
+            if any(m in stderr for m in NO_PASSWORD_NEEDED_MARKERS):
+                result = subprocess.run(
+                    command, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+                )
+
         return result.returncode == 0 and os.path.exists(backup_rdb)
 
     def save(self, backup_file: str) -> bool:
@@ -2066,7 +2105,11 @@ class RedisDB(
             return True
 
         # Redis writes to the configured dir/dbfilename pair.
-        self.r.save()
+        try:
+            self.r.save()
+        except redis.RedisError as e:
+            self.print(f"Error Saving: SAVE command failed: {e}")
+            return False
 
         redis_db_path = self._get_redis_dump_path_from_redis_config()
 
@@ -2080,8 +2123,7 @@ class RedisDB(
             return True
 
         self.print(
-            f"Error Saving: Cannot find the redis "
-            f"database directory {redis_db_path}"
+            f"Error Saving: Cannot find the redis database directory {redis_db_path}"
         )
         return False
 

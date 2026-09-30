@@ -1,7 +1,7 @@
 # This Dockerfile builds a dependency image for CI testing of (SLIPS).
 # this img contains apt and pip dependencies, zeek and redis.
 
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 # To avoid user interaction when installing libraries
 ENV DEBIAN_FRONTEND=noninteractive
 # Blocking module requirement to avoid using
@@ -45,19 +45,19 @@ RUN curl -fsSL https://packages.redis.io/gpg | gpg --dearmor -o /usr/share/keyri
 RUN set -e; \
     curl -fsSL https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/install/requirements.txt \
     -o /tmp/requirements.txt \
-    && python3 -m pip install --upgrade pip \
-    && python3 -m pip install --no-cache-dir --ignore-installed -r /tmp/requirements.txt \
+    && python3 -m pip install --break-system-packages --ignore-installed --upgrade pip \
+    && python3 -m pip install --no-cache-dir --break-system-packages --ignore-installed -r /tmp/requirements.txt \
     && rm -f /tmp/requirements.txt
 
 
-RUN curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_22.04/Release.key \
+RUN curl -fsSL https://download.opensuse.org/repositories/security:zeek/xUbuntu_24.04/Release.key \
         | gpg --dearmor -o /usr/share/keyrings/zeek.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/zeek.gpg] \
-        http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /" \
+        http://download.opensuse.org/repositories/security:/zeek/xUbuntu_24.04/ /" \
         > /etc/apt/sources.list.d/zeek.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        zeek-8.0 \
+        zeek-lts \
     && ln -s /opt/zeek/bin/zeek /usr/local/bin/bro \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*

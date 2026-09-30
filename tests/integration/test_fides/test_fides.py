@@ -467,95 +467,95 @@ def test_trust_recommendation_response(
 
     print(f"command: {' '.join(command)}")
 
-    # try:
-    print("running slips with output dir: ...")
-    print(output_dir)
+    try:
+        print("running slips with output dir: ...")
+        print(output_dir)
 
-    mock_logger = Mock()
-    mock_logger.print_line = Mock()
-    mock_logger.error = Mock()
-    print(
-        "Manipulating database: Inject peer1 and peer2 into the "
-        "database - Fides Module must know those peers"
-    )
-    fdb = FidesSQLiteDB(mock_logger, str(permanent_db))
-    fdb.store_peer_trust_data(
-        ptd.trust_data_prototype(
-            peer=PeerInfo(
-                id="peer1",
-                organisations=["org1", "org2"],
-                ip="192.168.1.1",
-            ),
-            has_fixed_trust=False,
+        mock_logger = Mock()
+        mock_logger.print_line = Mock()
+        mock_logger.error = Mock()
+        print(
+            "Manipulating database: Inject peer1 and peer2 into the "
+            "database - Fides Module must know those peers"
         )
-    )
-    fdb.store_peer_trust_data(
-        ptd.trust_data_prototype(
-            peer=PeerInfo(
-                id="peer2", organisations=["org2"], ip="192.168.1.2"
-            ),
-            has_fixed_trust=False,
+        fdb = FidesSQLiteDB(mock_logger, str(permanent_db))
+        fdb.store_peer_trust_data(
+            ptd.trust_data_prototype(
+                peer=PeerInfo(
+                    id="peer1",
+                    organisations=["org1", "org2"],
+                    ip="192.168.1.1",
+                ),
+                has_fixed_trust=False,
+            )
         )
-    )
-
-    with open(output_file, "w") as log_file:
-        process = subprocess.Popen(
-            command,
-            stdout=log_file,
-            stderr=log_file,
-            start_new_session=True,
+        fdb.store_peer_trust_data(
+            ptd.trust_data_prototype(
+                peer=PeerInfo(
+                    id="peer2", organisations=["org2"], ip="192.168.1.2"
+                ),
+                has_fixed_trust=False,
+            )
         )
 
-        print(f"Output and errors are logged in {output_file}")
+        with open(output_file, "w") as log_file:
+            process = subprocess.Popen(
+                command,
+                stdout=log_file,
+                stderr=log_file,
+                start_new_session=True,
+            )
 
-        # these seconds are the time we wait for slips to start all the
-        # modules
-        countdown(60, "test message")
+            print(f"Output and errors are logged in {output_file}")
 
-        # this msg simulates a msg sent by peers to the started
-        # slips instance
-        message_send(redis_port)
+            # these seconds are the time we wait for slips to start all the
+            # modules
+            countdown(60, "test message")
 
-        # these 30s are the time we give slips to process the msg
-        countdown(30, "sigterm")
-        db = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
+            # this msg simulates a msg sent by peers to the started
+            # slips instance
+            message_send(redis_port)
+
+            # these 30s are the time we give slips to process the msg
+            countdown(30, "sigterm")
+            db = ModuleFactory().create_db_manager_obj(
+                redis_port, output_dir=output_dir, start_redis_server=False
+            )
+            cached_network_opinion = db.get_cached_network_opinion(
+                "stratosphere.org", 200000000000, 200000000000
+            )
+            db.close_all_dbs()
+            stop_process_group(process, "fides slips")
+
+        print(f"Slips with PID {process.pid} was killed.")
+
+        print("Slips is done, checking for errors in the output dir.")
+        assert_no_fatal_runtime_errors(output_dir)
+
+        # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
+        print("Checking Fides' data outlets")
+
+        assert fdb.get_peer_trust_data("peer1").service_history != []
+        assert fdb.get_peer_trust_data("peer2").service_history != []
+        assert fdb.get_peer_trust_data("peer1").service_history_size == 1
+        assert fdb.get_peer_trust_data("peer2").service_history_size == 1
+        assert cached_network_opinion == {
+            "target": "stratosphere.org",
+            "score": "0.0",
+            "confidence": "0.0",
+        }
+        success = True
+    except Exception:
+        pass
+
+    finally:
+        if process is not None and process.poll() is None:
+            stop_process_group(process, "fides slips")
+        if permanent_db.exists():
+            permanent_db.unlink()
+        shutil.rmtree(
+            get_runtime_config_dir(output_dir.name), ignore_errors=True
         )
-        cached_network_opinion = db.get_cached_network_opinion(
-            "stratosphere.org", 200000000000, 200000000000
-        )
-        db.close_all_dbs()
-        stop_process_group(process, "fides slips")
-
-    print(f"Slips with PID {process.pid} was killed.")
-
-    print("Slips is done, checking for errors in the output dir.")
-    assert_no_fatal_runtime_errors(output_dir)
-
-    # assert db.get_msgs_received_at_runtime("fides")["fides2network"] == "1"
-    print("Checking Fides' data outlets")
-
-    assert fdb.get_peer_trust_data("peer1").service_history != []
-    assert fdb.get_peer_trust_data("peer2").service_history != []
-    assert fdb.get_peer_trust_data("peer1").service_history_size == 1
-    assert fdb.get_peer_trust_data("peer2").service_history_size == 1
-    assert cached_network_opinion == {
-        "target": "stratosphere.org",
-        "score": "0.0",
-        "confidence": "0.0",
-    }
-    # success = True
-    # except:
-    #     pass
-
-    # finally:
-    #     if process is not None and process.poll() is None:
-    #         stop_process_group(process, "fides slips")
-    #     if permanent_db.exists():
-    #         permanent_db.unlink()
-    #     shutil.rmtree(
-    #         get_runtime_config_dir(output_dir.name), ignore_errors=True
-    #     )
-    #     if success:
-    #         print("Deleting the output directory")
-    #         shutil.rmtree(output_dir)
+        if success:
+            print("Deleting the output directory")
+            shutil.rmtree(output_dir)

@@ -24,7 +24,6 @@ class Constants:
     FLOWS_CAUSING_EVIDENCE = "flows_causing_evidence"
     PROCESSED_EVIDENCE = "processed_evidence"
     NUMBER_OF_EVIDENCE = "number_of_evidence"
-    WHITELISTED_EVIDENCE = "whitelisted_evidence"
     SRCIPS_SEEN_IN_CONN_LOG = "srcips_seen_in_connlog"
     PASSIVE_DNS = "passiveDNS"
     # called for every IP in the timeline view
@@ -71,6 +70,7 @@ class Constants:
     # used in the web interface
     BLOCKED_PROFILES_AND_TWS = "BlockedProfTW"
     BLOCKED_IPS = "blocked_ips"
+    FIREWALL_BLOCKS = "firewall_blocks"
     PROFILES = "profiles"
     NUMBER_OF_ALERTS = "number_of_alerts"
     KNOWN_FP_MD5_HASHES = "known_fps"
@@ -117,6 +117,12 @@ class Constants:
     PEER_TRUST = "peer_trust"
     P2P_TRUST_SET = "peers_strust"
     P2P_PEER_INFO_HASH = "peer_info"
+    P2P_MESSAGE_COUNTS = "p2p_message_counts"
+    P2P_MESSAGE_HISTORY = "p2p_message_history"
+    P2P_CONNECTIONS = "p2p:connections"
+    P2P_CONNECTIONS_LAST_SEEN = "p2p:connections:last_seen"
+    P2P_ACTIVE_CONNECTIONS = "p2p:active_connections"
+    P2P_ACTIVE_CONNECTION_PREFIX = "p2p:active_connection:"
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
     FLOWS_PER_MINUTE = "flows_per_minute"

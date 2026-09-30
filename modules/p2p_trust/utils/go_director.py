@@ -49,6 +49,7 @@ class GoDirector:
         override_p2p: bool = False,
         report_func=None,
         request_func=None,
+        blame_evaluator=None,
         gopy_channel: str = "p2p_gopy",
         pygo_channel: str = "p2p_pygo",
         p2p_reports_logfile: str = "p2p_reports.log",
@@ -65,8 +66,16 @@ class GoDirector:
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
+        # only used when override_p2p is set: replaces our own
+        # validation/storage of "report" messages entirely, handing
+        # the validated data straight to this function instead.
         self.report_func = report_func
         self.request_func = request_func
+        # called for "blame" messages after they've been validated and
+        # stored like any other report, so the trust model can decide -
+        # from the network's trust-weighted opinion whether to forward it
+        # to the blocking module. runs for all recvd blames.
+        self.blame_evaluator = blame_evaluator
         # clear the logfile
         utils.initialize_logfile(
             p2p_reports_logfile, is_slips_started_by_an_update
@@ -110,6 +119,9 @@ class GoDirector:
                 # update in peers reliability or IP address.
                 self.process_go_update(message_contents)
 
+            elif message_type == "connection_update":
+                self.process_connection_update(message_contents)
+
             elif message_type == "go_data":
                 # a peer request or update
                 self.process_go_data(message_contents)
@@ -132,6 +144,59 @@ class GoDirector:
                 0,
                 1,
             )
+
+    #: Seconds an active P2P connection record survives without a refresh.
+    ACTIVE_P2P_CONNECTION_TTL = 300
+
+    def process_connection_update(self, connection: dict) -> None:
+        """Record one authenticated P2P connection lifecycle update.
+
+        This also keeps the live/recently-connected P2P registry that the
+        web interface's P2P dashboard reads up to date.
+
+        Parameters:
+            connection: Peer identity and exact TCP endpoint tuple from Go.
+        """
+        required = {
+            "peer_id",
+            "protocol",
+            "local_ip",
+            "local_port",
+            "remote_ip",
+            "remote_port",
+            "connected",
+        }
+        if not isinstance(connection, dict) or not required.issubset(
+            connection
+        ):
+            raise ValueError("Incomplete authenticated P2P connection update")
+        connected = connection["connected"] is True
+        connection_id = "|".join(
+            str(connection[field])
+            for field in (
+                "protocol",
+                "local_ip",
+                "local_port",
+                "remote_ip",
+                "remote_port",
+            )
+        )
+        if connected:
+            self.db.store_authenticated_p2p_connection(
+                connection_id,
+                {**connection, "authenticated": True},
+                self.ACTIVE_P2P_CONNECTION_TTL,
+            )
+        else:
+            self.db.remove_authenticated_p2p_connection(connection_id)
+        self.db.record_p2p_message(
+            "received",
+            {
+                "message_type": "connection_update",
+                "peer_id": str(connection["peer_id"]),
+                "connected": connected,
+            },
+        )
 
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer
@@ -169,6 +234,19 @@ class GoDirector:
         # decode b64
         message_type, data = self.validate_message(message)
 
+        self.db.record_p2p_message(
+            "received",
+            {
+                "message_type": message_type or "unknown",
+                "peer": reporter,
+                "target": (
+                    data.get("key", "") if isinstance(data, dict) else ""
+                ),
+                "report_time": report_time,
+                "message": data,
+            },
+        )
+
         self.print(
             f"[The Network -> Slips] Received msg {data} from peer {reporter}"
         )
@@ -182,11 +260,15 @@ class GoDirector:
             self.process_message_request(reporter, report_time, data)
 
         elif message_type == "blame":
-            # TODO SLIPS doesn't getthis kind of msgs at all. all reports are treated as one
-            # self.print("blame is not implemented yet", 0, 2)
-            # calls process_message_report in p2p_trust.py
-            # which gives the report to evidenceProcess to decide whether to block or not
-            self.report_func(reporter, report_time, data)
+            # a peer blaming an IP (i.e. asking us to block it).
+            # Validate it the same way as a regular report before it's
+            # ever allowed near the trust model: a blame is just a report
+            # that, once validated and stored, is also handed to
+            # blame_evaluator (Trust.evaluate_blame_report) to decide -
+            # based on the network's trust-weighted opinion, not on
+            # this one peer's say-so - whether it's worth forwarding
+            # to the blocking pipeline.
+            self.process_message_report(reporter, report_time, data)
 
         else:
             # TODO: lower reputation
@@ -367,7 +449,8 @@ class GoDirector:
         # pass the report to p2p_trust module
         # to decide what to do with it
         if self.override_p2p:
-            # calls process_message_report in p2p_trust.py
+            # override_p2p replaces our own validation/storage of this
+            # report entirely, handing it straight to report_func.
             self.report_func(reporter, report_time, data)
             return
 
@@ -385,6 +468,14 @@ class GoDirector:
             self.log(msg)
         # TODO: evaluate data from peer and asses if it was good or not.
         #       For invalid base64 etc, note that the node is bad
+
+        if data.get("message_type") == "blame" and self.blame_evaluator:
+            # the report is now stored like any other, so it will be
+            # counted in the network's aggregated opinion on this IP.
+            # blame_evaluator decides, from that trust-weighted
+            # opinion, whether to forward this to the blocking
+            # pipeline.
+            self.blame_evaluator(reporter, report_time, data)
 
     def process_evaluation_score_confidence(
         self,
@@ -523,28 +614,21 @@ class GoDirector:
 
     def process_go_update(self, data: dict) -> None:
         """
-        Handle update in peers reliability or IP address.
+        Handle peer connectivity, reliability, or IP address updates.
 
-        The message is expected to be JSON string, and it should contain data
-         according to the specified format.
-        It must have the field `peerid`, which specifies the peer that is
-        being updated,
-        and then values to update: `ip` or `reliability`.
-        It is OK if only one of these is provided.
-        Additionally, `timestamp` may be set, but is not mandatory - if it is
-        missing, current time will be used.
-        :param message: A string sent from go, should be json as specified above
-        :return: None
+        Parameters:
+            data: Validated peer update received from Pigeon. The peer ID is
+                required; IP, reliability, connectivity, and timestamp are
+                optional for compatibility with older Pigeon binaries.
         """
-        ip_address, reliability, peerid, timestamp = "", "", "", ""
+        ip_address = ""
+        reliability = None
         try:
-            peerid = data["peerid"]
+            peerid = str(data["peerid"])
         except KeyError:
             self.print("Peerid missing", 0, 1)
             return
 
-        # timestamp is optional. If it is not provided (or is wrong), it is set to None, and None timestamp is replaced
-        # with current time in the database
         try:
             timestamp = data["timestamp"]
             timestamp = validate_timestamp(timestamp)
@@ -561,30 +645,63 @@ class GoDirector:
             )
         except KeyError:
             self.print("Reliability missing", 2, 0)
-        except ValueError:
+        except (TypeError, ValueError):
             self.print("Reliability is not a float", 2, 0)
 
-        try:
-            ip_address = data["ip"]
+        if "ip" in data and data["ip"]:
+            ip_address = str(data["ip"])
             if not validate_ip_address(ip_address):
                 self.print(f"IP address {ip_address} is invalid", 2, 0)
-                return
-            self.trustdb.insert_go_ip_pairing(
-                peerid, ip_address, timestamp=timestamp
-            )
-            msg = (
-                f"[The Network -> Slips] Peer update or new peer {peerid} "
-                f"with IP: {ip_address} "
-                f"Reliability: {reliability } "
-            )
-
-            self.print(
-                msg,
-                2,
-                0,
-            )
-            self.log(msg)
-
-        except KeyError:
+                ip_address = ""
+            else:
+                self.trustdb.insert_go_ip_pairing(
+                    peerid, ip_address, timestamp=timestamp
+                )
+                msg = (
+                    f"[The Network -> Slips] Peer update or new peer "
+                    f"{peerid} with IP: {ip_address} "
+                    f"Reliability: {reliability}"
+                )
+                self.print(msg, 2, 0)
+                self.log(msg)
+        else:
             self.print("IP address missing", 2, 0)
+
+        connected = data.get("connected", True)
+        if not isinstance(connected, bool):
+            self.print("Peer connectivity is not a boolean", 2, 0)
             return
+
+        stored_state = self.db.get_peer_trust_data(peerid)
+        if isinstance(stored_state, bytes):
+            stored_state = stored_state.decode(errors="replace")
+        if isinstance(stored_state, str):
+            try:
+                stored_state = json.loads(stored_state)
+            except json.JSONDecodeError:
+                stored_state = {}
+        if not isinstance(stored_state, dict):
+            stored_state = {}
+        stored_state.update(
+            {
+                "connected": connected,
+                "timestamp": (
+                    timestamp if timestamp is not None else int(time.time())
+                ),
+            }
+        )
+        if ip_address:
+            stored_state["ip"] = ip_address
+        if reliability is not None:
+            stored_state["reliability"] = reliability
+        self.db.store_peer_trust_data(peerid, json.dumps(stored_state))
+
+        connected_peers = self.db.get_connected_peers()
+        if not isinstance(connected_peers, (list, tuple, set)):
+            connected_peers = []
+        connected_peer_ids = {str(item) for item in connected_peers}
+        if connected:
+            connected_peer_ids.add(peerid)
+        else:
+            connected_peer_ids.discard(peerid)
+        self.db.store_connected_peers(sorted(connected_peer_ids))

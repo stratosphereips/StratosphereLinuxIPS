@@ -19,6 +19,8 @@ Pigeon binary is included in the module for convenience.
 Pigeon uses the JSON format to communicate with the module or with other Pigeons. For details on the communication
 format, see the thesis.
 
+***Version compatibility***: pigeons older than 1.1.24 use a different mDNS wire protocol than newer ones, so old and new pigeons cannot discover each other on the network. All peers must be upgraded together.
+
 ## Docker direct use
 You can use Slips with P2P directly in a special docker image by doing:
 
@@ -34,6 +36,8 @@ and receive packets you should use ```--cap-add=NET_ADMIN```
 
 1. download and install go:
 
+- Go 1.21 or newer is needed; (`install/install.sh` installs Go for you when the system one is too old).
+
 ```
 apt install golang
 ```
@@ -41,7 +45,7 @@ apt install golang
 or by hand
 
 ```
-curl https://dl.google.com/go/go1.18.linux-amd64.tar.gz --output go.tar.gz
+curl https://go.dev/dl/go1.26.8.linux-amd64.tar.gz --output go.tar.gz
 rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz
 export PATH=$PATH:/usr/local/go/bin
 ```
@@ -78,6 +82,20 @@ source ~/.bashrc
 The P2P module is disabled by default in Slips.
 
 To enable it, change ```use_p2p=no``` to ```use_p2p=yes``` in ```config/slips.yaml```
+
+Local Pigeon uses the dedicated TCP port configured by
+```local_p2p.listen_port``` (default ```6668```). It no longer scans the
+ephemeral port range for an available listener.
+
+Pigeon (the Go peer daemon) stores every exact TCP 5-tuple of an
+authenticated libp2p connection directly in redis, in the
+```p2p:connections``` set, adding it on connect and removing it on
+disconnect. Slips never inspects or annotates a flow to identify these
+connections; instead, UNKNOWN_PORT detection, ML inference, network
+discovery (port scan) evidence, and alert scoring/blocking each check a
+flow's 5-tuple against that set (via the ```is_p2p_related_flow``` DB
+function) and skip it if it matches. Other ports and connections from the
+same peer IP continue through normal analysis.
 
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
@@ -165,6 +183,10 @@ you can enable p2p.log in slips.yaml by setting ```create_p2p_logfile``` to ```y
 and a ```p2p.log``` will be available in the output dir
 
 Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past day only.
+
+When the local web interface is enabled, its **P2P** tab shows live peer
+connectivity, local identity, bounded message activity, reports received in the
+current run, and persistent peer trust and reliability evolution.
 
 
 ## Limitations

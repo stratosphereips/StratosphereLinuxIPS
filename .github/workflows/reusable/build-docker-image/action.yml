@@ -23,12 +23,11 @@ runs:
   using: "composite"
   steps:
     - name: Checkout repository with submodules
-      uses: actions/checkout@v7
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       with:
         ref: ${{ github.ref }}
         fetch-depth: 0
         submodules: recursive
-        lfs: true
 
     - name: Validate Docker build context
       shell: bash
@@ -43,12 +42,16 @@ runs:
       env:
         DOCKERFILE: ${{ inputs.dockerfile }}
         IMAGE_TAG: ${{ inputs.image_tag }}
+        SLIPS_GIT_REF: ${{ github.sha }}
       run: |
-        docker build -t "$IMAGE_TAG" -f "$DOCKERFILE" .
+        # Pin the in-Dockerfile git clone to the exact commit being tested,
+        # rather than whatever the default branch happens to point to at
+        # the moment BuildKit runs the clone.
+        docker build -t "$IMAGE_TAG" -f "$DOCKERFILE" --build-arg SLIPS_GIT_REF="$SLIPS_GIT_REF" .
         docker save -o docker-image.tar "$IMAGE_TAG"
 
     - name: Upload Docker image
-      uses: actions/upload-artifact@v7
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
       with:
         name: ${{ inputs.artifact_name }}
         path: docker-image.tar

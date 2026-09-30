@@ -22,7 +22,7 @@ import subprocess
 import sys
 import ipaddress
 import aid_hash
-from typing import Any, Optional, Union, List
+from typing import Any, Optional, Union, List, Set
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 from dataclasses import is_dataclass, asdict
 from enum import Enum
@@ -265,6 +265,72 @@ class Utils(object):
         original_flow_uid = next(iter(original_conn_flow))
         if original_conn_flow[original_flow_uid]:
             return json.loads(original_conn_flow[original_flow_uid])
+
+    @staticmethod
+    def p2p_related_uids(uids: List[str], db) -> Set[str]:
+        """
+        Returns the subset of the given uids whose flow matches a known
+        P2P connection, i.e. is Slips's own P2P-network traffic.
+
+        Every flow's redis check is sent in one pipelined round trip
+        via ``is_p2p_related_flow_batch``, instead of one round trip
+        per uid, so checking many uids (e.g. all of one evidence's
+        flows) costs about as much as checking a single one.
+        """
+        flows_by_uid = {}
+        for uid in uids:
+            stored = db.get_flow(uid)
+            flow = stored.get(uid)
+            if isinstance(flow, str):
+                flow = json.loads(flow)
+            if isinstance(flow, dict) and flow:
+                flows_by_uid[uid] = flow
+
+        if not flows_by_uid:
+            return set()
+
+        ordered_uids = list(flows_by_uid.keys())
+        tuples = [
+            (
+                flows_by_uid[uid].get("saddr"),
+                flows_by_uid[uid].get("sport"),
+                flows_by_uid[uid].get("daddr"),
+                flows_by_uid[uid].get("dport"),
+                flows_by_uid[uid].get("proto"),
+            )
+            for uid in ordered_uids
+        ]
+        results = db.is_p2p_related_flow_batch(tuples)
+        return {uid for uid, is_p2p in zip(ordered_uids, results) if is_p2p}
+
+    @staticmethod
+    def all_uids_p2p_related(
+        uids: List[str], db, chunk_size: int = 10
+    ) -> bool:
+        """
+        Returns True only if every one of the given uids' flows matches
+        a known P2P connection.
+
+        A single evidence is overwhelmingly likely to be genuine traffic,
+        not Slips's own P2P control traffic, so most calls only need to
+        find ONE non-matching uid to return False. Checking uids in
+        small pipelined chunks (instead of either one round trip per
+        uid, or one big round trip for every uid regardless of size)
+        keeps that early exit: a non-match is usually found in the
+        first chunk, so the cost stays close to checking a single uid
+        even when the evidence has many uids -- while evidence that
+        does need every uid checked (rare, but possible for genuinely
+        P2P-related evidence) still gets the benefit of pipelining
+        within each chunk.
+        """
+        if not uids:
+            return False
+        for start in range(0, len(uids), chunk_size):
+            chunk = uids[start : start + chunk_size]
+            p2p_in_chunk = Utils.p2p_related_uids(chunk, db)
+            if not set(chunk).issubset(p2p_in_chunk):
+                return False
+        return True
 
     @staticmethod
     def is_ip_in_client_ips(ip_to_check: str, client_ips: List) -> bool:

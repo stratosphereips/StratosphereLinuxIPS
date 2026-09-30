@@ -5,9 +5,18 @@ services:
                 container_name: Slips
                 cap_add:
                   - NET_ADMIN
+                # block privilege gains via setuid/setgid binaries and file
+                # capabilities. slips already runs as root in the container
+                # so nothing it does depends on escalation.
+                security_opt:
+                  - no-new-privileges:true
                 volumes:
                   - $PWD/config:/StratosphereLinuxIPS/config/
                   - $PWD/dataset:/StratosphereLinuxIPS/dataset/
+                  # persists the generated redis auth password (and web
+                  # login hash) across `docker compose down`/`up`, so the
+                  # long-lived TI-cache redis-server keeps working after a
+                  # container recreation.
+                  - $PWD/permanent:/StratosphereLinuxIPS/permanent/
                 network_mode: "host"
                 entrypoint: ["/bin/bash"]
-               

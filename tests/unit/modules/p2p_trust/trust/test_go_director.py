@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import json
 from unittest.mock import Mock, patch
 import pytest
 from tests.module_factory import ModuleFactory
@@ -132,6 +133,31 @@ def test_handle_gopy_data_error_cases(data_dict, expected_print_args):
                 },
             ],
         ),
+        # Test case 3: A "blame" message must go through the same
+        # validated path as a regular report, NOT straight to
+        # report_func - it should never bypass validation.
+        (
+            {
+                "reporter": "test_reporter",
+                "report_time": 1649445643,
+                "message": "eyJtZXNzYWdlX3R5cGUiOiAiYmxhbWUiLCAia2V5IjogIjE"
+                "5Mi4xNjguMS4xIiwgImtleV90eXBlIjogImlwIiwgImV2YWx1YXRpb25"
+                "fdHlwZSI6ICJzY29yZV9jb25maWRlbmNlIiwgImV2YWx1YXRpb24iOi"
+                "B7InNjb3JlIjogMC41LCAiY29uZmlkZW5jZSI6IDAuOH19",
+            },
+            "process_message_report",
+            [
+                "test_reporter",
+                1649445643,
+                {
+                    "message_type": "blame",
+                    "key": "192.168.1.1",
+                    "key_type": "ip",
+                    "evaluation_type": "score_confidence",
+                    "evaluation": {"score": 0.5, "confidence": 0.8},
+                },
+            ],
+        ),
     ],
 )
 def test_process_go_data(report, expected_method, expected_args):
@@ -140,6 +166,90 @@ def test_process_go_data(report, expected_method, expected_args):
     with patch.object(go_director, expected_method) as mock_method:
         go_director.process_go_data(report)
         mock_method.assert_called_once_with(*expected_args)
+
+
+def test_process_message_report_forwards_blame_to_blame_evaluator():
+    """
+    A validated "blame" message must be stored like any other report
+    AND handed to blame_evaluator (Trust.evaluate_blame_report), so
+    the trust model gets to decide whether to act on it - it must
+    never be forwarded without first being validated and stored.
+    report_func (the unrelated override_p2p escape hatch) must be
+    left untouched.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.report_func = Mock()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+
+    data = {
+        "message_type": "blame",
+        "key": "192.168.1.1",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.5, "confidence": 0.8},
+    }
+
+    go_director.process_message_report("test_reporter", 1649445643, data)
+
+    go_director.evaluation_processors["score_confidence"].assert_called_once()
+    go_director.blame_evaluator.assert_called_once_with(
+        "test_reporter", 1649445643, data
+    )
+    go_director.report_func.assert_not_called()
+
+
+def test_process_message_report_does_not_forward_plain_reports():
+    """
+    A regular "report" (not a blame) must be stored, but must NOT be
+    handed to blame_evaluator - only blame messages need the trust
+    model's blocking decision.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+
+    data = {
+        "message_type": "report",
+        "key": "192.168.1.1",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.5, "confidence": 0.8},
+    }
+
+    go_director.process_message_report("test_reporter", 1649445643, data)
+
+    go_director.evaluation_processors["score_confidence"].assert_called_once()
+    go_director.blame_evaluator.assert_not_called()
+
+
+def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluator():
+    """
+    The override_p2p escape hatch is a separate mechanism from blame
+    evaluation: when set, it must hand the (still-validated) data to
+    report_func instead of ever touching storage or blame_evaluator.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.override_p2p = True
+    go_director.report_func = Mock()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+
+    data = {
+        "message_type": "blame",
+        "key": "192.168.1.1",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.5, "confidence": 0.8},
+    }
+
+    go_director.process_message_report("test_reporter", 1649445643, data)
+
+    go_director.report_func.assert_called_once_with(
+        "test_reporter", 1649445643, data
+    )
+    go_director.blame_evaluator.assert_not_called()
+    go_director.evaluation_processors["score_confidence"].assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -548,6 +658,50 @@ def test_process_go_update(data, expected_calls):
         assert actual_calls == expected_calls
 
 
+@pytest.mark.parametrize(
+    "connected, existing_peers, expected_peers",
+    [
+        (True, ["existing_peer"], ["existing_peer", "test_peer"]),
+        (False, ["existing_peer", "test_peer"], ["existing_peer"]),
+    ],
+)
+def test_process_go_update_publishes_live_peer_state(
+    connected: bool,
+    existing_peers: list[str],
+    expected_peers: list[str],
+) -> None:
+    """
+    Ensure Pigeon activation changes update the Redis state used by the web.
+
+    Parameters:
+        connected: Connectivity reported by Pigeon.
+        existing_peers: Connected peers already present in Redis.
+        expected_peers: Connected peers expected after processing.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.db.get_connected_peers.return_value = existing_peers
+    go_director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.168.1.1", "reliability": 0.4}
+    )
+
+    go_director.process_go_update(
+        {
+            "peerid": "test_peer",
+            "connected": connected,
+            "timestamp": 1649445643,
+        }
+    )
+
+    stored_state = json.loads(
+        go_director.db.store_peer_trust_data.call_args.args[1]
+    )
+    assert stored_state["connected"] is connected
+    assert stored_state["timestamp"] == 1649445643
+    go_director.db.store_connected_peers.assert_called_once_with(
+        expected_peers
+    )
+
+
 def test_respond_to_message_request_with_info():
     go_director = ModuleFactory().create_go_director_obj()
     key = "192.168.1.1"
@@ -608,3 +762,89 @@ def test_respond_to_message_request_without_info():
             go_director.print.assert_called_once_with(expected_print, 2, 0)
 
             mock_send_evaluation.assert_not_called()
+
+
+def test_connection_update_is_validated_and_recorded() -> None:
+    """Accept one authenticated exact-tuple lifecycle update from Pigeon."""
+    go_director = ModuleFactory().create_go_director_obj()
+    connection = {
+        "peer_id": "peer-a",
+        "protocol": "tcp",
+        "local_ip": "192.0.2.10",
+        "local_port": "6668",
+        "remote_ip": "198.51.100.20",
+        "remote_port": "51000",
+        "connected": True,
+    }
+
+    go_director.handle_gopy_data(
+        {
+            "message_type": "connection_update",
+            "message_contents": connection,
+        }
+    )
+
+    go_director.db.record_p2p_message.assert_called_once_with(
+        "received",
+        {
+            "message_type": "connection_update",
+            "peer_id": "peer-a",
+            "connected": True,
+        },
+    )
+    go_director.db.store_authenticated_p2p_connection.assert_called_once_with(
+        "tcp|192.0.2.10|6668|198.51.100.20|51000",
+        {**connection, "authenticated": True},
+        go_director.ACTIVE_P2P_CONNECTION_TTL,
+    )
+    go_director.db.remove_authenticated_p2p_connection.assert_not_called()
+
+
+def test_connection_update_removes_connection_on_disconnect() -> None:
+    """Drop a connection from the live registry once Go reports it closed."""
+    go_director = ModuleFactory().create_go_director_obj()
+    connection = {
+        "peer_id": "peer-a",
+        "protocol": "tcp",
+        "local_ip": "192.0.2.10",
+        "local_port": "6668",
+        "remote_ip": "198.51.100.20",
+        "remote_port": "51000",
+        "connected": False,
+    }
+
+    go_director.handle_gopy_data(
+        {
+            "message_type": "connection_update",
+            "message_contents": connection,
+        }
+    )
+
+    go_director.db.remove_authenticated_p2p_connection.assert_called_once_with(
+        "tcp|192.0.2.10|6668|198.51.100.20|51000",
+    )
+    go_director.db.store_authenticated_p2p_connection.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "connection",
+    [
+        {},
+        {
+            "peer_id": "peer-a",
+            "protocol": "tcp",
+            "local_ip": "192.0.2.10",
+            "local_port": "6668",
+            "remote_ip": "198.51.100.20",
+            # missing remote_port and connected
+        },
+    ],
+)
+def test_connection_update_rejects_incomplete_data(
+    connection: dict,
+) -> None:
+    """Reject lifecycle records missing required tuple fields."""
+    go_director = ModuleFactory().create_go_director_obj()
+
+    with pytest.raises(ValueError):
+        go_director.process_connection_update(connection)

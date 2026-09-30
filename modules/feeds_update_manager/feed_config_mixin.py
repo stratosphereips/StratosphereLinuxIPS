@@ -77,6 +77,13 @@ class FeedConfigMixin:
         return
          a dict with feed info
         """
+        # ti_files()/ja3_feeds()/ssl_feeds() return False when the
+        # corresponding config key isn't set. open() happily accepts a bool
+        # as a raw file descriptor instead of raising, so without this check
+        # False silently opens stdin (fd 0) and reading it can hang forever.
+        if not feeds_path:
+            return {}
+
         try:
             with open(feeds_path, "r") as feeds_file:
                 feeds: str = feeds_file.read()

@@ -1,5 +1,5 @@
 <h1 align="center">
-Slips v1.1.23
+Slips v1.1.24
 </h1>
 
 
@@ -26,6 +26,7 @@ Slips v1.1.23
 
 <hr>
 
+The official wepage of Slips is in: https://slips.stratosphereips.org/
 
 # Table of Contents
 
@@ -116,11 +117,9 @@ terminal interface.
 
 ##### Web interface
 
-    ./slips.py -e 1 -f dataset/test7-malicious.pcap -o output_dir -w
+    ./slips.py -e 1 -f dataset/test7-malicious.pcap -w
 
-Then navigate to ```http://localhost:55000/``` from your browser.
-
-<img src="https://raw.githubusercontent.com/stratosphereips/StratosphereLinuxIPS/develop/docs/images/web_interface.png" width="850px">
+Then navigate to `http://localhost:55000/`. The interface is read-only, localhost-only, and fixed to this run's Redis database, SQLite flow database, and output logs. It shows runtime and module health, alerts, all evidence, triggering flows, and host context. It can also be enabled with `web_interface.enabled: true` in `config/slips.yaml`.
 
 For more info about the web interface, check the docs: https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#the-web-interface
 
@@ -138,7 +137,7 @@ See the installation docs for native setup details.
 
 # Requirements
 
-Slips requires Python 3.10.12 and at least 4 GBs of RAM to run smoothly.
+Slips requires Python 3.12.3 and at least 4 GBs of RAM to run smoothly.
 
 ---
 

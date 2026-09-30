@@ -42,7 +42,7 @@ class AlertHandler:
     channels: Any
     default_ttl: int
     width: float
-    disabled_detections: Any
+    conf: Any
     default_evidence_signal: str
     evidence_signal_overrides: Dict[str, str]
     publish: Callable[..., Any]
@@ -59,6 +59,47 @@ class AlertHandler:
     add_profile: Callable[..., Any]
 
     name = "alert_handler_db"
+
+    def try_claim_alert_generation(self, profileid: str, twid: str) -> bool:
+        """
+        Atomically claim the right to generate an alert for one profile
+        and time window.
+
+        Multiple evidence-handler processes can independently observe
+        the same profile/tw crossing the detection threshold at
+        essentially the same time. this uses Redis's
+        atomic SET...NX so exactly one caller wins the claim; everyone
+        else gets False immediately and simply skips alert generation
+        for this evidence - no waiting involved.
+
+        Parameters:
+            profileid: Profile whose alert is being claimed.
+            twid: Time window whose alert is being claimed.
+
+        Returns:
+            True when this call won the claim, False when another
+            process already holds it.
+        """
+        claim_key = f"alert_claim:{profileid}:{twid}"
+        # expires after 0.3s
+        alert_claim_ttl_ms = 300_000
+        return bool(self.r.set(claim_key, 1, nx=True, px=alert_claim_ttl_ms))
+
+    def release_alert_claim(self, profileid: str, twid: str) -> None:
+        """
+        Release a previously won alert-generation claim.
+
+        set_alert() resets the profile/tw's accumulated threat level to
+        0, so evidence can legitimately re-cross the threshold and earn
+        a new alert before the claim's TTL would otherwise expire. Call
+        this right after persisting the alert so that next claim isn't
+        stuck waiting out the TTL.
+
+        Parameters:
+            profileid: Profile whose alert claim is being released.
+            twid: Time window whose alert claim is being released.
+        """
+        self.r.delete(f"alert_claim:{profileid}:{twid}")
 
     def set_evidence_causing_alert(self, alert: Alert):
         """
@@ -87,7 +128,6 @@ class AlertHandler:
             self.constants.ALERTS,
             profileid_twid_alerts,
         )
-        self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
 
     def get_number_of_alerts_so_far(self):
         return self.r.get(self.constants.NUMBER_OF_ALERTS)
@@ -116,12 +156,6 @@ class AlertHandler:
             if evidence_details.get("ID") == evidence_id:
                 # found an evidence that has a matching ID
                 return evidence_details
-
-    def is_detection_disabled(self, evidence_type: EvidenceType):
-        """
-        Function to check if detection is disabled in slips.yaml
-        """
-        return str(evidence_type) in self.disabled_detections
 
     def _classify_evidence_signal(
         self, evidence_type: EvidenceType
@@ -155,16 +189,18 @@ class AlertHandler:
         uids = self.r.hget(self.constants.FLOWS_CAUSING_EVIDENCE, evidence_id)
         return json.loads(uids) if uids else []
 
-    def set_blocked_ip(self, ip: str):
+    def set_blocked_ip(
+        self, ip: str, blocked_at: Optional[float] = None
+    ) -> None:
+        """Track an active firewall block and its original start time.
+
+        Parameters:
+            ip: Address currently enforced by the Slips firewall chain.
+            blocked_at: Original Unix block timestamp, or now for a new rule.
         """
-        Adds the given IP to the blocked IPs sorted set with the current timestamp as score.
-         Also ensures that only the 100 most recent IPs are kept in the
-         set. and deleted the rest,
-         :param ip: The IP address to block
-        """
-        limit = 100
+        timestamp = time.time() if blocked_at is None else float(blocked_at)
         self.zadd_but_keep_n_entries(
-            self.constants.BLOCKED_IPS, {ip: time.time()}, limit
+            self.constants.BLOCKED_IPS, {ip: timestamp}, max_entries=200
         )
 
     def is_ip_blocked(self, ip: str) -> Optional[float]:
@@ -177,28 +213,73 @@ class AlertHandler:
         # remove ip from the blocked_ips sorted set
         self.r.zrem(self.constants.BLOCKED_IPS, ip)
 
-    def get_tw_limits(self, profileid, twid: str) -> Tuple[float, float]:
-        """
-        returns the timewindow start and endtime
-        """
-        twid_start_time: float = self.get_tw_start_time(profileid, twid)
-        if not twid_start_time:
-            # the given tw is in the future
-            # calc the start time of the twid manually based on the first
-            # twid
-            first_twid_start_time: float = self.get_first_flow_time()
-            given_twid: int = int(twid.replace("timewindow", ""))
-            # tws in slips start from 1.
-            #     tw1   tw2   tw3   tw4
-            # 0 ──────┬─────┬──────┬──────
-            #         │     │      │
-            #         2     4      6
-            twid_start_time = first_twid_start_time + (
-                self.width * (given_twid - 1)
-            )
+    def set_firewall_block_state(self, ip: str, state: Dict[str, Any]) -> None:
+        """Store the current firewall block schedule for an IP."""
+        self.r.hset(self.constants.FIREWALL_BLOCKS, ip, json.dumps(state))
 
-        twid_end_time: float = twid_start_time + self.width
-        return twid_start_time, twid_end_time
+    def get_firewall_block_states(self) -> Dict[str, Dict[str, Any]]:
+        """Return current firewall block schedules indexed by IP."""
+        states: Dict[str, Dict[str, Any]] = {}
+        for ip, raw in self.r.hgetall(self.constants.FIREWALL_BLOCKS).items():
+            try:
+                state = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            if isinstance(state, dict):
+                states[ip] = state
+        return states
+
+    def del_firewall_block_state(self, ip: str) -> None:
+        """Remove the firewall block schedule for an unblocked IP."""
+        self.r.hdel(self.constants.FIREWALL_BLOCKS, ip)
+
+    def get_tw_limits(
+        self,
+        profileid: str,
+        twid: str,
+        fallback_time: Any = None,
+    ) -> Tuple[float, float]:
+        """
+        Return the start and end timestamps of a time window.
+
+        Parameters:
+            profileid: Profile that owns the time window.
+            twid: Canonical time-window identifier.
+            fallback_time: Evidence timestamp used when Redis anchors expired.
+
+        Returns:
+            Start and end Unix timestamps.
+        """
+        twid_start_time = self.get_tw_start_time(profileid, twid)
+        if twid_start_time is not None:
+            return float(twid_start_time), float(twid_start_time) + self.width
+
+        given_twid = int(twid.replace("timewindow", ""))
+        known_windows = self.r.zrange(f"tws{profileid}", 0, 0, withscores=True)
+        if known_windows:
+            known_twid, known_start = known_windows[0]
+            if isinstance(known_twid, bytes):
+                known_twid = known_twid.decode()
+            known_number = int(str(known_twid).replace("timewindow", ""))
+            twid_start_time = float(known_start) + self.width * (
+                given_twid - known_number
+            )
+        elif (first_twid_start_time := self.get_first_flow_time()) is not None:
+            twid_start_time = float(first_twid_start_time) + self.width * (
+                given_twid - 1
+            )
+        else:
+            try:
+                twid_start_time = float(fallback_time)
+            except (TypeError, ValueError):
+                try:
+                    twid_start_time = float(
+                        utils.convert_ts_format(fallback_time, "unixtimestamp")
+                    )
+                except (TypeError, ValueError):
+                    twid_start_time = time.time()
+
+        return twid_start_time, twid_start_time + self.width
 
     def _get_more_info_about_evidence(self, evidence) -> Evidence:
         """
@@ -258,7 +339,7 @@ class AlertHandler:
         )
 
         # Ignore evidence if it's disabled in the configuration file
-        if self.is_detection_disabled(evidence.evidence_type):
+        if evidence.evidence_type in self.conf.disabled_detections():
             return False
 
         self.set_flow_causing_evidence(evidence.uid, evidence.id)
@@ -274,15 +355,9 @@ class AlertHandler:
         )
         if evidence_exists:
             return False
-        if self.is_whitelisted_evidence(evidence.id):
-            return False
 
         self.r.hset(evidence_hash, evidence.id, evidence_to_send)
         self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-        # note that publishing HAS TO be done after adding the evidence
-        # to the db
-        # whitelisted evidence are deleted from the db, so we need to check
-        # that we're not re-adding a deleted evidence
         self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
         return True
 
@@ -291,6 +366,7 @@ class AlertHandler:
         # reset the accumulated threat level now that an alert is generated
         self._set_accumulated_threat_level(alert, 0)
         self.publish(self.channels.NEW_ALERT, json.dumps(alert_to_dict(alert)))
+        self.r.incr(self.constants.NUMBER_OF_ALERTS, 1)
 
     def init_evidence_number(self):
         """used when the db starts to initialize number of
@@ -325,42 +401,6 @@ class AlertHandler:
         self.r.hdel(f"{profileid}_{twid}_evidence", evidence_id)
         self.r.decr(self.constants.NUMBER_OF_EVIDENCE)
 
-    def cache_whitelisted_evidence_id(self, evidence_id: str):
-        """
-        Keep track of whitelisted evidence IDs to avoid showing them in
-        alerts later
-        """
-        # without this function, slips gets the stored evidence id from the db,
-        # before deleteEvidence is called, so we need to keep track of
-        # whitelisted evidence ids
-        self.r.sadd(self.constants.WHITELISTED_EVIDENCE, evidence_id)
-        self.r.expire(
-            self.constants.WHITELISTED_EVIDENCE, self.default_ttl, nx=True
-        )
-
-    def is_whitelisted_evidence(self, evidence_id: str):
-        """
-        Check if we have the evidence ID as whitelisted in the db to
-        avoid showing it in alerts
-        """
-        return self.r.sismember(
-            self.constants.WHITELISTED_EVIDENCE, evidence_id
-        )
-
-    def remove_whitelisted_evidence(self, all_evidence: dict) -> dict:
-        """
-        param all_evidence serialized json dict
-        returns a dict
-        """
-        # remove whitelisted evidence from the given evidence
-        # all_evidence = json.loads(all_evidence)
-        tw_evidence = {}
-        for evidence_id, evidence in all_evidence.items():
-            if self.is_whitelisted_evidence(evidence_id):
-                continue
-            tw_evidence[evidence_id] = evidence
-        return tw_evidence
-
     def get_profileid_twid_alerts(
         self, profileid, twid
     ) -> Dict[str, List[str]]:
@@ -379,13 +419,7 @@ class AlertHandler:
         evidence: Dict[str, dict] = self.r.hgetall(
             f"{profileid}_{twid}_evidence"
         )
-        if evidence:
-            evidence: Dict[str, dict] = self.remove_whitelisted_evidence(
-                evidence
-            )
-            return evidence
-
-        return {}
+        return evidence or {}
 
     def set_max_threat_level(self, profileid: str, threat_level: str):
         self.set_profileid_field(
