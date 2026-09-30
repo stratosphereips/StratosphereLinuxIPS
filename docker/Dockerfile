@@ -97,6 +97,7 @@ RUN apt-get update -o Acquire::Retries=5 \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && git fetch --depth 1 origin "${SLIPS_GIT_REF}" \
     && git checkout FETCH_HEAD \
+    && git submodule update --init --recursive --depth 1 \
     && git fetch --depth 1 origin master:refs/remotes/origin/master \
     && git fetch --depth 1 origin develop:refs/remotes/origin/develop \
     && git lfs install \
