@@ -504,11 +504,9 @@ class TIFeedParserMixin:
 
         data_type = utils.detect_ioc_type(ioc)
         if data_type is None:
-            self.print(
+            self.log(
                 f"The data {ioc} is not valid. It "
-                f"was found in {ti_file_path}.",
-                0,
-                1,
+                f"was found in {ti_file_path}."
             )
             return False
         return True
