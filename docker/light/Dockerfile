@@ -64,35 +64,19 @@ WORKDIR ${SLIPS_DIR}
 
 # Clone Slips directly from GitHub instead of COPYing the host build
 # context. avoid accedinatelly pushing tmp files to docker images, easier to checkout diff branches, and makes it the
-# dockerfile's responsibility to install git-lfs instead of the builder.
+# dockerfile's responsibility to install git instead of the builder.
+# Submodules (e.g. p2p4slips) are cloned too, since a plain fetch skips them.
 RUN apt-get update -o Acquire::Retries=5 \
-    && apt-get install -y --no-install-recommends git-lfs ca-certificates \
+    && apt-get install -y --no-install-recommends git ca-certificates \
     && git init . \
     && git remote add origin https://github.com/stratosphereips/StratosphereLinuxIPS.git \
     && git fetch --depth 1 origin "${SLIPS_GIT_REF}" \
     && git checkout FETCH_HEAD \
+    && git submodule update --init --recursive --depth 1 \
     && git fetch --depth 1 origin master:refs/remotes/origin/master \
     && git fetch --depth 1 origin develop:refs/remotes/origin/develop \
-    && git lfs install \
-    && git lfs pull \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
-
-# ml_linear_model/ml_online_model artifacts are stored with git LFS. If the
-# build context was checked out without pulling LFS objects (missing
-# git-lfs, or a clone/checkout that didn't fetch them), these files are
-# left as LFS pointer text files instead of the real pickled models, which
-# crashes those modules at runtime with "invalid load key, 'v'.". Fail the
-# build early instead of shipping a broken image.
-RUN for f in \
-        modules/ml_linear_model/artifacts/model.bin \
-        modules/ml_online_model/artifacts/model.bin; do \
-        if head -c 7 "$f" | grep -q "version"; then \
-            echo "ERROR: $f is a git-lfs pointer file, not the real model." >&2; \
-            echo "Run 'git lfs install && git lfs pull' in your clone before building this image." >&2; \
-            exit 1; \
-        fi; \
-    done
 
 RUN cd modules \
     && rm -rf \
@@ -106,6 +90,8 @@ RUN cd modules \
         template/ \
         blocking/ \
         virustotal/ \
+        ml_linear_model/ \
+        ml_online_model/ \
     && cd .. \
     && rm -rf dataset/ docs/  tests/ \
     && rm pytest.ini \
