@@ -771,6 +771,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.label_finalize_delay_windows = self._read_module_config_int(
             "label_finalize_delay_windows", default=2
         )
+        # Flow-match granularity for labeling + flip detection. Default uid:
+        # only exact evidence-cited flows get the label (no IP-wide
+        # over-labeling of a victim's or attacker's unrelated traffic).
+        # History note: 'uid_ip' (attacker+victim sets) was the Sept-30
+        # schema-fix behavior; kept over for static-attacker benchmarks.
+        self.label_match_mode = self._read_module_config_str(
+            "label_match_mode",
+            default="uid",
+            choices=("uid", "uid_attacker", "uid_ip"),
+        )
         self._flow_ring = (
             collections.deque()
         )  # ring cells: {"flows": dict, "mal_ids": set}
@@ -872,6 +882,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         section = self.module_config_section
         value = conf.read_configuration(section, config_key, default)
         return self._to_bool(value, default)
+
+    def _read_module_config_str(
+        self, config_key: str, default: str, choices=()
+    ) -> str:
+        """Read a validated string from this module's config section.
+
+        :param config_key: yaml key under the module's section
+        :param default: fallback when unset/invalid
+        :param choices: allowed values; anything else coerces to default
+        """
+        conf = ConfigParser()
+        value = conf.read_configuration(
+            self.module_config_section, config_key, default
+        )
+        value = str(value or default).strip()
+        return value if (not choices or value in choices) else default
 
     def _load_local_model(self):
         """Load local model (full state dict) and scaler from artifacts."""
@@ -1670,12 +1696,34 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         return matched_uids, attacker_ips, victim_ips, len(evidence_ids)
 
     def _flow_matches(self, flow, matched_uids, attacker_ips, victim_ips):
-        """One matching rule for both immediate and ring modes."""
+        """Match a flow to alert signatures under the configured mode.
+
+        Modes (yaml `federated_network_module.label_match_mode`, default
+        `uid`):
+          uid            — only flows whose uid an alert's evidence cites;
+                           exact, never over-labels non-attack traffic.
+          uid_attacker   — + flows sharing an alert's attacker-party IP
+                           (host-wide attack association, victim-side kept
+                           clean).
+          uid_ip         — + flows sharing attacker AND victim party IPs
+                           (maximal coverage; labels non-attack flows of a
+                           victim as malicious - keep for static-attacker
+                           benchmarks only).
+        The flip detector uses this exact rule, so flips measure
+        contradictions of the same matching semantics that produced the
+        label.
+        """
         uid = (flow.get("uid") or "").strip()
         if uid and uid in matched_uids:
             return True
+        mode = getattr(self, "label_match_mode", "uid")
+        if mode == "uid":
+            return False
         saddr = str(flow.get("saddr", ""))
         daddr = str(flow.get("daddr", ""))
+        if mode == "uid_attacker":
+            return saddr in attacker_ips or daddr in attacker_ips
+        # uid_ip: attacker and victim sets, maximal coverage
         return (
             saddr in attacker_ips
             or daddr in attacker_ips
