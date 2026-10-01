@@ -1870,18 +1870,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.logger.log_comp_header("comp_test_inferred", window_header)
         self.logger.log_comp_header("comp_test_gt", window_header)
 
+        # Inferred labels must be keyed BY FLOW, not by training_buffer
+        # position: training_buffer_y may start with leftovers from
+        # sub-threshold windows (min_training_samples carry-over), which
+        # shifts every comparison by that many entries and fabricates
+        # FN/TN artifacts. The finalized lists already carry the label.
         all_flows = malicious_flows + benign_flows
+        inferred_of = [MALICIOUS] * len(malicious_flows) + [BENIGN] * len(
+            benign_flows
+        )
 
         # inferred vs GT
         gt_labels = []
         inferred_labels = []
-        for i, flow in enumerate(all_flows):
-            if i >= len(self.training_buffer_y):
-                break
+        for flow, inferred in zip(all_flows, inferred_of):
             gt_norm = self._get_simulated_gt(flow)
             if gt_norm is None:
                 continue
-            inferred_labels.append(self.training_buffer_y[i])
+            inferred_labels.append(inferred)
             gt_labels.append(gt_norm)
 
         if len(gt_labels) > 0:
