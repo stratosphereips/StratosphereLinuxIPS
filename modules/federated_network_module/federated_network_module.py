@@ -707,9 +707,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Training counters
         self.training_count_alert: int = 0
-        # Alerts whose attacker party resolved to our own IP, dropped as
-        # identity inconsistencies (self-attack reports of p2p trust).
-        self.self_referential_alerts_dropped: int = 0
         # Label-flip instrumentation: flows that trained with one label whose
         # final (later-alert) label contradicts it. Not label-vs-GT - our own
         # pipeline's self-contradiction. flow_id -> {label,uid,saddr,daddr};
@@ -1566,14 +1563,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             attacker_ip = _party_ip("attacker")
             victim_ip = _party_ip("victim")
 
-            if attacker_ip and attacker_ip in self._local_ips():
-                # Self-referential report (p2p trust rings flag the local
-                # node at bootstrap, see p2p-self-alerts.md): an identity
-                # inconsistency, not attack evidence. Dropping it here keeps
-                # it from tagging our own flows malicious in the ring.
-                self.self_referential_alerts_dropped += 1
-                attacker_ip = None
-
+            # p2p bootstrap self-reports (attacker == own IP) are handled at
+            # the SLIPS/admin layer, not by module-side filtering; thread the
+            # identity question upward (see p2p-self-alerts.md).
             self.pending_alerts.append(
                 {
                     "evidence_ids": list(evidence_ids),
@@ -1773,6 +1765,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "uid": (flow.get("uid") or "").strip(),
                     "saddr": str(flow.get("saddr", "")),
                     "daddr": str(flow.get("daddr", "")),
+                    "starttime": str(flow.get("starttime", "")),
                 }
 
     def _commit_training_labels(self, window_n: int) -> None:
@@ -1804,6 +1797,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         "uid": rec["uid"],
                         "saddr": rec["saddr"],
                         "daddr": rec["daddr"],
+                        "starttime": rec["starttime"],
                         "label": rec["label"],
                         "train_window": window_n,
                     }
@@ -2327,38 +2321,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
     _TRUST_CACHE_TTL_S = 60
-
-    def _local_ips(self) -> set:
-        """Best-effort set of this node's own IPs (cached).
-
-        Used to drop self-referential alerts: p2p trust rings report the
-        local node as its own attacker during bootstrap, and without an
-        identity check those reports would tag this peer's own flows as
-        malicious labeling material.
-
-        :return: set of IP strings (may be empty when unresolved)
-        """
-        cached = getattr(self, "_local_ips_cache", None)
-        if cached is not None:
-            return cached
-        ips = set()
-        try:
-            import socket
-
-            for cand in {socket.gethostname(), self.my_peer_id} - {
-                None,
-                "unknown",
-            }:
-                try:
-                    ip = socket.gethostbyname(cand)
-                    if ip and not ip.startswith("127."):
-                        ips.add(ip)
-                except Exception:  # noqa: BLE001
-                    pass
-        except Exception:  # noqa: BLE001
-            pass
-        self._local_ips_cache = ips
-        return ips
 
     def _resolve_peer_ip(self, peer_id: str) -> Optional[str]:
         """Best-effort hostname -> topology IP via docker DNS (cached)."""
