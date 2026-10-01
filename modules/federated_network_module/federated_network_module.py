@@ -473,6 +473,7 @@ class ModuleLogger:
         self._files = {}
         if enable:
             os.makedirs(output_dir, exist_ok=True)
+            filenames = {"trained_labels": "trained_labels.jsonl"}
             for name in [
                 "local_train",
                 "local_head_train",
@@ -487,8 +488,11 @@ class ModuleLogger:
                 "merging_data",
                 "training_network",
                 "label_flips",
+                "trained_labels",
             ]:
-                path = os.path.join(output_dir, f"{name}.log")
+                path = os.path.join(
+                    output_dir, filenames.get(name, f"{name}.log")
+                )
                 self._files[name] = open(path, "w")
 
     def _write(self, name: str, msg: str) -> None:
@@ -715,6 +719,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._trained_per_window: dict = {}
         self._flip_events: list = []
         self._flipped_ids: set = set()
+        # Labeled-but-not-yet-trained flows. Finalization assigns their final
+        # label here; the registry/jsonl write at TRAIN time (window truthful).
+        # Carried-over (sub-threshold) batches wait here instead of vanishing.
+        self._pending_labeled: dict = {}
         self.training_count_twclose: int = 0
         self.training_count_window: int = 0
         self._training_trigger: str = ""
@@ -1744,33 +1752,64 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         stats["finalized_ben"] = len(benign_flows)
         return malicious_flows, benign_flows, finalized["mal_ids"], stats
 
-    def _register_trained_flows(
-        self, malicious_flows: list, benign_flows: list, window_n: int
+    def _record_pending_labels(
+        self, malicious_flows: list, benign_flows: list
     ) -> None:
-        """Record flows as trained-with-label for flip attribution.
+        """Snapshot finalize-time labels into the pending pool.
 
-        Registration happens only for flows that actually trained (the
-        caller gates on min_training_samples, mirroring the batch guard).
-
-        :param malicious_flows: finalized flows trained as malicious
-        :param benign_flows: finalized flows trained as benign
-        :param window_n: training window index of the batch
+        Pendings wait until a training batch actually fires; sub-threshold
+        batches therefore stay visible to flips instead of vanishing.
         """
-        label_of = {id(f): 1 for f in malicious_flows}
-        for flow in malicious_flows + benign_flows:
-            fid = self._get_flow_id(flow)
+        for lbl, group in ((1, malicious_flows), (0, benign_flows)):
+            for flow in group:
+                fid = self._get_flow_id(flow)
+                if (
+                    fid in self._pending_labeled
+                    or fid in self._trained_label_flows
+                ):
+                    continue
+                self._pending_labeled[fid] = {
+                    "label": lbl,
+                    "uid": (flow.get("uid") or "").strip(),
+                    "saddr": str(flow.get("saddr", "")),
+                    "daddr": str(flow.get("daddr", "")),
+                }
+
+    def _commit_training_labels(self, window_n: int) -> None:
+        """Commit pending labels into the trained registry + JSONL audit.
+
+        Called exactly when a training batch fires, so every flow gets its
+        TRUE train window (carried batches may have waited several windows).
+        One JSONL line per flow goes to trained_labels.jsonl for offline
+        cross-checks against the saved alert stream.
+
+        :param window_n: training window index of the firing batch
+        """
+        import json as _json
+
+        for fid, rec in self._pending_labeled.items():
             if fid in self._trained_label_flows:
                 continue
-            self._trained_label_flows[fid] = {
-                "label": label_of.get(id(flow), 0),
-                "uid": (flow.get("uid") or "").strip(),
-                "saddr": str(flow.get("saddr", "")),
-                "daddr": str(flow.get("daddr", "")),
-            }
+            self._trained_label_flows[fid] = rec
             self._trained_window_of[fid] = window_n
-            self._trained_per_window[window_n] = (
-                self._trained_per_window.get(window_n, 0) + 1
+        self._trained_per_window[window_n] = self._trained_per_window.get(
+            window_n, 0
+        ) + len(self._pending_labeled)
+        for fid, rec in self._pending_labeled.items():
+            self.logger._write(
+                "trained_labels",
+                _json.dumps(
+                    {
+                        "flow_id": fid,
+                        "uid": rec["uid"],
+                        "saddr": rec["saddr"],
+                        "daddr": rec["daddr"],
+                        "label": rec["label"],
+                        "train_window": window_n,
+                    }
+                ),
             )
+        self._pending_labeled.clear()
 
     def _detect_label_flips(
         self, matched_uids: set, attacker_ips: set, victim_ips: set
@@ -2071,12 +2110,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     f"flips {ring_stats['flips_total']}",
                 )
 
+            self._record_pending_labels(malicious_flows, benign_flows)
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
-                # flips are only meaningful for flows that actually trained
-                self._register_trained_flows(
-                    malicious_flows, benign_flows, window_n
-                )
+                # flips/jsonl audit only for flows that actually trained
+                self._commit_training_labels(window_n)
                 if ring_stats:
                     self._write_label_flips("finalize")
                 self._train_batch()
