@@ -1599,8 +1599,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     alert_count, evidence_count)
         """
         matched_uids: set = set()
-        all_attacker_ips: set = set()
-        all_victim_ips: set = set()
         all_evidence_ids: set = set()
 
         for alert in self.pending_alerts:
@@ -1609,30 +1607,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 uids = self.db.get_flows_causing_evidence(evid_id)
                 if uids:
                     matched_uids.update(uids)
-            attacker_ip = alert.get("attacker_ip")
-            victim_ip = alert.get("victim_ip")
-            if attacker_ip:
-                all_attacker_ips.add(attacker_ip)
-            if victim_ip:
-                all_victim_ips.add(victim_ip)
 
         malicious_flows = []
         malicious_flow_ids = set()
+        # UID-only semantics, same matcher as the ring path (the legacy
+        # inline attacker/victim IP branch was removed Oct 2 with the rest
+        # of IP-based labeling).
         for flow_id, flow in self.window_flows.items():
-            flow_uid = (flow.get("uid") or "").strip()
-            if flow_uid and flow_uid in matched_uids:
-                malicious_flows.append(flow)
-                malicious_flow_ids.add(flow_id)
-                continue
-
-            saddr = str(flow.get("saddr", ""))
-            daddr = str(flow.get("daddr", ""))
-            if (
-                saddr in all_attacker_ips
-                or daddr in all_attacker_ips
-                or saddr in all_victim_ips
-                or daddr in all_victim_ips
-            ):
+            if self._flow_matches(flow, matched_uids, set(), set()):
                 malicious_flows.append(flow)
                 malicious_flow_ids.add(flow_id)
 
@@ -2110,12 +2092,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
 
             self._record_pending_labels(malicious_flows, benign_flows)
+            # Central flip detection (immediate K=0 path too): this close's
+            # alerts are matched against earlier-TRAINED flows. The ring
+            # path also detects inside _label_ring_then_finalize; set-dedup
+            # (_flipped_ids) keeps re-execution idempotent.
+            _sign = self._collect_alert_signatures()
+            self._detect_label_flips(_sign[0], _sign[1], _sign[2])
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
                 # flips/jsonl audit only for flows that actually trained
                 self._commit_training_labels(window_n)
-                if ring_stats:
-                    self._write_label_flips("finalize")
+                self._write_label_flips("finalize")
                 self._train_batch()
 
                 self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
