@@ -473,7 +473,10 @@ class ModuleLogger:
         self._files = {}
         if enable:
             os.makedirs(output_dir, exist_ok=True)
-            filenames = {"trained_labels": "trained_labels.jsonl"}
+            filenames = {
+                "trained_labels": "trained_labels.jsonl",
+                "alert_uids": "alert_uids.jsonl",
+            }
             for name in [
                 "local_train",
                 "local_head_train",
@@ -489,6 +492,7 @@ class ModuleLogger:
                 "training_network",
                 "label_flips",
                 "trained_labels",
+                "alert_uids",
             ]:
                 path = os.path.join(
                     output_dir, filenames.get(name, f"{name}.log")
@@ -1850,6 +1854,28 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"pct {100.0 * f / t if t else 0.0:.2f}",
             )
 
+    def _write_alert_uids(self, window_n: int, sign) -> None:
+        """Persist this close's full alert->evidence->uid contagion.
+
+        :param window_n: current training window index
+        :param sign: _collect_alert_signatures() tuple
+        """
+        import json as _json
+
+        matched_uids, _attacker_ips, _victim_ips, evidence_count = sign
+        self.logger._write(
+            "alert_uids",
+            _json.dumps(
+                {
+                    "window": window_n,
+                    "alert_count": len(self.pending_alerts),
+                    "evidence_count": evidence_count,
+                    "uid_count": len(matched_uids),
+                    "uids": sorted(matched_uids),
+                }
+            ),
+        )
+
     def _add_flows_to_buffers(self, flows: list, label: str):
         """
         Add flows to training and alignment buffers if not already present.
@@ -2092,11 +2118,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
 
             self._record_pending_labels(malicious_flows, benign_flows)
+            # Persist this close's alert->evidence->uid contagion so offline
+            # analysis replays the SAME matching semantics the module used
+            # (live db lookups die with the run; this is the durable record):
+            # one JSONL per close with window, alert/evidence counts, and
+            # the exact uid set that constituted 'malicious' this window.
+            _sign = self._collect_alert_signatures()
+            self._write_alert_uids(window_n, _sign)
             # Central flip detection (immediate K=0 path too): this close's
             # alerts are matched against earlier-TRAINED flows. The ring
             # path also detects inside _label_ring_then_finalize; set-dedup
             # (_flipped_ids) keeps re-execution idempotent.
-            _sign = self._collect_alert_signatures()
             self._detect_label_flips(_sign[0], _sign[1], _sign[2])
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
