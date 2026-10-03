@@ -53,6 +53,12 @@ class WebInterface(IModule):
             bind_address,
             "--port",
             str(port),
+            "--host-profiles-path",
+            str(
+                Path(self.conf.permanent_dir())
+                / "host_profiles"
+                / "hosts.sqlite"
+            ),
             "--redis-port",
             str(self.redis_port),
             "--output-dir",
