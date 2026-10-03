@@ -3654,6 +3654,169 @@ class RunDataReader:
             result.append(current)
         return result
 
+    def _network_run_name(self) -> str:
+        """Return the same run identifier used by the host profile module.
+
+        Returns:
+            Output directory and main-process PID, if known.
+        """
+        main_pid = self.redis.hget("PIDs", "main")
+        if not isinstance(main_pid, (str, int)) or not str(main_pid).isdigit():
+            return ""
+        return f"{self.output_dir}:{main_pid}"
+
+    def _named_network_states(
+        self, states: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Attach permanent user names to current network cards.
+
+        Parameters:
+            states: Current interface settings.
+
+        Returns:
+            Settings with network identity and saved display name.
+        """
+        if not states:
+            return []
+        run_name = self._network_run_name()
+        result = [
+            {
+                **state,
+                "network_id": HostProfileStore.network_id_for_state(
+                    state, run_name
+                ),
+            }
+            for state in states
+        ]
+        names = HostProfileStore.network_names(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            (state["network_id"] for state in result),
+        )
+        for state in result:
+            state["name"] = names.get(state["network_id"], "")
+            state["name_scope"] = (
+                "network" if state.get("gateway_mac") else "run"
+            )
+        return result
+
+    def save_network_name(
+        self, interface: str, network_id: str, name: str
+    ) -> Dict[str, str]:
+        """Name the currently monitored network in permanent storage.
+
+        Parameters:
+            interface: Interface selected in the Overview panel.
+            network_id: Identity displayed when the editor was opened.
+            name: New display name, or empty to clear it.
+
+        Returns:
+            Saved name and network identity.
+
+        Raises:
+            ValueError: The input or current network is invalid or changed.
+        """
+        if not all(
+            isinstance(value, str) for value in (interface, network_id)
+        ):
+            raise ValueError("Network name request must contain text values")
+        name = self._validated_network_name(name)
+        analysis = self.redis.hgetall("analysis")
+        interfaces = [
+            item.strip()
+            for item in str(analysis.get("interface", "")).split(",")
+            if item.strip()
+        ]
+        if (
+            analysis.get("input_type") != "interface"
+            or analysis.get("analysis_end")
+            or interface not in interfaces
+        ):
+            raise ValueError("Select a currently monitored interface")
+        current = collect_network_state(interface, len(interfaces))
+        if not current.get("connected"):
+            raise ValueError("The selected interface is disconnected")
+        run_name = self._network_run_name()
+        expected_id = HostProfileStore.network_id_for_state(current, run_name)
+        if not expected_id or expected_id != network_id:
+            raise ValueError(
+                "The network changed; refresh the page and try again"
+            )
+        HostProfileStore.set_network_name(
+            self.host_profiles_path, expected_id, name
+        )
+        saved = self._loads(self.redis.hget("network_states", interface), {})
+        if (
+            current.get("gateway_mac")
+            and not saved.get("history")
+            and str(saved.get("gateway_mac") or "").lower()
+            == str(current["gateway_mac"]).lower()
+            and run_name
+        ):
+            HostProfileStore.set_network_name(
+                self.host_profiles_path,
+                HostProfileStore.network_id_for_state({}, run_name),
+                name,
+            )
+        return {"network_id": expected_id, "name": name}
+
+    @staticmethod
+    def _validated_network_name(name: str) -> str:
+        """Normalize a printable network name before persisting it.
+
+        Parameters:
+            name: User-provided network display name.
+
+        Returns:
+            Trimmed name, or an empty string to clear a saved name.
+
+        Raises:
+            ValueError: The value is not printable bounded text.
+        """
+        if not isinstance(name, str):
+            raise ValueError("Network name must be text")
+        name = name.strip()
+        if len(name) > 80 or any(
+            ord(char) < 32 or ord(char) == 127 for char in name
+        ):
+            raise ValueError(
+                "Network name must be at most 80 printable characters"
+            )
+        return name
+
+    def save_profile_network_name(
+        self, ip: str, network_id: str, name: str
+    ) -> Dict[str, str]:
+        """Name a historical network shown in one permanent host profile.
+
+        Parameters:
+            ip: Host whose network profile is visible in the page.
+            network_id: Exact stored network identity for that profile.
+            name: New display name, or empty to clear it.
+
+        Returns:
+            Saved name and network identity.
+
+        Raises:
+            ValueError: The profile or proposed name is invalid.
+        """
+        if not isinstance(ip, str) or not isinstance(network_id, str):
+            raise ValueError("Select a visible host network profile")
+        name = self._validated_network_name(name)
+        if not HostProfileStore.has_network_profile(
+            self.host_profiles_path, ip, network_id
+        ):
+            raise ValueError(
+                "The selected host network profile is unavailable"
+            )
+        HostProfileStore.set_network_name(
+            self.host_profiles_path, network_id, name
+        )
+        return {"network_id": network_id, "name": name}
+
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
@@ -3760,6 +3923,11 @@ class RunDataReader:
                 self.redis.hgetall("network_states").items()
             )
         ]
+        current_network_states = self._named_network_states(
+            self._current_network_states(
+                analysis, saved_network_states, host_addresses
+            )
+        )
         return {
             "run": {
                 **analysis,
@@ -3785,9 +3953,7 @@ class RunDataReader:
                 computer_interfaces
             ),
             "computer_name": socket.gethostname(),
-            "network_states": self._current_network_states(
-                analysis, saved_network_states, host_addresses
-            ),
+            "network_states": current_network_states,
             "sources": {
                 "redis": True,
                 "sqlite": self.sqlite_path.exists(),
@@ -4783,7 +4949,7 @@ class SlipsHTTPServer(ThreadingHTTPServer):
 
 
 class RequestHandler(BaseHTTPRequestHandler):
-    """Serve exact static assets and bounded read-only JSON APIs."""
+    """Serve run data and bounded, local network-name edits."""
 
     server: SlipsHTTPServer
 
@@ -4959,6 +5125,75 @@ class RequestHandler(BaseHTTPRequestHandler):
                     "detail": str(error),
                 },
                 HTTPStatus.INTERNAL_SERVER_ERROR,
+            )
+
+    def do_POST(self) -> None:
+        """Save one network name from the same-origin Overview editor."""
+        if urlparse(self.path).path != "/api/network-name":
+            self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+            return
+        origin = self.headers.get("Origin", "")
+        if origin and urlparse(origin).netloc != self.headers.get("Host", ""):
+            self._send_json({"error": "Invalid origin"}, HTTPStatus.FORBIDDEN)
+            return
+        if (
+            self.headers.get("Content-Type", "")
+            .split(";", 1)[0]
+            .strip()
+            .lower()
+            != "application/json"
+        ):
+            self._send_json(
+                {"error": "Expected a JSON request"},
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+            return
+        try:
+            size = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            size = 0
+        if size < 1 or size > 1024:
+            self._send_json(
+                {"error": "Invalid request size"},
+                HTTPStatus.BAD_REQUEST,
+            )
+            return
+        try:
+            payload = json.loads(self.rfile.read(size))
+            if not isinstance(payload, dict):
+                raise ValueError("Expected an object")
+            self.server.reader.validate_run_identity()
+            if "ip" in payload:
+                saved = self.server.reader.save_profile_network_name(
+                    payload.get("ip"),
+                    payload.get("network_id"),
+                    payload.get("name"),
+                )
+            else:
+                saved = self.server.reader.save_network_name(
+                    payload.get("interface"),
+                    payload.get("network_id"),
+                    payload.get("name"),
+                )
+            self._send_json(saved)
+        except ValueError as error:
+            self._send_json(
+                {"error": "Invalid network name", "detail": str(error)},
+                HTTPStatus.BAD_REQUEST,
+            )
+        except RunMismatchError as error:
+            self._send_json(
+                {"error": "Run mismatch", "detail": str(error)},
+                HTTPStatus.CONFLICT,
+            )
+        except (redis.RedisError, sqlite3.Error, OSError) as error:
+            traceback.print_exc()
+            self._send_json(
+                {
+                    "error": "Unable to save the network name",
+                    "detail": str(error),
+                },
+                HTTPStatus.SERVICE_UNAVAILABLE,
             )
 
 
