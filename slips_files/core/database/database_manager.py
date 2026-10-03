@@ -313,6 +313,12 @@ class DBManager:
     def get_local_network(self, *args, **kwargs):
         return self.rdb.get_local_network(*args, **kwargs)
 
+    def get_network_state(self, *args, **kwargs):
+        return self.rdb.get_network_state(*args, **kwargs)
+
+    def replace_network_state(self, *args, **kwargs):
+        return self.rdb.replace_network_state(*args, **kwargs)
+
     def get_total_recognized_localnets(self, *args, **kwargs):
         return self.rdb.get_total_recognized_localnets(*args, **kwargs)
 
