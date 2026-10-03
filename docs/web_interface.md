@@ -63,6 +63,20 @@ the Overview card reads the current interface settings directly. It labels
 that result as a live reading and keeps the saved change time visible. The
 saved history is updated by the Slips main process when it resumes.
 
+The Current network card also lets you enter a name such as `Home Wi-Fi` or
+`Office Ethernet`. Save an empty name to remove it. Names are stored in the
+permanent host profile database and appear on both the network card and
+matching permanent host profiles. When the router MAC is known, the name
+follows that network across Slips runs. If the router MAC is unavailable,
+the card explains that its name is scoped to the current run so two unrelated
+private networks are not combined. For a run with no earlier network changes,
+the same name is also applied to host records observed before the router MAC
+was learned.
+Each permanent profile section in the Host workspace has a **Name network**
+control for older run-scoped networks that cannot be matched safely to the
+current router. Naming one of those sections updates all hosts recorded under
+that same network identity.
+
 ## Permanent host profiles
 
 Slips keeps identity clues in `host_profiles/hosts.sqlite` inside the configured
