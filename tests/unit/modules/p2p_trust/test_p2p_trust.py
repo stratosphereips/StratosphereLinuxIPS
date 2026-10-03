@@ -30,6 +30,7 @@ def create_trust():
     trust.conf = Mock()
     trust.conf.use_local_p2p.return_value = False
     trust.db = Mock()
+    trust.termination_event = Mock()
     trust.print = Mock()
     trust.parent_output_dir = "output"
     trust.pigeon_binary_dir = "p2p4slips"
@@ -405,6 +406,55 @@ def test_main_continues_after_one_malformed_gopy_message() -> None:
         "Warning: Ignoring malformed p2p_gopy message after processing failed:"
     )
     assert warning[1:] == (0, 1)
+
+
+@pytest.mark.parametrize(
+    "message_type,expected",
+    [
+        ("peer_update", True),
+        ("connection_update", True),
+        ("go_data", True),
+        ("unexpected", False),
+    ],
+)
+def test_gopy_filter_accepts_connection_updates(
+    message_type: str, expected: bool
+) -> None:
+    """Pass authenticated connection events to the Go message handler.
+
+    Parameters:
+        message_type: Go message type on the local Pigeon channel.
+        expected: Whether the filter should accept the message.
+    """
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.gopy_channel = "p2p_gopy"
+    message = {
+        "data": json.dumps(
+            {"message_type": message_type, "message_contents": {}}
+        )
+    }
+
+    assert trust.is_msg_version_compatible(message, "p2p_gopy") is expected
+
+
+def test_main_yields_between_nonblocking_channel_polls() -> None:
+    """An idle P2P module must yield CPU while remaining responsive."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.create_p2p_logfile = False
+    trust.p2p_data_request_channel = "p2p_data_request"
+    trust.gopy_channel = "p2p_gopy"
+    trust.pigeon = Mock()
+    trust.pigeon.poll.return_value = None
+    trust.mutliaddress_printed = True
+    trust.get_msg = Mock(return_value=None)
+
+    trust.main()
+
+    trust.termination_event.wait.assert_called_once_with(0.05)
 
 
 def test_stop_pigeon_waits_for_child_exit() -> None:
