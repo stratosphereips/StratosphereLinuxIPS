@@ -61,6 +61,35 @@ flow = Conn(
 )
 
 
+@pytest.mark.parametrize("method_name", ["add_flow", "add_altflow"])
+def test_flow_writes_do_not_profile_hosts_inline(method_name: str) -> None:
+    """Keep durable host profiling out of the flow ingestion path.
+
+    Parameters:
+        method_name: Flow or alternate-flow write to exercise.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.sqlite = factory.logger
+    db.rdb = Mock()
+    db.host_profiles = Mock()
+
+    result = getattr(db, method_name)(flow, profileid, twid)
+
+    if method_name == "add_flow":
+        db.sqlite.add_flow.assert_called_once_with(
+            flow, profileid, twid, label="benign"
+        )
+        db.rdb.add_flow.assert_called_once_with(
+            flow, profileid=profileid, twid=twid, label="benign"
+        )
+        assert result is db.rdb.add_flow.return_value
+    else:
+        db.sqlite.add_altflow.assert_called_once_with(flow, profileid, twid)
+        assert result is db.sqlite.add_altflow.return_value
+    db.host_profiles.observe_flow.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "method_name",
     [
@@ -447,14 +476,20 @@ def test_replace_network_state_clears_old_network_settings() -> None:
     """A Wi-Fi switch replaces the subnet, gateway, host IP, and DNS."""
     db = ModuleFactory().create_db_manager_obj(6395, flush_db=True)
     first = {
-        "host_ip": "192.168.1.20", "local_network": "192.168.1.0/24",
-        "gateway_ip": "192.168.1.1", "gateway_mac": "aa:bb:cc:dd:ee:ff",
-        "dns_servers": ["192.168.1.53"], "version": 1,
+        "host_ip": "192.168.1.20",
+        "local_network": "192.168.1.0/24",
+        "gateway_ip": "192.168.1.1",
+        "gateway_mac": "aa:bb:cc:dd:ee:ff",
+        "dns_servers": ["192.168.1.53"],
+        "version": 1,
     }
     second = {
-        "host_ip": "10.0.0.25", "local_network": "10.0.0.0/24",
-        "gateway_ip": "10.0.0.1", "gateway_mac": "11:22:33:44:55:66",
-        "dns_servers": ["10.0.0.53"], "version": 2,
+        "host_ip": "10.0.0.25",
+        "local_network": "10.0.0.0/24",
+        "gateway_ip": "10.0.0.1",
+        "gateway_mac": "11:22:33:44:55:66",
+        "dns_servers": ["10.0.0.53"],
+        "version": 2,
     }
 
     db.replace_network_state("wlan0", first)
@@ -470,11 +505,18 @@ def test_replace_network_state_clears_old_network_settings() -> None:
     assert db.is_official_dns_server("192.168.1.53") is False
     assert db.is_official_dns_server("192.168.1.54") is False
 
-    db.replace_network_state("wlan0", {
-        **second, "host_ip": "", "local_network": "",
-        "gateway_ip": "", "gateway_mac": "", "dns_servers": [],
-        "version": 3,
-    })
+    db.replace_network_state(
+        "wlan0",
+        {
+            **second,
+            "host_ip": "",
+            "local_network": "",
+            "gateway_ip": "",
+            "gateway_mac": "",
+            "dns_servers": [],
+            "version": 3,
+        },
+    )
     assert db.get_host_ip("wlan0") is None
     assert db.get_local_network("wlan0") is None
     assert db.get_gateway_ip("wlan0") is None
