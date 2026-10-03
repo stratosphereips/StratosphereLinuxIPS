@@ -175,6 +175,40 @@ def test_main_reports_stopped_server() -> None:
     assert "exit code 7" in module.print.call_args.args[0]
 
 
+def test_main_moves_interface_listener_after_ip_change() -> None:
+    """Keep the dashboard reachable after the monitored interface moves."""
+    module = ModuleFactory().create_web_interface_obj()
+    module.bind_mode = "interface"
+    module.bound_address = "192.168.1.20"
+    module.conf.web_interface_port = 55000
+    module.server_process = Mock(pid=1234)
+    module.server_process.poll.return_value = None
+
+    with (
+        patch("modules.web_interface.web_interface.time.sleep"),
+        patch.object(module, "_bind_address", return_value="10.0.0.25"),
+        patch.object(module, "_stop_owned_server", return_value=True) as stop,
+        patch.object(module, "_start_server") as start,
+    ):
+        result = module.main()
+
+    assert result is False
+    stop.assert_called_once_with()
+    start.assert_called_once_with("10.0.0.25", 55000)
+    assert "10.0.0.25" in module.print.call_args.args[0]
+
+
+def test_stop_owned_server_before_rebinding() -> None:
+    """Stop only the server child started by this launcher."""
+    module = ModuleFactory().create_web_interface_obj()
+    module.server_process = Mock()
+    module.server_process.poll.return_value = None
+
+    assert module._stop_owned_server() is True
+    module.server_process.terminate.assert_called_once_with()
+    module.server_process.wait.assert_called_once_with(timeout=3)
+
+
 def test_listener_pid_falls_back_to_per_process_connections() -> None:
     """Find a macOS listener when the system-wide result omits its PID."""
     module_factory = ModuleFactory()
