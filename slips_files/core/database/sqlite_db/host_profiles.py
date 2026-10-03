@@ -66,6 +66,10 @@ class HostProfileStore:
                 "CREATE INDEX IF NOT EXISTS facts_host_idx "
                 "ON facts(network_id, ip, kind, last_seen DESC)"
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS network_names ("
+                "network_id TEXT PRIMARY KEY, name TEXT NOT NULL)"
+            )
         if os.geteuid() == 0:
             os.chown(path, owner.st_uid, owner.st_gid)
         path.chmod(0o600)
@@ -79,6 +83,131 @@ class HostProfileStore:
         connection = sqlite3.connect(self.path, timeout=20)
         connection.row_factory = sqlite3.Row
         return connection
+
+    @staticmethod
+    def network_id_for_state(state: dict[str, Any], run_name: str) -> str:
+        """Identify a network by router MAC or isolate it to one run.
+
+        Parameters:
+            state: Current interface settings.
+            run_name: Run identifier for networks without a known router.
+
+        Returns:
+            Network identity suitable for storing a user-provided name.
+        """
+        gateway_mac = str(state.get("gateway_mac") or "").strip().lower()
+        if gateway_mac:
+            return f"gateway:{gateway_mac}"
+        return f"run:{run_name}" if run_name else ""
+
+    @staticmethod
+    def _network_names_from_connection(
+        connection: sqlite3.Connection, network_ids: Iterable[str]
+    ) -> dict[str, str]:
+        """Read selected names using an already open SQLite connection.
+
+        Parameters:
+            connection: Open host profile database connection.
+            network_ids: Network identities to look up.
+
+        Returns:
+            Saved names indexed by network identity.
+        """
+        keys = list(dict.fromkeys(key for key in network_ids if key))
+        if not keys:
+            return {}
+        placeholders = ",".join("?" for _ in keys)
+        try:
+            return {
+                network_id: name
+                for network_id, name in connection.execute(
+                    "SELECT network_id, name FROM network_names "
+                    f"WHERE network_id IN ({placeholders})",
+                    keys,
+                )
+            }
+        except sqlite3.OperationalError:
+            return {}
+
+    @staticmethod
+    def network_names(
+        path: Path, network_ids: Iterable[str]
+    ) -> dict[str, str]:
+        """Read user-provided names for a bounded set of networks.
+
+        Parameters:
+            path: Permanent host profile database.
+            network_ids: Network identities to look up.
+
+        Returns:
+            Saved names indexed by network identity.
+        """
+        if not path.exists():
+            return {}
+        with sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=1
+        ) as connection:
+            return HostProfileStore._network_names_from_connection(
+                connection, network_ids
+            )
+
+    @staticmethod
+    def set_network_name(path: Path, network_id: str, name: str) -> None:
+        """Save or clear one network name in the permanent database.
+
+        Parameters:
+            path: Permanent host profile database.
+            network_id: Router or run-scoped network identity.
+            name: User-provided display name, or empty to clear it.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.parent.chmod(0o700)
+        with sqlite3.connect(path, timeout=5) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS network_names ("
+                "network_id TEXT PRIMARY KEY, name TEXT NOT NULL)"
+            )
+            if name:
+                connection.execute(
+                    "INSERT INTO network_names VALUES (?, ?) "
+                    "ON CONFLICT(network_id) DO UPDATE SET name=excluded.name",
+                    (network_id, name),
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM network_names WHERE network_id=?",
+                    (network_id,),
+                )
+        path.chmod(0o600)
+
+    @staticmethod
+    def has_network_profile(path: Path, ip: str, network_id: str) -> bool:
+        """Check whether a host was recorded under one network identity.
+
+        Parameters:
+            path: Permanent host profile database.
+            ip: Host address shown in the web interface.
+            network_id: Network identity selected for naming.
+
+        Returns:
+            Whether the exact host-network pair exists.
+        """
+        try:
+            normalized = str(ipaddress.ip_address(ip))
+        except ValueError:
+            return False
+        if not path.exists():
+            return False
+        with sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=1
+        ) as connection:
+            return (
+                connection.execute(
+                    "SELECT 1 FROM hosts WHERE network_id=? AND ip=? LIMIT 1",
+                    (network_id, normalized),
+                ).fetchone()
+                is not None
+            )
 
     def _network_state(self, interface: str) -> dict[str, Any]:
         """Read a recent network state for an interface.
@@ -140,12 +269,12 @@ class HostProfileStore:
             gateway_mac = str(state["gateway_mac"]).lower()
             return (
                 normalized,
-                f"gateway:{gateway_mac}",
+                self.network_id_for_state(state, self.run_name),
                 f"{network} · router {gateway_mac}",
             )
         return (
             normalized,
-            f"run:{self.run_name}",
+            self.network_id_for_state({}, self.run_name),
             f"Unidentified network · {self.run_name}",
         )
 
@@ -385,6 +514,9 @@ class HostProfileStore:
                 "ORDER BY last_seen DESC LIMIT 50",
                 (normalized,),
             ).fetchall()
+            names = HostProfileStore._network_names_from_connection(
+                conn, (host["network_id"] for host in hosts)
+            )
             profiles = []
             for host in hosts:
                 facts = conn.execute(
@@ -396,6 +528,11 @@ class HostProfileStore:
                 profiles.append(
                     {
                         **dict(host),
+                        "default_network_label": host["network_label"],
+                        "network_name": names.get(host["network_id"], ""),
+                        "network_label": names.get(
+                            host["network_id"], host["network_label"]
+                        ),
                         "facts": [
                             dict(fact)
                             for fact in facts
