@@ -291,3 +291,45 @@ def test_country_facts_are_real_public_geolocations(
             )
         profile = HostProfileStore.read(path, ip)[0]
         assert all(fact["kind"] != "country" for fact in profile["facts"])
+
+
+def test_network_names_survive_runs_and_label_existing_host_profiles(
+    tmp_path: Path,
+) -> None:
+    """Apply a saved router name and a current-run name to earlier records.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    unidentified = HostProfileStore(path, "run-one", lambda _: {}, [])
+    unidentified.observe_hostname("early-device", "profile_192.168.1.20")
+    state = {
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "AA:BB:CC:DD:EE:01",
+    }
+    identified = HostProfileStore(path, "run-two", lambda _: state, ["en0"])
+    identified.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime="200",
+            type_="conn",
+            saddr="192.168.1.20",
+            daddr="8.8.8.8",
+        )
+    )
+    router_id = HostProfileStore.network_id_for_state(state, "run-two")
+    HostProfileStore.set_network_name(path, router_id, "Home Wi-Fi")
+    HostProfileStore.set_network_name(path, "run:run-one", "Home Wi-Fi")
+
+    profiles = HostProfileStore.read(path, "192.168.1.20")
+
+    assert router_id == "gateway:aa:bb:cc:dd:ee:01"
+    assert {profile["network_label"] for profile in profiles} == {"Home Wi-Fi"}
+    assert {profile["network_name"] for profile in profiles} == {"Home Wi-Fi"}
+    assert HostProfileStore.network_names(path, [router_id])[router_id] == (
+        "Home Wi-Fi"
+    )
+    HostProfileStore.set_network_name(path, router_id, "")
+    assert router_id not in HostProfileStore.network_names(path, [router_id])
