@@ -461,12 +461,21 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     reader.redis_port = 6379
     reader.redis = Mock()
     reader.redis.hgetall.side_effect = lambda key: (
-        {"wlan0": json.dumps({
-            "interface": "wlan0", "connected": True,
-            "host_ip": "10.0.0.25", "local_network": "10.0.0.0/24",
-            "gateway_ip": "10.0.0.1", "dns_servers": ["10.0.0.53"],
-            "changed_at": 100.0,
-        })} if key == "network_states" else {}
+        {
+            "wlan0": json.dumps(
+                {
+                    "interface": "wlan0",
+                    "connected": True,
+                    "host_ip": "10.0.0.25",
+                    "local_network": "10.0.0.0/24",
+                    "gateway_ip": "10.0.0.1",
+                    "dns_servers": ["10.0.0.53"],
+                    "changed_at": 100.0,
+                }
+            )
+        }
+        if key == "network_states"
+        else {}
     )
     redis_values = {
         "number_of_alerts": "0",
@@ -495,9 +504,73 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
 
     assert result["counts"]["evidence"] == 123456
     assert result["network_states"][0]["dns_servers"] == ["10.0.0.53"]
+    assert "computer_addresses" in result
+    assert "computer_name" in result
     assert result["evidence_details_loaded"] is False
     reader._redis_evidence.assert_not_called()
     reader._module_rows.assert_called_once_with(None, {}, False)
+
+
+@pytest.mark.parametrize(
+    "input_type, finished, live_ip, expected_refresh",
+    [
+        ("interface", False, "10.0.1.25", True),
+        ("interface", False, "10.0.0.25", False),
+        ("interface", True, "10.0.1.25", False),
+        ("pcap", False, "10.0.1.25", False),
+    ],
+)
+def test_network_panel_uses_current_interface_after_saved_state_stalls(
+    input_type: str,
+    finished: bool,
+    live_ip: str,
+    expected_refresh: bool,
+) -> None:
+    """Refresh a stale live network card without changing saved history.
+
+    Parameters:
+        input_type: Run input kind.
+        finished: Whether the run already ended.
+        live_ip: Current address seen by the operating system.
+        expected_refresh: Whether live collection should replace the card.
+    """
+    _module_factory = ModuleFactory()
+    analysis = {
+        "input_type": input_type,
+        "interface": "en0",
+        "analysis_end": "done" if finished else "",
+    }
+    saved = {
+        "interface": "en0",
+        "addresses": [{"ip": "10.0.0.25"}],
+        "host_ip": "10.0.0.25",
+        "changed_at": 100.0,
+    }
+    current = {
+        "interface": "en0",
+        "addresses": [{"ip": live_ip}],
+        "host_ip": live_ip,
+        "gateway_ip": "10.0.1.1",
+    }
+    with patch(
+        "modules.web_interface.server.collect_network_state",
+        return_value=current,
+    ) as collect:
+        result = RunDataReader._current_network_states(
+            analysis,
+            [saved],
+            {"ipv4": [live_ip], "ipv6": []},
+        )
+
+    if expected_refresh:
+        collect.assert_called_once_with("en0", 1)
+        assert result[0]["host_ip"] == live_ip
+        assert result[0]["live_reading"] is True
+        assert result[0]["saved_changed_at"] == 100.0
+        assert "live_reading" not in saved
+    else:
+        collect.assert_not_called()
+        assert result == [saved]
 
 
 def test_overview_evidence_counts_scans_only_when_requested(
@@ -808,6 +881,23 @@ def test_api_routes_evidence_flow_ids() -> None:
     )
 
 
+def test_api_routes_host_name_lookup() -> None:
+    """Route the bounded name lookup before individual host paths."""
+    _module_factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    handler.server.reader.response_metadata.return_value = {}
+    handler.server.reader.host_names.return_value = {
+        "names": {"10.0.0.1": {"name": "laptop", "source": "Hostname"}}
+    }
+    query = {"ip": ["10.0.0.1"]}
+
+    result = handler._api_response("/api/host-names", query)
+
+    assert result["names"]["10.0.0.1"]["name"] == "laptop"
+    handler.server.reader.host_names.assert_called_once_with(query)
+
+
 @pytest.mark.parametrize(
     "evidence_type, expected",
     [
@@ -957,6 +1047,72 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
     assert alert_page["total"] == 1
     assert alert_page["items"][0]["evidence"][0]["id"] == "evidence-1"
     assert host["alerts"][0]["threat_level"] == "high"
+
+
+def test_host_names_resolves_live_and_historical_identity(
+    tmp_path: Path,
+) -> None:
+    """Return bounded names for displayed IPs from live and saved data.
+
+    Parameters:
+        tmp_path: Temporary history database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [
+                (
+                    "10.0.0.1",
+                    1,
+                    json.dumps({"hostname": "saved-host"}),
+                ),
+                (
+                    "10.0.0.2",
+                    1,
+                    json.dumps({"dns": {"domains": ["device.local"]}}),
+                ),
+            ],
+        )
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [
+        "current-host",
+        None,
+        None,
+        None,
+        None,
+        json.dumps({"domains": ["new.local"]}),
+        None,
+        None,
+    ]
+    reader.cache = Mock()
+    reader.cache.hget.return_value = "cached.example"
+
+    result = reader.host_names(
+        {
+            "ip": [
+                "10.0.0.1",
+                "10.0.0.2",
+                "10.0.0.3",
+                "2001:0DB8:0:0::5",
+                "invalid",
+            ]
+        }
+    )
+
+    assert result["names"] == {
+        "10.0.0.1": {"name": "current-host", "source": "Hostname"},
+        "10.0.0.2": {"name": "device.local", "source": "DNS"},
+        "10.0.0.3": {"name": "new.local", "source": "DNS"},
+        "2001:0DB8:0:0::5": {"name": "cached.example", "source": "rDNS"},
+    }
+    assert reader.redis.pipeline.return_value.hget.call_count == 8
+    reader.cache.hget.assert_called_once_with(
+        "IPsInfo:reverse_dns", "2001:db8::5"
+    )
 
 
 @pytest.mark.parametrize("redis_output", [None, "output/different"])
@@ -2785,8 +2941,9 @@ def test_header_shows_monitored_interface_addresses() -> None:
     )
     assert 'id="run-addresses"' in index_source
     assert "data.host_addresses || {}" in app_source
-    assert '`IPv4: ${addresses.ipv4.join(", ")}`' in app_source
-    assert '`IPv6: ${addresses.ipv6.join(", ")}`' in app_source
+    assert '["IPv4", addresses.ipv4 || []]' in app_source
+    assert '["IPv6", addresses.ipv6 || []]' in app_source
+    assert "addressLine.append(hostIdentity(ip))" in app_source
 
 
 def test_header_uptime_ticks_from_server_baseline() -> None:
