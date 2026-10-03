@@ -2489,6 +2489,55 @@ function hostRangeParams() {
   return params;
 }
 
+/**
+ * Show host clues saved across runs, separated by local network.
+ * @param {Object[]} profiles Permanent host records for this IP.
+ */
+function renderPermanentProfiles(profiles) {
+  const container = byId("host-permanent-profiles");
+  container.replaceChildren();
+  if (!profiles?.length) {
+    container.append(text("p", "No permanent identity clues recorded yet.", "muted"));
+    return;
+  }
+  const labels = {
+    hostname: "Names", reverse_dns: "Reverse DNS", dns_name: "DNS names",
+    mdns_name: "Multicast DNS names", sni: "HTTPS SNI",
+    http_host: "HTTP hosts", url: "Requested URLs", mac: "MAC addresses",
+    asn: "ASN", country: "Country",
+    threat_feed: "Threat feed appearances",
+  };
+  profiles.forEach((profile) => {
+    const group = document.createElement("section");
+    group.className = "permanent-host-profile";
+    group.append(text("strong", profile.network_label || profile.network_id));
+    group.append(text("small", `First seen ${formatTime(profile.first_seen)} · Last seen ${formatTime(profile.last_seen)}`, "muted"));
+    const byKind = new Map();
+    (profile.facts || []).forEach((fact) => {
+      if (!byKind.has(fact.kind)) byKind.set(fact.kind, []);
+      byKind.get(fact.kind).push(fact);
+    });
+    Object.entries(labels).forEach(([kind, label]) => {
+      const values = byKind.get(kind) || [];
+      if (!values.length) return;
+      const details = document.createElement("details");
+      details.className = "host-profile-facts";
+      details.open = ["hostname", "mdns_name", "dns_name"].includes(kind);
+      details.append(text("summary", `${label} · ${values.length}`));
+      const list = document.createElement("ul");
+      values.forEach((fact) => {
+        const item = document.createElement("li");
+        item.append(text("span", fact.value));
+        item.append(text("small", `Seen ${compact(fact.observations)}× · ${formatTime(fact.first_seen)} to ${formatTime(fact.last_seen)}`, "muted"));
+        list.append(item);
+      });
+      details.append(list);
+      group.append(details);
+    });
+    container.append(group);
+  });
+}
+
 function renderHostCards(host) {
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
@@ -2513,6 +2562,7 @@ function renderHostCards(host) {
     detailRow("Status", host.live ? "Current Redis metadata" : "Last-known persisted metadata"),
     detailRow("DNS", renderDnsDetails(host.dns)),
   );
+  renderPermanentProfiles(host.permanent_profiles || []);
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
     : "No cached threat-intelligence data.";
