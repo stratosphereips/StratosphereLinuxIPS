@@ -14,6 +14,8 @@ const state = {
   pendingHostNames: new Set(),
   hostNamesLoading: false,
   hostNamesScheduled: false,
+  networkNameDrafts: new Map(),
+  networkNameEditorOpen: new Set(),
   ownAddresses: new Set(),
   computerName: "",
   failures: 0,
@@ -382,6 +384,8 @@ function applyRunIdentity(identity) {
     state.rangesInitialized = false;
     state.hostNames.clear();
     state.pendingHostNames.clear();
+    state.networkNameDrafts.clear();
+    state.networkNameEditorOpen.clear();
     state.ownAddresses.clear();
     state.computerName = "";
     toast("A new Slips run is now active. Investigation state was cleared.");
@@ -835,6 +839,8 @@ function renderOverview() {
 /** Show current settings of every monitored network interface. */
 function renderNetworkStates(networkStates) {
   const container = byId("network-states");
+  if (container.contains(document.activeElement)
+      && document.activeElement.closest(".network-name-form")) return;
   container.replaceChildren();
   if (!networkStates.length) {
     container.append(text("p", "Live network settings are available when Slips monitors an interface.", "muted"));
@@ -843,7 +849,63 @@ function renderNetworkStates(networkStates) {
   networkStates.forEach((network) => {
     const card = document.createElement("div");
     card.className = "network-state";
-    card.append(text("strong", `${network.interface} · ${network.connected ? "Connected" : "Disconnected"}`));
+    card.append(text("strong", `${network.name || network.interface} · ${network.connected ? "Connected" : "Disconnected"}`));
+    if (network.name) card.append(text("small", `Interface ${network.interface}`, "muted"));
+    const form = document.createElement("form");
+    form.className = "network-name-form";
+    const label = text("label", "Network name");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 80;
+    input.placeholder = "e.g. Home Wi-Fi";
+    input.autocomplete = "off";
+    input.value = state.networkNameDrafts.get(network.network_id)
+      ?? network.name ?? "";
+    input.disabled = !network.connected || !network.network_id;
+    input.addEventListener("input", () => {
+      state.networkNameDrafts.set(network.network_id, input.value);
+    });
+    label.append(input);
+    const save = text("button", "Save name", "secondary");
+    save.type = "submit";
+    save.disabled = input.disabled;
+    form.append(label, save);
+    if (!network.network_id) {
+      form.append(text("small", "Restart Slips to enable network naming.", "muted"));
+    } else if (!network.connected) {
+      form.append(text("small", "Connect to this network to edit its name.", "muted"));
+    } else if (network.name_scope === "run") {
+      form.append(text("small", "Router identity unavailable; this name applies to the current run.", "muted"));
+    }
+    const feedback = text("small", "", "network-name-feedback");
+    form.append(feedback);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      save.disabled = true;
+      feedback.textContent = "Saving…";
+      try {
+        const response = await fetch("/api/network-name", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interface: network.interface,
+            network_id: network.network_id,
+            name: input.value,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+        network.name = payload.name;
+        state.networkNameDrafts.delete(network.network_id);
+        document.activeElement?.blur();
+        renderNetworkStates(networkStates);
+        toast(payload.name ? "Network name saved." : "Network name removed.");
+      } catch (error) {
+        feedback.textContent = error.message;
+        save.disabled = false;
+      }
+    });
+    card.append(form);
     const computer = document.createElement("span");
     computer.append("Computer: ", hostIdentity(network.host_ip));
     card.append(computer);
@@ -2495,6 +2557,8 @@ function hostRangeParams() {
  */
 function renderPermanentProfiles(profiles) {
   const container = byId("host-permanent-profiles");
+  if (container.contains(document.activeElement)
+      && document.activeElement.closest(".profile-network-name-form")) return;
   const profileIp = profiles?.[0]?.ip || "";
   const openSections = new Map();
   if (container.dataset.profileIp === profileIp) {
@@ -2518,8 +2582,74 @@ function renderPermanentProfiles(profiles) {
   profiles.forEach((profile) => {
     const group = document.createElement("section");
     group.className = "permanent-host-profile";
-    group.append(text("strong", profile.network_label || profile.network_id));
+    const title = text("strong", profile.network_label || profile.network_id);
+    group.append(title);
     group.append(text("small", `First seen ${formatTime(profile.first_seen)} · Last seen ${formatTime(profile.last_seen)}`, "muted"));
+    const form = document.createElement("form");
+    form.className = "network-name-form profile-network-name-form";
+    form.hidden = !state.networkNameEditorOpen.has(profile.network_id);
+    const label = text("label", "Network name");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 80;
+    input.placeholder = "Name this network";
+    input.autocomplete = "off";
+    input.value = state.networkNameDrafts.get(profile.network_id)
+      ?? profile.network_name ?? "";
+    input.disabled = profile.network_name === undefined;
+    input.addEventListener("input", () => {
+      state.networkNameDrafts.set(profile.network_id, input.value);
+    });
+    label.append(input);
+    const save = text("button", "Save name", "secondary");
+    save.type = "submit";
+    save.disabled = input.disabled;
+    form.append(label, save);
+    const feedback = text("small", "", "network-name-feedback");
+    form.append(feedback);
+    const edit = text("button", profile.network_name ? "Edit name" : "Name network", "secondary profile-network-name-action");
+    edit.type = "button";
+    edit.disabled = input.disabled;
+    edit.addEventListener("click", () => {
+      form.hidden = !form.hidden;
+      if (form.hidden) state.networkNameEditorOpen.delete(profile.network_id);
+      else {
+        state.networkNameEditorOpen.add(profile.network_id);
+        input.focus();
+      }
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      save.disabled = true;
+      feedback.textContent = "Saving…";
+      try {
+        const response = await fetch("/api/network-name", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip: profile.ip,
+            network_id: profile.network_id,
+            name: input.value,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+        profile.network_name = payload.name;
+        profile.network_label = payload.name || profile.default_network_label;
+        title.textContent = profile.network_label;
+        feedback.textContent = "";
+        state.networkNameDrafts.delete(profile.network_id);
+        state.networkNameEditorOpen.delete(profile.network_id);
+        form.hidden = true;
+        edit.textContent = payload.name ? "Edit name" : "Name network";
+        document.activeElement?.blur();
+        toast(payload.name ? "Network name saved." : "Network name removed.");
+      } catch (error) {
+        feedback.textContent = error.message;
+        save.disabled = false;
+      }
+    });
+    group.append(edit, form);
     const byKind = new Map();
     (profile.facts || []).forEach((fact) => {
       if (fact.kind === "country" && ["private", "unknown"].includes(String(fact.value).trim().toLowerCase())) return;
@@ -2890,15 +3020,19 @@ async function openHost(ip, summary = null) {
 
 async function refreshHostWorkspace() {
   if (!state.host) return;
-  const detail = await api("host", `/api/hosts/${escapePath(state.host.ip)}`);
-  if (!detail) return;
+  const ip = state.host.ip;
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}`);
+  if (!detail || !state.host || state.host.ip !== ip) return;
   const staleAliases = Array.isArray(detail.all_ips)
-    ? detail.all_ips.filter((address) => address !== state.host.ip)
+    ? detail.all_ips.filter((address) => address !== ip)
     : [];
   const host = {
     ...state.host,
     ...detail,
-    all_ips: [state.host.ip],
+    permanent_profiles: detail.permanent_profiles?.length
+      ? detail.permanent_profiles
+      : state.host.permanent_profiles || [],
+    all_ips: [ip],
     exact_aggregates: staleAliases.length === 0,
     ignored_aliases: staleAliases,
   };
