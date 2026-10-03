@@ -63,6 +63,32 @@ the Overview card reads the current interface settings directly. It labels
 that result as a live reading and keeps the saved change time visible. The
 saved history is updated by the Slips main process when it resumes.
 
+## Permanent host profiles
+
+Slips keeps identity clues in `host_profiles/hosts.sqlite` inside the configured
+`parameters.permanent_dir` (by default `permanent/`). This database survives
+individual output directories and Redis expiration. It is populated while
+Slips processes flows, including when the web interface is disabled.
+The dedicated host profile directory is restricted to its owner because
+requested URLs can contain private information.
+
+The Host workspace shows up to 50 recently seen network profiles for its IP,
+with first and last observation times. It records hostnames learned from DHCP
+or profile updates, DNS answers, multicast DNS answers on port 5353, TLS SNI,
+HTTP Host, requested HTTP URLs, reverse DNS, ASN, country, and threat feed
+appearances. Each clue has its own first and last observation time and
+occurrence count. The Host workspace groups clues by source; each group can
+be expanded.
+
+Public IPs share one profile across runs. Private addresses are grouped by
+the observed router MAC when the address belongs to the monitored subnet. If
+Slips cannot identify the network, it keeps that address under the run's
+output directory identity so unrelated networks do not merge. Local profiles
+for the same IP appear as separate network sections in the Host workspace.
+The database stores at most 200 distinct values per clue type per host and
+network. Existing run history is not imported automatically; new observations
+populate the database.
+
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
 When a file or folder analysis finishes naturally, or after the first Ctrl-C stops a web-enabled live analysis, Slips asks `Slips analysis has stopped. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
