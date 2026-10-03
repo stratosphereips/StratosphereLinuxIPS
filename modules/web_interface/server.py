@@ -2420,6 +2420,131 @@ class RunDataReader:
             }
         )
 
+    def _host_page_loads(self, ips: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Aggregate page traffic in one indexed history query.
+
+        Parameters:
+            ips: IPs in the requested Hosts page.
+
+        Returns:
+            Traffic totals keyed by IP.
+        """
+        if not ips:
+            return {}
+        placeholders = ",".join("?" for _ in ips)
+        with connect_history(self.history_path, read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT ip, COUNT(*) AS flows, SUM(bytes) AS bytes, "
+                "SUM(packets) AS packets, "
+                "SUM(inbound_flows) AS inbound_flows, "
+                "SUM(outbound_flows) AS outbound_flows, "
+                "SUM(inbound_bytes) AS inbound_bytes, "
+                "SUM(outbound_bytes) AS outbound_bytes, "
+                "MAX(event_time) AS last_seen FROM ("
+                "SELECT src_ip AS ip, bytes, packets, event_time, "
+                "0 AS inbound_flows, "
+                "CASE WHEN src_ip != dst_ip THEN 1 ELSE 0 END "
+                "AS outbound_flows, 0 AS inbound_bytes, "
+                "CASE WHEN src_ip != dst_ip THEN bytes ELSE 0 END "
+                "AS outbound_bytes FROM flow_index "
+                f"WHERE src_ip IN ({placeholders}) UNION ALL "
+                "SELECT dst_ip AS ip, bytes, packets, event_time, "
+                "1 AS inbound_flows, 0 AS outbound_flows, "
+                "bytes AS inbound_bytes, 0 AS outbound_bytes "
+                f"FROM flow_index WHERE dst_ip IN ({placeholders}) "
+                "AND src_ip != dst_ip) GROUP BY ip",
+                (*ips, *ips),
+            ).fetchall()
+        return {str(row["ip"]): dict(row) for row in rows}
+
+    def _host_page_counts(self, ips: List[str]) -> Dict[str, Dict[str, int]]:
+        """Count evidence and alerts for a page with two indexed queries.
+
+        Parameters:
+            ips: IPs in the requested Hosts page.
+
+        Returns:
+            Evidence and alert counts keyed by IP.
+        """
+        counts = {ip: {"evidence": 0, "alerts": 0} for ip in ips}
+        if not ips:
+            return counts
+        placeholders = ",".join("?" for _ in ips)
+        try:
+            with self._connect_sqlite() as connection:
+                for table, column, field in (
+                    ("evidence", "profile_ip", "evidence"),
+                    ("alerts", "ip_alerted", "alerts"),
+                ):
+                    rows = connection.execute(
+                        f"SELECT {column} AS ip, COUNT(*) AS count "
+                        f"FROM {table} WHERE {column} IN ({placeholders}) "
+                        f"GROUP BY {column}",
+                        ips,
+                    ).fetchall()
+                    for row in rows:
+                        counts[str(row["ip"])][field] = int(row["count"])
+        except sqlite3.Error:
+            pass
+        return counts
+
+    def _host_page_identity(self, ips: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Fetch live names, DNS, and threat context with two pipelines.
+
+        Parameters:
+            ips: IPs in the requested Hosts page.
+
+        Returns:
+            Identity records keyed by IP.
+        """
+        if not ips:
+            return {}
+        context_fields = ("reverse_dns", "threatintelligence")
+        profile_pipe = self.redis.pipeline(transaction=False)
+        cache_pipe = self.cache.pipeline(transaction=False)
+        for ip in ips:
+            profile_pipe.hgetall(f"profile_{ip}")
+            profile_pipe.hget("DNSresolution", ip)
+            for field in context_fields:
+                cache_pipe.hget(f"IPsInfo:{field}", ip)
+        try:
+            profile_values = profile_pipe.execute()
+            cache_values = cache_pipe.execute()
+        except redis.RedisError:
+            return {}
+        result: Dict[str, Dict[str, Any]] = {}
+        for index, ip in enumerate(ips):
+            fields = profile_values[index * 2] or {}
+            dns = self._loads(profile_values[index * 2 + 1], {})
+            ti = {}
+            for offset, field in enumerate(context_fields):
+                raw = cache_values[index * len(context_fields) + offset]
+                ti[field] = self._loads(raw, raw)
+            rdns = ti.get("reverse_dns") or ""
+            if isinstance(rdns, (list, tuple)):
+                rdns = rdns[0] if rdns else ""
+            domains = dns.get("domains", []) if isinstance(dns, dict) else []
+            if not isinstance(domains, (list, tuple)):
+                domains = [domains]
+            ti_record = ti.get("threatintelligence") or {}
+            sources = (
+                ti_record.get("source", [])
+                if isinstance(ti_record, dict)
+                else []
+            )
+            if not isinstance(sources, (list, tuple)):
+                sources = [sources]
+            result[ip] = {
+                "fields": fields,
+                "dns": dns,
+                "dns_name": str(rdns or (domains[0] if domains else "")),
+                "dns_name_source": (
+                    "rDNS" if rdns else ("DNS" if domains else "")
+                ),
+                "ti_feeds": [str(source) for source in sources if source],
+            }
+        return result
+
     def hosts(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return one filtered, cursor-bounded historical host page."""
         limit = self._limit(query)
@@ -2577,23 +2702,83 @@ class RunDataReader:
                 (*params, limit + 1),
             ).fetchall()
         has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        page_ips = [str(row["ip"]) for row in page_rows]
+        fast_page = getattr(self, "cache", None) is not None
+        if fast_page:
+            loads = self._host_page_loads(page_ips)
+            counts = self._host_page_counts(page_ips)
+            identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
-        for row in rows[:limit]:
-            host = self._live_host(str(row["ip"]))
+        for row in page_rows:
+            ip = str(row["ip"])
+            if fast_page:
+                host = self._loads(row["data"], {})
+                identity = identities.get(ip, {})
+                fields = identity.get("fields") or {}
+                host.update({"ip": ip, "live": bool(fields)})
+                if fields:
+                    host.update(
+                        {
+                            "scope": self._scope(ip),
+                            "hostname": fields.get("host_name", ""),
+                            "mac": fields.get("MAC", ""),
+                            "mac_vendor": fields.get("MAC_vendor", ""),
+                            "threat_level": fields.get("threat_level", "info"),
+                            "max_threat_level": fields.get(
+                                "max_threat_level", "info"
+                            ),
+                            "dns": identity.get("dns", {}),
+                        }
+                    )
+            else:
+                host = self._live_host(ip)
             host["observed_at"] = float(row["observed_at"])
             host["peak_alert_score"] = (
                 float(row["peak_alert_score"])
                 if row["peak_alert_score"] is not None
                 else None
             )
-            host["load"] = self._host_load(str(row["ip"]))
-            host.update(
-                self._ip_context_for_ip(str(host["ip"]), host.get("dns"))
-            )
-            host["evidence_count"] = self._profile_evidence_count(
-                str(row["ip"])
-            )
-            host["alert_count"] = self._profile_alert_count(str(row["ip"]))
+            if fast_page:
+                host["load"] = loads.get(
+                    ip,
+                    {
+                        "flows": 0,
+                        "bytes": 0,
+                        "packets": 0,
+                        "inbound_flows": 0,
+                        "outbound_flows": 0,
+                        "inbound_bytes": 0,
+                        "outbound_bytes": 0,
+                        "last_seen": 0,
+                    },
+                )
+                dns_name = identities.get(ip, {}).get("dns_name", "")
+                dns_source = identities.get(ip, {}).get("dns_name_source", "")
+                if not dns_name:
+                    saved_dns = host.get("dns") or {}
+                    domains = (
+                        saved_dns.get("domains", [])
+                        if isinstance(saved_dns, dict)
+                        else []
+                    )
+                    if isinstance(domains, (list, tuple)) and domains:
+                        dns_name = str(domains[0])
+                        dns_source = "DNS"
+                host.update(
+                    {
+                        "dns_name": dns_name,
+                        "dns_name_source": dns_source,
+                        "ti_feeds": identities.get(ip, {}).get("ti_feeds", []),
+                    }
+                )
+                host["evidence_count"] = counts[ip]["evidence"]
+                host["alert_count"] = counts[ip]["alerts"]
+            else:
+                host["load"] = self._host_load(ip)
+                host.update(self._ip_context_for_ip(ip, host.get("dns")))
+                host["evidence_count"] = self._profile_evidence_count(ip)
+                host["alert_count"] = self._profile_alert_count(ip)
             items.append(host)
         self._attach_current_host_scores(items)
         next_cursor = (
@@ -4373,6 +4558,7 @@ class RunDataReader:
         latest_reliability: Dict[str, Dict[str, Any]] = {}
         reports: List[Dict[str, Any]] = []
         reports_received = 0
+        report_counts: Counter[str] = Counter()
         peer_ips: Dict[str, Dict[str, Any]] = {}
         if trust_path.exists():
             try:
@@ -4456,25 +4642,26 @@ class RunDataReader:
                                 or timestamp >= run_start,
                             }
                         )
-                    if run_start:
-                        report_count_row = connection.execute(
-                            "SELECT COUNT(*) AS total FROM reports "
-                            "WHERE update_time >= ?",
-                            (run_start,),
-                        ).fetchone()
-                    else:
-                        report_count_row = connection.execute(
-                            "SELECT COUNT(*) AS total FROM reports"
-                        ).fetchone()
-                    if report_count_row:
-                        reports_received = int(report_count_row["total"])
+                    report_where = (
+                        "WHERE update_time >= ?" if run_start else ""
+                    )
+                    report_params = (run_start,) if run_start else ()
+                    for row in connection.execute(
+                        "SELECT reporter_peerid, COUNT(*) AS total "
+                        f"FROM reports {report_where} "
+                        "GROUP BY reporter_peerid",
+                        report_params,
+                    ):
+                        count = int(row["total"])
+                        report_counts[str(row["reporter_peerid"])] = count
+                        reports_received += count
             except sqlite3.Error:
                 pass
-        report_counts = Counter(item["peer_id"] for item in reports)
         peer_ids = (
             set(peer_info)
             | set(peer_ips)
             | set(latest_reliability)
+            | set(report_counts)
             | connected
         )
         peers = []
