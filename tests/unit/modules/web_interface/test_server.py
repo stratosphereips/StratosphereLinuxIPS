@@ -1,11 +1,13 @@
 from collections import Counter
 import argparse
+from io import BytesIO
 import json
 import socket
 import sqlite3
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.request import urlopen
 from unittest.mock import Mock, patch
 
@@ -572,6 +574,221 @@ def test_network_panel_uses_current_interface_after_saved_state_stalls(
     else:
         collect.assert_not_called()
         assert result == [saved]
+
+
+def test_save_network_name_labels_router_and_early_run_records(
+    tmp_path: Path,
+) -> None:
+    """Persist a current network name without attaching it to another router.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = Path("output/test-run")
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface",
+        "interface": "en0",
+    }
+    saved_state = {
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "history": [],
+    }
+    reader.redis.hget.side_effect = lambda key, field: {
+        ("PIDs", "main"): "123",
+        ("network_states", "en0"): json.dumps(saved_state),
+    }.get((key, field))
+    current = {
+        "connected": True,
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }
+    with patch(
+        "modules.web_interface.server.collect_network_state",
+        return_value=current,
+    ):
+        result = reader.save_network_name(
+            "en0", "gateway:aa:bb:cc:dd:ee:01", "Home Wi-Fi"
+        )
+        with pytest.raises(ValueError, match="network changed"):
+            reader.save_network_name("en0", "gateway:aa:bb:cc:dd:ee:02", "Wrong router")
+
+    assert result == {
+        "network_id": "gateway:aa:bb:cc:dd:ee:01",
+        "name": "Home Wi-Fi",
+    }
+    assert HostProfileStore.network_names(
+        reader.host_profiles_path,
+        ["gateway:aa:bb:cc:dd:ee:01", "run:output/test-run:123"],
+    ) == {
+        "gateway:aa:bb:cc:dd:ee:01": "Home Wi-Fi",
+        "run:output/test-run:123": "Home Wi-Fi",
+    }
+    assert reader._named_network_states([current])[0]["name"] == (
+        "Home Wi-Fi"
+    )
+
+
+def test_network_name_without_router_mac_is_scoped_to_current_run(
+    tmp_path: Path,
+) -> None:
+    """Keep an unknown router's name separate from another run.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = Path("output/test-run")
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface",
+        "interface": "en0",
+    }
+    reader.redis.hget.side_effect = lambda key, field: (
+        "123" if (key, field) == ("PIDs", "main") else None
+    )
+    current = {"connected": True, "gateway_mac": ""}
+    with patch(
+        "modules.web_interface.server.collect_network_state",
+        return_value=current,
+    ):
+        result = reader.save_network_name(
+            "en0", "run:output/test-run:123", "Hotel Ethernet"
+        )
+
+    assert result["name"] == "Hotel Ethernet"
+    assert reader._named_network_states([current])[0]["name"] == ("Hotel Ethernet")
+    assert HostProfileStore.network_names(
+        reader.host_profiles_path,
+        ["run:output/test-run:123", "run:output/another-run:456"],
+    ) == {"run:output/test-run:123": "Hotel Ethernet"}
+
+
+def test_historical_host_network_can_be_named_explicitly(
+    tmp_path: Path,
+) -> None:
+    """Let a user identify an older unknown network without guessing its router.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    store = HostProfileStore(path, "old-run", lambda _: {}, [])
+    store.observe_hostname("printer", "profile_192.168.1.20")
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+
+    saved = reader.save_profile_network_name(
+        "192.168.1.20", "run:old-run", "Previous home Wi-Fi"
+    )
+
+    assert saved["name"] == "Previous home Wi-Fi"
+    assert HostProfileStore.read(path, "192.168.1.20")[0][
+        "network_label"
+    ] == "Previous home Wi-Fi"
+    with pytest.raises(ValueError, match="unavailable"):
+        reader.save_profile_network_name(
+            "192.168.1.20", "run:another-network", "Wrong network"
+        )
+    with pytest.raises(ValueError, match="at most 80"):
+        reader.save_profile_network_name(
+            "192.168.1.20", "run:old-run", "x" * 81
+        )
+
+
+@pytest.mark.parametrize(
+    "origin,expected_status",
+    [
+        ("http://127.0.0.1:55000", 200),
+        ("http://unrelated.example", 403),
+    ],
+)
+def test_network_name_post_requires_same_origin(
+    origin: str, expected_status: int
+) -> None:
+    """Accept JSON edits from the page and reject another web origin.
+
+    Parameters:
+        origin: Origin supplied by the browser.
+        expected_status: HTTP response status.
+    """
+    _module_factory = ModuleFactory()
+    body = json.dumps(
+        {
+            "interface": "en0",
+            "network_id": "gateway:aa:bb:cc:dd:ee:01",
+            "name": "Home Wi-Fi",
+        }
+    ).encode()
+    reader = Mock()
+    reader.save_network_name.return_value = {
+        "network_id": "gateway:aa:bb:cc:dd:ee:01",
+        "name": "Home Wi-Fi",
+    }
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/network-name"
+    handler.headers = {
+        "Host": "127.0.0.1:55000",
+        "Origin": origin,
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+
+    handler.do_POST()
+
+    if expected_status == 200:
+        assert handler._send_json.call_args.args == (
+            reader.save_network_name.return_value,
+        )
+        reader.save_network_name.assert_called_once_with(
+            "en0", "gateway:aa:bb:cc:dd:ee:01", "Home Wi-Fi"
+        )
+    else:
+        assert handler._send_json.call_args.args[1] == expected_status
+        reader.save_network_name.assert_not_called()
+
+
+def test_network_name_post_routes_historical_profile() -> None:
+    """The Host workspace editor passes the selected profile to the server."""
+    _module_factory = ModuleFactory()
+    body = json.dumps(
+        {
+            "ip": "192.168.1.20",
+            "network_id": "run:old-run",
+            "name": "Previous home Wi-Fi",
+        }
+    ).encode()
+    reader = Mock()
+    reader.save_profile_network_name.return_value = {
+        "network_id": "run:old-run",
+        "name": "Previous home Wi-Fi",
+    }
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/network-name"
+    handler.headers = {
+        "Host": "127.0.0.1:55000",
+        "Origin": "http://127.0.0.1:55000",
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+
+    handler.do_POST()
+
+    reader.save_profile_network_name.assert_called_once_with(
+        "192.168.1.20", "run:old-run", "Previous home Wi-Fi"
+    )
+    reader.save_network_name.assert_not_called()
 
 
 def test_host_workspace_includes_permanent_identity_clues(
