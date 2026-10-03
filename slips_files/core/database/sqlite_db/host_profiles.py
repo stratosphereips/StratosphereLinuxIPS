@@ -5,8 +5,9 @@ import ipaddress
 import os
 import sqlite3
 import time
+from contextlib import nullcontext
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from slips_files.common.slips_utils import utils
 
@@ -38,6 +39,7 @@ class HostProfileStore:
         self.interfaces = interfaces
         self._network_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._recent_sightings: dict[tuple[str, str], float] = {}
+        self._active_connection: sqlite3.Connection | None = None
         path.parent.mkdir(parents=True, exist_ok=True)
         if os.geteuid() == 0:
             owner = Path.cwd().stat()
@@ -175,7 +177,12 @@ class HostProfileStore:
         now = time.monotonic()
         if not filtered and now - self._recent_sightings.get(key, 0) < 60:
             return
-        with self._connect() as connection:
+        context = (
+            nullcontext(self._active_connection)
+            if self._active_connection is not None
+            else self._connect()
+        )
+        with context as connection:
             connection.execute(
                 "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
                 "ON CONFLICT(network_id, ip) DO UPDATE SET "
@@ -279,6 +286,20 @@ class HostProfileStore:
         self._save(source, interface, observed_at, source_facts)
         self._save(target, interface, observed_at, target_facts)
 
+    def observe_flows(self, flows: Iterable[Any]) -> None:
+        """Persist one bounded flow batch in a single SQLite transaction.
+
+        Parameters:
+            flows: Parsed flow objects read by the host profile module.
+        """
+        with self._connect() as connection:
+            self._active_connection = connection
+            try:
+                for flow in flows:
+                    self.observe_flow(flow)
+            finally:
+                self._active_connection = None
+
     def observe_ip_info(self, ip: str, to_store: dict[str, Any]) -> None:
         """Keep learned reverse DNS, SNI, and threat feed appearances.
 
@@ -286,6 +307,10 @@ class HostProfileStore:
             ip: Address being enriched.
             to_store: Redis IPInfo fields written by a Slips module.
         """
+        try:
+            is_public = ipaddress.ip_address(ip).is_global
+        except ValueError:
+            return
         facts: list[tuple[str, str]] = []
         reverse_dns = to_store.get("reverse_dns")
         if reverse_dns:
@@ -297,7 +322,15 @@ class HostProfileStore:
             ).strip()
             facts.append(("asn", description))
         country = to_store.get("geocountry")
-        if country:
+        if (
+            is_public
+            and country
+            and str(country).strip().casefold()
+            not in {
+                "private",
+                "unknown",
+            }
+        ):
             facts.append(("country", str(country)))
         sni = to_store.get("SNI") or []
         for item in sni if isinstance(sni, list) else [sni]:
@@ -337,7 +370,8 @@ class HostProfileStore:
             Profiles and their clues, newest network first.
         """
         try:
-            normalized = str(ipaddress.ip_address(ip))
+            address = ipaddress.ip_address(ip)
+            normalized = str(address)
         except ValueError:
             return []
         if not path.exists():
@@ -362,7 +396,16 @@ class HostProfileStore:
                 profiles.append(
                     {
                         **dict(host),
-                        "facts": [dict(fact) for fact in facts],
+                        "facts": [
+                            dict(fact)
+                            for fact in facts
+                            if fact["kind"] != "country"
+                            or (
+                                address.is_global
+                                and str(fact["value"]).strip().casefold()
+                                not in {"private", "unknown"}
+                            )
+                        ],
                     }
                 )
             return profiles
