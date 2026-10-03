@@ -24,7 +24,33 @@ The `-w` flag enables the module even when `enabled` is false. `bind` accepts:
 - `localhost` — default; listens only on `127.0.0.1`.
 - `interface` — listens only on the IPv4 address of the interface Slips is monitoring. Slips reports the resulting URL in the console. This mode fails closed if no monitored IPv4 interface is available.
 
+When `bind: interface` is in use and that interface gets a new IPv4 address,
+the web launcher stops its own listener and starts it on the new address. The
+new URL is written to `slips.log`. The browser must reconnect at that URL;
+`bind: localhost` keeps the same URL through network changes.
+
 The interface mode exposes run data to hosts that can reach that network interface. The server has no login layer; use host firewall rules or a trusted network.
+
+## Live network changes
+
+When Slips monitors an interface, it checks that interface's current network
+settings every five seconds on Linux and macOS. The Overview page shows the
+current computer IP address, local subnet, router IP and MAC, DNS servers, connection
+state, and time of the last change for each monitored interface. A change is
+also written to `slips.log` with the old and new values.
+
+Slips reads addresses and prefixes from the interface, its router from the
+system route table, and DNS from `resolvectl` or NetworkManager on Linux and
+`scutil --dns` on macOS. If neither link-specific source is available, Slips
+uses the system resolver only when it monitors one interface. An unavailable
+value is shown as Unknown; Slips does not reuse the previous network's value.
+Alerts that require a known local subnet remain inactive until it is known.
+The ten most recent settings for each interface are retained in the current
+run so delayed flow records can be checked against the network active when
+they were captured. Older records with no matching settings are not judged
+against the wrong network.
+Saved captures and log files do not use the analysis computer's current Wi-Fi
+settings.
 
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
