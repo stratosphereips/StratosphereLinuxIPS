@@ -45,6 +45,7 @@ class Constants:
     MSGS_PUBLISHED_AT_RUNTIME = "msgs_published_at_runtime"
     ZEEK_FILES = "zeekfiles"
     DEFAULT_GATEWAY = "default_gateway"
+    NETWORK_STATES = "network_states"
     IS_CYST_ENABLED = "is_cyst_enabled"
     LOCAL_NETWORK = "local_network"
     ZEEK_PATH = "zeek_path"
