@@ -53,6 +53,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
     module.parent_output_dir = "output/current_run"
     module.redis_port = 32768
     module.conf.web_interface_bind = "localhost"
+    module.conf.permanent_dir = Mock(return_value="permanent")
     module.args.interface = None
     module.args.access_point = None
     process = Mock(pid=1234)
@@ -84,6 +85,9 @@ def test_pre_main_starts_server_for_current_run() -> None:
     assert result is False
     command = popen.call_args.args[0]
     assert command[command.index("--bind-address") + 1] == "127.0.0.1"
+    assert command[command.index("--host-profiles-path") + 1] == (
+        "permanent/host_profiles/hosts.sqlite"
+    )
     assert command[-3:] == [
         "32768",
         "--output-dir",
