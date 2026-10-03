@@ -449,7 +449,7 @@ class Utils(object):
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
             if "default" in gws and family in gws["default"]:
-                gw, gw_iface = gws["default"][family]
+                gw, gw_iface = gws["default"][family][:2]
                 if gw_iface == iface:
                     return gw
         return None
