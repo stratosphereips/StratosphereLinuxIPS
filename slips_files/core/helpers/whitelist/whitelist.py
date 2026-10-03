@@ -81,15 +81,19 @@ class Whitelist:
                 return True
         return False
 
-    def _flow_contains_whitelisted_ip(self, flow):
+    def _flow_contains_whitelisted_ip(self, flow) -> bool:
         """
         Returns True if any of the flow ips are whitelisted.
         checks the saddr, the daddr, and the dns answer
         """
-        if self.ip_analyzer.is_whitelisted(flow.saddr, Direction.SRC, "flows"):
+        if self.ip_analyzer.is_whitelisted(
+            flow.saddr, Direction.SRC, "flows", getattr(flow, "sport", None)
+        ):
             return True
 
-        if self.ip_analyzer.is_whitelisted(flow.daddr, Direction.DST, "flows"):
+        if self.ip_analyzer.is_whitelisted(
+            flow.daddr, Direction.DST, "flows", getattr(flow, "dport", None)
+        ):
             return True
 
         for answer in self.ip_analyzer.extract_dns_answers(flow):
@@ -158,7 +162,9 @@ class Whitelist:
         """extracts all the ips it can from the given attacker/victim"""
         # check the IPs that belong to this domain
         entity_ip = (
-            [entity.value] if entity.ioc_type == IoCType.IP.name else []
+            [entity.value]
+            if entity.ioc_type in (IoCType.IP, IoCType.IP.name)
+            else []
         )
         resolutions: List[str] = (
             entity.DNS_resolution if entity.DNS_resolution else []
@@ -176,7 +182,9 @@ class Whitelist:
         cnames = entity.CNAME if entity.CNAME else []
         sni = [entity.SNI] if entity.SNI else []
         entity_domain = (
-            [entity.value] if entity.ioc_type == IoCType.DOMAIN.name else []
+            [entity.value]
+            if entity.ioc_type in (IoCType.DOMAIN, IoCType.DOMAIN.name)
+            else []
         )
         unique_domains = set(sni + queries + cnames + entity_domain)
         return unique_domains
@@ -195,10 +203,23 @@ class Whitelist:
             return False
 
         what_to_ignore = "alerts"
+        port = (
+            evidence.src_port
+            if entity.direction in (Direction.SRC, Direction.SRC.name)
+            else evidence.dst_port
+        )
 
         for ip in self.extract_ips_from_entity(entity):
             if self.ip_analyzer.is_whitelisted(
-                ip, entity.direction, what_to_ignore
+                ip,
+                entity.direction,
+                what_to_ignore,
+                (
+                    port
+                    if entity.ioc_type in (IoCType.IP, IoCType.IP.name)
+                    and ip == entity.value
+                    else None
+                ),
             ):
                 return True
 
