@@ -761,6 +761,88 @@ class RedisDB(
     def get_local_network(self, interface):
         return self.r.hget(self.constants.LOCAL_NETWORK, interface)
 
+    def get_network_state(self, interface: str) -> dict | None:
+        """Read current live network settings for one interface.
+
+        Parameters:
+            interface: Monitored interface name.
+
+        Returns:
+            Current settings, or None before first collection.
+        """
+        value = self.r.hget(self.constants.NETWORK_STATES, interface)
+        return json.loads(value) if value else None
+
+    def replace_network_state(self, interface: str, state: dict) -> None:
+        """Replace current live addressing and service data together.
+
+        Parameters:
+            interface: Monitored interface name.
+            state: Collected settings, including its change version.
+        """
+        states = {
+            name: json.loads(value)
+            for name, value in self.r.hgetall(
+                self.constants.NETWORK_STATES
+            ).items()
+        }
+        previous = states.get(interface, {})
+        states[interface] = state
+        configured_dns = {
+            address
+            for item in states.values()
+            for address in item.get("dns_servers", [])
+        }
+        with self.r.pipeline(transaction=True) as pipe:
+            pipe.hset(
+                self.constants.NETWORK_STATES, interface, json.dumps(state)
+            )
+            if state.get("local_network"):
+                pipe.hset(
+                    self.constants.LOCAL_NETWORK,
+                    interface,
+                    state["local_network"],
+                )
+            else:
+                pipe.hdel(self.constants.LOCAL_NETWORK, interface)
+            gateway = {
+                key: value
+                for key, value in (
+                    ("IP", state.get("gateway_ip")),
+                    ("MAC", state.get("gateway_mac")),
+                )
+                if value
+            }
+            if gateway:
+                pipe.hset(
+                    self.constants.DEFAULT_GATEWAY,
+                    interface,
+                    json.dumps(gateway),
+                )
+            else:
+                pipe.hdel(self.constants.DEFAULT_GATEWAY, interface)
+            host_key = f"host_ip_{interface}"
+            pipe.delete(host_key)
+            if state.get("host_ip"):
+                pipe.zadd(host_key, {state["host_ip"]: state["version"]})
+            # Traffic-observed resolvers belong to the old network. They can
+            # be learned again; configured resolvers of all live links stay.
+            network_changed = any(
+                previous.get(key) != state.get(key)
+                for key in (
+                    "host_ip",
+                    "local_network",
+                    "gateway_ip",
+                    "gateway_mac",
+                    "dns_servers",
+                )
+            )
+            if network_changed:
+                pipe.delete(self.constants.OFFICIAL_DNS_SERVERS)
+            if configured_dns:
+                pipe.sadd(self.constants.OFFICIAL_DNS_SERVERS, *configured_dns)
+            pipe.execute()
+
     def get_total_recognized_localnets(self):
         """
         when slips is running using 2 interfaces, Slips recognizes 2 diff
@@ -1596,9 +1678,13 @@ class RedisDB(
                 and not self.get_gateway_mac_vendor(interface)
             )
         ):
-            gw_info = json.dumps({address_type: address})
-
-            self.r.hset(self.constants.DEFAULT_GATEWAY, interface, gw_info)
+            gw_info = self._get_gw_info(interface) or {}
+            gw_info[address_type] = address
+            self.r.hset(
+                self.constants.DEFAULT_GATEWAY,
+                interface,
+                json.dumps(gw_info),
+            )
 
     def get_domain_resolution(self, domain) -> List[str]:
         """
