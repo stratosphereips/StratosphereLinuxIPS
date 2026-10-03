@@ -393,6 +393,8 @@ For example, your copied whitelist file can contain:
 
     "IoCType","IoCValue","Direction","IgnoreType"
     ip,1.2.3.4,both,alerts
+    ip,192.168.1.163:5353,dst,alerts
+    ip,[fe80::1]:5353,dst,alerts
     domain,google.com,src,flows
     domain,apple.com,both,both
     ip,94.23.253.72,both,alerts
@@ -410,6 +412,15 @@ The values for each column are the following:
         - Supported IoCTypes: ip, domain, organization, mac
     Column IoCValue
         - Supported organizations: google, microsoft, apple, facebook, twitter.
+        - IP rules may include one port as `IPv4:port` or `[IPv6]:port`.
+          A port rule matches the source port for `src` and the destination
+          port for `dst`. `both` accepts either side when its IP and port match.
+          The port applies to all transport protocols; choose `alerts` if you
+          want to keep processing the flows. Rules without a port still match
+          the IP on every port. Add separate lines for additional ports.
+          Use `*:port` to match that port on any IP address. For example,
+          `ip,*:5353,both,alerts` suppresses alerts when either the source or
+          destination port is 5353, regardless of its IP address.
     Column Direction
         - Direction: src, dst or both
             - Src: Check if the IoCValue is the source
