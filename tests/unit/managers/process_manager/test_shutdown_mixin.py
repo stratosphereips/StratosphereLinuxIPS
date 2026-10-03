@@ -741,10 +741,41 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
 
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
+    assert process_manager.profiler_queue._closed
+    process_manager.main.logger._startup_queue.close.assert_called_once_with()
     process_manager.main.print.assert_any_call(
         "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
+
+
+@pytest.mark.parametrize("still_alive", [False, True])
+def test_kill_all_children_only_kills_running_processes(
+    still_alive: bool,
+) -> None:
+    """Reap exited children and force-kill only children still running.
+
+    Parameters:
+        still_alive: Whether the child survived the initial join.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = still_alive
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children()
+
+    assert child.join.call_count == (2 if still_alive else 1)
+    if still_alive:
+        process_manager.kill_process_tree.assert_called_once_with(123)
+    else:
+        process_manager.kill_process_tree.assert_not_called()
 
 
 def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
