@@ -240,7 +240,7 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .investigation-section-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 1rem; margin-bottom: .7rem; }
 .investigation-section-head h3 { margin: 0; color: var(--text); font-size: 1rem; }
 .investigation-section-head p { margin: 0; color: var(--muted); font-size: .74rem; text-align: right; }
-.description-box { margin: .8rem 0 1rem; padding: .9rem 1rem; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: #13212a; color: #d7e4ec; line-height: 1.5; }
+.description-box { display: block; margin: .8rem 0 1rem; padding: .9rem 1rem; border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; background: #13212a; color: #d7e4ec; line-height: 1.5; }
 .investigation-list { display: grid; gap: .65rem; }
 .investigation-card { display: block; width: 100%; padding: .85rem 1rem; border: 1px solid var(--line); border-left: 3px solid var(--blue); border-radius: 8px; background: #111d26; color: var(--text); text-align: left; cursor: pointer; }
 .investigation-card:hover, .investigation-card:focus-visible { border-color: var(--accent); border-left-color: var(--accent); outline: none; background: #152630; }
@@ -250,6 +250,7 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .investigation-card-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-bottom: .45rem; }
 .investigation-card-title { min-width: 0; overflow-wrap: anywhere; color: var(--blue); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .investigation-card p { margin: 0; color: #d4e0e8; font-size: .82rem; line-height: 1.42; }
+.investigation-description { display: block; color: #d4e0e8; font-size: .82rem; line-height: 1.42; }
 .investigation-card-meta { display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin-top: .55rem; color: var(--muted); font-size: .71rem; }
 .type-chip, .count-chip { display: inline-flex; align-items: center; padding: .18rem .48rem; border-radius: 99px; background: #65aaff17; color: var(--blue); font: 700 .68rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .count-chip { background: #43c7b517; color: var(--accent); font-family: inherit; }
@@ -263,6 +264,10 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .flow-arrow { color: var(--muted); font-size: 1.2rem; }
 .ip-link { max-width: 100%; padding: 0; border: 0; border-bottom: 1px dotted #65aaff88; background: transparent; color: var(--blue); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; text-align: inherit; cursor: pointer; }
 .ip-link:hover, .ip-link:focus-visible { border-color: var(--accent); outline: none; color: var(--accent); }
+.host-label { display: inline-flex; max-width: 100%; flex-wrap: wrap; align-items: baseline; gap: .15rem .4rem; overflow-wrap: anywhere; }
+.host-label .host-name { color: var(--muted); font: 600 .72rem ui-sans-serif, system-ui, sans-serif; }
+.host-label.own-host .host-name { color: var(--accent); font-weight: 700; }
+.ip-link .host-name { color: #b7d8ed; }
 .port-label { color: var(--warn); font: 650 .75rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .flow-metrics { display: grid; grid-template-columns: repeat(5, minmax(80px, 1fr)); gap: .55rem; margin-top: .7rem; }
 .flow-metric { min-width: 0; padding: .55rem .65rem; border: 1px solid #203443; border-radius: 7px; }
@@ -314,7 +319,7 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .host-evidence-panel .table-heading input { width: min(340px, 100%); }
 .host-evidence-wrap { max-height: 480px; }
 #host-evidence-table { min-width: 1120px; }
-.host-evidence-description { display: block; max-width: 430px; overflow: hidden; color: #c7d5de; text-overflow: ellipsis; white-space: nowrap; }
+.host-evidence-description { display: block; max-width: 430px; color: #c7d5de; overflow-wrap: anywhere; }
 .status.whitelisted, .slips-score.whitelisted { border-color: #ad8cff55; background: #ad8cff18; color: #c8b4ff; }
 .configuration-sections { display: grid; gap: .8rem; }
 .config-provenance { border-left: 3px solid var(--blue); }
