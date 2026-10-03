@@ -460,7 +460,14 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     reader.history_path = tmp_path / "history.sqlite"
     reader.redis_port = 6379
     reader.redis = Mock()
-    reader.redis.hgetall.return_value = {}
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"wlan0": json.dumps({
+            "interface": "wlan0", "connected": True,
+            "host_ip": "10.0.0.25", "local_network": "10.0.0.0/24",
+            "gateway_ip": "10.0.0.1", "dns_servers": ["10.0.0.53"],
+            "changed_at": 100.0,
+        })} if key == "network_states" else {}
+    )
     redis_values = {
         "number_of_alerts": "0",
         "number_of_evidence": "123456",
@@ -487,6 +494,7 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     result = reader.overview()
 
     assert result["counts"]["evidence"] == 123456
+    assert result["network_states"][0]["dns_servers"] == ["10.0.0.53"]
     assert result["evidence_details_loaded"] is False
     reader._redis_evidence.assert_not_called()
     reader._module_rows.assert_called_once_with(None, {}, False)
