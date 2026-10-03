@@ -430,7 +430,8 @@ class Trust(IModule):
                 return False
             return (
                 isinstance(payload, dict)
-                and payload.get("message_type") in ("peer_update", "go_data")
+                and payload.get("message_type")
+                in ("peer_update", "connection_update", "go_data")
                 and isinstance(payload.get("message_contents"), dict)
             )
         return super().is_msg_version_compatible(message, channel)
@@ -895,3 +896,6 @@ class Trust(IModule):
 
         except Exception:
             pass
+        # Channel reads are nonblocking. Yield between polls so an idle
+        # P2P module does not consume a CPU core.
+        self.termination_event.wait(0.05)
