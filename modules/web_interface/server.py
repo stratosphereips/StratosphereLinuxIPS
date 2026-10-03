@@ -24,6 +24,7 @@ import psutil
 import redis
 import yaml
 
+from managers.network_state import collect_network_state
 from modules.supported_module_names import Modules
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
@@ -2244,6 +2245,89 @@ class RunDataReader:
         )
         return result
 
+    def host_names(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
+        """Resolve a bounded set of displayed IPs to stored host names.
+
+        Parameters:
+            query: Repeated ``ip`` query values from the current view.
+
+        Returns:
+            Name and provenance for each valid requested address.
+        """
+        requested: Dict[str, str] = {}
+        for value in query.get("ip", [])[:MAX_PAGE_SIZE]:
+            try:
+                ip = str(ipaddress.ip_address(value))
+            except ValueError:
+                continue
+            requested[value] = ip
+        ips = list(dict.fromkeys(requested.values()))
+        if not ips:
+            return {"names": {}}
+
+        snapshots: Dict[str, Dict[str, Any]] = {}
+        try:
+            placeholders = ", ".join("?" for _ in ips)
+            with connect_history(
+                self.history_path, read_only=True
+            ) as connection:
+                rows = connection.execute(
+                    f"SELECT ip, data FROM host_snapshots WHERE ip IN ({placeholders})",
+                    ips,
+                ).fetchall()
+            snapshots = {
+                str(row["ip"]): self._loads(row["data"], {}) for row in rows
+            }
+        except (OSError, sqlite3.Error):
+            pass
+
+        live_identity: List[Any] = []
+        try:
+            pipeline = self.redis.pipeline(transaction=False)
+            for ip in ips:
+                pipeline.hget(f"profile_{ip}", "host_name")
+                pipeline.hget("DNSresolution", ip)
+            live_identity = pipeline.execute()
+        except (AttributeError, redis.RedisError):
+            live_identity = []
+
+        names: Dict[str, Dict[str, str]] = {}
+        for index, ip in enumerate(ips):
+            snapshot = snapshots.get(ip, {})
+            live_name = (
+                live_identity[index * 2]
+                if index * 2 < len(live_identity)
+                else ""
+            )
+            name = str(live_name or snapshot.get("hostname") or "")
+            source = "Hostname" if name else ""
+            if not name:
+                live_dns = (
+                    live_identity[index * 2 + 1]
+                    if index * 2 + 1 < len(live_identity)
+                    else None
+                )
+                dns = self._loads(live_dns, {}) or snapshot.get("dns") or {}
+                domains = (
+                    dns.get("domains", []) if isinstance(dns, dict) else []
+                )
+                if isinstance(domains, list) and domains:
+                    name = str(domains[0])
+                    source = "DNS"
+            if not name and getattr(self, "cache", None) is not None:
+                try:
+                    reverse_dns = self.cache.hget("IPsInfo:reverse_dns", ip)
+                except (AttributeError, redis.RedisError):
+                    reverse_dns = None
+                reverse_dns = self._loads(reverse_dns, reverse_dns)
+                if isinstance(reverse_dns, (list, tuple)):
+                    reverse_dns = reverse_dns[0] if reverse_dns else ""
+                if reverse_dns:
+                    name = str(reverse_dns)
+                    source = "rDNS"
+            names[ip] = {"name": name, "source": source}
+        return {"names": {value: names[ip] for value, ip in requested.items()}}
+
     def _current_profile_threats(self) -> Dict[str, str]:
         """
         Read current maximum threat levels for live Redis profiles in one batch.
@@ -3314,6 +3398,61 @@ class RunDataReader:
                     result[family].append(normalized)
         return result
 
+    @staticmethod
+    def _current_network_states(
+        analysis: Dict[str, str],
+        saved_states: List[Dict[str, Any]],
+        host_addresses: Dict[str, List[str]],
+    ) -> List[Dict[str, Any]]:
+        """Show live interface settings if the stored snapshot has fallen behind.
+
+        Parameters:
+            analysis: Run input metadata.
+            saved_states: Network settings last saved by Slips.
+            host_addresses: Current operating-system interface addresses.
+
+        Returns:
+            Saved states with any outdated live interface replaced for display.
+        """
+        if analysis.get("input_type") != "interface" or analysis.get(
+            "analysis_end"
+        ):
+            return saved_states
+        interface_names = {
+            name.strip()
+            for name in str(analysis.get("interface", "")).split(",")
+            if name.strip()
+        }
+        result = []
+        for saved in saved_states:
+            if saved.get("interface") not in interface_names:
+                result.append(saved)
+                continue
+            interface_addresses = (
+                host_addresses
+                if len(interface_names) == 1
+                else RunDataReader._interface_addresses(saved["interface"])
+            )
+            live_addresses = set(interface_addresses.get("ipv4", [])) | set(
+                interface_addresses.get("ipv6", [])
+            )
+            stored_addresses = {
+                item.get("ip") for item in saved.get("addresses", [])
+            }
+            if not stored_addresses and saved.get("host_ip"):
+                stored_addresses.add(saved["host_ip"])
+            if live_addresses == stored_addresses:
+                result.append(saved)
+                continue
+            current = collect_network_state(
+                saved["interface"], len(interface_names)
+            )
+            current["live_reading"] = True
+            current["observed_at"] = time.time()
+            current["saved_changed_at"] = saved.get("changed_at")
+            result.append(current)
+        return result
+
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
@@ -3401,12 +3540,25 @@ class RunDataReader:
             metadata.get(BACKEND_DISCONNECTED_KEY),
             now,
         )
+        try:
+            computer_interfaces = ",".join(psutil.net_if_addrs())
+        except psutil.Error:
+            computer_interfaces = ""
         uptime_reference = (
             now
             if backend_status["connected"]
             else backend_status["last_seen"] or now
         )
         firewall = self._firewall_overview()
+        host_addresses = self._interface_addresses(
+            str(analysis.get("interface") or run_metadata.get("File", ""))
+        )
+        saved_network_states = [
+            json.loads(value)
+            for _, value in sorted(
+                self.redis.hgetall("network_states").items()
+            )
+        ]
         return {
             "run": {
                 **analysis,
@@ -3427,15 +3579,14 @@ class RunDataReader:
             },
             "backend_status": backend_status,
             "run_metadata": run_metadata,
-            "host_addresses": self._interface_addresses(
-                str(analysis.get("interface") or run_metadata.get("File", ""))
+            "host_addresses": host_addresses,
+            "computer_addresses": self._interface_addresses(
+                computer_interfaces
             ),
-            "network_states": [
-                json.loads(value)
-                for _, value in sorted(
-                    self.redis.hgetall("network_states").items()
-                )
-            ],
+            "computer_name": socket.gethostname(),
+            "network_states": self._current_network_states(
+                analysis, saved_network_states, host_addresses
+            ),
             "sources": {
                 "redis": True,
                 "sqlite": self.sqlite_path.exists(),
@@ -4511,6 +4662,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.evidence(query)
         elif path == "/api/hosts":
             payload = reader.hosts(query)
+        elif path == "/api/host-names":
+            payload = reader.host_names(query)
         elif path == "/api/firewall":
             payload = reader.firewall(query)
         elif path == "/api/arp-poisoning":
