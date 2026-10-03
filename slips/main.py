@@ -731,7 +731,12 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.host_ip_man.update_host_ip(host_ips, modified_profiles)
+                host_ips = (
+                    self.host_ip_man.update_host_ip(
+                        host_ips, modified_profiles
+                    )
+                    or {}
+                )
                 if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 
