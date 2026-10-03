@@ -67,18 +67,24 @@ saved history is updated by the Slips main process when it resumes.
 
 Slips keeps identity clues in `host_profiles/hosts.sqlite` inside the configured
 `parameters.permanent_dir` (by default `permanent/`). This database survives
-individual output directories and Redis expiration. It is populated while
-Slips processes flows, including when the web interface is disabled.
+individual output directories and Redis expiration. A separate `host_profile`
+module reads completed flow rows in small batches and writes this database
+asynchronously, including when the web interface is disabled. Host identity
+can therefore appear shortly after its traffic, without delaying flow
+analysis. The module limits its work rate and drains pending rows briefly
+on shutdown.
 The dedicated host profile directory is restricted to its owner because
 requested URLs can contain private information.
 
 The Host workspace shows up to 50 recently seen network profiles for its IP,
 with first and last observation times. It records hostnames learned from DHCP
 or profile updates, DNS answers, multicast DNS answers on port 5353, TLS SNI,
-HTTP Host, requested HTTP URLs, reverse DNS, ASN, country, and threat feed
+HTTP Host, requested HTTP URLs, reverse DNS, ASN, public-IP country, and threat feed
 appearances. Each clue has its own first and last observation time and
 occurrence count. The Host workspace groups clues by source; each group can
-be expanded.
+be expanded. Open groups stay open as live data refreshes. Private and
+unknown geolocation labels are omitted from the country group, including
+labels stored by older runs.
 
 Public IPs share one profile across runs. Private addresses are grouped by
 the observed router MAC when the address belongs to the monitored subnet. If
@@ -266,7 +272,7 @@ search applies to isolation state, transition history, and ARP evidence.
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, a compact per-peer reliability history chart with Live, 1-hour, 24-hour, 7-day, and full-history ranges, peer reports received during the current run, and bounded recent send/receive activity. An enabled module with zero connected peers is shown as healthy and listening.
 
-Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; the reports table is filtered using this run's analysis start time.
+Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; both the received-report total and each peer's received-report count include only reports from this run. Previously known peers remain visible as offline until a live authenticated connection is reported.
 
 Pigeon adds the running Slips version to every Go-to-Python message. The P2P module also accepts unversioned messages only on its dedicated local Pigeon channel so an older bundled binary cannot silently disconnect the data pipeline. Authenticated libp2p TCP 5-tuples are stored in Redis as individually expiring records and removed from live state on disconnect. The web tab derives connected/offline status from those same live records, while `peer_info` and the persistent trust database retain historical identity, reliability, peer-IP mappings, and reports. The local identity and listen address come from Pigeon's Redis `multiAddress`, with `p2p.log` used only as a fallback for older runs.
 
