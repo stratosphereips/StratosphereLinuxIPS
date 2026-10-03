@@ -107,7 +107,11 @@ class DNS(IFlowalertsAnalyzer):
             # dns without conn in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
-            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
+            or (
+                self.is_running_non_stop
+                and flow.saddr not in self.our_ips
+                and flow.saddr != self.db.get_host_ip(flow.interface)
+            )
         ):
             return False
         return True
