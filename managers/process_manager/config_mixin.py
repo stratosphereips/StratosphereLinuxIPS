@@ -264,6 +264,18 @@ class ConfigMixin:
         if not self._reading_flows_from_cyst():
             runtime_disabled_modules.add(Modules.CYST)
 
+        vt_api_key_file = self.main.conf.vt_api_key_file()
+        if vt_api_key_file:
+            try:
+                with open(vt_api_key_file, "r") as f:
+                    vt_key = f.read(64)
+                if not vt_key or vt_key.strip() == "":
+                    runtime_disabled_modules.add(Modules.VIRUSTOTAL)
+            except Exception:
+                runtime_disabled_modules.add(Modules.VIRUSTOTAL)
+        else:
+            runtime_disabled_modules.add(Modules.VIRUSTOTAL)
+
         dependency_disabled_modules: Set[Modules] = (
             self._get_dependency_disabled_modules(runtime_disabled_modules)
         )
