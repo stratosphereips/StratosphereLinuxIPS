@@ -19,7 +19,6 @@ from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
-from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.output_paths import (
     get_this_filepath_inside_permanent_dir,
@@ -74,7 +73,6 @@ class DBManager:
         self.source_module: str = ""
         self.regex_generator_storage = None
         self.t_cell_storage = None
-        self.host_profiles = None
         # only the main process should ever flush the Redis DB. to avoid
         # children overwriting values set at the very start of slips
         if os.getpid() != main_pid:
@@ -107,15 +105,6 @@ class DBManager:
         if start_sqlite:
             self.sqlite = SQLiteDB(self.logger, output_dir, main_pid)
         self.all_interfaces = utils.get_all_interfaces(self.conf.get_args())
-        if start_sqlite:
-            self.host_profiles = HostProfileStore(
-                Path(self.conf.permanent_dir())
-                / "host_profiles"
-                / "hosts.sqlite",
-                f"{output_dir}:{main_pid}",
-                self.rdb.get_network_state,
-                self.all_interfaces,
-            )
         self.channels = self.rdb.channels
 
     def is_db_malformed(self, db_path: str) -> bool:
@@ -591,10 +580,7 @@ class DBManager:
         return self.rdb.update_accumulated_threat_level(*args, **kwargs)
 
     def set_ip_info(self, *args, **kwargs):
-        result = self.rdb.set_ip_info(*args, **kwargs)
-        if self.host_profiles:
-            self.host_profiles.observe_ip_info(*args, **kwargs)
-        return result
+        return self.rdb.set_ip_info(*args, **kwargs)
 
     def set_peer_trust(self, *args, **kwargs):
         return self.rdb.set_peer_trust(*args, **kwargs)
@@ -1451,10 +1437,7 @@ class DBManager:
         return self.rdb.get_hostname_from_profile(*args, **kwargs)
 
     def add_host_name_to_profile(self, *args, **kwargs):
-        result = self.rdb.add_host_name_to_profile(*args, **kwargs)
-        if self.host_profiles:
-            self.host_profiles.observe_hostname(*args, **kwargs)
-        return result
+        return self.rdb.add_host_name_to_profile(*args, **kwargs)
 
     def get_ipv4_from_profile(self, *args, **kwargs):
         return self.rdb.get_ipv4_from_profile(*args, **kwargs)
@@ -1528,8 +1511,6 @@ class DBManager:
     def add_flow(self, flow, profileid: str, twid: str, label="benign"):
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)
-        if self.host_profiles:
-            self.host_profiles.observe_flow(flow)
         # handles the channels and labels etc.
         return self.rdb.add_flow(
             flow, profileid=profileid, twid=twid, label=label
@@ -1542,12 +1523,7 @@ class DBManager:
         return self.rdb.set_slips_internal_time(ts)
 
     def add_altflow(self, *args, **kwargs):
-        result = self.sqlite.add_altflow(*args, **kwargs)
-        if self.host_profiles:
-            self.host_profiles.observe_flow(
-                args[0] if args else kwargs["flow"]
-            )
-        return result
+        return self.sqlite.add_altflow(*args, **kwargs)
 
     def insert(self, *args, **kwargs):
         return self.sqlite.insert(*args, **kwargs)
