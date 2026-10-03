@@ -2,6 +2,13 @@
 
 The web_interface module is a read-only technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
 
+Host addresses in the Overview, Alerts, Evidence, Firewall, ARP, and Hosts views,
+including IPs mentioned in evidence descriptions, appear with their stored
+hostname or cached DNS name. Addresses on the monitored
+computer are labeled **This computer** with the system hostname. When no name
+has been learned, the interface says **Name unknown** beside the IP. Name lookup
+uses bounded batches of addresses already visible in the current view.
+
 ## Start it
 
 Enable the interface with -w:
@@ -51,6 +58,10 @@ they were captured. Older records with no matching settings are not judged
 against the wrong network.
 Saved captures and log files do not use the analysis computer's current Wi-Fi
 settings.
+If a live run's saved network snapshot falls behind the monitored interface,
+the Overview card reads the current interface settings directly. It labels
+that result as a live reading and keeps the saved change time visible. The
+saved history is updated by the Slips main process when it resumes.
 
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
