@@ -1,5 +1,6 @@
 """Tests for permanent, network-scoped host identity storage."""
 
+import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from datetime import datetime, timezone
@@ -246,3 +247,47 @@ def test_dhcp_request_identifies_client_before_it_has_an_address(
         "new-device",
         "02:00:00:00:00:25",
     }
+
+
+@pytest.mark.parametrize(
+    "ip,country,expected_country",
+    [
+        ("192.168.1.10", "Private", False),
+        ("192.168.1.10", "United States", False),
+        ("8.8.8.8", "Unknown", False),
+        ("8.8.8.8", "United States", True),
+    ],
+)
+def test_country_facts_are_real_public_geolocations(
+    tmp_path: Path, ip: str, country: str, expected_country: bool
+) -> None:
+    """Ignore private/unknown labels, including facts saved by older runs.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+        ip: Address whose country metadata is stored.
+        country: Location label returned by IP info.
+        expected_country: Whether the label is a real public geolocation.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "host_profiles.sqlite"
+    store = HostProfileStore(path, "run", lambda _: {}, [])
+    store.observe_ip_info(
+        ip, {"reverse_dns": "example.org", "geocountry": country}
+    )
+    profile = HostProfileStore.read(path, ip)[0]
+    saved_countries = {
+        fact["value"]
+        for fact in profile["facts"]
+        if fact["kind"] == "country"
+    }
+    assert saved_countries == ({country} if expected_country else set())
+
+    if not expected_country:
+        with sqlite3.connect(path) as connection:
+            connection.execute(
+                "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (profile["network_id"], ip, "country", country, 1, 1, 1),
+            )
+        profile = HostProfileStore.read(path, ip)[0]
+        assert all(fact["kind"] != "country" for fact in profile["facts"])
