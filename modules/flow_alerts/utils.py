@@ -12,6 +12,39 @@ DHCPV6_PORTS = {"546", "547"}
 SPECIAL_IPV4 = SPECIAL_IPV4_ADDRESSES
 
 
+def network_state_for_flow(
+    db: DBManager, flow: Any, state: dict | None = None
+) -> dict | None:
+    """Select the network settings active when a live flow was recorded.
+
+    Parameters:
+        db: Database manager holding current and recent network settings.
+        flow: Flow with an interface and optional Unix start time.
+        state: Already loaded current settings, if available.
+
+    Returns:
+        Matching settings, or None when the network is unknown.
+    """
+    if state is None:
+        state = db.get_network_state(getattr(flow, "interface", ""))
+    if not isinstance(state, dict):
+        return None
+    try:
+        timestamp = float(flow.starttime)
+    except (AttributeError, TypeError, ValueError):
+        return state
+    matching = [
+        item
+        for item in [*state.get("history", []), state]
+        if float(item.get("changed_at", 0)) <= timestamp
+    ]
+    return (
+        max(matching, key=lambda item: item["changed_at"])
+        if matching
+        else None
+    )
+
+
 def get_ip_to_check(flow: Any, what_to_check: str) -> str:
     """
     Get the source or destination IP selected by the check direction.
@@ -149,7 +182,14 @@ def is_ip_outside_local_network(
     bool: True when the IP version matches the local network and the IP is
     outside that network.
     """
-    own_local_network = db.get_local_network(getattr(flow, "interface", ""))
+    state = db.get_network_state(getattr(flow, "interface", ""))
+    if isinstance(state, dict):
+        active = network_state_for_flow(db, flow, state)
+        own_local_network = active.get("local_network", "") if active else ""
+    else:
+        own_local_network = db.get_local_network(
+            getattr(flow, "interface", "")
+        )
     if not own_local_network:
         return False
 
@@ -208,6 +248,9 @@ def is_official_dns_server(
     if str(dns_server_port) != "53" or not dns_server_ip:
         return False
 
+    active = network_state_for_flow(db, flow)
+    if active and dns_server_ip in active.get("dns_servers", []):
+        return True
     return db.is_official_dns_server(dns_server_ip)
 
 
