@@ -2342,6 +2342,68 @@ def test_hosts_filter_by_maximum_threat_level(tmp_path) -> None:
     assert result["items"][0]["ip"] == "10.0.0.1"
 
 
+def test_hosts_page_batches_identity_and_counts(tmp_path: Path) -> None:
+    """Load a host page with bounded queries instead of one call per row.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+    """
+    factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.redis = factory.logger
+    reader.cache = Mock()
+    reader.score_mode = "ratl"
+    reader.alert_threshold = 5.0
+    reader._attach_current_host_scores = Mock()
+    reader._live_host = Mock(side_effect=AssertionError("per-host Redis read"))
+    reader._host_load = Mock(side_effect=AssertionError("per-host SQL read"))
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE evidence (profile_ip TEXT)")
+        connection.execute("CREATE TABLE alerts (ip_alerted TEXT)")
+        connection.execute("INSERT INTO evidence VALUES ('10.0.0.1')")
+        connection.execute("INSERT INTO alerts VALUES ('10.0.0.2')")
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [
+                ("10.0.0.1", 1.0, json.dumps({"ip": "10.0.0.1"})),
+                ("10.0.0.2", 2.0, json.dumps({"ip": "10.0.0.2"})),
+            ],
+        )
+        connection.execute(
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, bytes, packets) "
+            "VALUES ('one', 1, 3, '10.0.0.1', '10.0.0.2', 100, 2)"
+        )
+    reader.redis.pipeline.return_value.execute.return_value = [
+        {},
+        None,
+        {"host_name": "computer"},
+        None,
+    ]
+    reader.cache.pipeline.return_value.execute.return_value = [
+        "printer.local",
+        None,
+        None,
+        None,
+    ]
+
+    page = reader.hosts({"range": ["all"]})
+
+    by_ip = {item["ip"]: item for item in page["items"]}
+    assert by_ip["10.0.0.1"]["hostname"] == "computer"
+    assert by_ip["10.0.0.2"]["dns_name"] == "printer.local"
+    assert by_ip["10.0.0.1"]["evidence_count"] == 1
+    assert by_ip["10.0.0.2"]["alert_count"] == 1
+    assert by_ip["10.0.0.1"]["load"]["outbound_bytes"] == 100
+    assert by_ip["10.0.0.2"]["load"]["inbound_bytes"] == 100
+    reader.redis.pipeline.return_value.execute.assert_called_once_with()
+    reader.cache.pipeline.return_value.execute.assert_called_once_with()
+
+
 def test_hosts_show_and_sort_real_past_peak_score(tmp_path) -> None:
     """Return full-run persisted score peaks and sort the complete inventory."""
     _module_factory = ModuleFactory()
@@ -2688,6 +2750,10 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
             "(peerid TEXT, ipaddress TEXT, update_time REAL)"
         )
         connection.execute(
+            "INSERT INTO peer_ips VALUES (?, ?, ?)",
+            ("QmOldPeer", "192.0.2.25", 900),
+        )
+        connection.execute(
             "CREATE TABLE reports "
             "(reporter_peerid TEXT, reported_key TEXT, score REAL, "
             "confidence REAL, update_time REAL)"
@@ -2731,6 +2797,11 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
 
     assert len(result["reports"]) == 200
     assert result["counts"]["reports_received"] == 501
+    peer_counts = {
+        peer["peer_id"]: peer["reports_received"]
+        for peer in result["peers"]
+    }
+    assert peer_counts == {"QmRemotePeer": 501, "QmOldPeer": 0}
 
 
 def test_host_workspace_live_range_uses_run_wide_flow_clock(tmp_path) -> None:
