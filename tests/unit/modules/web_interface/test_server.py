@@ -20,6 +20,7 @@ from modules.web_interface.server import (
     SlipsHTTPServer,
     ipv4_address,
 )
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
@@ -571,6 +572,40 @@ def test_network_panel_uses_current_interface_after_saved_state_stalls(
     else:
         collect.assert_not_called()
         assert result == [saved]
+
+
+def test_host_workspace_includes_permanent_identity_clues(
+    tmp_path: Path,
+) -> None:
+    """Expose cross-run host names through the Host workspace response.
+
+    Parameters:
+        tmp_path: Isolated permanent host database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "host_profiles.sqlite"
+    store = HostProfileStore(path, "old-run", lambda _: {}, [])
+    store.observe_ip_info("8.8.8.8", {"reverse_dns": "dns.google"})
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+    reader._live_host = Mock(
+        return_value={
+            "ip": "8.8.8.8",
+            "observed_at": 100.0,
+            "live": False,
+        }
+    )
+    reader._attach_current_host_scores = Mock()
+    reader._host_ips = Mock(return_value=["8.8.8.8"])
+    reader._host_load = Mock(return_value={})
+    reader._ti_for_ip = Mock(return_value={})
+    reader.alerts = Mock(return_value={"total": 0, "items": []})
+    reader._profile_evidence_count = Mock(return_value=0)
+
+    host = reader.host("8.8.8.8")
+
+    assert host["permanent_profiles"][0]["network_id"] == "public"
+    assert host["permanent_profiles"][0]["facts"][0]["value"] == ("dns.google")
 
 
 def test_overview_evidence_counts_scans_only_when_requested(
