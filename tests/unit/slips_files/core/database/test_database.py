@@ -443,6 +443,55 @@ def test_store_official_dns_server():
     assert db.is_official_dns_server("not-an-ip") is False
 
 
+def test_replace_network_state_clears_old_network_settings() -> None:
+    """A Wi-Fi switch replaces the subnet, gateway, host IP, and DNS."""
+    db = ModuleFactory().create_db_manager_obj(6395, flush_db=True)
+    first = {
+        "host_ip": "192.168.1.20", "local_network": "192.168.1.0/24",
+        "gateway_ip": "192.168.1.1", "gateway_mac": "aa:bb:cc:dd:ee:ff",
+        "dns_servers": ["192.168.1.53"], "version": 1,
+    }
+    second = {
+        "host_ip": "10.0.0.25", "local_network": "10.0.0.0/24",
+        "gateway_ip": "10.0.0.1", "gateway_mac": "11:22:33:44:55:66",
+        "dns_servers": ["10.0.0.53"], "version": 2,
+    }
+
+    db.replace_network_state("wlan0", first)
+    db.store_official_dns_server("192.168.1.54")
+    db.replace_network_state("wlan0", second)
+
+    assert db.get_network_state("wlan0") == second
+    assert db.get_host_ip("wlan0") == "10.0.0.25"
+    assert db.get_local_network("wlan0") == "10.0.0.0/24"
+    assert db.get_gateway_ip("wlan0") == "10.0.0.1"
+    assert db.get_gateway_mac("wlan0") == "11:22:33:44:55:66"
+    assert db.is_official_dns_server("10.0.0.53") is True
+    assert db.is_official_dns_server("192.168.1.53") is False
+    assert db.is_official_dns_server("192.168.1.54") is False
+
+    db.replace_network_state("wlan0", {
+        **second, "host_ip": "", "local_network": "",
+        "gateway_ip": "", "gateway_mac": "", "dns_servers": [],
+        "version": 3,
+    })
+    assert db.get_host_ip("wlan0") is None
+    assert db.get_local_network("wlan0") is None
+    assert db.get_gateway_ip("wlan0") is None
+    assert db.is_official_dns_server("10.0.0.53") is False
+
+
+def test_gateway_fields_survive_separate_discovery() -> None:
+    """Preserve both gateway IP and MAC found by different modules."""
+    db = ModuleFactory().create_db_manager_obj(6396, flush_db=True)
+
+    db.set_default_gateway("IP", "10.0.0.1", "eth0")
+    db.set_default_gateway("MAC", "aa:bb:cc:dd:ee:ff", "eth0")
+
+    assert db.get_gateway_ip("eth0") == "10.0.0.1"
+    assert db.get_gateway_mac("eth0") == "aa:bb:cc:dd:ee:ff"
+
+
 def test_current_timewindow_wrappers_delegate_to_redis_db():
     """Test current-timewindow getters and increment delegation."""
     db = ModuleFactory().create_db_manager_obj(6385, flush_db=True)
