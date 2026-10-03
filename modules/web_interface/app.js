@@ -2495,7 +2495,15 @@ function hostRangeParams() {
  */
 function renderPermanentProfiles(profiles) {
   const container = byId("host-permanent-profiles");
+  const profileIp = profiles?.[0]?.ip || "";
+  const openSections = new Map();
+  if (container.dataset.profileIp === profileIp) {
+    container.querySelectorAll("details.host-profile-facts").forEach((details) => {
+      openSections.set(details.dataset.key, details.open);
+    });
+  }
   container.replaceChildren();
+  container.dataset.profileIp = profileIp;
   if (!profiles?.length) {
     container.append(text("p", "No permanent identity clues recorded yet.", "muted"));
     return;
@@ -2514,6 +2522,7 @@ function renderPermanentProfiles(profiles) {
     group.append(text("small", `First seen ${formatTime(profile.first_seen)} · Last seen ${formatTime(profile.last_seen)}`, "muted"));
     const byKind = new Map();
     (profile.facts || []).forEach((fact) => {
+      if (fact.kind === "country" && ["private", "unknown"].includes(String(fact.value).trim().toLowerCase())) return;
       if (!byKind.has(fact.kind)) byKind.set(fact.kind, []);
       byKind.get(fact.kind).push(fact);
     });
@@ -2522,12 +2531,17 @@ function renderPermanentProfiles(profiles) {
       if (!values.length) return;
       const details = document.createElement("details");
       details.className = "host-profile-facts";
-      details.open = ["hostname", "mdns_name", "dns_name"].includes(kind);
-      details.append(text("summary", `${label} · ${values.length}`));
+      details.dataset.key = JSON.stringify([profile.network_id, kind]);
+      details.open = openSections.has(details.dataset.key)
+        ? openSections.get(details.dataset.key)
+        : ["hostname", "mdns_name", "dns_name"].includes(kind);
+      const summary = document.createElement("summary");
+      summary.append(text("span", label), text("span", compact(values.length), "count-chip"));
+      details.append(summary);
       const list = document.createElement("ul");
       values.forEach((fact) => {
         const item = document.createElement("li");
-        item.append(text("span", fact.value));
+        item.append(text("span", fact.value, "host-profile-value"));
         item.append(text("small", `Seen ${compact(fact.observations)}× · ${formatTime(fact.first_seen)} to ${formatTime(fact.last_seen)}`, "muted"));
         list.append(item);
       });
