@@ -74,6 +74,13 @@ main { max-width: 1900px; margin: auto; padding: 2rem 2.5rem 4rem; }
 .network-states { display: grid; gap: .7rem; }
 .network-state { display: grid; gap: .25rem; border: 1px solid var(--line); border-radius: 7px; padding: .8rem; background: var(--surface-2); }
 .network-state strong { font-size: 1rem; }
+.network-name-form { display: flex; align-items: flex-end; gap: .6rem; flex-wrap: wrap; margin: .3rem 0 .45rem; }
+.network-name-form label { display: grid; gap: .25rem; min-width: min(100%, 260px); color: var(--muted); font-size: .76rem; }
+.network-name-form input { width: 100%; min-height: 2.3rem; padding: .45rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); }
+.network-name-form small { flex-basis: 100%; }
+.network-name-feedback { color: var(--warn); }
+.network-name-form[hidden] { display: none; }
+.profile-network-name-action { margin: .15rem 0 .55rem; padding: .35rem .6rem; font-size: .72rem; }
 .table-surface { padding: 0; overflow: hidden; }
 .table-heading { padding: 1rem; border-bottom: 1px solid var(--line); }
 .table-actions { display: flex; align-items: center; gap: .65rem; flex-wrap: wrap; }
