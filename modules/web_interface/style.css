@@ -340,14 +340,21 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .config-setting p { margin: .55rem 0 0; color: var(--muted); font-size: .74rem; line-height: 1.4; }
 .config-key { color: var(--blue); font: .65rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .empty-state { padding: 2rem; color: var(--muted); text-align: center; }
-.permanent-host-profile { padding: .8rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
-.permanent-host-profile:first-child { border-top: 0; }
-.permanent-host-profile > strong, .permanent-host-profile > small { display: block; margin-bottom: .35rem; }
-.host-profile-facts { margin: .35rem 0; }
-.host-profile-facts > summary { cursor: pointer; color: var(--blue); }
-.host-profile-facts ul { margin: .35rem 0 .7rem; padding-left: 1.4rem; }
-.host-profile-facts li { margin-bottom: .4rem; overflow-wrap: anywhere; }
-.host-profile-facts li small { display: block; }
+.permanent-host-profile { padding: 1rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.permanent-host-profile:first-child { border-top: 0; padding-top: .35rem; }
+.permanent-host-profile > strong { display: block; margin-bottom: .25rem; font-size: .92rem; }
+.permanent-host-profile > small { display: block; margin-bottom: .8rem; }
+.host-profile-facts { margin: .45rem 0; border: 1px solid var(--line); border-radius: 8px; background: #0b151d; overflow: hidden; }
+.host-profile-facts > summary { display: flex; align-items: center; gap: .6rem; padding: .7rem .8rem; cursor: pointer; color: var(--blue); list-style: none; }
+.host-profile-facts > summary::-webkit-details-marker { display: none; }
+.host-profile-facts > summary::before { content: "▸"; color: var(--accent); }
+.host-profile-facts[open] > summary::before { content: "▾"; }
+.host-profile-facts > summary .count-chip { margin-left: auto; }
+.host-profile-facts ul { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.host-profile-facts li { padding: .65rem .8rem; overflow-wrap: anywhere; }
+.host-profile-facts li + li { border-top: 1px solid var(--line); }
+.host-profile-value { display: block; font-size: .82rem; }
+.host-profile-facts li small { display: block; margin-top: .22rem; font-size: .72rem; }
 .whitelist-notice { margin-bottom: 1rem; padding: .9rem 1rem; border: 1px solid #ad8cff66; border-left: 4px solid #ad8cff; border-radius: 8px; background: #1b1830; }
 .whitelist-notice h3 { color: #d5c8ff; }
 .whitelist-notice p, .whitelist-notice li { color: #c8c0dc; font-size: .8rem; line-height: 1.5; }
