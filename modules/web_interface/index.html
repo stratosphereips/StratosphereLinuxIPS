@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20260830-host-addresses">
+  <link rel="stylesheet" href="/style.css?v=20261003-network-state">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -50,6 +50,10 @@
         <button class="secondary" id="refresh-overview">Refresh</button>
       </div>
       <div id="summary-cards" class="summary-grid overview-summary"></div>
+      <article class="surface"><h3>Current network</h3>
+        <p class="muted">Slips checks these settings while monitoring a live interface. They update when the computer changes network.</p>
+        <div id="network-states" class="network-states"></div>
+      </article>
       <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
       <article class="surface">
         <h3>Estimated attacks stopped by the firewall</h3>
@@ -273,6 +277,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260831-backend-heartbeat"></script>
+  <script src="/app.js?v=20261003-network-state"></script>
 </body>
 </html>
