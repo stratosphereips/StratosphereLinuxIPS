@@ -162,11 +162,14 @@ class Output(IObserver):
             slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
         self.slips_logfile_lock.release()
 
-    def print(self, sender: str, txt: str, end="\n"):
+    def print(self, sender: str, txt: str, end: str = "\n") -> None:
         """
         prints the given txt whether using tqdm or using print()
         """
-        self.cli_lock.acquire()
+        # A process can die or stop writing while holding this shared lock.
+        # Do not let terminal output halt the main monitoring loop.
+        if not self.cli_lock.acquire(timeout=2):
+            return
         try:
             if sender:
                 to_print = f"[{sender}] {txt}"
@@ -195,7 +198,8 @@ class Output(IObserver):
         except Exception as e:
             print(f"Problem printing {txt}. {e}")
 
-        self.cli_lock.release()
+        finally:
+            self.cli_lock.release()
 
     def log_error(self, msg: dict):
         """
