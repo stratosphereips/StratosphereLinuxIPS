@@ -10,6 +10,12 @@ const state = {
   whitelists: null,
   arpPoisoning: null,
   host: null,
+  hostNames: new Map(),
+  pendingHostNames: new Set(),
+  hostNamesLoading: false,
+  hostNamesScheduled: false,
+  ownAddresses: new Set(),
+  computerName: "",
   failures: 0,
   connected: false,
   lastSuccessfulRequest: null,
@@ -119,6 +125,123 @@ const cell = (value, className = "") => {
   if (className) td.className = className;
   return td;
 };
+
+/** Set the visible name for one rendered IP address. */
+function updateHostLabel(element) {
+  const ip = element.dataset.hostIp;
+  const own = state.ownAddresses.has(ip);
+  element.classList.toggle("own-host", own);
+  const identity = state.hostNames.get(ip);
+  const name = own
+    ? `This computer${state.computerName ? ` · ${state.computerName}` : ""}`
+    : identity?.name || "Name unknown";
+  const source = own ? "Monitored computer" : identity?.source || "No stored hostname";
+  element.querySelector(".host-name").textContent = name;
+  element.title = `${ip} · ${source}: ${name}`;
+}
+
+/** Update all visible host labels after identity information changes. */
+function refreshHostLabels() {
+  document.querySelectorAll("[data-host-ip]").forEach(updateHostLabel);
+}
+
+/** Keep a learned name without replacing it with missing metadata. */
+function rememberHostName(ip, name, source) {
+  if (!ip || !name) return;
+  state.hostNames.set(ip, { name, source, checkedAt: Date.now() });
+}
+
+/** Fetch names for visible addresses in bounded batches. */
+async function loadHostNames() {
+  if (state.hostNamesLoading) return;
+  state.hostNamesLoading = true;
+  try {
+    while (state.pendingHostNames.size) {
+      const ips = Array.from(state.pendingHostNames).slice(0, 100);
+      ips.forEach((ip) => state.pendingHostNames.delete(ip));
+      const params = new URLSearchParams();
+      ips.forEach((ip) => params.append("ip", ip));
+      const response = await fetch(`/api/host-names?${params}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      applyRunIdentity(payload.run_identity);
+      ips.forEach((ip) => {
+        const fetched = payload.names?.[ip] || {};
+        const existing = state.hostNames.get(ip);
+        if (existing?.name && (!fetched.name
+            || (existing.source === "Hostname" && fetched.source !== "Hostname"))) return;
+        state.hostNames.set(ip, { ...fetched, checkedAt: Date.now() });
+      });
+      refreshHostLabels();
+    }
+  } catch (_) {
+    // Keep addresses visible when optional name metadata is unavailable.
+  } finally {
+    state.hostNamesLoading = false;
+    if (state.pendingHostNames.size) {
+      window.setTimeout(loadHostNames, 1000);
+    }
+  }
+}
+
+/** Render an IP and its stored name together. */
+function hostIdentity(ip) {
+  const element = document.createElement("span");
+  element.className = "host-label";
+  if (!ip) {
+    element.append(text("code", "Unknown"));
+    return element;
+  }
+  element.dataset.hostIp = String(ip);
+  element.append(text("code", ip), text("small", "Name unknown", "host-name"));
+  updateHostLabel(element);
+  const cached = state.hostNames.get(String(ip));
+  if ((!cached || Date.now() - cached.checkedAt > 60000)
+      && !state.ownAddresses.has(String(ip))) {
+    state.pendingHostNames.add(String(ip));
+    if (!state.hostNamesScheduled) {
+      state.hostNamesScheduled = true;
+      window.setTimeout(() => {
+        state.hostNamesScheduled = false;
+        loadHostNames();
+      }, 0);
+    }
+  }
+  return element;
+}
+
+/** Add host names beside addresses mentioned in a detection description. */
+function hostDescription(record, className = "") {
+  const description = String(record.description || "—");
+  const addresses = new Set(description.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []);
+  [record.attacker, record.victim].forEach((entity) => {
+    if (String(entity?.ioc_type || "").toUpperCase() === "IP"
+        && description.includes(entity.value)) addresses.add(entity.value);
+  });
+  const element = document.createElement("span");
+  if (className) element.className = className;
+  if (!addresses.size) {
+    element.textContent = description;
+    return element;
+  }
+  const escaped = Array.from(addresses).sort((left, right) => right.length - left.length)
+    .map((ip) => ip.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const matcher = new RegExp(`(${escaped.join("|")})`, "g");
+  description.split(matcher).forEach((part) => {
+    if (addresses.has(part)) element.append(hostIdentity(part));
+    else element.append(part);
+  });
+  return element;
+}
+
+/** Show an indicator as a named host when it is an IP address. */
+function hostOrText(value) {
+  const candidate = String(value || "");
+  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(candidate);
+  const ipv6 = /^[0-9a-fA-F:.]+$/.test(candidate)
+    && (candidate.includes("::") || candidate.split(":").length === 8);
+  return ipv4 || ipv6 ? hostIdentity(candidate) : text("code", value || "—");
+}
 const threat = (value) => {
   const level = String(value || "info").toLowerCase();
   return text("span", level, `status threat-${level}`);
@@ -257,6 +380,10 @@ function applyRunIdentity(identity) {
     state.overviewEvidenceLoading = false;
     state.metrics = [];
     state.rangesInitialized = false;
+    state.hostNames.clear();
+    state.pendingHostNames.clear();
+    state.ownAddresses.clear();
+    state.computerName = "";
     toast("A new Slips run is now active. Investigation state was cleared.");
   }
   state.runIdentity = token;
@@ -575,7 +702,8 @@ function renderBars(id, rows) {
     const meter = document.createElement("span");
     meter.className = "bar-meter";
     meter.style.width = `${numeric(row.value) / maximum * 100}%`;
-    item.append(text("code", row.name || "unknown"), meter, text("strong", compact(row.value)));
+    item.append(id === "host-peers" ? hostIdentity(row.name) : text("code", row.name || "unknown"),
+      meter, text("strong", compact(row.value)));
     container.append(item);
   });
 }
@@ -627,13 +755,26 @@ function renderRunContext(data) {
     metadata.Commit ? `commit ${metadata.Commit}` : "",
   ].filter(Boolean).join(" · ");
   const addresses = data.host_addresses || {};
-  const addressParts = [
-    addresses.ipv4?.length ? `IPv4: ${addresses.ipv4.join(", ")}` : "",
-    addresses.ipv6?.length ? `IPv6: ${addresses.ipv6.join(", ")}` : "",
-  ].filter(Boolean);
+  const computerAddresses = data.computer_addresses || {};
+  state.computerName = data.computer_name || "";
+  state.ownAddresses = new Set([
+    ...(addresses.ipv4 || []), ...(addresses.ipv6 || []),
+    ...(computerAddresses.ipv4 || []), ...(computerAddresses.ipv6 || []),
+    "127.0.0.1", "::1",
+  ]);
   const addressLine = byId("run-addresses");
-  addressLine.textContent = addressParts.join(" · ");
-  addressLine.hidden = !addressParts.length;
+  addressLine.replaceChildren();
+  [["IPv4", addresses.ipv4 || []], ["IPv6", addresses.ipv6 || []]]
+    .filter(([, ips]) => ips.length).forEach(([kind, ips], index) => {
+      if (index) addressLine.append(" · ");
+      addressLine.append(`${kind}: `);
+      ips.forEach((ip, position) => {
+        if (position) addressLine.append(", ");
+        addressLine.append(hostIdentity(ip));
+      });
+    });
+  addressLine.hidden = !addressLine.childNodes.length;
+  refreshHostLabels();
   renderConnectionState(backendConnected);
   byId("alerts-badge").textContent = compact(data.counts.alerts);
   byId("evidence-badge").textContent = compact(data.counts.evidence);
@@ -703,12 +844,27 @@ function renderNetworkStates(networkStates) {
     const card = document.createElement("div");
     card.className = "network-state";
     card.append(text("strong", `${network.interface} · ${network.connected ? "Connected" : "Disconnected"}`));
-    card.append(text("span", `Computer IP: ${network.host_ip || "Unknown"}`));
+    const computer = document.createElement("span");
+    computer.append("Computer: ", hostIdentity(network.host_ip));
+    card.append(computer);
     card.append(text("span", `Local network: ${network.local_network || "Unknown"}`));
-    card.append(text("span", `Router: ${network.gateway_ip || "Unknown"}`));
+    const router = document.createElement("span");
+    router.append("Router: ", hostIdentity(network.gateway_ip));
+    card.append(router);
     card.append(text("span", `Router MAC: ${network.gateway_mac || "Unknown"}`));
-    card.append(text("span", `DNS servers: ${(network.dns_servers || []).join(", ") || "Unknown"}`));
-    card.append(text("small", `Last changed: ${formatTime(network.changed_at)}`, "muted"));
+    const dns = document.createElement("span");
+    dns.append("DNS servers: ");
+    (network.dns_servers || []).forEach((ip, index) => {
+      if (index) dns.append(", ");
+      dns.append(hostIdentity(ip));
+    });
+    if (!(network.dns_servers || []).length) dns.append("Unknown");
+    card.append(dns);
+    if (network.live_reading) {
+      card.append(text("small", `Live reading: ${formatTime(network.observed_at)} · Saved state last changed: ${formatTime(network.saved_changed_at)}`, "muted"));
+    } else {
+      card.append(text("small", `Last changed: ${formatTime(network.changed_at)}`, "muted"));
+    }
     container.append(card);
   });
 }
@@ -1086,7 +1242,7 @@ async function loadAlerts() {
   applyPage("alerts", payload);
   if (grouped) {
     renderTable("alerts-table", payload.items, [
-      (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
+      (row) => formatTime(row.alert_time), (row) => hostIdentity(row.ip_alerted),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => contextName(row),
       (row) => tiFeeds(row), (row) => compact(row.alert_count),
@@ -1094,7 +1250,7 @@ async function loadAlerts() {
     ], openAlertGroup);
   } else {
     renderTable("alerts-table", payload.items, [
-      (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
+      (row) => formatTime(row.alert_time), (row) => hostIdentity(row.ip_alerted),
       (row) => threat(row.threat_level),
       (row) => slipsScore(row),
       (row) => text("code", row.timewindow || "—"),
@@ -1131,7 +1287,7 @@ async function loadEvidence() {
       : `Individual durable evidence: ${compact(payload.total)}.`);
   if (grouped) {
     renderTable("evidence-table", payload.items, [
-      (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
+      (row) => formatTime(row.timestamp), (row) => hostIdentity(row.profile_ip),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => text("code", row.evidence_type),
       (row) => text("code", row.module), (row) => compact(row.evidence_count),
@@ -1141,13 +1297,13 @@ async function loadEvidence() {
     ], openEvidenceGroup);
   } else {
     renderTable("evidence-table", payload.items, [
-      (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
+      (row) => formatTime(row.timestamp), (row) => hostIdentity(row.profile_ip),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => text("code", row.evidence_type),
       (row) => text("code", row.module), (row) => whitelistHandling(row),
       (row) => compact(row.flow_count),
       (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
-      (row) => row.description || "—",
+      (row) => hostDescription(row),
     ], openEvidence);
   }
   pager("evidence", "evidence-pager", loadEvidence);
@@ -1278,7 +1434,7 @@ async function loadFirewall() {
     ["Evidence while blocked", compact(impact.evidence)],
   ], "firewall-impact-summary");
   renderTable("firewall-table", payload.items, [
-    (row) => text("code", row.ip),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
     (row) => row.recovered
       ? `${row.recovery_status || "Recovered"}${row.origin_run ? ` · ${row.origin_run}` : ""}`
@@ -1300,7 +1456,7 @@ async function loadFirewall() {
   byId("firewall-history-count").textContent = `${payload.history_total || 0} block/unblock event${payload.history_total === 1 ? "" : "s"} match this view.`;
   renderTable("firewall-history-table", history, [
     (row) => formatTime(row.timestamp),
-    (row) => text("code", row.ip),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.action, `status ${row.action === "unblocked" ? "ok" : "bad"}`),
     (row) => row.details || "—",
   ], (row) => openHost(row.ip));
@@ -1320,7 +1476,7 @@ function renderArpPoisoning() {
   byId("arp-poisoning-count").textContent = `${hosts.length} shown · ${payload.counts.hosts} hosts`;
   renderTable("arp-poisoning-hosts-table",
     sortLocalRows("arp-poisoning-hosts-table", hosts), [
-      (row) => text("code", row.ip),
+      (row) => hostIdentity(row.ip),
       (row) => text("span", row.status,
         `status ${row.status === "released" ? "ok" : "bad"}`),
       (row) => formatTime(row.poisoned_at),
@@ -1336,7 +1492,7 @@ function renderArpPoisoning() {
   renderTable("arp-poisoning-events-table",
     sortLocalRows("arp-poisoning-events-table", events), [
       (row) => formatTime(row.timestamp),
-      (row) => text("code", row.ip),
+      (row) => hostIdentity(row.ip),
       (row) => text("span", row.action,
         `status ${row.action === "released" ? "ok" : "bad"}`),
       (row) => row.current_tw ?? "—",
@@ -1348,13 +1504,13 @@ function renderArpPoisoning() {
   renderTable("arp-poisoning-evidence-table",
     sortLocalRows("arp-poisoning-evidence-table", evidence), [
       (row) => formatTime(row.timestamp),
-      (row) => text("code", row.profile_ip),
+      (row) => hostIdentity(row.profile_ip),
       (row) => threat(row.threat_level),
       (row) => text("code", row.evidence_type),
       (row) => `${Math.round(numeric(row.confidence) * 100)}%`,
       (row) => compact(row.flow_count),
       (row) => compact(row.alert_count),
-      (row) => row.description || "—",
+      (row) => hostDescription(row),
     ], (row) => openHost(row.profile_ip));
 }
 
@@ -1408,14 +1564,12 @@ function renderP2PTrustChart(history, peers) {
   const legend = byId("p2p-trust-legend");
   legend.replaceChildren();
   peerIds.forEach((peerId, index) => {
-    const item = text(
-      "span",
-      peerIps.get(peerId) || peerId,
-      "p2p-trust-legend-item",
-    );
+    const item = document.createElement("span");
+    item.className = "p2p-trust-legend-item";
     const marker = document.createElement("i");
     marker.className = `peer-trust-key peer-trust-line-${index % 8}`;
-    item.prepend(marker);
+    item.append(marker, peerIps.get(peerId)
+      ? hostIdentity(peerIps.get(peerId)) : text("code", peerId));
     item.title = peerId;
     legend.append(item);
   });
@@ -1451,7 +1605,7 @@ async function loadP2P() {
   renderP2PTrustChart(payload.trust_history || [], payload.peers || []);
   renderTable("p2p-peers-table", payload.peers || [], [
     (row) => text("code", row.peer_id),
-    (row) => text("code", row.ip || "—"),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
     (row) => row.trust === null ? "—" : numeric(row.trust).toFixed(3),
     (row) => row.reliability === null ? "—" : numeric(row.reliability).toFixed(3),
@@ -1466,7 +1620,7 @@ async function loadP2P() {
   renderTable("p2p-reports-table", payload.reports || [], [
     (row) => formatTime(row.timestamp),
     (row) => text("code", row.peer_id),
-    (row) => text("code", row.target),
+    (row) => hostOrText(row.target),
     (row) => numeric(row.score).toFixed(3),
     (row) => numeric(row.confidence).toFixed(3),
   ]);
@@ -1474,17 +1628,22 @@ async function loadP2P() {
     (row) => formatTime(row.timestamp),
     (row) => row.direction || "—",
     (row) => row.message_type || "unknown",
-    (row) => text("code", row.peer || "—"),
-    (row) => text("code", row.target || "—"),
+    (row) => hostOrText(row.peer),
+    (row) => hostOrText(row.target),
   ]);
 }
 
 async function loadHosts() {
   const payload = await api("hosts", listPath("hosts"));
   if (!payload) return;
+  payload.items.forEach((row) => rememberHostName(
+    row.ip, row.hostname || row.dns_name,
+    row.hostname ? "Hostname" : row.dns_name_source || "",
+  ));
+  refreshHostLabels();
   applyPage("hosts", payload);
   renderTable("hosts-table", payload.items, [
-    (row) => text("code", row.ip),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.scope, `status ${row.scope === "public" ? "warn" : "ok"}`),
     (row) => row.hostname || "—",
     (row) => contextName(row),
@@ -1561,8 +1720,10 @@ async function inspectHost(ip) {
 
 /** Render an IP as a host-workspace navigation control. */
 function hostLink(ip) {
-  const button = text("button", ip || "Unknown", "ip-link");
+  const button = document.createElement("button");
+  button.className = "ip-link";
   button.type = "button";
+  button.append(hostIdentity(ip));
   button.title = ip ? `Open host workspace for ${ip}` : "No host address available";
   button.disabled = !ip;
   button.addEventListener("click", (event) => {
@@ -1793,7 +1954,7 @@ function evidenceCard(record) {
     text("span", record.evidence_type || "Unknown evidence", "type-chip"),
     threat(level),
   );
-  button.append(heading, text("p", record.description || "No description provided."));
+  button.append(heading, hostDescription(record, "investigation-description"));
   const metadata = document.createElement("div");
   metadata.className = "investigation-card-meta";
   metadata.append(
@@ -2124,7 +2285,7 @@ async function openEvidence(record) {
       ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`, "accent"],
     ]),
     investigationHeading("Detection summary", record.module ? `Generated by ${record.module}` : ""),
-    text("p", record.description || "No description provided.", "description-box"),
+    hostDescription(record, "description-box"),
   );
   if (record.attacker || record.victim) {
     const entities = document.createElement("div");
@@ -2191,7 +2352,7 @@ async function openEvidence(record) {
 }
 
 async function openAlert(record) {
-  const generation = openDrawer("ALERT", `Alert on ${record.ip_alerted}`);
+  const generation = openDrawer("ALERT", "Alert details");
   const body = byId("drawer-body");
   if (record.evidence === undefined) {
     body.append(text("p", "Loading alert evidence…", "muted"));
@@ -2242,7 +2403,7 @@ async function openAlert(record) {
 }
 
 async function openAlertGroup(group) {
-  const generation = openDrawer("HOST ALERTS", `Alerts for ${group.ip_alerted}`);
+  const generation = openDrawer("HOST ALERTS", "Host alerts");
   const body = byId("drawer-body");
   body.append(
     investigationStats([
@@ -2344,7 +2505,7 @@ function renderHostCards(host) {
   ], "host-summary");
   const identity = byId("host-identity");
   identity.replaceChildren(
-    detailRow("Addresses", host.all_ips?.join(", ") || host.ip),
+    detailRow("Addresses", hostIdentity(host.ip)),
     detailRow("Hostname", host.hostname || "Unknown"),
     detailRow("MAC", host.mac || "Unknown"),
     detailRow("Vendor", host.mac_vendor || "Unknown"),
@@ -2409,7 +2570,7 @@ async function loadHostEvidence() {
     (row) => compact(row.flow_count),
     (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
     (row) => {
-      const description = text("span", row.description || "—", "host-evidence-description");
+      const description = hostDescription(row, "host-evidence-description");
       description.title = row.description || "";
       return description;
     },
@@ -2440,7 +2601,7 @@ async function loadHostFlows() {
   renderTable("host-flows-table", exactItems, [
     (row) => formatTime(row.event_time),
     (row) => text("span", row.direction, `status ${row.direction === "inbound" ? "ok" : "warn"}`),
-    (row) => text("code", row.peer),
+    (row) => hostIdentity(row.peer),
     (row) => [row.proto, row.app_proto].filter(Boolean).join(" / "),
     (row) => `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`,
     (row) => row.state || "—",
@@ -2452,7 +2613,7 @@ async function loadHostFlows() {
     openDrawer("FLOW", row.uid);
     byId("drawer-body").append(
       detailRow("Direction", row.direction),
-      detailRow("Peer", row.peer),
+      detailRow("Peer", hostIdentity(row.peer)),
       detailRow("Source", hostLink(row.src_ip)),
       detailRow("Destination", hostLink(row.dst_ip)),
       detailRow("Ports", `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`),
@@ -2645,13 +2806,18 @@ async function openHost(ip, summary = null) {
   host.ignored_aliases = staleAliases;
   host.all_ips = [ip];
   state.host = host;
+  rememberHostName(
+    ip, host.hostname || host.dns_name,
+    host.hostname ? "Hostname" : host.dns_name_source || "",
+  );
+  refreshHostLabels();
   resetPage("hostFlows");
   resetPage("host-evidence");
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
-  byId("host-title").textContent = host.ip;
+  byId("host-title").replaceChildren(hostIdentity(host.ip));
   byId("host-subtitle").textContent =
-    `${host.hostname || "Unnamed host"} · ${host.scope} · ${host.live ? "current" : "last known"}`;
+    `${host.scope} · ${host.live ? "current" : "last known"}`;
   renderHostCards(host);
   await Promise.all([
     loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
@@ -2673,6 +2839,11 @@ async function refreshHostWorkspace() {
     ignored_aliases: staleAliases,
   };
   state.host = host;
+  rememberHostName(
+    host.ip, host.hostname || host.dns_name,
+    host.hostname ? "Hostname" : host.dns_name_source || "",
+  );
+  refreshHostLabels();
   renderHostCards(host);
   await Promise.all([
     loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
