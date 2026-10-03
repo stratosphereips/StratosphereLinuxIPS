@@ -340,6 +340,14 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .config-setting p { margin: .55rem 0 0; color: var(--muted); font-size: .74rem; line-height: 1.4; }
 .config-key { color: var(--blue); font: .65rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
 .empty-state { padding: 2rem; color: var(--muted); text-align: center; }
+.permanent-host-profile { padding: .8rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.permanent-host-profile:first-child { border-top: 0; }
+.permanent-host-profile > strong, .permanent-host-profile > small { display: block; margin-bottom: .35rem; }
+.host-profile-facts { margin: .35rem 0; }
+.host-profile-facts > summary { cursor: pointer; color: var(--blue); }
+.host-profile-facts ul { margin: .35rem 0 .7rem; padding-left: 1.4rem; }
+.host-profile-facts li { margin-bottom: .4rem; overflow-wrap: anywhere; }
+.host-profile-facts li small { display: block; }
 .whitelist-notice { margin-bottom: 1rem; padding: .9rem 1rem; border: 1px solid #ad8cff66; border-left: 4px solid #ad8cff; border-radius: 8px; background: #1b1830; }
 .whitelist-notice h3 { color: #d5c8ff; }
 .whitelist-notice p, .whitelist-notice li { color: #c8c0dc; font-size: .8rem; line-height: 1.5; }
