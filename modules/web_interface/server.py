@@ -3430,6 +3430,12 @@ class RunDataReader:
             "host_addresses": self._interface_addresses(
                 str(analysis.get("interface") or run_metadata.get("File", ""))
             ),
+            "network_states": [
+                json.loads(value)
+                for _, value in sorted(
+                    self.redis.hgetall("network_states").items()
+                )
+            ],
             "sources": {
                 "redis": True,
                 "sqlite": self.sqlite_path.exists(),
