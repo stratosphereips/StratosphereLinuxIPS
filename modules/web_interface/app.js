@@ -647,6 +647,7 @@ function renderOverview() {
   const data = state.overview;
   if (!data) return;
   renderRunContext(data);
+  renderNetworkStates(data.network_states || []);
   const firewall = data.firewall || {};
   setSummaryCards([
     ["Alerts", compact(data.counts.alerts)],
@@ -688,6 +689,28 @@ function renderOverview() {
     : (data.evidence_details_loaded
       ? "Refresh evidence counts" : "Load evidence counts");
   renderModules(data.modules);
+}
+
+/** Show current settings of every monitored network interface. */
+function renderNetworkStates(networkStates) {
+  const container = byId("network-states");
+  container.replaceChildren();
+  if (!networkStates.length) {
+    container.append(text("p", "Live network settings are available when Slips monitors an interface.", "muted"));
+    return;
+  }
+  networkStates.forEach((network) => {
+    const card = document.createElement("div");
+    card.className = "network-state";
+    card.append(text("strong", `${network.interface} · ${network.connected ? "Connected" : "Disconnected"}`));
+    card.append(text("span", `Computer IP: ${network.host_ip || "Unknown"}`));
+    card.append(text("span", `Local network: ${network.local_network || "Unknown"}`));
+    card.append(text("span", `Router: ${network.gateway_ip || "Unknown"}`));
+    card.append(text("span", `Router MAC: ${network.gateway_mac || "Unknown"}`));
+    card.append(text("span", `DNS servers: ${(network.dns_servers || []).join(", ") || "Unknown"}`));
+    card.append(text("small", `Last changed: ${formatTime(network.changed_at)}`, "muted"));
+    container.append(card);
+  });
 }
 
 /**
