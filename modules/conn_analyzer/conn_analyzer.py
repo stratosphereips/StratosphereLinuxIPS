@@ -570,7 +570,11 @@ class ConnAnalyzer(IAsyncModule):
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
-            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
+            or (
+                self.is_running_non_stop
+                and flow.saddr not in self.our_ips
+                and flow.saddr != self.db.get_host_ip(flow.interface)
+            )
         )
 
     def check_if_resolution_was_made_by_different_version(
