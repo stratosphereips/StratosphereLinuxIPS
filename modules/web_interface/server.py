@@ -25,6 +25,7 @@ import redis
 import yaml
 
 from managers.network_state import collect_network_state
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from modules.supported_module_names import Modules
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
@@ -149,13 +150,19 @@ class RunMismatchError(RuntimeError):
 class RunDataReader:
     """Read bounded live and historical data for exactly one Slips run."""
 
-    def __init__(self, redis_port: int, output_dir: str) -> None:
+    def __init__(
+        self,
+        redis_port: int,
+        output_dir: str,
+        host_profiles_path: str = "permanent/host_profiles/hosts.sqlite",
+    ) -> None:
         """
         Initialize run data sources.
 
         Parameters:
             redis_port: Redis port assigned to this run.
             output_dir: Output directory assigned to this run.
+            host_profiles_path: Shared host profile database path.
         """
         self.redis_port = redis_port
         self.output_dir = Path(output_dir)
@@ -163,6 +170,7 @@ class RunDataReader:
         self.history_path = (
             self.output_dir / "web_interface" / "history.sqlite"
         )
+        self.host_profiles_path = Path(host_profiles_path)
         self.redis = redis.Redis(
             host=LOOPBACK_ADDRESS,
             port=redis_port,
@@ -2706,6 +2714,14 @@ class RunDataReader:
         host["all_ips"] = host_ips
         host["load"] = self._host_load(ip)
         host["ti"] = self._ti_for_ip(ip)
+        host["permanent_profiles"] = HostProfileStore.read(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            ip,
+        )
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
         alert_total = 0
         for address in host_ips:
@@ -4795,13 +4811,19 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--redis-port", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--host-profiles-path",
+        default="permanent/host_profiles/hosts.sqlite",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Start the single-run server on the configured IPv4 address."""
     args = parse_arguments()
-    reader = RunDataReader(args.redis_port, args.output_dir)
+    reader = RunDataReader(
+        args.redis_port, args.output_dir, args.host_profiles_path
+    )
     reader.validate_run_identity()
     server = SlipsHTTPServer(
         (args.bind_address, args.port), RequestHandler, reader
