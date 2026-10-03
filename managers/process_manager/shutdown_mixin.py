@@ -70,7 +70,9 @@ class ShutdownMixin:
                 continue
 
             process.join(3)
-            self.kill_process_tree(process.pid)
+            if process.is_alive():
+                self.kill_process_tree(process.pid)
+                process.join(3)
             if self._should_defer_web_interface_stopped_message(module_name):
                 self.deferred_stopped_modules.add(module_name)
                 continue
@@ -770,4 +772,10 @@ class ShutdownMixin:
                 port = int(self.main.conf.web_interface_port)
                 self._stop_web_interface(port)
             return False
+        finally:
+            # These queues are owned by the main process. Close them after
+            # children have stopped so their pipe handles do not survive
+            # until interpreter shutdown.
+            self.profiler_queue.close()
+            self.main.logger._startup_queue.close()
         return None
