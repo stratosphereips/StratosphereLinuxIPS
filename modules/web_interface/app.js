@@ -2740,11 +2740,22 @@ function renderPermanentProfiles(profiles) {
         state.hostAnnotationDrafts.delete(annotationKey);
         state.hostAnnotationEditorOpen.delete(annotationKey);
         if (!state.host || state.host.ip !== profile.ip) return;
+        const currentProfile = state.host.permanent_profiles?.find(
+          (item) => item.network_id === profile.network_id,
+        );
+        if (currentProfile) {
+          currentProfile.user_name = payload.name;
+          currentProfile.user_note = payload.note;
+        }
         if (state.host?.permanent_profiles?.[0]?.network_id === profile.network_id) {
           state.host.user_name = payload.name;
           state.host.user_note = payload.note;
           state.hostNames.delete(profile.ip);
           rememberHostRecord(state.host);
+          if (!payload.name) {
+            state.pendingHostNames.add(profile.ip);
+            loadHostNames();
+          }
           refreshHostLabels();
         }
         annotation.hidden = true;
