@@ -2749,6 +2749,7 @@ function renderPermanentProfiles(profiles) {
         }
         annotation.hidden = true;
         annotationFeedback.textContent = "";
+        document.activeElement?.blur();
         renderHostCards(state.host);
         toast(payload.name || payload.note ? "Host identification saved." : "Host identification removed.");
       } catch (error) {
