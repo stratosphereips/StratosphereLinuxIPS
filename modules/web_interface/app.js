@@ -16,6 +16,8 @@ const state = {
   hostNamesScheduled: false,
   networkNameDrafts: new Map(),
   networkNameEditorOpen: new Set(),
+  hostAnnotationDrafts: new Map(),
+  hostAnnotationEditorOpen: new Set(),
   ownAddresses: new Set(),
   computerName: "",
   failures: 0,
@@ -135,9 +137,12 @@ function updateHostLabel(element) {
   element.classList.toggle("own-host", own);
   const identity = state.hostNames.get(ip);
   const name = own
-    ? `This computer${state.computerName ? ` · ${state.computerName}` : ""}`
+    ? `This computer${identity?.source === "User name"
+      ? ` · ${identity.name}`
+      : state.computerName ? ` · ${state.computerName}` : ""}`
     : identity?.name || "Name unknown";
-  const source = own ? "Monitored computer" : identity?.source || "No stored hostname";
+  const source = own && identity?.source !== "User name"
+    ? "Monitored computer" : identity?.source || "No stored hostname";
   element.querySelector(".host-name").textContent = name;
   element.title = `${ip} · ${source}: ${name}`;
 }
@@ -150,7 +155,23 @@ function refreshHostLabels() {
 /** Keep a learned name without replacing it with missing metadata. */
 function rememberHostName(ip, name, source) {
   if (!ip || !name) return;
+  const existing = state.hostNames.get(ip);
+  if (existing?.name && hostNamePriority(existing.source) > hostNamePriority(source)) return;
   state.hostNames.set(ip, { name, source, checkedAt: Date.now() });
+}
+
+/** Rank user names above learned names and vendor fallback. */
+function hostNamePriority(source) {
+  return { "User name": 4, Hostname: 3, DNS: 2, rDNS: 2, "MAC vendor": 1 }[source] || 0;
+}
+
+/** Remember the best currently available identity from a Host record. */
+function rememberHostRecord(record) {
+  if (!record?.ip) return;
+  if (record.user_name) rememberHostName(record.ip, record.user_name, "User name");
+  else if (record.hostname) rememberHostName(record.ip, record.hostname, "Hostname");
+  else if (record.dns_name) rememberHostName(record.ip, record.dns_name, record.dns_name_source || "DNS");
+  else if (record.mac_vendor) rememberHostName(record.ip, `${record.mac_vendor} device`, "MAC vendor");
 }
 
 /** Fetch names for visible addresses in bounded batches. */
@@ -171,7 +192,7 @@ async function loadHostNames() {
         const fetched = payload.names?.[ip] || {};
         const existing = state.hostNames.get(ip);
         if (existing?.name && (!fetched.name
-            || (existing.source === "Hostname" && fetched.source !== "Hostname"))) return;
+            || hostNamePriority(existing.source) > hostNamePriority(fetched.source))) return;
         state.hostNames.set(ip, { ...fetched, checkedAt: Date.now() });
       });
       refreshHostLabels();
@@ -381,6 +402,7 @@ function applyRunIdentity(identity) {
     state.overviewEvidence = null;
     state.overviewEvidenceLoading = false;
     state.metrics = [];
+    state.configuration = null;
     state.rangesInitialized = false;
     state.hostNames.clear();
     state.pendingHostNames.clear();
@@ -393,7 +415,7 @@ function applyRunIdentity(identity) {
   state.runIdentity = token;
 }
 
-async function api(key, path, trackFailures = true) {
+async function api(key, path, trackFailures = true, allowNotFound = false) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
   state.requests.set(key, controller);
@@ -402,6 +424,7 @@ async function api(key, path, trackFailures = true) {
       cache: "no-store", signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
+    if (allowNotFound && response.status === 404) return { not_found: true };
     if (!response.ok) {
       const error = new Error(payload.detail || payload.error || `HTTP ${response.status}`);
       error.status = response.status;
@@ -582,10 +605,78 @@ function formatChartTime(value, span) {
   return new Date(timestamp * 1000).toLocaleString([], options);
 }
 
+/** Find the plotted sample nearest a time along one sorted series.
+ * @param {Array<object>} points - Samples with Unix-second timestamps.
+ * @param {number} timestamp - Time under the pointer, in Unix seconds.
+ * @returns {object} The nearest plotted sample.
+ */
+function nearestChartPoint(points, timestamp) {
+  let low = 0;
+  let high = points.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (numeric(points[middle].ts) < timestamp) low = middle + 1;
+    else high = middle;
+  }
+  if (low === 0) return points[0];
+  if (low === points.length) return points.at(-1);
+  return timestamp - numeric(points[low - 1].ts) <= numeric(points[low].ts) - timestamp
+    ? points[low - 1] : points[low];
+}
+
+/** Reuse one HTML hover label outside the SVG drawing area.
+ * @param {SVGElement} svg - Chart whose parent holds the label.
+ * @returns {HTMLElement} The chart's hover label.
+ */
+function chartTooltip(svg) {
+  const container = svg.parentElement;
+  let tooltip = container.querySelector(".chart-tooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "chart-tooltip";
+    tooltip.hidden = true;
+    container.append(tooltip);
+  }
+  return tooltip;
+}
+
+/** Show the exact sample time and value while a line or point is hovered.
+ * @param {SVGElement} svg - Rendered chart.
+ * @param {SVGElement} target - Wide hit area over a series.
+ * @param {Array<object>} points - Chronologically sorted samples in the series.
+ * @param {object} item - Series key and optional display label.
+ * @param {Function} formatValue - Value formatter for this chart.
+ * @param {number} maximum - Highest value on the chart.
+ * @param {number} left - Plot's left coordinate.
+ * @param {number} plotWidth - Plot's SVG width.
+ * @param {number} minimumTime - Earliest chart timestamp.
+ * @param {number} span - Chart time span in seconds.
+ */
+function bindChartHover(svg, target, points, item, formatValue, maximum, left, plotWidth, minimumTime, span) {
+  const tooltip = chartTooltip(svg);
+  target.addEventListener("pointermove", (event) => {
+    const bounds = svg.getBoundingClientRect();
+    if (!bounds.width) return;
+    const x = (event.clientX - bounds.left) * svg.viewBox.baseVal.width / bounds.width;
+    const timestamp = minimumTime + Math.max(0, Math.min(1, (x - left) / plotWidth)) * span;
+    const point = nearestChartPoint(points, timestamp);
+    const label = item.label || item.key.replaceAll("_", " ");
+    tooltip.textContent = `${label}: ${formatValue(point[item.key], maximum)}\n${formatTime(point.ts)}`;
+    tooltip.hidden = false;
+    const containerBounds = svg.parentElement.getBoundingClientRect();
+    tooltip.style.left = `${Math.max(4, Math.min(event.clientX - containerBounds.left + 12,
+      containerBounds.width - tooltip.offsetWidth - 4))}px`;
+    tooltip.style.top = `${Math.max(4, Math.min(event.clientY - containerBounds.top + 12,
+      containerBounds.height - tooltip.offsetHeight - 4))}px`;
+  });
+  target.addEventListener("pointerleave", () => { tooltip.hidden = true; });
+}
+
 /** Render a performance chart with numeric and time axes. */
 function renderLineChart(id, points, series, formatValue = formatChartValue) {
   const svg = byId(id);
   svg.replaceChildren();
+  chartTooltip(svg).hidden = true;
   const height = numeric(svg.viewBox?.baseVal?.height) || 180;
   const renderedWidth = numeric(svg.clientWidth);
   const renderedHeight = numeric(svg.clientHeight);
@@ -661,12 +752,13 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
-    if (item.label) {
-      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = item.label;
-      path.append(title);
-    }
     svg.append(path);
+    const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    hitArea.setAttribute("d", d);
+    hitArea.setAttribute("class", "chart-hit-line");
+    svg.append(hitArea);
+    bindChartHover(svg, hitArea, seriesPoints, item, formatValue, maximum,
+      left, plotWidth, minimumTime, span);
     if (seriesPoints.length === 1) {
       const point = seriesPoints[0];
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -675,6 +767,14 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
       marker.setAttribute("r", "3");
       marker.setAttribute("class", `chart-point ${item.className || ""}`);
       svg.append(marker);
+      const hitPoint = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      hitPoint.setAttribute("cx", marker.getAttribute("cx"));
+      hitPoint.setAttribute("cy", marker.getAttribute("cy"));
+      hitPoint.setAttribute("r", "10");
+      hitPoint.setAttribute("class", "chart-hit-point");
+      svg.append(hitPoint);
+      bindChartHover(svg, hitPoint, seriesPoints, item, formatValue, maximum,
+        left, plotWidth, minimumTime, span);
     }
   }
   points.filter((point) => point.reset_reason).forEach((point) => {
@@ -1698,10 +1798,7 @@ async function loadP2P() {
 async function loadHosts() {
   const payload = await api("hosts", listPath("hosts"));
   if (!payload) return;
-  payload.items.forEach((row) => rememberHostName(
-    row.ip, row.hostname || row.dns_name,
-    row.hostname ? "Hostname" : row.dns_name_source || "",
-  ));
+  payload.items.forEach(rememberHostRecord);
   refreshHostLabels();
   applyPage("hosts", payload);
   renderTable("hosts-table", payload.items, [
@@ -2558,7 +2655,7 @@ function hostRangeParams() {
 function renderPermanentProfiles(profiles) {
   const container = byId("host-permanent-profiles");
   if (container.contains(document.activeElement)
-      && document.activeElement.closest(".profile-network-name-form")) return;
+      && document.activeElement.closest(".profile-network-name-form, .host-annotation-form")) return;
   const profileIp = profiles?.[0]?.ip || "";
   const openSections = new Map();
   if (container.dataset.profileIp === profileIp) {
@@ -2585,6 +2682,83 @@ function renderPermanentProfiles(profiles) {
     const title = text("strong", profile.network_label || profile.network_id);
     group.append(title);
     group.append(text("small", `First seen ${formatTime(profile.first_seen)} · Last seen ${formatTime(profile.last_seen)}`, "muted"));
+    const annotationKey = JSON.stringify([profile.network_id, profile.ip]);
+    const annotation = document.createElement("form");
+    annotation.className = "host-annotation-form";
+    annotation.hidden = !state.hostAnnotationEditorOpen.has(annotationKey);
+    const nameLabel = text("label", "Your name");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 80;
+    nameInput.placeholder = "e.g. Sebastian's iPad";
+    nameInput.value = state.hostAnnotationDrafts.get(annotationKey)?.name ?? profile.user_name ?? "";
+    const noteLabel = text("label", "Note");
+    const noteInput = document.createElement("textarea");
+    noteInput.maxLength = 1000;
+    noteInput.rows = 3;
+    noteInput.placeholder = "How you recognize this host";
+    noteInput.value = state.hostAnnotationDrafts.get(annotationKey)?.note ?? profile.user_note ?? "";
+    const rememberDraft = () => state.hostAnnotationDrafts.set(annotationKey, {
+      name: nameInput.value, note: noteInput.value,
+    });
+    nameInput.addEventListener("input", rememberDraft);
+    noteInput.addEventListener("input", rememberDraft);
+    nameLabel.append(nameInput);
+    noteLabel.append(noteInput);
+    const annotationSave = text("button", "Save identification", "secondary");
+    annotationSave.type = "submit";
+    const annotationFeedback = text("small", "", "network-name-feedback");
+    annotation.append(nameLabel, noteLabel, annotationSave, annotationFeedback);
+    const annotationEdit = text("button", profile.user_name || profile.user_note
+      ? "Edit name and note" : "Name this host", "secondary profile-network-name-action");
+    annotationEdit.type = "button";
+    annotationEdit.addEventListener("click", () => {
+      annotation.hidden = !annotation.hidden;
+      if (annotation.hidden) state.hostAnnotationEditorOpen.delete(annotationKey);
+      else {
+        state.hostAnnotationEditorOpen.add(annotationKey);
+        nameInput.focus();
+      }
+    });
+    annotation.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      annotationSave.disabled = true;
+      annotationFeedback.textContent = "Saving…";
+      try {
+        const response = await fetch("/api/host-annotation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip: profile.ip, network_id: profile.network_id,
+            name: nameInput.value, note: noteInput.value,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+        profile.user_name = payload.name;
+        profile.user_note = payload.note;
+        state.hostAnnotationDrafts.delete(annotationKey);
+        state.hostAnnotationEditorOpen.delete(annotationKey);
+        if (!state.host || state.host.ip !== profile.ip) return;
+        if (state.host?.permanent_profiles?.[0]?.network_id === profile.network_id) {
+          state.host.user_name = payload.name;
+          state.host.user_note = payload.note;
+          state.hostNames.delete(profile.ip);
+          rememberHostRecord(state.host);
+          refreshHostLabels();
+        }
+        annotation.hidden = true;
+        annotationFeedback.textContent = "";
+        renderHostCards(state.host);
+        toast(payload.name || payload.note ? "Host identification saved." : "Host identification removed.");
+      } catch (error) {
+        annotationFeedback.textContent = error.message;
+        annotationSave.disabled = false;
+      }
+    });
+    if (profile.user_name) group.append(text("p", `Your name: ${profile.user_name}`, "host-user-name"));
+    if (profile.user_note) group.append(text("p", profile.user_note, "host-user-note"));
+    group.append(annotationEdit, annotation);
     const form = document.createElement("form");
     form.className = "network-name-form profile-network-name-form";
     form.hidden = !state.networkNameEditorOpen.has(profile.network_id);
@@ -2699,6 +2873,8 @@ function renderHostCards(host) {
   const identity = byId("host-identity");
   identity.replaceChildren(
     detailRow("Addresses", hostIdentity(host.ip)),
+    detailRow("Your name", host.user_name || "—"),
+    detailRow("Your note", host.user_note || "—"),
     detailRow("Hostname", host.hostname || "Unknown"),
     detailRow("MAC", host.mac || "Unknown"),
     detailRow("Vendor", host.mac_vendor || "Unknown"),
@@ -2967,9 +3143,47 @@ async function loadHostScoreHistory() {
   }
 }
 
+/** Explain why an address seen in evidence has no Slips host profile.
+ * @param {string} ip - Address selected from evidence or traffic.
+ */
+async function showUnprofiledHost(ip) {
+  let direction = "";
+  try {
+    let config = state.configuration;
+    if (!config) {
+      const response = await fetch("/api/configuration", { cache: "no-store" });
+      if (response.ok) {
+        config = await response.json();
+        applyRunIdentity(config.run_identity);
+        state.configuration = config;
+      }
+    }
+    direction = config?.sections?.find((section) => section.key === "parameters")
+      ?.settings?.find((setting) => setting.key === "analysis_direction")?.value || "";
+  } catch (error) {
+    // The profile explanation still works if the captured config is unavailable.
+  }
+  const explanation = direction === "out"
+    ? "This run analyzes outgoing traffic only (analysis_direction: out). Slips profiles the source IP; a destination can appear in evidence or a flow without getting its own Host profile."
+    : "This IP appears in evidence or traffic, but Slips did not create a Host profile for it in this run. Host workspaces show only profiled IPs.";
+  state.host = null;
+  byId("hosts-list-view").hidden = true;
+  byId("host-detail-view").hidden = false;
+  byId("host-detail-view").classList.add("unprofiled");
+  byId("host-title").replaceChildren(hostIdentity(ip));
+  byId("host-subtitle").textContent = "No Slips profile in this run";
+  byId("host-unprofiled-reason").textContent = explanation;
+  byId("host-unprofiled").hidden = false;
+  clearError();
+}
+
 async function openHost(ip, summary = null) {
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}`);
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}`, true, true);
   if (!detail) return;
+  if (detail.not_found) {
+    await showUnprofiledHost(ip);
+    return;
+  }
   const detailHasScore = detail.alert_score !== null
     && detail.alert_score !== undefined
     && Number.isFinite(Number(detail.alert_score))
@@ -3000,15 +3214,14 @@ async function openHost(ip, summary = null) {
   host.ignored_aliases = staleAliases;
   host.all_ips = [ip];
   state.host = host;
-  rememberHostName(
-    ip, host.hostname || host.dns_name,
-    host.hostname ? "Hostname" : host.dns_name_source || "",
-  );
+  rememberHostRecord(host);
   refreshHostLabels();
   resetPage("hostFlows");
   resetPage("host-evidence");
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
+  byId("host-detail-view").classList.remove("unprofiled");
+  byId("host-unprofiled").hidden = true;
   byId("host-title").replaceChildren(hostIdentity(host.ip));
   byId("host-subtitle").textContent =
     `${host.scope} · ${host.live ? "current" : "last known"}`;
@@ -3037,10 +3250,7 @@ async function refreshHostWorkspace() {
     ignored_aliases: staleAliases,
   };
   state.host = host;
-  rememberHostName(
-    host.ip, host.hostname || host.dns_name,
-    host.hostname ? "Hostname" : host.dns_name_source || "",
-  );
+  rememberHostRecord(host);
   refreshHostLabels();
   renderHostCards(host);
   await Promise.all([
@@ -3054,6 +3264,8 @@ function closeHost() {
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
   byId("host-detail-view").hidden = true;
+  byId("host-detail-view").classList.remove("unprofiled");
+  byId("host-unprofiled").hidden = true;
   byId("hosts-list-view").hidden = false;
 }
 
