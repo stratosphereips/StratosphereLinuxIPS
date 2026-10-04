@@ -149,7 +149,15 @@ slips can write to those files.
 
 ## Running Several slips instances
 
-By default, Slips will assume you are running only one instance and will use the redis port 6379 on each run.
+By default, Slips uses Redis port 6379. Logical database 0 on that server holds
+the active run's profiles, time windows, alerts, and other live state. Logical
+database 1 on port 6379 holds the cache shared by all Slips instances,
+including threat intelligence. These are two logical databases in one Redis
+server. A run started with `-m` or `-P` has a second Redis server for its
+database 0 on its own port, while its cache still uses port 6379 database 1.
+The default startup clears database 0 for a new run; it does not clear the
+shared cache. `deletePrevdb: false` can prevent that Redis flush, but does not
+preserve the output directory or safely resume the previous run.
 
 You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory.
@@ -157,13 +165,36 @@ You can run several instances of slips at the same time using the -m flag, and t
 If you want Slips to run on a certain port, you can use the ```-P <portnumber>``` parameter to specify the
 port you want Slips to use. but it will always use port 6379 db 1 for the cache db.
 
-Each instance of Slips will connect to redis server on a randomly generated port in the range (32768 to 32850).
+With `-m`, each instance uses an available port in the range 32768 to 32850.
 
 In macos, you will get a popup asking for permission to open and use that random port, press yes to allow it.
 
 However, all instance share 1 cached redis database on redis://localhost:6379 DB 1, to store the IoCs taken from TI files.
 
-Both redis servers, the main sever (DB 0) and the cache server (DB 1) are opened automatically by Slips.
+Slips opens the required Redis servers automatically.
+
+### Keep detections across a live-interface restart
+
+Stop the previous Slips run, then restart on the same interface and output
+directory:
+
+```bash
+./slips.py -i en0 -o output/my-network --keep-history -w
+```
+
+`--keep-history` retains `flows.sqlite`, web history, and other files in that
+directory. Alerts and evidence are durable SQLite records, so the web interface
+can show detections from before the restart. Redis database 0 starts clean:
+process IDs, time-window state, and other temporary values from the prior run
+must not influence new detections. The shared cache in port 6379 database 1 is
+preserved. This mode requires the original run's metadata and output database,
+uses port 6379, and refuses to start while any other Slips instance is running.
+It cannot be combined with `-m` or a different `-P` port. Start a normal run
+without the flag when you want a fresh output directory and detection history.
+
+The option preserves past detections in the output directory; it does not
+restore active Redis state after a machine reboot. For an archival Redis
+snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
 
 The local web interface is intentionally not a multi-instance viewer. Do not enable `-w` on several concurrent runs. It stays connected only to the Redis port and output directory of the Slips process that launched it.
 
@@ -787,6 +818,7 @@ this file can be used for training Slips RNN module.
 - ```-k``` or  ```--killall``` Kill all unused redis servers
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
+- ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory; start with a clean Redis database 0.
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
