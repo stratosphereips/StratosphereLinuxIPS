@@ -3,6 +3,7 @@
 """Unit test for modules/conn_analyzer/conn_analyzer.py"""
 
 from dataclasses import asdict
+from typing import Any
 from slips_files.core.flows.zeek import Conn
 from tests.module_factory import ModuleFactory
 import json
@@ -207,6 +208,117 @@ def test_check_unknown_port_true_case(mocker):
 
     assert conn.check_unknown_port(profileid, twid, flow)
     mock_set_evidence.assert_called_once_with(twid, flow)
+
+
+@pytest.mark.parametrize(
+    "daddr,dport,proto,dmac,dst_vendor,host_ip,gateway_mac,expected",
+    [
+        ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", True),
+        ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Other", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "udp", "", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "udp", "00:11:22:33:44:55", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.2.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.100", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "tcp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "5353", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+    ],
+)
+def test_local_apple_peer_requires_direct_pair(
+    mocker: Any,
+    daddr: str,
+    dport: str,
+    proto: str,
+    dmac: str,
+    dst_vendor: str,
+    host_ip: str,
+    gateway_mac: str,
+    expected: bool,
+) -> None:
+    """Skip only local high-port UDP flows with two identified Apple MACs.
+
+    Parameters:
+        mocker: Patches the offline MAC vendor lookup.
+        daddr: Destination IP under test.
+        dport: Destination port under test.
+        proto: Transport protocol under test.
+        dmac: Destination MAC from the flow.
+        dst_vendor: Vendor associated with the destination MAC.
+        host_ip: Computer IP in the network snapshot.
+        gateway_mac: Router MAC in the network snapshot.
+        expected: Whether the local Apple pair is recognized.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = {
+        "host_ip": host_ip,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": gateway_mac,
+        "changed_at": 0,
+    }
+    src_mac = "aa:bb:cc:00:00:01"
+    mocker.patch(
+        "modules.conn_analyzer.conn_analyzer.utils.get_mac_vendor_from_mac_addr",
+        side_effect=lambda mac: "Apple, Inc." if mac == src_mac else dst_vendor,
+    )
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="apple-peer",
+        saddr="192.168.1.247",
+        daddr=daddr,
+        dur=1,
+        proto=proto,
+        appproto="",
+        sport="50000",
+        dport=dport,
+        spkts=1,
+        dpkts=1,
+        sbytes=10,
+        dbytes=10,
+        smac=src_mac,
+        dmac=dmac,
+        state="Established",
+        history="Dd",
+        interface="en0",
+    )
+
+    assert conn.is_local_apple_peer_flow(flow) is expected
+
+
+def test_unknown_port_skips_identified_local_apple_peer(mocker: Any) -> None:
+    """Suppress only unknown-port evidence for an identified Apple pair.
+
+    Parameters:
+        mocker: Replaces unrelated database checks and evidence output.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="apple-peer",
+        saddr="192.168.1.247",
+        daddr="192.168.1.163",
+        dur=1,
+        proto="udp",
+        appproto="",
+        sport="50000",
+        dport="57558",
+        spkts=1,
+        dpkts=1,
+        sbytes=10,
+        dbytes=10,
+        smac="aa:bb:cc:00:00:01",
+        dmac="aa:bb:cc:00:00:02",
+        state="Established",
+        history="Dd",
+    )
+    conn.db.is_a_port_scanner.return_value = False
+    conn.db.get_port_info.return_value = None
+    mocker.patch.object(conn, "port_belongs_to_an_org", return_value=False)
+    mocker.patch.object(conn, "is_local_apple_peer_flow", return_value=True)
+    evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
+
+    assert conn.check_unknown_port("profile_192.168.1.247", twid, flow) is False
+    evidence.assert_not_called()
 
 
 def test_check_unknown_port_uses_lowercase_protocol_for_known_ports(mocker):
@@ -960,6 +1072,48 @@ def test_port_belongs_to_an_org(
     assert (
         conn.port_belongs_to_an_org(daddr, portproto, profileid)
         == expected_result
+    )
+
+
+@pytest.mark.parametrize(
+    "src_vendor,dst_vendor,expected",
+    [
+        ("Apple, Inc.", "Apple, Inc.", True),
+        ("Apple, Inc.", "", False),
+        ("", "Apple, Inc.", False),
+        ("Apple, Inc.", "Other vendor", False),
+    ],
+)
+def test_org_port_requires_both_mac_vendors(
+    mocker: Any, src_vendor: str, dst_vendor: str, expected: bool
+) -> None:
+    """Accept a MAC-only org match only when both endpoints match.
+
+    Parameters:
+        mocker: Patches the organization IP lookup.
+        src_vendor: Source profile MAC vendor.
+        dst_vendor: Destination profile MAC vendor.
+        expected: Whether the vendor pair matches Apple's port entry.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_organization_of_port.return_value = json.dumps(
+        {"ip": [], "org_name": ["Apple"]}
+    )
+    conn.db.get_mac_vendor_from_profile.side_effect = [
+        src_vendor,
+        dst_vendor,
+    ]
+    conn.db.get_ip_identification.return_value = {}
+    mocker.patch.object(
+        conn.whitelist.org_analyzer, "is_ip_in_org", return_value=False
+    )
+
+    assert (
+        conn.port_belongs_to_an_org(
+            "192.168.1.163", "57558/tcp", "profile_192.168.1.247"
+        )
+        is expected
     )
 
 
