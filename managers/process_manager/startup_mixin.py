@@ -88,6 +88,7 @@ class StartupMixin:
             self.main.bloom_filters_man,
             is_profiler_done_semaphore=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
+            aid_queue=self.aid_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
             is_input_failed_event=self.is_input_failed_event,
@@ -128,6 +129,8 @@ class StartupMixin:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
+            evidence_worker_queue=self.evidence_worker_queue,
+            evidence_logger_q=self.evidence_logger_q,
             total_processes_to_start=self.total_processes_to_start,
         )
         evidence_process.start()
