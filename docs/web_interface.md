@@ -5,7 +5,8 @@ The web_interface module is a read-only technical view of one Slips run. It is d
 Host addresses in the Overview, Alerts, Evidence, Firewall, ARP, and Hosts views,
 including IPs mentioned in evidence descriptions, appear with their stored
 hostname or cached DNS name. Addresses on the monitored
-computer are labeled **This computer** with the system hostname. When no name
+computer are labeled **This device** with the system hostname. The header also
+shows **This device** and the hostname separately from the run name. When no name
 has been learned, the interface says **Name unknown** beside the IP. Name lookup
 uses bounded batches of addresses already visible in the current view.
 
@@ -109,6 +110,9 @@ the observed router MAC when the address belongs to the monitored subnet. If
 Slips cannot identify the network, it keeps that address under the run's
 output directory identity so unrelated networks do not merge. Local profiles
 for the same IP appear as separate network sections in the Host workspace.
+Each section heading is explicitly labeled **Network**; its saved network name
+is separate from the host's **Your name** field. The current network's profile
+is shown first even if a recent run temporarily missed the router.
 The database stores at most 200 distinct values per clue type per host and
 network. Existing run history is not imported automatically; new observations
 populate the database.
@@ -143,7 +147,7 @@ The run database keeps raw traffic and durable detection relationships:
 output/<run>/databases/flows.sqlite
 ```
 
-It contains the existing unlimited flows and altflows rows, normalized evidence with its complete serialized record, evidence UUID to triggering flow UID relationships, and alert UUID to evidence UUID relationships. Evidence and alert relationships are written transactionally when Slips creates them, whether or not a browser is open.
+It contains recent flows and altflows, normalized evidence with its complete serialized record, evidence UUID to triggering flow UID relationships, and alert UUID to evidence UUID relationships. Evidence and alert relationships are written transactionally when Slips creates them, whether or not a browser is open. During live-interface runs, the background retention worker removes ordinary raw flows after 24 hours and raw flows linked to non-excluded evidence after 30 days by default. Detection records and their UID relationships remain available when the raw flow expires. These ages can be changed in `flow_retention` in `config/slips.yaml`.
 
 When an older run is opened after this upgrade, the module first backfills evidence and correlations still in Redis. Backfill runs only when Redis belongs to the same output directory. The web interface does not read `DisabledAlerts` or make its own suppression decisions. It presents the records and whitelist decisions Slips stored; deciding whether a detection should be generated belongs to the Slips detection and evidence pipeline. The module then consumes this file incrementally in bounded batches as a best-effort fallback for records that already expired:
 
@@ -184,7 +188,9 @@ All paths belong to this specific run. Nothing is written to a repository-level 
 
 ## Long-running behavior
 
-Slips never deletes raw flows automatically. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. Raw-flow history is limited only by available disk.
+For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires, and the evidence drawer explains when a linked UID has no raw record. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage.
+
+New run databases use incremental SQLite vacuuming so deleted raw pages can return to the filesystem. Existing databases reuse freed pages for future writes but do not shrink physically without a separate maintenance vacuum. Evidence and alert records are not expired by this flow policy, so they can still grow over a long unattended run.
 
 The browser never loads a complete run:
 
@@ -364,6 +370,25 @@ When sorting the Evidence table by Slips score, excluded rows stay together
 after numeric scores in both ascending and descending order, including across
 pages. A host/type group with any excluded evidence follows the same rule
 because its score cell displays **Excluded**.
+
+The **Show excluded / Hide excluded** selector is shared by Alerts, Evidence,
+and the Host workspace. Hiding excluded records filters evidence before
+grouping and pagination; a host/type group still appears when it also contains
+scored evidence. In the Host workspace, historical traffic linked only to
+excluded evidence is hidden as well. Flows linked to scored evidence and flows
+with no evidence remain visible. Alerts are already formed only from scored
+evidence, so their list is unchanged. The selector changes displayed lists;
+stored records and run totals remain available when **Show excluded** is
+selected. Flows discarded by the profiler's flow whitelist were never stored
+and cannot appear in either view.
+
+New `MALICIOUS_IP_FROM_P2P_NETWORK` evidence names every peer ID that reported
+the address in its description. When the trust database has no reporter ID,
+the description explicitly says that the reporting peer is unavailable. The
+Evidence and Host tables also show **Reporting peers** for both new and older
+P2P evidence, using reporter IDs retained in the permanent P2P trust database.
+For older evidence, this column identifies peers that reported the same IP;
+the original evidence did not record which subset contributed to its score.
 
 The displayed score is not calculated by the web interface. For interface,
 standard-input, and CYST runs it is Slips' risk-adjusted accumulated threat
