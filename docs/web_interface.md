@@ -394,12 +394,17 @@ profile for an address Slips ignored.
 
 Selecting a host opens a full-width workspace with:
 
+- a **Name this host** editor in each permanent, network-specific host profile. A saved user name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Clearing both fields removes the annotation. Local IPs on different networks keep separate annotations; public IPs use their public profile;
 - MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
 - compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs;
 - newest historical flows with cursor navigation into older traffic.
+
+IP labels throughout the web interface use the saved user name first, then a
+learned hostname, DNS or reverse DNS name, and finally the MAC vendor followed
+by “device” when no name is available. The IP stays visible beside the label.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
