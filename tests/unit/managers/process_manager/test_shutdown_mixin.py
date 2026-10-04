@@ -741,10 +741,44 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
 
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
+    assert process_manager.profiler_queue._closed
+    assert process_manager.aid_queue._closed
+    assert process_manager.evidence_worker_queue._closed
+    assert process_manager.evidence_logger_q._closed
+    process_manager.main.logger._startup_queue.close.assert_called_once_with()
     process_manager.main.print.assert_any_call(
         "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
+
+
+@pytest.mark.parametrize("still_alive", [False, True])
+def test_kill_all_children_only_kills_running_processes(
+    still_alive: bool,
+) -> None:
+    """Reap exited children and force-kill only children still running.
+
+    Parameters:
+        still_alive: Whether the child survived the initial join.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = still_alive
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children()
+
+    assert child.join.call_count == (2 if still_alive else 1)
+    if still_alive:
+        process_manager.kill_process_tree.assert_called_once_with(123)
+    else:
+        process_manager.kill_process_tree.assert_not_called()
 
 
 def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
@@ -904,6 +938,10 @@ def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
 
     with (
         patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value="Linux",
+        ),
+        patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
             return_value=True,
@@ -941,6 +979,10 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
 
     with (
         patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value="Linux",
+        ),
+        patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
             return_value=True,
@@ -958,3 +1000,46 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
+
+
+@pytest.mark.parametrize("system", ["Darwin", "Windows"])
+def test_firewall_shutdown_skips_non_linux_systems(system: str) -> None:
+    """Avoid invoking Linux firewall commands on unsupported systems.
+
+    Parameters:
+        system: Non-Linux operating-system name reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
+
+
+@pytest.mark.parametrize("finished", [False, True])
+def test_stdin_eof_allows_normal_shutdown(finished: bool) -> None:
+    """Keep stdin live until EOF, then allow normal input/profiler completion.
+
+    Parameters:
+        finished: Whether the input process has signalled end of input.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = InputType.STDIN
+    process_manager.main.db.is_running_non_stop.return_value = True
+    process_manager.is_input_done_event.is_set = Mock(return_value=finished)
+    process_manager.is_debugger_active = Mock(return_value=False)
+    process_manager.input_process = Mock(exitcode=0)
+    process_manager.profiler_process = Mock(exitcode=0)
+    process_manager.evidence_process = Mock(exitcode=None)
+    assert process_manager.should_run_non_stop() is not finished
+    assert process_manager._did_a_core_module_fail() is not finished

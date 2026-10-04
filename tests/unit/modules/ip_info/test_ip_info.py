@@ -3,6 +3,7 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
 import asyncio
+from queue import Queue
 
 
 from tests.module_factory import ModuleFactory
@@ -25,6 +26,52 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
+
+
+def test_pending_mac_queries_stay_inside_ip_info_process() -> None:
+    """Use a thread queue for MAC lookups to avoid named semaphores."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+
+    assert isinstance(ip_info.pending_mac_queries, Queue)
+
+
+def test_local_lookup_source_ips_use_current_interfaces() -> None:
+    """Discard loopback and IPv6 scope suffixes before marking WHOIS."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    with (
+        patch("modules.ip_info.ip_info.netifaces.interfaces", return_value=["en0"]),
+        patch(
+            "modules.ip_info.ip_info.netifaces.ifaddresses",
+            return_value={
+                socket.AF_INET: [
+                    {"addr": "192.0.2.10"}, {"addr": "127.0.0.1"}
+                ],
+                socket.AF_INET6: [{"addr": "2001:db8::10%en0"}],
+            },
+        ),
+    ):
+        assert ip_info._local_lookup_source_ips() == [
+            "192.0.2.10", "2001:db8::10"
+        ]
+
+
+def test_query_whois_marks_external_command_before_lookup() -> None:
+    """Suppress command-originated WHOIS flows without skipping enrichment."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.main_pid = 123
+    result = Mock()
+    with (
+        patch.object(
+            ip_info, "_local_lookup_source_ips", return_value=["192.0.2.10"]
+        ),
+        patch("modules.ip_info.ip_info.whois.query", return_value=result) as query,
+    ):
+        assert ip_info.query_whois("example.com") is result
+
+    ip_info.db.record_slips_own_service_port.assert_called_once_with(
+        123, "tcp", 43, ["192.0.2.10"]
+    )
+    query.assert_called_once_with("example.com", timeout=2.0)
 
 
 def test_start_mac_db_reader_returns_without_running_loop() -> None:
@@ -506,6 +553,30 @@ def test_get_gateway_ip_if_interface_args_interface(
     )
 
 
+@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
+def test_gateway_discovery_skips_invalid_addresses(
+    mocker, gateway: str | None
+) -> None:
+    """Ignore interfaces for which the OS reports no valid gateway.
+
+    Parameters:
+        mocker: Pytest mock fixture.
+        gateway: Missing or malformed gateway returned by the OS.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.is_running_non_stop = True
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.get_all_interfaces",
+        return_value=["en0"],
+    )
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.get_gateway_for_iface",
+        return_value=gateway,
+    )
+
+    assert ip_info.get_gateway_ip_if_interface() == {}
+
+
 # def test_get_gateway_ip_if_interface_args_access_point():
 
 
@@ -692,6 +763,23 @@ def test_mac_found_in_db_or_not(ip_info, gw_ips, mac_in_db, expected):
     result = ip_info.get_gateway_mac(gw_ips)
 
     assert result == expected
+
+
+@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
+def test_gateway_mac_skips_invalid_addresses(gateway: str | None) -> None:
+    """Do not query gateway data or OS neighbor tools for invalid addresses.
+
+    Parameters:
+        gateway: Missing or malformed gateway value.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info._get_mac_using_ip_neigh = Mock()
+    ip_info._get_mac_using_arp_cache = Mock()
+
+    assert ip_info.get_gateway_mac({"en0": gateway}) is None
+    ip_info.db.get_mac_addr_from_profile.assert_not_called()
+    ip_info._get_mac_using_ip_neigh.assert_not_called()
+    ip_info._get_mac_using_arp_cache.assert_not_called()
 
 
 def test_non_stop_false_skips_mac_lookup():

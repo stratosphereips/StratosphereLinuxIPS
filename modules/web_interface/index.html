@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20260830-host-addresses">
+  <link rel="stylesheet" href="/style.css?v=20261004-device-identity">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -15,6 +15,7 @@
       <div class="brand-copy">
         <p class="brand-name">SLIPS</p>
         <h1 id="run-name">Current run</h1>
+        <p id="run-device" class="run-device">This device: identifying…</p>
         <p id="run-meta" class="muted">Connecting to run data…</p>
         <p id="run-addresses" class="run-addresses muted" hidden></p>
       </div>
@@ -50,6 +51,10 @@
         <button class="secondary" id="refresh-overview">Refresh</button>
       </div>
       <div id="summary-cards" class="summary-grid overview-summary"></div>
+      <article class="surface"><h3>Current network</h3>
+        <p class="muted">Slips checks these settings while monitoring a live interface. They update when the computer changes network.</p>
+        <div id="network-states" class="network-states"></div>
+      </article>
       <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
       <article class="surface">
         <h3>Estimated attacks stopped by the firewall</h3>
@@ -96,6 +101,7 @@
         <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
         <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped" selected>Group by host</option></select>
+        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
         <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
         <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
@@ -112,6 +118,7 @@
         <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
         <select id="evidence-view" aria-label="Evidence display mode"><option value="grouped" selected>Group by host and type</option><option value="individual">Individual evidence</option></select>
+        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
         <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
         <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
@@ -204,7 +211,7 @@
       <div id="hosts-list-view">
         <div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2 id="hosts-title">Hosts</h2><p>Current and last-known identity with indexed historical activity.</p></div><button class="secondary refresh-list" data-target="hosts">Refresh</button></div>
         <div class="toolbar">
-          <input id="hosts-search" type="search" placeholder="Search IP, MAC, hostname, DNS…">
+          <input id="hosts-search" type="search" placeholder="Search IP, MAC, vendor, hostname, DNS…">
           <select id="hosts-scope"><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
           <select id="hosts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
           <select id="hosts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
@@ -212,7 +219,7 @@
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
           <span id="hosts-count" class="result-count"></span>
         </div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">Primary IP</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">IP / name</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th>MAC vendor</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
         <div id="hosts-pager" class="pager"></div>
       </div>
 
@@ -221,16 +228,22 @@
           <div><button id="host-back" class="text-button">← Back to hosts</button><p class="eyebrow">HOST WORKSPACE</p><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div>
           <div class="toolbar compact-toolbar">
             <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
+            <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
             <select id="host-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
             <input id="host-from" class="custom-time" type="datetime-local" hidden>
             <input id="host-to" class="custom-time" type="datetime-local" hidden>
           </div>
         </div>
+        <article id="host-unprofiled" class="surface" role="status" hidden>
+          <h3>No Host profile for this address</h3>
+          <p id="host-unprofiled-reason"></p>
+        </article>
         <div id="host-summary" class="summary-grid"></div>
         <div class="split-grid">
           <article class="surface"><h3>Identity and DNS</h3><div id="host-identity"></div></article>
           <article class="surface"><h3>Threat intelligence</h3><pre id="host-ti"></pre></article>
         </div>
+        <article class="surface"><h3>Permanent host profile</h3><div id="host-permanent-profiles"></div></article>
         <article class="surface">
           <p id="host-traffic-status" class="muted">Traffic and peers match the exact profile IP only.</p>
           <div class="chart-grid host-charts">
@@ -247,7 +260,7 @@
         </article>
         <article class="surface table-surface host-evidence-panel">
           <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for this exact profile IP.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
-          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th>Reporting peers</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
         </article>
         <div id="host-evidence-pager" class="pager"></div>
         <article class="surface table-surface">
@@ -273,6 +286,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20260831-backend-heartbeat"></script>
+  <script src="/app.js?v=20261004-device-identity"></script>
 </body>
 </html>

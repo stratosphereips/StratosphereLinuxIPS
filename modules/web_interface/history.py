@@ -19,6 +19,7 @@ ERROR_LINE = re.compile(
 )
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
 FLOW_INDEX_BATCH_SIZE = 5000
+FLOW_RECONCILE_BATCH_SIZE = 500
 HOST_SNAPSHOT_INTERVAL_SECONDS = 60
 BACKEND_HEARTBEAT_KEY = "backend_heartbeat_at"
 BACKEND_DISCONNECTED_KEY = "backend_disconnected_at"
@@ -156,6 +157,7 @@ class HistoryCollector:
         self._last_flow_count: Optional[int] = None
         self._last_flow_check = time.monotonic()
         self._last_rollup = 0.0
+        self._last_flow_reconcile = 0.0
         self._last_host_snapshot = 0.0
         self._detection_schema_ready = False
         self._redis_detection_backfill_complete = False
@@ -227,6 +229,7 @@ class HistoryCollector:
             last_rowid = int(
                 self._metadata_get(history, "flow_last_rowid", "0")
             )
+            last_uid = self._metadata_get(history, "flow_last_uid", "")
             try:
                 source = sqlite3.connect(
                     f"file:{self.flows_path}?mode=ro",
@@ -234,6 +237,21 @@ class HistoryCollector:
                     timeout=5,
                 )
                 source.row_factory = sqlite3.Row
+                if last_rowid:
+                    checkpoint = source.execute(
+                        "SELECT uid FROM flows WHERE rowid = ?",
+                        (last_rowid,),
+                    ).fetchone()
+                    if checkpoint is None:
+                        # Deleting the tail permits SQLite to reuse rowids.
+                        last_rowid = 0
+                    elif not last_uid:
+                        # Upgrade a pre-retention checkpoint in place.
+                        self._metadata_set(
+                            history, "flow_last_uid", checkpoint["uid"]
+                        )
+                    elif checkpoint["uid"] != last_uid:
+                        last_rowid = 0
                 rows = source.execute(
                     "SELECT rowid, uid, flow, label FROM flows "
                     "WHERE rowid > ? ORDER BY rowid LIMIT ?",
@@ -275,8 +293,58 @@ class HistoryCollector:
                 self._metadata_set(
                     history, "flow_last_rowid", rows[-1]["rowid"]
                 )
+                self._metadata_set(history, "flow_last_uid", rows[-1]["uid"])
             self._metadata_set(history, "flow_index_updated_at", time.time())
             return len(indexed)
+
+    def reconcile_flow_index(self) -> int:
+        """Remove a bounded batch of indexes whose raw flows expired.
+
+        Returns:
+            Number of orphaned index rows removed in this pass.
+        """
+        if not self.flows_path.exists():
+            return 0
+        with connect_history(self.history_path) as history:
+            last_uid = self._metadata_get(
+                history, "flow_reconcile_last_uid", ""
+            )
+            rows = history.execute(
+                "SELECT uid FROM flow_index WHERE uid > ? "
+                "ORDER BY uid LIMIT ?",
+                (last_uid, FLOW_RECONCILE_BATCH_SIZE),
+            ).fetchall()
+            if not rows:
+                self._metadata_set(history, "flow_reconcile_last_uid", "")
+                return 0
+            uids = [str(row["uid"]) for row in rows]
+            placeholders = ",".join("?" for _ in uids)
+            try:
+                with sqlite3.connect(
+                    f"file:{self.flows_path}?mode=ro",
+                    uri=True,
+                    timeout=5,
+                ) as source:
+                    present = {
+                        str(row[0])
+                        for row in source.execute(
+                            f"SELECT uid FROM flows WHERE uid IN "
+                            f"({placeholders})",
+                            uids,
+                        ).fetchall()
+                    }
+            except sqlite3.Error:
+                return 0
+            missing = [uid for uid in uids if uid not in present]
+            if missing:
+                missing_placeholders = ",".join("?" for _ in missing)
+                history.execute(
+                    f"DELETE FROM flow_index WHERE uid IN "
+                    f"({missing_placeholders})",
+                    missing,
+                )
+            self._metadata_set(history, "flow_reconcile_last_uid", uids[-1])
+            return len(missing)
 
     def _live_processes(self) -> List[psutil.Process]:
         """
@@ -1033,6 +1101,9 @@ class HistoryCollector:
             self.sample_storage()
             self._last_host_snapshot = now
         self.index_new_flows()
+        if now - self._last_flow_reconcile >= 60:
+            self.reconcile_flow_index()
+            self._last_flow_reconcile = now
         self.sample_metrics()
         self.tail_errors()
         if now - self._last_rollup >= 60:

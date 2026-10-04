@@ -6,12 +6,20 @@ from tests.module_factory import ModuleFactory
 import os
 import pytest
 import json
+from queue import Queue
 from unittest.mock import (
     patch,
     Mock,
 )
 import ipaddress
 from slips_files.core.structures.evidence import ThreatLevel
+
+
+def test_pending_circl_queries_stay_inside_threat_intel_process() -> None:
+    """Use a thread queue for retries that never cross a process boundary."""
+    threatintel = ModuleFactory().create_threatintel_obj()
+
+    assert isinstance(threatintel.pending_queries, Queue)
 
 
 def test_parse_local_ti_file():

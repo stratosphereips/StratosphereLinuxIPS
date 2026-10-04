@@ -4,6 +4,7 @@
 # and final cleanup for ProcessManager.
 import multiprocessing
 import os
+import platform
 import select
 import signal
 import sys
@@ -14,6 +15,7 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from slips_files.common.input_type import InputType
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
@@ -76,7 +78,9 @@ class ShutdownMixin:
                 continue
 
             process.join(3)
-            self.kill_process_tree(process.pid)
+            if process.is_alive():
+                self.kill_process_tree(process.pid)
+                process.join(3)
             if self._should_defer_web_interface_stopped_message(module_name):
                 self.deferred_stopped_modules.add(module_name)
                 continue
@@ -319,7 +323,11 @@ class ShutdownMixin:
 
         failed_modules: List[Tuple[str, Optional[int]]] = []
 
-        if self.main.db.is_running_non_stop():
+        stdin_finished = (
+            self.main.input_type == InputType.STDIN
+            and self.is_input_done_event.is_set()
+        )
+        if self.main.db.is_running_non_stop() and not stdin_finished:
             # Slips is continuously receiving flows,
             # none of these modules should stop or "finish"
             if not input_running:
@@ -383,7 +391,13 @@ class ShutdownMixin:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input
         # process this module should handle the stopping of slips
-        return self.is_debugger_active() or self.main.db.is_running_non_stop()
+        stdin_finished = (
+            self.main.input_type == InputType.STDIN
+            and self.is_input_done_event.is_set()
+        )
+        return self.is_debugger_active() or (
+            self.main.db.is_running_non_stop() and not stdin_finished
+        )
 
     def shutdown_interactive(
         self, to_kill_first: List[Process], to_kill_last: List[Process]
@@ -600,6 +614,8 @@ class ShutdownMixin:
 
     def _handle_firewall_after_analysis(self) -> None:
         """Keep or remove managed firewall rules after an interactive run."""
+        if platform.system() != "Linux":
+            return
         if has_slips_firewall_rules is None or not has_slips_firewall_rules():
             return
 
@@ -654,6 +670,7 @@ class ShutdownMixin:
         normal_completion = self._did_slips_finish_normally()
         try:
             print = self.get_print_function()
+            self.main.logger._flush_startup_queue()
 
             self._generate_plots()
 
@@ -763,4 +780,13 @@ class ShutdownMixin:
                 port = int(self.main.conf.web_interface_port)
                 self._stop_web_interface(port)
             return False
+        finally:
+            # These queues are owned by the main process. Close them after
+            # children have stopped so their pipe handles do not survive
+            # until interpreter shutdown.
+            self.profiler_queue.close()
+            self.aid_queue.close()
+            self.evidence_worker_queue.close()
+            self.evidence_logger_q.close()
+            self.main.logger._startup_queue.close()
         return None

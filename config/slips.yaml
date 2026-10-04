@@ -115,12 +115,11 @@ parameters:
   # detections, but the TCP standard defines 1hs.
   tcp_inactivity_timeout: 60
 
-  # Should Slips delete the previously stored data in the Redis DB when
-  # it starts?
-  # If Slips does not delete the DB, it can remember all the past
-  # detections and TI information.
-  # Redis will keep the data as long as it is not stopped.
-  # The persistence is in memory, not disk.
+  # Clear the current run's Redis database 0 at startup. Database 1 on
+  # port 6379 is the shared cache and is not cleared by this setting.
+  # Set false only for workflows that manage Redis state explicitly;
+  # it does not preserve the output directory or safely resume a run.
+  # Use --keep-history to retain old live-interface detections in SQLite.
   # deletePrevdb : false
   deletePrevdb: true
 
@@ -181,6 +180,16 @@ parameters:
   # All private client ips should belong to the same local network
   # client_ips : [10.0.0.1, 11.0.0.0/24]
   client_ips: []
+
+# Live-interface flow retention. Detection records stay in flows.sqlite;
+# ordinary raw flows expire sooner than flows linked to non-excluded evidence.
+# This does not run when importing a capture file.
+flow_retention:
+  enabled: true
+  ordinary_hours: 24
+  linked_days: 30
+  batch_size: 500
+  interval_seconds: 60
 
 #############################
 Debug:
@@ -1128,6 +1137,8 @@ global_p2p:
    # running slips on an interface
    use_global_p2p: False
    iris_conf: config/iris_config.yaml
+   # Path relative to the repository root; use a native build on macOS.
+   iris_binary: modules/iris/iris
    bootstrapping_node: False
    bootstrapping_modules: ["fides", "iris"]
 
@@ -1142,3 +1153,5 @@ local_p2p:
    connection_ttl: 30
    # Briefly hold candidate handshake flows while authentication completes.
    handshake_pending_seconds: 2
+   # Peers discover other nodes using this mDNS group name.
+   rendezvous: slips

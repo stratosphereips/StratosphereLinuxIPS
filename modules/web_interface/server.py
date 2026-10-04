@@ -24,6 +24,8 @@ import psutil
 import redis
 import yaml
 
+from managers.network_state import collect_network_state
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from modules.supported_module_names import Modules
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
@@ -166,13 +168,19 @@ class RunMismatchError(RuntimeError):
 class RunDataReader:
     """Read bounded live and historical data for exactly one Slips run."""
 
-    def __init__(self, redis_port: int, output_dir: str) -> None:
+    def __init__(
+        self,
+        redis_port: int,
+        output_dir: str,
+        host_profiles_path: str = "permanent/host_profiles/hosts.sqlite",
+    ) -> None:
         """
         Initialize run data sources.
 
         Parameters:
             redis_port: Redis port assigned to this run.
             output_dir: Output directory assigned to this run.
+            host_profiles_path: Shared host profile database path.
         """
         self.redis_port = redis_port
         self.output_dir = Path(output_dir)
@@ -180,6 +188,7 @@ class RunDataReader:
         self.history_path = (
             self.output_dir / "web_interface" / "history.sqlite"
         )
+        self.host_profiles_path = Path(host_profiles_path)
         self.redis = try_connect_with_and_without_password(
             redis.Redis,
             host=LOOPBACK_ADDRESS,
@@ -639,6 +648,55 @@ class RunDataReader:
                 self._whitelist_matches_for_record(item, rules)
                 if item["whitelisted"]
                 else []
+            )
+
+    def _annotate_p2p_reporters(self, items: List[Dict[str, Any]]) -> None:
+        """Add known reporter peer IDs to P2P evidence on one bounded page.
+
+        Parameters:
+            items: Individual or grouped evidence API records.
+        """
+        relevant = [
+            item
+            for item in items
+            if item.get("evidence_type") == "MALICIOUS_IP_FROM_P2P_NETWORK"
+        ]
+        if not relevant:
+            return
+        targets = sorted(
+            {
+                str(item.get("profile_ip") or "")
+                for item in relevant
+                if item.get("profile_ip")
+            }
+        )
+        reporters: Dict[str, List[str]] = {}
+        trust_path = getattr(
+            self,
+            "p2p_trust_path",
+            Path("permanent") / "p2p_trust_runtime" / "trustdb.db",
+        )
+        if targets and trust_path.exists():
+            try:
+                placeholders = ",".join("?" for _ in targets)
+                with sqlite3.connect(
+                    f"file:{trust_path}?mode=ro", uri=True, timeout=1
+                ) as connection:
+                    for target, peer_id in connection.execute(
+                        "SELECT DISTINCT reported_key, reporter_peerid "
+                        "FROM reports WHERE key_type = 'ip' "
+                        f"AND reported_key IN ({placeholders}) "
+                        "ORDER BY reporter_peerid",
+                        targets,
+                    ):
+                        reporters.setdefault(str(target), []).append(
+                            str(peer_id)
+                        )
+            except sqlite3.Error:
+                pass
+        for item in relevant:
+            item["reporting_peers"] = reporters.get(
+                str(item.get("profile_ip") or ""), []
             )
 
     def _detector_score_settings(self) -> tuple[str, float]:
@@ -1413,6 +1471,8 @@ class RunDataReader:
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            if self._query_value(query, "hide_excluded") == "1":
+                clauses.append(f"{whitelist_expression} = 0")
             if start is not None:
                 clauses.append("evidence_time >= ?")
                 params.append(start)
@@ -1476,6 +1536,14 @@ class RunDataReader:
                 },
                 "time",
             )
+            if sort_key == "score":
+                # A group displaying Excluded belongs after every numeric
+                # score, even if some evidence in that group was scored.
+                excluded_value = "1e308" if direction == "ASC" else "-1e308"
+                sort_expression = (
+                    "CASE WHEN persisted_whitelisted_count > 0 "
+                    f"THEN {excluded_value} ELSE COALESCE(alert_score, 0) END"
+                )
             total = int(
                 connection.execute(
                     f"SELECT COUNT(*) AS count FROM ({grouped_sql})",
@@ -1532,6 +1600,7 @@ class RunDataReader:
             )
             items.append(item)
         self._annotate_whitelisted_evidence(items)
+        self._annotate_p2p_reporters(items)
         next_cursor = (
             self._encode_cursor(rows[-1]["sort_value"], str(items[-1]["id"]))
             if has_more and items
@@ -1583,6 +1652,17 @@ class RunDataReader:
                 score_expression = self._detector_score_expression(
                     connection, "evidence"
                 )
+                evidence_columns = {
+                    str(column[1])
+                    for column in connection.execute(
+                        "PRAGMA table_info(evidence)"
+                    ).fetchall()
+                }
+                whitelist_expression = (
+                    "COALESCE(evidence.whitelisted, 0)"
+                    if "whitelisted" in evidence_columns
+                    else "0"
+                )
                 connection.create_function(
                     "evidence_module", 1, self._module_for_evidence
                 )
@@ -1614,8 +1694,19 @@ class RunDataReader:
                     },
                     "time",
                 )
+                if sort_key == "score":
+                    excluded_value = (
+                        "1e308" if direction == "ASC" else "-1e308"
+                    )
+                    sort_expression = (
+                        f"CASE WHEN {whitelist_expression} > 0 "
+                        f"THEN {excluded_value} "
+                        f"ELSE COALESCE({score_expression}, 0) END"
+                    )
                 clauses = ["1 = 1"]
                 params: List[Any] = []
+                if self._query_value(query, "hide_excluded") == "1":
+                    clauses.append(f"{whitelist_expression} = 0")
                 if start is not None:
                     clauses.append("evidence_time >= ?")
                     params.append(start)
@@ -1694,6 +1785,10 @@ class RunDataReader:
         except sqlite3.Error:
             records = self._redis_evidence()
             full_total = len(records)
+            if self._query_value(query, "hide_excluded") == "1":
+                records = [
+                    item for item in records if not item.get("whitelisted")
+                ]
             latest = max(
                 (float(item.get("timestamp") or 0) for item in records),
                 default=0,
@@ -1765,6 +1860,7 @@ class RunDataReader:
             sort_values = [float(item.get("timestamp") or 0) for item in items]
             has_more = len(records) > limit
         self._annotate_whitelisted_evidence(items)
+        self._annotate_p2p_reporters(items)
         next_cursor = (
             self._encode_cursor(
                 sort_values[-1],
@@ -2175,6 +2271,8 @@ class RunDataReader:
             return {
                 "items": [],
                 "total": 0,
+                "linked_uid_count": 0,
+                "unavailable_flow_count": 0,
                 "network_flow_total": 0,
                 "protocol_flow_total": 0,
                 "page_size": 0,
@@ -2223,6 +2321,8 @@ class RunDataReader:
         return {
             "items": items,
             "total": len(items),
+            "linked_uid_count": len(bounded_uids),
+            "unavailable_flow_count": len(bounded_uids) - len(items),
             "network_flow_total": network_flow_total,
             "protocol_flow_total": protocol_flow_total,
             "page_size": len(items),
@@ -2263,6 +2363,111 @@ class RunDataReader:
             }
         )
         return result
+
+    def host_names(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
+        """Resolve a bounded set of displayed IPs to stored host names.
+
+        Parameters:
+            query: Repeated ``ip`` query values from the current view.
+
+        Returns:
+            Name and provenance for each valid requested address.
+        """
+        requested: Dict[str, str] = {}
+        for value in query.get("ip", [])[:MAX_PAGE_SIZE]:
+            try:
+                ip = str(ipaddress.ip_address(value))
+            except ValueError:
+                continue
+            requested[value] = ip
+        ips = list(dict.fromkeys(requested.values()))
+        if not ips:
+            return {"names": {}}
+        annotations = HostProfileStore.annotations_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            ips,
+        )
+
+        snapshots: Dict[str, Dict[str, Any]] = {}
+        try:
+            placeholders = ", ".join("?" for _ in ips)
+            with connect_history(
+                self.history_path, read_only=True
+            ) as connection:
+                rows = connection.execute(
+                    f"SELECT ip, data FROM host_snapshots WHERE ip IN ({placeholders})",
+                    ips,
+                ).fetchall()
+            snapshots = {
+                str(row["ip"]): self._loads(row["data"], {}) for row in rows
+            }
+        except (OSError, sqlite3.Error):
+            pass
+
+        live_identity: List[Any] = []
+        try:
+            pipeline = self.redis.pipeline(transaction=False)
+            for ip in ips:
+                pipeline.hget(f"profile_{ip}", "host_name")
+                pipeline.hget("DNSresolution", ip)
+                pipeline.hget(f"profile_{ip}", "MAC_vendor")
+            live_identity = pipeline.execute()
+        except (AttributeError, redis.RedisError):
+            live_identity = []
+
+        names: Dict[str, Dict[str, str]] = {}
+        for index, ip in enumerate(ips):
+            snapshot = snapshots.get(ip, {})
+            annotation = annotations.get(ip, {})
+            live_name = (
+                live_identity[index * 3]
+                if index * 3 < len(live_identity)
+                else ""
+            )
+            name = str(annotation.get("name") or "")
+            source = "User name" if name else ""
+            if not name:
+                name = str(live_name or snapshot.get("hostname") or "")
+                source = "Hostname" if name else ""
+            if not name:
+                live_dns = (
+                    live_identity[index * 3 + 1]
+                    if index * 3 + 1 < len(live_identity)
+                    else None
+                )
+                dns = self._loads(live_dns, {}) or snapshot.get("dns") or {}
+                domains = (
+                    dns.get("domains", []) if isinstance(dns, dict) else []
+                )
+                if isinstance(domains, list) and domains:
+                    name = str(domains[0])
+                    source = "DNS"
+            if not name and getattr(self, "cache", None) is not None:
+                try:
+                    reverse_dns = self.cache.hget("IPsInfo:reverse_dns", ip)
+                except (AttributeError, redis.RedisError):
+                    reverse_dns = None
+                reverse_dns = self._loads(reverse_dns, reverse_dns)
+                if isinstance(reverse_dns, (list, tuple)):
+                    reverse_dns = reverse_dns[0] if reverse_dns else ""
+                if reverse_dns:
+                    name = str(reverse_dns)
+                    source = "rDNS"
+            if not name:
+                vendor = (
+                    live_identity[index * 3 + 2]
+                    if index * 3 + 2 < len(live_identity)
+                    else ""
+                ) or snapshot.get("mac_vendor")
+                if vendor:
+                    name = f"{str(vendor).strip()} device"
+                    source = "MAC vendor"
+            names[ip] = {"name": name, "source": source}
+        return {"names": {value: names[ip] for value, ip in requested.items()}}
 
     def _current_profile_threats(self) -> Dict[str, str]:
         """
@@ -2347,6 +2552,131 @@ class RunDataReader:
                 "last_seen": 0,
             }
         )
+
+    def _host_page_loads(self, ips: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Aggregate page traffic in one indexed history query.
+
+        Parameters:
+            ips: IPs in the requested Hosts page.
+
+        Returns:
+            Traffic totals keyed by IP.
+        """
+        if not ips:
+            return {}
+        placeholders = ",".join("?" for _ in ips)
+        with connect_history(self.history_path, read_only=True) as connection:
+            rows = connection.execute(
+                "SELECT ip, COUNT(*) AS flows, SUM(bytes) AS bytes, "
+                "SUM(packets) AS packets, "
+                "SUM(inbound_flows) AS inbound_flows, "
+                "SUM(outbound_flows) AS outbound_flows, "
+                "SUM(inbound_bytes) AS inbound_bytes, "
+                "SUM(outbound_bytes) AS outbound_bytes, "
+                "MAX(event_time) AS last_seen FROM ("
+                "SELECT src_ip AS ip, bytes, packets, event_time, "
+                "0 AS inbound_flows, "
+                "CASE WHEN src_ip != dst_ip THEN 1 ELSE 0 END "
+                "AS outbound_flows, 0 AS inbound_bytes, "
+                "CASE WHEN src_ip != dst_ip THEN bytes ELSE 0 END "
+                "AS outbound_bytes FROM flow_index "
+                f"WHERE src_ip IN ({placeholders}) UNION ALL "
+                "SELECT dst_ip AS ip, bytes, packets, event_time, "
+                "1 AS inbound_flows, 0 AS outbound_flows, "
+                "bytes AS inbound_bytes, 0 AS outbound_bytes "
+                f"FROM flow_index WHERE dst_ip IN ({placeholders}) "
+                "AND src_ip != dst_ip) GROUP BY ip",
+                (*ips, *ips),
+            ).fetchall()
+        return {str(row["ip"]): dict(row) for row in rows}
+
+    def _host_page_counts(self, ips: List[str]) -> Dict[str, Dict[str, int]]:
+        """Count evidence and alerts for a page with two indexed queries.
+
+        Parameters:
+            ips: IPs in the requested Hosts page.
+
+        Returns:
+            Evidence and alert counts keyed by IP.
+        """
+        counts = {ip: {"evidence": 0, "alerts": 0} for ip in ips}
+        if not ips:
+            return counts
+        placeholders = ",".join("?" for _ in ips)
+        try:
+            with self._connect_sqlite() as connection:
+                for table, column, field in (
+                    ("evidence", "profile_ip", "evidence"),
+                    ("alerts", "ip_alerted", "alerts"),
+                ):
+                    rows = connection.execute(
+                        f"SELECT {column} AS ip, COUNT(*) AS count "
+                        f"FROM {table} WHERE {column} IN ({placeholders}) "
+                        f"GROUP BY {column}",
+                        ips,
+                    ).fetchall()
+                    for row in rows:
+                        counts[str(row["ip"])][field] = int(row["count"])
+        except sqlite3.Error:
+            pass
+        return counts
+
+    def _host_page_identity(self, ips: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Fetch live names, DNS, and threat context with two pipelines.
+
+        Parameters:
+            ips: IPs in the requested Hosts page.
+
+        Returns:
+            Identity records keyed by IP.
+        """
+        if not ips:
+            return {}
+        context_fields = ("reverse_dns", "threatintelligence")
+        profile_pipe = self.redis.pipeline(transaction=False)
+        cache_pipe = self.cache.pipeline(transaction=False)
+        for ip in ips:
+            profile_pipe.hgetall(f"profile_{ip}")
+            profile_pipe.hget("DNSresolution", ip)
+            for field in context_fields:
+                cache_pipe.hget(f"IPsInfo:{field}", ip)
+        try:
+            profile_values = profile_pipe.execute()
+            cache_values = cache_pipe.execute()
+        except redis.RedisError:
+            return {}
+        result: Dict[str, Dict[str, Any]] = {}
+        for index, ip in enumerate(ips):
+            fields = profile_values[index * 2] or {}
+            dns = self._loads(profile_values[index * 2 + 1], {})
+            ti = {}
+            for offset, field in enumerate(context_fields):
+                raw = cache_values[index * len(context_fields) + offset]
+                ti[field] = self._loads(raw, raw)
+            rdns = ti.get("reverse_dns") or ""
+            if isinstance(rdns, (list, tuple)):
+                rdns = rdns[0] if rdns else ""
+            domains = dns.get("domains", []) if isinstance(dns, dict) else []
+            if not isinstance(domains, (list, tuple)):
+                domains = [domains]
+            ti_record = ti.get("threatintelligence") or {}
+            sources = (
+                ti_record.get("source", [])
+                if isinstance(ti_record, dict)
+                else []
+            )
+            if not isinstance(sources, (list, tuple)):
+                sources = [sources]
+            result[ip] = {
+                "fields": fields,
+                "dns": dns,
+                "dns_name": str(rdns or (domains[0] if domains else "")),
+                "dns_name_source": (
+                    "rDNS" if rdns else ("DNS" if domains else "")
+                ),
+                "ti_feeds": [str(source) for source in sources if source],
+            }
+        return result
 
     def hosts(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return one filtered, cursor-bounded historical host page."""
@@ -2505,23 +2835,94 @@ class RunDataReader:
                 (*params, limit + 1),
             ).fetchall()
         has_more = len(rows) > limit
+        page_rows = rows[:limit]
+        page_ips = [str(row["ip"]) for row in page_rows]
+        fast_page = getattr(self, "cache", None) is not None
+        if fast_page:
+            loads = self._host_page_loads(page_ips)
+            counts = self._host_page_counts(page_ips)
+            identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
-        for row in rows[:limit]:
-            host = self._live_host(str(row["ip"]))
+        annotations = HostProfileStore.annotations_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            page_ips,
+        )
+        for row in page_rows:
+            ip = str(row["ip"])
+            if fast_page:
+                host = self._loads(row["data"], {})
+                identity = identities.get(ip, {})
+                fields = identity.get("fields") or {}
+                host.update({"ip": ip, "live": bool(fields)})
+                if fields:
+                    host.update(
+                        {
+                            "scope": self._scope(ip),
+                            "hostname": fields.get("host_name", ""),
+                            "mac": fields.get("MAC", ""),
+                            "mac_vendor": fields.get("MAC_vendor", ""),
+                            "threat_level": fields.get("threat_level", "info"),
+                            "max_threat_level": fields.get(
+                                "max_threat_level", "info"
+                            ),
+                            "dns": identity.get("dns", {}),
+                        }
+                    )
+            else:
+                host = self._live_host(ip)
             host["observed_at"] = float(row["observed_at"])
             host["peak_alert_score"] = (
                 float(row["peak_alert_score"])
                 if row["peak_alert_score"] is not None
                 else None
             )
-            host["load"] = self._host_load(str(row["ip"]))
-            host.update(
-                self._ip_context_for_ip(str(host["ip"]), host.get("dns"))
-            )
-            host["evidence_count"] = self._profile_evidence_count(
-                str(row["ip"])
-            )
-            host["alert_count"] = self._profile_alert_count(str(row["ip"]))
+            if fast_page:
+                host["load"] = loads.get(
+                    ip,
+                    {
+                        "flows": 0,
+                        "bytes": 0,
+                        "packets": 0,
+                        "inbound_flows": 0,
+                        "outbound_flows": 0,
+                        "inbound_bytes": 0,
+                        "outbound_bytes": 0,
+                        "last_seen": 0,
+                    },
+                )
+                dns_name = identities.get(ip, {}).get("dns_name", "")
+                dns_source = identities.get(ip, {}).get("dns_name_source", "")
+                if not dns_name:
+                    saved_dns = host.get("dns") or {}
+                    domains = (
+                        saved_dns.get("domains", [])
+                        if isinstance(saved_dns, dict)
+                        else []
+                    )
+                    if isinstance(domains, (list, tuple)) and domains:
+                        dns_name = str(domains[0])
+                        dns_source = "DNS"
+                host.update(
+                    {
+                        "dns_name": dns_name,
+                        "dns_name_source": dns_source,
+                        "ti_feeds": identities.get(ip, {}).get("ti_feeds", []),
+                    }
+                )
+                host["evidence_count"] = counts[ip]["evidence"]
+                host["alert_count"] = counts[ip]["alerts"]
+            else:
+                host["load"] = self._host_load(ip)
+                host.update(self._ip_context_for_ip(ip, host.get("dns")))
+                host["evidence_count"] = self._profile_evidence_count(ip)
+                host["alert_count"] = self._profile_alert_count(ip)
+            annotation = annotations.get(ip, {})
+            host["user_name"] = annotation.get("name", "")
+            host["user_note"] = annotation.get("note", "")
             items.append(host)
         self._attach_current_host_scores(items)
         next_cursor = (
@@ -2632,6 +3033,47 @@ class RunDataReader:
             "ti_feeds": ti_feeds,
         }
 
+    def _current_network_profile_first(
+        self, ip: str, profiles: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Show an address's current network identity before older runs.
+
+        Parameters:
+            ip: Host address being opened.
+            profiles: Permanent profiles ordered by last sighting.
+
+        Returns:
+            Profiles with the matching current network first, if known.
+        """
+        if len(profiles) < 2:
+            return profiles
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return profiles
+        current_ids = set()
+        run_name = self._network_run_name()
+        for raw in self.redis.hgetall("network_states").values():
+            state = self._loads(raw, {})
+            if not isinstance(state, dict) or not state.get("connected"):
+                continue
+            try:
+                network = ipaddress.ip_network(
+                    state.get("local_network", ""), strict=False
+                )
+            except ValueError:
+                continue
+            if address in network:
+                current_ids.add(
+                    HostProfileStore.network_id_for_state(state, run_name)
+                )
+        if not current_ids:
+            return profiles
+        return sorted(
+            profiles,
+            key=lambda profile: profile.get("network_id") not in current_ids,
+        )
+
     def host(self, ip: str) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
         host = self._live_host(ip)
@@ -2642,6 +3084,23 @@ class RunDataReader:
         host["all_ips"] = host_ips
         host["load"] = self._host_load(ip)
         host["ti"] = self._ti_for_ip(ip)
+        host["permanent_profiles"] = HostProfileStore.read(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            ip,
+        )
+        host["permanent_profiles"] = self._current_network_profile_first(
+            ip, host["permanent_profiles"]
+        )
+        if host["permanent_profiles"]:
+            host["user_name"] = host["permanent_profiles"][0]["user_name"]
+            host["user_note"] = host["permanent_profiles"][0]["user_note"]
+        else:
+            host["user_name"] = ""
+            host["user_note"] = ""
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
         alert_total = 0
         for address in host_ips:
@@ -2722,13 +3181,36 @@ class RunDataReader:
         if end is not None:
             clauses.append("event_time <= ?")
             params.append(end)
-        if cursor:
-            clauses.append("(event_time < ? OR (event_time = ? AND uid < ?))")
-            params.extend([cursor[0], cursor[0], cursor[1]])
-        where = " AND ".join(clauses)
         with connect_history(self.history_path, read_only=True) as history:
-            count_clauses = clauses[:-1] if cursor else clauses
-            count_params = params[:-3] if cursor else params
+            if self._query_value(query, "hide_excluded") == "1":
+                history.execute(
+                    "ATTACH DATABASE ? AS run_db",
+                    (f"file:{self.sqlite_path}?mode=ro",),
+                )
+                evidence_columns = {
+                    str(column[1])
+                    for column in history.execute(
+                        "PRAGMA run_db.table_info(evidence)"
+                    ).fetchall()
+                }
+                if "whitelisted" in evidence_columns:
+                    clauses.append(
+                        "(NOT EXISTS (SELECT 1 FROM run_db.evidence_flows ef "
+                        "JOIN run_db.evidence e ON e.evidence_id = ef.evidence_id "
+                        "WHERE ef.uid = flow_index.uid AND e.whitelisted = 1) "
+                        "OR EXISTS (SELECT 1 FROM run_db.evidence_flows ef "
+                        "JOIN run_db.evidence e ON e.evidence_id = ef.evidence_id "
+                        "WHERE ef.uid = flow_index.uid "
+                        "AND COALESCE(e.whitelisted, 0) = 0))"
+                    )
+            count_clauses = list(clauses)
+            count_params = list(params)
+            if cursor:
+                clauses.append(
+                    "(event_time < ? OR (event_time = ? AND uid < ?))"
+                )
+                params.extend([cursor[0], cursor[0], cursor[1]])
+            where = " AND ".join(clauses)
             total = history.execute(
                 f"SELECT COUNT(*) AS count FROM flow_index WHERE "
                 f"{' AND '.join(count_clauses)}",
@@ -3334,6 +3816,270 @@ class RunDataReader:
                     result[family].append(normalized)
         return result
 
+    @staticmethod
+    def _current_network_states(
+        analysis: Dict[str, str],
+        saved_states: List[Dict[str, Any]],
+        host_addresses: Dict[str, List[str]],
+    ) -> List[Dict[str, Any]]:
+        """Show live interface settings if the stored snapshot has fallen behind.
+
+        Parameters:
+            analysis: Run input metadata.
+            saved_states: Network settings last saved by Slips.
+            host_addresses: Current operating-system interface addresses.
+
+        Returns:
+            Saved states with any outdated live interface replaced for display.
+        """
+        if analysis.get("input_type") != "interface" or analysis.get(
+            "analysis_end"
+        ):
+            return saved_states
+        interface_names = {
+            name.strip()
+            for name in str(analysis.get("interface", "")).split(",")
+            if name.strip()
+        }
+        result = []
+        for saved in saved_states:
+            if saved.get("interface") not in interface_names:
+                result.append(saved)
+                continue
+            interface_addresses = (
+                host_addresses
+                if len(interface_names) == 1
+                else RunDataReader._interface_addresses(saved["interface"])
+            )
+            live_addresses = set(interface_addresses.get("ipv4", [])) | set(
+                interface_addresses.get("ipv6", [])
+            )
+            stored_addresses = {
+                item.get("ip") for item in saved.get("addresses", [])
+            }
+            if not stored_addresses and saved.get("host_ip"):
+                stored_addresses.add(saved["host_ip"])
+            if live_addresses == stored_addresses:
+                result.append(saved)
+                continue
+            current = collect_network_state(
+                saved["interface"], len(interface_names)
+            )
+            current["live_reading"] = True
+            current["observed_at"] = time.time()
+            current["saved_changed_at"] = saved.get("changed_at")
+            result.append(current)
+        return result
+
+    def _network_run_name(self) -> str:
+        """Return the same run identifier used by the host profile module.
+
+        Returns:
+            Output directory and main-process PID, if known.
+        """
+        main_pid = self.redis.hget("PIDs", "main")
+        if not isinstance(main_pid, (str, int)) or not str(main_pid).isdigit():
+            return ""
+        return f"{self.output_dir}:{main_pid}"
+
+    def _named_network_states(
+        self, states: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Attach permanent user names to current network cards.
+
+        Parameters:
+            states: Current interface settings.
+
+        Returns:
+            Settings with network identity and saved display name.
+        """
+        if not states:
+            return []
+        run_name = self._network_run_name()
+        result = [
+            {
+                **state,
+                "network_id": HostProfileStore.network_id_for_state(
+                    state, run_name
+                ),
+            }
+            for state in states
+        ]
+        names = HostProfileStore.network_names(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            (state["network_id"] for state in result),
+        )
+        for state in result:
+            state["name"] = names.get(state["network_id"], "")
+            state["name_scope"] = (
+                "network" if state.get("gateway_mac") else "run"
+            )
+        return result
+
+    def save_network_name(
+        self, interface: str, network_id: str, name: str
+    ) -> Dict[str, str]:
+        """Name the currently monitored network in permanent storage.
+
+        Parameters:
+            interface: Interface selected in the Overview panel.
+            network_id: Identity displayed when the editor was opened.
+            name: New display name, or empty to clear it.
+
+        Returns:
+            Saved name and network identity.
+
+        Raises:
+            ValueError: The input or current network is invalid or changed.
+        """
+        if not all(
+            isinstance(value, str) for value in (interface, network_id)
+        ):
+            raise ValueError("Network name request must contain text values")
+        name = self._validated_network_name(name)
+        analysis = self.redis.hgetall("analysis")
+        interfaces = [
+            item.strip()
+            for item in str(analysis.get("interface", "")).split(",")
+            if item.strip()
+        ]
+        if (
+            analysis.get("input_type") != "interface"
+            or analysis.get("analysis_end")
+            or interface not in interfaces
+        ):
+            raise ValueError("Select a currently monitored interface")
+        current = collect_network_state(interface, len(interfaces))
+        if not current.get("connected"):
+            raise ValueError("The selected interface is disconnected")
+        run_name = self._network_run_name()
+        expected_id = HostProfileStore.network_id_for_state(current, run_name)
+        if not expected_id or expected_id != network_id:
+            raise ValueError(
+                "The network changed; refresh the page and try again"
+            )
+        HostProfileStore.set_network_name(
+            self.host_profiles_path, expected_id, name
+        )
+        saved = self._loads(self.redis.hget("network_states", interface), {})
+        if (
+            current.get("gateway_mac")
+            and not saved.get("history")
+            and str(saved.get("gateway_mac") or "").lower()
+            == str(current["gateway_mac"]).lower()
+            and run_name
+        ):
+            HostProfileStore.set_network_name(
+                self.host_profiles_path,
+                HostProfileStore.network_id_for_state({}, run_name),
+                name,
+            )
+        return {"network_id": expected_id, "name": name}
+
+    @staticmethod
+    def _validated_network_name(name: str) -> str:
+        """Normalize a printable network name before persisting it.
+
+        Parameters:
+            name: User-provided network display name.
+
+        Returns:
+            Trimmed name, or an empty string to clear a saved name.
+
+        Raises:
+            ValueError: The value is not printable bounded text.
+        """
+        if not isinstance(name, str):
+            raise ValueError("Network name must be text")
+        name = name.strip()
+        if len(name) > 80 or any(
+            ord(char) < 32 or ord(char) == 127 for char in name
+        ):
+            raise ValueError(
+                "Network name must be at most 80 printable characters"
+            )
+        return name
+
+    def save_profile_network_name(
+        self, ip: str, network_id: str, name: str
+    ) -> Dict[str, str]:
+        """Name a historical network shown in one permanent host profile.
+
+        Parameters:
+            ip: Host whose network profile is visible in the page.
+            network_id: Exact stored network identity for that profile.
+            name: New display name, or empty to clear it.
+
+        Returns:
+            Saved name and network identity.
+
+        Raises:
+            ValueError: The profile or proposed name is invalid.
+        """
+        if not isinstance(ip, str) or not isinstance(network_id, str):
+            raise ValueError("Select a visible host network profile")
+        name = self._validated_network_name(name)
+        if not HostProfileStore.has_network_profile(
+            self.host_profiles_path, ip, network_id
+        ):
+            raise ValueError(
+                "The selected host network profile is unavailable"
+            )
+        HostProfileStore.set_network_name(
+            self.host_profiles_path, network_id, name
+        )
+        return {"network_id": network_id, "name": name}
+
+    def save_host_annotation(
+        self, ip: str, network_id: str, name: str, note: str
+    ) -> Dict[str, str]:
+        """Save a user name and note for an exact permanent host profile.
+
+        Parameters:
+            ip: Selected host IP.
+            network_id: Network identity shown in the Host tab.
+            name: User-provided host name, or empty to clear it.
+            note: User-provided note, or empty to clear it.
+
+        Returns:
+            The saved host annotation.
+        """
+        if not all(
+            isinstance(value, str) for value in (ip, network_id, name, note)
+        ):
+            raise ValueError("Host annotation must contain text values")
+        name = name.strip()
+        note = note.strip()
+        if len(name) > 80 or any(
+            ord(char) < 32 or ord(char) == 127 for char in name
+        ):
+            raise ValueError(
+                "Host name must be at most 80 printable characters"
+            )
+        if len(note) > 1000 or any(
+            (ord(char) < 32 and char not in "\n\t") or ord(char) == 127
+            for char in note
+        ):
+            raise ValueError(
+                "Host note must be at most 1000 printable characters"
+            )
+        try:
+            ip = str(ipaddress.ip_address(ip))
+        except ValueError as error:
+            raise ValueError("Select a valid host IP") from error
+        if not HostProfileStore.has_network_profile(
+            self.host_profiles_path, ip, network_id
+        ):
+            raise ValueError("The selected host profile is unavailable")
+        HostProfileStore.set_host_annotation(
+            self.host_profiles_path, ip, network_id, name, note
+        )
+        return {"ip": ip, "network_id": network_id, "name": name, "note": note}
+
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
@@ -3421,12 +4167,30 @@ class RunDataReader:
             metadata.get(BACKEND_DISCONNECTED_KEY),
             now,
         )
+        try:
+            computer_interfaces = ",".join(psutil.net_if_addrs())
+        except psutil.Error:
+            computer_interfaces = ""
         uptime_reference = (
             now
             if backend_status["connected"]
             else backend_status["last_seen"] or now
         )
         firewall = self._firewall_overview()
+        host_addresses = self._interface_addresses(
+            str(analysis.get("interface") or run_metadata.get("File", ""))
+        )
+        saved_network_states = [
+            json.loads(value)
+            for _, value in sorted(
+                self.redis.hgetall("network_states").items()
+            )
+        ]
+        current_network_states = self._named_network_states(
+            self._current_network_states(
+                analysis, saved_network_states, host_addresses
+            )
+        )
         return {
             "run": {
                 **analysis,
@@ -3447,9 +4211,12 @@ class RunDataReader:
             },
             "backend_status": backend_status,
             "run_metadata": run_metadata,
-            "host_addresses": self._interface_addresses(
-                str(analysis.get("interface") or run_metadata.get("File", ""))
+            "host_addresses": host_addresses,
+            "computer_addresses": self._interface_addresses(
+                computer_interfaces
             ),
+            "computer_name": socket.gethostname(),
+            "network_states": current_network_states,
             "sources": {
                 "redis": True,
                 "sqlite": self.sqlite_path.exists(),
@@ -4160,6 +4927,27 @@ class RunDataReader:
             return []
         return connections
 
+    def _legacy_connected_p2p_peers(
+        self, peer_info: Dict[str, Dict[str, Any]]
+    ) -> set[str]:
+        """Read connected peers reported by legacy Pigeon binaries.
+
+        Parameters:
+            peer_info: Decoded peer state indexed by peer ID.
+
+        Returns:
+            Peer IDs that both legacy connectivity records mark connected.
+        """
+        raw_connected = self._loads(self.redis.get("connected_peers"), [])
+        if not isinstance(raw_connected, (list, tuple, set)):
+            return set()
+        connected = {str(peer_id) for peer_id in raw_connected}
+        return {
+            peer_id
+            for peer_id in connected
+            if peer_info.get(peer_id, {}).get("connected") is True
+        }
+
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -4175,6 +4963,7 @@ class RunDataReader:
             peer_id: self._loads(raw, {})
             for peer_id, raw in self.redis.hgetall("peer_info").items()
         }
+        connected.update(self._legacy_connected_p2p_peers(peer_info))
         peer_trust = self.redis.hgetall("peer_trust")
         peer_seen = dict(
             self.redis.zrange("peers_strust", 0, -1, withscores=True)
@@ -4198,6 +4987,7 @@ class RunDataReader:
         latest_reliability: Dict[str, Dict[str, Any]] = {}
         reports: List[Dict[str, Any]] = []
         reports_received = 0
+        report_counts: Counter[str] = Counter()
         peer_ips: Dict[str, Dict[str, Any]] = {}
         if trust_path.exists():
             try:
@@ -4281,25 +5071,26 @@ class RunDataReader:
                                 or timestamp >= run_start,
                             }
                         )
-                    if run_start:
-                        report_count_row = connection.execute(
-                            "SELECT COUNT(*) AS total FROM reports "
-                            "WHERE update_time >= ?",
-                            (run_start,),
-                        ).fetchone()
-                    else:
-                        report_count_row = connection.execute(
-                            "SELECT COUNT(*) AS total FROM reports"
-                        ).fetchone()
-                    if report_count_row:
-                        reports_received = int(report_count_row["total"])
+                    report_where = (
+                        "WHERE update_time >= ?" if run_start else ""
+                    )
+                    report_params = (run_start,) if run_start else ()
+                    for row in connection.execute(
+                        "SELECT reporter_peerid, COUNT(*) AS total "
+                        f"FROM reports {report_where} "
+                        "GROUP BY reporter_peerid",
+                        report_params,
+                    ):
+                        count = int(row["total"])
+                        report_counts[str(row["reporter_peerid"])] = count
+                        reports_received += count
             except sqlite3.Error:
                 pass
-        report_counts = Counter(item["peer_id"] for item in reports)
         peer_ids = (
             set(peer_info)
             | set(peer_ips)
             | set(latest_reliability)
+            | set(report_counts)
             | connected
         )
         peers = []
@@ -4421,7 +5212,7 @@ class SlipsHTTPServer(ThreadingHTTPServer):
 
 
 class RequestHandler(BaseHTTPRequestHandler):
-    """Serve exact static assets and bounded read-only JSON APIs."""
+    """Serve run data and bounded, local network-name edits."""
 
     server: SlipsHTTPServer
 
@@ -4531,6 +5322,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.evidence(query)
         elif path == "/api/hosts":
             payload = reader.hosts(query)
+        elif path == "/api/host-names":
+            payload = reader.host_names(query)
         elif path == "/api/firewall":
             payload = reader.firewall(query)
         elif path == "/api/arp-poisoning":
@@ -4661,7 +5454,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         """Only /login is a valid POST target - everything else is 405."""
         parsed = urlparse(self.path)
         if parsed.path != "/login":
-            self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
+            self._post_annotation(parsed.path)
             return
 
         ensure_web_password_matches_redis_password()
@@ -4703,6 +5496,91 @@ class RequestHandler(BaseHTTPRequestHandler):
             headers={"Location": "/", "Set-Cookie": cookie_header},
         )
 
+    def _post_annotation(self, path: str) -> None:
+        """Save an authenticated host annotation or network name.
+
+        Parameters:
+            path: Requested API path.
+        """
+        if self._require_password() and not self._session_ok():
+            self._send_json(
+                {"error": "login required"}, HTTPStatus.UNAUTHORIZED
+            )
+            return
+        if path not in {"/api/network-name", "/api/host-annotation"}:
+            self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+            return
+        origin = self.headers.get("Origin", "")
+        if origin and urlparse(origin).netloc != self.headers.get("Host", ""):
+            self._send_json({"error": "Invalid origin"}, HTTPStatus.FORBIDDEN)
+            return
+        if (
+            self.headers.get("Content-Type", "")
+            .split(";", 1)[0]
+            .strip()
+            .lower()
+            != "application/json"
+        ):
+            self._send_json(
+                {"error": "Expected a JSON request"},
+                HTTPStatus.UNSUPPORTED_MEDIA_TYPE,
+            )
+            return
+        try:
+            size = int(self.headers.get("Content-Length", ""))
+        except ValueError:
+            size = 0
+        if size < 1 or size > 8192:
+            self._send_json(
+                {"error": "Invalid request size"},
+                HTTPStatus.BAD_REQUEST,
+            )
+            return
+        try:
+            payload = json.loads(self.rfile.read(size))
+            if not isinstance(payload, dict):
+                raise ValueError("Expected an object")
+            self.server.reader.validate_run_identity()
+            if path == "/api/host-annotation":
+                saved = self.server.reader.save_host_annotation(
+                    payload.get("ip"),
+                    payload.get("network_id"),
+                    payload.get("name"),
+                    payload.get("note"),
+                )
+            elif "ip" in payload:
+                saved = self.server.reader.save_profile_network_name(
+                    payload.get("ip"),
+                    payload.get("network_id"),
+                    payload.get("name"),
+                )
+            else:
+                saved = self.server.reader.save_network_name(
+                    payload.get("interface"),
+                    payload.get("network_id"),
+                    payload.get("name"),
+                )
+            self._send_json(saved)
+        except ValueError as error:
+            self._send_json(
+                {"error": "Invalid value", "detail": str(error)},
+                HTTPStatus.BAD_REQUEST,
+            )
+        except RunMismatchError as error:
+            self._send_json(
+                {"error": "Run mismatch", "detail": str(error)},
+                HTTPStatus.CONFLICT,
+            )
+        except (redis.RedisError, sqlite3.Error, OSError) as error:
+            traceback.print_exc()
+            self._send_json(
+                {
+                    "error": "Unable to save the requested name or note",
+                    "detail": str(error),
+                },
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+
 
 def ipv4_address(value: str) -> str:
     """Validate one IPv4 bind address from the server command line.
@@ -4740,13 +5618,19 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--port", type=int, required=True)
     parser.add_argument("--redis-port", type=int, required=True)
     parser.add_argument("--output-dir", required=True)
+    parser.add_argument(
+        "--host-profiles-path",
+        default="permanent/host_profiles/hosts.sqlite",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     """Start the single-run server on the configured IPv4 address."""
     args = parse_arguments()
-    reader = RunDataReader(args.redis_port, args.output_dir)
+    reader = RunDataReader(
+        args.redis_port, args.output_dir, args.host_profiles_path
+    )
     reader.validate_run_identity()
     server = SlipsHTTPServer(
         (args.bind_address, args.port), RequestHandler, reader

@@ -1,12 +1,12 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import multiprocessing
 import time
 import threading
 from multiprocessing import Process
 from typing import List, Optional
 
 from slips_files.core.profiler_worker import ProfilerWorker
+from slips_files.core.aid_manager import AIDManager
 
 FIVE_MINS = 300
 NUM_INITIAL_PROFILER_WORKERS = 3
@@ -31,7 +31,7 @@ class WorkerManagerMixin:
         self.workers: List[ProfilerWorker] = []
         # is set by this module to indicate to the monitor thread that
         # workers stopped.
-        self.did_all_workers_stop = multiprocessing.Event()
+        self.did_all_workers_stop = threading.Event()
         self.last_worker_id = -1
         self.active_profiler_workers = 0
         self.num_of_initial_profiler_workers = NUM_INITIAL_PROFILER_WORKERS
@@ -70,7 +70,7 @@ class WorkerManagerMixin:
         None.
         """
         worker_name = f"profiler_worker_process_{worker_id}"
-        worker = ProfilerWorker(
+        worker = ProfilerWorker.create_process(
             logger=self.logger,
             output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
@@ -82,9 +82,16 @@ class WorkerManagerMixin:
             # module specific kwargs
             name=worker_name,
             profiler_queue=self.profiler_queue,
-            input_handler=self.input_handler_obj,
+            input_handler=(
+                type(self.input_handler_obj),
+                {
+                    key: value
+                    for key, value in vars(self.input_handler_obj).items()
+                    if key != "db"
+                },
+            ),
             aid_queue=self.aid_queue,
-            aid_manager=self.aid_manager,
+            aid_manager=AIDManager.for_queue(self.aid_queue),
             is_input_done_event=self.is_input_done_event,
             total_processes_to_start=self.total_processes_to_start,
         )

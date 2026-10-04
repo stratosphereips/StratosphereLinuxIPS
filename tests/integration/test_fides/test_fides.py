@@ -9,6 +9,7 @@ from pathlib import PosixPath, Path
 import signal
 from typing import Any
 
+import netifaces
 import redis
 
 from modules.fides.messaging.network_bridge import NetworkBridge
@@ -250,14 +251,23 @@ def assert_no_fatal_runtime_errors(output_dir: Path) -> None:
                     )
 
 
-def get_main_interface():
-    try:
-        out = subprocess.check_output(
-            ["ip", "-o", "route", "show", "default"], text=True
-        )
-        return out.split(" dev ")[1].split()[0]
-    except Exception:
-        return None
+def get_main_interface() -> str | None:
+    """Return an IPv4 interface without relying on Linux-only commands.
+
+    Returns:
+        Default-route interface, another IPv4 interface, or None.
+    """
+    default_gateway = (
+        netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+    )
+    if default_gateway:
+        return str(default_gateway[1])
+
+    for interface in netifaces.interfaces():
+        addresses = netifaces.ifaddresses(interface).get(netifaces.AF_INET, [])
+        if any(address.get("addr") for address in addresses):
+            return interface
+    return None
 
 
 def get_runtime_config_dir(output_dir_name: str) -> Path:

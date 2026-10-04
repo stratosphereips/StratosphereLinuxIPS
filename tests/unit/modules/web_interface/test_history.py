@@ -64,6 +64,120 @@ def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
     assert checkpoint == "2"
 
 
+def test_flow_index_reconciles_pruned_raw_flows(tmp_path) -> None:
+    """Clear stale host traffic rows after raw retention removes them."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = {
+        "starttime": 10,
+        "saddr": "10.0.0.1",
+        "daddr": "8.8.8.8",
+        "proto": "tcp",
+        "bytes": 100,
+        "pkts": 2,
+    }
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                ("keep", json.dumps(flow), "benign"),
+                ("expire", json.dumps(flow), "benign"),
+            ],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 2
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows WHERE uid = 'expire'")
+
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history_path, read_only=True) as connection:
+        assert [
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        ] == ["keep"]
+
+
+def test_flow_index_restarts_after_sqlite_reuses_rowids(tmp_path) -> None:
+    """Index new traffic even if retention removed the previous tail row."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = {
+        "starttime": 10,
+        "saddr": "10.0.0.1",
+        "daddr": "8.8.8.8",
+        "proto": "tcp",
+        "bytes": 100,
+        "pkts": 2,
+    }
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                (f"old-{index}", json.dumps(flow), "benign")
+                for index in range(3)
+            ],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 3
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows")
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("new", json.dumps(flow), "benign"),
+        )
+
+    assert collector.index_new_flows() == 1
+    assert collector.reconcile_flow_index() == 3
+    with connect_history(history_path, read_only=True) as connection:
+        assert [
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        ] == ["new"]
+
+
+def test_flow_index_detects_same_rowid_reused_for_new_uid(tmp_path) -> None:
+    """A replacement of the checkpoint row must still be indexed."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = json.dumps(
+        {
+            "starttime": 10,
+            "saddr": "10.0.0.1",
+            "daddr": "8.8.8.8",
+            "proto": "tcp",
+            "bytes": 100,
+            "pkts": 2,
+        }
+    )
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [("old-1", flow, "benign"), ("old-2", flow, "benign")],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 2
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows WHERE uid = 'old-2'")
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("new", flow, "benign"),
+        )
+
+    assert collector.index_new_flows() == 2
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history_path, read_only=True) as connection:
+        assert {
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        } == {"old-1", "new"}
+
+
 def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     _module_factory = ModuleFactory()
     output_dir = tmp_path / "run"

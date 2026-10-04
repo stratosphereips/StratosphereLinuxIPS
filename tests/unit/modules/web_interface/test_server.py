@@ -1,11 +1,13 @@
 from collections import Counter
 import argparse
+from io import BytesIO
 import json
 import socket
 import sqlite3
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 from urllib.request import Request, urlopen
 from unittest.mock import Mock, patch
 
@@ -21,6 +23,7 @@ from modules.web_interface.server import (
     ipv4_address,
 )
 from slips_files.common.web_auth import SESSION_COOKIE_NAME, issue_token
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
@@ -29,6 +32,35 @@ def _authenticated_request(url: str) -> Request:
     return Request(
         url, headers={"Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}"}
     )
+
+def test_current_network_profile_precedes_newer_run_fallback() -> None:
+    """Restore host annotations when an earlier run missed its router."""
+    _module_factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = "output/test-run"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "100"
+    reader.redis.hgetall.return_value = {
+        "en0": json.dumps(
+            {
+                "connected": True,
+                "local_network": "192.168.1.0/24",
+                "gateway_mac": "d8:58:d7:1:ff:e1",
+            }
+        )
+    }
+    profiles = [
+        {"network_id": "run:output/test-run:99", "user_name": ""},
+        {
+            "network_id": "gateway:d8:58:d7:1:ff:e1",
+            "user_name": "homeassistant",
+        },
+    ]
+
+    ordered = reader._current_network_profile_first("192.168.1.185", profiles)
+
+    assert ordered[0]["user_name"] == "homeassistant"
+    assert profiles[0]["user_name"] == ""
 
 
 def test_idle_connection_does_not_block_page_requests() -> None:
@@ -499,7 +531,23 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     reader.history_path = tmp_path / "history.sqlite"
     reader.redis_port = 6379
     reader.redis = Mock()
-    reader.redis.hgetall.return_value = {}
+    reader.redis.hgetall.side_effect = lambda key: (
+        {
+            "wlan0": json.dumps(
+                {
+                    "interface": "wlan0",
+                    "connected": True,
+                    "host_ip": "10.0.0.25",
+                    "local_network": "10.0.0.0/24",
+                    "gateway_ip": "10.0.0.1",
+                    "dns_servers": ["10.0.0.53"],
+                    "changed_at": 100.0,
+                }
+            )
+        }
+        if key == "network_states"
+        else {}
+    )
     redis_values = {
         "number_of_alerts": "0",
         "number_of_evidence": "123456",
@@ -526,9 +574,371 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     result = reader.overview()
 
     assert result["counts"]["evidence"] == 123456
+    assert result["network_states"][0]["dns_servers"] == ["10.0.0.53"]
+    assert "computer_addresses" in result
+    assert "computer_name" in result
     assert result["evidence_details_loaded"] is False
     reader._redis_evidence.assert_not_called()
     reader._module_rows.assert_called_once_with(None, {}, False)
+
+
+@pytest.mark.parametrize(
+    "input_type, finished, live_ip, expected_refresh",
+    [
+        ("interface", False, "10.0.1.25", True),
+        ("interface", False, "10.0.0.25", False),
+        ("interface", True, "10.0.1.25", False),
+        ("pcap", False, "10.0.1.25", False),
+    ],
+)
+def test_network_panel_uses_current_interface_after_saved_state_stalls(
+    input_type: str,
+    finished: bool,
+    live_ip: str,
+    expected_refresh: bool,
+) -> None:
+    """Refresh a stale live network card without changing saved history.
+
+    Parameters:
+        input_type: Run input kind.
+        finished: Whether the run already ended.
+        live_ip: Current address seen by the operating system.
+        expected_refresh: Whether live collection should replace the card.
+    """
+    _module_factory = ModuleFactory()
+    analysis = {
+        "input_type": input_type,
+        "interface": "en0",
+        "analysis_end": "done" if finished else "",
+    }
+    saved = {
+        "interface": "en0",
+        "addresses": [{"ip": "10.0.0.25"}],
+        "host_ip": "10.0.0.25",
+        "changed_at": 100.0,
+    }
+    current = {
+        "interface": "en0",
+        "addresses": [{"ip": live_ip}],
+        "host_ip": live_ip,
+        "gateway_ip": "10.0.1.1",
+    }
+    with patch(
+        "modules.web_interface.server.collect_network_state",
+        return_value=current,
+    ) as collect:
+        result = RunDataReader._current_network_states(
+            analysis,
+            [saved],
+            {"ipv4": [live_ip], "ipv6": []},
+        )
+
+    if expected_refresh:
+        collect.assert_called_once_with("en0", 1)
+        assert result[0]["host_ip"] == live_ip
+        assert result[0]["live_reading"] is True
+        assert result[0]["saved_changed_at"] == 100.0
+        assert "live_reading" not in saved
+    else:
+        collect.assert_not_called()
+        assert result == [saved]
+
+
+def test_save_network_name_labels_router_and_early_run_records(
+    tmp_path: Path,
+) -> None:
+    """Persist a current network name without attaching it to another router.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = Path("output/test-run")
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface",
+        "interface": "en0",
+    }
+    saved_state = {
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "history": [],
+    }
+    reader.redis.hget.side_effect = lambda key, field: {
+        ("PIDs", "main"): "123",
+        ("network_states", "en0"): json.dumps(saved_state),
+    }.get((key, field))
+    current = {
+        "connected": True,
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }
+    with patch(
+        "modules.web_interface.server.collect_network_state",
+        return_value=current,
+    ):
+        result = reader.save_network_name(
+            "en0", "gateway:aa:bb:cc:dd:ee:01", "Home Wi-Fi"
+        )
+        with pytest.raises(ValueError, match="network changed"):
+            reader.save_network_name(
+                "en0", "gateway:aa:bb:cc:dd:ee:02", "Wrong router"
+            )
+
+    assert result == {
+        "network_id": "gateway:aa:bb:cc:dd:ee:01",
+        "name": "Home Wi-Fi",
+    }
+    assert HostProfileStore.network_names(
+        reader.host_profiles_path,
+        ["gateway:aa:bb:cc:dd:ee:01", "run:output/test-run:123"],
+    ) == {
+        "gateway:aa:bb:cc:dd:ee:01": "Home Wi-Fi",
+        "run:output/test-run:123": "Home Wi-Fi",
+    }
+    assert reader._named_network_states([current])[0]["name"] == ("Home Wi-Fi")
+
+
+def test_network_name_without_router_mac_is_scoped_to_current_run(
+    tmp_path: Path,
+) -> None:
+    """Keep an unknown router's name separate from another run.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = Path("output/test-run")
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface",
+        "interface": "en0",
+    }
+    reader.redis.hget.side_effect = lambda key, field: (
+        "123" if (key, field) == ("PIDs", "main") else None
+    )
+    current = {"connected": True, "gateway_mac": ""}
+    with patch(
+        "modules.web_interface.server.collect_network_state",
+        return_value=current,
+    ):
+        result = reader.save_network_name(
+            "en0", "run:output/test-run:123", "Hotel Ethernet"
+        )
+
+    assert result["name"] == "Hotel Ethernet"
+    assert reader._named_network_states([current])[0]["name"] == (
+        "Hotel Ethernet"
+    )
+    assert HostProfileStore.network_names(
+        reader.host_profiles_path,
+        ["run:output/test-run:123", "run:output/another-run:456"],
+    ) == {"run:output/test-run:123": "Hotel Ethernet"}
+
+
+def test_historical_host_network_can_be_named_explicitly(
+    tmp_path: Path,
+) -> None:
+    """Let a user identify an older unknown network without guessing its router.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    store = HostProfileStore(path, "old-run", lambda _: {}, [])
+    store.observe_hostname("printer", "profile_192.168.1.20")
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+
+    saved = reader.save_profile_network_name(
+        "192.168.1.20", "run:old-run", "Previous home Wi-Fi"
+    )
+
+    assert saved["name"] == "Previous home Wi-Fi"
+    assert (
+        HostProfileStore.read(path, "192.168.1.20")[0]["network_label"]
+        == "Previous home Wi-Fi"
+    )
+    with pytest.raises(ValueError, match="unavailable"):
+        reader.save_profile_network_name(
+            "192.168.1.20", "run:another-network", "Wrong network"
+        )
+    with pytest.raises(ValueError, match="at most 80"):
+        reader.save_profile_network_name(
+            "192.168.1.20", "run:old-run", "x" * 81
+        )
+
+
+@pytest.mark.parametrize(
+    "origin,expected_status",
+    [
+        ("http://127.0.0.1:55000", 200),
+        ("http://unrelated.example", 403),
+    ],
+)
+def test_network_name_post_requires_same_origin(
+    origin: str, expected_status: int
+) -> None:
+    """Accept JSON edits from the page and reject another web origin.
+
+    Parameters:
+        origin: Origin supplied by the browser.
+        expected_status: HTTP response status.
+    """
+    _module_factory = ModuleFactory()
+    body = json.dumps(
+        {
+            "interface": "en0",
+            "network_id": "gateway:aa:bb:cc:dd:ee:01",
+            "name": "Home Wi-Fi",
+        }
+    ).encode()
+    reader = Mock()
+    reader.save_network_name.return_value = {
+        "network_id": "gateway:aa:bb:cc:dd:ee:01",
+        "name": "Home Wi-Fi",
+    }
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/network-name"
+    handler.headers = {
+        "Host": "127.0.0.1:55000",
+        "Origin": origin,
+        "Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}",
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+
+    handler.do_POST()
+
+    if expected_status == 200:
+        assert handler._send_json.call_args.args == (
+            reader.save_network_name.return_value,
+        )
+        reader.save_network_name.assert_called_once_with(
+            "en0", "gateway:aa:bb:cc:dd:ee:01", "Home Wi-Fi"
+        )
+    else:
+        assert handler._send_json.call_args.args[1] == expected_status
+        reader.save_network_name.assert_not_called()
+
+
+def test_network_name_post_routes_historical_profile() -> None:
+    """The Host workspace editor passes the selected profile to the server."""
+    _module_factory = ModuleFactory()
+    body = json.dumps(
+        {
+            "ip": "192.168.1.20",
+            "network_id": "run:old-run",
+            "name": "Previous home Wi-Fi",
+        }
+    ).encode()
+    reader = Mock()
+    reader.save_profile_network_name.return_value = {
+        "network_id": "run:old-run",
+        "name": "Previous home Wi-Fi",
+    }
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/network-name"
+    handler.headers = {
+        "Host": "127.0.0.1:55000",
+        "Origin": "http://127.0.0.1:55000",
+        "Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}",
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+
+    handler.do_POST()
+
+    reader.save_profile_network_name.assert_called_once_with(
+        "192.168.1.20", "run:old-run", "Previous home Wi-Fi"
+    )
+    reader.save_network_name.assert_not_called()
+
+
+def test_host_annotation_post_saves_name_and_note() -> None:
+    """Route the Host editor's name and note to permanent storage."""
+    _module_factory = ModuleFactory()
+    body = json.dumps(
+        {
+            "ip": "192.168.1.20",
+            "network_id": "gateway:aa:bb:cc:dd:ee:01",
+            "name": "My iPad",
+            "note": "Kitchen tablet",
+        }
+    ).encode()
+    reader = Mock()
+    reader.save_host_annotation.return_value = {
+        "ip": "192.168.1.20",
+        "name": "My iPad",
+        "note": "Kitchen tablet",
+    }
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/host-annotation"
+    handler.headers = {
+        "Host": "127.0.0.1:55000",
+        "Origin": "http://127.0.0.1:55000",
+        "Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}",
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+
+    handler.do_POST()
+
+    reader.save_host_annotation.assert_called_once_with(
+        "192.168.1.20",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "My iPad",
+        "Kitchen tablet",
+    )
+    handler._send_json.assert_called_once_with(
+        reader.save_host_annotation.return_value
+    )
+
+
+def test_host_workspace_includes_permanent_identity_clues(
+    tmp_path: Path,
+) -> None:
+    """Expose cross-run host names through the Host workspace response.
+
+    Parameters:
+        tmp_path: Isolated permanent host database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "host_profiles.sqlite"
+    store = HostProfileStore(path, "old-run", lambda _: {}, [])
+    store.observe_ip_info("8.8.8.8", {"reverse_dns": "dns.google"})
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+    reader._live_host = Mock(
+        return_value={
+            "ip": "8.8.8.8",
+            "observed_at": 100.0,
+            "live": False,
+        }
+    )
+    reader._attach_current_host_scores = Mock()
+    reader._host_ips = Mock(return_value=["8.8.8.8"])
+    reader._host_load = Mock(return_value={})
+    reader._ti_for_ip = Mock(return_value={})
+    reader.alerts = Mock(return_value={"total": 0, "items": []})
+    reader._profile_evidence_count = Mock(return_value=0)
+
+    host = reader.host("8.8.8.8")
+
+    assert host["permanent_profiles"][0]["network_id"] == "public"
+    assert host["permanent_profiles"][0]["facts"][0]["value"] == ("dns.google")
 
 
 def test_overview_evidence_counts_scans_only_when_requested(
@@ -784,12 +1194,18 @@ def test_flows_for_evidence_reads_durable_conn_and_altflows(tmp_path) -> None:
             "INSERT INTO evidence_flows VALUES (?, ?)",
             ("evidence-1", "flow-1"),
         )
+        connection.execute(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            ("evidence-1", "older-flow-without-raw-record"),
+        )
 
     result = reader.flows_for_evidence("evidence-1")
 
     assert result["total"] == 1
     assert result["network_flow_total"] == 1
     assert result["protocol_flow_total"] == 1
+    assert result["linked_uid_count"] == 2
+    assert result["unavailable_flow_count"] == 1
     group = result["items"][0]
     assert group["network_flow"]["table"] == "flows"
     assert group["protocol_flows"][0]["table"] == "altflows"
@@ -837,6 +1253,23 @@ def test_api_routes_evidence_flow_ids() -> None:
     handler.server.reader.score_history.assert_called_once_with(
         "10.0.0.1", {"range": ["all"]}
     )
+
+
+def test_api_routes_host_name_lookup() -> None:
+    """Route the bounded name lookup before individual host paths."""
+    _module_factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    handler.server.reader.response_metadata.return_value = {}
+    handler.server.reader.host_names.return_value = {
+        "names": {"10.0.0.1": {"name": "laptop", "source": "Hostname"}}
+    }
+    query = {"ip": ["10.0.0.1"]}
+
+    result = handler._api_response("/api/host-names", query)
+
+    assert result["names"]["10.0.0.1"]["name"] == "laptop"
+    handler.server.reader.host_names.assert_called_once_with(query)
 
 
 @pytest.mark.parametrize(
@@ -988,6 +1421,149 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
     assert alert_page["total"] == 1
     assert alert_page["items"][0]["evidence"][0]["id"] == "evidence-1"
     assert host["alerts"][0]["threat_level"] == "high"
+
+
+def test_host_names_resolves_live_and_historical_identity(
+    tmp_path: Path,
+) -> None:
+    """Return bounded names for displayed IPs from live and saved data.
+
+    Parameters:
+        tmp_path: Temporary history database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.host_profiles_path = tmp_path / "missing-host-profiles.sqlite"
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [
+                (
+                    "10.0.0.1",
+                    1,
+                    json.dumps({"hostname": "saved-host"}),
+                ),
+                (
+                    "10.0.0.2",
+                    1,
+                    json.dumps({"dns": {"domains": ["device.local"]}}),
+                ),
+            ],
+        )
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [
+        "current-host",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        json.dumps({"domains": ["new.local"]}),
+        None,
+        None,
+        None,
+        None,
+    ]
+    reader.cache = Mock()
+    reader.cache.hget.return_value = "cached.example"
+
+    result = reader.host_names(
+        {
+            "ip": [
+                "10.0.0.1",
+                "10.0.0.2",
+                "10.0.0.3",
+                "2001:0DB8:0:0::5",
+                "invalid",
+            ]
+        }
+    )
+
+    assert result["names"] == {
+        "10.0.0.1": {"name": "current-host", "source": "Hostname"},
+        "10.0.0.2": {"name": "device.local", "source": "DNS"},
+        "10.0.0.3": {"name": "new.local", "source": "DNS"},
+        "2001:0DB8:0:0::5": {"name": "cached.example", "source": "rDNS"},
+    }
+    assert reader.redis.pipeline.return_value.hget.call_count == 12
+    reader.cache.hget.assert_called_once_with(
+        "IPsInfo:reverse_dns", "2001:db8::5"
+    )
+
+
+def test_host_names_prefers_saved_name_then_vendor(tmp_path: Path) -> None:
+    """Show a manual name or vendor beside IPs in alert labels.
+
+    Parameters:
+        tmp_path: Isolated history and permanent profile paths.
+    """
+    _module_factory = ModuleFactory()
+    profile_path = tmp_path / "permanent" / "hosts.sqlite"
+    network = {
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }
+    store = HostProfileStore(
+        profile_path, "run-one", lambda _: network, ["en0"]
+    )
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime="100",
+            type_="conn",
+            saddr="192.168.1.20",
+            daddr="8.8.8.8",
+        )
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = profile_path
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.execute(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            ("192.168.1.21", 1, json.dumps({"mac_vendor": "Samsung"})),
+        )
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [
+        "learned-name",
+        None,
+        "Apple",
+        None,
+        None,
+        None,
+    ]
+    reader.cache = Mock()
+    reader.cache.hget.return_value = None
+
+    saved = reader.save_host_annotation(
+        "192.168.1.20",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "My tablet",
+        "Kitchen iPad",
+    )
+    names = reader.host_names({"ip": ["192.168.1.20", "192.168.1.21"]})
+
+    assert saved["note"] == "Kitchen iPad"
+    assert names["names"]["192.168.1.20"] == {
+        "name": "My tablet",
+        "source": "User name",
+    }
+    assert names["names"]["192.168.1.21"] == {
+        "name": "Samsung device",
+        "source": "MAC vendor",
+    }
+
+    with pytest.raises(ValueError, match="profile is unavailable"):
+        reader.save_host_annotation(
+            "192.168.1.20",
+            "gateway:aa:bb:cc:dd:ee:02",
+            "Wrong network",
+            "Do not save",
+        )
 
 
 @pytest.mark.parametrize("redis_output", [None, "output/different"])
@@ -1836,6 +2412,260 @@ def test_evidence_sorting_is_server_side_and_stable(tmp_path) -> None:
     assert result["order"] == "asc"
 
 
+@pytest.mark.parametrize("group", ["", "host_type"])
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_evidence_score_sort_keeps_excluded_after_numbers(
+    tmp_path, group: str, order: str
+) -> None:
+    """Keep excluded evidence together after scored rows across pages.
+
+    Parameters:
+        tmp_path: Isolated durable evidence database.
+        group: Individual or host-and-type table layout.
+        order: Numeric score direction.
+    """
+    factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = factory.create_redis_publisher_obj().r
+    reader._runtime_whitelist_rules = Mock(return_value=[])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT, accumulated_ratl REAL, "
+            "whitelisted INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("low", 1, "10.0.0.1", "tw", "low", "A", "", 1, "{}", 1, 0),
+                ("high", 2, "10.0.0.1", "tw", "low", "B", "", 1, "{}", 5, 0),
+                (
+                    "excluded-low",
+                    3,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "C",
+                    "",
+                    1,
+                    "{}",
+                    0,
+                    1,
+                ),
+                (
+                    "excluded-high",
+                    4,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "D",
+                    "",
+                    1,
+                    "{}",
+                    8,
+                    1,
+                ),
+                (
+                    "mixed-scored",
+                    5,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "E",
+                    "",
+                    1,
+                    "{}",
+                    9,
+                    0,
+                ),
+                (
+                    "mixed-excluded",
+                    6,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "E",
+                    "",
+                    1,
+                    "{}",
+                    0,
+                    1,
+                ),
+            ],
+        )
+
+    query = {
+        "range": ["all"],
+        "sort": ["score"],
+        "order": [order],
+        "limit": ["2"],
+    }
+    if group:
+        query["group"] = [group]
+    items = []
+    seen_cursors = set()
+    while True:
+        page = reader.evidence(query)
+        assert page["sort"] == "score"
+        assert page["order"] == order
+        items.extend(page["items"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+        assert cursor not in seen_cursors
+        seen_cursors.add(cursor)
+        query["cursor"] = [cursor]
+
+    assert len(items) == (5 if group else 6)
+    assert len({item["id"] for item in items}) == len(items)
+    statuses = [item["whitelisted"] for item in items]
+    assert statuses == sorted(statuses)
+    numeric_scores = [
+        item["alert_score"] for item in items if not item["whitelisted"]
+    ]
+    assert numeric_scores == sorted(numeric_scores, reverse=order == "desc")
+
+    query.pop("cursor", None)
+    query["hide_excluded"] = ["1"]
+    visible = []
+    while True:
+        page = reader.evidence(query)
+        visible.extend(page["items"])
+        if not page["next_cursor"]:
+            break
+        query["cursor"] = [page["next_cursor"]]
+
+    assert page["full_total"] == 6
+    assert page["total"] == 3
+    assert len(visible) == 3
+    assert all(not item["whitelisted"] for item in visible)
+    if group:
+        mixed = next(item for item in visible if item["evidence_type"] == "E")
+        assert mixed["evidence_count"] == 1
+        assert mixed["alert_score"] == 9
+
+
+def test_host_flow_filter_hides_only_exclusively_excluded_evidence(
+    tmp_path,
+) -> None:
+    """Keep unlinked and scored flows while paging past excluded ones.
+
+    Parameters:
+        tmp_path: Isolated run and web history databases.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    uids = ["unlinked", "mixed", "scored", "excluded"]
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE flows (uid TEXT, flow TEXT, label TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [(uid, "{}", "") for uid in uids],
+        )
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "whitelisted INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE INDEX evidence_flows_uid_idx ON evidence_flows(uid)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?)",
+            [("excluded", 1), ("scored", 0)],
+        )
+        connection.executemany(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            [
+                ("excluded", "excluded"),
+                ("excluded", "mixed"),
+                ("scored", "mixed"),
+                ("scored", "scored"),
+            ],
+        )
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, "
+            "bytes, packets) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (uid, index, index, "10.0.0.1", "8.8.8.8", 1, 1)
+                for index, uid in enumerate(uids, start=1)
+            ],
+        )
+
+    assert reader.flows_for_host("10.0.0.1", {"range": ["all"]})["total"] == 4
+    query = {"range": ["all"], "hide_excluded": ["1"], "limit": ["2"]}
+    first = reader.flows_for_host("10.0.0.1", query)
+    query["cursor"] = [first["next_cursor"]]
+    second = reader.flows_for_host("10.0.0.1", query)
+
+    assert first["total"] == second["total"] == 3
+    assert [item["uid"] for item in first["items"] + second["items"]] == [
+        "scored",
+        "mixed",
+        "unlinked",
+    ]
+
+
+def test_p2p_evidence_page_shows_reporter_peer_ids(tmp_path) -> None:
+    """Recover reporter identities for existing P2P evidence in one query.
+
+    Parameters:
+        tmp_path: Isolated permanent trust database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.p2p_trust_path = tmp_path / "trustdb.db"
+    with sqlite3.connect(reader.p2p_trust_path) as connection:
+        connection.execute(
+            "CREATE TABLE reports (reporter_peerid TEXT, key_type TEXT, "
+            "reported_key TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO reports VALUES (?, ?, ?)",
+            [
+                ("peer-b", "ip", "8.8.8.8"),
+                ("peer-a", "ip", "8.8.8.8"),
+                ("peer-a", "ip", "8.8.8.8"),
+                ("other", "ip", "1.1.1.1"),
+            ],
+        )
+    items = [
+        {
+            "evidence_type": "MALICIOUS_IP_FROM_P2P_NETWORK",
+            "profile_ip": "8.8.8.8",
+        },
+        {
+            "evidence_type": "MALICIOUS_IP_FROM_P2P_NETWORK",
+            "profile_ip": "9.9.9.9",
+        },
+        {"evidence_type": "DNS_WITHOUT_CONNECTION", "profile_ip": "8.8.8.8"},
+    ]
+
+    reader._annotate_p2p_reporters(items)
+
+    assert items[0]["reporting_peers"] == ["peer-a", "peer-b"]
+    assert items[1]["reporting_peers"] == []
+    assert "reporting_peers" not in items[2]
+
+
 def test_host_evidence_excludes_mac_alias_profiles(
     tmp_path,
 ) -> None:
@@ -2182,6 +3012,68 @@ def test_hosts_filter_by_maximum_threat_level(tmp_path) -> None:
     assert result["items"][0]["ip"] == "10.0.0.1"
 
 
+def test_hosts_page_batches_identity_and_counts(tmp_path: Path) -> None:
+    """Load a host page with bounded queries instead of one call per row.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+    """
+    factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.redis = factory.logger
+    reader.cache = Mock()
+    reader.score_mode = "ratl"
+    reader.alert_threshold = 5.0
+    reader._attach_current_host_scores = Mock()
+    reader._live_host = Mock(side_effect=AssertionError("per-host Redis read"))
+    reader._host_load = Mock(side_effect=AssertionError("per-host SQL read"))
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE evidence (profile_ip TEXT)")
+        connection.execute("CREATE TABLE alerts (ip_alerted TEXT)")
+        connection.execute("INSERT INTO evidence VALUES ('10.0.0.1')")
+        connection.execute("INSERT INTO alerts VALUES ('10.0.0.2')")
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [
+                ("10.0.0.1", 1.0, json.dumps({"ip": "10.0.0.1"})),
+                ("10.0.0.2", 2.0, json.dumps({"ip": "10.0.0.2"})),
+            ],
+        )
+        connection.execute(
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, bytes, packets) "
+            "VALUES ('one', 1, 3, '10.0.0.1', '10.0.0.2', 100, 2)"
+        )
+    reader.redis.pipeline.return_value.execute.return_value = [
+        {},
+        None,
+        {"host_name": "computer"},
+        None,
+    ]
+    reader.cache.pipeline.return_value.execute.return_value = [
+        "printer.local",
+        None,
+        None,
+        None,
+    ]
+
+    page = reader.hosts({"range": ["all"]})
+
+    by_ip = {item["ip"]: item for item in page["items"]}
+    assert by_ip["10.0.0.1"]["hostname"] == "computer"
+    assert by_ip["10.0.0.2"]["dns_name"] == "printer.local"
+    assert by_ip["10.0.0.1"]["evidence_count"] == 1
+    assert by_ip["10.0.0.2"]["alert_count"] == 1
+    assert by_ip["10.0.0.1"]["load"]["outbound_bytes"] == 100
+    assert by_ip["10.0.0.2"]["load"]["inbound_bytes"] == 100
+    reader.redis.pipeline.return_value.execute.assert_called_once_with()
+    reader.cache.pipeline.return_value.execute.assert_called_once_with()
+
+
 def test_hosts_show_and_sort_real_past_peak_score(tmp_path) -> None:
     """Return full-run persisted score peaks and sort the complete inventory."""
     _module_factory = ModuleFactory()
@@ -2437,6 +3329,77 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     ]
 
 
+@pytest.mark.parametrize(
+    "connected_peers,peer_state,expected",
+    [
+        (["QmPeer"], {"connected": True}, {"QmPeer"}),
+        (["QmPeer"], {"connected": False}, set()),
+        (["QmPeer"], {}, set()),
+        ("invalid", {"connected": True}, set()),
+    ],
+)
+def test_legacy_connected_p2p_peers_require_consistent_state(
+    connected_peers: object,
+    peer_state: dict,
+    expected: set[str],
+) -> None:
+    """Use compatible connectivity only when both legacy records agree.
+
+    Parameters:
+        connected_peers: Decoded legacy connected-peer registry.
+        peer_state: Legacy state stored for the peer.
+        expected: Peer IDs considered connected.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.get.return_value = connected_peers
+
+    result = reader._legacy_connected_p2p_peers({"QmPeer": peer_state})
+
+    assert result == expected
+
+
+def test_p2p_uses_legacy_connectivity_without_connection_updates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Show active peers reported by the bundled legacy macOS Pigeon."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.side_effect = lambda key: {
+        "connected_peers": json.dumps(["QmLegacyPeer"]),
+    }.get(key)
+    reader.redis.smembers.return_value = set()
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": "2026-08-25T23:07:20"},
+        "peer_info": {
+            "QmLegacyPeer": json.dumps(
+                {
+                    "connected": True,
+                    "ip": "192.0.2.20",
+                    "reliability": 1.0,
+                    "timestamp": 1649445643,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["connected"] == 1
+    assert result["peers"][0]["peer_id"] == "QmLegacyPeer"
+    assert result["peers"][0]["connected"] is True
+    assert result["peers"][0]["connections"] == []
+
+
 def test_p2p_report_counter_is_not_limited_to_latest_500(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -2455,6 +3418,10 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
         connection.execute(
             "CREATE TABLE peer_ips "
             "(peerid TEXT, ipaddress TEXT, update_time REAL)"
+        )
+        connection.execute(
+            "INSERT INTO peer_ips VALUES (?, ?, ?)",
+            ("QmOldPeer", "192.0.2.25", 900),
         )
         connection.execute(
             "CREATE TABLE reports "
@@ -2500,6 +3467,10 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
 
     assert len(result["reports"]) == 200
     assert result["counts"]["reports_received"] == 501
+    peer_counts = {
+        peer["peer_id"]: peer["reports_received"] for peer in result["peers"]
+    }
+    assert peer_counts == {"QmRemotePeer": 501, "QmOldPeer": 0}
 
 
 def test_host_workspace_live_range_uses_run_wide_flow_clock(tmp_path) -> None:
@@ -2745,8 +3716,9 @@ def test_header_shows_monitored_interface_addresses() -> None:
     )
     assert 'id="run-addresses"' in index_source
     assert "data.host_addresses || {}" in app_source
-    assert '`IPv4: ${addresses.ipv4.join(", ")}`' in app_source
-    assert '`IPv6: ${addresses.ipv6.join(", ")}`' in app_source
+    assert '["IPv4", addresses.ipv4 || []]' in app_source
+    assert '["IPv6", addresses.ipv6 || []]' in app_source
+    assert "addressLine.append(hostIdentity(ip))" in app_source
 
 
 def test_header_uptime_ticks_from_server_baseline() -> None:

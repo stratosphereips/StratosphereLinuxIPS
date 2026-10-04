@@ -7,7 +7,7 @@ import requests
 from typing import Union, Dict, Optional, List, Tuple
 import time
 import bisect
-from multiprocessing import Lock
+from threading import Lock
 
 from modules.http_analyzer.set_evidence import SetEvidenceHelper
 from slips_files.common.flow_classifier import FlowClassifier

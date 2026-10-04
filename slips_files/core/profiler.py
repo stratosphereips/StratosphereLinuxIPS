@@ -15,9 +15,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
+from multiprocessing.synchronize import SEM_VALUE_MAX
 import queue
 import multiprocessing
 import time
+import threading
 from multiprocessing.synchronize import Event, Semaphore
 from typing import (
     List,
@@ -70,6 +72,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self,
         is_profiler_done_semaphore: Optional[Semaphore] = None,
         profiler_queue=None,
+        aid_queue: Optional[multiprocessing.Queue] = None,
         is_profiler_done_event: Optional[Event] = None,
         is_input_done_event: Optional[Event] = None,
         is_input_failed_event: Optional[Event] = None,
@@ -111,8 +114,17 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self.is_input_failed_event: Optional[Event] = is_input_failed_event
         self.input_handler_obj = None
         self.init_worker_manager()
-        # 30MBs max size of this queue to avoid growing forever in mem
-        self.aid_queue = multiprocessing.Queue(maxsize=30000000)
+        self.flow_retention_thread = threading.Thread(
+            target=self._run_flow_retention,
+            name="flow_retention_loop",
+            daemon=True,
+        )
+        # Bound the number of queued tasks to the platform semaphore limit.
+        self.aid_queue = (
+            aid_queue
+            if aid_queue is not None
+            else multiprocessing.Queue(maxsize=min(30000000, SEM_VALUE_MAX))
+        )
         # This starts a process that handles calculatng aid hash and stores
         # the conn fows in the db. why? because it's cpu intensive so we dont
         # want it to block the profiler workers
@@ -130,6 +142,31 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
         self.client_ips = conf.client_ips()
+        self.flow_retention_policy = conf.flow_retention_policy()
+
+    def _run_flow_retention(self) -> None:
+        """Prune small flow batches away from the profiler hot path."""
+        policy = self.flow_retention_policy
+        interval = int(policy["interval_seconds"])
+        ordinary_age = int(policy["ordinary_hours"]) * 3600
+        linked_age = int(policy["linked_days"]) * 86400
+        batch_size = int(policy["batch_size"])
+        while not self.did_all_workers_stop.wait(interval):
+            now = time.time()
+            try:
+                removed = self.db.maintain_flow_retention(
+                    now - ordinary_age,
+                    now - linked_age,
+                    batch_size=batch_size,
+                )
+                if removed:
+                    self.db.remove_flow_index_uids(removed)
+            except Exception as error:
+                self.print(
+                    f"Flow retention maintenance failed: {error}",
+                    0,
+                    1,
+                )
 
     def get_input_type(self, line: dict, input_type: str) -> str:
         """
@@ -156,7 +193,11 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             return InputType.ZEEK_TABS
         elif input_type == InputType.STDIN:
             # ok we're reading flows from stdin, but what type of flows?
-            return line["line_type"]
+            return (
+                InputType.BINETFLOW
+                if line["line_type"] == "argus"
+                else InputType.coerce(line["line_type"])
+            )
         else:
             # if it's none of the above cases
             # it's probably one of the following:
@@ -232,7 +273,6 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             # wait for all flows to be processed by the profiler processes.
             self.stop_profiler_workers()
 
-            self.aid_queue.put("stop")
             self.aid_manager.shutdown()
 
             used_queues = [
@@ -346,6 +386,9 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         for worker_id in range(self.num_of_initial_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
+
+        if self.args.interface and self.flow_retention_policy["enabled"]:
+            utils.start_thread(self.flow_retention_thread, self.db)
 
         self.is_profiler_done_starting_initial_workers_event.set()
 

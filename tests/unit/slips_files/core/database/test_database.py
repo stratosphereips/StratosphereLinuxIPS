@@ -7,6 +7,8 @@ from unittest.mock import (
 )
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
+import sys
 
 import redis
 import json
@@ -16,6 +18,7 @@ import pytest
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.structures.risk_weights import RiskWeight
 from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
@@ -33,6 +36,79 @@ def ensure_redis_options(monkeypatch: Any) -> None:
         None.
     """
     monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
+
+
+def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
+    """Clear active Redis data even when config disables normal flushing.
+
+    Parameters:
+        monkeypatch: Restores RedisDB class settings and argv.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=False)
+    assert db.rdb is not None
+    monkeypatch.setattr(RedisDB, "args", SimpleNamespace(keep_history=True))
+    monkeypatch.setattr(RedisDB, "config_flush_db", False)
+    monkeypatch.setattr(RedisDB, "flush_db", True)
+    monkeypatch.setattr(sys, "argv", ["slips.py"])
+
+    assert RedisDB._should_flush_db() is True
+
+
+def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
+    """Bound self-generated flow marks and separate retained Redis runs."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_connection(
+        123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+
+    key = (
+        "slips:own_connection:123:"
+        "tcp|192.0.2.10|51234|198.51.100.43|43"
+    )
+    source_key = "slips:own_sources:123"
+    pipe = db.r.pipeline.return_value
+    pipe.set.assert_called_once_with(key, "1", ex=3600)
+    pipe.sadd.assert_called_once_with(source_key, "192.0.2.10")
+    pipe.expire.assert_called_once_with(source_key, 3600)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    db.r.exists.return_value = 1
+    assert db.is_slips_own_source_ip(123, "192.0.2.10")
+    assert db.is_slips_own_connection(
+        123, "TCP", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+    db.r.exists.assert_called_once_with(key)
+
+
+def test_slips_own_service_port_window_expires() -> None:
+    """Bound external WHOIS traffic marks to a short run-specific window."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_service_port(
+        123, "tcp", 43, ["192.0.2.10", "2001:db8::10"]
+    )
+
+    key = "slips:own_service_port:123:tcp:43"
+    pipe = db.r.pipeline.return_value
+    pipe.sadd.assert_called_once_with(
+        key, "192.0.2.10", "2001:db8::10"
+    )
+    pipe.expire.assert_called_once_with(key, 10)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    assert db.is_slips_own_service_port(
+        123, "TCP", "43", "192.0.2.10"
+    )
+    db.r.sismember.assert_called_once_with(key, "192.0.2.10")
 
 
 # random values for testing
@@ -59,6 +135,35 @@ flow = Conn(
     dmac="",
     interface="eth0",
 )
+
+
+@pytest.mark.parametrize("method_name", ["add_flow", "add_altflow"])
+def test_flow_writes_do_not_profile_hosts_inline(method_name: str) -> None:
+    """Keep durable host profiling out of the flow ingestion path.
+
+    Parameters:
+        method_name: Flow or alternate-flow write to exercise.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.sqlite = factory.logger
+    db.rdb = Mock()
+    db.host_profiles = Mock()
+
+    result = getattr(db, method_name)(flow, profileid, twid)
+
+    if method_name == "add_flow":
+        db.sqlite.add_flow.assert_called_once_with(
+            flow, profileid, twid, label="benign"
+        )
+        db.rdb.add_flow.assert_called_once_with(
+            flow, profileid=profileid, twid=twid, label="benign"
+        )
+        assert result is db.rdb.add_flow.return_value
+    else:
+        db.sqlite.add_altflow.assert_called_once_with(flow, profileid, twid)
+        assert result is db.sqlite.add_altflow.return_value
+    db.host_profiles.observe_flow.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -445,6 +550,68 @@ def test_store_official_dns_server():
     assert db.is_official_dns_server("not-an-ip") is False
 
 
+def test_replace_network_state_clears_old_network_settings() -> None:
+    """A Wi-Fi switch replaces the subnet, gateway, host IP, and DNS."""
+    db = ModuleFactory().create_db_manager_obj(6395, flush_db=True)
+    first = {
+        "host_ip": "192.168.1.20",
+        "local_network": "192.168.1.0/24",
+        "gateway_ip": "192.168.1.1",
+        "gateway_mac": "aa:bb:cc:dd:ee:ff",
+        "dns_servers": ["192.168.1.53"],
+        "version": 1,
+    }
+    second = {
+        "host_ip": "10.0.0.25",
+        "local_network": "10.0.0.0/24",
+        "gateway_ip": "10.0.0.1",
+        "gateway_mac": "11:22:33:44:55:66",
+        "dns_servers": ["10.0.0.53"],
+        "version": 2,
+    }
+
+    db.replace_network_state("wlan0", first)
+    db.store_official_dns_server("192.168.1.54")
+    db.replace_network_state("wlan0", second)
+
+    assert db.get_network_state("wlan0") == second
+    assert db.get_host_ip("wlan0") == "10.0.0.25"
+    assert db.get_local_network("wlan0") == "10.0.0.0/24"
+    assert db.get_gateway_ip("wlan0") == "10.0.0.1"
+    assert db.get_gateway_mac("wlan0") == "11:22:33:44:55:66"
+    assert db.is_official_dns_server("10.0.0.53") is True
+    assert db.is_official_dns_server("192.168.1.53") is False
+    assert db.is_official_dns_server("192.168.1.54") is False
+
+    db.replace_network_state(
+        "wlan0",
+        {
+            **second,
+            "host_ip": "",
+            "local_network": "",
+            "gateway_ip": "",
+            "gateway_mac": "",
+            "dns_servers": [],
+            "version": 3,
+        },
+    )
+    assert db.get_host_ip("wlan0") is None
+    assert db.get_local_network("wlan0") is None
+    assert db.get_gateway_ip("wlan0") is None
+    assert db.is_official_dns_server("10.0.0.53") is False
+
+
+def test_gateway_fields_survive_separate_discovery() -> None:
+    """Preserve both gateway IP and MAC found by different modules."""
+    db = ModuleFactory().create_db_manager_obj(6396, flush_db=True)
+
+    db.set_default_gateway("IP", "10.0.0.1", "eth0")
+    db.set_default_gateway("MAC", "aa:bb:cc:dd:ee:ff", "eth0")
+
+    assert db.get_gateway_ip("eth0") == "10.0.0.1"
+    assert db.get_gateway_mac("eth0") == "aa:bb:cc:dd:ee:ff"
+
+
 def test_current_timewindow_wrappers_delegate_to_redis_db():
     """Test current-timewindow getters and increment delegation."""
     db = ModuleFactory().create_db_manager_obj(6385, flush_db=True)
@@ -724,3 +891,20 @@ def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
         "persistent_state", "p2p_trust_runtime", "trustdb.db"
     )
     assert os.path.isdir(os.path.join("persistent_state", "p2p_trust_runtime"))
+
+
+@pytest.mark.parametrize("add_version", [True, False])
+def test_publish_preserves_external_protocol_version(
+    add_version: bool,
+) -> None:
+    """Allow protocol adapters to preserve their external wire version.
+
+    Parameters:
+        add_version: Whether publishing should add Slips's version metadata.
+    """
+    db = ModuleFactory().create_redis_publisher_obj()
+    payload = json.dumps({"type": "tl2nl_alert", "version": 1, "data": {}})
+    db.publish("iris_internal", payload, add_version=add_version)
+    sent = json.loads(db.r.publish.call_args.args[1])
+    expected = Path("VERSION").read_text().strip() if add_version else 1
+    assert sent["version"] == expected

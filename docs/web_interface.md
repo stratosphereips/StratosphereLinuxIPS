@@ -1,6 +1,14 @@
 # Local web interface
 
-The web_interface module is a read-only technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
+The web_interface module is a technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
+
+Host addresses in the Overview, Alerts, Evidence, Firewall, ARP, and Hosts views,
+including IPs mentioned in evidence descriptions, appear with their stored
+hostname or cached DNS name. Addresses on the monitored
+computer are labeled **This device** with the system hostname. The header also
+shows **This device** and the hostname separately from the run name. When no name
+has been learned, the interface says **Name unknown** beside the IP. Name lookup
+uses bounded batches of addresses already visible in the current view.
 
 ## Start it
 
@@ -42,6 +50,89 @@ can reach that network interface over plain HTTP (no TLS).
 Prefer `bind: localhost` plus an SSH port-forward (`ssh -L 55000:localhost:55000
 <host>`) for remote access instead.
 
+When interface binding is used and the interface changes IPv4 address,
+the web listener restarts on the new address. The new URL appears in
+slips.log. The browser must reconnect there.
+
+
+Hover over a line or plotted point in the Overview, P2P, or Host charts to see
+that sample's full local date and time, series name, and value. The hover area
+is wider than the visible line so points are easier to inspect.
+
+## Live network changes
+
+When Slips monitors an interface, it checks that interface's current network
+settings every five seconds on Linux and macOS. The Overview page shows the
+current computer IP address, local subnet, router IP and MAC, DNS servers, connection
+state, and time of the last change for each monitored interface. A change is
+also written to `slips.log` with the old and new values.
+
+Slips reads addresses and prefixes from the interface, its router from the
+system route table, and DNS from `resolvectl` or NetworkManager on Linux and
+`scutil --dns` on macOS. If neither link-specific source is available, Slips
+uses the system resolver only when it monitors one interface. An unavailable
+value is shown as Unknown; Slips does not reuse the previous network's value.
+Alerts that require a known local subnet remain inactive until it is known.
+The ten most recent settings for each interface are retained in the current
+run so delayed flow records can be checked against the network active when
+they were captured. Older records with no matching settings are not judged
+against the wrong network.
+Saved captures and log files do not use the analysis computer's current Wi-Fi
+settings.
+If a live run's saved network snapshot falls behind the monitored interface,
+the Overview card reads the current interface settings directly. It labels
+that result as a live reading and keeps the saved change time visible. The
+saved history is updated by the Slips main process when it resumes.
+
+The Current network card also lets you enter a name such as `Home Wi-Fi` or
+`Office Ethernet`. Save an empty name to remove it. Names are stored in the
+permanent host profile database and appear on both the network card and
+matching permanent host profiles. When the router MAC is known, the name
+follows that network across Slips runs. If the router MAC is unavailable,
+the card explains that its name is scoped to the current run so two unrelated
+private networks are not combined. For a run with no earlier network changes,
+the same name is also applied to host records observed before the router MAC
+was learned.
+Each permanent profile section in the Host workspace has a **Name network**
+control for older run-scoped networks that cannot be matched safely to the
+current router. Naming one of those sections updates all hosts recorded under
+that same network identity.
+
+## Permanent host profiles
+
+Slips keeps identity clues in `host_profiles/hosts.sqlite` inside the configured
+`parameters.permanent_dir` (by default `permanent/`). This database survives
+individual output directories and Redis expiration. A separate `host_profile`
+module reads completed flow rows in small batches and writes this database
+asynchronously, including when the web interface is disabled. Host identity
+can therefore appear shortly after its traffic, without delaying flow
+analysis. The module limits its work rate and drains pending rows briefly
+on shutdown.
+The dedicated host profile directory is restricted to its owner because
+requested URLs can contain private information.
+
+The Host workspace shows up to 50 recently seen network profiles for its IP,
+with first and last observation times. It records hostnames learned from DHCP
+or profile updates, DNS answers, multicast DNS answers on port 5353, TLS SNI,
+HTTP Host, requested HTTP URLs, reverse DNS, ASN, public-IP country, and threat feed
+appearances. Each clue has its own first and last observation time and
+occurrence count. The Host workspace groups clues by source; each group can
+be expanded. Open groups stay open as live data refreshes. Private and
+unknown geolocation labels are omitted from the country group, including
+labels stored by older runs.
+
+Public IPs share one profile across runs. Private addresses are grouped by
+the observed router MAC when the address belongs to the monitored subnet. If
+Slips cannot identify the network, it keeps that address under the run's
+output directory identity so unrelated networks do not merge. Local profiles
+for the same IP appear as separate network sections in the Host workspace.
+Each section heading is explicitly labeled **Network**; its saved network name
+is separate from the host's **Your name** field. The current network's profile
+is shown first even if a recent run temporarily missed the router.
+The database stores at most 200 distinct values per clue type per host and
+network. Existing run history is not imported automatically; new observations
+populate the database.
+
 Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
 
 When a file or folder analysis finishes naturally, or after the first Ctrl-C stops a web-enabled live analysis, Slips asks `Slips analysis has stopped. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
@@ -72,7 +163,7 @@ The run database keeps raw traffic and durable detection relationships:
 output/<run>/databases/flows.sqlite
 ```
 
-It contains the existing unlimited flows and altflows rows, normalized evidence with its complete serialized record, evidence UUID to triggering flow UID relationships, and alert UUID to evidence UUID relationships. Evidence and alert relationships are written transactionally when Slips creates them, whether or not a browser is open.
+It contains recent flows and altflows, normalized evidence with its complete serialized record, evidence UUID to triggering flow UID relationships, and alert UUID to evidence UUID relationships. Evidence and alert relationships are written transactionally when Slips creates them, whether or not a browser is open. During live-interface runs, the background retention worker removes ordinary raw flows after 24 hours and raw flows linked to non-excluded evidence after 30 days by default. Detection records and their UID relationships remain available when the raw flow expires. These ages can be changed in `flow_retention` in `config/slips.yaml`.
 
 When an older run is opened after this upgrade, the module first backfills evidence and correlations still in Redis. Backfill runs only when Redis belongs to the same output directory. The web interface does not read `DisabledAlerts` or make its own suppression decisions. It presents the records and whitelist decisions Slips stored; deciding whether a detection should be generated belongs to the Slips detection and evidence pipeline. The module then consumes this file incrementally in bounded batches as a best-effort fallback for records that already expired:
 
@@ -113,7 +204,9 @@ All paths belong to this specific run. Nothing is written to a repository-level 
 
 ## Long-running behavior
 
-Slips never deletes raw flows automatically. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. Raw-flow history is limited only by available disk.
+For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires, and the evidence drawer explains when a linked UID has no raw record. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage.
+
+New run databases use incremental SQLite vacuuming so deleted raw pages can return to the filesystem. Existing databases reuse freed pages for future writes but do not shrink physically without a separate maintenance vacuum. Evidence and alert records are not expired by this flow policy, so they can still grow over a long unattended run.
 
 The browser never loads a complete run:
 
@@ -219,7 +312,7 @@ search applies to isolation state, transition history, and ARP evidence.
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, a compact per-peer reliability history chart with Live, 1-hour, 24-hour, 7-day, and full-history ranges, peer reports received during the current run, and bounded recent send/receive activity. An enabled module with zero connected peers is shown as healthy and listening.
 
-Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; the reports table is filtered using this run's analysis start time.
+Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; both the received-report total and each peer's received-report count include only reports from this run. Previously known peers remain visible as offline until a live authenticated connection is reported.
 
 Pigeon adds the running Slips version to every Go-to-Python message. The P2P module also accepts unversioned messages only on its dedicated local Pigeon channel so an older bundled binary cannot silently disconnect the data pipeline. Authenticated libp2p TCP 5-tuples are stored in Redis as individually expiring records and removed from live state on disconnect. The web tab derives connected/offline status from those same live records, while `peer_info` and the persistent trust database retain historical identity, reliability, peer-IP mappings, and reports. The local identity and listen address come from Pigeon's Redis `multiAddress`, with `p2p.log` used only as a fallback for older runs.
 
@@ -289,6 +382,29 @@ rule whenever those details can be reconstructed. Grouped Evidence and the
 host workspace show how many records were excluded. New runs persist this
 decision with the evidence in `flows.sqlite`; older active runs use Slips'
 existing `whitelisted_evidence` decision set while it remains available.
+When sorting the Evidence table by Slips score, excluded rows stay together
+after numeric scores in both ascending and descending order, including across
+pages. A host/type group with any excluded evidence follows the same rule
+because its score cell displays **Excluded**.
+
+The **Show excluded / Hide excluded** selector is shared by Alerts, Evidence,
+and the Host workspace. Hiding excluded records filters evidence before
+grouping and pagination; a host/type group still appears when it also contains
+scored evidence. In the Host workspace, historical traffic linked only to
+excluded evidence is hidden as well. Flows linked to scored evidence and flows
+with no evidence remain visible. Alerts are already formed only from scored
+evidence, so their list is unchanged. The selector changes displayed lists;
+stored records and run totals remain available when **Show excluded** is
+selected. Flows discarded by the profiler's flow whitelist were never stored
+and cannot appear in either view.
+
+New `MALICIOUS_IP_FROM_P2P_NETWORK` evidence names every peer ID that reported
+the address in its description. When the trust database has no reporter ID,
+the description explicitly says that the reporting peer is unavailable. The
+Evidence and Host tables also show **Reporting peers** for both new and older
+P2P evidence, using reporter IDs retained in the permanent P2P trust database.
+For older evidence, this column identifies peers that reported the same IP;
+the original evidence did not record which subset contributed to its score.
 
 The displayed score is not calculated by the web interface. For interface,
 standard-input, and CYST runs it is Slips' risk-adjusted accumulated threat
@@ -313,16 +429,27 @@ table, so the next selection starts a new investigation.
 
 ### Hosts
 
-The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. Inventory can be filtered by local/public scope and by the host's maximum threat level. Its current Slips score column reads the active time-window accumulator directly from Redis and retains the last snapshot for completed runs. The separate **Past peak Slips score** column shows the maximum real score persisted after evidence processing for that exact profile IP over the full run. Both values show the configured threshold and are sortable server-side.
+The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. It shows the MAC vendor beside the MAC address when Slips has identified one; otherwise the vendor cell shows a dash. Vendor names can be searched. Inventory can be filtered by local/public scope and by the host's maximum threat level. Its current Slips score column reads the active time-window accumulator directly from Redis and retains the last snapshot for completed runs. The separate **Past peak Slips score** column shows the maximum real score persisted after evidence processing for that exact profile IP over the full run. Both values show the configured threshold and are sortable server-side.
+
+An IP mentioned in Evidence can be a destination without its own Slips
+profile. Selecting such an IP shows an explanation in the Host workspace;
+when the captured configuration uses `analysis_direction: out`, it explains
+that Slips profiled only the source of the flow. It does not create a host
+profile for an address Slips ignored.
 
 Selecting a host opens a full-width workspace with:
 
+- a **Name this host** button beside **Your name** and **Your note** in the Identity and DNS card. It edits the current network's permanent host profile; editors for older network profiles remain in the Permanent host profile section. A saved user name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Clearing both fields removes the annotation. Local IPs on different networks keep separate annotations; public IPs use their public profile;
 - MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
 - compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs;
 - newest historical flows with cursor navigation into older traffic.
+
+IP labels throughout the web interface use the saved user name first, then a
+learned hostname, DNS or reverse DNS name, and finally the MAC vendor followed
+by “device” when no name is available. The IP stays visible beside the label.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
@@ -344,12 +471,14 @@ GET /api/metrics?range=...&max_points=...
 GET /api/alerts?...filters...&sort=...&order=...&cursor=...
 GET /api/evidence?...filters...&sort=...&order=...&cursor=...
 GET /api/hosts?...filters...&sort=...&order=...&cursor=...
+GET /api/host-names?ip=...
 GET /api/hosts/<ip>
 GET /api/hosts/<ip>/evidence?sort=...&order=...&cursor=...
 GET /api/hosts/<ip>/flows?limit=...&from=...&to=...&cursor=...
 GET /api/hosts/<ip>/traffic-summary?from=...&to=...&max_points=...
 GET /api/hosts/<ip>/score-history?range=...&from=...&to=...&max_points=...
 GET /api/evidence/<uuid>/flows
+POST /api/host-annotation
 ```
 
 Responses include bounded page metadata and selected ranges. Overview and identity include source freshness and indexing state. Request handlers use short-lived read-only SQLite connections so browser requests do not hold back WAL checkpoints.

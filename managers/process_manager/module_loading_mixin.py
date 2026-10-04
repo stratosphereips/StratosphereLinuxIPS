@@ -4,16 +4,15 @@
 # startup of detection modules for ProcessManager.
 import importlib
 import inspect
-import os
 import pkgutil
 import traceback
-from multiprocessing import Process
 from types import ModuleType
 from typing import List, Any, Dict, Iterator, Optional
 
 import modules
 from modules.supported_module_names import Modules
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.module_process import ModuleProcess
 from slips_files.core.evidence_handler import DEFAULT_EVIDENCE_HANDLER_WORKERS
 from slips_files.core.worker_manager_mixin import (
     NUM_INITIAL_PROFILER_WORKERS,
@@ -241,63 +240,6 @@ class ModuleLoadingMixin:
                     return member_object
         return None
 
-    def _run_module(
-        self,
-        module_name: str,
-        logger: Any,
-        output_dir: str,
-        redis_port: int,
-        termination_event: Any,
-        slips_args: Any,
-        conf: Any,
-        ppid: int,
-        bloom_filters_manager: Any,
-    ) -> None:
-        """
-        Entry point that runs inside a module's own (already forked)
-        process. Imports the module and constructs+runs its class here
-        instead of in the main process, so every module's import cost
-        is paid in parallel across processes instead of serially
-        blocking the rest of Slips startup. The module announces its
-        own startup once it knows its own description and real PID.
-
-        Parameters:
-            module_name: Fully qualified module name to import and run.
-            logger, output_dir, redis_port, termination_event,
-            slips_args, conf, ppid, bloom_filters_manager: Regular
-                IModule constructor arguments.
-        """
-        imported_module = self._import_module(module_name)
-        if imported_module is None:
-            return
-
-        module_class = self._find_module_class(imported_module)
-        if module_class is None:
-            return
-
-        instance = module_class(
-            logger,
-            output_dir,
-            redis_port,
-            termination_event,
-            slips_args,
-            conf,
-            ppid,
-            bloom_filters_manager,
-        )
-        # each module announces itself from its own process, so the
-        # only way to know how many have started so far is a counter
-        # shared through the db, not local process state. uses this
-        # module's own db connection - the one on self.main.db was
-        # inherited across the fork and isn't safe to share.
-        self.announce_started(
-            Modules(module_class.name),
-            os.getpid(),
-            module_class.description,
-            instance.db,
-        )
-        instance.run()
-
     def set_total_processes_to_start(self, will_load_modules: bool) -> None:
         """
         Compute and cache how many processes slips will start this run,
@@ -333,20 +275,17 @@ class ModuleLoadingMixin:
         enabled_module_names = self.get_enabled_module_names()
         for module_name in enabled_module_names:
             short_name = self._short_name(module_name)
-            process = Process(
-                target=self._run_module,
-                name=short_name,
-                args=(
-                    module_name,
-                    self.main.logger,
-                    self.main.args.output,
-                    self.main.redis_port,
-                    self.termination_event,
-                    self.main.args,
-                    self.main.conf,
-                    self.main.pid,
-                    self.main.bloom_filters_man,
-                ),
+            process = ModuleProcess(
+                module_name,
+                self.main.logger,
+                self.main.args.output,
+                self.main.redis_port,
+                self.termination_event,
+                self.main.args,
+                self.main.conf,
+                self.main.pid,
+                self.main.bloom_filters_man,
+                startup_total=self.total_processes_to_start,
             )
             process.start()
             self.main.db.store_pid(short_name, int(process.pid))

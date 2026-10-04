@@ -313,6 +313,12 @@ class DBManager:
     def get_local_network(self, *args, **kwargs):
         return self.rdb.get_local_network(*args, **kwargs)
 
+    def get_network_state(self, *args, **kwargs):
+        return self.rdb.get_network_state(*args, **kwargs)
+
+    def replace_network_state(self, *args, **kwargs):
+        return self.rdb.replace_network_state(*args, **kwargs)
+
     def get_total_recognized_localnets(self, *args, **kwargs):
         return self.rdb.get_total_recognized_localnets(*args, **kwargs)
 
@@ -339,6 +345,21 @@ class DBManager:
 
     def get_input_type(self, *args, **kwargs):
         return self.rdb.get_input_type(*args, **kwargs)
+
+    def record_slips_own_connection(self, *args, **kwargs):
+        return self.rdb.record_slips_own_connection(*args, **kwargs)
+
+    def is_slips_own_source_ip(self, *args, **kwargs):
+        return self.rdb.is_slips_own_source_ip(*args, **kwargs)
+
+    def is_slips_own_connection(self, *args, **kwargs):
+        return self.rdb.is_slips_own_connection(*args, **kwargs)
+
+    def record_slips_own_service_port(self, *args, **kwargs):
+        return self.rdb.record_slips_own_service_port(*args, **kwargs)
+
+    def is_slips_own_service_port(self, *args, **kwargs):
+        return self.rdb.is_slips_own_service_port(*args, **kwargs)
 
     def get_interface(self, *args, **kwargs):
         return self.rdb.get_interface(*args, **kwargs)
@@ -1518,6 +1539,12 @@ class DBManager:
 
     def add_altflow(self, *args, **kwargs):
         return self.sqlite.add_altflow(*args, **kwargs)
+
+    def maintain_flow_retention(self, *args, **kwargs):
+        return self.sqlite.maintain_flow_retention(*args, **kwargs)
+
+    def remove_flow_index_uids(self, *args, **kwargs):
+        return self.sqlite.remove_flow_index_uids(*args, **kwargs)
 
     def insert(self, *args, **kwargs):
         return self.sqlite.insert(*args, **kwargs)

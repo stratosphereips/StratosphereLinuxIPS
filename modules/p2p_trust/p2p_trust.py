@@ -5,11 +5,11 @@ import os
 import shutil
 import signal
 import subprocess
+import netifaces
 import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
-import socket
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
@@ -176,13 +176,31 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
         self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.rendezvous: str = conf.read_configuration(
+            "local_p2p", "rendezvous", "slips"
+        )
 
-    def get_local_IP(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+    def get_local_IP(self) -> str:
+        """Return the capture interface's IPv4 address without Internet access.
+
+        Returns:
+            IPv4 address on the selected interface or default-route interface.
+        """
+        interface = self.args.interface
+        if not interface:
+            gateway = (
+                netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+            )
+            interface = gateway[1] if gateway else None
+        if interface:
+            for address in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                if address.get("addr"):
+                    return address["addr"]
+        raise ValueError(
+            "Local P2P requires an interface with an IPv4 address."
+        )
 
     def _configure(self):
         self.trust_db = self.db.trust_db
@@ -409,6 +427,29 @@ class Trust(IModule):
         # except Exception as e:
         #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
 
+    def is_msg_version_compatible(self, message: dict, channel: str) -> bool:
+        """Validate Go envelopes separately from versioned Slips messages.
+
+        Parameters:
+            message: Redis message from a subscribed channel.
+            channel: Channel on which the message was received.
+
+        Returns:
+            Whether the message matches the channel's expected protocol.
+        """
+        if message and channel == self.gopy_channel:
+            try:
+                payload = json.loads(message["data"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            return (
+                isinstance(payload, dict)
+                and payload.get("message_type")
+                in ("peer_update", "connection_update", "go_data")
+                and isinstance(payload.get("message_contents"), dict)
+            )
+        return super().is_msg_version_compatible(message, channel)
+
     # def update_callback(self, msg: Dict):
     #     try:
     #         data = msg["data"]
@@ -431,7 +472,7 @@ class Trust(IModule):
 
     def set_evidence_malicious_ip(
         self, ip_info: dict, threat_level: float, confidence: float
-    ):
+    ) -> None:
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
@@ -451,6 +492,21 @@ class Trust(IModule):
         :param confidence: how confident the network opinion is about this opinion
         """
         attacker_ip: str = ip_info.get("ip")
+        peer_ids = sorted(
+            {
+                str(report[0])
+                for report in (
+                    self.trust_db.get_reports_for_ip(attacker_ip) or []
+                )
+                if report[0]
+            }
+        )
+        peer_source = (
+            f" Reported by peer{'s' if len(peer_ids) != 1 else ''}: "
+            f"{', '.join(peer_ids)}."
+            if peer_ids
+            else " Reporting peer unavailable."
+        )
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
 
@@ -461,12 +517,12 @@ class Trust(IModule):
         if "src" in ip_info.get("ip_state"):
             description = (
                 f"Connection from blacklisted IP {attacker_ip} "
-                f"to {saddr} Source: Slips P2P network."
+                f"to {saddr} Source: Slips P2P network.{peer_source}"
             )
         else:
             description = (
                 f"Connection to blacklisted IP {attacker_ip} "
-                f"from {saddr} Source: Slips P2P network."
+                f"from {saddr} Source: Slips P2P network.{peer_source}"
             )
 
         for ip in (saddr, attacker_ip):
@@ -622,6 +678,55 @@ class Trust(IModule):
         """
         pass
 
+    def _pigeon_supports_flag(self, flag: str) -> bool:
+        """Check whether the installed Pigeon binary accepts a CLI flag.
+
+        Parameters:
+            flag: Command-line flag to look for in Pigeon's help output.
+
+        Returns:
+            True when the binary advertises the flag, otherwise False.
+        """
+        try:
+            result = subprocess.run(
+                [str(self.pigeon_binary), "-help"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return flag in f"{result.stdout}\n{result.stderr}"
+
+    def _get_pigeon_command(self) -> list[str]:
+        """Build a command compatible with the installed Pigeon binary.
+
+        Returns:
+            Sanitized Pigeon command and arguments.
+        """
+        params = {
+            "-port": str(self.port),
+            "-host": self.host,
+            "-rendezvous": self.rendezvous,
+            "-key-file": self.pigeon_key_file,
+            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
+            "-redis-auth-conf": get_redis_auth_conf_path(),
+            "-redis-channel-pygo": self.pygo_channel_raw,
+            "-redis-channel-gopy": self.gopy_channel_raw,
+        }
+        if self._pigeon_supports_flag("-slips-version"):
+            params["-slips-version"] = self.slips_version
+        else:
+            self.print(
+                "Warning: The installed p2p4slips binary does not support "
+                "-slips-version; starting in legacy compatibility mode."
+            )
+
+        return [str(self.pigeon_binary)] + [
+            utils.sanitize(item) for pair in params.items() for item in pair
+        ]
+
     def evaluate_blame_report(
         self, reporter: str, report_time: int, data: dict
     ):
@@ -726,31 +831,21 @@ class Trust(IModule):
             )
             return
 
-        params = {
-            "-port": str(self.port),
-            "-host": self.host,
-            "-key-file": self.pigeon_key_file,
-            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
-            # slips starts every redis-server with the shared requirepass
-            # from this conf, so the pigeon reads its password from it too
-            "-redis-auth-conf": get_redis_auth_conf_path(),
-            "-redis-channel-pygo": self.pygo_channel_raw,
-            "-redis-channel-gopy": self.gopy_channel_raw,
-            "-slips-version": self.slips_version,
-        }
         self.print(f"P2P is listening on {self.host} port {self.port}.")
-        executable = [self.pigeon_binary] + [
-            utils.sanitize(item) for pair in params.items() for item in pair
-        ]
+        executable = self._get_pigeon_command()
 
         if self.create_p2p_logfile:
-            outfile = open(self.pigeon_logfile, "+w")
+            pigeon_log_path = self.pigeon_logfile
         else:
-            outfile = open(os.devnull, "+w")
+            pigeon_log_path = os.devnull
+        outfile = open(pigeon_log_path, "+w")
 
         try:
             self.pigeon = subprocess.Popen(
-                executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
+                executable,
+                cwd=self.p2p_trust_runtime_dir,
+                stdout=outfile,
+                stderr=subprocess.STDOUT,
             )
         except OSError as error:
             if error.errno != errno.ENOEXEC:
@@ -767,18 +862,34 @@ class Trust(IModule):
                 return
 
             try:
+                executable = self._get_pigeon_command()
                 self.pigeon = subprocess.Popen(
                     executable,
                     cwd=self.p2p_trust_runtime_dir,
                     stdout=outfile,
+                    stderr=subprocess.STDOUT,
                 )
             except OSError as retry_error:
                 self.print(
                     "Warning: Failed to start p2p4slips after rebuilding. "
                     f"Error: {retry_error}"
                 )
+                return
 
-    def shutdown_gracefully(self):
+        time.sleep(0.1)
+        return_code = self.pigeon.poll()
+        if return_code is not None:
+            self.print(
+                "Warning: p2p4slips exited during startup with return code "
+                f"{return_code}. Check {pigeon_log_path}."
+            )
+            self.pigeon = None
+            return
+
+        self.print(f"P2P is listening on {self.host} port {self.port}.")
+
+    def shutdown_gracefully(self) -> None:
+        """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
@@ -840,6 +951,14 @@ class Trust(IModule):
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
+    def should_stop(self) -> bool:
+        """Stop peer callbacks as soon as Slips begins shutting down.
+
+        Returns:
+            True when the shared termination event is set.
+        """
+        return self.termination_event.is_set()
+
     def main(self):
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
@@ -884,3 +1003,6 @@ class Trust(IModule):
 
         except Exception:
             pass
+        # Channel reads are nonblocking. Yield between polls so an idle
+        # P2P module does not consume a CPU core.
+        self.termination_event.wait(0.05)

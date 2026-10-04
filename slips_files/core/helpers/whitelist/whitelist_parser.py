@@ -106,8 +106,28 @@ class WhitelistParser:
             return
         self.whitelisted_mac[mac] = info
 
-    def update_whitelisted_ips(self, ip: str, info: Dict[str, str]):
-        if not (validators.ipv6(ip) or validators.ipv4(ip)):
+    def update_whitelisted_ips(self, ip: str, info: Dict[str, str]) -> None:
+        """Store an IP rule, optionally scoped to a port.
+
+        :param ip: IPv4, IPv6, IPv4:port, [IPv6]:port, or *:port.
+        :param info: Direction and ignore type for the rule.
+        """
+        if validators.ipv6(ip) or validators.ipv4(ip):
+            self.whitelisted_ips[ip] = info
+            return
+
+        if ip.startswith("["):
+            address, separator, port = ip[1:].partition("]:")
+            valid_address = separator and validators.ipv6(address)
+        else:
+            address, separator, port = ip.rpartition(":")
+            valid_address = separator and (
+                address == "*" or validators.ipv4(address)
+            )
+
+        if not valid_address or not port.isdecimal():
+            return
+        if not 0 <= int(port) <= 65535 or str(int(port)) != port:
             return
         self.whitelisted_ips[ip] = info
 

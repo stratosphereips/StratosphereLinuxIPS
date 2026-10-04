@@ -34,13 +34,18 @@ class IPAnalyzer(IWhitelistAnalyzer):
         return flow.answers if flow.type_ == "dns" else []
 
     def is_whitelisted(
-        self, ip: str, direction: Direction, what_to_ignore: str
+        self,
+        ip: str,
+        direction: Direction,
+        what_to_ignore: str,
+        port: int | str | None = None,
     ) -> bool:
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         :param ip: ip to check if whitelisted
         :param direction: is the given ip a srcip or a dstip
         :param what_to_ignore: can be 'flows' or 'alerts'
+        :param port: Port on the same side as the IP, if available.
         """
         if not self.enable_local_whitelist:
             return False
@@ -48,29 +53,31 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not utils.is_valid_ip(ip):
             return False
 
-        if ip not in self.manager.bloom_filters.ips:
-            # defnitely not whitelisted
+        candidates = [ip]
+        if port is not None and str(port).isdecimal():
+            port_number = int(port)
+            if 0 <= port_number <= 65535:
+                address = f"[{ip}]" if ":" in ip else ip
+                candidates.append(f"{address}:{port_number}")
+                candidates.append(f"*:{port_number}")
+
+        for candidate in candidates:
+            if candidate not in self.manager.bloom_filters.ips:
+                self.bf_hits += 1
+                continue
+
+            ip_info: str | None = self.db.is_whitelisted(candidate, "IPs")
+            if not ip_info:
+                self.bf_misses += 1
+                continue
+
             self.bf_hits += 1
-            return False
+            rule: Dict[str, str] = json.loads(ip_info)
+            if not self.match.direction(direction, rule["from"]):
+                continue
+            if self.match.what_to_ignore(
+                what_to_ignore, rule["what_to_ignore"]
+            ):
+                return True
 
-        ip_info: str | None = self.db.is_whitelisted(ip, "IPs")
-        # reaching here means ip is in the bloom filter
-        if not ip_info:
-            # bloom filter FP
-            self.bf_misses += 1
-            return False
-
-        self.bf_hits += 1
-        ip_info: Dict[str, str] = json.loads(ip_info)
-        # Check if we should ignore src or dst alerts from this ip
-        # from_ can be: src, dst, both
-        # what_to_ignore can be: alerts or flows or both
-        whitelist_direction: str = ip_info["from"]
-        if not self.match.direction(direction, whitelist_direction):
-            return False
-
-        ignore: str = ip_info["what_to_ignore"]
-        if not self.match.what_to_ignore(what_to_ignore, ignore):
-            return False
-
-        return True
+        return False
