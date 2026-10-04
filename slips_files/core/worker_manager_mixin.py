@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import multiprocessing
 import time
 import threading
 from multiprocessing import Process
@@ -32,7 +31,7 @@ class WorkerManagerMixin:
         self.workers: List[ProfilerWorker] = []
         # is set by this module to indicate to the monitor thread that
         # workers stopped.
-        self.did_all_workers_stop = multiprocessing.Event()
+        self.did_all_workers_stop = threading.Event()
         self.last_worker_id = -1
         self.active_profiler_workers = 0
         self.num_of_initial_profiler_workers = NUM_INITIAL_PROFILER_WORKERS
