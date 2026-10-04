@@ -1402,6 +1402,8 @@ class RunDataReader:
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            if self._query_value(query, "hide_excluded") == "1":
+                clauses.append(f"{whitelist_expression} = 0")
             if start is not None:
                 clauses.append("evidence_time >= ?")
                 params.append(start)
@@ -1465,6 +1467,14 @@ class RunDataReader:
                 },
                 "time",
             )
+            if sort_key == "score":
+                # A group displaying Excluded belongs after every numeric
+                # score, even if some evidence in that group was scored.
+                excluded_value = "1e308" if direction == "ASC" else "-1e308"
+                sort_expression = (
+                    "CASE WHEN persisted_whitelisted_count > 0 "
+                    f"THEN {excluded_value} ELSE COALESCE(alert_score, 0) END"
+                )
             total = int(
                 connection.execute(
                     f"SELECT COUNT(*) AS count FROM ({grouped_sql})",
@@ -1572,6 +1582,17 @@ class RunDataReader:
                 score_expression = self._detector_score_expression(
                     connection, "evidence"
                 )
+                evidence_columns = {
+                    str(column[1])
+                    for column in connection.execute(
+                        "PRAGMA table_info(evidence)"
+                    ).fetchall()
+                }
+                whitelist_expression = (
+                    "COALESCE(evidence.whitelisted, 0)"
+                    if "whitelisted" in evidence_columns
+                    else "0"
+                )
                 connection.create_function(
                     "evidence_module", 1, self._module_for_evidence
                 )
@@ -1603,8 +1624,19 @@ class RunDataReader:
                     },
                     "time",
                 )
+                if sort_key == "score":
+                    excluded_value = (
+                        "1e308" if direction == "ASC" else "-1e308"
+                    )
+                    sort_expression = (
+                        f"CASE WHEN {whitelist_expression} > 0 "
+                        f"THEN {excluded_value} "
+                        f"ELSE COALESCE({score_expression}, 0) END"
+                    )
                 clauses = ["1 = 1"]
                 params: List[Any] = []
+                if self._query_value(query, "hide_excluded") == "1":
+                    clauses.append(f"{whitelist_expression} = 0")
                 if start is not None:
                     clauses.append("evidence_time >= ?")
                     params.append(start)
@@ -1683,6 +1715,10 @@ class RunDataReader:
         except sqlite3.Error:
             records = self._redis_evidence()
             full_total = len(records)
+            if self._query_value(query, "hide_excluded") == "1":
+                records = [
+                    item for item in records if not item.get("whitelisted")
+                ]
             latest = max(
                 (float(item.get("timestamp") or 0) for item in records),
                 default=0,
@@ -3026,13 +3062,36 @@ class RunDataReader:
         if end is not None:
             clauses.append("event_time <= ?")
             params.append(end)
-        if cursor:
-            clauses.append("(event_time < ? OR (event_time = ? AND uid < ?))")
-            params.extend([cursor[0], cursor[0], cursor[1]])
-        where = " AND ".join(clauses)
         with connect_history(self.history_path, read_only=True) as history:
-            count_clauses = clauses[:-1] if cursor else clauses
-            count_params = params[:-3] if cursor else params
+            if self._query_value(query, "hide_excluded") == "1":
+                history.execute(
+                    "ATTACH DATABASE ? AS run_db",
+                    (f"file:{self.sqlite_path}?mode=ro",),
+                )
+                evidence_columns = {
+                    str(column[1])
+                    for column in history.execute(
+                        "PRAGMA run_db.table_info(evidence)"
+                    ).fetchall()
+                }
+                if "whitelisted" in evidence_columns:
+                    clauses.append(
+                        "(NOT EXISTS (SELECT 1 FROM run_db.evidence_flows ef "
+                        "JOIN run_db.evidence e ON e.evidence_id = ef.evidence_id "
+                        "WHERE ef.uid = flow_index.uid AND e.whitelisted = 1) "
+                        "OR EXISTS (SELECT 1 FROM run_db.evidence_flows ef "
+                        "JOIN run_db.evidence e ON e.evidence_id = ef.evidence_id "
+                        "WHERE ef.uid = flow_index.uid "
+                        "AND COALESCE(e.whitelisted, 0) = 0))"
+                    )
+            count_clauses = list(clauses)
+            count_params = list(params)
+            if cursor:
+                clauses.append(
+                    "(event_time < ? OR (event_time = ? AND uid < ?))"
+                )
+                params.extend([cursor[0], cursor[0], cursor[1]])
+            where = " AND ".join(clauses)
             total = history.execute(
                 f"SELECT COUNT(*) AS count FROM flow_index WHERE "
                 f"{' AND '.join(count_clauses)}",
