@@ -131,6 +131,7 @@ def test_start_profiler_process():
                 process_manager.is_profiler_done_semaphore
             ),
             profiler_queue=process_manager.profiler_queue,
+            aid_queue=process_manager.aid_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
             is_input_failed_event=process_manager.is_input_failed_event,
@@ -224,6 +225,8 @@ def test_start_evidence_process(output_dir, redis_port):
             process_manager.main.conf,
             process_manager.main.pid,
             process_manager.main.bloom_filters_man,
+            evidence_worker_queue=process_manager.evidence_worker_queue,
+            evidence_logger_q=process_manager.evidence_logger_q,
             total_processes_to_start=process_manager.total_processes_to_start,
         )
         mock_evidence_process.start.assert_called_once()
