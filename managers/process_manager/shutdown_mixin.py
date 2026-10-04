@@ -777,5 +777,8 @@ class ShutdownMixin:
             # children have stopped so their pipe handles do not survive
             # until interpreter shutdown.
             self.profiler_queue.close()
+            self.aid_queue.close()
+            self.evidence_worker_queue.close()
+            self.evidence_logger_q.close()
             self.main.logger._startup_queue.close()
         return None
