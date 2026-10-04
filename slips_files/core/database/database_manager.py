@@ -1540,6 +1540,12 @@ class DBManager:
     def add_altflow(self, *args, **kwargs):
         return self.sqlite.add_altflow(*args, **kwargs)
 
+    def maintain_flow_retention(self, *args, **kwargs):
+        return self.sqlite.maintain_flow_retention(*args, **kwargs)
+
+    def remove_flow_index_uids(self, *args, **kwargs):
+        return self.sqlite.remove_flow_index_uids(*args, **kwargs)
+
     def insert(self, *args, **kwargs):
         return self.sqlite.insert(*args, **kwargs)
 

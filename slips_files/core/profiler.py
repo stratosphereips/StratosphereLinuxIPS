@@ -19,6 +19,7 @@ from multiprocessing.synchronize import SEM_VALUE_MAX
 import queue
 import multiprocessing
 import time
+import threading
 from multiprocessing.synchronize import Event, Semaphore
 from typing import (
     List,
@@ -113,6 +114,11 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self.is_input_failed_event: Optional[Event] = is_input_failed_event
         self.input_handler_obj = None
         self.init_worker_manager()
+        self.flow_retention_thread = threading.Thread(
+            target=self._run_flow_retention,
+            name="flow_retention_loop",
+            daemon=True,
+        )
         # Bound the number of queued tasks to the platform semaphore limit.
         self.aid_queue = (
             aid_queue
@@ -136,6 +142,31 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
         self.client_ips = conf.client_ips()
+        self.flow_retention_policy = conf.flow_retention_policy()
+
+    def _run_flow_retention(self) -> None:
+        """Prune small flow batches away from the profiler hot path."""
+        policy = self.flow_retention_policy
+        interval = int(policy["interval_seconds"])
+        ordinary_age = int(policy["ordinary_hours"]) * 3600
+        linked_age = int(policy["linked_days"]) * 86400
+        batch_size = int(policy["batch_size"])
+        while not self.did_all_workers_stop.wait(interval):
+            now = time.time()
+            try:
+                removed = self.db.maintain_flow_retention(
+                    now - ordinary_age,
+                    now - linked_age,
+                    batch_size=batch_size,
+                )
+                if removed:
+                    self.db.remove_flow_index_uids(removed)
+            except Exception as error:
+                self.print(
+                    f"Flow retention maintenance failed: {error}",
+                    0,
+                    1,
+                )
 
     def get_input_type(self, line: dict, input_type: str) -> str:
         """
@@ -355,6 +386,9 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         for worker_id in range(self.num_of_initial_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
+
+        if self.args.interface and self.flow_retention_policy["enabled"]:
+            utils.start_thread(self.flow_retention_thread, self.db)
 
         self.is_profiler_done_starting_initial_workers_event.set()
 

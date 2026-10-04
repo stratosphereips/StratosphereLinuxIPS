@@ -455,6 +455,42 @@ class ConfigParser(object):
             "parameters", "delete_zeek_files", False
         )
 
+    def flow_retention_policy(self) -> dict[str, int | bool]:
+        """Read bounded live-flow retention settings.
+
+        Returns:
+            Enable flag, ordinary and linked ages, batch size, and cadence.
+        """
+        defaults = {
+            "ordinary_hours": 24,
+            "linked_days": 30,
+            "batch_size": 500,
+            "interval_seconds": 60,
+        }
+        policy: dict[str, int | bool] = {
+            "enabled": self.read_configuration(
+                "flow_retention", "enabled", True
+            )
+            is True
+        }
+        limits = {
+            "ordinary_hours": (1, 24 * 365),
+            "linked_days": (1, 3650),
+            "batch_size": (1, 800),
+            "interval_seconds": (10, 3600),
+        }
+        for key, default in defaults.items():
+            raw = self.read_configuration("flow_retention", key, default)
+            try:
+                value = int(raw)
+            except (TypeError, ValueError):
+                value = default
+            lower, upper = limits[key]
+            policy[key] = value if lower <= value <= upper else default
+        if policy["linked_days"] * 24 < policy["ordinary_hours"]:
+            policy["linked_days"] = (policy["ordinary_hours"] + 23) // 24
+        return policy
+
     def store_zeek_files_copy(self):
         return self.read_configuration(
             "parameters", "store_a_copy_of_zeek_files", True

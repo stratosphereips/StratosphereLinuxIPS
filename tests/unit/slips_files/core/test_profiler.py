@@ -25,6 +25,29 @@ def test_mark_process_as_done_processing(monkeypatch):
     profiler.is_profiler_done_event.set.assert_called_once()
 
 
+def test_flow_retention_runs_in_bounded_background_pass() -> None:
+    """Keep SQLite deletion outside the profiler's flow processing path."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow_retention_policy = {
+        "enabled": True,
+        "ordinary_hours": 24,
+        "linked_days": 30,
+        "batch_size": 500,
+        "interval_seconds": 60,
+    }
+    profiler.did_all_workers_stop = Mock()
+    profiler.did_all_workers_stop.wait.side_effect = [False, True]
+    profiler.db.maintain_flow_retention.return_value = ["old-flow"]
+
+    with patch("slips_files.core.profiler.time.time", return_value=10000000):
+        profiler._run_flow_retention()
+
+    profiler.db.maintain_flow_retention.assert_called_once_with(
+        9913600, 7408000, batch_size=500
+    )
+    profiler.db.remove_flow_index_uids.assert_called_once_with(["old-flow"])
+
+
 @pytest.mark.parametrize(
     "msg_from_queue, handler_obj, expected_start_workers",
     [
