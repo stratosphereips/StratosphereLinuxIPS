@@ -2272,6 +2272,14 @@ class RunDataReader:
         ips = list(dict.fromkeys(requested.values()))
         if not ips:
             return {"names": {}}
+        annotations = HostProfileStore.annotations_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            ips,
+        )
 
         snapshots: Dict[str, Dict[str, Any]] = {}
         try:
@@ -2295,6 +2303,7 @@ class RunDataReader:
             for ip in ips:
                 pipeline.hget(f"profile_{ip}", "host_name")
                 pipeline.hget("DNSresolution", ip)
+                pipeline.hget(f"profile_{ip}", "MAC_vendor")
             live_identity = pipeline.execute()
         except (AttributeError, redis.RedisError):
             live_identity = []
@@ -2302,17 +2311,21 @@ class RunDataReader:
         names: Dict[str, Dict[str, str]] = {}
         for index, ip in enumerate(ips):
             snapshot = snapshots.get(ip, {})
+            annotation = annotations.get(ip, {})
             live_name = (
-                live_identity[index * 2]
-                if index * 2 < len(live_identity)
+                live_identity[index * 3]
+                if index * 3 < len(live_identity)
                 else ""
             )
-            name = str(live_name or snapshot.get("hostname") or "")
-            source = "Hostname" if name else ""
+            name = str(annotation.get("name") or "")
+            source = "User name" if name else ""
+            if not name:
+                name = str(live_name or snapshot.get("hostname") or "")
+                source = "Hostname" if name else ""
             if not name:
                 live_dns = (
-                    live_identity[index * 2 + 1]
-                    if index * 2 + 1 < len(live_identity)
+                    live_identity[index * 3 + 1]
+                    if index * 3 + 1 < len(live_identity)
                     else None
                 )
                 dns = self._loads(live_dns, {}) or snapshot.get("dns") or {}
@@ -2333,6 +2346,15 @@ class RunDataReader:
                 if reverse_dns:
                     name = str(reverse_dns)
                     source = "rDNS"
+            if not name:
+                vendor = (
+                    live_identity[index * 3 + 2]
+                    if index * 3 + 2 < len(live_identity)
+                    else ""
+                ) or snapshot.get("mac_vendor")
+                if vendor:
+                    name = f"{str(vendor).strip()} device"
+                    source = "MAC vendor"
             names[ip] = {"name": name, "source": source}
         return {"names": {value: names[ip] for value, ip in requested.items()}}
 
@@ -2710,6 +2732,14 @@ class RunDataReader:
             counts = self._host_page_counts(page_ips)
             identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
+        annotations = HostProfileStore.annotations_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            page_ips,
+        )
         for row in page_rows:
             ip = str(row["ip"])
             if fast_page:
@@ -2779,6 +2809,9 @@ class RunDataReader:
                 host.update(self._ip_context_for_ip(ip, host.get("dns")))
                 host["evidence_count"] = self._profile_evidence_count(ip)
                 host["alert_count"] = self._profile_alert_count(ip)
+            annotation = annotations.get(ip, {})
+            host["user_name"] = annotation.get("name", "")
+            host["user_note"] = annotation.get("note", "")
             items.append(host)
         self._attach_current_host_scores(items)
         next_cursor = (
@@ -2907,6 +2940,12 @@ class RunDataReader:
             ),
             ip,
         )
+        if host["permanent_profiles"]:
+            host["user_name"] = host["permanent_profiles"][0]["user_name"]
+            host["user_note"] = host["permanent_profiles"][0]["user_note"]
+        else:
+            host["user_name"] = ""
+            host["user_note"] = ""
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
         alert_total = 0
         for address in host_ips:
@@ -3816,6 +3855,52 @@ class RunDataReader:
             self.host_profiles_path, network_id, name
         )
         return {"network_id": network_id, "name": name}
+
+    def save_host_annotation(
+        self, ip: str, network_id: str, name: str, note: str
+    ) -> Dict[str, str]:
+        """Save a user name and note for an exact permanent host profile.
+
+        Parameters:
+            ip: Selected host IP.
+            network_id: Network identity shown in the Host tab.
+            name: User-provided host name, or empty to clear it.
+            note: User-provided note, or empty to clear it.
+
+        Returns:
+            The saved host annotation.
+        """
+        if not all(
+            isinstance(value, str) for value in (ip, network_id, name, note)
+        ):
+            raise ValueError("Host annotation must contain text values")
+        name = name.strip()
+        note = note.strip()
+        if len(name) > 80 or any(
+            ord(char) < 32 or ord(char) == 127 for char in name
+        ):
+            raise ValueError(
+                "Host name must be at most 80 printable characters"
+            )
+        if len(note) > 1000 or any(
+            (ord(char) < 32 and char not in "\n\t") or ord(char) == 127
+            for char in note
+        ):
+            raise ValueError(
+                "Host note must be at most 1000 printable characters"
+            )
+        try:
+            ip = str(ipaddress.ip_address(ip))
+        except ValueError as error:
+            raise ValueError("Select a valid host IP") from error
+        if not HostProfileStore.has_network_profile(
+            self.host_profiles_path, ip, network_id
+        ):
+            raise ValueError("The selected host profile is unavailable")
+        HostProfileStore.set_host_annotation(
+            self.host_profiles_path, ip, network_id, name, note
+        )
+        return {"ip": ip, "network_id": network_id, "name": name, "note": note}
 
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
@@ -5128,8 +5213,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             )
 
     def do_POST(self) -> None:
-        """Save one network name from the same-origin Overview editor."""
-        if urlparse(self.path).path != "/api/network-name":
+        """Save a host annotation or network name from the local web UI."""
+        path = urlparse(self.path).path
+        if path not in {"/api/network-name", "/api/host-annotation"}:
             self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
         origin = self.headers.get("Origin", "")
@@ -5152,7 +5238,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", ""))
         except ValueError:
             size = 0
-        if size < 1 or size > 1024:
+        if size < 1 or size > 4096:
             self._send_json(
                 {"error": "Invalid request size"},
                 HTTPStatus.BAD_REQUEST,
@@ -5163,7 +5249,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Expected an object")
             self.server.reader.validate_run_identity()
-            if "ip" in payload:
+            if path == "/api/host-annotation":
+                saved = self.server.reader.save_host_annotation(
+                    payload.get("ip"),
+                    payload.get("network_id"),
+                    payload.get("name"),
+                    payload.get("note"),
+                )
+            elif "ip" in payload:
                 saved = self.server.reader.save_profile_network_name(
                     payload.get("ip"),
                     payload.get("network_id"),
@@ -5178,7 +5271,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             self._send_json(saved)
         except ValueError as error:
             self._send_json(
-                {"error": "Invalid network name", "detail": str(error)},
+                {"error": "Invalid value", "detail": str(error)},
                 HTTPStatus.BAD_REQUEST,
             )
         except RunMismatchError as error:
@@ -5190,7 +5283,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._send_json(
                 {
-                    "error": "Unable to save the network name",
+                    "error": "Unable to save the requested name or note",
                     "detail": str(error),
                 },
                 HTTPStatus.SERVICE_UNAVAILABLE,
