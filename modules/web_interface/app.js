@@ -2,6 +2,7 @@
 
 const state = {
   activeTab: "overview",
+  hideExcluded: false,
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
@@ -1281,6 +1282,9 @@ function listPath(name) {
   params.set("limit", "100");
   params.set("sort", page.sort);
   params.set("order", page.order);
+  if (state.hideExcluded && ["alerts", "evidence"].includes(name)) {
+    params.set("hide_excluded", "1");
+  }
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const search = byId(`${name}-search`).value.trim();
   if (search) params.set("search", search);
@@ -2651,12 +2655,15 @@ function hostRangeParams() {
 /**
  * Show host clues saved across runs, separated by local network.
  * @param {Object[]} profiles Permanent host records for this IP.
+ * @param {HTMLElement|null} currentEditorTarget Editor location in the identity card.
  */
-function renderPermanentProfiles(profiles) {
+function renderPermanentProfiles(profiles, currentEditorTarget = null) {
   const container = byId("host-permanent-profiles");
-  if (container.contains(document.activeElement)
-      && document.activeElement.closest(".profile-network-name-form, .host-annotation-form")) return;
   const profileIp = profiles?.[0]?.ip || "";
+  if (container.dataset.profileIp === profileIp
+      && document.activeElement?.closest(".profile-network-name-form, .host-annotation-form")
+      && (container.contains(document.activeElement)
+        || currentEditorTarget?.contains(document.activeElement))) return;
   const openSections = new Map();
   if (container.dataset.profileIp === profileIp) {
     container.querySelectorAll("details.host-profile-facts").forEach((details) => {
@@ -2676,7 +2683,7 @@ function renderPermanentProfiles(profiles) {
     asn: "ASN", country: "Country",
     threat_feed: "Threat feed appearances",
   };
-  profiles.forEach((profile) => {
+  profiles.forEach((profile, index) => {
     const group = document.createElement("section");
     group.className = "permanent-host-profile";
     const title = text("strong", profile.network_label || profile.network_id);
@@ -2770,7 +2777,11 @@ function renderPermanentProfiles(profiles) {
     });
     if (profile.user_name) group.append(text("p", `Your name: ${profile.user_name}`, "host-user-name"));
     if (profile.user_note) group.append(text("p", profile.user_note, "host-user-note"));
-    group.append(annotationEdit, annotation);
+    if (index === 0 && currentEditorTarget) {
+      currentEditorTarget.append(annotationEdit, annotation);
+    } else {
+      group.append(annotationEdit, annotation);
+    }
     const form = document.createElement("form");
     form.className = "network-name-form profile-network-name-form";
     form.hidden = !state.networkNameEditorOpen.has(profile.network_id);
@@ -2883,18 +2894,28 @@ function renderHostCards(host) {
     ["Alerts", exactAggregates ? compact(host.alert_count) : "—"],
   ], "host-summary");
   const identity = byId("host-identity");
-  identity.replaceChildren(
-    detailRow("Addresses", hostIdentity(host.ip)),
-    detailRow("Your name", host.user_name || "—"),
-    detailRow("Your note", host.user_note || "—"),
-    detailRow("Hostname", host.hostname || "Unknown"),
-    detailRow("MAC", host.mac || "Unknown"),
-    detailRow("Vendor", host.mac_vendor || "Unknown"),
-    detailRow("Scope", host.scope || "Unknown"),
-    detailRow("Status", host.live ? "Current Redis metadata" : "Last-known persisted metadata"),
-    detailRow("DNS", renderDnsDetails(host.dns)),
-  );
-  renderPermanentProfiles(host.permanent_profiles || []);
+  const editingCurrentHost = identity.dataset.profileIp === host.ip
+    && identity.contains(document.activeElement)
+    && document.activeElement.closest(".host-annotation-form");
+  if (!editingCurrentHost) {
+    const annotationEntry = document.createElement("div");
+    annotationEntry.id = "host-annotation-entry";
+    identity.replaceChildren(
+      detailRow("Addresses", hostIdentity(host.ip)),
+      detailRow("Your name", host.user_name || "—"),
+      detailRow("Your note", host.user_note || "—"),
+      ...(host.permanent_profiles?.length
+        ? [detailRow("Edit identification", annotationEntry)] : []),
+      detailRow("Hostname", host.hostname || "Unknown"),
+      detailRow("MAC", host.mac || "Unknown"),
+      detailRow("Vendor", host.mac_vendor || "Unknown"),
+      detailRow("Scope", host.scope || "Unknown"),
+      detailRow("Status", host.live ? "Current Redis metadata" : "Last-known persisted metadata"),
+      detailRow("DNS", renderDnsDetails(host.dns)),
+    );
+    identity.dataset.profileIp = host.ip;
+  }
+  renderPermanentProfiles(host.permanent_profiles || [], byId("host-annotation-entry"));
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
     : "No cached threat-intelligence data.";
@@ -2932,6 +2953,7 @@ async function loadHostEvidence() {
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   params.set("profile", state.host.ip);
   params.set("details", "false");
+  if (state.hideExcluded) params.set("hide_excluded", "1");
   const path = "/api/evidence?" + params;
   const payload = await api("hostEvidence", path);
   if (!payload) return;
@@ -2966,6 +2988,7 @@ async function loadHostFlows() {
   const page = state.pages.hostFlows;
   const params = hostRangeParams();
   params.set("limit", byId("host-flow-limit").value);
+  if (state.hideExcluded) params.set("hide_excluded", "1");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const path = `/api/hosts/${escapePath(state.host.ip)}/flows?${params}`;
   const payload = await api("hostFlows", path);
@@ -3427,6 +3450,20 @@ byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
 });
+document.querySelectorAll(".excluded-visibility-select").forEach((select) =>
+  select.addEventListener("change", () => {
+    state.hideExcluded = select.value === "hide";
+    document.querySelectorAll(".excluded-visibility-select").forEach((other) => {
+      other.value = select.value;
+    });
+    ["alerts", "evidence", "host-evidence", "hostFlows"].forEach(resetPage);
+    if (state.activeTab === "hosts" && state.host) {
+      Promise.all([loadHostEvidence(), loadHostFlows()]).catch(() => {});
+    } else if (state.activeTab === "alerts" || state.activeTab === "evidence") {
+      currentLoader()().catch(() => {});
+    }
+    schedulePoll();
+  }));
 
 bindFilters("firewall", ["firewall-search"], loadFirewall);
 bindFilters("host-evidence", ["host-evidence-search"], loadHostEvidence);
