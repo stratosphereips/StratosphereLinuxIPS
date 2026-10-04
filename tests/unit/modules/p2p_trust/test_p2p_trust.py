@@ -41,6 +41,16 @@ def create_trust():
     return trust
 
 
+@pytest.mark.parametrize("stopping", [False, True])
+def test_peer_reports_do_not_delay_shutdown(stopping: bool) -> None:
+    """Follow the shared stop event even while peer channels are busy."""
+    trust = create_trust()
+    trust.termination_event.is_set.return_value = stopping
+    trust.channel_tracker = {"p2p_gopy": {"msg_received": True}}
+
+    assert trust.should_stop() is stopping
+
+
 @pytest.mark.parametrize(
     "is_slips_started_by_an_update,use_local_p2p,expected",
     [
