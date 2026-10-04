@@ -360,6 +360,10 @@ rule whenever those details can be reconstructed. Grouped Evidence and the
 host workspace show how many records were excluded. New runs persist this
 decision with the evidence in `flows.sqlite`; older active runs use Slips'
 existing `whitelisted_evidence` decision set while it remains available.
+When sorting the Evidence table by Slips score, excluded rows stay together
+after numeric scores in both ascending and descending order, including across
+pages. A host/type group with any excluded evidence follows the same rule
+because its score cell displays **Excluded**.
 
 The displayed score is not calculated by the web interface. For interface,
 standard-input, and CYST runs it is Slips' risk-adjusted accumulated threat
@@ -394,7 +398,7 @@ profile for an address Slips ignored.
 
 Selecting a host opens a full-width workspace with:
 
-- a **Name this host** editor in each permanent, network-specific host profile. A saved user name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Clearing both fields removes the annotation. Local IPs on different networks keep separate annotations; public IPs use their public profile;
+- a **Name this host** button beside **Your name** and **Your note** in the Identity and DNS card. It edits the current network's permanent host profile; editors for older network profiles remain in the Permanent host profile section. A saved user name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Clearing both fields removes the annotation. Local IPs on different networks keep separate annotations; public IPs use their public profile;
 - MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
