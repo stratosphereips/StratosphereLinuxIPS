@@ -3,6 +3,8 @@
 import shutil
 from unittest.mock import ANY, patch, mock_open, Mock, call
 import os
+from pathlib import Path
+from typing import Any
 import psutil
 import redis
 import pytest
@@ -783,6 +785,138 @@ def test_get_redis_port_started_by_update(args_port, expected_port, mock_db):
     mock_db_mgr.assert_not_called()
     mock_confirm.assert_not_called()
     mock_random_port.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "argument,value",
+    [
+        ("multiinstance", True),
+        ("port", "32800"),
+        ("interface", None),
+        ("db", "snapshot.rdb"),
+    ],
+)
+def test_validate_keep_history_rejects_incompatible_args(
+    tmp_path: Path, argument: str, value: Any
+) -> None:
+    """Refuse history mode when it cannot identify one live run.
+
+    Parameters:
+        tmp_path: Temporary output path.
+        argument: CLI attribute made incompatible.
+        value: Incompatible CLI value.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    output_dir = tmp_path / "run"
+    (output_dir / "databases").mkdir(parents=True)
+    (output_dir / "databases" / "flows.sqlite").touch()
+    (output_dir / "metadata").mkdir()
+    (output_dir / "metadata" / "info.txt").write_text("File: en0\n")
+    manager.main.args.interface = "en0"
+    manager.main.args.output = str(output_dir)
+    manager.main.args.multiinstance = False
+    manager.main.args.db = None
+    manager.main.args.port = None
+    manager.main.args.is_slips_started_by_an_update = False
+    setattr(manager.main.args, argument, value)
+
+    with pytest.raises(SystemExit, match="--keep-history requires"):
+        manager.validate_keep_history()
+
+
+def test_validate_keep_history_accepts_matching_stopped_run(
+    tmp_path: Path,
+) -> None:
+    """Allow one stopped interface run with its existing SQLite history.
+
+    Parameters:
+        tmp_path: Temporary output path.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    output_dir = tmp_path / "run"
+    (output_dir / "databases").mkdir(parents=True)
+    (output_dir / "databases" / "flows.sqlite").touch()
+    (output_dir / "metadata").mkdir()
+    (output_dir / "metadata" / "info.txt").write_text("File: en0\n")
+    manager.main.args.interface = "en0"
+    manager.main.args.output = str(output_dir)
+    manager.main.args.multiinstance = False
+    manager.main.args.db = None
+    manager.main.args.port = None
+    manager.main.args.is_slips_started_by_an_update = False
+
+    with patch("managers.redis_manager.psutil.process_iter", return_value=[]):
+        assert manager.validate_keep_history() is None
+
+
+def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
+    """Do not append a different interface's detections to saved history.
+
+    Parameters:
+        tmp_path: Temporary output path.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    output_dir = tmp_path / "run"
+    (output_dir / "databases").mkdir(parents=True)
+    (output_dir / "databases" / "flows.sqlite").touch()
+    (output_dir / "metadata").mkdir()
+    (output_dir / "metadata" / "info.txt").write_text("File: en1\n")
+    manager.main.args.interface = "en0"
+    manager.main.args.output = str(output_dir)
+    manager.main.args.multiinstance = False
+    manager.main.args.db = None
+    manager.main.args.port = None
+    manager.main.args.is_slips_started_by_an_update = False
+
+    with pytest.raises(SystemExit, match="output belongs to en1"):
+        manager.validate_keep_history()
+
+
+def test_validate_keep_history_rejects_running_slips(
+    tmp_path: Path,
+) -> None:
+    """Do not mix retained history with a concurrent Slips process.
+
+    Parameters:
+        tmp_path: Temporary output path.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    output_dir = tmp_path / "run"
+    (output_dir / "databases").mkdir(parents=True)
+    (output_dir / "databases" / "flows.sqlite").touch()
+    (output_dir / "metadata").mkdir()
+    (output_dir / "metadata" / "info.txt").write_text("File: en0\n")
+    manager.main.args.interface = "en0"
+    manager.main.args.output = str(output_dir)
+    manager.main.args.multiinstance = False
+    manager.main.args.db = None
+    manager.main.args.port = None
+    manager.main.args.is_slips_started_by_an_update = False
+    active = Mock(info={"pid": 123, "cmdline": ["python", "./slips.py"]})
+
+    with patch(
+        "managers.redis_manager.psutil.process_iter", return_value=[active]
+    ):
+        with pytest.raises(SystemExit, match="all other Slips instances"):
+            manager.validate_keep_history()
+
+
+def test_active_history_run_blocks_second_instance() -> None:
+    """Refuse a normal Slips launch while another run keeps history."""
+    manager = ModuleFactory().create_redis_manager_obj()
+    manager.main.args.keep_history = False
+    active = Mock(
+        info={
+            "pid": 123,
+            "cmdline": ["python", "./slips.py", "--keep-history"],
+        }
+    )
+
+    with patch(
+        "managers.redis_manager.psutil.process_iter", return_value=[active]
+    ):
+        with pytest.raises(SystemExit, match="Another Slips run"):
+            manager.reject_active_history_run()
 
 
 @pytest.mark.parametrize(
