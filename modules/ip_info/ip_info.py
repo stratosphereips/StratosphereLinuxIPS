@@ -20,7 +20,7 @@ from contextlib import redirect_stdout, redirect_stderr
 import subprocess
 import netifaces
 import asyncio
-import multiprocessing
+from queue import Queue
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache, partial
@@ -55,10 +55,8 @@ class IPInfo(IAsyncModule):
 
     def init(self):
         """This will be called when initializing this module"""
-        # 30MBs max size of this queue to avoid growing forever in mem
-        self.pending_mac_queries = multiprocessing.Queue(
-            maxsize=min(30000000, SEM_VALUE_MAX)
-        )
+        # MAC lookups stay in this process, so they need no shared semaphore.
+        self.pending_mac_queries = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         self.lookup_executor = ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="ip-info"
         )
@@ -428,9 +426,6 @@ class IPInfo(IAsyncModule):
             self.asn_db.close()
         if hasattr(self, "country_db"):
             self.country_db.close()
-        if hasattr(self, "pending_mac_queries"):
-            self.pending_mac_queries.close()
-            self.pending_mac_queries.join_thread()
         if hasattr(self, "lookup_executor"):
             self.lookup_executor.shutdown(wait=True, cancel_futures=True)
         if hasattr(self, "domain_validity_cache"):
