@@ -10,6 +10,7 @@ import sys
 import time
 import subprocess
 from typing import Dict, Union
+from pathlib import Path
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.core.database.redis_db.database import RedisDB
@@ -54,6 +55,76 @@ class RedisManager:
         """
         if port in RedisDB.instances:
             del RedisDB.instances[port]
+
+    def validate_keep_history(self) -> None:
+        """Require one live interface run and an existing matching output.
+
+        The retained SQLite database belongs to one interface. Reusing it
+        for another input or while another Slips runs would mix detections.
+        """
+        args = self.main.args
+        if (
+            not getattr(args, "interface", None)
+            or not getattr(args, "output", None)
+            or getattr(args, "multiinstance", False)
+            or getattr(args, "db", None)
+            or getattr(args, "is_slips_started_by_an_update", False)
+            or getattr(args, "port", None) not in (None, "6379", 6379)
+        ):
+            raise SystemExit(
+                "--keep-history requires -i <interface> -o <existing dir> "
+                "and Redis port 6379; it cannot be combined with -m or -d."
+            )
+
+        output_dir = Path(args.output)
+        flows_db = output_dir / "databases" / "flows.sqlite"
+        if not flows_db.is_file():
+            raise SystemExit(f"--keep-history needs an existing {flows_db}.")
+
+        metadata = output_dir / "metadata" / "info.txt"
+        if not metadata.is_file():
+            raise SystemExit(
+                f"--keep-history needs {metadata} to verify the interface."
+            )
+        previous_input = next(
+            (
+                line.removeprefix("File: ").strip()
+                for line in metadata.read_text().splitlines()
+                if line.startswith("File: ")
+            ),
+            "",
+        )
+        if previous_input != args.interface:
+            raise SystemExit(
+                "--keep-history output belongs to "
+                f"{previous_input or 'an unknown input'}, not {args.interface}."
+            )
+
+        for process in psutil.process_iter(attrs=["pid", "cmdline"]):
+            if process.info["pid"] == os.getpid():
+                continue
+            command = process.info["cmdline"] or []
+            if any(os.path.basename(part) == "slips.py" for part in command):
+                raise SystemExit(
+                    "--keep-history requires the previous Slips run and "
+                    "all other Slips instances to be stopped first."
+                )
+
+    def reject_active_history_run(self) -> None:
+        """Prevent a second Slips run while history mode is active."""
+        if getattr(self.main.args, "keep_history", False) is True:
+            return
+        for process in psutil.process_iter(attrs=["pid", "cmdline"]):
+            if process.info["pid"] == os.getpid():
+                continue
+            command = process.info["cmdline"] or []
+            if any(
+                os.path.basename(part) == "slips.py" for part in command
+            ) and ("--keep-history" in command):
+                raise SystemExit(
+                    "Another Slips run is using --keep-history. Stop it "
+                    "before starting a second Slips instance."
+                )
 
     def get_start_port(self):
         return self.start_port
@@ -526,6 +597,10 @@ class RedisManager:
         if self.main.args.is_slips_started_by_an_update:
             if self.main.args.port:
                 return int(self.main.args.port)
+            return DEFAULT_REDIS_PORT
+
+        if getattr(self.main.args, "keep_history", False) is True:
+            self._clear_cached_redis_instance(DEFAULT_REDIS_PORT)
             return DEFAULT_REDIS_PORT
 
         if self.main.args.port:
