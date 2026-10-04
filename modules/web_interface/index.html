@@ -100,6 +100,7 @@
         <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
         <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped" selected>Group by host</option></select>
+        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
         <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
         <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
@@ -116,6 +117,7 @@
         <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
         <select id="evidence-view" aria-label="Evidence display mode"><option value="grouped" selected>Group by host and type</option><option value="individual">Individual evidence</option></select>
+        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
         <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
         <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
@@ -225,6 +227,7 @@
           <div><button id="host-back" class="text-button">← Back to hosts</button><p class="eyebrow">HOST WORKSPACE</p><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div>
           <div class="toolbar compact-toolbar">
             <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
+            <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
             <select id="host-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
             <input id="host-from" class="custom-time" type="datetime-local" hidden>
             <input id="host-to" class="custom-time" type="datetime-local" hidden>
@@ -282,6 +285,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261004-unprofiled-host"></script>
+  <script src="/app.js?v=20261004-host-editor-visible"></script>
 </body>
 </html>
