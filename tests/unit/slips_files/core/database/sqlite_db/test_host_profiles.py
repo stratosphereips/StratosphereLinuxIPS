@@ -98,6 +98,53 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
     }
 
 
+def test_user_annotation_persists_for_exact_network_host(tmp_path: Path) -> None:
+    """Keep a manual name and note separate for reused private IPs.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "host_profiles.sqlite"
+    state = {
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }
+    store = HostProfileStore(path, "run-one", lambda _: state, ["en0"])
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0", starttime="100", type_="conn",
+            saddr="192.168.1.20", daddr="8.8.8.8",
+        )
+    )
+    network_id = "gateway:aa:bb:cc:dd:ee:01"
+    HostProfileStore.set_host_annotation(
+        path, "192.168.1.20", network_id, "My iPad", "Tablet in the kitchen"
+    )
+
+    state["gateway_mac"] = "aa:bb:cc:dd:ee:02"
+    another = HostProfileStore(path, "run-two", lambda _: state, ["en0"])
+    another.observe_flow(
+        SimpleNamespace(
+            interface="en0", starttime="200", type_="conn",
+            saddr="192.168.1.20", daddr="8.8.8.8",
+        )
+    )
+    profiles = HostProfileStore.read(path, "192.168.1.20")
+
+    assert profiles[0]["user_name"] == ""
+    assert profiles[1]["user_name"] == "My iPad"
+    assert profiles[1]["user_note"] == "Tablet in the kitchen"
+    assert HostProfileStore.annotations_for_ips(path, ["192.168.1.20"])[
+        "192.168.1.20"
+    ] == {"name": "", "note": ""}
+
+    HostProfileStore.set_host_annotation(
+        path, "192.168.1.20", network_id, "", ""
+    )
+    assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
+
+
 @pytest.mark.parametrize(
     "port, expected_kind",
     [("5353", "mdns_name"), ("53", "dns_name")],
