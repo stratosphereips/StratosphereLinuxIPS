@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20261003-network-name">
+  <link rel="stylesheet" href="/style.css?v=20261004-unprofiled-host">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -230,6 +230,10 @@
             <input id="host-to" class="custom-time" type="datetime-local" hidden>
           </div>
         </div>
+        <article id="host-unprofiled" class="surface" role="status" hidden>
+          <h3>No Host profile for this address</h3>
+          <p id="host-unprofiled-reason"></p>
+        </article>
         <div id="host-summary" class="summary-grid"></div>
         <div class="split-grid">
           <article class="surface"><h3>Identity and DNS</h3><div id="host-identity"></div></article>
@@ -278,6 +282,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261003-network-name"></script>
+  <script src="/app.js?v=20261004-unprofiled-host"></script>
 </body>
 </html>
