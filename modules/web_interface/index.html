@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any">
-  <link rel="stylesheet" href="/style.css?v=20261004-unprofiled-host">
+  <link rel="stylesheet" href="/style.css?v=20261004-device-identity">
 </head>
 <body>
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -15,6 +15,7 @@
       <div class="brand-copy">
         <p class="brand-name">SLIPS</p>
         <h1 id="run-name">Current run</h1>
+        <p id="run-device" class="run-device">This device: identifying…</p>
         <p id="run-meta" class="muted">Connecting to run data…</p>
         <p id="run-addresses" class="run-addresses muted" hidden></p>
       </div>
@@ -259,7 +260,7 @@
         </article>
         <article class="surface table-surface host-evidence-panel">
           <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for this exact profile IP.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
-          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th>Reporting peers</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
         </article>
         <div id="host-evidence-pager" class="pager"></div>
         <article class="surface table-surface">
@@ -285,6 +286,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261004-host-editor-visible"></script>
+  <script src="/app.js?v=20261004-device-identity"></script>
 </body>
 </html>

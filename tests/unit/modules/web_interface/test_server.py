@@ -26,6 +26,36 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def test_current_network_profile_precedes_newer_run_fallback() -> None:
+    """Restore host annotations when an earlier run missed its router."""
+    _module_factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = "output/test-run"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "100"
+    reader.redis.hgetall.return_value = {
+        "en0": json.dumps(
+            {
+                "connected": True,
+                "local_network": "192.168.1.0/24",
+                "gateway_mac": "d8:58:d7:1:ff:e1",
+            }
+        )
+    }
+    profiles = [
+        {"network_id": "run:output/test-run:99", "user_name": ""},
+        {
+            "network_id": "gateway:d8:58:d7:1:ff:e1",
+            "user_name": "homeassistant",
+        },
+    ]
+
+    ordered = reader._current_network_profile_first("192.168.1.185", profiles)
+
+    assert ordered[0]["user_name"] == "homeassistant"
+    assert profiles[0]["user_name"] == ""
+
+
 def test_idle_connection_does_not_block_page_requests() -> None:
     """Verify a speculative idle browser connection cannot stall the server."""
     _module_factory = ModuleFactory()
@@ -613,7 +643,9 @@ def test_save_network_name_labels_router_and_early_run_records(
             "en0", "gateway:aa:bb:cc:dd:ee:01", "Home Wi-Fi"
         )
         with pytest.raises(ValueError, match="network changed"):
-            reader.save_network_name("en0", "gateway:aa:bb:cc:dd:ee:02", "Wrong router")
+            reader.save_network_name(
+                "en0", "gateway:aa:bb:cc:dd:ee:02", "Wrong router"
+            )
 
     assert result == {
         "network_id": "gateway:aa:bb:cc:dd:ee:01",
@@ -626,9 +658,7 @@ def test_save_network_name_labels_router_and_early_run_records(
         "gateway:aa:bb:cc:dd:ee:01": "Home Wi-Fi",
         "run:output/test-run:123": "Home Wi-Fi",
     }
-    assert reader._named_network_states([current])[0]["name"] == (
-        "Home Wi-Fi"
-    )
+    assert reader._named_network_states([current])[0]["name"] == ("Home Wi-Fi")
 
 
 def test_network_name_without_router_mac_is_scoped_to_current_run(
@@ -661,7 +691,9 @@ def test_network_name_without_router_mac_is_scoped_to_current_run(
         )
 
     assert result["name"] == "Hotel Ethernet"
-    assert reader._named_network_states([current])[0]["name"] == ("Hotel Ethernet")
+    assert reader._named_network_states([current])[0]["name"] == (
+        "Hotel Ethernet"
+    )
     assert HostProfileStore.network_names(
         reader.host_profiles_path,
         ["run:output/test-run:123", "run:output/another-run:456"],
@@ -688,9 +720,10 @@ def test_historical_host_network_can_be_named_explicitly(
     )
 
     assert saved["name"] == "Previous home Wi-Fi"
-    assert HostProfileStore.read(path, "192.168.1.20")[0][
-        "network_label"
-    ] == "Previous home Wi-Fi"
+    assert (
+        HostProfileStore.read(path, "192.168.1.20")[0]["network_label"]
+        == "Previous home Wi-Fi"
+    )
     with pytest.raises(ValueError, match="unavailable"):
         reader.save_profile_network_name(
             "192.168.1.20", "run:another-network", "Wrong network"
@@ -794,13 +827,19 @@ def test_network_name_post_routes_historical_profile() -> None:
 def test_host_annotation_post_saves_name_and_note() -> None:
     """Route the Host editor's name and note to permanent storage."""
     _module_factory = ModuleFactory()
-    body = json.dumps({
-        "ip": "192.168.1.20", "network_id": "gateway:aa:bb:cc:dd:ee:01",
-        "name": "My iPad", "note": "Kitchen tablet",
-    }).encode()
+    body = json.dumps(
+        {
+            "ip": "192.168.1.20",
+            "network_id": "gateway:aa:bb:cc:dd:ee:01",
+            "name": "My iPad",
+            "note": "Kitchen tablet",
+        }
+    ).encode()
     reader = Mock()
     reader.save_host_annotation.return_value = {
-        "ip": "192.168.1.20", "name": "My iPad", "note": "Kitchen tablet"
+        "ip": "192.168.1.20",
+        "name": "My iPad",
+        "note": "Kitchen tablet",
     }
     handler = RequestHandler.__new__(RequestHandler)
     handler.path = "/api/host-annotation"
@@ -817,8 +856,10 @@ def test_host_annotation_post_saves_name_and_note() -> None:
     handler.do_POST()
 
     reader.save_host_annotation.assert_called_once_with(
-        "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01",
-        "My iPad", "Kitchen tablet",
+        "192.168.1.20",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "My iPad",
+        "Kitchen tablet",
     )
     handler._send_json.assert_called_once_with(
         reader.save_host_annotation.return_value
@@ -1112,12 +1153,18 @@ def test_flows_for_evidence_reads_durable_conn_and_altflows(tmp_path) -> None:
             "INSERT INTO evidence_flows VALUES (?, ?)",
             ("evidence-1", "flow-1"),
         )
+        connection.execute(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            ("evidence-1", "older-flow-without-raw-record"),
+        )
 
     result = reader.flows_for_evidence("evidence-1")
 
     assert result["total"] == 1
     assert result["network_flow_total"] == 1
     assert result["protocol_flow_total"] == 1
+    assert result["linked_uid_count"] == 2
+    assert result["unavailable_flow_count"] == 1
     group = result["items"][0]
     assert group["network_flow"]["table"] == "flows"
     assert group["protocol_flows"][0]["table"] == "altflows"
@@ -1423,8 +1470,11 @@ def test_host_names_prefers_saved_name_then_vendor(tmp_path: Path) -> None:
     )
     store.observe_flow(
         SimpleNamespace(
-            interface="en0", starttime="100", type_="conn",
-            saddr="192.168.1.20", daddr="8.8.8.8",
+            interface="en0",
+            starttime="100",
+            type_="conn",
+            saddr="192.168.1.20",
+            daddr="8.8.8.8",
         )
     )
     reader = RunDataReader.__new__(RunDataReader)
@@ -1438,29 +1488,40 @@ def test_host_names_prefers_saved_name_then_vendor(tmp_path: Path) -> None:
         )
     reader.redis = Mock()
     reader.redis.pipeline.return_value.execute.return_value = [
-        "learned-name", None, "Apple", None, None, None,
+        "learned-name",
+        None,
+        "Apple",
+        None,
+        None,
+        None,
     ]
     reader.cache = Mock()
     reader.cache.hget.return_value = None
 
     saved = reader.save_host_annotation(
-        "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01",
-        "My tablet", "Kitchen iPad",
+        "192.168.1.20",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "My tablet",
+        "Kitchen iPad",
     )
     names = reader.host_names({"ip": ["192.168.1.20", "192.168.1.21"]})
 
     assert saved["note"] == "Kitchen iPad"
     assert names["names"]["192.168.1.20"] == {
-        "name": "My tablet", "source": "User name"
+        "name": "My tablet",
+        "source": "User name",
     }
     assert names["names"]["192.168.1.21"] == {
-        "name": "Samsung device", "source": "MAC vendor"
+        "name": "Samsung device",
+        "source": "MAC vendor",
     }
 
     with pytest.raises(ValueError, match="profile is unavailable"):
         reader.save_host_annotation(
-            "192.168.1.20", "gateway:aa:bb:cc:dd:ee:02",
-            "Wrong network", "Do not save",
+            "192.168.1.20",
+            "gateway:aa:bb:cc:dd:ee:02",
+            "Wrong network",
+            "Do not save",
         )
 
 
@@ -2346,16 +2407,66 @@ def test_evidence_score_sort_keeps_excluded_after_numbers(
             [
                 ("low", 1, "10.0.0.1", "tw", "low", "A", "", 1, "{}", 1, 0),
                 ("high", 2, "10.0.0.1", "tw", "low", "B", "", 1, "{}", 5, 0),
-                ("excluded-low", 3, "10.0.0.1", "tw", "low", "C", "", 1, "{}", 0, 1),
-                ("excluded-high", 4, "10.0.0.1", "tw", "low", "D", "", 1, "{}", 8, 1),
-                ("mixed-scored", 5, "10.0.0.1", "tw", "low", "E", "", 1, "{}", 9, 0),
-                ("mixed-excluded", 6, "10.0.0.1", "tw", "low", "E", "", 1, "{}", 0, 1),
+                (
+                    "excluded-low",
+                    3,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "C",
+                    "",
+                    1,
+                    "{}",
+                    0,
+                    1,
+                ),
+                (
+                    "excluded-high",
+                    4,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "D",
+                    "",
+                    1,
+                    "{}",
+                    8,
+                    1,
+                ),
+                (
+                    "mixed-scored",
+                    5,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "E",
+                    "",
+                    1,
+                    "{}",
+                    9,
+                    0,
+                ),
+                (
+                    "mixed-excluded",
+                    6,
+                    "10.0.0.1",
+                    "tw",
+                    "low",
+                    "E",
+                    "",
+                    1,
+                    "{}",
+                    0,
+                    1,
+                ),
             ],
         )
 
     query = {
-        "range": ["all"], "sort": ["score"],
-        "order": [order], "limit": ["2"],
+        "range": ["all"],
+        "sort": ["score"],
+        "order": [order],
+        "limit": ["2"],
     }
     if group:
         query["group"] = [group]
@@ -2377,8 +2488,141 @@ def test_evidence_score_sort_keeps_excluded_after_numbers(
     assert len({item["id"] for item in items}) == len(items)
     statuses = [item["whitelisted"] for item in items]
     assert statuses == sorted(statuses)
-    numeric_scores = [item["alert_score"] for item in items if not item["whitelisted"]]
+    numeric_scores = [
+        item["alert_score"] for item in items if not item["whitelisted"]
+    ]
     assert numeric_scores == sorted(numeric_scores, reverse=order == "desc")
+
+    query.pop("cursor", None)
+    query["hide_excluded"] = ["1"]
+    visible = []
+    while True:
+        page = reader.evidence(query)
+        visible.extend(page["items"])
+        if not page["next_cursor"]:
+            break
+        query["cursor"] = [page["next_cursor"]]
+
+    assert page["full_total"] == 6
+    assert page["total"] == 3
+    assert len(visible) == 3
+    assert all(not item["whitelisted"] for item in visible)
+    if group:
+        mixed = next(item for item in visible if item["evidence_type"] == "E")
+        assert mixed["evidence_count"] == 1
+        assert mixed["alert_score"] == 9
+
+
+def test_host_flow_filter_hides_only_exclusively_excluded_evidence(
+    tmp_path,
+) -> None:
+    """Keep unlinked and scored flows while paging past excluded ones.
+
+    Parameters:
+        tmp_path: Isolated run and web history databases.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    uids = ["unlinked", "mixed", "scored", "excluded"]
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE flows (uid TEXT, flow TEXT, label TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [(uid, "{}", "") for uid in uids],
+        )
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "whitelisted INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE INDEX evidence_flows_uid_idx ON evidence_flows(uid)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?)",
+            [("excluded", 1), ("scored", 0)],
+        )
+        connection.executemany(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            [
+                ("excluded", "excluded"),
+                ("excluded", "mixed"),
+                ("scored", "mixed"),
+                ("scored", "scored"),
+            ],
+        )
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO flow_index "
+            "(uid, flow_rowid, event_time, src_ip, dst_ip, "
+            "bytes, packets) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            [
+                (uid, index, index, "10.0.0.1", "8.8.8.8", 1, 1)
+                for index, uid in enumerate(uids, start=1)
+            ],
+        )
+
+    assert reader.flows_for_host("10.0.0.1", {"range": ["all"]})["total"] == 4
+    query = {"range": ["all"], "hide_excluded": ["1"], "limit": ["2"]}
+    first = reader.flows_for_host("10.0.0.1", query)
+    query["cursor"] = [first["next_cursor"]]
+    second = reader.flows_for_host("10.0.0.1", query)
+
+    assert first["total"] == second["total"] == 3
+    assert [item["uid"] for item in first["items"] + second["items"]] == [
+        "scored",
+        "mixed",
+        "unlinked",
+    ]
+
+
+def test_p2p_evidence_page_shows_reporter_peer_ids(tmp_path) -> None:
+    """Recover reporter identities for existing P2P evidence in one query.
+
+    Parameters:
+        tmp_path: Isolated permanent trust database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.p2p_trust_path = tmp_path / "trustdb.db"
+    with sqlite3.connect(reader.p2p_trust_path) as connection:
+        connection.execute(
+            "CREATE TABLE reports (reporter_peerid TEXT, key_type TEXT, "
+            "reported_key TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO reports VALUES (?, ?, ?)",
+            [
+                ("peer-b", "ip", "8.8.8.8"),
+                ("peer-a", "ip", "8.8.8.8"),
+                ("peer-a", "ip", "8.8.8.8"),
+                ("other", "ip", "1.1.1.1"),
+            ],
+        )
+    items = [
+        {
+            "evidence_type": "MALICIOUS_IP_FROM_P2P_NETWORK",
+            "profile_ip": "8.8.8.8",
+        },
+        {
+            "evidence_type": "MALICIOUS_IP_FROM_P2P_NETWORK",
+            "profile_ip": "9.9.9.9",
+        },
+        {"evidence_type": "DNS_WITHOUT_CONNECTION", "profile_ip": "8.8.8.8"},
+    ]
+
+    reader._annotate_p2p_reporters(items)
+
+    assert items[0]["reporting_peers"] == ["peer-a", "peer-b"]
+    assert items[1]["reporting_peers"] == []
+    assert "reporting_peers" not in items[2]
 
 
 def test_host_evidence_excludes_mac_alias_profiles(
@@ -3183,8 +3427,7 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
     assert len(result["reports"]) == 200
     assert result["counts"]["reports_received"] == 501
     peer_counts = {
-        peer["peer_id"]: peer["reports_received"]
-        for peer in result["peers"]
+        peer["peer_id"]: peer["reports_received"] for peer in result["peers"]
     }
     assert peer_counts == {"QmRemotePeer": 501, "QmOldPeer": 0}
 

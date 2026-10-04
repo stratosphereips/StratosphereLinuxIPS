@@ -630,6 +630,55 @@ class RunDataReader:
                 else []
             )
 
+    def _annotate_p2p_reporters(self, items: List[Dict[str, Any]]) -> None:
+        """Add known reporter peer IDs to P2P evidence on one bounded page.
+
+        Parameters:
+            items: Individual or grouped evidence API records.
+        """
+        relevant = [
+            item
+            for item in items
+            if item.get("evidence_type") == "MALICIOUS_IP_FROM_P2P_NETWORK"
+        ]
+        if not relevant:
+            return
+        targets = sorted(
+            {
+                str(item.get("profile_ip") or "")
+                for item in relevant
+                if item.get("profile_ip")
+            }
+        )
+        reporters: Dict[str, List[str]] = {}
+        trust_path = getattr(
+            self,
+            "p2p_trust_path",
+            Path("permanent") / "p2p_trust_runtime" / "trustdb.db",
+        )
+        if targets and trust_path.exists():
+            try:
+                placeholders = ",".join("?" for _ in targets)
+                with sqlite3.connect(
+                    f"file:{trust_path}?mode=ro", uri=True, timeout=1
+                ) as connection:
+                    for target, peer_id in connection.execute(
+                        "SELECT DISTINCT reported_key, reporter_peerid "
+                        "FROM reports WHERE key_type = 'ip' "
+                        f"AND reported_key IN ({placeholders}) "
+                        "ORDER BY reporter_peerid",
+                        targets,
+                    ):
+                        reporters.setdefault(str(target), []).append(
+                            str(peer_id)
+                        )
+            except sqlite3.Error:
+                pass
+        for item in relevant:
+            item["reporting_peers"] = reporters.get(
+                str(item.get("profile_ip") or ""), []
+            )
+
     def _detector_score_settings(self) -> tuple[str, float]:
         """
         Read the run's real Slips alert-score mode and threshold.
@@ -1531,6 +1580,7 @@ class RunDataReader:
             )
             items.append(item)
         self._annotate_whitelisted_evidence(items)
+        self._annotate_p2p_reporters(items)
         next_cursor = (
             self._encode_cursor(rows[-1]["sort_value"], str(items[-1]["id"]))
             if has_more and items
@@ -1790,6 +1840,7 @@ class RunDataReader:
             sort_values = [float(item.get("timestamp") or 0) for item in items]
             has_more = len(records) > limit
         self._annotate_whitelisted_evidence(items)
+        self._annotate_p2p_reporters(items)
         next_cursor = (
             self._encode_cursor(
                 sort_values[-1],
@@ -2200,6 +2251,8 @@ class RunDataReader:
             return {
                 "items": [],
                 "total": 0,
+                "linked_uid_count": 0,
+                "unavailable_flow_count": 0,
                 "network_flow_total": 0,
                 "protocol_flow_total": 0,
                 "page_size": 0,
@@ -2248,6 +2301,8 @@ class RunDataReader:
         return {
             "items": items,
             "total": len(items),
+            "linked_uid_count": len(bounded_uids),
+            "unavailable_flow_count": len(bounded_uids) - len(items),
             "network_flow_total": network_flow_total,
             "protocol_flow_total": protocol_flow_total,
             "page_size": len(items),
@@ -2958,6 +3013,47 @@ class RunDataReader:
             "ti_feeds": ti_feeds,
         }
 
+    def _current_network_profile_first(
+        self, ip: str, profiles: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Show an address's current network identity before older runs.
+
+        Parameters:
+            ip: Host address being opened.
+            profiles: Permanent profiles ordered by last sighting.
+
+        Returns:
+            Profiles with the matching current network first, if known.
+        """
+        if len(profiles) < 2:
+            return profiles
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return profiles
+        current_ids = set()
+        run_name = self._network_run_name()
+        for raw in self.redis.hgetall("network_states").values():
+            state = self._loads(raw, {})
+            if not isinstance(state, dict) or not state.get("connected"):
+                continue
+            try:
+                network = ipaddress.ip_network(
+                    state.get("local_network", ""), strict=False
+                )
+            except ValueError:
+                continue
+            if address in network:
+                current_ids.add(
+                    HostProfileStore.network_id_for_state(state, run_name)
+                )
+        if not current_ids:
+            return profiles
+        return sorted(
+            profiles,
+            key=lambda profile: profile.get("network_id") not in current_ids,
+        )
+
     def host(self, ip: str) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
         host = self._live_host(ip)
@@ -2975,6 +3071,9 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             ip,
+        )
+        host["permanent_profiles"] = self._current_network_profile_first(
+            ip, host["permanent_profiles"]
         )
         if host["permanent_profiles"]:
             host["user_name"] = host["permanent_profiles"][0]["user_name"]

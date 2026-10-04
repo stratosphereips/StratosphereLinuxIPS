@@ -41,6 +41,41 @@ def create_trust():
     return trust
 
 
+@pytest.mark.parametrize("ip_state", ["srcip", "dstip"])
+def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
+    """Keep the reporter identities in each P2P evidence description.
+
+    Parameters:
+        ip_state: Direction of the reported address in the flow.
+    """
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.trust_db = Mock()
+    trust.trust_db.get_reports_for_ip.return_value = [
+        ("peer-b", 1, 0.8, 0.9, "8.8.8.8"),
+        ("peer-a", 2, 0.7, 0.9, "8.8.8.8"),
+        ("peer-b", 3, 0.8, 0.9, "8.8.8.8"),
+    ]
+
+    trust.set_evidence_malicious_ip(
+        {
+            "ip": "8.8.8.8",
+            "profileid": "profile_10.0.0.1",
+            "twid": "timewindow1",
+            "ip_state": ip_state,
+            "uid": "flow-1",
+            "stime": "2026/10/04 10:00:00.000000+0000",
+        },
+        0.8,
+        0.9,
+    )
+
+    trust.trust_db.get_reports_for_ip.assert_called_once_with("8.8.8.8")
+    assert trust.db.set_evidence.call_count == 2
+    for call_args in trust.db.set_evidence.call_args_list:
+        assert "Reported by peers: peer-a, peer-b." in call_args.args[0].description
+
+
 @pytest.mark.parametrize("stopping", [False, True])
 def test_peer_reports_do_not_delay_shutdown(stopping: bool) -> None:
     """Follow the shared stop event even while peer channels are busy."""

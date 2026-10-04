@@ -458,7 +458,7 @@ class Trust(IModule):
 
     def set_evidence_malicious_ip(
         self, ip_info: dict, threat_level: float, confidence: float
-    ):
+    ) -> None:
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
@@ -478,6 +478,21 @@ class Trust(IModule):
         :param confidence: how confident the network opinion is about this opinion
         """
         attacker_ip: str = ip_info.get("ip")
+        peer_ids = sorted(
+            {
+                str(report[0])
+                for report in (
+                    self.trust_db.get_reports_for_ip(attacker_ip) or []
+                )
+                if report[0]
+            }
+        )
+        peer_source = (
+            f" Reported by peer{'s' if len(peer_ids) != 1 else ''}: "
+            f"{', '.join(peer_ids)}."
+            if peer_ids
+            else " Reporting peer unavailable."
+        )
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
 
@@ -488,12 +503,12 @@ class Trust(IModule):
         if "src" in ip_info.get("ip_state"):
             description = (
                 f"Connection from blacklisted IP {attacker_ip} "
-                f"to {saddr} Source: Slips P2P network."
+                f"to {saddr} Source: Slips P2P network.{peer_source}"
             )
         else:
             description = (
                 f"Connection to blacklisted IP {attacker_ip} "
-                f"from {saddr} Source: Slips P2P network."
+                f"from {saddr} Source: Slips P2P network.{peer_source}"
             )
 
         for ip in (saddr, attacker_ip):
