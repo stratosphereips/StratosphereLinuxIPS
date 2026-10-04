@@ -2310,6 +2310,77 @@ def test_evidence_sorting_is_server_side_and_stable(tmp_path) -> None:
     assert result["order"] == "asc"
 
 
+@pytest.mark.parametrize("group", ["", "host_type"])
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_evidence_score_sort_keeps_excluded_after_numbers(
+    tmp_path, group: str, order: str
+) -> None:
+    """Keep excluded evidence together after scored rows across pages.
+
+    Parameters:
+        tmp_path: Isolated durable evidence database.
+        group: Individual or host-and-type table layout.
+        order: Numeric score direction.
+    """
+    factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = factory.create_redis_publisher_obj().r
+    reader._runtime_whitelist_rules = Mock(return_value=[])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT, accumulated_ratl REAL, "
+            "whitelisted INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("low", 1, "10.0.0.1", "tw", "low", "A", "", 1, "{}", 1, 0),
+                ("high", 2, "10.0.0.1", "tw", "low", "B", "", 1, "{}", 5, 0),
+                ("excluded-low", 3, "10.0.0.1", "tw", "low", "C", "", 1, "{}", 0, 1),
+                ("excluded-high", 4, "10.0.0.1", "tw", "low", "D", "", 1, "{}", 8, 1),
+                ("mixed-scored", 5, "10.0.0.1", "tw", "low", "E", "", 1, "{}", 9, 0),
+                ("mixed-excluded", 6, "10.0.0.1", "tw", "low", "E", "", 1, "{}", 0, 1),
+            ],
+        )
+
+    query = {
+        "range": ["all"], "sort": ["score"],
+        "order": [order], "limit": ["2"],
+    }
+    if group:
+        query["group"] = [group]
+    items = []
+    seen_cursors = set()
+    while True:
+        page = reader.evidence(query)
+        assert page["sort"] == "score"
+        assert page["order"] == order
+        items.extend(page["items"])
+        cursor = page["next_cursor"]
+        if cursor is None:
+            break
+        assert cursor not in seen_cursors
+        seen_cursors.add(cursor)
+        query["cursor"] = [cursor]
+
+    assert len(items) == (5 if group else 6)
+    assert len({item["id"] for item in items}) == len(items)
+    statuses = [item["whitelisted"] for item in items]
+    assert statuses == sorted(statuses)
+    numeric_scores = [item["alert_score"] for item in items if not item["whitelisted"]]
+    assert numeric_scores == sorted(numeric_scores, reverse=order == "desc")
+
+
 def test_host_evidence_excludes_mac_alias_profiles(
     tmp_path,
 ) -> None:
