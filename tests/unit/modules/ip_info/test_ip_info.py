@@ -3,6 +3,7 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
 import asyncio
+from queue import Queue
 
 
 from tests.module_factory import ModuleFactory
@@ -25,6 +26,13 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
+
+
+def test_pending_mac_queries_stay_inside_ip_info_process() -> None:
+    """Use a thread queue for MAC lookups to avoid named semaphores."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+
+    assert isinstance(ip_info.pending_mac_queries, Queue)
 
 
 def test_start_mac_db_reader_returns_without_running_loop() -> None:
