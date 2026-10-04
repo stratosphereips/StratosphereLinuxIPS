@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from multiprocessing.synchronize import SEM_VALUE_MAX
 import ipaddress
-import multiprocessing
+from queue import Queue
 import os
 import json
 import threading
@@ -64,9 +64,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
-        self.pending_queries = multiprocessing.Queue(
-            maxsize=min(30000000, SEM_VALUE_MAX)
-        )
+        # CIRCL retries are shared only with this module's worker thread.
+        self.pending_queries = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         self.pending_circllu_calls_thread = threading.Thread(
             target=self.handle_pending_queries,
             daemon=True,
