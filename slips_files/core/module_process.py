@@ -57,23 +57,39 @@ class ModuleProcess(Process):
             if module_class is None:
                 raise ImportError(f"No detection module in {self.module}")
 
-        instance = module_class(*self.module_args, **self.module_kwargs)
-        if instance.name.startswith("profiler_worker_process_"):
-            instance._received_lines = self._received_lines
-        if self.startup_total:
-            count = instance.db.increment_modules_started_count()
-            instance.print(
-                format_started_line(
-                    module_class.name,
-                    count,
-                    self.startup_total,
-                    os.getpid(),
-                    module_class.description,
-                    category="module",
-                ),
-                1,
-                0,
-                suppress_sender=True,
-                is_final_startup_announcement=count >= self.startup_total,
-            )
-        instance.run()
+        from slips_files.common.abstracts.imodule import IModule
+        from slips_files.common.slips_own_traffic import SlipsTrafficTracker
+
+        tracker = (
+            SlipsTrafficTracker()
+            if issubclass(module_class, IModule)
+            else None
+        )
+        if tracker is not None:
+            tracker.install()
+        try:
+            instance = module_class(*self.module_args, **self.module_kwargs)
+            if tracker is not None:
+                tracker.attach(instance.db)
+            if instance.name.startswith("profiler_worker_process_"):
+                instance._received_lines = self._received_lines
+            if self.startup_total:
+                count = instance.db.increment_modules_started_count()
+                instance.print(
+                    format_started_line(
+                        module_class.name,
+                        count,
+                        self.startup_total,
+                        os.getpid(),
+                        module_class.description,
+                        category="module",
+                    ),
+                    1,
+                    0,
+                    suppress_sender=True,
+                    is_final_startup_announcement=count >= self.startup_total,
+                )
+            instance.run()
+        finally:
+            if tracker is not None:
+                tracker.stop()

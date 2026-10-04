@@ -134,12 +134,14 @@ class RedisDB(
     _gateway_MAC_found = False
     _conf_file_template = "config/redis.conf.template"
     _conf_file = "config/redis.conf"
-    our_ips: List[str] = utils.get_own_ips(ret="List")
+    # Importing the database must not launch an untracked public-IP request.
+    # Assigned interface addresses still cover direct public-IP interfaces.
+    our_ips: List[str] = utils.get_own_ips(ret="List", include_public=False)
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
     # in case of redis ConnectionErrors, this is how long we'll wait in
     # seconds before retrying.
-    # this will increase exponentially each retry
+    # this increases between retries, capped at two seconds
     backoff = 0.1
     # try to reconnect to redis this amount of times in case of connection
     # errors before terminating
@@ -1065,6 +1067,123 @@ class RedisDB(
             self.constants.ANALYSIS, self.constants.ANALYSIS_INPUT_TYPE
         )
         return InputType.coerce(input)
+
+    def record_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int,
+        dst_ip: str,
+        dst_port: int,
+    ) -> None:
+        """Keep one module-owned socket tuple for a bounded live interval.
+
+        Parameters:
+            run_id: Main Slips process ID, separating retained Redis runs.
+            proto: TCP or UDP transport.
+            src_ip: Local socket address.
+            src_port: Local socket port.
+            dst_ip: Remote socket address.
+            dst_port: Remote socket port.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{proto}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        sources = f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}"
+        ttl = self.constants.SLIPS_OWN_CONNECTION_TTL
+        pipe = self.r.pipeline(transaction=False)
+        pipe.set(key, "1", ex=ttl)
+        pipe.sadd(sources, src_ip)
+        pipe.expire(sources, ttl)
+        pipe.execute()
+
+    def is_slips_own_source_ip(self, run_id: int, ip: str) -> bool:
+        """Check whether a Slips module recently opened a socket from an IP.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            ip: Flow source address.
+
+        Returns:
+            True when a tracked socket used this source IP.
+        """
+        return bool(
+            self.r.sismember(
+                f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}", ip
+            )
+        )
+
+    def is_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int | str,
+        dst_ip: str,
+        dst_port: int | str,
+    ) -> bool:
+        """Match a captured flow to one exact Slips-owned socket tuple.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            src_ip: Flow source IP.
+            src_port: Flow source port.
+            dst_ip: Flow destination IP.
+            dst_port: Flow destination port.
+
+        Returns:
+            True when the full tuple was registered by a Slips process.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{str(proto).lower()}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        return bool(self.r.exists(key))
+
+    def record_slips_own_service_port(
+        self, run_id: int, proto: str, dst_port: int, source_ips: list[str]
+    ) -> None:
+        """Mark local addresses for a brief external lookup command.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            dst_port: Service port used by the external command.
+            source_ips: Current local interface addresses.
+        """
+        if not source_ips:
+            return
+        key = (
+            f"{self.constants.SLIPS_OWN_SERVICE_PORT_PREFIX}{run_id}:"
+            f"{proto.lower()}:{dst_port}"
+        )
+        pipe = self.r.pipeline(transaction=False)
+        pipe.sadd(key, *source_ips)
+        pipe.expire(key, self.constants.SLIPS_OWN_SERVICE_PORT_TTL)
+        pipe.execute()
+
+    def is_slips_own_service_port(
+        self, run_id: int, proto: str, dst_port: int | str, src_ip: str
+    ) -> bool:
+        """Check a short lived external lookup allowance.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            dst_port: Flow destination port.
+            src_ip: Flow source IP.
+
+        Returns:
+            True when this source and service port were marked for this run.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_SERVICE_PORT_PREFIX}{run_id}:"
+            f"{proto.lower()}:{dst_port}"
+        )
+        return bool(self.r.sismember(key, src_ip))
 
     def get_interface(self) -> str:
         return self.r.hget(

@@ -18,6 +18,7 @@ import pytest
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.structures.risk_weights import RiskWeight
 from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
@@ -51,6 +52,63 @@ def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
     monkeypatch.setattr(sys, "argv", ["slips.py"])
 
     assert RedisDB._should_flush_db() is True
+
+
+def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
+    """Bound self-generated flow marks and separate retained Redis runs."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_connection(
+        123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+
+    key = (
+        "slips:own_connection:123:"
+        "tcp|192.0.2.10|51234|198.51.100.43|43"
+    )
+    source_key = "slips:own_sources:123"
+    pipe = db.r.pipeline.return_value
+    pipe.set.assert_called_once_with(key, "1", ex=3600)
+    pipe.sadd.assert_called_once_with(source_key, "192.0.2.10")
+    pipe.expire.assert_called_once_with(source_key, 3600)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    db.r.exists.return_value = 1
+    assert db.is_slips_own_source_ip(123, "192.0.2.10")
+    assert db.is_slips_own_connection(
+        123, "TCP", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+    db.r.exists.assert_called_once_with(key)
+
+
+def test_slips_own_service_port_window_expires() -> None:
+    """Bound external WHOIS traffic marks to a short run-specific window."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_service_port(
+        123, "tcp", 43, ["192.0.2.10", "2001:db8::10"]
+    )
+
+    key = "slips:own_service_port:123:tcp:43"
+    pipe = db.r.pipeline.return_value
+    pipe.sadd.assert_called_once_with(
+        key, "192.0.2.10", "2001:db8::10"
+    )
+    pipe.expire.assert_called_once_with(key, 10)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    assert db.is_slips_own_service_port(
+        123, "TCP", "43", "192.0.2.10"
+    )
+    db.r.sismember.assert_called_once_with(key, "192.0.2.10")
 
 
 # random values for testing

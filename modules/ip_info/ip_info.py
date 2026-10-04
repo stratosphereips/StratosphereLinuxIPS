@@ -347,10 +347,45 @@ class IPInfo(IAsyncModule):
         self.domain_validity_cache[domain] = True
         return True
 
+    @staticmethod
+    def _local_lookup_source_ips() -> list[str]:
+        """Read current local IPs before a system WHOIS command starts.
+
+        Returns:
+            Non-loopback IPv4 and IPv6 interface addresses.
+        """
+        local_ips: set[str] = set()
+        for interface in netifaces.interfaces():
+            try:
+                addresses = netifaces.ifaddresses(interface)
+            except ValueError:
+                continue
+            for family in (netifaces.AF_INET, netifaces.AF_INET6):
+                for address in addresses.get(family, []):
+                    try:
+                        ip = ipaddress.ip_address(
+                            address["addr"].split("%", 1)[0]
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if not ip.is_loopback:
+                        local_ips.add(str(ip))
+        return sorted(local_ips)
+
     def query_whois(self, domain: str):
         if self._is_negative_cache_hit(self.failed_whois_lookups, domain):
             return None
         try:
+            try:
+                self.db.record_slips_own_service_port(
+                    self.db.main_pid,
+                    "tcp",
+                    43,
+                    self._local_lookup_source_ips(),
+                )
+            except Exception:
+                # A failed traffic mark must not disable domain enrichment.
+                pass
             with (
                 open("/dev/null", "w") as f,
                 redirect_stdout(f),

@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import time
+import ipaddress
+from collections import OrderedDict
 from typing import (
+    Any,
     Dict,
     List,
     Union,
@@ -8,6 +12,7 @@ from typing import (
 )
 
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.input_type import InputType
 from slips_files.common.printer import Printer
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.helpers.whitelist.domain_whitelist import DomainAnalyzer
@@ -43,6 +48,12 @@ class Whitelist:
         self.mac_analyzer = MACAnalyzer(self.db, whitelist_manager=self)
         self.org_analyzer = OrgAnalyzer(self.db, whitelist_manager=self)
         self.read_configuration()
+        self._filter_slips_own_traffic = (
+            self.db.get_input_type() == InputType.INTERFACE
+        )
+        self._own_source_cache: OrderedDict[str, tuple[bool, float]] = (
+            OrderedDict()
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -131,6 +142,9 @@ class Whitelist:
         Checks if the src IP, dst IP, domain, dns answer, or organization
          of this flow is whitelisted.
         """
+        if self._is_slips_own_flow(flow):
+            return True
+
         if self._check_if_whitelisted_domains_of_flow(flow):
             return True
 
@@ -144,6 +158,65 @@ class Whitelist:
             return False
 
         return self.org_analyzer.is_whitelisted(flow)
+
+    def _is_slips_own_flow(self, flow: Any) -> bool:
+        """Exclude a live flow only when its exact tuple came from Slips.
+
+        Parameters:
+            flow: Parsed connection or protocol flow.
+
+        Returns:
+            True only for a module-owned socket in this live run.
+        """
+        if not self._filter_slips_own_traffic:
+            return False
+        proto = str(getattr(flow, "proto", "")).lower()
+        src_port = getattr(flow, "sport", None)
+        dst_port = getattr(flow, "dport", None)
+        if proto not in ("tcp", "udp") or src_port is None or dst_port is None:
+            return False
+        try:
+            src_ip = str(ipaddress.ip_address(str(flow.saddr)))
+            dst_ip = str(ipaddress.ip_address(str(flow.daddr)))
+        except ValueError:
+            return False
+        if proto == "tcp" and str(dst_port) == "43":
+            if (
+                self.db.is_slips_own_service_port(
+                    self.db.main_pid, proto, dst_port, src_ip
+                )
+                is True
+            ):
+                return True
+        now = time.monotonic()
+        cached = self._own_source_cache.get(src_ip)
+        if cached is None or cached[1] <= now:
+            own_source = (
+                self.db.is_slips_own_source_ip(self.db.main_pid, src_ip)
+                is True
+            )
+            self._own_source_cache[src_ip] = (
+                own_source,
+                now + (60 if own_source else 2),
+            )
+            if len(self._own_source_cache) > 1024:
+                self._own_source_cache.popitem(last=False)
+        else:
+            own_source = cached[0]
+            self._own_source_cache.move_to_end(src_ip)
+        if not own_source:
+            return False
+        return (
+            self.db.is_slips_own_connection(
+                self.db.main_pid,
+                proto,
+                src_ip,
+                src_port,
+                dst_ip,
+                dst_port,
+            )
+            is True
+        )
 
     def is_whitelisted_evidence(self, evidence: Evidence) -> bool:
         """

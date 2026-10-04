@@ -30,7 +30,6 @@ from enum import Enum
 from slips_files.common.ips import IPV4_BROADCAST, LOCALHOST_HOSTNAME
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
-
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 BROADCAST_ADDR = IPV4_BROADCAST
 
@@ -445,11 +444,21 @@ class Utils(object):
                     return interface
 
     def get_gateway_for_iface(self, iface: str) -> Optional[str]:
-        """returns the default gateway for the given interface"""
+        """Find the gateway assigned to an interface, including secondary routes.
+
+        Parameters:
+            iface: Monitored network interface.
+
+        Returns:
+            IPv4 or IPv6 gateway for that interface, if one exists.
+        """
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
             if "default" in gws and family in gws["default"]:
                 gw, gw_iface = gws["default"][family][:2]
+                if gw_iface == iface:
+                    return gw
+            for gw, gw_iface, *_ in gws.get(family, ()):
                 if gw_iface == iface:
                     return gw
         return None
@@ -868,12 +877,15 @@ class Utils(object):
         ):
             return None
 
-    def get_own_ips(self, ret="Dict") -> dict[str, list[str]] | list[str]:
+    def get_own_ips(
+        self, ret: str = "Dict", include_public: bool = True
+    ) -> dict[str, list[str]] | list[str]:
         """
         returns a dict of our private IPs from all interfaces and our public
         IPs. return a dict by default
         e.g. { "ipv4": [..], "ipv6": [..] }
         :kwarg ret: "Dict" or "List"
+        :kwarg include_public: Query the public IP service when True.
         and returns a list of all the ips combined if ret=List is given
         """
         if "-i" not in sys.argv:
@@ -899,12 +911,13 @@ class Utils(object):
             except Exception as e:
                 print(f"Error processing interface {interface}: {e}")
 
-        public_ip = self.get_public_ip()
-        if public_ip:
-            if validators.ipv4(public_ip):
-                ips["ipv4"].append(public_ip)
-            elif validators.ipv6(public_ip):
-                ips["ipv6"].append(public_ip)
+        if include_public:
+            public_ip = self.get_public_ip()
+            if public_ip:
+                if validators.ipv4(public_ip):
+                    ips["ipv4"].append(public_ip)
+                elif validators.ipv6(public_ip):
+                    ips["ipv6"].append(public_ip)
 
         if ret == "Dict":
             return ips
