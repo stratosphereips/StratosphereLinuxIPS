@@ -71,6 +71,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self,
         is_profiler_done_semaphore: Optional[Semaphore] = None,
         profiler_queue=None,
+        aid_queue: Optional[multiprocessing.Queue] = None,
         is_profiler_done_event: Optional[Event] = None,
         is_input_done_event: Optional[Event] = None,
         is_input_failed_event: Optional[Event] = None,
@@ -113,8 +114,10 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self.input_handler_obj = None
         self.init_worker_manager()
         # Bound the number of queued tasks to the platform semaphore limit.
-        self.aid_queue = multiprocessing.Queue(
-            maxsize=min(30000000, SEM_VALUE_MAX)
+        self.aid_queue = (
+            aid_queue
+            if aid_queue is not None
+            else multiprocessing.Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         )
         # This starts a process that handles calculatng aid hash and stores
         # the conn fows in the db. why? because it's cpu intensive so we dont
