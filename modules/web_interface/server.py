@@ -5238,7 +5238,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             size = int(self.headers.get("Content-Length", ""))
         except ValueError:
             size = 0
-        if size < 1 or size > 4096:
+        if size < 1 or size > 8192:
             self._send_json(
                 {"error": "Invalid request size"},
                 HTTPStatus.BAD_REQUEST,
