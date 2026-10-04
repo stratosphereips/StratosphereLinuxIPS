@@ -115,12 +115,11 @@ parameters:
   # detections, but the TCP standard defines 1hs.
   tcp_inactivity_timeout: 60
 
-  # Should Slips delete the previously stored data in the Redis DB when
-  # it starts?
-  # If Slips does not delete the DB, it can remember all the past
-  # detections and TI information.
-  # Redis will keep the data as long as it is not stopped.
-  # The persistence is in memory, not disk.
+  # Clear the current run's Redis database 0 at startup. Database 1 on
+  # port 6379 is the shared cache and is not cleared by this setting.
+  # Set false only for workflows that manage Redis state explicitly;
+  # it does not preserve the output directory or safely resume a run.
+  # Use --keep-history to retain old live-interface detections in SQLite.
   # deletePrevdb : false
   deletePrevdb: true
 
