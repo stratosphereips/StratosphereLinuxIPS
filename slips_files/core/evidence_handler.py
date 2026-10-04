@@ -28,6 +28,7 @@ import time
 from typing import List
 
 from multiprocessing import Process
+from multiprocessing.queues import Queue as MultiprocessingQueue
 
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.abstracts.icore import ICore
@@ -65,7 +66,19 @@ class EvidenceHandler(ICore):
     )
     show_popup = EvidenceHandlerWorker.show_popup
 
-    def init(self, total_processes_to_start: int = 1):
+    def init(
+        self,
+        total_processes_to_start: int = 1,
+        evidence_worker_queue: MultiprocessingQueue | None = None,
+        evidence_logger_q: MultiprocessingQueue | None = None,
+    ) -> None:
+        """Set up evidence workers and their main-owned queues.
+
+        Parameters:
+            total_processes_to_start: Expected startup announcement count.
+            evidence_worker_queue: Queue shared with evidence workers.
+            evidence_logger_q: Queue shared with the evidence logger.
+        """
         # shared with every evidence worker this process starts, so
         # they all announce themselves against the same run-wide total
         self.total_processes_to_start = total_processes_to_start
@@ -82,15 +95,19 @@ class EvidenceHandler(ICore):
         # read from there, in that case all workers will process the same
         # msg. instead we use a queue, so that each worker processes a
         # unique msg.
-        self.evidence_worker_queue = multiprocessing.Queue(
-            maxsize=min(30000000, SEM_VALUE_MAX)
+        self.evidence_worker_queue = (
+            evidence_worker_queue
+            if evidence_worker_queue is not None
+            else multiprocessing.Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         )
         self.evidence_worker_child_processes: List[Process] = []
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue(
-            maxsize=min(30000000, SEM_VALUE_MAX)
+        self.evidence_logger_q = (
+            evidence_logger_q
+            if evidence_logger_q is not None
+            else multiprocessing.Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         )
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
