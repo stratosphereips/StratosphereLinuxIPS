@@ -7,6 +7,8 @@ from unittest.mock import (
 )
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
+import sys
 
 import redis
 import json
@@ -33,6 +35,22 @@ def ensure_redis_options(monkeypatch: Any) -> None:
         None.
     """
     monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
+
+
+def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
+    """Clear active Redis data even when config disables normal flushing.
+
+    Parameters:
+        monkeypatch: Restores RedisDB class settings and argv.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=False)
+    assert db.rdb is not None
+    monkeypatch.setattr(RedisDB, "args", SimpleNamespace(keep_history=True))
+    monkeypatch.setattr(RedisDB, "config_flush_db", False)
+    monkeypatch.setattr(RedisDB, "flush_db", True)
+    monkeypatch.setattr(sys, "argv", ["slips.py"])
+
+    assert RedisDB._should_flush_db() is True
 
 
 # random values for testing
