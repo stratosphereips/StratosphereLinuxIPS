@@ -192,6 +192,29 @@ uses port 6379, and refuses to start while any other Slips instance is running.
 It cannot be combined with `-m` or a different `-P` port. Start a normal run
 without the flag when you want a fresh output directory and detection history.
 
+In a live-interface run, `flow_retention` in `config/slips.yaml` keeps all raw
+flows for 24 hours by default, then keeps only those linked to non-excluded
+evidence for up to 30 days. It runs in bounded background batches, including
+after a `--keep-history` restart. It never prunes imported captures. Detection
+records remain in SQLite after their raw flows expire, so the web can still
+show older alerts and evidence. Set `enabled: false` to retain every raw flow,
+or change `ordinary_hours` and `linked_days` to adjust the two windows.
+This limits raw-flow age, not total disk use: retained evidence, alerts, and
+their links still accumulate. A strict disk budget also requires an explicit
+policy for expiring or summarizing old detections.
+
+New output databases return deleted pages to the filesystem incrementally.
+For an output database created before flow retention was added, stop Slips
+before compacting it:
+
+```bash
+sqlite3 output/my-network/databases/flows.sqlite 'VACUUM;'
+```
+
+SQLite needs temporary free disk space roughly equal to the
+database size during that operation. Normal live retention can reuse freed
+pages in the old database even without this one-time compaction.
+
 The option preserves past detections in the output directory; it does not
 restore active Redis state after a machine reboot. For an archival Redis
 snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
@@ -336,6 +359,17 @@ request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 
 This whitelist can be enabled or disabled by changing the ```enable_local_whitelist``` key in `config/slips.yaml`.
+
+When monitoring a live interface, Slips also excludes its own information
+lookup connections from profiling. Python lookup sockets, including update
+checks, are matched by their full source and destination IPs, ports, and
+protocol. The external `whois` command is covered by a ten-second allowance
+for TCP port 43 from the current
+local interface addresses. These automatic exclusions apply only to the
+current Slips run and do not affect imported captures. Redis marks expire
+automatically, including when run history is retained. The database import
+also reads local interface addresses without making a public-IP request;
+public-IP lookups made by running modules use the same socket tracking.
 
 Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
 
@@ -542,6 +576,11 @@ update:
 ```
 
 This setting is separate from the runtime ```feeds_update_manager``` module, which only updates TI feeds and related files.
+When a remote TI feed responds with an empty body, Slips keeps the last valid
+entries for that feed and records the skipped update in `slips.log`. A later
+nonempty version is loaded at the next scheduled check. Invalid individual
+entries are skipped and noted in `slips.log`; they do not stop the rest of a
+valid feed from loading.
 
 Automatic Slips updates may overwrite the default config files shipped with Slips. If you want to keep local config changes safe, do not modify the default config files. Create and use your own config files with different names instead.
 
