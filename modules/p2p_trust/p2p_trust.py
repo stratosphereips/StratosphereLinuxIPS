@@ -852,6 +852,14 @@ class Trust(IModule):
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
+    def should_stop(self) -> bool:
+        """Stop peer callbacks as soon as Slips begins shutting down.
+
+        Returns:
+            True when the shared termination event is set.
+        """
+        return self.termination_event.is_set()
+
     def main(self):
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
