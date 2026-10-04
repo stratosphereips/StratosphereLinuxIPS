@@ -742,6 +742,9 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
     assert process_manager.profiler_queue._closed
+    assert process_manager.aid_queue._closed
+    assert process_manager.evidence_worker_queue._closed
+    assert process_manager.evidence_logger_q._closed
     process_manager.main.logger._startup_queue.close.assert_called_once_with()
     process_manager.main.print.assert_any_call(
         "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
