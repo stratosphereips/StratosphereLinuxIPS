@@ -791,6 +791,40 @@ def test_network_name_post_routes_historical_profile() -> None:
     reader.save_network_name.assert_not_called()
 
 
+def test_host_annotation_post_saves_name_and_note() -> None:
+    """Route the Host editor's name and note to permanent storage."""
+    _module_factory = ModuleFactory()
+    body = json.dumps({
+        "ip": "192.168.1.20", "network_id": "gateway:aa:bb:cc:dd:ee:01",
+        "name": "My iPad", "note": "Kitchen tablet",
+    }).encode()
+    reader = Mock()
+    reader.save_host_annotation.return_value = {
+        "ip": "192.168.1.20", "name": "My iPad", "note": "Kitchen tablet"
+    }
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/host-annotation"
+    handler.headers = {
+        "Host": "127.0.0.1:55000",
+        "Origin": "http://127.0.0.1:55000",
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+
+    handler.do_POST()
+
+    reader.save_host_annotation.assert_called_once_with(
+        "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01",
+        "My iPad", "Kitchen tablet",
+    )
+    handler._send_json.assert_called_once_with(
+        reader.save_host_annotation.return_value
+    )
+
+
 def test_host_workspace_includes_permanent_identity_clues(
     tmp_path: Path,
 ) -> None:
@@ -1312,6 +1346,7 @@ def test_host_names_resolves_live_and_historical_identity(
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
     reader.history_path = tmp_path / "history.sqlite"
+    reader.host_profiles_path = tmp_path / "missing-host-profiles.sqlite"
     initialize_history(reader.history_path)
     with sqlite3.connect(reader.history_path) as connection:
         connection.executemany(
@@ -1336,7 +1371,11 @@ def test_host_names_resolves_live_and_historical_identity(
         None,
         None,
         None,
+        None,
+        None,
         json.dumps({"domains": ["new.local"]}),
+        None,
+        None,
         None,
         None,
     ]
@@ -1361,10 +1400,68 @@ def test_host_names_resolves_live_and_historical_identity(
         "10.0.0.3": {"name": "new.local", "source": "DNS"},
         "2001:0DB8:0:0::5": {"name": "cached.example", "source": "rDNS"},
     }
-    assert reader.redis.pipeline.return_value.hget.call_count == 8
+    assert reader.redis.pipeline.return_value.hget.call_count == 12
     reader.cache.hget.assert_called_once_with(
         "IPsInfo:reverse_dns", "2001:db8::5"
     )
+
+
+def test_host_names_prefers_saved_name_then_vendor(tmp_path: Path) -> None:
+    """Show a manual name or vendor beside IPs in alert labels.
+
+    Parameters:
+        tmp_path: Isolated history and permanent profile paths.
+    """
+    _module_factory = ModuleFactory()
+    profile_path = tmp_path / "permanent" / "hosts.sqlite"
+    network = {
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }
+    store = HostProfileStore(
+        profile_path, "run-one", lambda _: network, ["en0"]
+    )
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0", starttime="100", type_="conn",
+            saddr="192.168.1.20", daddr="8.8.8.8",
+        )
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = profile_path
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.execute(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            ("192.168.1.21", 1, json.dumps({"mac_vendor": "Samsung"})),
+        )
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [
+        "learned-name", None, "Apple", None, None, None,
+    ]
+    reader.cache = Mock()
+    reader.cache.hget.return_value = None
+
+    saved = reader.save_host_annotation(
+        "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01",
+        "My tablet", "Kitchen iPad",
+    )
+    names = reader.host_names({"ip": ["192.168.1.20", "192.168.1.21"]})
+
+    assert saved["note"] == "Kitchen iPad"
+    assert names["names"]["192.168.1.20"] == {
+        "name": "My tablet", "source": "User name"
+    }
+    assert names["names"]["192.168.1.21"] == {
+        "name": "Samsung device", "source": "MAC vendor"
+    }
+
+    with pytest.raises(ValueError, match="profile is unavailable"):
+        reader.save_host_annotation(
+            "192.168.1.20", "gateway:aa:bb:cc:dd:ee:02",
+            "Wrong network", "Do not save",
+        )
 
 
 @pytest.mark.parametrize("redis_output", [None, "output/different"])
