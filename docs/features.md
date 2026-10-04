@@ -276,11 +276,21 @@ These are the cases where Slips marks the port as known and doesn't trigger an a
 Slips considers an IP belongs to an org if:
 
 1. Both `saddr` and `daddr` have the organization's name in their MAC vendor (e.g. Apple.)
-2. Both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv` for that organization.
+2. `daddr` belongs to the range specified in `ports_used_by_specific_orgs.csv` for that organization.
 3. If the SNI, hostname, rDNS, ASN of this IP belong to this organization.
 4. If the IP is hardcoded in any of the organizations IPs in `slips_files/organizations_info/`.
 
 Otherwise, Slips triggers and "unknown port" evidence.
+
+For live local monitoring, high-numbered UDP traffic from the monitored
+computer to a peer on its current subnet is exempt from this evidence only
+when Zeek records distinct source and destination MACs, neither destination
+MAC is the gateway, and the offline MAC database identifies both vendors as
+Apple. The organization-specific port check also requires both endpoint MAC
+vendors to match when MAC vendor is its only evidence. These checks do not
+establish that devices belong to the same person. Private Wi-Fi addresses can
+prevent vendor identification; when the required MAC evidence is missing,
+Slips keeps the unknown-port detection.
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
