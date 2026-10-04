@@ -70,6 +70,12 @@ class HostProfileStore:
                 "CREATE TABLE IF NOT EXISTS network_names ("
                 "network_id TEXT PRIMARY KEY, name TEXT NOT NULL)"
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_annotations ("
+                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+                "name TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', "
+                "updated_at REAL NOT NULL, PRIMARY KEY (network_id, ip))"
+            )
         if os.geteuid() == 0:
             os.chown(path, owner.st_uid, owner.st_gid)
         path.chmod(0o600)
@@ -208,6 +214,76 @@ class HostProfileStore:
                 ).fetchone()
                 is not None
             )
+
+    @staticmethod
+    def set_host_annotation(
+        path: Path, ip: str, network_id: str, name: str, note: str
+    ) -> None:
+        """Persist a user name and note for one network-specific host.
+
+        Parameters:
+            path: Permanent host profile database.
+            ip: Host IP address.
+            network_id: Network identity already associated with this host.
+            name: User name, or empty to clear it.
+            note: User note, or empty to clear it.
+        """
+        normalized = str(ipaddress.ip_address(ip))
+        with sqlite3.connect(path, timeout=5) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_annotations ("
+                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+                "name TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', "
+                "updated_at REAL NOT NULL, PRIMARY KEY (network_id, ip))"
+            )
+            if name or note:
+                connection.execute(
+                    "INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(network_id, ip) DO UPDATE SET "
+                    "name=excluded.name, note=excluded.note, "
+                    "updated_at=excluded.updated_at",
+                    (network_id, normalized, name, note, time.time()),
+                )
+            else:
+                connection.execute(
+                    "DELETE FROM host_annotations WHERE network_id=? AND ip=?",
+                    (network_id, normalized),
+                )
+
+    @staticmethod
+    def annotations_for_ips(
+        path: Path, ips: Iterable[str]
+    ) -> dict[str, dict[str, str]]:
+        """Read one latest network annotation per IP in a bounded query.
+
+        Parameters:
+            path: Permanent host profile database.
+            ips: IP addresses displayed in the current view.
+
+        Returns:
+            User names and notes indexed by IP address.
+        """
+        keys = list(dict.fromkeys(ips))
+        if not keys or not path.exists():
+            return {}
+        placeholders = ",".join("?" for _ in keys)
+        with sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=1
+        ) as connection:
+            try:
+                rows = connection.execute(
+                    "SELECT h.ip, a.name, a.note FROM hosts h "
+                    "LEFT JOIN host_annotations a ON a.network_id=h.network_id "
+                    "AND a.ip=h.ip WHERE h.ip IN (" + placeholders + ") "
+                    "ORDER BY h.last_seen DESC",
+                    keys,
+                ).fetchall()
+            except sqlite3.OperationalError:
+                return {}
+        result: dict[str, dict[str, str]] = {}
+        for ip, name, note in rows:
+            result.setdefault(ip, {"name": name or "", "note": note or ""})
+        return result
 
     def _network_state(self, interface: str) -> dict[str, Any]:
         """Read a recent network state for an interface.
@@ -517,6 +593,17 @@ class HostProfileStore:
             names = HostProfileStore._network_names_from_connection(
                 conn, (host["network_id"] for host in hosts)
             )
+            try:
+                annotations = {
+                    network_id: {"user_name": name, "user_note": note}
+                    for network_id, name, note in conn.execute(
+                        "SELECT network_id, name, note FROM host_annotations "
+                        "WHERE ip=?",
+                        (normalized,),
+                    )
+                }
+            except sqlite3.OperationalError:
+                annotations = {}
             profiles = []
             for host in hosts:
                 facts = conn.execute(
@@ -532,6 +619,10 @@ class HostProfileStore:
                         "network_name": names.get(host["network_id"], ""),
                         "network_label": names.get(
                             host["network_id"], host["network_label"]
+                        ),
+                        **annotations.get(
+                            host["network_id"],
+                            {"user_name": "", "user_note": ""},
                         ),
                         "facts": [
                             dict(fact)
