@@ -212,7 +212,13 @@ class HostProfile(IModule):
         started = time.monotonic()
         count = self.process_batch()
         elapsed = time.monotonic() - started
-        self.termination_event.wait(max(0.25, elapsed * 4) if count else 1.0)
+        # Event.wait() can lose its condition lock after a worker is
+        # force-stopped on macOS. Check the stop flag between short sleeps.
+        delay = max(0.25, elapsed * 4) if count else 1.0
+        while delay > 0 and not self.termination_event.is_set():
+            pause = min(delay, 0.25)
+            time.sleep(pause)
+            delay -= pause
         return False
 
     def shutdown_gracefully(self) -> None:

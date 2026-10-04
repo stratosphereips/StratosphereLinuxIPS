@@ -45,6 +45,17 @@ class RemoteFeedUpdaterMixin:
         try:
             self.log(f"Updating the remote file {link_to_download}")
             response = self.responses[link_to_download]
+            if not response.text.strip():
+                # A 200 response can still contain no feed entries. Keep the
+                # previously loaded IoCs until the source has data again.
+                self.db.set_feed_last_update_time(
+                    link_to_download, time.time()
+                )
+                self.log(
+                    f"Skipped empty remote feed {link_to_download}; "
+                    "retained previously loaded entries."
+                )
+                return False
             file_name_to_download = link_to_download.split("/")[-1]
 
             # first download the file and save it locally

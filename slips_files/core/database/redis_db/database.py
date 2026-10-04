@@ -656,44 +656,36 @@ class RedisDB(
 
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
-        Wrapper for redis' get_message() to be able to handle
-        redis.exceptions.ConnectionError
-        notice: there has to be a timeout or the channel will wait forever
-        and never receive a new msg
-        :param channel_obj: PubSub obj of the channel
+        Read a PubSub message and retry briefly when Redis disconnects.
+
+        Parameters:
+            channel_obj: PubSub channel to poll.
+            timeout: Maximum wait for one message.
+
+        Returns:
+            Message or None when no message is ready or Redis is recovering.
         """
         try:
             msg = channel_obj.get_message(timeout=timeout)
+            self.connection_retry = 0
+            self.backoff = 0.1
             if msg:
                 self._track_flow_processing_rate(msg)
             return msg
         except redis.exceptions.ConnectionError as ex:
-            # make sure we log the error only once
-            if not self.is_connection_error_logged():
-                self.mark_connection_error_as_logged()
-
+            # Redis cannot be used to record a Redis outage. Keep retry state
+            # local to this process and avoid recursive calls or huge backoffs.
+            self.connection_retry += 1
+            if self.connection_retry == 1:
+                self.print(f"Redis connection lost; retrying: {ex}", 0, 1)
             if self.connection_retry >= self.max_retries:
-                self.publish_stop()
-                self.print(
-                    f"Stopping slips due to redis.exceptions.ConnectionError: {ex}",
-                    1,
-                    1,
-                )
-            else:
-                # don't log this each retry
-                if self.connection_retry % 10 == 0:
-                    # retry to connect after backing off for a while
-                    self.print(
-                        f"redis.exceptions.ConnectionError: "
-                        f"retrying to connect in {self.backoff}s. "
-                        f"Retries to far: {self.connection_retry}",
-                        0,
-                        1,
-                    )
-                time.sleep(self.backoff)
-                self.backoff = self.backoff * 2
-                self.connection_retry += 1
-                self.get_message(channel_obj, timeout)
+                raise RuntimeError(
+                    f"Redis unavailable after {self.max_retries} retries"
+                ) from None
+            delay = min(self.backoff, 2.0)
+            time.sleep(delay)
+            self.backoff = min(delay * 2, 2.0)
+            return None
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)

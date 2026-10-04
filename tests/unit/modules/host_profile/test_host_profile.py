@@ -4,11 +4,35 @@ import json
 import sqlite3
 import time
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from modules.host_profile.host_profile import HostProfile
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+
+
+def test_host_profile_idle_wait_does_not_touch_multiprocessing_event() -> None:
+    """Avoid the macOS condition-lock assertion after worker shutdown."""
+    factory = ModuleFactory()
+    module = HostProfile.__new__(HostProfile)
+    module.process_batch = Mock(return_value=0)
+    module.termination_event = factory.logger
+    module.termination_event.is_set.return_value = False
+    module.termination_event.wait.side_effect = AssertionError(
+        "must acquire() condition before using wait()"
+    )
+
+    with patch("modules.host_profile.host_profile.time.sleep") as sleep:
+        assert module.main() is False
+
+    assert sleep.call_count == 4
+    sleep.assert_any_call(0.25)
+    module.termination_event.wait.assert_not_called()
+
+    module.termination_event.is_set.side_effect = [False, True]
+    with patch("modules.host_profile.host_profile.time.sleep") as sleep:
+        assert module.main() is False
+    sleep.assert_called_once_with(0.25)
 
 
 def test_host_profile_processes_bounded_batches_without_profiler_writes(
