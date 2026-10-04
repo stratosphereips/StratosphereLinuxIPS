@@ -38,6 +38,10 @@ new URL is written to `slips.log`. The browser must reconnect at that URL;
 
 The interface mode exposes run data to hosts that can reach that network interface. The server has no login layer; use host firewall rules or a trusted network.
 
+Hover over a line or plotted point in the Overview, P2P, or Host charts to see
+that sample's full local date and time, series name, and value. The hover area
+is wider than the visible line so points are easier to inspect.
+
 ## Live network changes
 
 When Slips monitors an interface, it checks that interface's current network
@@ -381,6 +385,12 @@ table, so the next selection starts a new investigation.
 ### Hosts
 
 The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. It shows the MAC vendor beside the MAC address when Slips has identified one; otherwise the vendor cell shows a dash. Vendor names can be searched. Inventory can be filtered by local/public scope and by the host's maximum threat level. Its current Slips score column reads the active time-window accumulator directly from Redis and retains the last snapshot for completed runs. The separate **Past peak Slips score** column shows the maximum real score persisted after evidence processing for that exact profile IP over the full run. Both values show the configured threshold and are sortable server-side.
+
+An IP mentioned in Evidence can be a destination without its own Slips
+profile. Selecting such an IP shows an explanation in the Host workspace;
+when the captured configuration uses `analysis_direction: out`, it explains
+that Slips profiled only the source of the flow. It does not create a host
+profile for an address Slips ignored.
 
 Selecting a host opens a full-width workspace with:
 
