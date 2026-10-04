@@ -181,6 +181,16 @@ parameters:
   # client_ips : [10.0.0.1, 11.0.0.0/24]
   client_ips: []
 
+# Live-interface flow retention. Detection records stay in flows.sqlite;
+# ordinary raw flows expire sooner than flows linked to non-excluded evidence.
+# This does not run when importing a capture file.
+flow_retention:
+  enabled: true
+  ordinary_hours: 24
+  linked_days: 30
+  batch_size: 500
+  interval_seconds: 60
+
 #############################
 Debug:
   # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
