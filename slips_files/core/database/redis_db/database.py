@@ -372,6 +372,12 @@ class RedisDB(
         if will_need_the_db_later:
             return False
 
+        if getattr(cls.args, "keep_history", False) is True:
+            # Historical detections live in the retained SQLite run database.
+            # Redis DB 0 contains active process and time-window state and must
+            # start fresh even when deletePrevdb is disabled in the config.
+            return cls.flush_db
+
         return cls.config_flush_db and cls.flush_db
 
     @classmethod
