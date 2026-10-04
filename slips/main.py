@@ -71,6 +71,7 @@ class Main:
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
             self.checker.verify_given_flags()
+            self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
                 self.input_type: InputType
@@ -185,6 +186,11 @@ class Main:
         if self.args.is_slips_started_by_an_update:
             # we should append to existing files in the output dir,
             # and never overwrite them.
+            return
+
+        if getattr(self.args, "keep_history", False) is True:
+            self.redis_man.validate_keep_history()
+            os.chmod(self.args.output, 0o777)
             return
 
         if not self.args.output:
