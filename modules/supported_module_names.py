@@ -20,6 +20,7 @@ class Modules(str, Enum):
     CYST = "cyst"
     EVIDENCE_HANDLER = "evidence_handler"
     EXPORTING_ALERTS = "exporting_alerts"
+    FEDERATED_NETWORK_MODULE = "federated_network_module"
     FEEDS_UPDATE_MANAGER = "feeds_update_manager"
     FIDES = "fides"
     FLOW_ALERTS = "flow_alerts"
