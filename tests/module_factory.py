@@ -83,12 +83,24 @@ class ModuleFactory:
         start_redis_server=True,
         disabled_detections: list[str] | None = None,
     ):
-        from slips_files.core.database.database_manager import DBManager
+        """Create a database manager for tests without flushing by default.
 
+        Parameters:
+            port: Redis port used by the test database.
+            output_dir: Directory for test output.
+            flush_db: Whether to clear Redis during initialization.
+            start_redis_server: Whether the test may start Redis.
+            disabled_detections: Detection names disabled in the test.
+
+        Returns:
+            Configured test database manager.
         """
-        flush_db is False by default  because we use this function to check
-        the db after integration tests to make sure everything's going fine
-        """
+        from slips_files.core.database.database_manager import DBManager
+        from slips_files.common.parsers.config_parser import ConfigParser
+
+        # Redis authentication reads the real persistent path while the
+        # constructor below temporarily mocks builtins.open.
+        ConfigParser()
 
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = None

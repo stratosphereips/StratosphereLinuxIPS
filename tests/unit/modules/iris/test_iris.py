@@ -152,11 +152,10 @@ def test_pre_main_starts_iris_with_runtime_config(tmp_path):
         "config/iris_config.yaml", 6379
     )
     command = mock_popen.call_args.args[0]
-    exe_dir = os.path.dirname(command[0])
     assert command[1] == "--conf"
-    assert os.path.normpath(os.path.join(exe_dir, command[2])) == (
-        os.path.normpath(runtime_conf)
-    )
+    assert (
+        Path(mock_popen.call_args.kwargs["cwd"]) / command[2]
+    ).resolve() == (Path(runtime_conf))
     assert not iris.stopFlag
     iris.log_file.close()
 
@@ -220,9 +219,11 @@ def test_iris_native_binary_keeps_module_working_directory() -> None:
     iris = ModuleFactory().create_iris_obj()
     iris._iris_configurator = Mock(return_value="output/iris_config.yaml")
     iris.get_module_specific_output_path = Mock(return_value="iris_logs.txt")
-    with patch("modules.iris.iris.ConfigParser") as parser, patch(
-        "modules.iris.iris.subprocess.Popen"
-    ) as popen, patch("builtins.open"):
+    with (
+        patch("modules.iris.iris.ConfigParser") as parser,
+        patch("modules.iris.iris.subprocess.Popen") as popen,
+        patch("builtins.open"),
+    ):
         parser.return_value.read_configuration.return_value = "output/bin/iris"
         parser.return_value.get_iris_config_location.return_value = (
             "config/iris_config.yaml"

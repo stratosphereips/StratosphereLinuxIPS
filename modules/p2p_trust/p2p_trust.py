@@ -831,7 +831,6 @@ class Trust(IModule):
             )
             return
 
-        self.print(f"P2P is listening on {self.host} port {self.port}.")
         executable = self._get_pigeon_command()
 
         if self.create_p2p_logfile:

@@ -456,6 +456,14 @@ class IPInfo(IAsyncModule):
         if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
+    async def gather_tasks_and_shutdown_gracefully(self) -> None:
+        """Stop the optional MAC database retry before draining lookups."""
+        reader = getattr(self, "reading_mac_db_task", None)
+        if isinstance(reader, asyncio.Task) and not reader.done():
+            reader.cancel()
+            await asyncio.gather(reader, return_exceptions=True)
+        await super().gather_tasks_and_shutdown_gracefully()
+
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
             self.asn_db.close()

@@ -79,7 +79,6 @@ class RemoteFeedUpdaterMixin:
                 os.remove(feed_local_path)
                 return False
 
-
             # File is updated in the server and was in our database.
             # Delete previous iocs of this file.
             self.db.delete_feed_entries(link_to_download)

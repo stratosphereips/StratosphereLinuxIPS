@@ -483,6 +483,30 @@ async def tmp_function():
     await asyncio.sleep(1)
 
 
+async def test_shutdown_cancels_mac_database_retry_and_drains_lookups() -> None:
+    """Do not wait for optional MAC data after all flows are processed."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.channels = {}
+    ip_info.shutdown_gracefully = AsyncMock()
+    reader = ip_info.create_task(asyncio.sleep, 600)
+    ip_info.reading_mac_db_task = reader
+    completed: list[bool] = []
+
+    async def finish_lookup() -> None:
+        """Mark a required lookup as finished."""
+        completed.append(True)
+
+    ip_info.create_task(finish_lookup)
+
+    await asyncio.wait_for(
+        ip_info.gather_tasks_and_shutdown_gracefully(), timeout=1
+    )
+
+    assert reader.cancelled()
+    assert completed == [True]
+    ip_info.shutdown_gracefully.assert_awaited_once()
+
+
 async def test_shutdown_gracefully(
     mocker,
 ):

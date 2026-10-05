@@ -36,6 +36,7 @@ def ensure_redis_options(monkeypatch: Any) -> None:
         None.
     """
     monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
+    monkeypatch.setattr(RedisDB, "instances", {}, raising=False)
 
 
 def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
@@ -65,10 +66,7 @@ def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
         123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43
     )
 
-    key = (
-        "slips:own_connection:123:"
-        "tcp|192.0.2.10|51234|198.51.100.43|43"
-    )
+    key = "slips:own_connection:123:" "tcp|192.0.2.10|51234|198.51.100.43|43"
     source_key = "slips:own_sources:123"
     pipe = db.r.pipeline.return_value
     pipe.set.assert_called_once_with(key, "1", ex=3600)
@@ -98,16 +96,12 @@ def test_slips_own_service_port_window_expires() -> None:
 
     key = "slips:own_service_port:123:tcp:43"
     pipe = db.r.pipeline.return_value
-    pipe.sadd.assert_called_once_with(
-        key, "192.0.2.10", "2001:db8::10"
-    )
+    pipe.sadd.assert_called_once_with(key, "192.0.2.10", "2001:db8::10")
     pipe.expire.assert_called_once_with(key, 10)
     pipe.execute.assert_called_once()
 
     db.r.sismember.return_value = 1
-    assert db.is_slips_own_service_port(
-        123, "TCP", "43", "192.0.2.10"
-    )
+    assert db.is_slips_own_service_port(123, "TCP", "43", "192.0.2.10")
     db.r.sismember.assert_called_once_with(key, "192.0.2.10")
 
 
@@ -736,6 +730,14 @@ def test_setup_config_file_uses_absolute_redis_paths(
     )
     monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
     monkeypatch.setattr(RedisDB, "args", Mock(save=False), raising=False)
+    monkeypatch.setattr(
+        "slips_files.core.database.redis_db.database.ensure_redis_password",
+        lambda: "test-password",
+    )
+    monkeypatch.setattr(
+        "slips_files.core.database.redis_db.database.get_redis_auth_conf_path",
+        lambda: str(tmp_path / "redis_auth.conf"),
+    )
 
     RedisDB._setup_config_file()
 
