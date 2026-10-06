@@ -211,6 +211,9 @@ class ConnAnalyzer(IAsyncModule):
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
+        if self.is_broadcast_or_multicast_flow(flow):
+            return
+
         if not flow.dport:
             return
 
@@ -248,6 +251,56 @@ class ConnAnalyzer(IAsyncModule):
             # we don't have info about this port
             self.set_evidence.unknown_port(twid, flow)
             return True
+
+    def is_broadcast_or_multicast_flow(self, flow: Any) -> bool:
+        """Check whether either endpoint is multicast or broadcast traffic.
+
+        Parameters:
+            flow: Connection flow with source, destination, and interface.
+
+        Returns:
+            True when an endpoint is multicast or a known IPv4 broadcast.
+        """
+        addresses = []
+        for value in (flow.saddr, flow.daddr):
+            try:
+                address = ipaddress.ip_address(value)
+            except ValueError:
+                continue
+            if address.is_multicast:
+                return True
+            if isinstance(address, ipaddress.IPv4Address):
+                if address == ipaddress.IPv4Address("255.255.255.255"):
+                    return True
+                addresses.append(address)
+
+        if not addresses:
+            return False
+        interface = str(getattr(flow, "interface", "") or "")
+        if not interface:
+            return False
+        now = time.monotonic()
+        network_cache = getattr(self, "_broadcast_network_cache", {})
+        cached = network_cache.get(interface)
+        if not cached or now - cached[0] >= 5:
+            local_network = self.db.get_local_network(interface)
+            try:
+                parsed_network = ipaddress.ip_network(
+                    local_network, strict=False
+                )
+            except (TypeError, ValueError):
+                parsed_network = None
+            cached = (now, parsed_network)
+            network_cache[interface] = cached
+            self._broadcast_network_cache = network_cache
+        local_network = cached[1]
+        if isinstance(local_network, ipaddress.IPv4Network):
+            if local_network.prefixlen < 31 and any(
+                address == local_network.broadcast_address
+                for address in addresses
+            ):
+                return True
+        return False
 
     def is_local_apple_peer_flow(self, flow: Any) -> bool:
         """Recognize direct high-port UDP traffic between local Apple devices.
@@ -864,6 +917,9 @@ class ConnAnalyzer(IAsyncModule):
         Alerts when there's a connection from a private IP to
         another private IP except for expected DNS and DHCP service traffic.
         """
+
+        if self.is_broadcast_or_multicast_flow(flow):
+            return
 
         def is_dhcp_conn(flow):
             # Bootstrap protocol server. Used by DHCP servers to communicate
