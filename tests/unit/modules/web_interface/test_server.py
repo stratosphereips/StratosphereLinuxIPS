@@ -2247,6 +2247,21 @@ def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
     assert result["items"][0]["id"] == "current"
 
 
+def test_live_range_uses_wall_clock_for_interface_runs(mocker) -> None:
+    """Keep stale detections outside the live window during an idle capture."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "interface"
+    mocker.patch("modules.web_interface.server.time.time", return_value=10_000)
+
+    start, end, range_name = reader._time_bounds(
+        {"range": ["live"]}, latest_event=7_000
+    )
+
+    assert (start, end, range_name) == (6_400, 10_000, "live")
+
+
 def test_host_load_reports_directional_flows_and_bytes(tmp_path) -> None:
     """Test host totals separate inbound, outbound, and internal traffic."""
     _module_factory = ModuleFactory()

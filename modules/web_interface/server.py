@@ -1066,14 +1066,13 @@ class RunDataReader:
         except ValueError:
             return default
 
-    @classmethod
     def _time_bounds(
-        cls,
+        self,
         query: Dict[str, List[str]],
         latest_event: Optional[float] = None,
     ) -> tuple[Optional[float], Optional[float], str]:
         """
-        Resolve named or custom time bounds against the data clock.
+        Resolve time bounds against the active run or capture clock.
 
         Parameters:
             query: Request query-string values.
@@ -1082,19 +1081,27 @@ class RunDataReader:
         Returns:
             Start, end, and normalized range name.
         """
-        range_name = cls._query_value(query, "range", "live")
+        range_name = self._query_value(query, "range", "live")
         now = float(latest_event or time.time())
+        try:
+            input_type = str(
+                self.redis.hget("analysis", "input_type") or ""
+            ).lower()
+        except redis.RedisError:
+            input_type = ""
+        if input_type in {"interface", "stdin", "cyst"}:
+            now = time.time()
         if range_name in TIME_RANGES:
             return now - TIME_RANGES[range_name], now, range_name
         if range_name in {"all", "full"}:
             return None, now, "all"
         if range_name == "custom":
             try:
-                start = float(cls._query_value(query, "from"))
+                start = float(self._query_value(query, "from"))
             except ValueError:
                 start = None
             try:
-                end = float(cls._query_value(query, "to"))
+                end = float(self._query_value(query, "to"))
             except ValueError:
                 end = now
             return start, end, "custom"

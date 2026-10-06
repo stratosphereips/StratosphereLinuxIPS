@@ -203,7 +203,7 @@ The browser never loads a complete run:
 
 Alerts, Evidence, Hosts, and host traffic support Live, 1 hour, 24 hours, 7 days, Full run, and Custom ranges. Custom and past ranges are frozen during investigation. Changing a filter resets pagination. Badges show full-run durable totals; each table separately reports its filtered total and current page size.
 
-For offline files, named ranges use the newest timestamp in that data source as their endpoint. For example, Live evidence means the final hour of evidence currently processed from the capture, not the final hour on the computer's wall clock. This keeps offline evidence and host traffic visible while retaining normal wall-clock behavior for interface analyses.
+For interface, standard-input, and CYST runs, named ranges use the computer's current time as their endpoint. This keeps old detections retained by `--keep-history` out of **Live** after they become more than an hour old. For offline files, named ranges use the newest timestamp in that data source as their endpoint; **Live** evidence means the final hour of evidence in the capture, not the final hour on the computer's wall clock.
 
 Offline file and folder analyses initially open Alerts, Evidence, Hosts, and host traffic at **Full run**, so a short final capture interval cannot make a populated run look empty. Interface, standard-input, and CYST analyses initially open at **Live**. The user can change the range at any time. Capture-relative timestamps are displayed as elapsed values such as `T+07:53:06`, never as misleading dates in 1970.
 
