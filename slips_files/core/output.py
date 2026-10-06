@@ -195,8 +195,20 @@ class Output(IObserver):
             # with the next process' output
             sys.stdout.flush()
 
+        except (BrokenPipeError, ValueError):
+            # Shutdown can close a child process' inherited stdout before
+            # its final queued messages are drained. A failed terminal
+            # write must not turn that late message into a module failure.
+            return
         except Exception as e:
-            print(f"Problem printing {txt}. {e}")
+            # Shutdown can close a child process' inherited stdout before
+            # its final queued messages are drained. Preserve diagnostics
+            # for unexpected terminal errors when stderr is still usable.
+            try:
+                if sys.__stderr__ and not sys.__stderr__.closed:
+                    sys.__stderr__.write(f"Problem printing {txt}. {e}\n")
+            except Exception:
+                pass
 
         finally:
             self.cli_lock.release()
