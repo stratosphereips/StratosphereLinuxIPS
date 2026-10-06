@@ -192,16 +192,19 @@ uses port 6379, and refuses to start while any other Slips instance is running.
 It cannot be combined with `-m` or a different `-P` port. Start a normal run
 without the flag when you want a fresh output directory and detection history.
 
-In a live-interface run, `flow_retention` in `config/slips.yaml` keeps all raw
-flows for 24 hours by default, then keeps only those linked to non-excluded
-evidence for up to 30 days. It runs in bounded background batches, including
-after a `--keep-history` restart. It never prunes imported captures. Detection
-records remain in SQLite after their raw flows expire, so the web can still
-show older alerts and evidence. Set `enabled: false` to retain every raw flow,
-or change `ordinary_hours` and `linked_days` to adjust the two windows.
-This limits raw-flow age, not total disk use: retained evidence, alerts, and
-their links still accumulate. A strict disk budget also requires an explicit
-policy for expiring or summarizing old detections.
+In a live-interface run, `flow_retention` in `config/slips.yaml` keeps ordinary
+raw flows for 24 hours and evidence-linked raw flows for up to 30 days by
+default. It also targets a 512 MiB logical database size. When over that
+target, bounded background batches prune the oldest raw flows without
+non-excluded evidence first, then the oldest evidence-linked raw flows.
+Evidence, alerts, and their relationships remain available after a raw flow is
+removed. Set `max_size_mb: 0` to disable the size target, or `enabled: false`
+to disable all flow retention. Imported captures are not pruned.
+
+The size target measures live SQLite pages; deleted pages may remain allocated
+in an older database file until it is compacted offline. Stop Slips before
+running `VACUUM` on that file. Evidence, alerts, and their links are retained
+and can themselves exceed the target in a long-running deployment.
 
 New output databases return deleted pages to the filesystem incrementally.
 For an output database created before flow retention was added, stop Slips

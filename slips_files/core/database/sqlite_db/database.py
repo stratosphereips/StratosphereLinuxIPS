@@ -624,6 +624,7 @@ class SQLiteDB(ISQLite):
         ordinary_cutoff: float,
         linked_cutoff: float,
         batch_size: int = 500,
+        max_size_bytes: int = 512 * 1024 * 1024,
     ) -> list[str]:
         """Prune bounded flow batches while retaining recent evidence flows.
 
@@ -631,6 +632,7 @@ class SQLiteDB(ISQLite):
             ordinary_cutoff: Unix time before which ordinary flows expire.
             linked_cutoff: Unix time before which linked flows expire.
             batch_size: Maximum rows per table and class per pass.
+            max_size_bytes: Logical database size target; zero disables it.
 
         Returns:
             Connection UIDs removed, for the web's compact index cleanup.
@@ -641,6 +643,8 @@ class SQLiteDB(ISQLite):
             raise ValueError(
                 "linked flows cannot expire before ordinary flows"
             )
+        if max_size_bytes < 0:
+            raise ValueError("max_size_bytes cannot be negative")
         with self.conn_lock:
             with self._acquire_flock():
                 cursor = self.conn.cursor()
@@ -662,6 +666,23 @@ class SQLiteDB(ISQLite):
                         any_removed = any_removed or bool(deleted)
                         if table == "flows":
                             removed.extend(deleted)
+                    if (
+                        max_size_bytes
+                        and self._logical_size_bytes(cursor) > max_size_bytes
+                    ):
+                        for linked_only in (False, True):
+                            for table in ("flows", "altflows"):
+                                deleted = self._prune_for_size(
+                                    cursor, table, batch_size, linked_only
+                                )
+                                any_removed = any_removed or bool(deleted)
+                                if table == "flows":
+                                    removed.extend(deleted)
+                            if (
+                                self._logical_size_bytes(cursor)
+                                <= max_size_bytes
+                            ):
+                                break
                     self.conn.commit()
                 except Exception:
                     self.conn.rollback()
@@ -669,6 +690,47 @@ class SQLiteDB(ISQLite):
                 if any_removed:
                     cursor.execute("PRAGMA incremental_vacuum(2048)")
         return removed
+
+    def _logical_size_bytes(self, cursor) -> int:
+        """Return the SQLite database size excluding reusable free pages."""
+        page_count = cursor.execute("PRAGMA page_count").fetchone()[0]
+        free_pages = cursor.execute("PRAGMA freelist_count").fetchone()[0]
+        page_size = cursor.execute("PRAGMA page_size").fetchone()[0]
+        return (page_count - free_pages) * page_size
+
+    def _prune_for_size(
+        self, cursor, table: str, batch_size: int, linked_only: bool
+    ) -> list[str]:
+        """Delete the oldest raw-flow batch of the requested evidence class.
+
+        Parameters:
+            cursor: Cursor in the active retention transaction.
+            table: Raw flow table to prune.
+            batch_size: Maximum rows to delete in this pass.
+            linked_only: Select evidence-linked rows when true, otherwise
+                select rows without non-excluded evidence.
+
+        Returns:
+            UIDs deleted from the selected table.
+        """
+        evidence_condition = "EXISTS" if linked_only else "NOT EXISTS"
+        uids = [
+            row[0]
+            for row in cursor.execute(
+                f"SELECT f.uid FROM {table} f WHERE {evidence_condition} ("
+                "SELECT 1 FROM evidence_flows ef "
+                "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+                "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0) "
+                "ORDER BY f.event_time ASC, f.rowid ASC LIMIT ?",
+                (batch_size,),
+            ).fetchall()
+        ]
+        if uids:
+            placeholders = ",".join("?" for _ in uids)
+            cursor.execute(
+                f"DELETE FROM {table} WHERE uid IN ({placeholders})", uids
+            )
+        return uids
 
     def remove_flow_index_uids(self, uids: list[str]) -> int:
         """Drop compact web index rows after their raw flows are pruned.

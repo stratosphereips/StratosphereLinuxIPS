@@ -151,6 +151,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         ordinary_age = int(policy["ordinary_hours"]) * 3600
         linked_age = int(policy["linked_days"]) * 86400
         batch_size = int(policy["batch_size"])
+        max_size_bytes = int(policy["max_size_mb"]) * 1024 * 1024
         while not self.did_all_workers_stop.wait(interval):
             now = time.time()
             try:
@@ -158,6 +159,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
                     now - ordinary_age,
                     now - linked_age,
                     batch_size=batch_size,
+                    max_size_bytes=max_size_bytes,
                 )
                 if removed:
                     self.db.remove_flow_index_uids(removed)

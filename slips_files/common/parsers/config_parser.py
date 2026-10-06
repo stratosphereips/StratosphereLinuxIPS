@@ -466,6 +466,7 @@ class ConfigParser(object):
             "linked_days": 30,
             "batch_size": 500,
             "interval_seconds": 60,
+            "max_size_mb": 512,
         }
         policy: dict[str, int | bool] = {
             "enabled": self.read_configuration(
@@ -478,6 +479,7 @@ class ConfigParser(object):
             "linked_days": (1, 3650),
             "batch_size": (1, 800),
             "interval_seconds": (10, 3600),
+            "max_size_mb": (0, 1024 * 1024),
         }
         for key, default in defaults.items():
             raw = self.read_configuration("flow_retention", key, default)
