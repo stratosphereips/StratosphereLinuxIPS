@@ -64,6 +64,41 @@ BENIGN = ml_base.BENIGN
 MALICIOUS = ml_base.MALICIOUS
 
 
+def shared_random_projection(
+    input_dim: int, hidden1: int, seed: int
+) -> torch.Tensor:
+    """The frozen random projection every peer must share.
+
+    Drawn from a dedicated generator seeded with the (shared) config seed,
+    so it is identical on all peers and equal to the distributed
+    artifacts/random_projection.bin, and drawing it never touches the
+    global torch RNG that initialises the trainable layers.
+    """
+    generator = torch.Generator().manual_seed(seed)
+    weights = torch.empty(input_dim, hidden1)
+    nn.init.kaiming_normal_(
+        weights, mode="fan_in", nonlinearity="relu", generator=generator
+    )
+    return weights
+
+
+def peer_init_seed(seed: int, peer_id: str) -> int:
+    """Per-peer seed for the trainable layers: same init scheme on every
+    peer, different (but run-to-run reproducible) starting weights."""
+    import hashlib
+
+    digest = hashlib.md5(f"{seed}:{peer_id}".encode()).hexdigest()
+    return int(digest, 16) % (2**31)
+
+
+def build_with_init_seed(init_seed: int, build):
+    """Construct a model with its trainable layers initialised from
+    `init_seed`, without disturbing the caller's global torch RNG state."""
+    with torch.random.fork_rng(devices=[]):
+        torch.manual_seed(init_seed)
+        return build()
+
+
 class SimpleFederatedNet(nn.Module):
     """
     Federated network model: frozen shared random projection + learnable fc1 + head.
@@ -101,32 +136,33 @@ class SimpleFederatedNet(nn.Module):
             )
         self.input_dim = self.FIXED_INPUT_DIM
 
-        # Load or create frozen random projection with He initialization
-        import sys
-
-        sys.stdout.flush()
+        # Load or recreate the shared frozen random projection (He init).
+        # Both paths give the same matrix on every peer; neither touches the
+        # global RNG that initialises fc1/head (see build_with_init_seed).
+        random_weights = None
         if rp_path and os.path.exists(rp_path):
             try:
                 random_weights = torch.load(rp_path, weights_only=True)
-                if random_weights.shape[0] != self.FIXED_INPUT_DIM:
+                if random_weights.shape != (self.FIXED_INPUT_DIM, hidden1):
                     raise ValueError(
-                        f"Loaded random_projection has input_dim={random_weights.shape[0]}, "
-                        f"expected {self.FIXED_INPUT_DIM}"
+                        f"Loaded random_projection has shape "
+                        f"{tuple(random_weights.shape)}, expected "
+                        f"{(self.FIXED_INPUT_DIM, hidden1)}"
                     )
-            except (RuntimeError, ValueError) as e:
+            except (
+                RuntimeError,
+                ValueError,
+                EOFError,
+                pickle.UnpicklingError,
+            ) as e:
                 print(
                     f"[FederatedNetworkModule] Random projection load failed: {e}. "
-                    f"Reconstructing new random projection from seed={seed}."
+                    f"Reconstructing the shared projection from seed={seed}."
                 )
-                random_weights = torch.empty(self.FIXED_INPUT_DIM, hidden1)
-                nn.init.kaiming_normal_(
-                    random_weights, mode="fan_in", nonlinearity="relu"
-                )
-        else:
-            torch.manual_seed(seed)
-            random_weights = torch.empty(self.FIXED_INPUT_DIM, hidden1)
-            nn.init.kaiming_normal_(
-                random_weights, mode="fan_in", nonlinearity="relu"
+                random_weights = None
+        if random_weights is None:
+            random_weights = shared_random_projection(
+                self.FIXED_INPUT_DIM, hidden1, seed
             )
 
         if rp_path:
@@ -628,10 +664,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if os.path.isdir(_pycache):
             shutil.rmtree(_pycache)
 
-        # Artifact paths - use SLIPS root dir, not relative CWD
-        _slips_root = os.path.dirname(os.path.dirname(__file__))
+        # Artifact paths: this module's own artifacts/ dir (holds the
+        # distributed random_projection.bin), independent of the CWD.
         artifacts_dir = os.path.join(
-            _slips_root, "modules", "federated_network_module", "artifacts"
+            os.path.dirname(os.path.abspath(__file__)), "artifacts"
         )
         os.makedirs(artifacts_dir, exist_ok=True)
         self.rp_path = os.path.join(artifacts_dir, "random_projection.bin")
@@ -699,6 +735,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self.my_peer_id = "unknown"
         self.print(f"My peer ID: {self.my_peer_id}", 1, 1)
+        # Trainable layers: same init scheme on every peer, per-peer seed
+        # (reproducible across runs); the random projection stays shared.
+        self.init_seed = peer_init_seed(self.seed, self.my_peer_id)
+        self.print(
+            f"Trainable-layer init seed {self.init_seed} "
+            f"(seed={self.seed}, peer={self.my_peer_id})",
+            1,
+            1,
+        )
 
         # Device
         self.device = torch.device(
@@ -933,7 +978,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"unknown model_class '{self.model_class_name}' "
                 f"(known: {sorted(MODEL_REGISTRY)})"
             )
-        model = builder(self)
+        model = build_with_init_seed(self.init_seed, lambda: builder(self))
         # Class weighting default is model-declared (USE_CLASS_WEIGHTING);
         # yaml `class_weighting` overrides it per experiment (A/B runs).
         model.USE_CLASS_WEIGHTING = self._read_module_config_bool(
