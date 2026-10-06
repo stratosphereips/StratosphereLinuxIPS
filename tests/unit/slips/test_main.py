@@ -532,3 +532,77 @@ def test_prepare_output_dir_without_o_flag(
     expected_base = tmp_path / "wlp3s0_2025-07-15_12:00:00"
     assert expected_base.exists()
     assert oct(expected_base.stat().st_mode & 0o777) == "0o777"
+
+@pytest.mark.parametrize(
+    "dir_path, dir_contents, subdirs, ignored_predicate, expected_type, should_exit",
+    [
+        (
+            "/valid_zeek_dir",
+            ["conn.log", "dns.log"],
+            [],
+            lambda f: False,
+            InputType.ZEEK_FOLDER,
+            False,
+        ),
+        (
+            "/empty_dir",
+            [],
+            [],
+            lambda f: False,
+            None,
+            True,
+        ),
+        (
+            "/subdir_zeek_dir",
+            ["conn.log", "some_dir"],
+            ["/subdir_zeek_dir/some_dir"],
+            lambda f: False,
+            None,
+            True,
+        ),
+        (
+            "/invalid_zeek_dir",
+            ["conn.log", "something.csv"],
+            [],
+            lambda f: "something" in f,
+            None,
+            True,
+        ),
+    ],
+)
+@patch("os.path.isdir")
+@patch("os.listdir")
+@patch("slips_files.common.slips_utils.Utils.is_ignored_zeek_log_file")
+@patch("subprocess.run")
+def test_get_input_file_type_zeek_folder(
+    mock_run: Mock,
+    mock_is_ignored: Mock,
+    mock_listdir: Mock,
+    mock_isdir: Mock,
+    dir_path: str,
+    dir_contents: list[str],
+    subdirs: list[str],
+    ignored_predicate: Any,
+    expected_type: InputType | None,
+    should_exit: bool,
+) -> None:
+    """Test zeek directory validation logic with valid and invalid contents."""
+    main = ModuleFactory().create_main_obj()
+    mock_run.return_value.stdout = b"directory"
+
+    def is_dir_check(path: str) -> bool:
+        if path == dir_path:
+            return True
+        if path in subdirs:
+            return True
+        return False
+
+    mock_isdir.side_effect = is_dir_check
+    mock_listdir.return_value = dir_contents
+    mock_is_ignored.side_effect = ignored_predicate
+
+    if should_exit:
+        with pytest.raises(SystemExit):
+            main.get_input_file_type(dir_path)
+    else:
+        assert main.get_input_file_type(dir_path) == expected_type
