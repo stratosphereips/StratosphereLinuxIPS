@@ -1085,9 +1085,10 @@ class RunDataReader:
         now = float(latest_event or time.time())
         try:
             input_type = str(
-                self.redis.hget("analysis", "input_type") or ""
+                getattr(self, "redis", None).hget("analysis", "input_type")
+                or ""
             ).lower()
-        except redis.RedisError:
+        except (AttributeError, redis.RedisError):
             input_type = ""
         if input_type in {"interface", "stdin", "cyst"}:
             now = time.time()
@@ -1497,6 +1498,7 @@ class RunDataReader:
                 "SELECT profile_ip, evidence_type, "
                 "profile_ip || char(31) || evidence_type AS group_id, "
                 "MAX(evidence_time) AS timestamp, "
+                "MIN(evidence_time) AS first_timestamp, "
                 f"MAX({threat_expression}) AS threat_rank, "
                 f"GROUP_CONCAT(DISTINCT {module_expression}) AS module, "
                 "COUNT(*) AS evidence_count, "
@@ -1565,6 +1567,7 @@ class RunDataReader:
                 item.pop("threat_rank")
             )
             item["timestamp"] = float(item["timestamp"] or 0)
+            item["first_timestamp"] = float(item["first_timestamp"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["_evidence_ids"] = [
                 evidence_id
@@ -1586,6 +1589,9 @@ class RunDataReader:
                 )
             )
             items.append(item)
+        self._annotate_detection_networks(
+            items, "profile_ip", "timestamp", "first_timestamp"
+        )
         self._annotate_whitelisted_evidence(items)
         self._annotate_p2p_reporters(items)
         next_cursor = (
@@ -1846,6 +1852,7 @@ class RunDataReader:
             items = records[:limit]
             sort_values = [float(item.get("timestamp") or 0) for item in items]
             has_more = len(records) > limit
+        self._annotate_detection_networks(items, "profile_ip", "timestamp")
         self._annotate_whitelisted_evidence(items)
         self._annotate_p2p_reporters(items)
         next_cursor = (
@@ -1889,6 +1896,9 @@ class RunDataReader:
             items = [
                 self._durable_evidence_row(connection, row) for row in rows
             ]
+            self._annotate_detection_networks(
+                items, "profile_ip", "timestamp"
+            )
             self._annotate_whitelisted_evidence(items)
             return items
         profile_id = f"profile_{alert.get('ip_alerted', '')}"
@@ -1903,6 +1913,7 @@ class RunDataReader:
         )
         by_id = {item["id"]: item for item in self._redis_evidence()}
         items = [by_id[item] for item in ids if item in by_id][:maximum]
+        self._annotate_detection_networks(items, "profile_ip", "timestamp")
         self._annotate_whitelisted_evidence(items)
         return items
 
@@ -1992,6 +2003,7 @@ class RunDataReader:
             grouped_sql = (
                 "SELECT ip_alerted, ip_alerted AS group_id, "
                 "MAX(CAST(alert_time AS REAL)) AS alert_time, "
+                "MIN(CAST(alert_time AS REAL)) AS first_alert_time, "
                 f"MAX({threat_expression}) AS threat_rank, "
                 "COUNT(*) AS alert_count, "
                 f"SUM({evidence_expression}) AS evidence_count, "
@@ -2046,6 +2058,9 @@ class RunDataReader:
                 item.pop("threat_rank")
             )
             item["alert_time"] = float(item["alert_time"] or 0)
+            item["first_alert_time"] = float(
+                item["first_alert_time"] or 0
+            )
             item["alert_count"] = int(item["alert_count"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["label"] = str(item.pop("labels") or "")
@@ -2058,6 +2073,9 @@ class RunDataReader:
             )
             item.update(self._ip_context_for_ip(str(item["ip_alerted"])))
             items.append(item)
+        self._annotate_detection_networks(
+            items, "ip_alerted", "alert_time", "first_alert_time"
+        )
         next_cursor = (
             self._encode_cursor(rows[-1]["sort_value"], str(items[-1]["id"]))
             if has_more and items
@@ -2209,6 +2227,9 @@ class RunDataReader:
                     )
                 alert.update(self._ip_context_for_ip(str(alert["ip_alerted"])))
                 items.append(alert)
+            self._annotate_detection_networks(
+                items, "ip_alerted", "alert_time"
+            )
         next_cursor = (
             self._encode_cursor(
                 sort_values[-1],
@@ -3019,6 +3040,57 @@ class RunDataReader:
             "dns_name_source": "rDNS" if rdns else ("DNS" if domains else ""),
             "ti_feeds": ti_feeds,
         }
+
+    def _annotate_detection_networks(
+        self,
+        items: List[Dict[str, Any]],
+        ip_field: str,
+        time_field: str,
+        start_field: str = "",
+    ) -> None:
+        """Attach the saved network identity for each detection timestamp.
+
+        Parameters:
+            items: Detection rows returned to the web interface.
+            ip_field: Row field containing the affected host IP.
+            time_field: Row field containing the detection timestamp.
+            start_field: Optional first timestamp for grouped detections.
+        """
+        host_profiles_path = getattr(
+            self,
+            "host_profiles_path",
+            Path("permanent") / "host_profiles" / "hosts.sqlite",
+        )
+        for item in items:
+            context = HostProfileStore.network_for_observation(
+                host_profiles_path,
+                str(item.get(ip_field) or ""),
+                item.get(time_field) or 0,
+            )
+            if start_field and item.get(start_field):
+                first_context = HostProfileStore.network_for_observation(
+                    host_profiles_path,
+                    str(item.get(ip_field) or ""),
+                    item[start_field],
+                )
+                if (
+                    first_context["network_id"]
+                    and context["network_id"]
+                    and first_context["network_id"] != context["network_id"]
+                ):
+                    context = {
+                        "network_id": ",".join(
+                            sorted(
+                                {
+                                    first_context["network_id"],
+                                    context["network_id"],
+                                }
+                            )
+                        ),
+                        "network_name": "",
+                        "network_label": "Multiple networks",
+                    }
+            item.update(context)
 
     def _current_network_profile_first(
         self, ip: str, profiles: List[Dict[str, Any]]

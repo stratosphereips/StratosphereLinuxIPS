@@ -182,6 +182,8 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         section = app_source.split("async function loadAlerts()", 1)[1].split(
             "async function loadEvidence()", 1
         )[0]
+        assert '["Network", null]' in section
+        assert "networkContext(row)" in section
         assert '["Peak Slips score", "score"]' in section
         assert '["Slips score", "score"]' in section
         assert "(row) => slipsScore(row)" in section
@@ -189,6 +191,8 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         section = app_source.split("async function loadEvidence()", 1)[
             1
         ].split("async function loadFirewall()", 1)[0]
+        assert '["Network", null]' in section
+        assert "networkContext(row)" in section
         assert '["Peak Slips score", "score"]' in section
         assert '["Slips score", "score"]' in section
         assert "(row) => slipsScore(row)" in section
@@ -732,6 +736,58 @@ def test_historical_host_network_can_be_named_explicitly(
         reader.save_profile_network_name(
             "192.168.1.20", "run:old-run", "x" * 81
         )
+
+
+def test_detection_network_is_resolved_by_event_time(tmp_path: Path) -> None:
+    """Resolve historical detections to the network seen at their timestamp.
+
+    Parameters:
+        tmp_path: Isolated permanent profile database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    HostProfileStore(path, "run-one", lambda _: {}, [])
+    with sqlite3.connect(path) as connection:
+        connection.executemany(
+            "INSERT INTO hosts VALUES (?, ?, ?, ?, ?)",
+            [
+                ("gateway:aa:aa:aa:aa:aa:aa", "192.168.1.20", "Old Wi-Fi", 100, 200),
+                ("gateway:bb:bb:bb:bb:bb:bb", "192.168.1.20", "New Wi-Fi", 300, 400),
+            ],
+        )
+        connection.execute(
+            "INSERT INTO network_names VALUES (?, ?)",
+            ("gateway:bb:bb:bb:bb:bb:bb", "Current Wi-Fi"),
+        )
+
+    assert HostProfileStore.network_for_observation(
+        path, "192.168.1.20", 150
+    ) == {
+        "network_id": "gateway:aa:aa:aa:aa:aa:aa",
+        "network_name": "",
+        "network_label": "Old Wi-Fi",
+    }
+    assert HostProfileStore.network_for_observation(
+        path, "192.168.1.20", 350
+    ) == {
+        "network_id": "gateway:bb:bb:bb:bb:bb:bb",
+        "network_name": "Current Wi-Fi",
+        "network_label": "Current Wi-Fi",
+    }
+    assert HostProfileStore.network_for_observation(
+        path, "192.168.1.20", 250
+    )["network_label"] == "Unknown network (not recorded)"
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+    grouped_item = {
+        "profile_ip": "192.168.1.20",
+        "first_timestamp": 150,
+        "timestamp": 350,
+    }
+    reader._annotate_detection_networks(
+        [grouped_item], "profile_ip", "timestamp", "first_timestamp"
+    )
+    assert grouped_item["network_label"] == "Multiple networks"
 
 
 @pytest.mark.parametrize(
