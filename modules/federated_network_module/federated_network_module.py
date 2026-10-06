@@ -813,10 +813,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Alert-labelling FINALIZATION delay in training windows.
         # Flows sit in a small ring for N windows so *late* alerts can still
-        # match them; on exit they are labeled MALICIOUS only if some alert
-        # (evidence-UID or attacker/victim IP) connected, else BENIGN — and
-        # trained exactly once with their final label. 0 = immediate labeling
-        # (legacy behavior). Config key: label_finalize_delay_windows
+        # match them; on exit they are labeled MALICIOUS only if an alert's
+        # evidence cites their uid, else BENIGN — and trained exactly once
+        # with their final label. 0 = finalize at the window's own close.
+        # Config key: label_finalize_delay_windows
         self.label_finalize_delay_windows = self._read_module_config_int(
             "label_finalize_delay_windows", default=2
         )
@@ -829,6 +829,30 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._flow_ring = (
             collections.deque()
         )  # ring cells: {"flows": dict, "mal_ids": set}
+
+        # Alert -> evidence -> flow-uid sets are RETAINED for the whole SLIPS
+        # time window (the "large" window), not only the 5-minute close they
+        # arrived in: a flow can reach this module AFTER its alert (SLIPS
+        # delivers flows with lag), and must still be labeled by it. One
+        # set per close; a deque keeps exactly the retention span.
+        slips_tw_seconds = float(
+            conf.read_configuration("parameters", "time_window_width", 3600)
+        )
+        self.alert_uid_retention_windows = self._read_module_config_int(
+            "alert_uid_retention_windows",
+            default=max(
+                1, -(-int(slips_tw_seconds) // self.window_size_seconds)
+            ),
+        )
+        self._alert_uid_memory: collections.deque = collections.deque(
+            maxlen=self.alert_uid_retention_windows
+        )
+        self.print(
+            f"Alert uid retention: {self.alert_uid_retention_windows} windows "
+            f"(SLIPS TW {slips_tw_seconds:.0f}s / {self.window_size_seconds}s)",
+            1,
+            1,
+        )
 
         # Deterministic per-instance sub-window offset (0–5 minutes).
         # Uses hostname hash to avoid all peers getting the same offset
@@ -1426,40 +1450,60 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """Bypass version check - this module handles all messages directly."""
         return True
 
+    # Upper bound of queued messages consumed per channel per loop pass, so
+    # the p2p channel and the window clock are still serviced under load.
+    _DRAIN_BATCH = 2000
+
+    def _ingest_flow_msg(self, msg: dict) -> None:
+        """Buffer one new_flow message and run the live testing streams."""
+        data = json.loads(msg["data"])
+        flow = data["flow"]
+        flow_ts = float(data.get("stime", 0))
+
+        # Buffer flow for the next training window
+        self.handle_new_flow(flow, flow_ts)
+
+        # Test with local model (if fitted)
+        if self._is_fitted:
+            predicted = self._classify_flow(flow)
+            if predicted is not None:
+                gt_label = self._get_simulated_gt(flow) or BENIGN
+                self.store_testing_results(gt_label, predicted)
+                self.test_time_predictions[self._get_flow_id(flow)] = predicted
+                # Second testing stream (L1): while merged, also
+                # evaluate with the frozen last-locally-trained model.
+                if (
+                    self._using_merged_model
+                    and self._local_only_model is not None
+                ):
+                    local_pred = self._predict_with(
+                        self._local_only_model, flow
+                    )
+                    if local_pred is not None:
+                        self._store_local_stream(gt_label, local_pred)
+
+    def _drain(self, limit=None) -> int:
+        """Consume queued flows and alerts (all of them when limit is None).
+
+        Flows are read before alerts so a window close never overtakes a
+        flow that was already waiting. Returns the number of messages read.
+        """
+        consumed = 0
+        while limit is None or consumed < limit:
+            msg = self.get_msg("new_flow")
+            if not msg:
+                break
+            self._ingest_flow_msg(msg)
+            consumed += 1
+        while msg := self.get_msg("new_alert"):
+            self.handle_new_alert(json.loads(msg["data"]))
+            consumed += 1
+        return consumed
+
     def _main_training(self) -> bool:
-        """Training main loop: buffer flows, close wall-clock windows, test if model ready."""
+        """Training main loop: drain flows/alerts, close windows in order."""
         try:
-            if msg := self.get_msg("new_flow"):
-                data = json.loads(msg["data"])
-                flow = data["flow"]
-                flow_ts = float(data.get("stime", 0))
-
-                # Buffer flow for the next training window
-                self.handle_new_flow(flow, flow_ts)
-
-                # Test with local model (if fitted)
-                if self._is_fitted:
-                    predicted = self._classify_flow(flow)
-                    if predicted is not None:
-                        gt_label = self._get_simulated_gt(flow) or BENIGN
-                        self.store_testing_results(gt_label, predicted)
-                        self.test_time_predictions[self._get_flow_id(flow)] = (
-                            predicted
-                        )
-                        # Second testing stream (L1): while merged, also
-                        # evaluate with the frozen last-locally-trained model.
-                        if (
-                            self._using_merged_model
-                            and self._local_only_model is not None
-                        ):
-                            local_pred = self._predict_with(
-                                self._local_only_model, flow
-                            )
-                            if local_pred is not None:
-                                self._store_local_stream(gt_label, local_pred)
-
-            if msg := self.get_msg("new_alert"):
-                self.handle_new_alert(json.loads(msg["data"]))
+            consumed = self._drain(self._DRAIN_BATCH)
 
             # Only check P2P channel if it exists (uses p2p_gopy)
             if "p2p_gopy" in self.channels:
@@ -1499,14 +1543,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
 
-            # Wall-clock training window trigger (independent of Slips windows)
+            # Wall-clock training window trigger (independent of Slips
+            # windows). Order before timing: everything already queued is
+            # consumed first, then the window is labeled and trained.
             if (
                 time.time() - self.training_window_start
                 >= self.window_size_seconds
             ):
+                consumed += self._drain()
                 self._close_training_window()
 
-            time.sleep(0.1)
+            if not consumed:
+                time.sleep(0.1)
             return False
         except Exception:
             self.print(f"Error in main: {traceback.format_exc()}", 0, 1)
@@ -1602,32 +1650,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.print("No evidence IDs in alert, skipping", 1, 1)
                 return
 
-            def _party_ip(party: str) -> Optional[str]:
-                """Address of the attacker/victim from last_evidence.
-
-                :param party: "attacker" or "victim"
-                :return: the ip/domain string, or None when absent
-                """
-                node = last_evidence.get(party)
-                if isinstance(node, dict):
-                    # SLIPS serializes Attacker/Victim with the address in
-                    # "value"; "ip" lived only in this module's old docstring
-                    return node.get("value") or node.get("ip")
-                return node if isinstance(node, str) else None
-
-            attacker_ip = _party_ip("attacker")
-            victim_ip = _party_ip("victim")
-
-            # p2p bootstrap self-reports (attacker == own IP) are handled at
-            # the SLIPS/admin layer, not by module-side filtering; thread the
-            # identity question upward (see p2p-self-alerts.md).
-            self.pending_alerts.append(
-                {
-                    "evidence_ids": list(evidence_ids),
-                    "attacker_ip": attacker_ip,
-                    "victim_ip": victim_ip,
-                }
-            )
+            # Labels are flow-exact: only the alert's evidence ids matter
+            # (resolved to flow uids at window close). Attacker/victim
+            # addresses are deliberately not used.
+            self.pending_alerts.append({"evidence_ids": list(evidence_ids)})
             self.training_count_alert += 1
             self.print(
                 f"Buffered alert {self.training_count_alert} with "
@@ -1639,131 +1665,57 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self.print(f"Error handling alert: {traceback.format_exc()}", 1, 1)
 
-    def _label_window_flows(self):
-        """
-        Label flows in the current window using all buffered alerts.
+    def _collect_alert_uids(self):
+        """This close's alerts -> all their correlated evidences -> all the
+        flow uids those evidences cite (one db lookup per evidence id).
 
-        Returns:
-            tuple: (malicious_flows, benign_flows, malicious_flow_ids,
-                    alert_count, evidence_count)
+        :return: (uid set, number of distinct evidence ids)
         """
-        matched_uids: set = set()
-        all_evidence_ids: set = set()
-
+        uids: set = set()
+        evidence_ids: set = set()
         for alert in self.pending_alerts:
             for evid_id in alert.get("evidence_ids", []):
-                all_evidence_ids.add(evid_id)
-                uids = self.db.get_flows_causing_evidence(evid_id)
-                if uids:
-                    matched_uids.update(uids)
-
-        malicious_flows = []
-        malicious_flow_ids = set()
-        # UID-only semantics, same matcher as the ring path (the legacy
-        # inline attacker/victim IP branch was removed Oct 2 with the rest
-        # of IP-based labeling).
-        for flow_id, flow in self.window_flows.items():
-            if self._flow_matches(flow, matched_uids, set(), set()):
-                malicious_flows.append(flow)
-                malicious_flow_ids.add(flow_id)
-
-        benign_flows = [
-            flow
-            for flow_id, flow in self.window_flows.items()
-            if flow_id not in malicious_flow_ids
-        ]
-
-        return (
-            malicious_flows,
-            benign_flows,
-            malicious_flow_ids,
-            len(self.pending_alerts),
-            len(all_evidence_ids),
-        )
-
-    def _collect_alert_signatures(self):
-        """Aggregate matching material from pending alerts: evidence-connected
-        flow UIDs (via SLIPS db) plus attacker/victim IP sets. Same semantics
-        as the legacy inline matcher in _label_window_flows."""
-        matched_uids: set = set()
-        attacker_ips: set = set()
-        victim_ips: set = set()
-        evidence_ids: set = set()
-        for alert in list(self.pending_alerts):
-            for evid_id in alert.get("evidence_ids", []):
+                if evid_id in evidence_ids:
+                    continue
                 evidence_ids.add(evid_id)
                 try:
-                    uids = self.db.get_flows_causing_evidence(evid_id)
+                    found = self.db.get_flows_causing_evidence(evid_id)
                 except Exception:  # noqa: BLE001
-                    uids = None
-                if uids:
-                    matched_uids.update(uids)
-            attacker_ip = alert.get("attacker_ip")
-            victim_ip = alert.get("victim_ip")
-            if attacker_ip:
-                attacker_ips.add(attacker_ip)
-            if victim_ip:
-                victim_ips.add(victim_ip)
-        return matched_uids, attacker_ips, victim_ips, len(evidence_ids)
+                    found = None
+                uids.update(u for u in (found or []) if u)
+        return uids, len(evidence_ids)
 
-    def _flow_matches(self, flow, matched_uids, attacker_ips, victim_ips):
-        """Flow-exact alert matching: the flow's uid must be cited by an
-        alert's evidence. attacker_ips/victim_ips are accepted for caller
-        compatibility but intentionally unused - device-level labeling was
-        deleted Oct 1 as methodologically unsound (self-feeding cascade,
-        unbounded IP-keep policy, and IP-total labels only ever agreed
-        with GT because GT shared the same attacker identity). The flip
-        detector uses this exact rule so labels and contradictions share
-        one semantics.
-        """
+    def _flow_matches(self, flow, malicious_uids) -> bool:
+        """Flow-exact matching: the flow's uid is cited by an alert's
+        evidence. The flip detector uses the same rule."""
         uid = (flow.get("uid") or "").strip()
-        return bool(uid and uid in matched_uids)
+        return bool(uid and uid in malicious_uids)
 
-    def _label_ring_then_finalize(self):
-        """Delay-then-finalize labelling.
+    def _label_ring_then_finalize(self, malicious_uids: set):
+        """Delay-then-finalize labelling (every K, K=0 included).
 
-        Push this window's flows onto the ring, match alerts against ALL ring
-        cells (late arrivals still land), then finalize the oldest cell when
-        the ring is longer than the configured delay. Returns the finalized
-        lists (may be None when still warming up) plus bookkeeping stats.
+        Push this window's flows onto the ring, match the retained alert
+        uids against ALL ring cells (late alerts still land), then finalize
+        the oldest cell once the ring is longer than K. Returns the
+        finalized lists (None while warming up) plus bookkeeping stats.
         """
         cell = {"flows": dict(self.window_flows), "mal_ids": set()}
         self._flow_ring.append(cell)
 
-        matched_uids, attacker_ips, victim_ips, evidence_count = (
-            self._collect_alert_signatures()
-        )
         new_hits = 0
         for ring_cell in self._flow_ring:
             for fid, flow in ring_cell["flows"].items():
                 if fid in ring_cell["mal_ids"]:
                     continue
-                if self._flow_matches(
-                    flow, matched_uids, attacker_ips, victim_ips
-                ):
+                if self._flow_matches(flow, malicious_uids):
                     ring_cell["mal_ids"].add(fid)
                     new_hits += 1
 
-        # flip detection: alerts arriving now may contradict earlier TRAINED
-        # labels (flows long gone from the ring). Counted once per flow and
-        # attributed to the window the flow was trained in.
-        flips_now = self._detect_label_flips(
-            matched_uids, attacker_ips, victim_ips
-        )
-
-        alert_count = len(self.pending_alerts)
         finalized = None
         if len(self._flow_ring) > self.label_finalize_delay_windows:
             finalized = self._flow_ring.popleft()
 
-        stats = {
-            "ring_cells": len(self._flow_ring),
-            "new_hits": new_hits,
-            "alert_count": alert_count,
-            "evidence_count": evidence_count,
-            "flips_total": len(self._flip_events),
-            "flips_now": flips_now,
-        }
+        stats = {"ring_cells": len(self._flow_ring), "new_hits": new_hits}
         if finalized is None:
             return None, None, None, stats
         malicious_flows = [
@@ -1841,27 +1793,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
         self._pending_labeled.clear()
 
-    def _detect_label_flips(
-        self, matched_uids: set, attacker_ips: set, victim_ips: set
-    ) -> int:
+    def _detect_label_flips(self, fresh_uids: set) -> int:
         """Count earlier-trained benign flows this alert wave would flip.
 
-        A flip = a flow trained BENIGN whose stored addresses/uid match the
-        current alert signatures (evidence-uids or attacker/victim IP sets).
-        Each flow flips at most once.
+        A flip = a flow trained BENIGN whose uid this close's alerts cite,
+        i.e. the alert reached the module only after the label was
+        finalized. Each flow flips at most once.
 
-        :param matched_uids: flow uids resolvable from buffered alerts
-        :param attacker_ips: attacker party IPs of buffered alerts
-        :param victim_ips: victim party IPs of buffered alerts
+        :param fresh_uids: flow uids cited by this close's alerts
         :return: number of new flips recorded this call
         """
-        if not (matched_uids or attacker_ips or victim_ips):
+        if not fresh_uids:
             return 0
         new_flips = 0
         for fid, rec in self._trained_label_flows.items():
             if rec["label"] != 0 or fid in self._flipped_ids:
                 continue
-            if self._flow_matches(rec, matched_uids, attacker_ips, victim_ips):
+            if self._flow_matches(rec, fresh_uids):
                 self._flipped_ids.add(fid)
                 self._flip_events.append(
                     {
@@ -1899,24 +1847,34 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"pct {100.0 * f / t if t else 0.0:.2f}",
             )
 
-    def _write_alert_uids(self, window_n: int, sign) -> None:
-        """Persist this close's full alert->evidence->uid contagion.
+    def _write_alert_uids(
+        self,
+        window_n: int,
+        fresh_uids: set,
+        alert_count: int,
+        evidence_count: int,
+        retained_uid_count: int,
+    ) -> None:
+        """Persist this close's alert->evidence->uid contagion.
 
         :param window_n: current training window index
-        :param sign: _collect_alert_signatures() tuple
+        :param fresh_uids: uids cited by THIS close's alerts
+        :param alert_count: alerts received during this window
+        :param evidence_count: distinct evidence ids of those alerts
+        :param retained_uid_count: size of the retained uid union used to label
         """
         import json as _json
 
-        matched_uids, _attacker_ips, _victim_ips, evidence_count = sign
         self.logger._write(
             "alert_uids",
             _json.dumps(
                 {
                     "window": window_n,
-                    "alert_count": len(self.pending_alerts),
+                    "alert_count": alert_count,
                     "evidence_count": evidence_count,
-                    "uid_count": len(matched_uids),
-                    "uids": sorted(matched_uids),
+                    "uid_count": len(fresh_uids),
+                    "retained_uid_count": retained_uid_count,
+                    "uids": sorted(fresh_uids),
                 }
             ),
         )
@@ -2084,39 +2042,44 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Training window {window_n} closed, preparing batch", 1, 1
             )
 
-            ring_stats = None
-            if self.label_finalize_delay_windows > 0:
-                (
-                    malicious_flows,
-                    benign_flows,
-                    malicious_flow_ids,
-                    ring_stats,
-                ) = self._label_ring_then_finalize()
-                alert_count = ring_stats["alert_count"]
-                evidence_count = ring_stats["evidence_count"]
-                if malicious_flows is None:
-                    # ring warming up; finalize nothing this window
-                    self.print(
-                        f"Window {window_n}: ring warm-up "
-                        f"({ring_stats['ring_cells']}/{self.label_finalize_delay_windows} cells), "
-                        f"no finalized batch; {alert_count} alerts"
-                        f" -> {ring_stats['new_hits']} ring matches",
-                        1,
-                        1,
-                    )
-                    self.window_flows.clear()
-                    self.pending_alerts.clear()
-                    self.test_time_predictions.clear()
-                    self.training_window_start += self.window_size_seconds
-                    return
-            else:
-                (
-                    malicious_flows,
-                    benign_flows,
-                    malicious_flow_ids,
-                    alert_count,
-                    evidence_count,
-                ) = self._label_window_flows()
+            # This close's alerts -> evidences -> flow uids (one db pass),
+            # retained for the large SLIPS window; the union labels flows.
+            alert_count = len(self.pending_alerts)
+            fresh_uids, evidence_count = self._collect_alert_uids()
+            self._alert_uid_memory.append(fresh_uids)
+            malicious_uids = set().union(*self._alert_uid_memory)
+            self._write_alert_uids(
+                window_n,
+                fresh_uids,
+                alert_count,
+                evidence_count,
+                len(malicious_uids),
+            )
+            # Flips: this close's alerts against earlier-TRAINED flows (before
+            # this close's labels are committed). Set-dedup keeps it once.
+            self._detect_label_flips(fresh_uids)
+
+            (
+                malicious_flows,
+                benign_flows,
+                malicious_flow_ids,
+                ring_stats,
+            ) = self._label_ring_then_finalize(malicious_uids)
+            if malicious_flows is None:
+                # ring warming up; finalize nothing this window
+                self.print(
+                    f"Window {window_n}: ring warm-up "
+                    f"({ring_stats['ring_cells']}/{self.label_finalize_delay_windows} cells), "
+                    f"no finalized batch; {alert_count} alerts"
+                    f" -> {ring_stats['new_hits']} ring matches",
+                    1,
+                    1,
+                )
+                self.window_flows.clear()
+                self.pending_alerts.clear()
+                self.test_time_predictions.clear()
+                self.training_window_start += self.window_size_seconds
+                return
 
             self.print(
                 f"Window {window_n}: {len(malicious_flows)} malicious, "
@@ -2137,44 +2100,28 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._add_flows_to_buffers(malicious_flows, MALICIOUS)
             self._add_flows_to_buffers(benign_flows, BENIGN)
 
-            connected_count = len(malicious_flows)
-            total_batch = total_labeled
             header = (
                 f"window_{window_n} | "
                 f"{alert_count} alerts, {evidence_count} evidence. "
-                f"{connected_count} malicious connected to evidence, "
+                f"{len(malicious_flows)} malicious connected to evidence, "
                 f"{len(benign_flows)} benign, "
-                f"{total_batch} total"
+                f"{total_labeled} total"
             )
             self._log_window_comparisons(
                 malicious_flows, benign_flows, malicious_flow_ids, header
             )
-            if ring_stats:
-                # approved audit marker: finalization lag is visible directly
-                # in local_train.log next to the batch lines
-                self.logger.log_comp_header(
-                    "local_train",
-                    f"ring | pending {ring_stats['ring_cells']} cells | "
-                    f"finalized mal {ring_stats['finalized_mal']} ben "
-                    f"{ring_stats['finalized_ben']} | "
-                    f"ring matches {ring_stats['new_hits']} | alerts "
-                    f"{ring_stats['alert_count']} | "
-                    f"flips {ring_stats['flips_total']}",
-                )
+            # audit marker: finalization lag is visible directly in
+            # local_train.log next to the batch lines
+            self.logger.log_comp_header(
+                "local_train",
+                f"ring | pending {ring_stats['ring_cells']} cells | "
+                f"finalized mal {ring_stats['finalized_mal']} ben "
+                f"{ring_stats['finalized_ben']} | "
+                f"ring matches {ring_stats['new_hits']} | alerts "
+                f"{alert_count} | flips {len(self._flip_events)}",
+            )
 
             self._record_pending_labels(malicious_flows, benign_flows)
-            # Persist this close's alert->evidence->uid contagion so offline
-            # analysis replays the SAME matching semantics the module used
-            # (live db lookups die with the run; this is the durable record):
-            # one JSONL per close with window, alert/evidence counts, and
-            # the exact uid set that constituted 'malicious' this window.
-            _sign = self._collect_alert_signatures()
-            self._write_alert_uids(window_n, _sign)
-            # Central flip detection (immediate K=0 path too): this close's
-            # alerts are matched against earlier-TRAINED flows. The ring
-            # path also detects inside _label_ring_then_finalize; set-dedup
-            # (_flipped_ids) keeps re-execution idempotent.
-            self._detect_label_flips(_sign[0], _sign[1], _sign[2])
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
                 # flips/jsonl audit only for flows that actually trained
