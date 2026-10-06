@@ -426,6 +426,7 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+    - We match organization domains and their subdomains, such as `captive.apple.com` for `apple.com`.
 
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
