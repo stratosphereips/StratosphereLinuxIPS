@@ -671,13 +671,11 @@ class SQLiteDB(ISQLite):
                         and self._logical_size_bytes(cursor) > max_size_bytes
                     ):
                         for linked_only in (False, True):
-                            for table in ("flows", "altflows"):
-                                deleted = self._prune_for_size(
-                                    cursor, table, batch_size, linked_only
-                                )
-                                any_removed = any_removed or bool(deleted)
-                                if table == "flows":
-                                    removed.extend(deleted)
+                            deleted = self._prune_for_size(
+                                cursor, batch_size, linked_only
+                            )
+                            any_removed = any_removed or any(deleted.values())
+                            removed.extend(deleted["flows"])
                             if (
                                 self._logical_size_bytes(cursor)
                                 <= max_size_bytes
@@ -699,38 +697,50 @@ class SQLiteDB(ISQLite):
         return (page_count - free_pages) * page_size
 
     def _prune_for_size(
-        self, cursor, table: str, batch_size: int, linked_only: bool
-    ) -> list[str]:
-        """Delete the oldest raw-flow batch of the requested evidence class.
+        self, cursor, batch_size: int, linked_only: bool
+    ) -> dict[str, list[str]]:
+        """Delete the oldest cross-table batch of a requested evidence class.
 
         Parameters:
             cursor: Cursor in the active retention transaction.
-            table: Raw flow table to prune.
             batch_size: Maximum rows to delete in this pass.
             linked_only: Select evidence-linked rows when true, otherwise
                 select rows without non-excluded evidence.
 
         Returns:
-            UIDs deleted from the selected table.
+            Deleted UIDs grouped by raw flow table.
         """
         evidence_condition = "EXISTS" if linked_only else "NOT EXISTS"
-        uids = [
-            row[0]
-            for row in cursor.execute(
-                f"SELECT f.uid FROM {table} f WHERE {evidence_condition} ("
-                "SELECT 1 FROM evidence_flows ef "
-                "JOIN evidence e ON e.evidence_id = ef.evidence_id "
-                "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0) "
-                "ORDER BY f.event_time ASC, f.rowid ASC LIMIT ?",
-                (batch_size,),
-            ).fetchall()
-        ]
-        if uids:
+        candidates = cursor.execute(
+            "SELECT table_name, uid FROM ("
+            "SELECT 'flows' AS table_name, f.uid AS uid, "
+            "f.event_time AS event_time, f.rowid AS flow_rowid "
+            "FROM flows f WHERE "
+            f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
+            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0) "
+            "UNION ALL "
+            "SELECT 'altflows' AS table_name, f.uid AS uid, "
+            "f.event_time AS event_time, f.rowid AS flow_rowid "
+            "FROM altflows f WHERE "
+            f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
+            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
+            ") ORDER BY event_time ASC, table_name ASC, flow_rowid ASC "
+            "LIMIT ?",
+            (batch_size,),
+        ).fetchall()
+        deleted: dict[str, list[str]] = {"flows": [], "altflows": []}
+        for table, uid in candidates:
+            deleted[table].append(uid)
+        for table, uids in deleted.items():
+            if not uids:
+                continue
             placeholders = ",".join("?" for _ in uids)
             cursor.execute(
                 f"DELETE FROM {table} WHERE uid IN ({placeholders})", uids
             )
-        return uids
+        return deleted
 
     def remove_flow_index_uids(self, uids: list[str]) -> int:
         """Drop compact web index rows after their raw flows are pruned.
