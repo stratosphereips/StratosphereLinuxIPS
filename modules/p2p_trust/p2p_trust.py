@@ -129,6 +129,9 @@ class Trust(IModule):
         self.mutliaddress_printed = False
         self.last_log_rotation_time = time.time()
         self.rotation_period = 86400  # 1 day in seconds
+        self.last_report_compaction_time = 0
+        self.report_compaction_interval = 5
+        self.report_compaction_batch_size = 1000
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("report_to_peers")
@@ -479,13 +482,7 @@ class Trust(IModule):
         """
         attacker_ip: str = ip_info.get("ip")
         peer_ids = sorted(
-            {
-                str(report[0])
-                for report in (
-                    self.trust_db.get_reports_for_ip(attacker_ip) or []
-                )
-                if report[0]
-            }
+            self.trust_db.get_reporter_peerids_for_ip(attacker_ip)
         )
         peer_source = (
             f" Reported by peer{'s' if len(peer_ids) != 1 else ''}: "
@@ -919,6 +916,17 @@ class Trust(IModule):
 
         except Exception:
             pass
+
+        now = time.time()
+        if (
+            now - getattr(self, "last_report_compaction_time", now)
+            >= getattr(self, "report_compaction_interval", 5)
+        ):
+            self.trust_db.compact_reports(
+                getattr(self, "report_compaction_batch_size", 1000)
+            )
+            self.last_report_compaction_time = now
+
         # Channel reads are nonblocking. Yield between polls so an idle
         # P2P module does not consume a CPU core.
         self.termination_event.wait(0.05)

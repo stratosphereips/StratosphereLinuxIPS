@@ -51,11 +51,10 @@ def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
     _module_factory = ModuleFactory()
     trust = create_trust()
     trust.trust_db = Mock()
-    trust.trust_db.get_reports_for_ip.return_value = [
-        ("peer-b", 1, 0.8, 0.9, "8.8.8.8"),
-        ("peer-a", 2, 0.7, 0.9, "8.8.8.8"),
-        ("peer-b", 3, 0.8, 0.9, "8.8.8.8"),
-    ]
+    trust.trust_db.get_reporter_peerids_for_ip.return_value = {
+        "peer-a",
+        "peer-b",
+    }
 
     trust.set_evidence_malicious_ip(
         {
@@ -70,7 +69,9 @@ def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
         0.9,
     )
 
-    trust.trust_db.get_reports_for_ip.assert_called_once_with("8.8.8.8")
+    trust.trust_db.get_reporter_peerids_for_ip.assert_called_once_with(
+        "8.8.8.8"
+    )
     assert trust.db.set_evidence.call_count == 2
     for call_args in trust.db.set_evidence.call_args_list:
         assert "Reported by peers: peer-a, peer-b." in call_args.args[0].description

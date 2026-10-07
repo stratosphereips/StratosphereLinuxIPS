@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import sqlite3
 import pytest
 from unittest.mock import (
     patch,
@@ -26,6 +27,8 @@ def normalize_sql(sql):
                 "go_reliability",
                 "peer_ips",
                 "reports",
+                "report_aggregates",
+                "report_compaction_state",
             ]
         ),
         # Testcase 2: Some tables missing
@@ -49,6 +52,8 @@ def test_delete_tables(existing_tables):
         call("DROP TABLE IF EXISTS go_reliability;"),
         call("DROP TABLE IF EXISTS peer_ips;"),
         call("DROP TABLE IF EXISTS reports;"),
+        call("DROP TABLE IF EXISTS report_aggregates;"),
+        call("DROP TABLE IF EXISTS report_compaction_state;"),
     ]
 
     trust_db.delete_tables()
@@ -262,6 +267,14 @@ def test_create_tables():
             "opinion_cache",
             "key_type TEXT NOT NULL, reported_key TEXT NOT NULL PRIMARY KEY, score REAL NOT NULL, confidence REAL NOT NULL, network_score REAL NOT NULL, update_time DATE NOT NULL",
         ),
+        (
+            "report_aggregates",
+            "key_type TEXT NOT NULL, reported_key TEXT NOT NULL, reporter_peerid TEXT NOT NULL, reporter_ip TEXT NOT NULL, report_count INTEGER NOT NULL, score_sum REAL NOT NULL, confidence_sum REAL NOT NULL, PRIMARY KEY (key_type, reported_key, reporter_peerid, reporter_ip)",
+        ),
+        (
+            "report_compaction_state",
+            "id INTEGER PRIMARY KEY CHECK (id = 1), last_report_id INTEGER NOT NULL, database_vacuumed INTEGER NOT NULL DEFAULT 0",
+        ),
     ]
 
     for table, schema in expected_calls:
@@ -287,10 +300,56 @@ def test_create_tables_adds_indexes_for_opinion_lookups():
         "ON go_reliability(peerid)",
         "CREATE INDEX IF NOT EXISTS slips_reputation_ip_time_idx "
         "ON slips_reputation(ipaddress, update_time DESC)",
+        "CREATE INDEX IF NOT EXISTS report_aggregates_key_idx "
+        "ON report_aggregates(reported_key, key_type)",
     )
 
     for index in expected_indexes:
         assert index in executed_sql
+
+
+def test_compact_reports_preserves_opinions_and_unmapped_raw_reports(
+    tmp_path,
+):
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn = sqlite3.connect(tmp_path / "trust.db")
+    trust_db.create_tables()
+    trust_db.insert_go_ip_pairing("peer_1", "203.0.113.10", 1)
+    trust_db.insert_go_reliability("peer_1", 0.8, 1)
+    trust_db.insert_slips_score("203.0.113.10", 0.6, 0.9, 1)
+    trust_db.insert_new_go_report(
+        "peer_1", "ip", "8.8.8.8", 0.4, 0.8, 2
+    )
+    trust_db.insert_new_go_report(
+        "peer_1", "ip", "8.8.8.8", 0.8, 0.2, 3
+    )
+    trust_db.insert_new_go_report(
+        "peer_without_mapping", "ip", "8.8.8.8", 0.9, 0.9, 3
+    )
+
+    assert trust_db.compact_reports(batch_size=2) is False
+    assert trust_db.compact_reports(batch_size=2) is False
+    assert trust_db.compact_reports(batch_size=2) is True
+
+    aggregates = trust_db.select(
+        "report_aggregates",
+        columns=(
+            "reporter_peerid, reporter_ip, report_count, score_sum, "
+            "confidence_sum"
+        ),
+        condition="reported_key = ?",
+        params=("8.8.8.8",),
+    )
+    remaining_reports = trust_db.get_reports_for_ip("8.8.8.8")
+    opinion = trust_db.get_opinion_on_ip("8.8.8.8")
+
+    assert aggregates[0][:3] == ("peer_1", "203.0.113.10", 2)
+    assert aggregates[0][3:] == pytest.approx((1.2, 1.0))
+    assert len(remaining_reports) == 1
+    assert remaining_reports[0][0] == "peer_without_mapping"
+    assert len(opinion) == 1
+    assert opinion[0][0:2] == pytest.approx((1.2, 1.0))
+    assert opinion[0][-1] == 2
 
 
 @pytest.mark.parametrize(
@@ -500,8 +559,8 @@ def test_get_reporter_ip(
                 ("reporter_2", 1678886500, 0.3, 0.6, "192.168.1.4"),
             ],
             [
-                (0.5, 0.8, 0.7, 0.6, 0.9, "192.168.1.1"),
-                (0.3, 0.6, 0.8, 0.4, 0.7, "192.168.1.2"),
+                (0.5, 0.8, 0.7, 0.6, 0.9, "192.168.1.1", 1),
+                (0.3, 0.6, 0.8, 0.4, 0.7, "192.168.1.2", 1),
             ],
         ),
     ],
@@ -509,6 +568,7 @@ def test_get_reporter_ip(
 def test_get_opinion_on_ip(ipaddress, reports, expected_result):
     trust_db = ModuleFactory().create_trust_db_obj()
 
+    trust_db.select = MagicMock(return_value=[])
     trust_db.get_reports_for_ip = MagicMock(return_value=reports)
     trust_db.get_reporter_ip = MagicMock(
         side_effect=["192.168.1.1", "192.168.1.2"]

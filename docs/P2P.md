@@ -154,6 +154,19 @@ reputation lookups at startup. This keeps opinion checks from scanning the
 entire database as its report history grows. On an existing large database,
 the indexes are built once during startup; subsequent starts reuse them.
 
+Slips compacts stored IP reports in batches of up to 1,000 rows every five
+seconds. For each reported IP, peer ID, and reporter IP at report time, it
+keeps the report count and score/confidence totals. The trust calculation
+still uses each peer's current reliability and the reporter IP's current
+reputation, so new peer information continues to affect past reports. Reports
+whose peer IP cannot yet be resolved stay in the raw table and continue to be
+considered normally. Aggregation preserves the opinion formula; only ordinary
+floating-point rounding at machine precision can differ. After the existing
+backlog is processed, Slips attempts one vacuum to reclaim disk space. Keep
+the database; deleting it would discard the peer reports and trust history.
+Back it up before the first run with compaction if you need a recoverable
+original copy.
+
 
 ### Answering the network's request about an IP
 
