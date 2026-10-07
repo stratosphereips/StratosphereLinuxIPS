@@ -93,6 +93,8 @@ class TrustDB(ISQLite):
         for table, schema in table_schema.items():
             self.create_table(table, schema)
 
+        self._compact_slips_reputation_history()
+
         # These tables are persistent and their row counts grow over time.
         # Opinion calculation looks up reports and peer metadata for every
         # previously unseen IP, so keep those lookups indexed.
@@ -103,8 +105,8 @@ class TrustDB(ISQLite):
             "ON peer_ips(peerid, update_time DESC)",
             "CREATE INDEX IF NOT EXISTS go_reliability_peer_idx "
             "ON go_reliability(peerid)",
-            "CREATE INDEX IF NOT EXISTS slips_reputation_ip_time_idx "
-            "ON slips_reputation(ipaddress, update_time DESC)",
+            "CREATE UNIQUE INDEX IF NOT EXISTS slips_reputation_ip_idx "
+            "ON slips_reputation(ipaddress)",
         )
         for index in indexes:
             self.execute(index)
@@ -115,6 +117,73 @@ class TrustDB(ISQLite):
         self.execute(
             "INSERT OR IGNORE INTO report_compaction_state "
             "(id, last_report_id, database_vacuumed) VALUES (1, 0, 0)"
+        )
+
+    def _compact_slips_reputation_history(self):
+        """Keep only each IP's latest reputation, which is the value used."""
+        index = self.select(
+            "sqlite_master",
+            columns="name",
+            condition="type = ? AND name = ?",
+            params=("index", "slips_reputation_ip_idx"),
+            limit=1,
+        )
+        if index:
+            return
+
+        deleted_rows = 0
+        self.print(
+            "Compacting old P2P reputation snapshots; keeping the latest "
+            "score for each IP."
+        )
+        with self.conn_lock:
+            with self._acquire_flock():
+                cursor = self.conn.cursor()
+                cursor.execute("BEGIN")
+                try:
+                    cursor.execute(
+                        "CREATE TEMP TABLE latest_slips_reputation ("
+                        "ipaddress TEXT PRIMARY KEY, update_time REAL NOT NULL)"
+                    )
+                    cursor.execute(
+                        "INSERT INTO latest_slips_reputation "
+                        "SELECT ipaddress, MAX(update_time) "
+                        "FROM slips_reputation GROUP BY ipaddress"
+                    )
+                    cursor.execute(
+                        "CREATE TEMP TABLE keep_slips_reputation ("
+                        "id INTEGER PRIMARY KEY)"
+                    )
+                    cursor.execute(
+                        "INSERT INTO keep_slips_reputation "
+                        "SELECT MAX(reputation.id) "
+                        "FROM slips_reputation AS reputation "
+                        "JOIN latest_slips_reputation AS latest "
+                        "ON reputation.ipaddress = latest.ipaddress "
+                        "AND reputation.update_time = latest.update_time "
+                        "GROUP BY reputation.ipaddress"
+                    )
+                    cursor.execute(
+                        "DELETE FROM slips_reputation WHERE id NOT IN "
+                        "(SELECT id FROM keep_slips_reputation)"
+                    )
+                    deleted_rows += cursor.rowcount
+                    cursor.execute("DROP TABLE keep_slips_reputation")
+                    cursor.execute("DROP TABLE latest_slips_reputation")
+                    cursor.execute(
+                        "CREATE UNIQUE INDEX slips_reputation_ip_idx "
+                        "ON slips_reputation(ipaddress)"
+                    )
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+
+        if deleted_rows:
+            self.shrink_compacted_database(mark_reports_compacted=False)
+        self.print(
+            "Finished compacting P2P reputation history; removed "
+            f"{deleted_rows} obsolete snapshots."
         )
 
     def delete_tables(self):
@@ -137,9 +206,14 @@ class TrustDB(ISQLite):
             timestamp = time.time()
 
         query = """
-            INSERT OR REPLACE INTO slips_reputation
+            INSERT INTO slips_reputation
             (ipaddress, score, confidence, update_time)
             VALUES (?, ?, ?, ?)
+            ON CONFLICT(ipaddress) DO UPDATE SET
+                score = excluded.score,
+                confidence = excluded.confidence,
+                update_time = excluded.update_time
+            WHERE excluded.update_time >= slips_reputation.update_time
         """
         self.execute(query, (ip, score, confidence, timestamp))
 
@@ -259,18 +333,24 @@ class TrustDB(ISQLite):
         Returns:
             The peer IDs whose reports contributed to this IP.
         """
-        raw_reporters = self.select(
-            table_name="reports",
-            columns="DISTINCT reporter_peerid",
-            condition="reported_key = ? AND key_type = ?",
-            params=(ipaddress, "ip"),
-        ) or []
-        compact_reporters = self.select(
-            table_name="report_aggregates",
-            columns="DISTINCT reporter_peerid",
-            condition="reported_key = ? AND key_type = ?",
-            params=(ipaddress, "ip"),
-        ) or []
+        raw_reporters = (
+            self.select(
+                table_name="reports",
+                columns="DISTINCT reporter_peerid",
+                condition="reported_key = ? AND key_type = ?",
+                params=(ipaddress, "ip"),
+            )
+            or []
+        )
+        compact_reporters = (
+            self.select(
+                table_name="report_aggregates",
+                columns="DISTINCT reporter_peerid",
+                condition="reported_key = ? AND key_type = ?",
+                params=(ipaddress, "ip"),
+            )
+            or []
+        )
         return {row[0] for row in raw_reporters + compact_reporters if row[0]}
 
     def compact_reports(self, batch_size: int = 500) -> bool:
@@ -368,8 +448,14 @@ class TrustDB(ISQLite):
             self.shrink_compacted_database()
         return compaction_complete
 
-    def shrink_compacted_database(self) -> bool:
+    def shrink_compacted_database(
+        self, mark_reports_compacted: bool = True
+    ) -> bool:
         """Reclaim SQLite pages freed by report compaction.
+
+        Parameters:
+            mark_reports_compacted: Record that raw report compaction has
+                completed after the database is reclaimed.
 
         Returns:
             True if VACUUM completed successfully, otherwise False.
@@ -378,10 +464,16 @@ class TrustDB(ISQLite):
             with self.conn_lock:
                 with self._acquire_flock():
                     self.conn.execute("VACUUM")
-            self.execute(
-                "UPDATE report_compaction_state SET database_vacuumed = 1 "
-                "WHERE id = 1"
-            )
+                    checkpoint = self.conn.execute(
+                        "PRAGMA wal_checkpoint(TRUNCATE)"
+                    ).fetchone()
+                    if checkpoint and checkpoint[0]:
+                        return False
+            if mark_reports_compacted:
+                self.execute(
+                    "UPDATE report_compaction_state SET database_vacuumed = 1 "
+                    "WHERE id = 1"
+                )
             return True
         except sqlite3.Error as error:
             self.print(
@@ -389,10 +481,11 @@ class TrustDB(ISQLite):
                 0,
                 1,
             )
-            self.execute(
-                "UPDATE report_compaction_state SET database_vacuumed = 2 "
-                "WHERE id = 1"
-            )
+            if mark_reports_compacted:
+                self.execute(
+                    "UPDATE report_compaction_state SET database_vacuumed = 2 "
+                    "WHERE id = 1"
+                )
             return False
 
     def get_reporter_ip(self, reporter_peerid, report_timestamp) -> str:
@@ -449,16 +542,25 @@ class TrustDB(ISQLite):
         reporter reliability, reporter score, and reporter confidence for a given IP address.
         """
         grouped_reports = {}
-        compact_reports = self.select(
-            table_name="report_aggregates",
-            columns=(
-                "reporter_peerid, reporter_ip, report_count, score_sum, "
-                "confidence_sum"
-            ),
-            condition="reported_key = ? AND key_type = ?",
-            params=(ipaddress, "ip"),
-        ) or []
-        for reporter_peerid, reporter_ip, count, score_sum, confidence_sum in compact_reports:
+        compact_reports = (
+            self.select(
+                table_name="report_aggregates",
+                columns=(
+                    "reporter_peerid, reporter_ip, report_count, score_sum, "
+                    "confidence_sum"
+                ),
+                condition="reported_key = ? AND key_type = ?",
+                params=(ipaddress, "ip"),
+            )
+            or []
+        )
+        for (
+            reporter_peerid,
+            reporter_ip,
+            count,
+            score_sum,
+            confidence_sum,
+        ) in compact_reports:
             grouped_reports[(reporter_peerid, reporter_ip)] = [
                 count,
                 score_sum,
@@ -471,7 +573,9 @@ class TrustDB(ISQLite):
             report_score,
             report_confidence,
             _reported_ip,
-        ) in self.get_reports_for_ip(ipaddress) or []:
+        ) in (
+            self.get_reports_for_ip(ipaddress) or []
+        ):
             reporter_ip = self.get_reporter_ip(
                 reporter_peerid, report_timestamp
             )

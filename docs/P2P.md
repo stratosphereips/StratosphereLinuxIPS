@@ -154,6 +154,15 @@ reputation lookups at startup. This keeps opinion checks from scanning the
 entire database as its report history grows. On an existing large database,
 the indexes are built once during startup; subsequent starts reuse them.
 
+The trust database stores only the latest Slips reputation score and
+confidence for each IP. Older snapshots were not used for opinion lookups;
+they only made `trustdb.db` grow continuously. On startup, existing databases
+are migrated by retaining the row with the newest timestamp for each IP, then
+the database is vacuumed and its WAL is checkpointed. This preserves the
+current reputation values while discarding unused reputation history. Do not
+delete `permanent/p2p_trust_runtime/trustdb.db` to reclaim space: Slips performs
+the migration without resetting peer reports or reputation.
+
 Slips compacts stored IP reports in batches of up to 1,000 rows every five
 seconds. For each reported IP, peer ID, and reporter IP at report time, it
 keeps the report count and score/confidence totals. The trust calculation

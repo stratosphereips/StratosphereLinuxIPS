@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import sqlite3
 import pytest
+from contextlib import nullcontext
 from unittest.mock import (
     patch,
     call,
@@ -10,6 +11,7 @@ from unittest.mock import (
 )
 from tests.module_factory import ModuleFactory
 import datetime
+from modules.p2p_trust.trust.trustdb import TrustDB
 
 
 def normalize_sql(sql):
@@ -187,10 +189,60 @@ def test_insert_slips_score(
     actual_call = trust_db.execute.call_args
     actual_sql = normalize_sql(actual_call[0][0])
     expected_sql = normalize_sql(
-        "INSERT OR REPLACE INTO slips_reputation (ipaddress, score, "
-        "confidence, update_time) VALUES (?, ?, ?, ?)"
+        "INSERT INTO slips_reputation (ipaddress, score, confidence, "
+        "update_time) VALUES (?, ?, ?, ?) ON CONFLICT(ipaddress) DO "
+        "UPDATE SET score = excluded.score, confidence = excluded.confidence, "
+        "update_time = excluded.update_time WHERE excluded.update_time >= "
+        "slips_reputation.update_time"
     )
     assert actual_sql == expected_sql
+
+
+def test_reputation_history_migration_keeps_latest_value(tmp_path):
+    db_path = tmp_path / "trust.db"
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        "CREATE TABLE slips_reputation (id INTEGER PRIMARY KEY NOT NULL, "
+        "ipaddress TEXT NOT NULL, score REAL NOT NULL, confidence REAL NOT NULL, "
+        "update_time REAL NOT NULL)"
+    )
+    connection.executemany(
+        "INSERT INTO slips_reputation "
+        "(ipaddress, score, confidence, update_time) VALUES (?, ?, ?, ?)",
+        [
+            ("203.0.113.1", 0.2, 0.3, 1),
+            ("203.0.113.1", 0.8, 0.9, 3),
+            ("203.0.113.1", 0.5, 0.6, 2),
+            ("203.0.113.2", 0.4, 0.5, 4),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    with (
+        patch(
+            "slips_files.common.abstracts.isqlite.ISQLite._init_flock",
+            autospec=True,
+            side_effect=lambda instance, *_: setattr(
+                instance,
+                "sqlite_flock",
+                Mock(acquire=Mock(return_value=nullcontext())),
+            ),
+        ),
+    ):
+        trust_db = TrustDB(Mock(), str(db_path), 1)
+
+    assert trust_db.select(
+        "slips_reputation",
+        columns="score, confidence, update_time",
+        condition="ipaddress = ?",
+        params=("203.0.113.1",),
+    ) == [(0.8, 0.9, 3)]
+    assert trust_db.get_count("slips_reputation") == 2
+    trust_db.insert_slips_score("203.0.113.1", 0.1, 0.2, 2)
+    assert trust_db.get_reporter_reputation("203.0.113.1") == (0.8, 0.9)
+    trust_db.insert_slips_score("203.0.113.1", 0.7, 0.8, 5)
+    assert trust_db.get_reporter_reputation("203.0.113.1") == (0.7, 0.8)
 
 
 @pytest.mark.parametrize(
@@ -298,8 +350,8 @@ def test_create_tables_adds_indexes_for_opinion_lookups():
         "ON peer_ips(peerid, update_time DESC)",
         "CREATE INDEX IF NOT EXISTS go_reliability_peer_idx "
         "ON go_reliability(peerid)",
-        "CREATE INDEX IF NOT EXISTS slips_reputation_ip_time_idx "
-        "ON slips_reputation(ipaddress, update_time DESC)",
+        "CREATE UNIQUE INDEX IF NOT EXISTS slips_reputation_ip_idx "
+        "ON slips_reputation(ipaddress)",
         "CREATE INDEX IF NOT EXISTS report_aggregates_key_idx "
         "ON report_aggregates(reported_key, key_type)",
     )
