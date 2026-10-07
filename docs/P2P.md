@@ -149,6 +149,11 @@ and we alert if the score of this IP is more than 0 (threat level=info).
 
 The persistent local P2P runtime directory is stored under the directory configured by ```parameters.permanent_dir``` in ```config/slips.yaml```. By default, this is ```permanent/p2p_trust_runtime/```.
 
+The persistent trust database creates indexes for report, peer, and
+reputation lookups at startup. This keeps opinion checks from scanning the
+entire database as its report history grows. On an existing large database,
+the indexes are built once during startup; subsequent starts reuse them.
+
 
 ### Answering the network's request about an IP
 

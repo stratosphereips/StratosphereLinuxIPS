@@ -76,6 +76,22 @@ class TrustDB(ISQLite):
         for table, schema in table_schema.items():
             self.create_table(table, schema)
 
+        # These tables are persistent and their row counts grow over time.
+        # Opinion calculation looks up reports and peer metadata for every
+        # previously unseen IP, so keep those lookups indexed.
+        indexes = (
+            "CREATE INDEX IF NOT EXISTS reports_key_type_idx "
+            "ON reports(reported_key, key_type)",
+            "CREATE INDEX IF NOT EXISTS peer_ips_peer_time_idx "
+            "ON peer_ips(peerid, update_time DESC)",
+            "CREATE INDEX IF NOT EXISTS go_reliability_peer_idx "
+            "ON go_reliability(peerid)",
+            "CREATE INDEX IF NOT EXISTS slips_reputation_ip_time_idx "
+            "ON slips_reputation(ipaddress, update_time DESC)",
+        )
+        for index in indexes:
+            self.execute(index)
+
     def delete_tables(self):
         tables = [
             "opinion_cache",

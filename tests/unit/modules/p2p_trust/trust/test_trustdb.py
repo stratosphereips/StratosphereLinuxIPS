@@ -270,6 +270,29 @@ def test_create_tables():
     assert trust_db.create_table.call_count == len(expected_calls)
 
 
+def test_create_tables_adds_indexes_for_opinion_lookups():
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.create_table = Mock()
+    trust_db.execute = Mock()
+
+    trust_db.create_tables()
+
+    executed_sql = [call.args[0] for call in trust_db.execute.call_args_list]
+    expected_indexes = (
+        "CREATE INDEX IF NOT EXISTS reports_key_type_idx "
+        "ON reports(reported_key, key_type)",
+        "CREATE INDEX IF NOT EXISTS peer_ips_peer_time_idx "
+        "ON peer_ips(peerid, update_time DESC)",
+        "CREATE INDEX IF NOT EXISTS go_reliability_peer_idx "
+        "ON go_reliability(peerid)",
+        "CREATE INDEX IF NOT EXISTS slips_reputation_ip_time_idx "
+        "ON slips_reputation(ipaddress, update_time DESC)",
+    )
+
+    for index in expected_indexes:
+        assert index in executed_sql
+
+
 @pytest.mark.parametrize(
     "reporter_peerid, key_type, reported_key, score, confidence, "
     "timestamp, expected_query, expected_params",
