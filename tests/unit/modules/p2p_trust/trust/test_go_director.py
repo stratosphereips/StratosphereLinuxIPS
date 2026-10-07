@@ -711,6 +711,9 @@ def test_connection_update_is_validated_and_recorded() -> None:
         {**connection, "authenticated": True},
         go_director.ACTIVE_P2P_CONNECTION_TTL,
     )
+    go_director.trustdb.insert_go_peer_address.assert_called_once_with(
+        "peer-a", "198.51.100.20", 51000
+    )
     go_director.db.remove_authenticated_p2p_connection.assert_not_called()
 
 

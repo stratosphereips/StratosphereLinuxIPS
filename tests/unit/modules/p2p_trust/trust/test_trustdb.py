@@ -28,6 +28,7 @@ def normalize_sql(sql):
                 "slips_reputation",
                 "go_reliability",
                 "peer_ips",
+                "peer_addresses",
                 "reports",
                 "report_aggregates",
                 "report_compaction_state",
@@ -53,6 +54,7 @@ def test_delete_tables(existing_tables):
         call("DROP TABLE IF EXISTS slips_reputation;"),
         call("DROP TABLE IF EXISTS go_reliability;"),
         call("DROP TABLE IF EXISTS peer_ips;"),
+        call("DROP TABLE IF EXISTS peer_addresses;"),
         call("DROP TABLE IF EXISTS reports;"),
         call("DROP TABLE IF EXISTS report_aggregates;"),
         call("DROP TABLE IF EXISTS report_compaction_state;"),
@@ -169,6 +171,58 @@ def test_insert_go_ip_pairing(peerid, ip, timestamp, expected_params):
     trust_db.insert.assert_called_once_with(
         "peer_ips", (ip, peerid, timestamp), "ipaddress, peerid, update_time"
     )
+
+
+def test_insert_go_peer_address_stores_authenticated_endpoint() -> None:
+    """Persist the remote IP and P2P port observed on an authenticated link."""
+    module_factory = ModuleFactory()
+    trust_db = module_factory.create_trust_db_obj()
+    trust_db.execute = Mock()
+
+    trust_db.insert_go_peer_address("peer-1", "192.0.2.4", 6669, 1234)
+
+    trust_db.execute.assert_called_once_with(
+        "INSERT INTO peer_addresses "
+        "(peerid, ipaddress, port, update_time) VALUES (?, ?, ?, ?) "
+        "ON CONFLICT(peerid) DO UPDATE SET "
+        "ipaddress = excluded.ipaddress, port = excluded.port, "
+        "update_time = excluded.update_time "
+        "WHERE excluded.update_time >= peer_addresses.update_time",
+        ("peer-1", "192.0.2.4", 6669, 1234),
+    )
+
+
+@pytest.mark.parametrize(
+    "method,columns,table,condition",
+    [
+        (
+            "get_recent_peer_addresses",
+            "peerid, ipaddress, port, update_time",
+            "peer_addresses",
+            "newer.peerid = peer_addresses.peerid",
+        ),
+        (
+            "get_recent_peer_ips",
+            "peerid, ipaddress, update_time",
+            "peer_ips",
+            "newer.peerid = peer_ips.peerid",
+        ),
+    ],
+)
+def test_recent_peer_mapping_queries_select_latest_per_peer(
+    method: str, columns: str, table: str, condition: str
+) -> None:
+    """Fetch bounded latest addresses so old mappings cannot override them."""
+    module_factory = ModuleFactory()
+    trust_db = module_factory.create_trust_db_obj()
+    trust_db.select = Mock(return_value=[("peer-1", "192.0.2.4", 1)])
+
+    assert getattr(trust_db, method)(25) == [("peer-1", "192.0.2.4", 1)]
+    trust_db.select.assert_called_once()
+    assert trust_db.select.call_args.kwargs["columns"] == columns
+    assert trust_db.select.call_args.args[0] == table
+    assert condition in trust_db.select.call_args.kwargs["condition"]
+    assert trust_db.select.call_args.kwargs["limit"] == 25
 
 
 @pytest.mark.parametrize(
@@ -312,6 +366,10 @@ def test_create_tables():
             "id INTEGER PRIMARY KEY NOT NULL, ipaddress TEXT NOT NULL, peerid TEXT NOT NULL, update_time REAL NOT NULL",
         ),
         (
+            "peer_addresses",
+            "id INTEGER PRIMARY KEY NOT NULL, peerid TEXT NOT NULL UNIQUE, ipaddress TEXT NOT NULL, port INTEGER NOT NULL, update_time REAL NOT NULL",
+        ),
+        (
             "reports",
             "id INTEGER PRIMARY KEY NOT NULL, reporter_peerid TEXT NOT NULL, key_type TEXT NOT NULL, reported_key TEXT NOT NULL, score REAL NOT NULL, confidence REAL NOT NULL, update_time REAL NOT NULL",
         ),
@@ -348,6 +406,8 @@ def test_create_tables_adds_indexes_for_opinion_lookups():
         "ON reports(reported_key, key_type)",
         "CREATE INDEX IF NOT EXISTS peer_ips_peer_time_idx "
         "ON peer_ips(peerid, update_time DESC)",
+        "CREATE INDEX IF NOT EXISTS peer_addresses_peer_time_idx "
+        "ON peer_addresses(peerid, update_time DESC)",
         "CREATE INDEX IF NOT EXISTS go_reliability_peer_idx "
         "ON go_reliability(peerid)",
         "CREATE UNIQUE INDEX IF NOT EXISTS slips_reputation_ip_idx "

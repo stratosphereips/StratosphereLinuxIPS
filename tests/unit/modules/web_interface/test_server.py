@@ -2387,7 +2387,7 @@ def test_host_score_history_reports_peaks_resets_and_missing_coverage(
     assert [point["reset_reason"] for point in result["timeline"]] == [
         "",
         "",
-        "score reset after an alert",
+        "score decreased (possible reset)",
         "time window changed",
     ]
 
@@ -3379,6 +3379,7 @@ def test_p2p_marks_recently_active_message_sender_online(
             "QmSlowPeer": json.dumps(
                 {
                     "ip": "192.0.2.40",
+                    "connected": True,
                     "last_activity": now - 30,
                 }
             )
@@ -3392,6 +3393,41 @@ def test_p2p_marks_recently_active_message_sender_online(
     assert result["counts"]["connected"] == 1
     assert result["peers"][0]["peer_id"] == "QmSlowPeer"
     assert result["peers"][0]["connected"] is True
+
+
+def test_p2p_does_not_show_failed_connection_as_online(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep a recent failed dial offline until authenticated activity arrives."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    now = time.time()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": str(now - 60)},
+        "peer_info": {
+            "QmFailedPeer": json.dumps(
+                {
+                    "ip": "192.0.2.41",
+                    "connected": False,
+                    "last_activity": now - 1,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["connected"] == 0
+    assert result["peers"][0]["connected"] is False
 
 
 @pytest.mark.parametrize(

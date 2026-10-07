@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import errno
+import ipaddress
 import json
 import os
 import signal
@@ -214,16 +215,45 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert mock_popen.call_args.kwargs["stderr"] == subprocess.STDOUT
 
 
+def test_pigeon_command_bootstraps_to_authenticated_peers_on_current_subnet():
+    """Use saved peer ID and endpoint mappings when mDNS misses peers."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.port = 6668
+    trust.host = "192.168.1.163"
+    trust.trust_db = Mock()
+    trust.trust_db.get_recent_peer_addresses.return_value = [
+        ("peer-current", "192.168.1.196", 6669, 100),
+        ("peer-other-network", "10.0.0.5", 6668, 99),
+    ]
+    trust.trust_db.get_recent_peer_ips.return_value = [
+        ("peer-current", "192.168.1.196", 100),
+        ("peer-legacy", "192.168.1.170", 98),
+    ]
+    trust._get_local_subnet = Mock(
+        return_value=ipaddress.ip_network("192.168.1.0/24")
+    )
+
+    peers = trust._get_bootstrap_peer_addresses()
+
+    assert peers == [
+        "/ip4/192.168.1.196/tcp/6669/p2p/peer-current",
+        "/ip4/192.168.1.170/tcp/6668/p2p/peer-legacy",
+    ]
+
+
 @pytest.mark.parametrize(
-    "stdout,stderr,expected",
+    "flag,stdout,stderr,expected",
     [
-        ("  -slips-version string\n", "", True),
-        ("", "  -slips-version string\n", True),
-        ("  -rendezvous string\n", "", False),
+        ("-slips-version", "  -slips-version string\n", "", True),
+        ("-slips-version", "", "  -slips-version string\n", True),
+        ("-bootstrap-peers", "  -bootstrap-peers string\n", "", True),
+        ("-slips-version", "  -rendezvous string\n", "", False),
     ],
 )
 def test_pigeon_supports_flag(
-    stdout: str, stderr: str, expected: bool
+    flag: str, stdout: str, stderr: str, expected: bool
 ) -> None:
     """Detect supported Pigeon flags from stdout or stderr help text.
 
@@ -239,7 +269,7 @@ def test_pigeon_supports_flag(
     with patch(
         "modules.p2p_trust.p2p_trust.subprocess.run", return_value=result
     ) as run:
-        assert trust._pigeon_supports_flag("-slips-version") is expected
+        assert trust._pigeon_supports_flag(flag) is expected
 
     run.assert_called_once_with(
         [str(trust.pigeon_binary), "-help"],
@@ -517,6 +547,31 @@ def test_stop_pigeon_waits_for_child_exit() -> None:
     pigeon.send_signal.assert_called_once_with(signal.SIGINT)
     pigeon.wait.assert_called_once_with(timeout=5)
     assert trust.pigeon is None
+
+
+def test_pigeon_restarts_when_monitored_interface_address_changes() -> None:
+    """Rebind Pigeon and clear stale live peers after a Wi-Fi change."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.host = "192.168.1.247"
+    trust.last_local_ip_check = 0
+    trust.local_ip_check_interval = 5
+    trust.pigeon = Mock()
+    trust.mutliaddress_printed = True
+    trust.get_local_IP = Mock(return_value="192.168.1.163")
+    trust._stop_pigeon = Mock()
+    trust._start_pigeon = Mock()
+
+    with patch("modules.p2p_trust.p2p_trust.time.monotonic", return_value=10):
+        trust._refresh_pigeon_address()
+
+    assert trust.host == "192.168.1.163"
+    assert trust.mutliaddress_printed is False
+    trust._stop_pigeon.assert_called_once_with()
+    trust.db.clear_authenticated_p2p_connections.assert_called_once_with()
+    trust.db.store_connected_peers.assert_called_once_with([])
+    trust._start_pigeon.assert_called_once_with()
 
 
 def test_run_stops_pigeon_after_unexpected_module_exit() -> None:

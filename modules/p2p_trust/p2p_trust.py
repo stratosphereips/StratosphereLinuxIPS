@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import errno
+import ipaddress
 import os
 import shutil
 import signal
@@ -84,6 +85,8 @@ class Trust(IModule):
     start_pigeon = True
     active_p2p_connection_ttl = 300
     p2p_connection_heartbeat_interval = 60
+    local_ip_check_interval = 5
+    max_bootstrap_peers = 50
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
     pigeon_binary = pigeon_binary_dir / "p2p4slips"
@@ -104,6 +107,7 @@ class Trust(IModule):
 
         self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
+        self.last_local_ip_check = time.monotonic()
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
@@ -708,9 +712,110 @@ class Trust(IModule):
                 "-slips-version; starting in legacy compatibility mode."
             )
 
+        bootstrap_peers = self._get_bootstrap_peer_addresses()
+        if bootstrap_peers and self._pigeon_supports_flag("-bootstrap-peers"):
+            params["-bootstrap-peers"] = ",".join(bootstrap_peers)
+
         return [str(self.pigeon_binary)] + [
             utils.sanitize(item) for pair in params.items() for item in pair
         ]
+
+    def _get_bootstrap_peer_addresses(self) -> list[str]:
+        """Build authenticated peer endpoints from this network's history.
+
+        Returns:
+            Recent peer multiaddresses on the monitored IPv4 subnet.
+        """
+        trust_db = getattr(self, "trust_db", None)
+        if trust_db is None:
+            return []
+
+        try:
+            subnet = self._get_local_subnet()
+        except (OSError, ValueError):
+            subnet = None
+
+        addresses: dict[str, str] = {}
+        try:
+            known_addresses = trust_db.get_recent_peer_addresses(
+                self.max_bootstrap_peers
+            )
+        except (AttributeError, TypeError):
+            known_addresses = []
+        if isinstance(known_addresses, (list, tuple)):
+            for peer_id, address, port, _timestamp in known_addresses:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), port, subnet
+                )
+
+        try:
+            known_ips = trust_db.get_recent_peer_ips(self.max_bootstrap_peers)
+        except (AttributeError, TypeError):
+            known_ips = []
+        if isinstance(known_ips, (list, tuple)):
+            for peer_id, address, _timestamp in known_ips:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), self.port, subnet
+                )
+
+        return list(addresses.values())[: self.max_bootstrap_peers]
+
+    def _add_bootstrap_address(
+        self,
+        addresses: dict[str, str],
+        peer_id: str,
+        address: str,
+        port: int,
+        subnet: Optional[ipaddress.IPv4Network],
+    ) -> None:
+        """Add a valid peer endpoint once, if it belongs to this subnet.
+
+        Parameters:
+            addresses: Output mapping keyed by peer ID.
+            peer_id: Authenticated P2P identity.
+            address: Last observed IPv4 address.
+            port: Last observed P2P listening port.
+            subnet: Current monitored subnet, when available.
+        """
+        if peer_id in addresses:
+            return
+        try:
+            peer_ip = ipaddress.IPv4Address(address)
+            peer_port = int(port)
+        except (ipaddress.AddressValueError, TypeError, ValueError):
+            return
+        if peer_port < 1 or peer_port > 65535:
+            return
+        if subnet and peer_ip not in subnet:
+            return
+        if address == getattr(self, "host", ""):
+            return
+        addresses[peer_id] = f"/ip4/{peer_ip}/tcp/{peer_port}/p2p/{peer_id}"
+
+    def _get_local_subnet(self) -> Optional[ipaddress.IPv4Network]:
+        """Return the monitored interface's IPv4 network when available.
+
+        Returns:
+            IPv4 subnet, or None when the interface has no usable netmask.
+        """
+        interface = getattr(getattr(self, "args", None), "interface", None)
+        if not interface:
+            gateway = (
+                netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+            )
+            interface = gateway[1] if gateway else None
+        if not interface:
+            return None
+        for entry in netifaces.ifaddresses(interface).get(
+            netifaces.AF_INET, []
+        ):
+            if entry.get("addr") == getattr(self, "host", None) and entry.get(
+                "netmask"
+            ):
+                return ipaddress.ip_network(
+                    f"{entry['addr']}/{entry['netmask']}", strict=False
+                )
+        return None
 
     def process_message_report(
         self, reporter: str, report_time: int, data: dict
@@ -844,6 +949,48 @@ class Trust(IModule):
 
         self.pigeon = None
 
+    def _refresh_pigeon_address(self) -> None:
+        """Restart Pigeon when the monitored interface gets a new IPv4.
+
+        Wi-Fi and Ethernet interfaces can change addresses while Slips is
+        running. Pigeon binds to its startup address and advertises that
+        address through mDNS, so it must be restarted to join the new network.
+        """
+        now = time.monotonic()
+        if (
+            now - getattr(self, "last_local_ip_check", 0)
+            < self.local_ip_check_interval
+        ):
+            return
+        self.last_local_ip_check = now
+
+        if not hasattr(self, "host"):
+            return
+
+        try:
+            current_ip = self.get_local_IP()
+        except (OSError, ValueError):
+            return
+
+        if (
+            current_ip == self.host
+            and getattr(self, "pigeon", None) is not None
+        ):
+            return
+
+        if current_ip != self.host:
+            self.print(
+                f"Monitored interface address changed from {self.host} to "
+                f"{current_ip}; restarting Pigeon to reconnect to local peers."
+            )
+            self._stop_pigeon()
+            self.db.clear_authenticated_p2p_connections()
+            self.db.store_connected_peers([])
+            self.host = current_ip
+            self.mutliaddress_printed = False
+
+        self._start_pigeon()
+
     def run(self) -> None:
         """Run p2p_trust and guarantee its Go child cannot be orphaned."""
         try:
@@ -901,6 +1048,12 @@ class Trust(IModule):
                     0,
                     1,
                 )
+
+        self._refresh_pigeon_address()
+
+        if self.pigeon is None:
+            self.termination_event.wait(0.05)
+            return
 
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):

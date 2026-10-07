@@ -55,6 +55,13 @@ class TrustDB(ISQLite):
                 "peerid TEXT NOT NULL, "
                 "update_time REAL NOT NULL"
             ),
+            "peer_addresses": (
+                "id INTEGER PRIMARY KEY NOT NULL, "
+                "peerid TEXT NOT NULL UNIQUE, "
+                "ipaddress TEXT NOT NULL, "
+                "port INTEGER NOT NULL, "
+                "update_time REAL NOT NULL"
+            ),
             "reports": (
                 "id INTEGER PRIMARY KEY NOT NULL, "
                 "reporter_peerid TEXT NOT NULL, "
@@ -103,6 +110,8 @@ class TrustDB(ISQLite):
             "ON reports(reported_key, key_type)",
             "CREATE INDEX IF NOT EXISTS peer_ips_peer_time_idx "
             "ON peer_ips(peerid, update_time DESC)",
+            "CREATE INDEX IF NOT EXISTS peer_addresses_peer_time_idx "
+            "ON peer_addresses(peerid, update_time DESC)",
             "CREATE INDEX IF NOT EXISTS go_reliability_peer_idx "
             "ON go_reliability(peerid)",
             "CREATE UNIQUE INDEX IF NOT EXISTS slips_reputation_ip_idx "
@@ -192,6 +201,7 @@ class TrustDB(ISQLite):
             "slips_reputation",
             "go_reliability",
             "peer_ips",
+            "peer_addresses",
             "reports",
             "report_aggregates",
             "report_compaction_state",
@@ -236,6 +246,83 @@ class TrustDB(ISQLite):
 
         values = (ip, peerid, timestamp)
         self.insert("peer_ips", values, "ipaddress, peerid, update_time")
+
+    def insert_go_peer_address(
+        self, peerid: str, ip: str, port: int, timestamp: float = None
+    ) -> None:
+        """Store the endpoint of an authenticated peer connection.
+
+        Parameters:
+            peerid: Authenticated remote peer ID.
+            ip: Remote IP address observed by the TCP connection.
+            port: Remote P2P listening port.
+            timestamp: Observation time in Unix seconds.
+        """
+        if timestamp is None:
+            timestamp = time.time()
+        self.execute(
+            "INSERT INTO peer_addresses "
+            "(peerid, ipaddress, port, update_time) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(peerid) DO UPDATE SET "
+            "ipaddress = excluded.ipaddress, port = excluded.port, "
+            "update_time = excluded.update_time "
+            "WHERE excluded.update_time >= peer_addresses.update_time",
+            (peerid, ip, port, timestamp),
+        )
+
+    def get_recent_peer_addresses(self, limit: int = 100) -> list[tuple]:
+        """Return each known peer's most recently observed TCP endpoint.
+
+        Parameters:
+            limit: Maximum number of peer endpoints to return.
+
+        Returns:
+            Rows containing peer ID, IP, port, and observation time.
+        """
+        condition = (
+            "NOT EXISTS (SELECT 1 FROM peer_addresses AS newer "
+            "WHERE newer.peerid = peer_addresses.peerid AND "
+            "(newer.update_time > peer_addresses.update_time OR "
+            "(newer.update_time = peer_addresses.update_time "
+            "AND newer.id > peer_addresses.id)))"
+        )
+        return (
+            self.select(
+                "peer_addresses",
+                columns="peerid, ipaddress, port, update_time",
+                condition=condition,
+                order_by="update_time DESC",
+                limit=max(1, int(limit)),
+            )
+            or []
+        )
+
+    def get_recent_peer_ips(self, limit: int = 100) -> list[tuple]:
+        """Return each peer's latest IP pairing for older database records.
+
+        Parameters:
+            limit: Maximum number of peer IP mappings to return.
+
+        Returns:
+            Rows containing peer ID, IP, and observation time.
+        """
+        condition = (
+            "NOT EXISTS (SELECT 1 FROM peer_ips AS newer "
+            "WHERE newer.peerid = peer_ips.peerid AND "
+            "(newer.update_time > peer_ips.update_time OR "
+            "(newer.update_time = peer_ips.update_time "
+            "AND newer.id > peer_ips.id)))"
+        )
+        return (
+            self.select(
+                "peer_ips",
+                columns="peerid, ipaddress, update_time",
+                condition=condition,
+                order_by="update_time DESC",
+                limit=max(1, int(limit)),
+            )
+            or []
+        )
 
     def insert_new_go_report(
         self,

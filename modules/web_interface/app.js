@@ -3174,7 +3174,7 @@ async function loadLegacyScoreHistory(params) {
     point.reset_reason = previous && point.timewindow !== previous.timewindow
       ? "time window changed"
       : previous && point.score < previous.score
-        ? "score reset after an alert"
+        ? "score decreased (possible reset)"
         : "";
     if (point.reset_reason) resetCount += 1;
     previous = point;

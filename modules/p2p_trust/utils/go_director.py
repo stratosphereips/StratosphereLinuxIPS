@@ -188,6 +188,20 @@ class GoDirector:
                 "connected": connected,
             },
         )
+        try:
+            remote_port = int(connection["remote_port"])
+        except (TypeError, ValueError):
+            return
+        remote_ip = str(connection["remote_ip"])
+        if (
+            remote_port < 1
+            or remote_port > 65535
+            or not validate_ip_address(remote_ip)
+        ):
+            return
+        self.trustdb.insert_go_peer_address(
+            str(connection["peer_id"]), remote_ip, remote_port
+        )
 
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer

@@ -3554,7 +3554,10 @@ class RunDataReader:
                 elif float(point.get("score") or 0) < float(
                     previous.get("score") or 0
                 ):
-                    reset_reason = "score reset after an alert"
+                    # A lower persisted sample is consistent with Slips
+                    # resetting the score, but the chart cannot prove why it
+                    # dropped (for example, whether an alert caused it).
+                    reset_reason = "score decreased (possible reset)"
             point["reset_reason"] = reset_reason
             if reset_reason:
                 resets += 1
@@ -5051,7 +5054,11 @@ class RunDataReader:
         )
         for peer_id, info in peer_info.items():
             last_activity = self._event_timestamp(info.get("last_activity"))
-            if last_activity and last_activity >= recent_activity_cutoff:
+            if (
+                info.get("connected") is True
+                and last_activity
+                and last_activity >= recent_activity_cutoff
+            ):
                 connected.add(peer_id)
         trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
         trust_range = "all"
