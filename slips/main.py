@@ -287,16 +287,37 @@ class Main:
         elif "CSV" in cmd_result and os.path.isfile(given_path):
             input_type = InputType.BINETFLOW
         elif "directory" in cmd_result and os.path.isdir(given_path):
-            for log_file in os.listdir(given_path):
-                # if there is at least 1 supported log file inside the
-                # given directory, start slips normally
-                # otherwise, stop slips
+            files = os.listdir(given_path)
+            if not files:
+                print(f"The given directory {given_path} is empty. Stopping.")
+                sys.exit(-1)
+
+            has_valid_zeek_file = False
+            for log_file in files:
+                full_path = os.path.join(given_path, log_file)
+                if os.path.isdir(full_path):
+                    print(
+                        f"Directories inside the given zeek directory are not supported.\n"
+                        f"Found directory: '{log_file}' inside {given_path}.\n"
+                        f"Make sure the given zeek directory contains ONLY valid zeek log files. Stopping."
+                    )
+                    sys.exit(-1)
+
                 if not utils.is_ignored_zeek_log_file(log_file):
-                    input_type = InputType.ZEEK_FOLDER
-                    break
+                    has_valid_zeek_file = True
+                elif not (log_file.endswith(".log") or log_file.endswith(".log.labeled")):
+                    print(
+                        f"Invalid file found in {given_path}: '{log_file}'.\n"
+                        f"Make sure the given zeek directory contains ONLY valid zeek log files\n"
+                        f"(ending with .log or .log.labeled) and no subdirectories. Stopping."
+                    )
+                    sys.exit(-1)
+
+            if has_valid_zeek_file:
+                input_type = InputType.ZEEK_FOLDER
             else:
                 print(
-                    f"Log files in {given_path} are not supported \n"
+                    f"Log files in {given_path} are not supported.\n"
                     f"Make sure all log files inside the given "
                     f"directory end with .log or .log.labeled .. Stopping."
                 )

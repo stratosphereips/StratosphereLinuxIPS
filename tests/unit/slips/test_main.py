@@ -532,3 +532,36 @@ def test_prepare_output_dir_without_o_flag(
     expected_base = tmp_path / "wlp3s0_2025-07-15_12:00:00"
     assert expected_base.exists()
     assert oct(expected_base.stat().st_mode & 0o777) == "0o777"
+
+@patch("os.path.isdir")
+@patch("os.listdir")
+@patch("slips_files.common.slips_utils.Utils.is_ignored_zeek_log_file")
+@patch("subprocess.run")
+def test_get_input_file_type_zeek_folder(mock_run, mock_is_ignored, mock_listdir, mock_isdir):
+    main = ModuleFactory().create_main_obj()
+    mock_run.return_value.stdout = b"directory"
+    
+    # Valid zeek folder
+    mock_isdir.side_effect = lambda x: True if x == "/valid_zeek_dir" else False
+    mock_listdir.return_value = ["conn.log", "dns.log"]
+    mock_is_ignored.return_value = False
+    assert main.get_input_file_type("/valid_zeek_dir") == InputType.ZEEK_FOLDER
+
+    # Empty folder
+    mock_isdir.side_effect = lambda x: True if x == "/empty_dir" else False
+    mock_listdir.return_value = []
+    with pytest.raises(SystemExit):
+        main.get_input_file_type("/empty_dir")
+
+    # Folder with a subdirectory
+    mock_isdir.side_effect = lambda x: True if x in ("/subdir_zeek_dir", "/subdir_zeek_dir/some_dir") else False
+    mock_listdir.return_value = ["conn.log", "some_dir"]
+    with pytest.raises(SystemExit):
+        main.get_input_file_type("/subdir_zeek_dir")
+
+    # Folder with an invalid file
+    mock_isdir.side_effect = lambda x: True if x == "/invalid_zeek_dir" else False
+    mock_listdir.return_value = ["conn.log", "something.csv"]
+    mock_is_ignored.side_effect = lambda x: True if 'something' in x else False
+    with pytest.raises(SystemExit):
+        main.get_input_file_type("/invalid_zeek_dir")
