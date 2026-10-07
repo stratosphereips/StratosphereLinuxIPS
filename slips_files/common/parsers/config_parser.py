@@ -497,10 +497,33 @@ class ConfigParser(object):
         return twid_width
 
     def disabled_detections(self) -> list:
+        """
+        returns the EvidenceType members listed in disabled_detections.
+        evidence.evidence_type is an EvidenceType, so the configured names
+        must be converted for `evidence_type in disabled_detections()`
+        checks to match. Names are matched ignoring case and underscores,
+        so both CONNECTION_WITHOUT_DNS and ConnectionWithoutDNS work.
+        """
+        from slips_files.core.structures.evidence import EvidenceType
+
         value = self.read_configuration(
             "DisabledAlerts", "disabled_detections", []
         )
-        return value if isinstance(value, list) else []
+        if not isinstance(value, list):
+            return []
+
+        def normalize(name: str) -> str:
+            return name.replace("_", "").upper()
+
+        types_by_name = {normalize(t.name): t for t in EvidenceType}
+        disabled = []
+        for name in value:
+            if not isinstance(name, str):
+                continue
+            evidence_type = types_by_name.get(normalize(name.strip()))
+            if evidence_type is not None:
+                disabled.append(evidence_type)
+        return disabled
 
     def evidence_signal_default(self) -> str:
         value = self.read_configuration(
