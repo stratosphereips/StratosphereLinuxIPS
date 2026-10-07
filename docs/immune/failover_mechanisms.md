@@ -5,7 +5,7 @@ The project has a few failure points listed below that we explicitly want to con
 Our goal if something breaks, is to try to recover automatically where possible, but if recovery is not possible or the failure is critical, the user must lose internet so they are forced to debug and restart Slips manually instead of staying connected without Slips protection.
 
 
-All failure points are handled by the ```failover_handler.sh``` script located in ```StratosphereLinuxIPS/rpi_scripts/```.
+All failure points are handled by the `failover_handler.sh` script located in `StratosphereLinuxIPS/rpi_scripts/`.
 
 ## Prerequisites
 
@@ -75,27 +75,27 @@ Failovers consist of:
 * **Automatic start of Slips service through systemd**
 
 
-When the Pi reboots, we want Slips to start automatically, and we want the iptables rules added by Slips to persist. The automatic restart is handled by systemd through the generated ```slips.service``` file, and firewall persistence is handled using the custom iptables watcher through the generated ```iptables-watcher.service```.
+When the Pi reboots, we want Slips to start automatically, and we want the iptables rules added by Slips to persist. The automatic restart is handled by systemd through the generated `slips.service` file, and firewall persistence is handled using the custom iptables watcher through the generated `iptables-watcher.service`.
 
 
-Both units are generated and started and added to the user's ```/etc/systemd/system``` by the ```failover_handler.sh``` script.
+Both units are generated and started and added to the user's `/etc/systemd/system` by the `failover_handler.sh` script.
 
 ---
 
 ## File Descriptions
 
-All the files involved in failover mechanisms are placed in ```StratosphereLinuxIPS/rpi_scripts/``` and are described in the table below:
+All the files involved in failover mechanisms are placed in `StratosphereLinuxIPS/rpi_scripts/` and are described in the table below:
 
 
 | File                                      | What it does                                                                                                                                                                                                                                                                                                                                  |
 |-------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| failover_handler.sh                       | The central orchestrator that checks AP status, ensures root access, prepares directories, sets up iptables persistence, builds the Slips runner script, generates the systemd unit, and enforces all failover behavior. This is the piece that links every component together and decides how the system should react when something breaks. |
-| iptables_autosave/check-iptables-hash.sh  | Keeps track of the hash of the current iptables rules and triggers a save when change is detected.                                                                                                                                                                                                                                            |
-| iptables_autosave/iptables-watcher.service | The systemd service that runs check-iptables-hash.sh (because we can't run the script directly by the timer), this is triggered by the iptables-watcher.timer every 10s to check for iptables changes.                                                                                                                                        |
-| iptables_autosave/iptables-watcher.timer  | A systemd timer that periodically runs iptables-watcher.service so iptables rule changes are captured and saved automatically.                                                                                                                                                                                                                |
-| slips_container.log                        | A runtime log collecting Docker container output, commands, and status. useful for investigating restarts, failures, or unexpected behavior.                                                                                                                                                                                                  |
-| slips-runner-template.sh                   | The script that launches Slips container and launches slips inside of it in a tmux. This runner keeps the container up as long as Slips is running.                                                                                                                                                                                           |
-| slips.service.template                     | The systemd unit that starts slips on reboot and on failure, it runs the slips-runner-template.sh.                                                                                                                                                                                                                                            |
+| `failover_handler.sh`                      | The central orchestrator that checks AP status, ensures root access, prepares directories, sets up iptables persistence, builds the Slips runner script, generates the systemd unit, and enforces all failover behavior. This is the piece that links every component together and decides how the system should react when something breaks. |
+| `iptables_autosave/check-iptables-hash.sh` | Keeps track of the hash of the current iptables rules and triggers a save when change is detected.                                                                                                                                                                                                                                            |
+| `iptables_autosave/iptables-watcher.service` | The systemd service that runs `check-iptables-hash.sh` (because we can't run the script directly by the timer), this is triggered by the iptables-watcher.timer every 10s to check for iptables changes.                                                                                                                                        |
+| `iptables_autosave/iptables-watcher.timer` | A systemd timer that periodically runs iptables-watcher.service so iptables rule changes are captured and saved automatically.                                                                                                                                                                                                                |
+| `slips_container.log`                       | A runtime log collecting Docker container output, commands, and status. useful for investigating restarts, failures, or unexpected behavior.                                                                                                                                                                                                  |
+| `slips-runner-template.sh`                  | The script that launches Slips container and launches slips inside of it in a tmux. This runner keeps the container up as long as Slips is running.                                                                                                                                                                                           |
+| `slips.service.template`                    | The systemd unit that starts slips on reboot and on failure, it runs the `slips-runner-template.sh`.                                                                                                                                                                                                                                            |
 
 
 ---
