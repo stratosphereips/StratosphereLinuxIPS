@@ -143,6 +143,28 @@ def test_process_go_data(report, expected_method, expected_args):
         mock_method.assert_called_once_with(*expected_args)
 
 
+def test_received_message_marks_peer_recently_active() -> None:
+    """Save recent activity without discarding known peer metadata."""
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.0.2.10", "reliability": 0.8}
+    )
+
+    with patch("modules.p2p_trust.utils.go_director.time.time", return_value=1234):
+        go_director._record_peer_activity("peer-a")
+
+    stored = json.loads(
+        go_director.db.store_peer_trust_data.call_args.args[1]
+    )
+    assert stored == {
+        "ip": "192.0.2.10",
+        "reliability": 0.8,
+        "connected": True,
+        "timestamp": 1234,
+        "last_activity": 1234,
+    }
+
+
 @pytest.mark.parametrize(
     "message, expected_message_type, expected_data",
     [
@@ -588,6 +610,7 @@ def test_process_go_update_publishes_live_peer_state(
     )
     assert stored_state["connected"] is connected
     assert stored_state["timestamp"] == 1649445643
+    assert ("last_activity" in stored_state) is connected
     go_director.db.store_connected_peers.assert_called_once_with(
         expected_peers
     )

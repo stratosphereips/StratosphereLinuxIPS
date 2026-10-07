@@ -3359,6 +3359,41 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     ]
 
 
+def test_p2p_marks_recently_active_message_sender_online(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Show peers online for a short period after their latest message."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    now = time.time()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": str(now - 60)},
+        "peer_info": {
+            "QmSlowPeer": json.dumps(
+                {
+                    "ip": "192.0.2.40",
+                    "last_activity": now - 30,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["connected"] == 1
+    assert result["peers"][0]["peer_id"] == "QmSlowPeer"
+    assert result["peers"][0]["connected"] is True
+
+
 @pytest.mark.parametrize(
     "connected_peers,peer_state,expected",
     [
@@ -3414,7 +3449,7 @@ def test_p2p_uses_legacy_connectivity_without_connection_updates(
                     "connected": True,
                     "ip": "192.0.2.20",
                     "reliability": 1.0,
-                    "timestamp": 1649445643,
+                    "timestamp": time.time(),
                 }
             )
         },

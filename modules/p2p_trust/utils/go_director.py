@@ -215,12 +215,15 @@ class GoDirector:
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
 
+        reporter = str(report.get(key_reporter) or "")
+        if reporter:
+            self._record_peer_activity(reporter)
+
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
             self.print("Invalid timestamp", 0, 2)
             return
 
-        reporter = report[key_reporter]
         message = report[key_message]
         # decode b64
         message_type, data = self.validate_message(message)
@@ -237,7 +240,6 @@ class GoDirector:
                 "message": data,
             },
         )
-
         self.print(
             f"[The Network -> Slips] Received msg {data} from peer {reporter}"
         )
@@ -266,6 +268,32 @@ class GoDirector:
                 2,
             )
             self.print("Peer sent unknown message type", 0, 2)
+
+    def _record_peer_activity(self, peer_id: str) -> None:
+        """Mark a peer active after receiving an authenticated P2P message.
+
+        Parameters:
+            peer_id: Authenticated sender identity from Pigeon.
+        """
+        state = self.db.get_peer_trust_data(peer_id)
+        if isinstance(state, bytes):
+            state = state.decode(errors="replace")
+        if isinstance(state, str):
+            try:
+                state = json.loads(state)
+            except json.JSONDecodeError:
+                state = {}
+        if not isinstance(state, dict):
+            state = {}
+        now = time.time()
+        state.update(
+            {
+                "connected": True,
+                "timestamp": now,
+                "last_activity": now,
+            }
+        )
+        self.db.store_peer_trust_data(peer_id, json.dumps(state))
 
     def validate_message(self, message: str) -> (str, dict):
         """
@@ -668,6 +696,8 @@ class GoDirector:
                 ),
             }
         )
+        if connected:
+            stored_state["last_activity"] = time.time()
         if ip_address:
             stored_state["ip"] = ip_address
         if reliability is not None:

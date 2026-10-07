@@ -42,6 +42,7 @@ MAX_FLOW_LIMIT = 1000
 MAX_CHART_POINTS = 1200
 CLIENT_REQUEST_TIMEOUT_SECONDS = 15
 BACKEND_HEARTBEAT_TIMEOUT_SECONDS = 15
+P2P_RECENT_ACTIVITY_SECONDS = 15 * 60
 INTERNAL_PID_NAMES = {
     "web_interface_history",
     "web_interface_detection_backfill",
@@ -1896,9 +1897,7 @@ class RunDataReader:
             items = [
                 self._durable_evidence_row(connection, row) for row in rows
             ]
-            self._annotate_detection_networks(
-                items, "profile_ip", "timestamp"
-            )
+            self._annotate_detection_networks(items, "profile_ip", "timestamp")
             self._annotate_whitelisted_evidence(items)
             return items
         profile_id = f"profile_{alert.get('ip_alerted', '')}"
@@ -2058,9 +2057,7 @@ class RunDataReader:
                 item.pop("threat_rank")
             )
             item["alert_time"] = float(item["alert_time"] or 0)
-            item["first_alert_time"] = float(
-                item["first_alert_time"] or 0
-            )
+            item["first_alert_time"] = float(item["first_alert_time"] or 0)
             item["alert_count"] = int(item["alert_count"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["label"] = str(item.pop("labels") or "")
@@ -5001,11 +4998,19 @@ class RunDataReader:
         if not isinstance(raw_connected, (list, tuple, set)):
             return set()
         connected = {str(peer_id) for peer_id in raw_connected}
-        return {
-            peer_id
-            for peer_id in connected
-            if peer_info.get(peer_id, {}).get("connected") is True
-        }
+        now = time.time()
+        active_peers = set()
+        for peer_id in connected:
+            state = peer_info.get(peer_id, {})
+            timestamp = self._event_timestamp(
+                state.get("last_activity", state.get("timestamp"))
+            )
+            if state.get("connected") is True and (
+                timestamp == 0
+                or now - timestamp <= P2P_RECENT_ACTIVITY_SECONDS
+            ):
+                active_peers.add(peer_id)
+        return active_peers
 
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -5040,6 +5045,14 @@ class RunDataReader:
         ]
         analysis = self.redis.hgetall("analysis")
         run_start = self._event_timestamp(analysis.get("analysis_start"))
+        recent_activity_cutoff = max(
+            time.time() - P2P_RECENT_ACTIVITY_SECONDS,
+            run_start or 0,
+        )
+        for peer_id, info in peer_info.items():
+            last_activity = self._event_timestamp(info.get("last_activity"))
+            if last_activity and last_activity >= recent_activity_cutoff:
+                connected.add(peer_id)
         trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
         trust_range = "all"
         trust_history: List[Dict[str, Any]] = []
@@ -5181,6 +5194,7 @@ class RunDataReader:
                     "last_seen": max(
                         float(peer_seen.get(peer_id, 0)),
                         self._event_timestamp(info.get("timestamp")),
+                        self._event_timestamp(info.get("last_activity")),
                         float(pairing.get("timestamp") or 0),
                         float(reliability.get("timestamp") or 0),
                     ),

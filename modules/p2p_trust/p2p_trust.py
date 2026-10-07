@@ -82,6 +82,8 @@ class Trust(IModule):
     gopy_channel_raw = "p2p_gopy"
     pygo_channel_raw = "p2p_pygo"
     start_pigeon = True
+    active_p2p_connection_ttl = 300
+    p2p_connection_heartbeat_interval = 60
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
     pigeon_binary = pigeon_binary_dir / "p2p4slips"
@@ -132,6 +134,7 @@ class Trust(IModule):
         self.last_report_compaction_time = 0
         self.report_compaction_interval = 5
         self.report_compaction_batch_size = 1000
+        self.last_p2p_connection_heartbeat_time = 0
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("report_to_peers")
@@ -804,6 +807,7 @@ class Trust(IModule):
     def shutdown_gracefully(self) -> None:
         """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
@@ -851,6 +855,7 @@ class Trust(IModule):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
@@ -918,9 +923,16 @@ class Trust(IModule):
             pass
 
         now = time.time()
-        if (
-            now - getattr(self, "last_report_compaction_time", now)
-            >= getattr(self, "report_compaction_interval", 5)
+        if now - getattr(
+            self, "last_p2p_connection_heartbeat_time", 0
+        ) >= getattr(self, "p2p_connection_heartbeat_interval", 60):
+            self.db.refresh_authenticated_p2p_connections(
+                getattr(self, "active_p2p_connection_ttl", 300)
+            )
+            self.last_p2p_connection_heartbeat_time = now
+
+        if now - getattr(self, "last_report_compaction_time", now) >= getattr(
+            self, "report_compaction_interval", 5
         ):
             self.trust_db.compact_reports(
                 getattr(self, "report_compaction_batch_size", 1000)

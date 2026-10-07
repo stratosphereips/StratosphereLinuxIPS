@@ -78,6 +78,13 @@ flow's 5-tuple against that set (via the ```is_p2p_related_flow``` DB
 function) and skip it if it matches. Other ports and connections from the
 same peer IP continue through normal analysis.
 
+The P2P module refreshes the local authenticated-connection records every
+minute while Pigeon still lists the exact tuple, so a quiet connection does
+not appear offline just because no connect event was repeated. A received
+peer message also marks its authenticated sender active for 15 minutes. A
+disconnect removes the connection immediately; the active list is cleared
+when the P2P module starts and stops.
+
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
 You don't have to do anything in particular for the P2P module to work, just enable it and Slips will:
