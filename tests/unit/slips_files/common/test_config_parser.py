@@ -7,6 +7,7 @@ import pytest
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.input_type import InputType
+from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
 
 
@@ -36,6 +37,35 @@ def test_evidence_signal_overrides_sanitizes_values():
         "MALICIOUS_FLOW": "DAMP",
         "SSH_SUCCESSFUL": "PAMP",
     }
+
+
+def test_disabled_detections_returns_evidence_types():
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {
+        "DisabledAlerts": {
+            "disabled_detections": [
+                "CONNECTION_WITHOUT_DNS",
+                "ThreatIntelligenceBlacklistedASN",
+                "not_a_detection",
+                42,
+            ]
+        }
+    }
+
+    disabled = parser.disabled_detections()
+
+    assert disabled == [
+        EvidenceType.CONNECTION_WITHOUT_DNS,
+        EvidenceType.THREAT_INTELLIGENCE_BLACKLISTED_ASN,
+    ]
+    assert EvidenceType.CONNECTION_WITHOUT_DNS in disabled
+
+
+def test_disabled_detections_defaults_to_empty():
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {}
+
+    assert parser.disabled_detections() == []
 
 
 def test_t_cell_config_defaults():
