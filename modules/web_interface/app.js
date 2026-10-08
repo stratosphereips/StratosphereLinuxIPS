@@ -2551,6 +2551,9 @@ async function openEvidence(record) {
   try {
     const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
     if (!payload || generation !== state.drawerGeneration) return;
+    if (numeric(payload.recovered_flow_count) > 0) {
+      body.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from current Zeek logs after their SQLite rows were pruned.`, "muted"));
+    }
     if (!payload.items.length) {
       body.append(text("p", numeric(payload.unavailable_flow_count) > 0
         ? "The evidence still has linked flow IDs, but their raw records are unavailable. They may have expired under retention or were never stored."

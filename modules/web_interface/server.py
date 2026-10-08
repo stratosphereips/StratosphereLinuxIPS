@@ -57,6 +57,19 @@ PROFILE_PREFIX = "profile_"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
 MAX_FLOW_LIMIT = 1000
+MAX_ZEEK_FALLBACK_BYTES = 32 * 1024 * 1024
+ZEEK_FALLBACK_LOGS = (
+    "conn",
+    "dns",
+    "http",
+    "ssl",
+    "ssh",
+    "dhcp",
+    "files",
+    "notice",
+    "quic",
+    "arp",
+)
 MAX_CHART_POINTS = 1200
 CLIENT_REQUEST_TIMEOUT_SECONDS = 15
 BACKEND_HEARTBEAT_TIMEOUT_SECONDS = 15
@@ -2277,12 +2290,83 @@ class RunDataReader:
                         (evidence_id,),
                     ).fetchall()
                     if rows:
-                        return [str(row["uid"]) for row in rows]
+                        return [str(row["uid"]).strip() for row in rows]
         except sqlite3.Error:
             pass
         return self._id_list(
             self.redis.hget("flows_causing_evidence", evidence_id)
         )
+
+    def _recover_zeek_flows(self, grouped: Dict[str, Dict[str, Any]]) -> int:
+        """Recover pruned flow details from bounded Zeek JSON logs.
+
+        Parameters:
+            grouped: Linked UIDs and any raw SQLite records already found.
+
+        Returns:
+            Number of linked UIDs recovered from Zeek logs.
+        """
+        output_dir = getattr(self, "output_dir", None)
+        if output_dir is None:
+            return 0
+        log_dirs = (
+            Path(output_dir) / "web_interface" / "zeek_recovery",
+            Path(output_dir) / "zeek_files",
+        )
+        remaining = MAX_ZEEK_FALLBACK_BYTES
+        recovered: set[str] = set()
+        for log_type in ZEEK_FALLBACK_LOGS:
+            for log_dir in log_dirs:
+                path = log_dir / f"{log_type}.log"
+                try:
+                    size = path.stat().st_size
+                    if not size or remaining <= 0:
+                        continue
+                    start = max(0, size - remaining)
+                    with path.open("rb") as stream:
+                        stream.seek(start)
+                        if start:
+                            remaining -= len(stream.readline())
+                        while remaining > 0:
+                            raw = stream.readline()
+                            if not raw:
+                                break
+                            remaining -= len(raw)
+                            try:
+                                flow = json.loads(raw)
+                            except (TypeError, ValueError):
+                                continue
+                            if not isinstance(flow, dict):
+                                continue
+                            uid = str(flow.get("uid") or "").strip()
+                            if uid not in grouped:
+                                continue
+                            group = grouped[uid]
+                            record = {
+                                "uid": uid,
+                                "flow": flow,
+                                "table": (
+                                    "flows"
+                                    if log_type == "conn"
+                                    else "altflows"
+                                ),
+                                "flow_type": log_type,
+                                "source": "zeek_log",
+                                "event_time": flow.get("ts"),
+                            }
+                            if log_type == "conn":
+                                if group["network_flow"] is None:
+                                    group["network_flow"] = record
+                                    recovered.add(uid)
+                            elif not any(
+                                item.get("flow_type") == log_type
+                                for item in group["protocol_flows"]
+                            ):
+                                group["protocol_flows"].append(record)
+                                recovered.add(uid)
+                except OSError:
+                    continue
+        return len(recovered)
 
     def flows_for_evidence(self, evidence_id: str) -> Dict[str, Any]:
         """Return triggering network flows grouped with protocol activity."""
@@ -2300,9 +2384,12 @@ class RunDataReader:
                 "unavailable_flow_count": 0,
                 "network_flow_total": 0,
                 "protocol_flow_total": 0,
+                "recovered_flow_count": 0,
                 "page_size": 0,
             }
-        bounded_uids = list(dict.fromkeys(uids))[:MAX_FLOW_LIMIT]
+        bounded_uids = list(
+            dict.fromkeys(str(uid).strip() for uid in uids if str(uid).strip())
+        )[:MAX_FLOW_LIMIT]
         placeholders = ",".join("?" for _ in bounded_uids)
         grouped: Dict[str, Dict[str, Any]] = {
             uid: {"uid": uid, "network_flow": None, "protocol_flows": []}
@@ -2331,6 +2418,12 @@ class RunDataReader:
                         item["network_flow"] = record
                     else:
                         item["protocol_flows"].append(record)
+        recovered_flow_count = 0
+        if any(
+            not group["network_flow"] and not group["protocol_flows"]
+            for group in grouped.values()
+        ):
+            recovered_flow_count = self._recover_zeek_flows(grouped)
         items = [
             grouped[uid]
             for uid in bounded_uids
@@ -2350,6 +2443,7 @@ class RunDataReader:
             "unavailable_flow_count": len(bounded_uids) - len(items),
             "network_flow_total": network_flow_total,
             "protocol_flow_total": protocol_flow_total,
+            "recovered_flow_count": recovered_flow_count,
             "page_size": len(items),
         }
 

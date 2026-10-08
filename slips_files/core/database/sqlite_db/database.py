@@ -672,7 +672,10 @@ class SQLiteDB(ISQLite):
                     ):
                         for linked_only in (False, True):
                             deleted = self._prune_for_size(
-                                cursor, batch_size, linked_only
+                                cursor,
+                                batch_size,
+                                linked_only,
+                                ordinary_cutoff,
                             )
                             any_removed = any_removed or any(deleted.values())
                             removed.extend(deleted["flows"])
@@ -697,7 +700,11 @@ class SQLiteDB(ISQLite):
         return (page_count - free_pages) * page_size
 
     def _prune_for_size(
-        self, cursor, batch_size: int, linked_only: bool
+        self,
+        cursor,
+        batch_size: int,
+        linked_only: bool,
+        linked_size_cutoff: float,
     ) -> dict[str, list[str]]:
         """Delete the oldest cross-table batch of a requested evidence class.
 
@@ -706,11 +713,18 @@ class SQLiteDB(ISQLite):
             batch_size: Maximum rows to delete in this pass.
             linked_only: Select evidence-linked rows when true, otherwise
                 select rows without non-excluded evidence.
+            linked_size_cutoff: Oldest age eligible for linked size pruning.
 
         Returns:
             Deleted UIDs grouped by raw flow table.
         """
         evidence_condition = "EXISTS" if linked_only else "NOT EXISTS"
+        age_filter = " AND f.event_time < ?" if linked_only else ""
+        parameters = (
+            (linked_size_cutoff, linked_size_cutoff, batch_size)
+            if linked_only
+            else (batch_size,)
+        )
         candidates = cursor.execute(
             "SELECT table_name, uid FROM ("
             "SELECT 'flows' AS table_name, f.uid AS uid, "
@@ -718,7 +732,8 @@ class SQLiteDB(ISQLite):
             "FROM flows f WHERE "
             f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
             "JOIN evidence e ON e.evidence_id = ef.evidence_id "
-            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0) "
+            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
+            f"{age_filter} "
             "UNION ALL "
             "SELECT 'altflows' AS table_name, f.uid AS uid, "
             "f.event_time AS event_time, f.rowid AS flow_rowid "
@@ -726,9 +741,10 @@ class SQLiteDB(ISQLite):
             f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
             "JOIN evidence e ON e.evidence_id = ef.evidence_id "
             "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
+            f"{age_filter}"
             ") ORDER BY event_time ASC, table_name ASC, flow_rowid ASC "
             "LIMIT ?",
-            (batch_size,),
+            parameters,
         ).fetchall()
         deleted: dict[str, list[str]] = {"flows": [], "altflows": []}
         for table, uid in candidates:
