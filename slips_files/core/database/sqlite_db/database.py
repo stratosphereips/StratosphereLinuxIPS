@@ -605,8 +605,9 @@ class SQLiteDB(ISQLite):
         expired_linked = [
             row[0]
             for row in cursor.execute(
-                f"SELECT uid FROM {table} WHERE retention_class = 1 "
-                "AND event_time < ? ORDER BY event_time LIMIT ?",
+                f"SELECT f.uid FROM {table} f WHERE f.retention_class = 1 "
+                f"AND {self._linked_priority_time('f')} < ? "
+                f"ORDER BY {self._linked_priority_time('f')} LIMIT ?",
                 (linked_cutoff, batch_size),
             ).fetchall()
         ]
@@ -699,6 +700,25 @@ class SQLiteDB(ISQLite):
         page_size = cursor.execute("PRAGMA page_size").fetchone()[0]
         return (page_count - free_pages) * page_size
 
+    @staticmethod
+    def _linked_priority_time(alias: str) -> str:
+        """Use the newest linked evidence time when deciding flow retention.
+
+        Parameters:
+            alias: SQL alias of a flows or altflows row.
+
+        Returns:
+            SQL expression for the latest flow or non-excluded evidence time.
+        """
+        return (
+            f"MAX({alias}.event_time, COALESCE(("
+            "SELECT MAX(e.evidence_time) FROM evidence_flows ef "
+            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+            f"WHERE ef.uid = {alias}.uid "
+            "AND COALESCE(e.whitelisted, 0) = 0), "
+            f"{alias}.event_time))"
+        )
+
     def _prune_for_size(
         self,
         cursor,
@@ -719,7 +739,10 @@ class SQLiteDB(ISQLite):
             Deleted UIDs grouped by raw flow table.
         """
         evidence_condition = "EXISTS" if linked_only else "NOT EXISTS"
-        age_filter = " AND f.event_time < ?" if linked_only else ""
+        priority_time = (
+            self._linked_priority_time("f") if linked_only else "f.event_time"
+        )
+        age_filter = f" AND {priority_time} < ?" if linked_only else ""
         parameters = (
             (linked_size_cutoff, linked_size_cutoff, batch_size)
             if linked_only
@@ -728,7 +751,8 @@ class SQLiteDB(ISQLite):
         candidates = cursor.execute(
             "SELECT table_name, uid FROM ("
             "SELECT 'flows' AS table_name, f.uid AS uid, "
-            "f.event_time AS event_time, f.rowid AS flow_rowid "
+            f"f.event_time AS event_time, {priority_time} AS priority_time, "
+            "f.rowid AS flow_rowid "
             "FROM flows f WHERE "
             f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
             "JOIN evidence e ON e.evidence_id = ef.evidence_id "
@@ -736,13 +760,15 @@ class SQLiteDB(ISQLite):
             f"{age_filter} "
             "UNION ALL "
             "SELECT 'altflows' AS table_name, f.uid AS uid, "
-            "f.event_time AS event_time, f.rowid AS flow_rowid "
+            f"f.event_time AS event_time, {priority_time} AS priority_time, "
+            "f.rowid AS flow_rowid "
             "FROM altflows f WHERE "
             f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
             "JOIN evidence e ON e.evidence_id = ef.evidence_id "
             "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
             f"{age_filter}"
-            ") ORDER BY event_time ASC, table_name ASC, flow_rowid ASC "
+            ") ORDER BY priority_time ASC, event_time ASC, "
+            "table_name ASC, flow_rowid ASC "
             "LIMIT ?",
             parameters,
         ).fetchall()
