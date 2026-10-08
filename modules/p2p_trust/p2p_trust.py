@@ -5,6 +5,7 @@ import ipaddress
 import os
 import shutil
 import signal
+import sqlite3
 import subprocess
 import netifaces
 import time
@@ -1088,9 +1089,14 @@ class Trust(IModule):
         if now - getattr(self, "last_report_compaction_time", now) >= getattr(
             self, "report_compaction_interval", 5
         ):
-            self.trust_db.compact_reports(
-                getattr(self, "report_compaction_batch_size", 1000)
-            )
+            try:
+                self.trust_db.compact_reports(
+                    getattr(self, "report_compaction_batch_size", 1000)
+                )
+            except sqlite3.OperationalError as error:
+                if "locked" not in str(error).lower():
+                    raise
+                self.print(f"Deferring P2P report compaction: {error}", 0, 1)
             self.last_report_compaction_time = now
 
         # Channel reads are nonblocking. Yield between polls so an idle

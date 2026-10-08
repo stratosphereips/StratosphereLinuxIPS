@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import signal
+import sqlite3
 import subprocess
 from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
@@ -554,6 +555,60 @@ def test_main_yields_between_nonblocking_channel_polls() -> None:
     trust.main()
 
     trust.termination_event.wait.assert_called_once_with(0.05)
+
+
+@pytest.mark.parametrize(
+    "error_message,handled",
+    [
+        ("database is locked", True),
+        ("database table is locked", True),
+        ("malformed SQL", False),
+    ],
+)
+def test_main_defers_locked_report_compaction(
+    error_message: str, handled: bool
+) -> None:
+    """Keep P2P online when compaction temporarily loses the SQLite lock.
+
+    Parameters:
+        error_message: SQLite operational error to simulate.
+        handled: Whether the module should retry on a later poll.
+    """
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.create_p2p_logfile = False
+    trust.p2p_data_request_channel = "p2p_data_request"
+    trust.gopy_channel = "p2p_gopy"
+    trust.pigeon = Mock()
+    trust.pigeon.poll.return_value = None
+    trust.mutliaddress_printed = True
+    trust.get_msg = Mock(return_value=None)
+    trust._refresh_pigeon_address = Mock()
+    trust.trust_db = Mock()
+    trust.trust_db.compact_reports.side_effect = sqlite3.OperationalError(
+        error_message
+    )
+    trust.last_p2p_connection_heartbeat_time = 100
+    trust.last_report_compaction_time = 90
+
+    with patch("modules.p2p_trust.p2p_trust.time.time", return_value=100):
+        if handled:
+            trust.main()
+        else:
+            with pytest.raises(sqlite3.OperationalError):
+                trust.main()
+
+    trust.trust_db.compact_reports.assert_called_once()
+    if handled:
+        assert trust.last_report_compaction_time == 100
+        trust.print.assert_any_call(
+            f"Deferring P2P report compaction: {error_message}", 0, 1
+        )
+        trust.termination_event.wait.assert_called_once_with(0.05)
+    else:
+        assert trust.last_report_compaction_time == 90
+        trust.termination_event.wait.assert_not_called()
 
 
 def test_stop_pigeon_waits_for_child_exit() -> None:
