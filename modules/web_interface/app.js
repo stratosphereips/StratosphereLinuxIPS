@@ -2,7 +2,7 @@
 
 const state = {
   activeTab: "overview",
-  hideExcluded: false,
+  hideExcluded: true,
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
@@ -1477,7 +1477,8 @@ async function loadEvidence() {
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
-  byId("evidence-summary").textContent = `Total Evidence (including whitelisted): ${compact(payload.full_total)}. `
+  byId("evidence-summary").textContent = (state.hideExcluded
+    ? "" : `Total Evidence (including whitelisted): ${compact(payload.full_total)}. `)
     + (grouped
       ? `Evidence grouped by host and type: ${compact(payload.total)}.`
       : `Individual durable evidence: ${compact(payload.total)}.`);
@@ -1716,7 +1717,9 @@ function renderArpPoisoning() {
 
 /** Load the bounded, run-scoped ARP poisoner and detector view. */
 async function loadArpPoisoning() {
-  const payload = await api("arpPoisoning", "/api/arp-poisoning");
+  const path = state.hideExcluded
+    ? "/api/arp-poisoning?hide_excluded=1" : "/api/arp-poisoning";
+  const payload = await api("arpPoisoning", path);
   if (!payload) return;
   state.arpPoisoning = payload;
   const counts = payload.counts || {};
@@ -2683,6 +2686,7 @@ async function openEvidenceGroup(group) {
   if (level) params.set("threat", level);
   if (association) params.set("association", association);
   if (search) params.set("search", search);
+  if (state.hideExcluded) params.set("hide_excluded", "1");
   try {
     const payload = await api("evidenceGroup", `/api/evidence?${params}`);
     if (!payload || generation !== state.drawerGeneration) return;
@@ -3164,6 +3168,7 @@ async function loadLegacyScoreHistory(params) {
     query.set("sort", "time");
     query.set("order", "desc");
     query.set("details", "false");
+    if (state.hideExcluded) query.set("hide_excluded", "1");
     if (cursor) query.set("cursor", cursor);
     const response = await fetch(`/api/evidence?${query}`, { cache: "no-store" });
     const page = await response.json().catch(() => ({}));
@@ -3508,7 +3513,8 @@ byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
 });
-document.querySelectorAll(".excluded-visibility-select").forEach((select) =>
+document.querySelectorAll(".excluded-visibility-select").forEach((select) => {
+  select.value = state.hideExcluded ? "hide" : "show";
   select.addEventListener("change", () => {
     state.hideExcluded = select.value === "hide";
     document.querySelectorAll(".excluded-visibility-select").forEach((other) => {
@@ -3519,9 +3525,12 @@ document.querySelectorAll(".excluded-visibility-select").forEach((select) =>
       Promise.all([loadHostEvidence(), loadHostFlows()]).catch(() => {});
     } else if (state.activeTab === "alerts" || state.activeTab === "evidence") {
       currentLoader()().catch(() => {});
+    } else if (state.activeTab === "arp-poisoning") {
+      loadArpPoisoning().catch(() => {});
     }
     schedulePoll();
-  }));
+  });
+});
 
 bindFilters("firewall", ["firewall-search"], loadFirewall);
 bindFilters("host-evidence", ["host-evidence-search"], loadHostEvidence);

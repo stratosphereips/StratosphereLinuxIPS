@@ -391,13 +391,15 @@ after numeric scores in both ascending and descending order, including across
 pages. A host/type group with any excluded evidence follows the same rule
 because its score cell displays **Excluded**.
 
-The **Show excluded / Hide excluded** selector is shared by Alerts, Evidence,
-and the Host workspace. Hiding excluded records filters evidence before
+The **Hide excluded / Show excluded** selector defaults to **Hide excluded**
+and is shared by Alerts, Evidence, the Host workspace, and ARP detections.
+Hiding excluded records filters evidence before
 grouping and pagination; a host/type group still appears when it also contains
 scored evidence. In the Host workspace, historical traffic linked only to
 excluded evidence is hidden as well. Flows linked to scored evidence and flows
 with no evidence remain visible. Alerts are already formed only from scored
-evidence, so their list is unchanged. The selector changes displayed lists;
+evidence, so their list is unchanged. Opening an Evidence group keeps the same
+filter. The selector changes displayed lists;
 stored records and run totals remain available when **Show excluded** is
 selected. Flows discarded by the profiler's flow whitelist were never stored
 and cannot appear in either view.
