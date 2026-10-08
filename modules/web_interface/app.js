@@ -2349,13 +2349,14 @@ function protocolFlowCard(record) {
   }
   const context = document.createElement("div");
   context.className = "protocol-context";
-  const timestamp = flowValue(flow, "starttime", "ts");
+  const timestamp = flowValue(flow, "starttime", "ts") ?? record?.event_time;
   context.append(
     text("span", "Alternative protocol flow: " + displayType),
     text("span", "UID: " + (record.uid || flow.uid || "Unknown")),
   );
-  if (timestamp) {
-    const observed = numeric(timestamp) ? formatTime(timestamp) : String(timestamp);
+  if (timestamp !== null && timestamp !== undefined && timestamp !== "") {
+    const observed = Number.isFinite(Number(timestamp))
+      ? formatTime(timestamp) : String(timestamp);
     context.append(text("span", "Observed: " + observed));
   }
   const grid = document.createElement("div");
@@ -2382,6 +2383,9 @@ function flowCard(group) {
   const record = group.network_flow;
   const related = Array.isArray(group.protocol_flows) ? group.protocol_flows : [];
   const flow = record?.flow && typeof record.flow === "object" ? record.flow : {};
+  const timestamp = flowValue(flow, "starttime", "ts") ?? record?.event_time;
+  const observed = timestamp === null || timestamp === undefined || timestamp === ""
+    ? "—" : Number.isFinite(Number(timestamp)) ? formatTime(timestamp) : String(timestamp);
   const card = document.createElement("article");
   card.className = "flow-card flow-group";
   const heading = document.createElement("div");
@@ -2418,6 +2422,7 @@ function flowCard(group) {
     const metrics = document.createElement("div");
     metrics.className = "flow-metrics";
     [
+      ["Observed", observed],
       ["Transport", flowValue(flow, "proto", "protocol") || "—"],
       ["Application", flowValue(flow, "appproto", "app_proto", "service") || "—"],
       ["State", flowValue(flow, "state", "conn_state") || "—"],
