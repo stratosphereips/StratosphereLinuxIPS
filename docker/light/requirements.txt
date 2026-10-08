@@ -3,7 +3,7 @@ maxminddb==3.0.0
 river==0.22.0
 watchdog==5.0.0
 redis==5.2.1
-urllib3==2.7.0
+urllib3==2.8.0
 tzlocal==5.3.1
 cabby==0.1.23
 taxii2-client==2.3.0
