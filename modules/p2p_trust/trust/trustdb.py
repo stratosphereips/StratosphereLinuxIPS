@@ -100,6 +100,7 @@ class TrustDB(ISQLite):
         for table, schema in table_schema.items():
             self.create_table(table, schema)
 
+        self._ensure_unique_peer_addresses()
         self._compact_slips_reputation_history()
 
         # These tables are persistent and their row counts grow over time.
@@ -127,6 +128,44 @@ class TrustDB(ISQLite):
             "INSERT OR IGNORE INTO report_compaction_state "
             "(id, last_report_id, database_vacuumed) VALUES (1, 0, 0)"
         )
+
+    def _ensure_unique_peer_addresses(self) -> None:
+        """Keep the newest legacy address per peer and enable address upserts."""
+        with self.conn_lock:
+            with self._acquire_flock():
+                cursor = self.conn.cursor()
+                try:
+                    cursor.execute("BEGIN IMMEDIATE")
+                    indexes = cursor.execute(
+                        "PRAGMA index_list(peer_addresses)"
+                    ).fetchall()
+                    for index in indexes:
+                        if not index[2] or index[4]:
+                            continue
+                        columns = cursor.execute(
+                            "SELECT name FROM pragma_index_info(?)",
+                            (index[1],),
+                        ).fetchall()
+                        if columns == [("peerid",)]:
+                            self.conn.commit()
+                            return
+
+                    cursor.execute(
+                        "DELETE FROM peer_addresses WHERE EXISTS ("
+                        "SELECT 1 FROM peer_addresses AS newer "
+                        "WHERE newer.peerid = peer_addresses.peerid AND "
+                        "(newer.update_time > peer_addresses.update_time OR "
+                        "(newer.update_time = peer_addresses.update_time "
+                        "AND newer.id > peer_addresses.id)))"
+                    )
+                    cursor.execute(
+                        "CREATE UNIQUE INDEX peer_addresses_peerid_unique_idx "
+                        "ON peer_addresses(peerid)"
+                    )
+                    self.conn.commit()
+                except sqlite3.Error:
+                    self.conn.rollback()
+                    raise
 
     def _compact_slips_reputation_history(self):
         """Keep only each IP's latest reputation, which is the value used."""

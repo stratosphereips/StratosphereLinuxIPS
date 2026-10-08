@@ -300,6 +300,72 @@ def test_reputation_history_migration_keeps_latest_value(tmp_path):
 
 
 @pytest.mark.parametrize(
+    "older_time,newer_time",
+    [(1, 2), (2, 2)],
+)
+def test_peer_address_migration_keeps_latest_endpoint(
+    tmp_path, older_time: int, newer_time: int
+) -> None:
+    """Migrate duplicate legacy peers before authenticated endpoint upserts."""
+    module_factory = ModuleFactory()
+    db_path = tmp_path / "trust.db"
+    connection = sqlite3.connect(db_path)
+    connection.execute(
+        "CREATE TABLE peer_addresses (id INTEGER PRIMARY KEY NOT NULL, "
+        "peerid TEXT NOT NULL, ipaddress TEXT NOT NULL, "
+        "port INTEGER NOT NULL, update_time REAL NOT NULL)"
+    )
+    connection.executemany(
+        "INSERT INTO peer_addresses "
+        "(peerid, ipaddress, port, update_time) VALUES (?, ?, ?, ?)",
+        [
+            ("peer-1", "192.0.2.1", 6668, older_time),
+            ("peer-1", "192.0.2.2", 6669, newer_time),
+            ("peer-2", "192.0.2.3", 6668, 3),
+        ],
+    )
+    connection.commit()
+    connection.close()
+
+    with patch(
+        "slips_files.common.abstracts.isqlite.ISQLite._init_flock",
+        autospec=True,
+        side_effect=lambda instance, *_: setattr(
+            instance,
+            "sqlite_flock",
+            Mock(acquire=Mock(return_value=nullcontext())),
+        ),
+    ):
+        trust_db = TrustDB(module_factory.logger, str(db_path), 1)
+
+    assert trust_db.select(
+        "peer_addresses",
+        columns="ipaddress, port, update_time",
+        condition="peerid = ?",
+        params=("peer-1",),
+    ) == [("192.0.2.2", 6669, newer_time)]
+    assert trust_db.get_count("peer_addresses") == 2
+    trust_db.insert_go_peer_address("peer-1", "192.0.2.1", 6668, 1)
+    assert trust_db.select(
+        "peer_addresses",
+        columns="ipaddress, port, update_time",
+        condition="peerid = ?",
+        params=("peer-1",),
+    ) == [("192.0.2.2", 6669, newer_time)]
+    trust_db.insert_go_peer_address("peer-1", "192.0.2.4", 6670, 4)
+    assert trust_db.select(
+        "peer_addresses",
+        columns="ipaddress, port, update_time",
+        condition="peerid = ?",
+        params=("peer-1",),
+    ) == [("192.0.2.4", 6670, 4)]
+    assert trust_db.get_count("peer_addresses") == 2
+    assert trust_db.conn.execute("PRAGMA integrity_check").fetchone() == (
+        "ok",
+    )
+
+
+@pytest.mark.parametrize(
     "peerid, reliability, timestamp, expected_timestamp",
     [
         # Testcase 1: Using provided timestamp
@@ -349,6 +415,7 @@ def test_get_ip_of_peer(peerid, fetchone_result, expected_result):
 def test_create_tables():
     trust_db = ModuleFactory().create_trust_db_obj()
     trust_db.create_table = Mock()
+    trust_db._ensure_unique_peer_addresses = Mock()
 
     trust_db.create_tables()
 
@@ -397,6 +464,7 @@ def test_create_tables_adds_indexes_for_opinion_lookups():
     trust_db = ModuleFactory().create_trust_db_obj()
     trust_db.create_table = Mock()
     trust_db.execute = Mock()
+    trust_db._ensure_unique_peer_addresses = Mock()
 
     trust_db.create_tables()
 

@@ -616,6 +616,9 @@ class ModuleFactory:
             patch(
                 "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
             ),
+            patch(
+                "modules.p2p_trust.trust.trustdb.TrustDB._ensure_unique_peer_addresses"
+            ),
         ):
             trust_db = TrustDB(
                 logger=self.logger,
