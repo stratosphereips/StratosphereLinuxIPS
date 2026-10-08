@@ -102,7 +102,7 @@
         <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
         <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped" selected>Group by host</option></select>
-        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
+        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
         <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
         <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
@@ -119,7 +119,7 @@
         <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
         <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
         <select id="evidence-view" aria-label="Evidence display mode"><option value="grouped" selected>Group by host and type</option><option value="individual">Individual evidence</option></select>
-        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
+        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
         <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
         <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
         <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
@@ -151,7 +151,7 @@
       <article id="arp-poisoning-disabled" class="surface empty-state" hidden><p>ARP poisoning not enabled in this run.</p></article>
       <div id="arp-poisoning-stats">
         <div id="arp-poisoning-summary" class="summary-grid"></div>
-        <div class="toolbar"><input id="arp-poisoning-search" type="search" placeholder="Search IP, MAC, state, TW, or evidence…"><span id="arp-poisoning-count" class="result-count"></span></div>
+        <div class="toolbar"><input id="arp-poisoning-search" type="search" placeholder="Search IP, MAC, state, TW, or evidence…"><select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select><span id="arp-poisoning-count" class="result-count"></span></div>
         <article class="surface table-surface">
           <div class="table-heading"><div><h3>Isolation state</h3><p>Hosts currently poisoned or previously released in this run.</p></div></div>
           <div class="table-wrap"><table id="arp-poisoning-hosts-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="poisoned_at">Poisoned since</th><th data-sort="unblock_at">Release at</th><th data-sort="released_at">Released at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="mac">MAC</th></tr></thead><tbody></tbody></table></div>
@@ -229,7 +229,7 @@
           <div><button id="host-back" class="text-button">← Back to hosts</button><p class="eyebrow">HOST WORKSPACE</p><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div>
           <div class="toolbar compact-toolbar">
             <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
-            <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="show">Show excluded</option><option value="hide">Hide excluded</option></select>
+            <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
             <select id="host-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
             <input id="host-from" class="custom-time" type="datetime-local" hidden>
             <input id="host-to" class="custom-time" type="datetime-local" hidden>

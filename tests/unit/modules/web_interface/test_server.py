@@ -1942,6 +1942,54 @@ def test_arp_evidence_uses_only_durable_arp_detections(
     assert result["items"][0]["alert_count"] == 1
 
 
+@pytest.mark.parametrize(
+    "hide_excluded, expected_descriptions",
+    [
+        (False, ["Excluded ARP", "Scored ARP"]),
+        (True, ["Scored ARP"]),
+    ],
+)
+def test_arp_evidence_exclusion_filter(
+    tmp_path: Path, hide_excluded: bool, expected_descriptions: list[str]
+) -> None:
+    """Filter whitelisted ARP evidence before limiting rows and counts.
+
+    Parameters:
+        tmp_path: Isolated run database location.
+        hide_excluded: Whether excluded evidence should be omitted.
+        expected_descriptions: Descriptions visible in newest-first order.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, threat_level TEXT, "
+            "evidence_type TEXT, description TEXT, confidence REAL, "
+            "whitelisted INTEGER)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                ("scored", 1, "10.0.0.8", "high", "MITM_ARP_ATTACK", "Scored ARP", 0.9, 0),
+                ("excluded", 2, "10.0.0.8", "high", "MITM_ARP_ATTACK", "Excluded ARP", 0.9, 1),
+            ],
+        )
+
+    result = reader._arp_evidence(hide_excluded=hide_excluded)
+
+    assert result["total"] == len(expected_descriptions)
+    assert result["counts"] == {"MITM_ARP_ATTACK": len(expected_descriptions)}
+    assert [item["description"] for item in result["items"]] == expected_descriptions
+
+
 def test_arp_poisoning_summarizes_current_module_state(tmp_path: Path) -> None:
     """Summarize active, overdue, and released ARP isolation records."""
     _module_factory = ModuleFactory()
@@ -1974,7 +2022,7 @@ def test_arp_poisoning_summarizes_current_module_state(tmp_path: Path) -> None:
         }
     )
 
-    result = reader.arp_poisoning()
+    result = reader.arp_poisoning({"hide_excluded": ["1"]})
 
     assert result["module"] == {
         "enabled": False,
@@ -1989,6 +2037,7 @@ def test_arp_poisoning_summarizes_current_module_state(tmp_path: Path) -> None:
         "evidence": 4,
     }
     assert result["evidence_counts"] == {"ARP_SCAN": 4}
+    reader._arp_evidence.assert_called_once_with(hide_excluded=True)
 
 
 def test_arp_poisoning_tab_is_wired_and_every_column_is_sortable() -> None:
@@ -2012,7 +2061,7 @@ def test_arp_poisoning_tab_is_wired_and_every_column_is_sortable() -> None:
     assert 'id="arp-poisoning-events-table"' in section
     assert 'id="arp-poisoning-evidence-table"' in section
     assert section.count("<th ") == section.count('data-sort="')
-    assert 'api("arpPoisoning", "/api/arp-poisoning")' in app_source
+    assert 'api("arpPoisoning", path)' in app_source
     assert "bindLocalTableSort(id, renderArpPoisoning)" in app_source
     assert 'path == "/api/arp-poisoning"' in server_source
 
