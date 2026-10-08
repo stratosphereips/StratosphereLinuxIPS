@@ -196,9 +196,12 @@ In a live-interface run, `flow_retention` in `config/slips.yaml` keeps ordinary
 raw flows for 24 hours and evidence-linked raw flows for up to 30 days by
 default. It also targets a 512 MiB logical database size. When over that
 target, bounded background batches prune the oldest raw flows without
-non-excluded evidence first, then evidence-linked raw flows older than the
-configured ordinary-flow age. Recent evidence-linked flows remain available
-even when durable detection records alone exceed the size target.
+non-excluded evidence first. Linked raw flows are ranked by the latest
+non-excluded evidence that cites them, so new evidence takes priority over
+older evidence even when its triggering flow started earlier. Linked flows
+stay protected for at least the configured ordinary-flow age after that
+evidence. Recent evidence-linked flows remain available even when durable
+detection records alone exceed the size target.
 Evidence, alerts, and their relationships remain available after a raw flow is
 removed. Set `max_size_mb: 0` to disable the size target, or `enabled: false`
 to disable all flow retention. Imported captures are not pruned.

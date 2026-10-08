@@ -190,8 +190,9 @@ flow_retention:
   linked_days: 30
   batch_size: 500
   interval_seconds: 60
-  # Target logical SQLite size. Under pressure, oldest raw flows are pruned;
-  # unlinked flows first, then evidence-linked flows. 0 disables the size cap.
+  # Target logical SQLite size. Under pressure, unlinked flows go first;
+  # linked flows are ordered by their latest evidence and protected for at
+  # least ordinary_hours after that evidence. 0 disables the size cap.
   max_size_mb: 512
 
 #############################

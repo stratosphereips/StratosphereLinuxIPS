@@ -242,16 +242,21 @@ def test_size_retention_prunes_oldest_row_across_flow_tables(db) -> None:
 
 
 def test_size_retention_protects_recent_evidence_flows(db) -> None:
-    """Keep linked flow records younger than ordinary flow retention."""
+    """Keep flows cited by new evidence even when the flow itself is old."""
     _module_factory = ModuleFactory()
-    for uid, event_time in (("old-linked", 50), ("recent-linked", 150)):
+    for uid, event_time, evidence_time in (
+        ("old-linked", 50, 50),
+        ("recent-linked", 150, 150),
+        ("old-flow-new-evidence", 50, 150),
+    ):
         db.execute(
             "INSERT INTO flows (uid, flow, event_time) VALUES (?, ?, ?)",
             (uid, "{}", event_time),
         )
         db.execute(
-            "INSERT INTO evidence (evidence_id, whitelisted) VALUES (?, 0)",
-            (uid,),
+            "INSERT INTO evidence (evidence_id, evidence_time, whitelisted) "
+            "VALUES (?, ?, 0)",
+            (uid, evidence_time),
         )
         db.execute(
             "INSERT INTO evidence_flows (evidence_id, uid) VALUES (?, ?)",
@@ -267,8 +272,57 @@ def test_size_retention_protects_recent_evidence_flows(db) -> None:
 
     assert deleted == ["old-linked"]
     assert db.get_flow("recent-linked")["recent-linked"] == "{}"
+    assert (
+        db.get_flow("old-flow-new-evidence")["old-flow-new-evidence"] == "{}"
+    )
     assert db.maintain_flow_retention(100, 0, max_size_bytes=1) == []
-    assert db.get_count("flows") == 1
+    assert db.get_count("flows") == 2
+
+
+@pytest.mark.parametrize(
+    "max_size_bytes,linked_cutoff,batch_size", [(1, 0, 1), (0, 100, 10)]
+)
+def test_retention_prioritizes_latest_evidence_for_shared_flow(
+    db, max_size_bytes: int, linked_cutoff: int, batch_size: int
+) -> None:
+    """Keep a flow with newer evidence before a newer flow with old evidence.
+
+    Parameters:
+        db: Isolated SQLite database fixture.
+        max_size_bytes: Size target for this retention pass.
+        linked_cutoff: Age cutoff for linked records.
+        batch_size: Maximum number of linked records to prune in a pass.
+    """
+    _module_factory = ModuleFactory()
+    for uid, flow_time in (("old-flow", 10), ("newer-flow", 40)):
+        db.execute(
+            "INSERT INTO flows (uid, flow, event_time) VALUES (?, ?, ?)",
+            (uid, "{}", flow_time),
+        )
+    for evidence_id, uid, evidence_time in (
+        ("old-evidence", "old-flow", 30),
+        ("latest-evidence", "old-flow", 150),
+        ("other-evidence", "newer-flow", 80),
+    ):
+        db.execute(
+            "INSERT INTO evidence (evidence_id, evidence_time, whitelisted) "
+            "VALUES (?, ?, 0)",
+            (evidence_id, evidence_time),
+        )
+        db.execute(
+            "INSERT INTO evidence_flows (evidence_id, uid) VALUES (?, ?)",
+            (evidence_id, uid),
+        )
+
+    deleted = db.maintain_flow_retention(
+        ordinary_cutoff=1000,
+        linked_cutoff=linked_cutoff,
+        batch_size=batch_size,
+        max_size_bytes=max_size_bytes,
+    )
+
+    assert deleted == ["newer-flow"]
+    assert db.get_flow("old-flow")["old-flow"] == "{}"
 
 
 def test_retention_backfills_legacy_flow_timestamps(db) -> None:
