@@ -151,6 +151,13 @@ function updateHostLabel(element) {
 /** Update all visible host labels after identity information changes. */
 function refreshHostLabels() {
   document.querySelectorAll("[data-host-ip]").forEach(updateHostLabel);
+  const displayedName = byId("host-displayed-name");
+  if (displayedName && state.host?.ip) {
+    const identity = state.hostNames.get(state.host.ip);
+    const source = identity?.source === "rDNS" ? "reverse DNS" : identity?.source;
+    displayedName.textContent = identity?.name
+      ? `${identity.name} · ${source || "stored name"}` : "—";
+  }
 }
 
 /** Keep a learned name without replacing it with missing metadata. */
@@ -2731,7 +2738,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
     const annotation = document.createElement("form");
     annotation.className = "host-annotation-form";
     annotation.hidden = !state.hostAnnotationEditorOpen.has(annotationKey);
-    const nameLabel = text("label", "Your name");
+    const nameLabel = text("label", "Custom name");
     const nameInput = document.createElement("input");
     nameInput.type = "text";
     nameInput.maxLength = 80;
@@ -2813,7 +2820,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
         annotationSave.disabled = false;
       }
     });
-    if (profile.user_name) group.append(text("p", `Your name: ${profile.user_name}`, "host-user-name"));
+    if (profile.user_name) group.append(text("p", `Custom name: ${profile.user_name}`, "host-user-name"));
     if (profile.user_note) group.append(text("p", profile.user_note, "host-user-note"));
     if (index === 0 && currentEditorTarget) {
       currentEditorTarget.append(annotationEdit, annotation);
@@ -2938,10 +2945,13 @@ function renderHostCards(host) {
   if (!editingCurrentHost) {
     const annotationEntry = document.createElement("div");
     annotationEntry.id = "host-annotation-entry";
+    const displayedName = text("span", "—");
+    displayedName.id = "host-displayed-name";
     identity.replaceChildren(
       detailRow("Addresses", hostIdentity(host.ip)),
-      detailRow("Your name", host.user_name || "—"),
-      detailRow("Your note", host.user_note || "—"),
+      detailRow("Displayed name", displayedName),
+      detailRow("Custom name", host.user_name || "—"),
+      detailRow("Custom note", host.user_note || "—"),
       ...(host.permanent_profiles?.length
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
@@ -2952,6 +2962,7 @@ function renderHostCards(host) {
       detailRow("DNS", renderDnsDetails(host.dns)),
     );
     identity.dataset.profileIp = host.ip;
+    refreshHostLabels();
   }
   renderPermanentProfiles(host.permanent_profiles || [], byId("host-annotation-entry"));
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
