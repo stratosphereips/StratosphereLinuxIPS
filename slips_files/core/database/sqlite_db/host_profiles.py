@@ -196,9 +196,7 @@ class HostProfileStore:
                 ).fetchall()
         except sqlite3.Error:
             return unknown
-        matching = [
-            row for row in rows if row[2] <= timestamp <= row[3]
-        ]
+        matching = [row for row in rows if row[2] <= timestamp <= row[3]]
         network_ids = {str(row[0]) for row in matching}
         if len(network_ids) != 1:
             if len(network_ids) > 1:
@@ -406,6 +404,17 @@ class HostProfileStore:
                 normalized,
                 self.network_id_for_state(state, self.run_name),
                 f"{network} · router {gateway_mac}",
+            )
+        if (
+            address.version == 6
+            and address.is_link_local
+            and state.get("gateway_mac")
+        ):
+            gateway_mac = str(state["gateway_mac"]).lower()
+            return (
+                normalized,
+                self.network_id_for_state(state, self.run_name),
+                f"Link-local on {state.get('interface') or interface} · router {gateway_mac}",
             )
         return (
             normalized,

@@ -3038,6 +3038,91 @@ class RunDataReader:
             "ti_feeds": ti_feeds,
         }
 
+    def _network_context_at(
+        self,
+        path: Path,
+        ip: str,
+        observed_at: Any,
+        states: Dict[str, List[Dict[str, Any]]],
+        names: Dict[str, str],
+        run_name: str,
+    ) -> Dict[str, str]:
+        """Find an event's network from interface history or host sightings.
+
+        Parameters:
+            path: Permanent host profile database path.
+            ip: Address associated with the detection.
+            observed_at: Detection time as a Unix timestamp.
+            states: Saved network states grouped by monitored interface.
+            names: User names indexed by network identity.
+            run_name: Current run identifier for routerless networks.
+
+        Returns:
+            Network identity, name, and display label.
+        """
+        saved = HostProfileStore.network_for_observation(path, ip, observed_at)
+        try:
+            address = ipaddress.ip_address(ip)
+            timestamp = float(observed_at)
+        except (TypeError, ValueError):
+            return saved
+        if address.is_global:
+            return saved
+        matches: Dict[str, Dict[str, Any]] = {}
+        for snapshots in states.values():
+            previous = [
+                state
+                for state in snapshots
+                if state.get("changed_at")
+                and float(state["changed_at"]) <= timestamp
+            ]
+            if not previous:
+                continue
+            state = max(previous, key=lambda item: float(item["changed_at"]))
+            if not state.get("connected"):
+                continue
+            if address.version == 4:
+                try:
+                    is_local = address in ipaddress.ip_network(
+                        state.get("local_network", ""), strict=False
+                    )
+                except ValueError:
+                    is_local = False
+            elif address.is_link_local:
+                is_local = True
+            else:
+                is_local = False
+                for item in state.get("addresses", []):
+                    try:
+                        if address in ipaddress.ip_network(
+                            item.get("network", ""), strict=False
+                        ):
+                            is_local = True
+                            break
+                    except ValueError:
+                        continue
+            if is_local:
+                network_id = HostProfileStore.network_id_for_state(
+                    state, run_name
+                )
+                if network_id:
+                    matches[network_id] = state
+        if len(matches) != 1:
+            return saved
+        network_id, state = next(iter(matches.items()))
+        gateway_mac = str(state.get("gateway_mac") or "").lower()
+        default_label = (
+            f"{state.get('local_network') or 'Local network'} · router {gateway_mac}"
+            if gateway_mac
+            else f"Unidentified network · {run_name}"
+        )
+        network_name = names.get(network_id, "")
+        return {
+            "network_id": network_id,
+            "network_name": network_name,
+            "network_label": network_name or default_label,
+        }
+
     def _annotate_detection_networks(
         self,
         items: List[Dict[str, Any]],
@@ -3058,17 +3143,51 @@ class RunDataReader:
             "host_profiles_path",
             Path("permanent") / "host_profiles" / "hosts.sqlite",
         )
+        states: Dict[str, List[Dict[str, Any]]] = {}
+        if getattr(self, "redis", None) is not None:
+            try:
+                raw_states = self.redis.hgetall("network_states")
+            except redis.RedisError:
+                raw_states = {}
+            if not isinstance(raw_states, dict):
+                raw_states = {}
+            for interface, raw in raw_states.items():
+                state = self._loads(raw, {})
+                if not isinstance(state, dict):
+                    continue
+                history = state.get("history", [])
+                snapshots = (
+                    [item for item in history if isinstance(item, dict)]
+                    if isinstance(history, list)
+                    else []
+                )
+                states[interface] = [*snapshots, state]
+        run_name = self._network_run_name() if states else ""
+        names = HostProfileStore.network_names(
+            host_profiles_path,
+            (
+                HostProfileStore.network_id_for_state(state, run_name)
+                for snapshots in states.values()
+                for state in snapshots
+            ),
+        )
         for item in items:
-            context = HostProfileStore.network_for_observation(
+            context = self._network_context_at(
                 host_profiles_path,
                 str(item.get(ip_field) or ""),
                 item.get(time_field) or 0,
+                states,
+                names,
+                run_name,
             )
             if start_field and item.get(start_field):
-                first_context = HostProfileStore.network_for_observation(
+                first_context = self._network_context_at(
                     host_profiles_path,
                     str(item.get(ip_field) or ""),
                     item[start_field],
+                    states,
+                    names,
+                    run_name,
                 )
                 if (
                     first_context["network_id"]
