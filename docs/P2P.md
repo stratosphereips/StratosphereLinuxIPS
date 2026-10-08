@@ -162,6 +162,9 @@ The network then replies with a score and confidence for the IP. The higher the 
 
 Once we get the score of the IP, we store it in the database,
 and we alert if the score of this IP is more than 0 (threat level=info).
+The alert description lists each reporting peer's ID and latest known IP
+address, for example `peer-id (192.0.2.10)`. If no IP address is known for a
+peer, the alert still lists its ID.
 
 The persistent local P2P runtime directory is stored under the directory configured by ```parameters.permanent_dir``` in ```config/slips.yaml```. By default, this is ```permanent/p2p_trust_runtime/```.
 

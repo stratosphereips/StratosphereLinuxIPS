@@ -44,11 +44,28 @@ def create_trust():
 
 
 @pytest.mark.parametrize("ip_state", ["srcip", "dstip"])
-def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
-    """Keep the reporter identities in each P2P evidence description.
+@pytest.mark.parametrize(
+    "peer_ips, expected_peers",
+    [
+        (
+            [(1, "192.0.2.10"), (2, "192.0.2.20")],
+            "peer-a (192.0.2.10), peer-b (192.0.2.20)",
+        ),
+        (
+            [(False, False), (2, "192.0.2.20")],
+            "peer-a, peer-b (192.0.2.20)",
+        ),
+    ],
+)
+def test_p2p_evidence_names_reporting_peers(
+    ip_state: str, peer_ips: list[tuple], expected_peers: str
+) -> None:
+    """Include each reporting peer's known IP in P2P evidence.
 
     Parameters:
         ip_state: Direction of the reported address in the flow.
+        peer_ips: Latest stored timestamp and address for each reporter.
+        expected_peers: Reporter labels expected in the alert.
     """
     _module_factory = ModuleFactory()
     trust = create_trust()
@@ -57,6 +74,7 @@ def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
         "peer-a",
         "peer-b",
     }
+    trust.trust_db.get_ip_of_peer.side_effect = peer_ips
 
     trust.set_evidence_malicious_ip(
         {
@@ -76,7 +94,14 @@ def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
     )
     assert trust.db.set_evidence.call_count == 2
     for call_args in trust.db.set_evidence.call_args_list:
-        assert "Reported by peers: peer-a, peer-b." in call_args.args[0].description
+        assert (
+            f"Reported by peers: {expected_peers}."
+            in call_args.args[0].description
+        )
+    assert trust.trust_db.get_ip_of_peer.call_args_list == [
+        call("peer-a"),
+        call("peer-b"),
+    ]
 
 
 @pytest.mark.parametrize("stopping", [False, True])

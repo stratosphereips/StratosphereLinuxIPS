@@ -506,9 +506,15 @@ class Trust(IModule):
         peer_ids = sorted(
             self.trust_db.get_reporter_peerids_for_ip(attacker_ip)
         )
+        peer_labels = []
+        for peer_id in peer_ids:
+            _last_seen, peer_ip = self.trust_db.get_ip_of_peer(peer_id)
+            peer_labels.append(
+                f"{peer_id} ({peer_ip})" if peer_ip else peer_id
+            )
         peer_source = (
             f" Reported by peer{'s' if len(peer_ids) != 1 else ''}: "
-            f"{', '.join(peer_ids)}."
+            f"{', '.join(peer_labels)}."
             if peer_ids
             else " Reporting peer unavailable."
         )
