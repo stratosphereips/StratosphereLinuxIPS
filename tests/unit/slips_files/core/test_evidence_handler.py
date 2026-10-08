@@ -57,7 +57,7 @@ def test_init_creates_notify_obj_only_when_popups_are_enabled(
     ):
         handler = EvidenceHandler(
             logger=Mock(),
-            output_dir="/tmp",
+            output_dir="output/unit_test_evidence_handler",
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),

@@ -250,6 +250,26 @@ def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluato
     )
     go_director.blame_evaluator.assert_not_called()
     go_director.evaluation_processors["score_confidence"].assert_not_called()
+def test_received_message_marks_peer_recently_active() -> None:
+    """Save recent activity without discarding known peer metadata."""
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.0.2.10", "reliability": 0.8}
+    )
+
+    with patch("modules.p2p_trust.utils.go_director.time.time", return_value=1234):
+        go_director._record_peer_activity("peer-a")
+
+    stored = json.loads(
+        go_director.db.store_peer_trust_data.call_args.args[1]
+    )
+    assert stored == {
+        "ip": "192.0.2.10",
+        "reliability": 0.8,
+        "connected": True,
+        "timestamp": 1234,
+        "last_activity": 1234,
+    }
 
 
 @pytest.mark.parametrize(
@@ -697,6 +717,7 @@ def test_process_go_update_publishes_live_peer_state(
     )
     assert stored_state["connected"] is connected
     assert stored_state["timestamp"] == 1649445643
+    assert ("last_activity" in stored_state) is connected
     go_director.db.store_connected_peers.assert_called_once_with(
         expected_peers
     )
@@ -796,6 +817,9 @@ def test_connection_update_is_validated_and_recorded() -> None:
         "tcp|192.0.2.10|6668|198.51.100.20|51000",
         {**connection, "authenticated": True},
         go_director.ACTIVE_P2P_CONNECTION_TTL,
+    )
+    go_director.trustdb.insert_go_peer_address.assert_called_once_with(
+        "peer-a", "198.51.100.20", 51000
     )
     go_director.db.remove_authenticated_p2p_connection.assert_not_called()
 

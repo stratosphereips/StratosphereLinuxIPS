@@ -158,6 +158,63 @@ class HostProfileStore:
             )
 
     @staticmethod
+    def network_for_observation(
+        path: Path, ip: str, observed_at: float
+    ) -> dict[str, str]:
+        """Resolve the saved network for an address at an event timestamp.
+
+        Parameters:
+            path: Permanent host profile database path.
+            ip: Host address associated with the detection.
+            observed_at: Detection time as a Unix timestamp.
+
+        Returns:
+            Network identity and display name, or an explicit unknown label.
+        """
+        unknown = {
+            "network_id": "",
+            "network_name": "",
+            "network_label": "Unknown network (not recorded)",
+        }
+        try:
+            normalized_ip = str(ipaddress.ip_address(ip))
+            timestamp = float(observed_at)
+        except (TypeError, ValueError):
+            return unknown
+        if not path.exists():
+            return unknown
+        try:
+            with sqlite3.connect(
+                f"file:{path}?mode=ro", uri=True, timeout=5
+            ) as connection:
+                rows = connection.execute(
+                    "SELECT h.network_id, h.network_label, h.first_seen, "
+                    "h.last_seen, n.name FROM hosts h "
+                    "LEFT JOIN network_names n ON n.network_id=h.network_id "
+                    "WHERE h.ip=?",
+                    (normalized_ip,),
+                ).fetchall()
+        except sqlite3.Error:
+            return unknown
+        matching = [row for row in rows if row[2] <= timestamp <= row[3]]
+        network_ids = {str(row[0]) for row in matching}
+        if len(network_ids) != 1:
+            if len(network_ids) > 1:
+                return {
+                    "network_id": ",".join(sorted(network_ids)),
+                    "network_name": "",
+                    "network_label": "Multiple networks",
+                }
+            return unknown
+        row = matching[0]
+        network_name = str(row[4] or "")
+        return {
+            "network_id": str(row[0]),
+            "network_name": network_name,
+            "network_label": network_name or str(row[1]),
+        }
+
+    @staticmethod
     def set_network_name(path: Path, network_id: str, name: str) -> None:
         """Save or clear one network name in the permanent database.
 

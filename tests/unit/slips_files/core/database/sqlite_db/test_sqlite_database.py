@@ -34,9 +34,7 @@ def test_sqlite_lockfile_is_world_writable(tmp_path):
     locks_dir = tmp_path / "locks"
     locks_dir.mkdir()
 
-    with patch(
-        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
-    ):
+    with patch("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)):
         db = SQLiteDB(logger, str(tmp_path), 12345)
 
     assert locks_dir.exists()
@@ -181,6 +179,62 @@ def test_flow_retention_applies_to_protocol_flows(db) -> None:
     assert set(row[0] for row in db.select("altflows", columns="uid")) == {
         "linked-http"
     }
+
+
+def test_size_retention_prunes_oldest_row_across_flow_tables(db) -> None:
+    """Choose the oldest flow across both tables before pruning newer data."""
+    _module_factory = ModuleFactory()
+    for uid, starttime in (("old-connection", "100"),):
+        db.add_flow(
+            Conn(
+                starttime=starttime,
+                uid=uid,
+                saddr="192.0.2.10",
+                daddr="198.51.100.10",
+                dur=1,
+                proto="tcp",
+                appproto="http",
+                sport="50000",
+                dport="80",
+                spkts=1,
+                dpkts=1,
+                sbytes=10,
+                dbytes=10,
+                state="EST",
+                history="ShADadf",
+                interface="eth0",
+            ),
+            "profile-a",
+            "tw-1",
+        )
+    db.add_altflow(
+        HTTP(
+            starttime="200",
+            uid="newer-http",
+            saddr="192.0.2.10",
+            daddr="198.51.100.10",
+            method="GET",
+            host="example.test",
+            uri="/",
+            version=1,
+            user_agent="pytest",
+            request_body_len=0,
+            response_body_len=0,
+            status_code="200",
+            status_msg="OK",
+            resp_mime_types="text/html",
+            resp_fuids="",
+            interface="eth0",
+        ),
+        "profile-a",
+        "tw-1",
+    )
+
+    deleted = db._prune_for_size(db.conn.cursor(), 1, linked_only=False)
+
+    assert deleted == {"flows": ["old-connection"], "altflows": []}
+    assert db.get_count("flows") == 0
+    assert db.get_count("altflows") == 1
 
 
 def test_retention_backfills_legacy_flow_timestamps(db) -> None:
@@ -365,9 +419,7 @@ def test_get_flows_count_handles_quoted_filters(db):
     db.add_flow(second_flow, 'profile"quoted', "tw-other")
 
     assert db.get_flows_count(profileid='profile"quoted') == 2
-    assert (
-        db.get_flows_count(profileid='profile"quoted', twid='tw"quoted') == 1
-    )
+    assert db.get_flows_count(profileid='profile"quoted', twid='tw"quoted') == 1
 
 
 def test_get_columns_rejects_unknown_tables(db):
@@ -502,16 +554,7 @@ def test_get_whitelisted_evidence_ids_in_tw_scopes_by_ip_and_twid(
     db.mark_evidence_whitelisted("ev3")
     db.mark_evidence_whitelisted("ev4")
 
-    assert db.get_whitelisted_evidence_ids_in_tw(
-        "10.0.0.1", "timewindow1"
-    ) == {"ev1"}
-    assert db.get_whitelisted_evidence_ids_in_tw(
-        "10.0.0.1", "timewindow2"
-    ) == {"ev3"}
-    assert db.get_whitelisted_evidence_ids_in_tw(
-        "10.0.0.2", "timewindow1"
-    ) == {"ev4"}
-    assert (
-        db.get_whitelisted_evidence_ids_in_tw("10.0.0.3", "timewindow1")
-        == set()
-    )
+    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.1", "timewindow1") == {"ev1"}
+    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.1", "timewindow2") == {"ev3"}
+    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.2", "timewindow1") == {"ev4"}
+    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.3", "timewindow1") == set()

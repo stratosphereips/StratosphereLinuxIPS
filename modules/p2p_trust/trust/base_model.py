@@ -123,40 +123,55 @@ class BaseModel:
         )
         :return: average peer reputation, final score and final confidence
         """
-        reports = []
-        reporters = []
+        report_groups = []
 
         for peer_report in data:
-            (
-                report_score,
-                report_confidence,
-                reporter_reliability,
-                # what does slips think about the reporter's ip
-                reporter_score,
-                # how confident slips is about the reporter's ip's score
-                reporter_confidence,
-                reporter_ipaddress,
-            ) = peer_report
+            if len(peer_report) == 6:
+                (
+                    report_score_sum,
+                    report_confidence_sum,
+                    reporter_reliability,
+                    reporter_score,
+                    reporter_confidence,
+                    reporter_ipaddress,
+                ) = peer_report
+                report_count = 1
+            else:
+                (
+                    report_score_sum,
+                    report_confidence_sum,
+                    reporter_reliability,
+                    reporter_score,
+                    reporter_confidence,
+                    reporter_ipaddress,
+                    report_count,
+                ) = peer_report
 
-            reports.append((report_score, report_confidence))
-            # here reporter_score, reporter_confidence are the local ips
-            # detection of this peer
             peer_trust = self.compute_peer_trust(
                 reporter_reliability, reporter_score, reporter_confidence
             )
-            reporters.append(peer_trust)
+            report_groups.append(
+                (
+                    report_score_sum,
+                    report_confidence_sum,
+                    peer_trust,
+                    report_count,
+                )
+            )
             self.main_slips_db.set_peer_trust(reporter_ipaddress, peer_trust)
 
-        weighted_reporters = self.normalize_peer_reputations(reporters)
-        # peers we trust more will contribute more to the final score.
-        # r[0] → the score from each peer's report.
-        # w → the normalized trust weight for that peer
+        normalized_trust_sum = sum(
+            ((peer_trust + 1) / 2) * count
+            for _, _, peer_trust, count in report_groups
+        )
         combined_score = sum(
-            r[0] * w for r, w, in zip(reports, weighted_reporters)
+            report_score_sum * ((peer_trust + 1) / 2) / normalized_trust_sum
+            for report_score_sum, _, peer_trust, _ in report_groups
         )
         combined_confidence = sum(
-            [max(0, r[1] * w) for r, w, in zip(reports, reporters)]
-        ) / len(reporters)
+            max(0, report_confidence_sum * peer_trust)
+            for _, report_confidence_sum, peer_trust, _ in report_groups
+        ) / sum(count for _, _, _, count in report_groups)
 
         # to ensure the score and confidence are within the range [0, 1]
         # this avoids python issues with negative values or values

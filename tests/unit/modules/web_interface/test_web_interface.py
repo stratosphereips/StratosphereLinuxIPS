@@ -76,6 +76,10 @@ def test_pre_main_starts_server_for_current_run() -> None:
         ),
         patch("builtins.open", mock_open()),
         patch(
+            "modules.web_interface.web_interface.redis_auth_kwargs",
+            return_value={"password": "test"},
+        ),
+        patch(
             "modules.web_interface.web_interface.subprocess.Popen",
             return_value=process,
         ) as popen,

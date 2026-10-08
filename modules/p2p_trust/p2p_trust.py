@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import errno
+import ipaddress
 import os
 import shutil
 import signal
@@ -95,6 +96,10 @@ class Trust(IModule):
     # levels.
     blame_threshold = 0.5
     start_pigeon = True
+    active_p2p_connection_ttl = 300
+    p2p_connection_heartbeat_interval = 60
+    local_ip_check_interval = 5
+    max_bootstrap_peers = 50
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
     pigeon_binary = pigeon_binary_dir / "p2p4slips"
@@ -115,6 +120,7 @@ class Trust(IModule):
 
         self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
+        self.last_local_ip_check = time.monotonic()
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
@@ -142,6 +148,10 @@ class Trust(IModule):
         self.mutliaddress_printed = False
         self.last_log_rotation_time = time.time()
         self.rotation_period = 86400  # 1 day in seconds
+        self.last_report_compaction_time = 0
+        self.report_compaction_interval = 5
+        self.report_compaction_batch_size = 1000
+        self.last_p2p_connection_heartbeat_time = 0
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("report_to_peers")
@@ -493,13 +503,7 @@ class Trust(IModule):
         """
         attacker_ip: str = ip_info.get("ip")
         peer_ids = sorted(
-            {
-                str(report[0])
-                for report in (
-                    self.trust_db.get_reports_for_ip(attacker_ip) or []
-                )
-                if report[0]
-            }
+            self.trust_db.get_reporter_peerids_for_ip(attacker_ip)
         )
         peer_source = (
             f" Reported by peer{'s' if len(peer_ids) != 1 else ''}: "
@@ -707,7 +711,7 @@ class Trust(IModule):
         """
         params = {
             "-port": str(self.port),
-            "-host": self.host,
+            "-host": "0.0.0.0",
             "-rendezvous": self.rendezvous,
             "-key-file": self.pigeon_key_file,
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
@@ -723,13 +727,113 @@ class Trust(IModule):
                 "-slips-version; starting in legacy compatibility mode."
             )
 
+        bootstrap_peers = self._get_bootstrap_peer_addresses()
+        if bootstrap_peers and self._pigeon_supports_flag("-bootstrap-peers"):
+            params["-bootstrap-peers"] = ",".join(bootstrap_peers)
+
         return [str(self.pigeon_binary)] + [
             utils.sanitize(item) for pair in params.items() for item in pair
         ]
 
+    def _get_bootstrap_peer_addresses(self) -> list[str]:
+        """Build authenticated peer endpoints from this network's history.
+
+        Returns:
+            Recent peer multiaddresses on the monitored IPv4 subnet.
+        """
+        trust_db = getattr(self, "trust_db", None)
+        if trust_db is None:
+            return []
+
+        try:
+            subnets = self._get_local_subnets()
+        except (OSError, ValueError):
+            subnets = set()
+
+        addresses: dict[str, str] = {}
+        try:
+            known_addresses = trust_db.get_recent_peer_addresses(
+                self.max_bootstrap_peers
+            )
+        except (AttributeError, TypeError):
+            known_addresses = []
+        if isinstance(known_addresses, (list, tuple)):
+            for peer_id, address, port, _timestamp in known_addresses:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), port, subnets
+                )
+
+        try:
+            known_ips = trust_db.get_recent_peer_ips(self.max_bootstrap_peers)
+        except (AttributeError, TypeError):
+            known_ips = []
+        if isinstance(known_ips, (list, tuple)):
+            for peer_id, address, _timestamp in known_ips:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), self.port, subnets
+                )
+
+        return list(addresses.values())[: self.max_bootstrap_peers]
+
+    def _add_bootstrap_address(
+        self,
+        addresses: dict[str, str],
+        peer_id: str,
+        address: str,
+        port: int,
+        subnets: set[ipaddress.IPv4Network],
+    ) -> None:
+        """Add a valid peer endpoint once, if it belongs to this subnet.
+
+        Parameters:
+            addresses: Output mapping keyed by peer ID.
+            peer_id: Authenticated P2P identity.
+            address: Last observed IPv4 address.
+            port: Last observed P2P listening port.
+            subnet: Current monitored subnet, when available.
+        """
+        if peer_id in addresses:
+            return
+        try:
+            peer_ip = ipaddress.IPv4Address(address)
+            peer_port = int(port)
+        except (ipaddress.AddressValueError, TypeError, ValueError):
+            return
+        if peer_port < 1 or peer_port > 65535:
+            return
+        if subnets and not any(peer_ip in subnet for subnet in subnets):
+            return
+        if address == getattr(self, "host", ""):
+            return
+        addresses[peer_id] = f"/ip4/{peer_ip}/tcp/{peer_port}/p2p/{peer_id}"
+
+    def _get_local_subnets(self) -> set[ipaddress.IPv4Network]:
+        """Return directly connected IPv4 networks on local interfaces.
+
+        Returns:
+            IPv4 subnets for non-loopback interfaces with usable netmasks.
+        """
+        subnets = set()
+        for interface in netifaces.interfaces():
+            if interface == "lo0":
+                continue
+            for entry in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                address, netmask = entry.get("addr"), entry.get("netmask")
+                if not address or not netmask:
+                    continue
+                local_ip = ipaddress.IPv4Address(address)
+                if local_ip.is_loopback or local_ip.is_link_local:
+                    continue
+                subnets.add(
+                    ipaddress.ip_network(f"{address}/{netmask}", strict=False)
+                )
+        return subnets
+
     def evaluate_blame_report(
         self, reporter: str, report_time: int, data: dict
-    ):
+    ) -> None:
         """
         Decide whether a peer's "blame" (a request to block an IP)
         should be forwarded to the blocking module.
@@ -890,6 +994,7 @@ class Trust(IModule):
     def shutdown_gracefully(self) -> None:
         """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
@@ -926,6 +1031,48 @@ class Trust(IModule):
 
         self.pigeon = None
 
+    def _refresh_pigeon_address(self) -> None:
+        """Restart Pigeon when the monitored interface gets a new IPv4.
+
+        Wi-Fi and Ethernet interfaces can change addresses while Slips is
+        running. Pigeon binds to its startup address and advertises that
+        address through mDNS, so it must be restarted to join the new network.
+        """
+        now = time.monotonic()
+        if (
+            now - getattr(self, "last_local_ip_check", 0)
+            < self.local_ip_check_interval
+        ):
+            return
+        self.last_local_ip_check = now
+
+        if not hasattr(self, "host"):
+            return
+
+        try:
+            current_ip = self.get_local_IP()
+        except (OSError, ValueError):
+            return
+
+        if (
+            current_ip == self.host
+            and getattr(self, "pigeon", None) is not None
+        ):
+            return
+
+        if current_ip != self.host:
+            self.print(
+                f"Monitored interface address changed from {self.host} to "
+                f"{current_ip}; restarting Pigeon to reconnect to local peers."
+            )
+            self._stop_pigeon()
+            self.db.clear_authenticated_p2p_connections()
+            self.db.store_connected_peers([])
+            self.host = current_ip
+            self.mutliaddress_printed = False
+
+        self._start_pigeon()
+
     def run(self) -> None:
         """Run p2p_trust and guarantee its Go child cannot be orphaned."""
         try:
@@ -937,6 +1084,7 @@ class Trust(IModule):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
@@ -983,6 +1131,12 @@ class Trust(IModule):
                     1,
                 )
 
+        self._refresh_pigeon_address()
+
+        if self.pigeon is None:
+            self.termination_event.wait(0.05)
+            return
+
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):
             # The pigeon stopped with some error
@@ -1002,6 +1156,24 @@ class Trust(IModule):
 
         except Exception:
             pass
+
+        now = time.time()
+        if now - getattr(
+            self, "last_p2p_connection_heartbeat_time", 0
+        ) >= getattr(self, "p2p_connection_heartbeat_interval", 60):
+            self.db.refresh_authenticated_p2p_connections(
+                getattr(self, "active_p2p_connection_ttl", 300)
+            )
+            self.last_p2p_connection_heartbeat_time = now
+
+        if now - getattr(self, "last_report_compaction_time", now) >= getattr(
+            self, "report_compaction_interval", 5
+        ):
+            self.trust_db.compact_reports(
+                getattr(self, "report_compaction_batch_size", 1000)
+            )
+            self.last_report_compaction_time = now
+
         # Channel reads are nonblocking. Yield between polls so an idle
         # P2P module does not consume a CPU core.
         self.termination_event.wait(0.05)

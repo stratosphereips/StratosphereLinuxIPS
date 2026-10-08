@@ -231,6 +231,35 @@ def test_is_ip_in_org_complete(
 
 
 @pytest.mark.parametrize(
+    "ip, org, cidr",
+    [
+        ("17.253.73.205", "apple", "17.0.0.0/8"),
+        ("8.8.8.8", "google", "8.8.8.0/24"),
+    ],
+)
+def test_known_apple_and_google_ip_ranges_match_whitelist(
+    ip: str, org: str, cidr: str
+) -> None:
+    """Match representative public IPs from built-in organization ranges.
+
+    Parameters:
+        ip: IP address to check.
+        org: Organization owning the range.
+        cidr: Organization CIDR expected to contain the IP.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    analyzer = whitelist.org_analyzer
+    first_octet = ip.split(".")[0]
+    analyzer.bloom_filters = {
+        org: {"asns": [], "first_octets": [first_octet]}
+    }
+    whitelist.db.get_asn_info.return_value = None
+    whitelist.db.is_ip_in_org_ips.return_value = [cidr]
+
+    assert analyzer.is_ip_part_of_a_whitelisted_org(ip, org)
+
+
+@pytest.mark.parametrize(
     "domain, org, mock_bf_domains, mock_db_exact, mock_db_org_list, "
     "mock_tld_side_effect, expected_result",
     [
@@ -251,6 +280,15 @@ def test_is_ip_in_org_complete(
             ["google.com", "google.com"],  # 4. TLDs match (ads.google.com
             # -> google.com, google.com -> google.com)
             True,  # 5. Expected: True
+        ),
+        (
+            "captive.apple.com",
+            "apple",
+            ["apple.com"],
+            False,
+            ["apple.com"],
+            None,
+            True,
         ),
         # --- Case 4: Reverse Subdomain Match (domain IN org_domain) ---
         # 'google.com' (flow domain) is IN 'ads.google.com' (from db)

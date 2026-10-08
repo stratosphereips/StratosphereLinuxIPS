@@ -192,16 +192,19 @@ uses port 6379, and refuses to start while any other Slips instance is running.
 It cannot be combined with `-m` or a different `-P` port. Start a normal run
 without the flag when you want a fresh output directory and detection history.
 
-In a live-interface run, `flow_retention` in `config/slips.yaml` keeps all raw
-flows for 24 hours by default, then keeps only those linked to non-excluded
-evidence for up to 30 days. It runs in bounded background batches, including
-after a `--keep-history` restart. It never prunes imported captures. Detection
-records remain in SQLite after their raw flows expire, so the web can still
-show older alerts and evidence. Set `enabled: false` to retain every raw flow,
-or change `ordinary_hours` and `linked_days` to adjust the two windows.
-This limits raw-flow age, not total disk use: retained evidence, alerts, and
-their links still accumulate. A strict disk budget also requires an explicit
-policy for expiring or summarizing old detections.
+In a live-interface run, `flow_retention` in `config/slips.yaml` keeps ordinary
+raw flows for 24 hours and evidence-linked raw flows for up to 30 days by
+default. It also targets a 512 MiB logical database size. When over that
+target, bounded background batches prune the oldest raw flows without
+non-excluded evidence first, then the oldest evidence-linked raw flows.
+Evidence, alerts, and their relationships remain available after a raw flow is
+removed. Set `max_size_mb: 0` to disable the size target, or `enabled: false`
+to disable all flow retention. Imported captures are not pruned.
+
+The size target measures live SQLite pages; deleted pages may remain allocated
+in an older database file until it is compacted offline. Stop Slips before
+running `VACUUM` on that file. Evidence, alerts, and their links are retained
+and can themselves exceed the target in a long-running deployment.
 
 New output databases return deleted pages to the filesystem incrementally.
 For an output database created before flow retention was added, stop Slips
@@ -423,6 +426,7 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+    - We match organization domains and their subdomains, such as `captive.apple.com` for `apple.com`.
 
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
@@ -576,7 +580,7 @@ update:
 ```
 
 This setting is separate from the runtime ```feeds_update_manager``` module, which only updates TI feeds and related files.
-When a remote TI feed responds with an empty body, Slips keeps the last valid
+When a remote TI feed responds with an empty or whitespace-only body, Slips keeps the last valid
 entries for that feed and records the skipped update in `slips.log`. A later
 nonempty version is loaded at the next scheduled check. Invalid individual
 entries are skipped and noted in `slips.log`; they do not stop the rest of a

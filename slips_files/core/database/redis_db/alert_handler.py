@@ -304,8 +304,15 @@ class AlertHandler:
                 entity.queries = ip_identification.get("queries")
 
             elif entity.ioc_type == IoCType.DOMAIN:
-                domain_info: Dict[str, str]
+                domain_info: Any
                 domain_info = self.get_domain_data(entity.value)
+                if isinstance(domain_info, str):
+                    try:
+                        domain_info = json.loads(domain_info)
+                    except (TypeError, ValueError):
+                        continue
+                if not isinstance(domain_info, dict):
+                    continue
                 if not domain_info:
                     continue
 

@@ -41,40 +41,14 @@ toolchain; Go may download that toolchain during the first build.
 From the Slips repository root, check out the pinned submodule revision and
 build its binary:
 
-- Go 1.21 or newer is needed; (`install/install.sh` installs Go for you when the system one is too old).
-
 ```
 git submodule update --init p2p4slips
 go -C p2p4slips build -buildvcs=false
 ```
 
-or by hand
-
-```
-curl https://go.dev/dl/go1.26.8.linux-amd64.tar.gz --output go.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz
-export PATH=$PATH:/usr/local/go/bin
-```
-
-2. build the pigeon:
-
-- if you installed slips with the submodules using
-```
-git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS -j4
-```
-
-then you should only build the pigeon using:
-```cd p2p4slips && go build -buildvcs=false```
-- If you installed Slips without the submodules then you should download and build the pigeon using:
-
-```
-git submodule init && git submodule update && cd p2p4slips && go build -buildvcs=false
-```
-
-The p2p binary should now be in ```p2p4slips/``` dir and slips will be able to find it.
-
 Rebuild after updating the submodule, then restart Slips to run the new binary.
-The submodule update alone does not replace a compiled Pigeon binary.
+`git submodule update` changes the source files but does not replace a compiled
+`p2p4slips/p2p4slips` binary.
 
 
 ***NOTE***
@@ -106,6 +80,13 @@ discovery (port scan) evidence, and alert scoring/blocking each check a
 flow's 5-tuple against that set (via the ```is_p2p_related_flow``` DB
 function) and skip it if it matches. Other ports and connections from the
 same peer IP continue through normal analysis.
+
+The P2P module refreshes the local authenticated-connection records every
+minute while Pigeon still lists the exact tuple, so a quiet connection does
+not appear offline just because no connect event was repeated. A received
+peer message also marks its authenticated sender active for 15 minutes. A
+disconnect removes the connection immediately; the active list is cleared
+when the P2P module starts and stops.
 
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
@@ -177,6 +158,33 @@ Once we get the score of the IP, we store it in the database,
 and we alert if the score of this IP is more than 0 (threat level=info).
 
 The persistent local P2P runtime directory is stored under the directory configured by ```parameters.permanent_dir``` in ```config/slips.yaml```. By default, this is ```permanent/p2p_trust_runtime/```.
+
+The persistent trust database creates indexes for report, peer, and
+reputation lookups at startup. This keeps opinion checks from scanning the
+entire database as its report history grows. On an existing large database,
+the indexes are built once during startup; subsequent starts reuse them.
+
+The trust database stores only the latest Slips reputation score and
+confidence for each IP. Older snapshots were not used for opinion lookups;
+they only made `trustdb.db` grow continuously. On startup, existing databases
+are migrated by retaining the row with the newest timestamp for each IP, then
+the database is vacuumed and its WAL is checkpointed. This preserves the
+current reputation values while discarding unused reputation history. Do not
+delete `permanent/p2p_trust_runtime/trustdb.db` to reclaim space: Slips performs
+the migration without resetting peer reports or reputation.
+
+Slips compacts stored IP reports in batches of up to 1,000 rows every five
+seconds. For each reported IP, peer ID, and reporter IP at report time, it
+keeps the report count and score/confidence totals. The trust calculation
+still uses each peer's current reliability and the reporter IP's current
+reputation, so new peer information continues to affect past reports. Reports
+whose peer IP cannot yet be resolved stay in the raw table and continue to be
+considered normally. Aggregation preserves the opinion formula; only ordinary
+floating-point rounding at machine precision can differ. After the existing
+backlog is processed, Slips attempts one vacuum to reclaim disk space. Keep
+the database; deleting it would discard the peer reports and trust history.
+Back it up before the first run with compaction if you need a recoverable
+original copy.
 
 
 ### Answering the network's request about an IP

@@ -33,6 +33,7 @@ def test_flow_retention_runs_in_bounded_background_pass() -> None:
         "ordinary_hours": 24,
         "linked_days": 30,
         "batch_size": 500,
+        "max_size_mb": 512,
         "interval_seconds": 60,
     }
     profiler.did_all_workers_stop = Mock()
@@ -43,7 +44,7 @@ def test_flow_retention_runs_in_bounded_background_pass() -> None:
         profiler._run_flow_retention()
 
     profiler.db.maintain_flow_retention.assert_called_once_with(
-        9913600, 7408000, batch_size=500
+        9913600, 7408000, batch_size=500, max_size_bytes=512 * 1024 * 1024
     )
     profiler.db.remove_flow_index_uids.assert_called_once_with(["old-flow"])
 

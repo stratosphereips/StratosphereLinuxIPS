@@ -1279,7 +1279,7 @@ class ModuleFactory:
         ):
             handler = EvidenceHandler(
                 logger=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1325,7 +1325,7 @@ class ModuleFactory:
         ):
             worker = EvidenceHandlerWorker(
                 logger=self.logger,
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1373,7 +1373,7 @@ class ModuleFactory:
             handler = EvidenceLogger(
                 logger_stop_signal=Mock(),
                 evidence_logger_q=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
             )
         return handler
 

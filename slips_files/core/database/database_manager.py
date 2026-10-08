@@ -1655,6 +1655,12 @@ class DBManager:
     def get_authenticated_p2p_connections(self, *args, **kwargs):
         return self.rdb.get_authenticated_p2p_connections(*args, **kwargs)
 
+    def clear_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.clear_authenticated_p2p_connections(*args, **kwargs)
+
+    def refresh_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.refresh_authenticated_p2p_connections(*args, **kwargs)
+
     def del_stale_p2p_connections(self, *args, **kwargs):
         return self.rdb.del_stale_p2p_connections(*args, **kwargs)
 

@@ -220,6 +220,8 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         section = app_source.split("async function loadAlerts()", 1)[1].split(
             "async function loadEvidence()", 1
         )[0]
+        assert '["Network", null]' in section
+        assert "networkContext(row)" in section
         assert '["Peak Slips score", "score"]' in section
         assert '["Slips score", "score"]' in section
         assert "(row) => slipsScore(row)" in section
@@ -227,6 +229,8 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         section = app_source.split("async function loadEvidence()", 1)[
             1
         ].split("async function loadFirewall()", 1)[0]
+        assert '["Network", null]' in section
+        assert "networkContext(row)" in section
         assert '["Peak Slips score", "score"]' in section
         assert '["Slips score", "score"]' in section
         assert "(row) => slipsScore(row)" in section
@@ -770,6 +774,58 @@ def test_historical_host_network_can_be_named_explicitly(
         reader.save_profile_network_name(
             "192.168.1.20", "run:old-run", "x" * 81
         )
+
+
+def test_detection_network_is_resolved_by_event_time(tmp_path: Path) -> None:
+    """Resolve historical detections to the network seen at their timestamp.
+
+    Parameters:
+        tmp_path: Isolated permanent profile database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    HostProfileStore(path, "run-one", lambda _: {}, [])
+    with sqlite3.connect(path) as connection:
+        connection.executemany(
+            "INSERT INTO hosts VALUES (?, ?, ?, ?, ?)",
+            [
+                ("gateway:aa:aa:aa:aa:aa:aa", "192.168.1.20", "Old Wi-Fi", 100, 200),
+                ("gateway:bb:bb:bb:bb:bb:bb", "192.168.1.20", "New Wi-Fi", 300, 400),
+            ],
+        )
+        connection.execute(
+            "INSERT INTO network_names VALUES (?, ?)",
+            ("gateway:bb:bb:bb:bb:bb:bb", "Current Wi-Fi"),
+        )
+
+    assert HostProfileStore.network_for_observation(
+        path, "192.168.1.20", 150
+    ) == {
+        "network_id": "gateway:aa:aa:aa:aa:aa:aa",
+        "network_name": "",
+        "network_label": "Old Wi-Fi",
+    }
+    assert HostProfileStore.network_for_observation(
+        path, "192.168.1.20", 350
+    ) == {
+        "network_id": "gateway:bb:bb:bb:bb:bb:bb",
+        "network_name": "Current Wi-Fi",
+        "network_label": "Current Wi-Fi",
+    }
+    assert HostProfileStore.network_for_observation(
+        path, "192.168.1.20", 250
+    )["network_label"] == "Unknown network (not recorded)"
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+    grouped_item = {
+        "profile_ip": "192.168.1.20",
+        "first_timestamp": 150,
+        "timestamp": 350,
+    }
+    reader._annotate_detection_networks(
+        [grouped_item], "profile_ip", "timestamp", "first_timestamp"
+    )
+    assert grouped_item["network_label"] == "Multiple networks"
 
 
 @pytest.mark.parametrize(
@@ -2288,6 +2344,21 @@ def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
     assert result["items"][0]["id"] == "current"
 
 
+def test_live_range_uses_wall_clock_for_interface_runs(mocker) -> None:
+    """Keep stale detections outside the live window during an idle capture."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "interface"
+    mocker.patch("modules.web_interface.server.time.time", return_value=10_000)
+
+    start, end, range_name = reader._time_bounds(
+        {"range": ["live"]}, latest_event=7_000
+    )
+
+    assert (start, end, range_name) == (6_400, 10_000, "live")
+
+
 def test_host_load_reports_directional_flows_and_bytes(tmp_path) -> None:
     """Test host totals separate inbound, outbound, and internal traffic."""
     _module_factory = ModuleFactory()
@@ -2357,7 +2428,7 @@ def test_host_score_history_reports_peaks_resets_and_missing_coverage(
     assert [point["reset_reason"] for point in result["timeline"]] == [
         "",
         "",
-        "score reset after an alert",
+        "score decreased (possible reset)",
         "time window changed",
     ]
 
@@ -3329,6 +3400,77 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     ]
 
 
+def test_p2p_marks_recently_active_message_sender_online(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Show peers online for a short period after their latest message."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    now = time.time()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": str(now - 60)},
+        "peer_info": {
+            "QmSlowPeer": json.dumps(
+                {
+                    "ip": "192.0.2.40",
+                    "connected": True,
+                    "last_activity": now - 30,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["connected"] == 1
+    assert result["peers"][0]["peer_id"] == "QmSlowPeer"
+    assert result["peers"][0]["connected"] is True
+
+
+def test_p2p_does_not_show_failed_connection_as_online(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep a recent failed dial offline until authenticated activity arrives."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    now = time.time()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": str(now - 60)},
+        "peer_info": {
+            "QmFailedPeer": json.dumps(
+                {
+                    "ip": "192.0.2.41",
+                    "connected": False,
+                    "last_activity": now - 1,
+                }
+            )
+        },
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["connected"] == 0
+    assert result["peers"][0]["connected"] is False
+
+
 @pytest.mark.parametrize(
     "connected_peers,peer_state,expected",
     [
@@ -3384,7 +3526,7 @@ def test_p2p_uses_legacy_connectivity_without_connection_updates(
                     "connected": True,
                     "ip": "192.0.2.20",
                     "reliability": 1.0,
-                    "timestamp": 1649445643,
+                    "timestamp": time.time(),
                 }
             )
         },

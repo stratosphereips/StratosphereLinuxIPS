@@ -60,6 +60,7 @@ MAX_FLOW_LIMIT = 1000
 MAX_CHART_POINTS = 1200
 CLIENT_REQUEST_TIMEOUT_SECONDS = 15
 BACKEND_HEARTBEAT_TIMEOUT_SECONDS = 15
+P2P_RECENT_ACTIVITY_SECONDS = 15 * 60
 INTERNAL_PID_NAMES = {
     "web_interface_history",
     "web_interface_detection_backfill",
@@ -1086,14 +1087,13 @@ class RunDataReader:
         except ValueError:
             return default
 
-    @classmethod
     def _time_bounds(
-        cls,
+        self,
         query: Dict[str, List[str]],
         latest_event: Optional[float] = None,
     ) -> tuple[Optional[float], Optional[float], str]:
         """
-        Resolve named or custom time bounds against the data clock.
+        Resolve time bounds against the active run or capture clock.
 
         Parameters:
             query: Request query-string values.
@@ -1102,19 +1102,28 @@ class RunDataReader:
         Returns:
             Start, end, and normalized range name.
         """
-        range_name = cls._query_value(query, "range", "live")
+        range_name = self._query_value(query, "range", "live")
         now = float(latest_event or time.time())
+        try:
+            input_type = str(
+                getattr(self, "redis", None).hget("analysis", "input_type")
+                or ""
+            ).lower()
+        except (AttributeError, redis.RedisError):
+            input_type = ""
+        if input_type in {"interface", "stdin", "cyst"}:
+            now = time.time()
         if range_name in TIME_RANGES:
             return now - TIME_RANGES[range_name], now, range_name
         if range_name in {"all", "full"}:
             return None, now, "all"
         if range_name == "custom":
             try:
-                start = float(cls._query_value(query, "from"))
+                start = float(self._query_value(query, "from"))
             except ValueError:
                 start = None
             try:
-                end = float(cls._query_value(query, "to"))
+                end = float(self._query_value(query, "to"))
             except ValueError:
                 end = now
             return start, end, "custom"
@@ -1510,6 +1519,7 @@ class RunDataReader:
                 "SELECT profile_ip, evidence_type, "
                 "profile_ip || char(31) || evidence_type AS group_id, "
                 "MAX(evidence_time) AS timestamp, "
+                "MIN(evidence_time) AS first_timestamp, "
                 f"MAX({threat_expression}) AS threat_rank, "
                 f"GROUP_CONCAT(DISTINCT {module_expression}) AS module, "
                 "COUNT(*) AS evidence_count, "
@@ -1578,6 +1588,7 @@ class RunDataReader:
                 item.pop("threat_rank")
             )
             item["timestamp"] = float(item["timestamp"] or 0)
+            item["first_timestamp"] = float(item["first_timestamp"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["_evidence_ids"] = [
                 evidence_id
@@ -1599,6 +1610,9 @@ class RunDataReader:
                 )
             )
             items.append(item)
+        self._annotate_detection_networks(
+            items, "profile_ip", "timestamp", "first_timestamp"
+        )
         self._annotate_whitelisted_evidence(items)
         self._annotate_p2p_reporters(items)
         next_cursor = (
@@ -1859,6 +1873,7 @@ class RunDataReader:
             items = records[:limit]
             sort_values = [float(item.get("timestamp") or 0) for item in items]
             has_more = len(records) > limit
+        self._annotate_detection_networks(items, "profile_ip", "timestamp")
         self._annotate_whitelisted_evidence(items)
         self._annotate_p2p_reporters(items)
         next_cursor = (
@@ -1902,6 +1917,7 @@ class RunDataReader:
             items = [
                 self._durable_evidence_row(connection, row) for row in rows
             ]
+            self._annotate_detection_networks(items, "profile_ip", "timestamp")
             self._annotate_whitelisted_evidence(items)
             return items
         profile_id = f"profile_{alert.get('ip_alerted', '')}"
@@ -1916,6 +1932,7 @@ class RunDataReader:
         )
         by_id = {item["id"]: item for item in self._redis_evidence()}
         items = [by_id[item] for item in ids if item in by_id][:maximum]
+        self._annotate_detection_networks(items, "profile_ip", "timestamp")
         self._annotate_whitelisted_evidence(items)
         return items
 
@@ -2005,6 +2022,7 @@ class RunDataReader:
             grouped_sql = (
                 "SELECT ip_alerted, ip_alerted AS group_id, "
                 "MAX(CAST(alert_time AS REAL)) AS alert_time, "
+                "MIN(CAST(alert_time AS REAL)) AS first_alert_time, "
                 f"MAX({threat_expression}) AS threat_rank, "
                 "COUNT(*) AS alert_count, "
                 f"SUM({evidence_expression}) AS evidence_count, "
@@ -2059,6 +2077,7 @@ class RunDataReader:
                 item.pop("threat_rank")
             )
             item["alert_time"] = float(item["alert_time"] or 0)
+            item["first_alert_time"] = float(item["first_alert_time"] or 0)
             item["alert_count"] = int(item["alert_count"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
             item["label"] = str(item.pop("labels") or "")
@@ -2071,6 +2090,9 @@ class RunDataReader:
             )
             item.update(self._ip_context_for_ip(str(item["ip_alerted"])))
             items.append(item)
+        self._annotate_detection_networks(
+            items, "ip_alerted", "alert_time", "first_alert_time"
+        )
         next_cursor = (
             self._encode_cursor(rows[-1]["sort_value"], str(items[-1]["id"]))
             if has_more and items
@@ -2222,6 +2244,9 @@ class RunDataReader:
                     )
                 alert.update(self._ip_context_for_ip(str(alert["ip_alerted"])))
                 items.append(alert)
+            self._annotate_detection_networks(
+                items, "ip_alerted", "alert_time"
+            )
         next_cursor = (
             self._encode_cursor(
                 sort_values[-1],
@@ -3033,6 +3058,57 @@ class RunDataReader:
             "ti_feeds": ti_feeds,
         }
 
+    def _annotate_detection_networks(
+        self,
+        items: List[Dict[str, Any]],
+        ip_field: str,
+        time_field: str,
+        start_field: str = "",
+    ) -> None:
+        """Attach the saved network identity for each detection timestamp.
+
+        Parameters:
+            items: Detection rows returned to the web interface.
+            ip_field: Row field containing the affected host IP.
+            time_field: Row field containing the detection timestamp.
+            start_field: Optional first timestamp for grouped detections.
+        """
+        host_profiles_path = getattr(
+            self,
+            "host_profiles_path",
+            Path("permanent") / "host_profiles" / "hosts.sqlite",
+        )
+        for item in items:
+            context = HostProfileStore.network_for_observation(
+                host_profiles_path,
+                str(item.get(ip_field) or ""),
+                item.get(time_field) or 0,
+            )
+            if start_field and item.get(start_field):
+                first_context = HostProfileStore.network_for_observation(
+                    host_profiles_path,
+                    str(item.get(ip_field) or ""),
+                    item[start_field],
+                )
+                if (
+                    first_context["network_id"]
+                    and context["network_id"]
+                    and first_context["network_id"] != context["network_id"]
+                ):
+                    context = {
+                        "network_id": ",".join(
+                            sorted(
+                                {
+                                    first_context["network_id"],
+                                    context["network_id"],
+                                }
+                            )
+                        ),
+                        "network_name": "",
+                        "network_label": "Multiple networks",
+                    }
+            item.update(context)
+
     def _current_network_profile_first(
         self, ip: str, profiles: List[Dict[str, Any]]
     ) -> List[Dict[str, Any]]:
@@ -3498,7 +3574,10 @@ class RunDataReader:
                 elif float(point.get("score") or 0) < float(
                     previous.get("score") or 0
                 ):
-                    reset_reason = "score reset after an alert"
+                    # A lower persisted sample is consistent with Slips
+                    # resetting the score, but the chart cannot prove why it
+                    # dropped (for example, whether an alert caused it).
+                    reset_reason = "score decreased (possible reset)"
             point["reset_reason"] = reset_reason
             if reset_reason:
                 resets += 1
@@ -4942,11 +5021,19 @@ class RunDataReader:
         if not isinstance(raw_connected, (list, tuple, set)):
             return set()
         connected = {str(peer_id) for peer_id in raw_connected}
-        return {
-            peer_id
-            for peer_id in connected
-            if peer_info.get(peer_id, {}).get("connected") is True
-        }
+        now = time.time()
+        active_peers = set()
+        for peer_id in connected:
+            state = peer_info.get(peer_id, {})
+            timestamp = self._event_timestamp(
+                state.get("last_activity", state.get("timestamp"))
+            )
+            if state.get("connected") is True and (
+                timestamp == 0
+                or now - timestamp <= P2P_RECENT_ACTIVITY_SECONDS
+            ):
+                active_peers.add(peer_id)
+        return active_peers
 
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -4981,6 +5068,18 @@ class RunDataReader:
         ]
         analysis = self.redis.hgetall("analysis")
         run_start = self._event_timestamp(analysis.get("analysis_start"))
+        recent_activity_cutoff = max(
+            time.time() - P2P_RECENT_ACTIVITY_SECONDS,
+            run_start or 0,
+        )
+        for peer_id, info in peer_info.items():
+            last_activity = self._event_timestamp(info.get("last_activity"))
+            if (
+                info.get("connected") is True
+                and last_activity
+                and last_activity >= recent_activity_cutoff
+            ):
+                connected.add(peer_id)
         trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
         trust_range = "all"
         trust_history: List[Dict[str, Any]] = []
@@ -5122,6 +5221,7 @@ class RunDataReader:
                     "last_seen": max(
                         float(peer_seen.get(peer_id, 0)),
                         self._event_timestamp(info.get("timestamp")),
+                        self._event_timestamp(info.get("last_activity")),
                         float(pairing.get("timestamp") or 0),
                         float(reliability.get("timestamp") or 0),
                     ),

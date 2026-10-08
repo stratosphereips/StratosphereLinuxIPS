@@ -211,6 +211,57 @@ def test_check_unknown_port_true_case(mocker):
 
 
 @pytest.mark.parametrize(
+    "saddr, daddr",
+    [
+        ("192.168.1.20", "224.0.0.251"),
+        ("224.0.0.251", "192.168.1.20"),
+        ("192.168.1.20", "ff02::1"),
+        ("192.168.1.20", "255.255.255.255"),
+        ("192.168.1.20", "192.168.1.255"),
+    ],
+)
+def test_broadcast_and_multicast_flows_do_not_create_evidence(
+    saddr: str, daddr: str
+) -> None:
+    """Skip unknown-port and private-IP evidence for broadcast traffic.
+
+    Parameters:
+        saddr: Flow source address.
+        daddr: Flow destination address.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_local_network.return_value = "192.168.1.0/24"
+    conn.set_evidence.unknown_port = Mock()
+    conn.set_evidence.conn_to_private_ip = Mock()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="broadcast-flow",
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="udp",
+        appproto="",
+        sport="12345",
+        dport="12345",
+        spkts=1,
+        dpkts=1,
+        sbytes=10,
+        dbytes=10,
+        smac="",
+        dmac="",
+        state="Established",
+        history="S",
+    )
+
+    assert conn.check_unknown_port(f"profile_{saddr}", twid, flow) is None
+    conn.check_connection_to_local_ip(twid, flow)
+
+    conn.set_evidence.unknown_port.assert_not_called()
+    conn.set_evidence.conn_to_private_ip.assert_not_called()
+
+
+@pytest.mark.parametrize(
     "daddr,dport,proto,dmac,dst_vendor,host_ip,gateway_mac,expected",
     [
         ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", True),

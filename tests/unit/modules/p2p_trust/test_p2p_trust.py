@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import errno
+import ipaddress
 import json
 import os
 import signal
@@ -11,7 +12,7 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from modules.p2p_trust.p2p_trust import Trust
+from modules.p2p_trust.p2p_trust import Trust, netifaces
 from modules.p2p_trust.utils.utils import get_ip_info_from_slips
 from slips_files.common.abstracts.imodule import IModule
 from tests.module_factory import ModuleFactory
@@ -51,11 +52,10 @@ def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
     _module_factory = ModuleFactory()
     trust = create_trust()
     trust.trust_db = Mock()
-    trust.trust_db.get_reports_for_ip.return_value = [
-        ("peer-b", 1, 0.8, 0.9, "8.8.8.8"),
-        ("peer-a", 2, 0.7, 0.9, "8.8.8.8"),
-        ("peer-b", 3, 0.8, 0.9, "8.8.8.8"),
-    ]
+    trust.trust_db.get_reporter_peerids_for_ip.return_value = {
+        "peer-a",
+        "peer-b",
+    }
 
     trust.set_evidence_malicious_ip(
         {
@@ -70,7 +70,9 @@ def test_p2p_evidence_names_reporting_peers(ip_state: str) -> None:
         0.9,
     )
 
-    trust.trust_db.get_reports_for_ip.assert_called_once_with("8.8.8.8")
+    trust.trust_db.get_reporter_peerids_for_ip.assert_called_once_with(
+        "8.8.8.8"
+    )
     assert trust.db.set_evidence.call_count == 2
     for call_args in trust.db.set_evidence.call_args_list:
         assert "Reported by peers: peer-a, peer-b." in call_args.args[0].description
@@ -209,20 +211,72 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert executable[rendezvous_index + 1] == trust.rendezvous
     version_index = executable.index("-slips-version")
     assert executable[version_index + 1] == trust.slips_version
+    host_index = executable.index("-host")
+    assert executable[host_index + 1] == "0.0.0.0"
     assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"
     assert mock_popen.call_args.kwargs["stderr"] == subprocess.STDOUT
 
 
+def test_pigeon_command_bootstraps_to_authenticated_peers_on_current_subnet():
+    """Use saved peer ID and endpoint mappings when mDNS misses peers."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.port = 6668
+    trust.host = "192.168.1.163"
+    trust.trust_db = Mock()
+    trust.trust_db.get_recent_peer_addresses.return_value = [
+        ("peer-current", "192.168.1.196", 6669, 100),
+        ("peer-other-network", "10.0.0.5", 6668, 99),
+    ]
+    trust.trust_db.get_recent_peer_ips.return_value = [
+        ("peer-current", "192.168.1.196", 100),
+        ("peer-legacy", "192.168.1.170", 98),
+    ]
+    trust._get_local_subnets = Mock(
+        return_value={ipaddress.ip_network("192.168.1.0/24")}
+    )
+
+    peers = trust._get_bootstrap_peer_addresses()
+
+    assert peers == [
+        "/ip4/192.168.1.196/tcp/6669/p2p/peer-current",
+        "/ip4/192.168.1.170/tcp/6668/p2p/peer-legacy",
+    ]
+
+
+def test_local_subnets_include_interfaces_other_than_capture_interface():
+    """Include directly connected LANs on secondary interfaces for P2P."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.args = SimpleNamespace(interface="en0")
+    addresses = {
+        "en0": {netifaces.AF_INET: [{"addr": "192.168.12.24", "netmask": "255.255.255.0"}]},
+        "en16": {netifaces.AF_INET: [{"addr": "192.168.1.132", "netmask": "255.255.255.0"}]},
+        "lo0": {netifaces.AF_INET: [{"addr": "127.0.0.1", "netmask": "255.0.0.0"}]},
+    }
+    with (
+        patch("modules.p2p_trust.p2p_trust.netifaces.interfaces", return_value=list(addresses)),
+        patch("modules.p2p_trust.p2p_trust.netifaces.ifaddresses", side_effect=lambda name: addresses[name]),
+    ):
+        assert trust._get_local_subnets() == {
+            ipaddress.ip_network("192.168.12.0/24"),
+            ipaddress.ip_network("192.168.1.0/24"),
+        }
+
+
 @pytest.mark.parametrize(
-    "stdout,stderr,expected",
+    "flag,stdout,stderr,expected",
     [
-        ("  -slips-version string\n", "", True),
-        ("", "  -slips-version string\n", True),
-        ("  -rendezvous string\n", "", False),
+        ("-slips-version", "  -slips-version string\n", "", True),
+        ("-slips-version", "", "  -slips-version string\n", True),
+        ("-bootstrap-peers", "  -bootstrap-peers string\n", "", True),
+        ("-slips-version", "  -rendezvous string\n", "", False),
     ],
 )
 def test_pigeon_supports_flag(
-    stdout: str, stderr: str, expected: bool
+    flag: str, stdout: str, stderr: str, expected: bool
 ) -> None:
     """Detect supported Pigeon flags from stdout or stderr help text.
 
@@ -238,7 +292,7 @@ def test_pigeon_supports_flag(
     with patch(
         "modules.p2p_trust.p2p_trust.subprocess.run", return_value=result
     ) as run:
-        assert trust._pigeon_supports_flag("-slips-version") is expected
+        assert trust._pigeon_supports_flag(flag) is expected
 
     run.assert_called_once_with(
         [str(trust.pigeon_binary), "-help"],
@@ -551,6 +605,31 @@ def test_stop_pigeon_waits_for_child_exit() -> None:
     pigeon.send_signal.assert_called_once_with(signal.SIGINT)
     pigeon.wait.assert_called_once_with(timeout=5)
     assert trust.pigeon is None
+
+
+def test_pigeon_restarts_when_monitored_interface_address_changes() -> None:
+    """Rebind Pigeon and clear stale live peers after a Wi-Fi change."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.host = "192.168.1.247"
+    trust.last_local_ip_check = 0
+    trust.local_ip_check_interval = 5
+    trust.pigeon = Mock()
+    trust.mutliaddress_printed = True
+    trust.get_local_IP = Mock(return_value="192.168.1.163")
+    trust._stop_pigeon = Mock()
+    trust._start_pigeon = Mock()
+
+    with patch("modules.p2p_trust.p2p_trust.time.monotonic", return_value=10):
+        trust._refresh_pigeon_address()
+
+    assert trust.host == "192.168.1.163"
+    assert trust.mutliaddress_printed is False
+    trust._stop_pigeon.assert_called_once_with()
+    trust.db.clear_authenticated_p2p_connections.assert_called_once_with()
+    trust.db.store_connected_peers.assert_called_once_with([])
+    trust._start_pigeon.assert_called_once_with()
 
 
 def test_run_stops_pigeon_after_unexpected_module_exit() -> None:

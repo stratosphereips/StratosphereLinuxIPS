@@ -1402,12 +1402,12 @@ function configureTable(name, layout, headers, loader) {
 async function loadAlerts() {
   const grouped = byId("alerts-view").value === "grouped";
   configureTable("alerts", grouped ? "grouped" : "individual", grouped ? [
-    ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
+    ["Latest", "time"], ["Host", "host"], ["Network", null], ["Highest threat", "threat"],
     ["Peak Slips score", "score"],
     ["Name / domain", null], ["TI feeds", null],
     ["Alerts", "alerts"], ["Evidence links", "evidence"], ["Labels", "label"],
   ] : [
-    ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
+    ["Time", "time"], ["Host", "host"], ["Network", null], ["Threat", "threat"],
     ["Slips score", "score"],
     ["TW", "tw"], ["Window start", "tw_start"], ["Window end", "tw_end"],
     ["Name / domain", null], ["TI feeds", null], ["Label", "label"],
@@ -1422,6 +1422,7 @@ async function loadAlerts() {
   if (grouped) {
     renderTable("alerts-table", payload.items, [
       (row) => formatTime(row.alert_time), (row) => hostIdentity(row.ip_alerted),
+      (row) => networkContext(row),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => contextName(row),
       (row) => tiFeeds(row), (row) => compact(row.alert_count),
@@ -1430,6 +1431,7 @@ async function loadAlerts() {
   } else {
     renderTable("alerts-table", payload.items, [
       (row) => formatTime(row.alert_time), (row) => hostIdentity(row.ip_alerted),
+      (row) => networkContext(row),
       (row) => threat(row.threat_level),
       (row) => slipsScore(row),
       (row) => text("code", row.timewindow || "—"),
@@ -1444,12 +1446,12 @@ async function loadAlerts() {
 async function loadEvidence() {
   const grouped = byId("evidence-view").value === "grouped";
   configureTable("evidence", grouped ? "grouped" : "individual", grouped ? [
-    ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
+    ["Latest", "time"], ["Host", "host"], ["Network", null], ["Highest threat", "threat"],
     ["Peak Slips score", "score"],
     ["Type", "type"], ["Reporting peers", null], ["Module", "module"], ["Evidence", "evidence"],
     ["Flows", "flows"], ["Alert links", "alert"], ["Score handling", null],
   ] : [
-    ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
+    ["Time", "time"], ["Host", "host"], ["Network", null], ["Threat", "threat"],
     ["Slips score", "score"],
     ["Type", "type"], ["Reporting peers", null], ["Module", "module"], ["Score handling", null], ["Flows", "flows"],
     ["Alerts", "alert"], ["Description", null],
@@ -1467,6 +1469,7 @@ async function loadEvidence() {
   if (grouped) {
     renderTable("evidence-table", payload.items, [
       (row) => formatTime(row.timestamp), (row) => hostIdentity(row.profile_ip),
+      (row) => networkContext(row),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => text("code", row.evidence_type),
       (row) => reportingPeers(row),
@@ -1478,6 +1481,7 @@ async function loadEvidence() {
   } else {
     renderTable("evidence-table", payload.items, [
       (row) => formatTime(row.timestamp), (row) => hostIdentity(row.profile_ip),
+      (row) => networkContext(row),
       (row) => threat(row.threat_level), (row) => slipsScore(row),
       (row) => text("code", row.evidence_type),
       (row) => reportingPeers(row),
@@ -1846,6 +1850,14 @@ function contextName(record) {
   const source = record.dns_name_source || "No cached DNS context";
   const element = text("code", value);
   element.title = source;
+  return element;
+}
+
+/** Show the saved network where a detection occurred. */
+function networkContext(record) {
+  const label = record.network_label || "Unknown network (not recorded)";
+  const element = text("span", label);
+  if (record.network_id) element.title = record.network_id;
   return element;
 }
 
@@ -2458,6 +2470,7 @@ async function openEvidence(record) {
     investigationStats([
       ["Detected", formatTime(record.timestamp)],
       ["Profile host", hostLink(record.profile_ip)],
+      ["Network", networkContext(record)],
       ["Threat", threat(record.threat_level)],
       ["Slips score", slipsScore(record), "accent"],
       ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`, "accent"],
@@ -2566,6 +2579,7 @@ async function openAlert(record) {
     investigationStats([
       ["Created", formatTime(record.alert_time)],
       ["Affected host", hostLink(record.ip_alerted)],
+      ["Network", networkContext(record)],
       ["Highest threat", threat(record.threat_level)],
       ["Slips score", slipsScore(record), "danger"],
       ["Evidence", compact(record.evidence_count), "accent"],
@@ -3160,7 +3174,7 @@ async function loadLegacyScoreHistory(params) {
     point.reset_reason = previous && point.timewindow !== previous.timewindow
       ? "time window changed"
       : previous && point.score < previous.score
-        ? "score reset after an alert"
+        ? "score decreased (possible reset)"
         : "";
     if (point.reset_reason) resetCount += 1;
     previous = point;
