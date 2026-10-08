@@ -85,6 +85,12 @@ peer message also marks its authenticated sender active for 15 minutes. A
 disconnect removes the connection immediately; the active list is cleared
 when the P2P module starts and stops.
 
+At startup, the P2P trust database migrates older peer address records to
+keep the newest endpoint for each peer. This lets existing installations use
+authenticated endpoint updates without resetting their trust history. If
+SQLite is temporarily locked during report compaction, P2P retries the
+compaction later and keeps the peer online.
+
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
 You don't have to do anything in particular for the P2P module to work, just enable it and Slips will:
