@@ -127,7 +127,7 @@ Slips cannot identify the network, it keeps that address under the run's
 output directory identity so unrelated networks do not merge. Local profiles
 for the same IP appear as separate network sections in the Host workspace.
 Each section heading is explicitly labeled **Network**; its saved network name
-is separate from the host's **Your name** field. The current network's profile
+is separate from the host's **Custom name** field. The current network's profile
 is shown first even if a recent run temporarily missed the router.
 The database stores at most 200 distinct values per clue type per host and
 network. Existing run history is not imported automatically; new observations
@@ -441,7 +441,8 @@ profile for an address Slips ignored.
 
 Selecting a host opens a full-width workspace with:
 
-- a **Name this host** button beside **Your name** and **Your note** in the Identity and DNS card. It edits the current network's permanent host profile; editors for older network profiles remain in the Permanent host profile section. A saved user name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Clearing both fields removes the annotation. Local IPs on different networks keep separate annotations; public IPs use their public profile;
+- a **Name this host** button beside **Custom name** and **Custom note** in the Identity and DNS card. It edits the current network's permanent host profile; editors for older network profiles remain in the Permanent host profile section. A saved custom name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Clearing both fields removes the annotation. Local IPs on different networks keep separate annotations; public IPs use their public profile;
+- a **Displayed name** row showing the name beside the IP and its source, such as `rpi-slips · reverse DNS`. This name may be learned from DNS or another source. **Custom name** shows only the name you saved manually, so a detected name does not appear there;
 - MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
