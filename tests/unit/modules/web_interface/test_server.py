@@ -789,8 +789,20 @@ def test_detection_network_is_resolved_by_event_time(tmp_path: Path) -> None:
         connection.executemany(
             "INSERT INTO hosts VALUES (?, ?, ?, ?, ?)",
             [
-                ("gateway:aa:aa:aa:aa:aa:aa", "192.168.1.20", "Old Wi-Fi", 100, 200),
-                ("gateway:bb:bb:bb:bb:bb:bb", "192.168.1.20", "New Wi-Fi", 300, 400),
+                (
+                    "gateway:aa:aa:aa:aa:aa:aa",
+                    "192.168.1.20",
+                    "Old Wi-Fi",
+                    100,
+                    200,
+                ),
+                (
+                    "gateway:bb:bb:bb:bb:bb:bb",
+                    "192.168.1.20",
+                    "New Wi-Fi",
+                    300,
+                    400,
+                ),
             ],
         )
         connection.execute(
@@ -812,9 +824,12 @@ def test_detection_network_is_resolved_by_event_time(tmp_path: Path) -> None:
         "network_name": "Current Wi-Fi",
         "network_label": "Current Wi-Fi",
     }
-    assert HostProfileStore.network_for_observation(
-        path, "192.168.1.20", 250
-    )["network_label"] == "Unknown network (not recorded)"
+    assert (
+        HostProfileStore.network_for_observation(path, "192.168.1.20", 250)[
+            "network_label"
+        ]
+        == "Unknown network (not recorded)"
+    )
     reader = RunDataReader.__new__(RunDataReader)
     reader.host_profiles_path = path
     grouped_item = {
@@ -826,6 +841,75 @@ def test_detection_network_is_resolved_by_event_time(tmp_path: Path) -> None:
         [grouped_item], "profile_ip", "timestamp", "first_timestamp"
     )
     assert grouped_item["network_label"] == "Multiple networks"
+
+
+def test_detection_network_uses_capture_state_between_host_sightings(
+    tmp_path: Path,
+) -> None:
+    """Attribute local detections from interface history across sparse flows.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    HostProfileStore(path, "test-run", lambda _: {}, [])
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO hosts VALUES (?, ?, ?, ?, ?)",
+            ("gateway:aa:aa:aa:aa:aa:aa", "192.168.1.20", "Old", 100, 100),
+        )
+        connection.executemany(
+            "INSERT INTO network_names VALUES (?, ?)",
+            [
+                ("gateway:aa:aa:aa:aa:aa:aa", "Home Wi-Fi"),
+                ("gateway:bb:bb:bb:bb:bb:bb", "Guest Wi-Fi"),
+            ],
+        )
+    old = {
+        "connected": True,
+        "changed_at": 50,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "aa:aa:aa:aa:aa:aa",
+    }
+    current = {
+        "connected": True,
+        "changed_at": 150,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "bb:bb:bb:bb:bb:bb",
+        "history": [old],
+    }
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = path
+    reader.output_dir = Path("output/test-run")
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"en0": json.dumps(current)}
+    reader.redis.hget.return_value = "123"
+    items = [
+        {"profile_ip": "192.168.1.20", "timestamp": 140},
+        {"profile_ip": "192.168.1.20", "timestamp": 175},
+        {"profile_ip": "fe80::1234", "timestamp": 175},
+        {
+            "profile_ip": "192.168.1.20",
+            "first_timestamp": 140,
+            "timestamp": 175,
+        },
+        {"profile_ip": "192.168.1.20", "timestamp": 25},
+        {"profile_ip": "10.0.0.20", "timestamp": 175},
+    ]
+
+    reader._annotate_detection_networks(
+        items, "profile_ip", "timestamp", "first_timestamp"
+    )
+
+    assert [item["network_label"] for item in items] == [
+        "Home Wi-Fi",
+        "Guest Wi-Fi",
+        "Guest Wi-Fi",
+        "Multiple networks",
+        "Unknown network (not recorded)",
+        "Unknown network (not recorded)",
+    ]
 
 
 @pytest.mark.parametrize(
@@ -2019,8 +2103,26 @@ def test_arp_evidence_exclusion_filter(
         connection.executemany(
             "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
             [
-                ("scored", 1, "10.0.0.8", "high", "MITM_ARP_ATTACK", "Scored ARP", 0.9, 0),
-                ("excluded", 2, "10.0.0.8", "high", "MITM_ARP_ATTACK", "Excluded ARP", 0.9, 1),
+                (
+                    "scored",
+                    1,
+                    "10.0.0.8",
+                    "high",
+                    "MITM_ARP_ATTACK",
+                    "Scored ARP",
+                    0.9,
+                    0,
+                ),
+                (
+                    "excluded",
+                    2,
+                    "10.0.0.8",
+                    "high",
+                    "MITM_ARP_ATTACK",
+                    "Excluded ARP",
+                    0.9,
+                    1,
+                ),
             ],
         )
 
@@ -2028,7 +2130,9 @@ def test_arp_evidence_exclusion_filter(
 
     assert result["total"] == len(expected_descriptions)
     assert result["counts"] == {"MITM_ARP_ATTACK": len(expected_descriptions)}
-    assert [item["description"] for item in result["items"]] == expected_descriptions
+    assert [
+        item["description"] for item in result["items"]
+    ] == expected_descriptions
 
 
 def test_arp_poisoning_summarizes_current_module_state(tmp_path: Path) -> None:

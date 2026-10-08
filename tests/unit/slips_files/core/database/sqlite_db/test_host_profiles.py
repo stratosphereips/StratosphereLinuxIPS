@@ -98,7 +98,40 @@ def test_profiles_persist_across_runs_and_separate_private_networks(
     }
 
 
-def test_user_annotation_persists_for_exact_network_host(tmp_path: Path) -> None:
+def test_ipv6_link_local_uses_the_captured_network(tmp_path: Path) -> None:
+    """Keep link-local hosts on the interface's known router network.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {
+        "interface": "en0",
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "AA:BB:CC:DD:EE:01",
+    }
+    store = HostProfileStore(path, "run-one", lambda _: state, ["en0"])
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime="100",
+            type_="conn",
+            saddr="fe80::1234",
+            daddr="fe80::5678",
+        )
+    )
+
+    profile = HostProfileStore.read(path, "fe80::1234")[0]
+    assert profile["network_id"] == "gateway:aa:bb:cc:dd:ee:01"
+    assert profile["network_label"] == (
+        "Link-local on en0 · router aa:bb:cc:dd:ee:01"
+    )
+
+
+def test_user_annotation_persists_for_exact_network_host(
+    tmp_path: Path,
+) -> None:
     """Keep a manual name and note separate for reused private IPs.
 
     Parameters:
@@ -113,8 +146,11 @@ def test_user_annotation_persists_for_exact_network_host(tmp_path: Path) -> None
     store = HostProfileStore(path, "run-one", lambda _: state, ["en0"])
     store.observe_flow(
         SimpleNamespace(
-            interface="en0", starttime="100", type_="conn",
-            saddr="192.168.1.20", daddr="8.8.8.8",
+            interface="en0",
+            starttime="100",
+            type_="conn",
+            saddr="192.168.1.20",
+            daddr="8.8.8.8",
         )
     )
     network_id = "gateway:aa:bb:cc:dd:ee:01"
@@ -126,8 +162,11 @@ def test_user_annotation_persists_for_exact_network_host(tmp_path: Path) -> None
     another = HostProfileStore(path, "run-two", lambda _: state, ["en0"])
     another.observe_flow(
         SimpleNamespace(
-            interface="en0", starttime="200", type_="conn",
-            saddr="192.168.1.20", daddr="8.8.8.8",
+            interface="en0",
+            starttime="200",
+            type_="conn",
+            saddr="192.168.1.20",
+            daddr="8.8.8.8",
         )
     )
     profiles = HostProfileStore.read(path, "192.168.1.20")
@@ -324,9 +363,7 @@ def test_country_facts_are_real_public_geolocations(
     )
     profile = HostProfileStore.read(path, ip)[0]
     saved_countries = {
-        fact["value"]
-        for fact in profile["facts"]
-        if fact["kind"] == "country"
+        fact["value"] for fact in profile["facts"] if fact["kind"] == "country"
     }
     assert saved_countries == ({country} if expected_country else set())
 

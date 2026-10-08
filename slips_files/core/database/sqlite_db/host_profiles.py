@@ -405,6 +405,17 @@ class HostProfileStore:
                 self.network_id_for_state(state, self.run_name),
                 f"{network} · router {gateway_mac}",
             )
+        if (
+            address.version == 6
+            and address.is_link_local
+            and state.get("gateway_mac")
+        ):
+            gateway_mac = str(state["gateway_mac"]).lower()
+            return (
+                normalized,
+                self.network_id_for_state(state, self.run_name),
+                f"Link-local on {state.get('interface') or interface} · router {gateway_mac}",
+            )
         return (
             normalized,
             self.network_id_for_state({}, self.run_name),
