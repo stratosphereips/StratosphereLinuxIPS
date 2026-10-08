@@ -34,7 +34,9 @@ def test_sqlite_lockfile_is_world_writable(tmp_path):
     locks_dir = tmp_path / "locks"
     locks_dir.mkdir()
 
-    with patch("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)):
+    with patch(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(locks_dir)
+    ):
         db = SQLiteDB(logger, str(tmp_path), 12345)
 
     assert locks_dir.exists()
@@ -230,11 +232,43 @@ def test_size_retention_prunes_oldest_row_across_flow_tables(db) -> None:
         "tw-1",
     )
 
-    deleted = db._prune_for_size(db.conn.cursor(), 1, linked_only=False)
+    deleted = db._prune_for_size(
+        db.conn.cursor(), 1, linked_only=False, linked_size_cutoff=1000.0
+    )
 
     assert deleted == {"flows": ["old-connection"], "altflows": []}
     assert db.get_count("flows") == 0
     assert db.get_count("altflows") == 1
+
+
+def test_size_retention_protects_recent_evidence_flows(db) -> None:
+    """Keep linked flow records younger than ordinary flow retention."""
+    _module_factory = ModuleFactory()
+    for uid, event_time in (("old-linked", 50), ("recent-linked", 150)):
+        db.execute(
+            "INSERT INTO flows (uid, flow, event_time) VALUES (?, ?, ?)",
+            (uid, "{}", event_time),
+        )
+        db.execute(
+            "INSERT INTO evidence (evidence_id, whitelisted) VALUES (?, 0)",
+            (uid,),
+        )
+        db.execute(
+            "INSERT INTO evidence_flows (evidence_id, uid) VALUES (?, ?)",
+            (uid, uid),
+        )
+
+    deleted = db.maintain_flow_retention(
+        ordinary_cutoff=100,
+        linked_cutoff=0,
+        batch_size=10,
+        max_size_bytes=1,
+    )
+
+    assert deleted == ["old-linked"]
+    assert db.get_flow("recent-linked")["recent-linked"] == "{}"
+    assert db.maintain_flow_retention(100, 0, max_size_bytes=1) == []
+    assert db.get_count("flows") == 1
 
 
 def test_retention_backfills_legacy_flow_timestamps(db) -> None:
@@ -283,7 +317,9 @@ def test_retention_backfills_legacy_flow_timestamps(db) -> None:
 def test_retention_removes_only_deleted_uids_from_web_index(db) -> None:
     """Keep historical host traffic totals aligned with retained raw flows."""
     _module_factory = ModuleFactory()
-    history_path = os.path.join(db.output_dir, "web_interface", "history.sqlite")
+    history_path = os.path.join(
+        db.output_dir, "web_interface", "history.sqlite"
+    )
     os.makedirs(os.path.dirname(history_path))
     with sqlite3.connect(history_path) as history:
         history.execute("CREATE TABLE flow_index (uid TEXT PRIMARY KEY)")
@@ -294,7 +330,9 @@ def test_retention_removes_only_deleted_uids_from_web_index(db) -> None:
 
     assert db.remove_flow_index_uids(["expired"]) == 1
     with sqlite3.connect(history_path) as history:
-        assert history.execute("SELECT uid FROM flow_index").fetchall() == [("kept",)]
+        assert history.execute("SELECT uid FROM flow_index").fetchall() == [
+            ("kept",)
+        ]
 
 
 def test_retention_schema_migrates_existing_run_without_vacuum(
@@ -320,8 +358,12 @@ def test_retention_schema_migrates_existing_run_without_vacuum(
         )
     migrated = SQLiteDB(MagicMock(), str(tmp_path), 12345)
 
-    assert {"event_time", "retention_class"}.issubset(migrated.get_columns("flows"))
-    assert {"event_time", "retention_class"}.issubset(migrated.get_columns("altflows"))
+    assert {"event_time", "retention_class"}.issubset(
+        migrated.get_columns("flows")
+    )
+    assert {"event_time", "retention_class"}.issubset(
+        migrated.get_columns("altflows")
+    )
     assert migrated.conn.execute("PRAGMA auto_vacuum").fetchone()[0] == 0
     migrated.close()
 
@@ -411,7 +453,9 @@ def test_get_flows_count_handles_quoted_filters(db):
     db.add_flow(second_flow, 'profile"quoted', "tw-other")
 
     assert db.get_flows_count(profileid='profile"quoted') == 2
-    assert db.get_flows_count(profileid='profile"quoted', twid='tw"quoted') == 1
+    assert (
+        db.get_flows_count(profileid='profile"quoted', twid='tw"quoted') == 1
+    )
 
 
 def test_get_columns_rejects_unknown_tables(db):
@@ -546,7 +590,16 @@ def test_get_whitelisted_evidence_ids_in_tw_scopes_by_ip_and_twid(
     db.mark_evidence_whitelisted("ev3")
     db.mark_evidence_whitelisted("ev4")
 
-    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.1", "timewindow1") == {"ev1"}
-    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.1", "timewindow2") == {"ev3"}
-    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.2", "timewindow1") == {"ev4"}
-    assert db.get_whitelisted_evidence_ids_in_tw("10.0.0.3", "timewindow1") == set()
+    assert db.get_whitelisted_evidence_ids_in_tw(
+        "10.0.0.1", "timewindow1"
+    ) == {"ev1"}
+    assert db.get_whitelisted_evidence_ids_in_tw(
+        "10.0.0.1", "timewindow2"
+    ) == {"ev3"}
+    assert db.get_whitelisted_evidence_ids_in_tw(
+        "10.0.0.2", "timewindow1"
+    ) == {"ev4"}
+    assert (
+        db.get_whitelisted_evidence_ids_in_tw("10.0.0.3", "timewindow1")
+        == set()
+    )

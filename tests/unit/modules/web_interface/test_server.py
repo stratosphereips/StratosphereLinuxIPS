@@ -1312,6 +1312,76 @@ def test_flows_for_evidence_reads_durable_conn_and_altflows(tmp_path) -> None:
     assert group["protocol_flows"][0]["flow"]["rcode_name"] == "NXDOMAIN"
 
 
+def test_flows_for_evidence_recovers_pruned_dga_from_zeek(
+    tmp_path: Path,
+) -> None:
+    """Show recent linked DNS flows after size retention removed SQLite rows.
+
+    Parameters:
+        tmp_path: Isolated output directory and flow database.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE flows (uid TEXT, flow TEXT)")
+        connection.execute("CREATE TABLE altflows (uid TEXT, flow TEXT)")
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO evidence_flows VALUES (?, ?)",
+            ("dga-evidence", "dns-flow "),
+        )
+    logs = tmp_path / "zeek_files"
+    logs.mkdir()
+    (logs / "conn.log").write_text(
+        json.dumps(
+            {
+                "ts": 100,
+                "uid": "dns-flow",
+                "id.orig_h": "192.168.1.135",
+                "id.resp_h": "192.168.1.1",
+                "service": "dns",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (logs / "dns.log").write_text(
+        json.dumps(
+            {
+                "ts": 100,
+                "uid": "dns-flow",
+                "query": "bad.example",
+                "rcode_name": "NXDOMAIN",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    result = reader.flows_for_evidence("dga-evidence")
+
+    assert result["total"] == 1
+    assert result["recovered_flow_count"] == 1
+    assert result["unavailable_flow_count"] == 0
+    group = result["items"][0]
+    assert group["network_flow"]["source"] == "zeek_log"
+    assert group["protocol_flows"][0]["flow_type"] == "dns"
+    assert group["protocol_flows"][0]["flow"]["query"] == "bad.example"
+
+    archive = tmp_path / "web_interface" / "zeek_recovery"
+    archive.mkdir(parents=True)
+    for name in ("conn.log", "dns.log"):
+        (logs / name).rename(archive / name)
+    archived = reader.flows_for_evidence("dga-evidence")
+    assert archived["total"] == 1
+    assert archived["protocol_flow_total"] == 1
+
+
 def test_api_routes_evidence_flow_ids() -> None:
     _module_factory = ModuleFactory()
     handler = RequestHandler.__new__(RequestHandler)
