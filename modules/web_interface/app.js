@@ -959,6 +959,14 @@ function renderOverview() {
 
 /** Show current settings of every monitored network interface. */
 function renderNetworkStates(networkStates) {
+  const runNetwork = byId("run-network");
+  const namedNetworks = networkStates.filter((network) => network.connected && network.name);
+  runNetwork.textContent = namedNetworks.length
+    ? `${namedNetworks.length === 1 ? "Network" : "Networks"}: ${namedNetworks
+      .map((network) => namedNetworks.length === 1
+        ? network.name : `${network.name} (${network.interface})`).join(" · ")}`
+    : "";
+  runNetwork.hidden = !namedNetworks.length;
   const container = byId("network-states");
   if (container.contains(document.activeElement)
       && document.activeElement.closest(".network-name-form")) return;

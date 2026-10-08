@@ -87,7 +87,9 @@ saved history is updated by the Slips main process when it resumes.
 The Current network card also lets you enter a name such as `Home Wi-Fi` or
 `Office Ethernet`. Save an empty name to remove it. Names are stored in the
 permanent host profile database and appear on both the network card and
-matching permanent host profiles. When the router MAC is known, the name
+matching permanent host profiles. The connected network's saved name also
+appears in the top header above the computer's IP addresses and updates when
+you save or change it. When the router MAC is known, the name
 follows that network across Slips runs. If the router MAC is unavailable,
 the card explains that its name is scoped to the current run so two unrelated
 private networks are not combined. For a run with no earlier network changes,
