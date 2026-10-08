@@ -12,7 +12,7 @@ from unittest.mock import Mock, call, patch
 
 import pytest
 
-from modules.p2p_trust.p2p_trust import Trust
+from modules.p2p_trust.p2p_trust import Trust, netifaces
 from modules.p2p_trust.utils.utils import get_ip_info_from_slips
 from slips_files.common.abstracts.imodule import IModule
 from tests.module_factory import ModuleFactory
@@ -211,6 +211,8 @@ def test_start_pigeon_passes_runtime_arguments_to_go():
     assert executable[rendezvous_index + 1] == trust.rendezvous
     version_index = executable.index("-slips-version")
     assert executable[version_index + 1] == trust.slips_version
+    host_index = executable.index("-host")
+    assert executable[host_index + 1] == "0.0.0.0"
     assert mock_popen.call_args.kwargs["cwd"] == "permanent/p2p_trust_runtime"
     assert mock_popen.call_args.kwargs["stderr"] == subprocess.STDOUT
 
@@ -231,8 +233,8 @@ def test_pigeon_command_bootstraps_to_authenticated_peers_on_current_subnet():
         ("peer-current", "192.168.1.196", 100),
         ("peer-legacy", "192.168.1.170", 98),
     ]
-    trust._get_local_subnet = Mock(
-        return_value=ipaddress.ip_network("192.168.1.0/24")
+    trust._get_local_subnets = Mock(
+        return_value={ipaddress.ip_network("192.168.1.0/24")}
     )
 
     peers = trust._get_bootstrap_peer_addresses()
@@ -241,6 +243,27 @@ def test_pigeon_command_bootstraps_to_authenticated_peers_on_current_subnet():
         "/ip4/192.168.1.196/tcp/6669/p2p/peer-current",
         "/ip4/192.168.1.170/tcp/6668/p2p/peer-legacy",
     ]
+
+
+def test_local_subnets_include_interfaces_other_than_capture_interface():
+    """Include directly connected LANs on secondary interfaces for P2P."""
+    module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.logger = module_factory.logger
+    trust.args = SimpleNamespace(interface="en0")
+    addresses = {
+        "en0": {netifaces.AF_INET: [{"addr": "192.168.12.24", "netmask": "255.255.255.0"}]},
+        "en16": {netifaces.AF_INET: [{"addr": "192.168.1.132", "netmask": "255.255.255.0"}]},
+        "lo0": {netifaces.AF_INET: [{"addr": "127.0.0.1", "netmask": "255.0.0.0"}]},
+    }
+    with (
+        patch("modules.p2p_trust.p2p_trust.netifaces.interfaces", return_value=list(addresses)),
+        patch("modules.p2p_trust.p2p_trust.netifaces.ifaddresses", side_effect=lambda name: addresses[name]),
+    ):
+        assert trust._get_local_subnets() == {
+            ipaddress.ip_network("192.168.12.0/24"),
+            ipaddress.ip_network("192.168.1.0/24"),
+        }
 
 
 @pytest.mark.parametrize(

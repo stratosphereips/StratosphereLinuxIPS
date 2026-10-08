@@ -697,7 +697,9 @@ class Trust(IModule):
         """
         params = {
             "-port": str(self.port),
-            "-host": self.host,
+            # Pigeon must accept connections through any local interface;
+            # the monitored capture interface may differ from the LAN.
+            "-host": "0.0.0.0",
             "-rendezvous": self.rendezvous,
             "-key-file": self.pigeon_key_file,
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
@@ -731,9 +733,9 @@ class Trust(IModule):
             return []
 
         try:
-            subnet = self._get_local_subnet()
+            subnets = self._get_local_subnets()
         except (OSError, ValueError):
-            subnet = None
+            subnets = set()
 
         addresses: dict[str, str] = {}
         try:
@@ -745,7 +747,7 @@ class Trust(IModule):
         if isinstance(known_addresses, (list, tuple)):
             for peer_id, address, port, _timestamp in known_addresses:
                 self._add_bootstrap_address(
-                    addresses, str(peer_id), str(address), port, subnet
+                    addresses, str(peer_id), str(address), port, subnets
                 )
 
         try:
@@ -755,7 +757,7 @@ class Trust(IModule):
         if isinstance(known_ips, (list, tuple)):
             for peer_id, address, _timestamp in known_ips:
                 self._add_bootstrap_address(
-                    addresses, str(peer_id), str(address), self.port, subnet
+                    addresses, str(peer_id), str(address), self.port, subnets
                 )
 
         return list(addresses.values())[: self.max_bootstrap_peers]
@@ -766,7 +768,7 @@ class Trust(IModule):
         peer_id: str,
         address: str,
         port: int,
-        subnet: Optional[ipaddress.IPv4Network],
+        subnets: set[ipaddress.IPv4Network],
     ) -> None:
         """Add a valid peer endpoint once, if it belongs to this subnet.
 
@@ -786,36 +788,35 @@ class Trust(IModule):
             return
         if peer_port < 1 or peer_port > 65535:
             return
-        if subnet and peer_ip not in subnet:
+        if subnets and not any(peer_ip in subnet for subnet in subnets):
             return
         if address == getattr(self, "host", ""):
             return
         addresses[peer_id] = f"/ip4/{peer_ip}/tcp/{peer_port}/p2p/{peer_id}"
 
-    def _get_local_subnet(self) -> Optional[ipaddress.IPv4Network]:
-        """Return the monitored interface's IPv4 network when available.
+    def _get_local_subnets(self) -> set[ipaddress.IPv4Network]:
+        """Return directly connected IPv4 networks on local interfaces.
 
         Returns:
-            IPv4 subnet, or None when the interface has no usable netmask.
+            IPv4 subnets for non-loopback interfaces with usable netmasks.
         """
-        interface = getattr(getattr(self, "args", None), "interface", None)
-        if not interface:
-            gateway = (
-                netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
-            )
-            interface = gateway[1] if gateway else None
-        if not interface:
-            return None
-        for entry in netifaces.ifaddresses(interface).get(
-            netifaces.AF_INET, []
-        ):
-            if entry.get("addr") == getattr(self, "host", None) and entry.get(
-                "netmask"
+        subnets = set()
+        for interface in netifaces.interfaces():
+            if interface == "lo0":
+                continue
+            for entry in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
             ):
-                return ipaddress.ip_network(
-                    f"{entry['addr']}/{entry['netmask']}", strict=False
+                address, netmask = entry.get("addr"), entry.get("netmask")
+                if not address or not netmask:
+                    continue
+                local_ip = ipaddress.IPv4Address(address)
+                if local_ip.is_loopback or local_ip.is_link_local:
+                    continue
+                subnets.add(
+                    ipaddress.ip_network(f"{address}/{netmask}", strict=False)
                 )
-        return None
+        return subnets
 
     def process_message_report(
         self, reporter: str, report_time: int, data: dict
