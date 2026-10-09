@@ -856,8 +856,8 @@ this file can be used for training Slips RNN module.
 - ```-l``` or  ```--createlogfiles``` Create log files with all the traffic info and detections.
 - ```-F``` or  ```--pcapfilter``` Packet filter for Zeek. BPF style.
 - ```-cc``` or  ```--clearcache``` Clear the cache database.
-- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.
-- ```-cb``` or  ```--clearblocking``` Flush and delete slipsBlocking iptables chain
+- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Linux uses iptables; macOS uses a dedicated Packet Filter anchor (`com.apple/slips`).
+- ```-cb``` or  ```--clearblocking``` Remove Slips-owned iptables or macOS Packet Filter rules.
 - ```-o``` or  ```--output``` Store alerts.json and alerts.txt in the given folder.
 - ```-s``` or  ```--save``` Save the analysed file db to disk.
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.

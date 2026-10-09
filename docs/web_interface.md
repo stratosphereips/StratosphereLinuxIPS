@@ -370,6 +370,9 @@ destination side carefully. Rules can suppress future evidence and alerts
 (the default), flows, or both. Existing evidence and alerts remain in the
 record. New IP rules become active in running workers within a few seconds.
 Web-added rules appear in the Whitelists table with a **Remove** action.
+Choose an **Evidence type** to limit an IP rule to one detection, for example
+`192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
+only that evidence type; they do not hide its flows or other detections.
 
 The web interface writes these rules beside the configured local whitelist in
 a separate `.web.conf` file. Slips reads that file after the configured
@@ -377,6 +380,8 @@ whitelist on future starts. The shipped `config/whitelist.conf` is never
 modified. Saving changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web
 interface; an unprotected web interface accepts these changes only locally.
+The optional fifth column in a local IP whitelist line is the canonical
+evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN`.
 
 ### Host score history
 

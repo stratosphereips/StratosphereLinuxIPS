@@ -58,6 +58,7 @@ class ARPPoisoner(IModule):
         self.gw_ip: Dict[str, str] = {}
         # keeps track of which interface were blocked ips attacking on
         self.ip_interface_map = {}
+        self.fake_macs: Dict[str, str] = {}
 
     def subscribe_to_channels(self):
         if not self.arp_scan_bin_available:
@@ -139,6 +140,7 @@ class ARPPoisoner(IModule):
 
         for ip in ips_to_stop_poisoning:
             self.unblocker.del_request(ip)
+            self.fake_macs.pop(ip, None)
 
     def _is_time_to_rescan(self) -> bool:
         """
@@ -201,7 +203,9 @@ class ARPPoisoner(IModule):
         # RAW_SOCKET permissions for arp-scan to be able to auto detect the ip
         host_ip = self.db.get_host_ip(interface)
         # sanitize host ip
-        if not ipaddress.ip_address(host_ip):
+        try:
+            ipaddress.IPv4Address(host_ip)
+        except (ValueError, TypeError):
             self.print(
                 f"arp-scan failed: {host_ip} is not a valid IP."
                 f"Using the last cached scan output.",
@@ -243,14 +247,22 @@ class ARPPoisoner(IModule):
         self._adjust_scan_delay_based_on_arp_scan_output(pairs)
         return pairs
 
-    def _get_mac_using_arp(self, ip) -> str | None:
-        """sends an arp asking for the mac of the given ip"""
+    def _get_mac_using_arp(self, ip: str, interface: str) -> str | None:
+        """Resolve a target MAC on its monitored interface.
+
+        Parameters:
+            ip: Target IPv4 address.
+            interface: Interface carrying the target's local network.
+
+        Returns:
+            Resolved MAC address, if an ARP reply arrived.
+        """
         arp = ARP(pdst=ip)
         ether = Ether(dst=BROADCAST_MAC)
         packet = ether / arp
 
         # send the packet and receive response
-        result = srp(packet, timeout=4, verbose=0)[0]
+        result = srp(packet, iface=interface, timeout=4, verbose=0)[0]
 
         if result:
             return result[0][1].hwsrc
@@ -271,7 +283,7 @@ class ARPPoisoner(IModule):
             psrc=target_ip,
             hwsrc=fake_mac,
         )
-        sendp(gratuitous_pkt, verbose=0)
+        sendp(gratuitous_pkt, iface=interface, verbose=0)
 
         # PS: this function doesnt poison own cache. when an attacker is
         # found, FW blocking module handles blocking it through the fw,
@@ -289,7 +301,7 @@ class ARPPoisoner(IModule):
                 psrc=target_ip,
                 hwsrc=fake_mac,
             )
-            sendp(pkt, verbose=0)
+            sendp(pkt, iface=interface, verbose=0)
 
     def _get_gateway_ip(self, interface: str) -> str | None:
         """gets the GW ip using cache, using the DB, or using netifaces"""
@@ -318,6 +330,7 @@ class ARPPoisoner(IModule):
                 f"Unable to cut the internet of attacker at"
                 f" {target_ip}. Gateway IP is not found."
             )
+            return
         # we use replies, not requests, because we wanna answer ARP requests
         # sent to the network instead of waiting for the attacker to answer
         # them.
@@ -338,6 +351,12 @@ class ARPPoisoner(IModule):
         # from it wont reach the victim
         # attacker -> gw: im at a fake mac.
         gateway_mac = self.db.get_gateway_mac(interface)
+        if not gateway_mac:
+            self.print(
+                f"Unable to poison gateway for {target_ip}: "
+                f"gateway MAC on {interface} is unknown."
+            )
+            return
 
         pkt = Ether(dst=gateway_mac) / ARP(
             op=2,
@@ -365,7 +384,15 @@ class ARPPoisoner(IModule):
         based on a new_blocking msg, and should be false when we're
         repoisoning every x seconds.
         """
-        fake_mac = generate_fake_mac()
+        interface: str | None = self._get_interface_of_ip(target_ip)
+        if not interface:
+            self.print(
+                f"Can't get the interface of {target_ip}. "
+                f"Poisoning cancelled."
+            )
+            return
+
+        fake_mac = self.fake_macs.setdefault(target_ip, generate_fake_mac())
 
         # it makes sense here to get the mac using cache, because if we
         # reached this function, means there's an alert, means slips saw
@@ -374,17 +401,9 @@ class ARPPoisoner(IModule):
         target_mac: str = utils.get_mac_for_ip_using_cache(target_ip)
 
         if not target_mac:
-            target_mac: str = self._get_mac_using_arp(target_ip)
+            target_mac: str = self._get_mac_using_arp(target_ip, interface)
             if not target_mac:
                 return
-
-        interface: str | None = self._get_interface_of_ip(target_ip)
-        if not interface:
-            self.print(
-                f"Can't get the interface of {target_ip}. "
-                f"Poisoning cancelled."
-            )
-            return
 
         self._cut_targets_internet(target_ip, target_mac, fake_mac, interface)
         self._isolate_target_from_localnet(target_ip, fake_mac, interface)
@@ -405,11 +424,21 @@ class ARPPoisoner(IModule):
         """
         Checks if the ip is in out localnet, isnt the router
         """
+        if not interface:
+            return False
+        try:
+            target = ipaddress.IPv4Address(ip)
+        except (ValueError, TypeError):
+            return False
         if utils.is_public_ip(ip):
             return False
 
         localnet = self.db.get_local_network(interface)
-        if ipaddress.ip_address(ip) not in ipaddress.ip_network(localnet):
+        try:
+            network = ipaddress.IPv4Network(localnet, strict=False)
+        except (ValueError, TypeError):
+            return False
+        if target not in network:
             return False
 
         if self.is_broadcast(ip, localnet):

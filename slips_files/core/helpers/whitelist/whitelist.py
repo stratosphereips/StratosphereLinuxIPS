@@ -293,6 +293,7 @@ class Whitelist:
                     and ip == entity.value
                     else None
                 ),
+                evidence.evidence_type.name,
             ):
                 return True
 

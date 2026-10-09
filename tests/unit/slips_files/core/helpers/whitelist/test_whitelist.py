@@ -7,10 +7,64 @@ from unittest.mock import MagicMock, patch, Mock, mock_open
 from types import SimpleNamespace
 from slips_files.core.structures.evidence import (
     Direction,
+    EvidenceType,
     IoCType,
     Attacker,
     Victim,
 )
+
+
+@pytest.mark.parametrize(
+    "rule_side, evidence_side, evidence_type, expected",
+    [
+        ("src", Direction.SRC, EvidenceType.ARP_SCAN, True),
+        ("src", Direction.SRC, EvidenceType.DHCP_SCAN, False),
+        ("src", Direction.DST, EvidenceType.ARP_SCAN, False),
+        ("dst", Direction.DST, EvidenceType.ARP_SCAN, True),
+    ],
+)
+def test_alert_type_scoped_ip_rule(
+    rule_side: str,
+    evidence_side: Direction,
+    evidence_type: EvidenceType,
+    expected: bool,
+) -> None:
+    """Match a scoped rule by IP, side, and exact evidence type.
+
+    Parameters:
+        rule_side: Side configured in the whitelist.
+        evidence_side: Side of the evidence entity.
+        evidence_type: Detection type under test.
+        expected: Whether the evidence should be excluded.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(
+        whitelist.parser.parse_line(
+            f"ip,192.0.2.10,{rule_side},alerts,ARP_SCAN"
+        )
+    )
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    entity = Attacker(
+        ioc_type=IoCType.IP,
+        value="192.0.2.10",
+        direction=evidence_side,
+    )
+    evidence = Mock(
+        attacker=entity,
+        victim=None,
+        evidence_type=evidence_type,
+        src_port=None,
+        dst_port=None,
+    )
+
+    assert whitelist.is_whitelisted_evidence(evidence) is expected
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", evidence_side, "flows"
+    )
 
 
 def test_read_whitelist():

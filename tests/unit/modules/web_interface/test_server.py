@@ -480,6 +480,80 @@ def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
     reader.redis.hdel.assert_called_once_with("whitelist_IPs", "192.0.2.4:443")
 
 
+def test_web_whitelist_can_scope_ip_to_alert_type(tmp_path) -> None:
+    """Persist a source IP rule for one detector without hiding flows.
+
+    Parameters:
+        tmp_path: Isolated configured whitelist directory.
+    """
+    factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "whitelist.conf"
+    configured.write_text("", encoding="utf-8")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(
+        return_value={"backend_status": {"connected": True}}
+    )
+
+    saved = reader.save_whitelist_rule(
+        "add", "192.0.2.4", "src", "alerts", "ARP_SCAN"
+    )
+
+    assert saved["evidence_type"] == "ARP_SCAN"
+    managed = tmp_path / "whitelist.conf.web.conf"
+    assert "ip,192.0.2.4,src,alerts,ARP_SCAN" in managed.read_text(
+        encoding="utf-8"
+    )
+    whitelist = factory.create_whitelist_obj()
+    whitelist.parser.local_whitelist_path = str(configured)
+    whitelist.parser.parse()
+    assert (
+        whitelist.parser.whitelisted_ips["192.0.2.4|ARP_SCAN"]["evidence_type"]
+        == "ARP_SCAN"
+    )
+
+    reader.save_whitelist_rule(
+        "remove", "192.0.2.4", "src", "alerts", "ARP_SCAN"
+    )
+    assert "ip,192.0.2.4,src,alerts,ARP_SCAN" not in managed.read_text(
+        encoding="utf-8"
+    )
+    reader.redis.hdel.assert_called_once_with(
+        "whitelist_IPs", "192.0.2.4|ARP_SCAN"
+    )
+
+
+@pytest.mark.parametrize(
+    "ignored, evidence_type",
+    [("flows", "ARP_SCAN"), ("alerts", "NOT_A_DETECTION")],
+)
+def test_web_whitelist_rejects_invalid_alert_scope(
+    ignored: str, evidence_type: str
+) -> None:
+    """Reject scoped flow rules and unknown detector names.
+
+    Parameters:
+        ignored: Requested suppression class.
+        evidence_type: Requested detection name.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+
+    with pytest.raises(ValueError):
+        reader.save_whitelist_rule(
+            "add", "192.0.2.4", "src", ignored, evidence_type
+        )
+
+
 def test_local_web_request_can_add_whitelist_rule() -> None:
     """Route a local JSON request to the whitelist writer."""
     _module_factory = ModuleFactory()
@@ -710,7 +784,9 @@ def test_overview_prioritizes_operational_data() -> None:
     assert '"/api/overview/evidence-counts"' in app_source
     assert "async function loadOverviewEvidenceCounts" in app_source
     assert "document.title = `Slips ${compact" in app_source
-    assert 'api("liveTitleCounts", "/api/live-counts", false, true)' in app_source
+    assert (
+        'api("liveTitleCounts", "/api/live-counts", false, true)' in app_source
+    )
     assert 'path == "/api/live-counts"' in server_source
     assert "updatePageTitle({ alerts: data.counts.alerts" not in app_source
     assert "updatePageTitle({ [name]: payload.full_total" not in app_source
@@ -1446,7 +1522,9 @@ def test_metadata_and_logs_endpoints_are_bounded(tmp_path: Path) -> None:
     assert logs["items"][0]["line"] == "raw line"
 
 
-def test_logs_show_the_final_exception_in_traceback_summary(tmp_path: Path) -> None:
+def test_logs_show_the_final_exception_in_traceback_summary(
+    tmp_path: Path,
+) -> None:
     """Make the cause visible in the log table as well as the raw drawer."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
@@ -1461,14 +1539,16 @@ def test_logs_show_the_final_exception_in_traceback_summary(tmp_path: Path) -> N
                 "brute_force_detector",
                 "Traceback (most recent call last):",
                 "Traceback (most recent call last):\n"
-                "  File \"detector.py\", line 461\n"
+                '  File "detector.py", line 461\n'
                 "RecursionError: maximum recursion depth exceeded",
             ),
         )
 
     item = reader.logs()["items"][0]
-    assert "RecursionError: maximum recursion depth exceeded" in item["message"]
-    assert "  File \"detector.py\", line 461" in item["line"]
+    assert (
+        "RecursionError: maximum recursion depth exceeded" in item["message"]
+    )
+    assert '  File "detector.py", line 461' in item["line"]
 
 
 def test_log_rows_open_the_colored_raw_console() -> None:
@@ -3893,9 +3973,7 @@ def test_p2p_activity_keeps_report_content_from_retained_history(
 
     result = reader.p2p()
 
-    reader.redis.lrange.assert_called_once_with(
-        "p2p_message_history", 0, 999
-    )
+    reader.redis.lrange.assert_called_once_with("p2p_message_history", 0, 999)
     assert result["activity"][0]["message"]["evaluation"] == {
         "score": 0.7,
         "confidence": 0.8,

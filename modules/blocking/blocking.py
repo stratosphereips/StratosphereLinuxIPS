@@ -20,7 +20,7 @@ from .exec_iptables_cmd import (
 )
 from modules.blocking.unblocker import Unblocker
 from modules.blocking.recovery import RecoveryMixin
-
+from modules.blocking.macos_pf import MacOSPF
 
 OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
 
@@ -35,13 +35,17 @@ class Blocking(IModule, RecoveryMixin):
     authors = ["Sebastian Garcia, Alya Gomaa"]
 
     def init(self):
-        if platform.system() == "Darwin":
-            self.print("Mac OS blocking is not supported yet.")
-            sys.exit()
-
-        self.firewall = self._determine_linux_firewall()
         self.sudo = utils.get_sudo_according_to_env()
-        self._init_chains_in_firewall()
+        self.firewall = (
+            "pf"
+            if platform.system() == "Darwin"
+            else self._determine_linux_firewall()
+        )
+        self.pf = (
+            MacOSPF(self.sudo, self.db) if self.firewall == "pf" else None
+        )
+        if self.firewall == "iptables":
+            self._init_chains_in_firewall()
         self.blocking_log_path = self.get_module_specific_output_path(
             "blocking.log"
         )
@@ -292,10 +296,19 @@ class Blocking(IModule, RecoveryMixin):
         returns true if the ip is successfully blocked
         """
 
-        if self.firewall != "iptables":
+        if not isinstance(ip_to_block, str):
             return False
 
-        if not isinstance(ip_to_block, str):
+        if self.firewall == "pf":
+            if not self.pf.block(ip_to_block, flags):
+                self.print(
+                    f"Unable to install PF block for {ip_to_block}.", 0, 1
+                )
+                return False
+            self._store_blocked_ip_ts_in_db(ip_to_block, flags)
+            self.log(f"Blocked {ip_to_block} with macOS PF.")
+            return True
+        if self.firewall != "iptables":
             return False
 
         if self._is_ip_already_blocked(ip_to_block):
@@ -322,9 +335,18 @@ class Blocking(IModule, RecoveryMixin):
             self.print("Problem shutting down unblocker thread.")
 
     def pre_main(self):
-        self._recover_firewall_rules()
+        if self.firewall == "pf":
+            if not self.pf.restore():
+                self.print("Unable to restore macOS PF blocks.", 0, 1)
+        else:
+            self._recover_firewall_rules()
         self.unblocker = Unblocker(
-            self.db, self.sudo, self.should_stop, self.logger, self.log
+            self.db,
+            self.sudo,
+            self.should_stop,
+            self.logger,
+            self.log,
+            pf=self.pf,
         )
 
     def _get_timewindow_to_block_in(self, evidence_tw: int | None) -> int:

@@ -630,7 +630,10 @@ class Trust(IModule):
         #       when everybody responds asap?
         report_after_id = self.trust_db.get_latest_report_id()
         p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
-        self.print(f"[Slips -> The Network] request about {ip_address}")
+        self.print(
+            f"[Slips -> The Network] request about {ip_address}",
+            log_to_logfiles_only=True,
+        )
 
         # go will send a reply in no longer than 10s (or whatever the
         # timeout there is set to). The reply will be

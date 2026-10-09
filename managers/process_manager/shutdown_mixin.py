@@ -635,7 +635,7 @@ class ShutdownMixin:
 
     def _handle_firewall_after_analysis(self) -> None:
         """Keep or remove managed firewall rules after an interactive run."""
-        if platform.system() != "Linux":
+        if platform.system() not in {"Linux", "Darwin"}:
             return
         if has_slips_firewall_rules is None or not has_slips_firewall_rules():
             return

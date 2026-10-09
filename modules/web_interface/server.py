@@ -28,6 +28,7 @@ import yaml
 
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+from slips_files.core.structures.evidence import EvidenceType
 from modules.supported_module_names import Modules
 from slips_files.core.helpers.whitelist.whitelist_parser import (
     web_whitelist_path,
@@ -458,12 +459,15 @@ class RunDataReader:
                         details = {}
                     direction = str(details.get("from", "both"))
                     ignored = str(details.get("what_to_ignore", "alerts"))
+                    evidence_type = str(details.get("evidence_type") or "")
+                    visible_value = str(value).split("|", 1)[0]
                     rules.append(
                         {
                             "type": label,
-                            "value": str(value),
+                            "value": visible_value,
                             "direction": direction,
                             "ignore": ignored,
+                            "evidence_type": evidence_type,
                             "effect": self._whitelist_effect(
                                 direction, ignored
                             ),
@@ -486,17 +490,20 @@ class RunDataReader:
             )
             try:
                 managed = {
-                    line.split(",", 3)[1]
+                    (parts[1], parts[4] if len(parts) > 4 else "")
                     for line in managed_path.read_text(
                         encoding="utf-8"
                     ).splitlines()
-                    if line.startswith("ip,") and len(line.split(",", 3)) == 4
+                    if (parts := line.split(","))
+                    and parts[0] == "ip"
+                    and len(parts) >= 4
                 }
             except OSError:
                 managed = set()
             for rule in rules:
                 rule["managed"] = (
-                    rule["type"] == "IP address" and rule["value"] in managed
+                    rule["type"] == "IP address"
+                    and (rule["value"], rule["evidence_type"]) in managed
                 )
                 if rule["managed"]:
                     rule["source"] = "Added from web"
@@ -517,6 +524,7 @@ class RunDataReader:
                 if len(parts) < 4:
                     continue
                 type_name, value, direction, ignored = parts[:4]
+                evidence_type = parts[4] if len(parts) > 4 else ""
                 label = {
                     "ip": "IP address",
                     "domain": "Domain",
@@ -529,6 +537,7 @@ class RunDataReader:
                         "value": value,
                         "direction": direction,
                         "ignore": ignored,
+                        "evidence_type": evidence_type,
                         "effect": self._whitelist_effect(direction, ignored),
                         "source": "Captured local file",
                     }
@@ -574,6 +583,7 @@ class RunDataReader:
             "counts": counts,
             "total": len(rules),
             "rules": rules,
+            "evidence_types": [item.name for item in EvidenceType],
         }
 
     @staticmethod
@@ -618,7 +628,12 @@ class RunDataReader:
         return f"{prefix}:{int(port)}"
 
     def save_whitelist_rule(
-        self, action: Any, value: Any, direction: Any, ignored: Any
+        self,
+        action: Any,
+        value: Any,
+        direction: Any,
+        ignored: Any,
+        evidence_type: Any = None,
     ) -> Dict[str, Any]:
         """Persist a web-managed IP rule and update the current run.
 
@@ -627,6 +642,7 @@ class RunDataReader:
             value: IP address, IP:port, or port-only value.
             direction: Source, destination, or both sides.
             ignored: Flows, evidence and alerts, or both.
+            evidence_type: Optional evidence type for alert-only rules.
 
         Returns:
             The saved rule and whether it was added or removed.
@@ -645,7 +661,21 @@ class RunDataReader:
             "both",
         }:
             raise ValueError("Choose what the rule suppresses")
+        if evidence_type in (None, ""):
+            evidence_type = ""
+        elif (
+            not isinstance(evidence_type, str)
+            or evidence_type.upper() not in EvidenceType.__members__
+        ):
+            raise ValueError("Choose a valid evidence type")
+        else:
+            evidence_type = evidence_type.upper()
+        if evidence_type and ignored != "alerts":
+            raise ValueError("Evidence type rules must suppress alerts only")
         normalized = self._normalize_whitelist_ip(value)
+        redis_value = (
+            f"{normalized}|{evidence_type}" if evidence_type else normalized
+        )
         config, _ = self._run_config()
         settings = config.get("whitelists", {})
         if not isinstance(settings, dict) or not settings.get(
@@ -669,25 +699,31 @@ class RunDataReader:
                 else ["; Rules added through the Slips web interface"]
             )
             existing = {
-                parts[1]: line
+                (parts[1], parts[4] if len(parts) > 4 else ""): line
                 for line in lines
-                if (parts := line.split(",", 3))
-                and len(parts) == 4
+                if (parts := line.split(","))
+                and len(parts) >= 4
                 and parts[0] == "ip"
             }
             if action == "add":
-                if normalized in existing or self.redis.hexists(
-                    "whitelist_IPs", normalized
+                if (
+                    normalized,
+                    evidence_type,
+                ) in existing or self.redis.hexists(
+                    "whitelist_IPs", redis_value
                 ):
                     raise ValueError("This value already has a whitelist rule")
-                lines.append(f"ip,{normalized},{direction},{ignored}")
+                suffix = f",{evidence_type}" if evidence_type else ""
+                lines.append(f"ip,{normalized},{direction},{ignored}{suffix}")
             else:
-                if normalized not in existing:
+                if (normalized, evidence_type) not in existing:
                     raise ValueError(
                         "Only web-managed rules can be removed here"
                     )
                 lines = [
-                    line for line in lines if line != existing[normalized]
+                    line
+                    for line in lines
+                    if line != existing[(normalized, evidence_type)]
                 ]
             with tempfile.NamedTemporaryFile(
                 mode="w", encoding="utf-8", dir=path.parent, delete=False
@@ -703,16 +739,27 @@ class RunDataReader:
             if action == "add":
                 self.redis.hset(
                     "whitelist_IPs",
-                    normalized,
-                    json.dumps({"from": direction, "what_to_ignore": ignored}),
+                    redis_value,
+                    json.dumps(
+                        {
+                            "from": direction,
+                            "what_to_ignore": ignored,
+                            **(
+                                {"evidence_type": evidence_type}
+                                if evidence_type
+                                else {}
+                            ),
+                        }
+                    ),
                 )
             else:
-                self.redis.hdel("whitelist_IPs", normalized)
+                self.redis.hdel("whitelist_IPs", redis_value)
         return {
             "action": action,
             "value": normalized,
             "direction": direction,
             "ignore": ignored,
+            "evidence_type": evidence_type,
         }
 
     @staticmethod
@@ -782,6 +829,10 @@ class RunDataReader:
             for rule in rules:
                 if rule.get("type") != type_name:
                     continue
+                if rule.get("evidence_type") and rule[
+                    "evidence_type"
+                ] != record.get("evidence_type"):
+                    continue
                 rule_value = str(rule.get("value") or "")
                 value_matches = value == rule_value
                 if type_name == "IP address" and port is not None:
@@ -814,6 +865,11 @@ class RunDataReader:
                         "rule": rule_value,
                         "direction": rule.get("direction"),
                         "ignore": rule.get("ignore"),
+                        **(
+                            {"evidence_type": rule["evidence_type"]}
+                            if rule.get("evidence_type")
+                            else {}
+                        ),
                         "effect": rule.get("effect"),
                     }
                 )
@@ -6153,12 +6209,15 @@ class RequestHandler(BaseHTTPRequestHandler):
                 raise ValueError("Expected an object")
             self.server.reader.validate_run_identity()
             if path == "/api/whitelists":
-                saved = self.server.reader.save_whitelist_rule(
+                arguments = (
                     payload.get("action"),
                     payload.get("value"),
                     payload.get("direction"),
                     payload.get("ignore"),
                 )
+                if payload.get("evidence_type"):
+                    arguments += (payload["evidence_type"],)
+                saved = self.server.reader.save_whitelist_rule(*arguments)
             elif path == "/api/host-annotation":
                 saved = self.server.reader.save_host_annotation(
                     payload.get("ip"),

@@ -1717,10 +1717,31 @@ function whitelistEditor(kind, record = null) {
     ignored.append(option);
   });
   ignoreLabel.append(ignored);
+  const typeLabel = document.createElement("label");
+  typeLabel.append(text("span", "Evidence type"));
+  const evidenceType = document.createElement("select");
+  evidenceType.className = "whitelist-evidence-type";
+  const allTypes = text("option", "All evidence types");
+  allTypes.value = "";
+  evidenceType.append(allTypes);
+  const typeNames = new Set(state.whitelists?.evidence_types || []);
+  if (record?.evidence_type) typeNames.add(record.evidence_type);
+  typeNames.forEach((name) => {
+    const option = text("option", name);
+    option.value = name;
+    evidenceType.append(option);
+  });
+  if (record?.evidence_type) evidenceType.value = record.evidence_type;
+  evidenceType.addEventListener("change", () => {
+    if (evidenceType.value) ignored.value = "alerts";
+    ignored.disabled = Boolean(evidenceType.value);
+  });
+  ignored.disabled = Boolean(evidenceType.value);
+  typeLabel.append(evidenceType);
   const save = text("button", "Add rule", "secondary");
   save.type = "submit";
   const feedback = text("p", "Rules take effect for future traffic and detections while Slips is running.", "muted whitelist-feedback");
-  form.append(valueLabel, list, directionLabel, ignoreLabel, save);
+  form.append(valueLabel, list, directionLabel, ignoreLabel, typeLabel, save);
   section.append(form, feedback);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -1728,7 +1749,8 @@ function whitelistEditor(kind, record = null) {
     feedback.textContent = "Saving rule…";
     try {
       const result = await saveWhitelistRule({
-        action: "add", value: value.value, direction: direction.value, ignore: ignored.value,
+        action: "add", value: value.value, direction: direction.value,
+        ignore: ignored.value, evidence_type: evidenceType.value,
       });
       feedback.textContent = `${result.value} was added. New matching activity will be suppressed within a few seconds.`;
       value.value = "";
@@ -1756,6 +1778,7 @@ function renderWhitelists() {
     (row) => text("code", row.value),
     (row) => row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
     (row) => row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
+    (row) => row.evidence_type || "All",
     (row) => row.effect,
     (row) => row.source,
     (row) => {
@@ -1768,7 +1791,7 @@ function renderWhitelists() {
         try {
           await saveWhitelistRule({
             action: "remove", value: row.value, direction: row.direction,
-            ignore: row.ignore,
+            ignore: row.ignore, evidence_type: row.evidence_type,
           });
           toast("Whitelist rule removed");
         } catch (error) {
@@ -1785,6 +1808,19 @@ async function loadWhitelists() {
   const payload = await api("whitelists", "/api/whitelists");
   if (!payload) return;
   state.whitelists = payload;
+  document.querySelectorAll(".whitelist-evidence-type").forEach((select) => {
+    const selected = select.value;
+    select.replaceChildren();
+    const all = text("option", "All evidence types");
+    all.value = "";
+    select.append(all);
+    (payload.evidence_types || []).forEach((name) => {
+      const option = text("option", name);
+      option.value = name;
+      select.append(option);
+    });
+    select.value = selected;
+  });
   byId("whitelists-badge").textContent = compact(payload.total);
   byId("whitelists-status").textContent = `${payload.total} local rules were parsed for this run. Evidence marked “Whitelisted” was excluded by Slips before score accumulation.`;
   setSummaryCards([

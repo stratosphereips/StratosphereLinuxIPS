@@ -348,7 +348,7 @@ class EvidenceHandlerWorker(IModule):
 
     def is_blocking_modules_supported(self) -> bool:
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
-        blocking_module_enabled = "-p" in sys.argv
+        blocking_module_enabled = "-p" in sys.argv or "--blocking" in sys.argv
         return (
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled

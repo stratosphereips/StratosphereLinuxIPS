@@ -92,8 +92,10 @@ Foreground file and stdin analysis, growing Zeek logs, and a local two-peer
 Iris exchange are covered by the [native macOS investigation](macos.md).
 Live interfaces need permission to capture through macOS BPF devices. Live
 capture, daemon mode, Intel Macs, and other optional integrations have not
-been validated by this change. Firewall
-blocking and the Linux access-point workflow remain Linux-specific.
+been validated by this change. The Linux access-point workflow remains
+Linux-specific. On macOS, active
+blocking uses the Slips-owned `com.apple/slips` Packet Filter anchor and
+requires running Slips with root privileges.
 
 Alerts are written to `output/macos-test/alerts/`; diagnostic output is in
 `output/macos-test/slips.log` and `output/macos-test/errors.log`. Remote feed
@@ -462,7 +464,7 @@ follow the official docker [installation instructions for Debian](https://docs.d
 ## Enabling the memory protection for Docker
 The default raspbian image disables by default the memory protection that Docker needs.
 
-To test if your rpi is correctly configured you can do 
+To test if your rpi is correctly configured you can do
 
 	grep -qw memory /sys/fs/cgroup/cgroup.controllers && echo "PASS: memory cgroups enabled" || echo "FAIL: memory cgroups disabled"
 
@@ -473,7 +475,7 @@ If your rpi is not correctly configured, you can correctly configured it with
 
 ## Running Slips' Docker in the Pi
 
-This command 
+This command
 
 	docker run --restart unless-stopped -d --cpu-shares "700" --memory="14g" --memory-swap="40g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output --name slips_rpi stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eth0 -w -p -c config/slips.yaml -o output/slips_rpi
 

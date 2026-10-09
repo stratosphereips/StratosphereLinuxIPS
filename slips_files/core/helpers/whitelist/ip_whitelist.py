@@ -61,6 +61,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         direction: Direction,
         what_to_ignore: str,
         port: int | str | None = None,
+        evidence_type: str | None = None,
     ) -> bool:
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
@@ -68,6 +69,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         :param direction: is the given ip a srcip or a dstip
         :param what_to_ignore: can be 'flows' or 'alerts'
         :param port: Port on the same side as the IP, if available.
+        :param evidence_type: Restrict matching to this evidence type.
         """
         if not self.enable_local_whitelist:
             return False
@@ -84,6 +86,13 @@ class IPAnalyzer(IWhitelistAnalyzer):
                 address = f"[{ip}]" if ":" in ip else ip
                 candidates.append(f"{address}:{port_number}")
                 candidates.append(f"*:{port_number}")
+
+        if evidence_type:
+            candidates = [
+                scoped
+                for candidate in candidates
+                for scoped in (f"{candidate}|{evidence_type}", candidate)
+            ]
 
         for candidate in candidates:
             if candidate not in self.manager.bloom_filters.ips:

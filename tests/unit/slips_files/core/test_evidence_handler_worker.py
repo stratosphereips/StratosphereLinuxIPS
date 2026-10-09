@@ -760,6 +760,7 @@ def test_send_to_exporting_module():
     "sys_argv, running_non_stop, expected_result",
     [
         (["-i", "-p"], True, True),
+        (["-i", "--blocking"], True, True),
         (["-i", "-im"], False, False),
         ([], False, False),
     ],

@@ -8,6 +8,7 @@ import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import EvidenceType
 
 
 def web_whitelist_path(local_path: str) -> Path:
@@ -127,7 +128,12 @@ class WhitelistParser:
         :param info: Direction and ignore type for the rule.
         """
         if validators.ipv6(ip) or validators.ipv4(ip):
-            self.whitelisted_ips[ip] = info
+            key = (
+                f"{ip}|{info['evidence_type']}"
+                if info.get("evidence_type")
+                else ip
+            )
+            self.whitelisted_ips[key] = info
             return
 
         if ip.startswith("["):
@@ -143,9 +149,22 @@ class WhitelistParser:
             return
         if not 0 <= int(port) <= 65535 or str(int(port)) != port:
             return
-        self.whitelisted_ips[ip] = info
+        key = (
+            f"{ip}|{info['evidence_type']}"
+            if info.get("evidence_type")
+            else ip
+        )
+        self.whitelisted_ips[key] = info
 
     def parse_line(self, line: str) -> Dict[str, str]:
+        """Parse one local rule with an optional evidence type.
+
+        Parameters:
+            line: Comma-separated whitelist line.
+
+        Returns:
+            Parsed rule fields or an empty dict for an incomplete line.
+        """
         # line should be:
         # "type","domain/ip/organization/mac","from","what_to_ignore"
         line: List = line.replace("\n", "").replace(" ", "").split(",")
@@ -155,6 +174,7 @@ class WhitelistParser:
                 "data": line[1],
                 "from": line[2],
                 "what_to_ignore": line[3],
+                "evidence_type": line[4].upper() if len(line) > 4 else "",
             }
         except IndexError:
             # line is missing a column, ignore it.
@@ -190,6 +210,18 @@ class WhitelistParser:
             "from": parsed_line["from"],
             "what_to_ignore": parsed_line["what_to_ignore"],
         }
+        evidence_type = parsed_line.get("evidence_type", "")
+        if evidence_type:
+            if (
+                entry_type != "ip"
+                or evidence_type not in EvidenceType.__members__
+                or entry_details["what_to_ignore"] != "alerts"
+            ):
+                self.manager.print(
+                    "Invalid evidence-scoped whitelist rule.", 1, 0
+                )
+                return
+            entry_details["evidence_type"] = evidence_type
         handlers[entry_type](parsed_line["data"], entry_details)
 
     def load_org_asn(self, org) -> Optional[List[str]]:
