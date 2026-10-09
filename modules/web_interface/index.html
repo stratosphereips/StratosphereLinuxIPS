@@ -173,10 +173,6 @@
       <div id="p2p-stats">
         <div id="p2p-summary" class="summary-grid"></div>
         <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
-        <article class="surface table-surface">
-          <div class="table-heading"><div><h3>Reports and message activity</h3><p>Recent P2P messages, including received reports. Select a row to inspect its content.</p></div><div class="table-actions"><label for="p2p-message-filter">Show</label><select id="p2p-message-filter" class="range-select"><option value="all">All messages</option><option value="received-report">Received reports</option><option value="sent-report">Sent reports</option><option value="request">Requests</option><option value="blame">Blame reports</option><option value="connection_update">Connection changes</option></select><span id="p2p-message-count" class="muted"></span></div></div>
-          <div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="direction">Direction</th><th data-sort="message_type">Type</th><th data-sort="peer">Peer</th><th data-sort="target">Target</th><th data-sort="score">Score</th><th data-sort="confidence">Confidence</th></tr></thead><tbody></tbody></table></div>
-        </article>
         <article class="surface p2p-trust-history">
           <div class="table-heading p2p-chart-heading">
             <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model; current computed trust is shown in the peers table.</p></div>
@@ -186,6 +182,10 @@
           <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
         </article>
         <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
+        <article class="surface table-surface">
+          <div class="table-heading"><div><h3>Reports and message activity</h3><p>Recent P2P messages, including received reports. Select a row to inspect its content.</p></div><div class="table-actions"><label for="p2p-message-filter">Show</label><select id="p2p-message-filter" class="range-select"><option value="all">All messages</option><option value="received-report">Received reports</option><option value="sent-report">Sent reports</option><option value="request">Requests</option><option value="blame">Blame reports</option><option value="connection_update">Connection changes</option></select><span id="p2p-message-count" class="muted"></span></div></div>
+          <div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="direction">Direction</th><th data-sort="message_type">Type</th><th data-sort="peer">Peer</th><th data-sort="target">Target</th><th data-sort="score">Score</th><th data-sort="confidence">Confidence</th></tr></thead><tbody></tbody></table></div>
+        </article>
       </div>
     </section>
 
