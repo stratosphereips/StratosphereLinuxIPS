@@ -10,6 +10,7 @@ const state = {
   configuration: null,
   whitelists: null,
   arpPoisoning: null,
+  p2p: null,
   host: null,
   hostNames: new Map(),
   pendingHostNames: new Set(),
@@ -38,6 +39,7 @@ const state = {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
+    "p2p-activity-table": { key: "timestamp", order: "desc" },
   },
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
@@ -508,7 +510,9 @@ function sortLocalRows(id, rows) {
   return [...rows].sort((left, right) => {
     const first = left[sort.key];
     const second = right[sort.key];
-    if (first === null || first === undefined) return 1;
+    if (first === null || first === undefined) {
+      return second === null || second === undefined ? 0 : 1;
+    }
     if (second === null || second === undefined) return -1;
     const firstNumber = Number(first);
     const secondNumber = Number(second);
@@ -1970,10 +1974,104 @@ function renderP2PTrustChart(history, peers) {
   });
 }
 
+/** Combine retained message telemetry with reports still present in the trust DB. */
+function p2pMessageRows(payload) {
+  const activity = (payload.activity || []).filter((record) => record && typeof record === "object")
+    .map((record) => {
+      const content = record.message && typeof record.message === "object" ? record.message : null;
+      const evaluation = content?.evaluation && typeof content.evaluation === "object"
+        ? content.evaluation : {};
+      return {
+        ...record,
+        message_type: String(record.message_type || "unknown"),
+        direction: String(record.direction || "unknown"),
+        peer: String(record.peer || record.peer_id || ""),
+        target: String(record.target || content?.key || ""),
+        score: evaluation.score !== null && evaluation.score !== undefined
+          && Number.isFinite(Number(evaluation.score)) ? Number(evaluation.score) : null,
+        confidence: evaluation.confidence !== null && evaluation.confidence !== undefined
+          && Number.isFinite(Number(evaluation.confidence)) ? Number(evaluation.confidence) : null,
+      };
+    });
+  const reportKey = (peer, target, timestamp) =>
+    `${peer}\u0000${target}\u0000${Number(timestamp).toFixed(3)}`;
+  const retained = new Set(activity
+    .filter((row) => row.direction === "received" && ["report", "blame"].includes(row.message_type))
+    .map((row) => reportKey(row.peer, row.target, row.report_time || row.timestamp)));
+  for (const report of payload.reports || []) {
+    const key = reportKey(report.peer_id, report.target, report.timestamp);
+    if (retained.has(key)) continue;
+    retained.add(key);
+    activity.push({
+      timestamp: report.timestamp,
+      direction: "received",
+      message_type: "report",
+      peer: report.peer_id,
+      target: report.target,
+      score: report.score,
+      confidence: report.confidence,
+      archived_report: true,
+    });
+  }
+  return activity;
+}
+
+/** Apply the selected report/message filter and render the sortable table. */
+function renderP2PMessages() {
+  const payload = state.p2p || {};
+  const filter = byId("p2p-message-filter").value;
+  const rows = p2pMessageRows(payload);
+  const visible = rows.filter((row) => {
+    if (filter === "all") return true;
+    if (filter === "received-report") return row.direction === "received"
+      && row.message_type === "report";
+    if (filter === "sent-report") return row.direction === "sent"
+      && row.message_type === "report";
+    return row.message_type === filter;
+  });
+  byId("p2p-message-count").textContent = `${visible.length} shown · ${rows.length} retained`;
+  renderTable("p2p-activity-table", sortLocalRows("p2p-activity-table", visible), [
+    (row) => formatTime(row.timestamp),
+    (row) => row.direction,
+    (row) => row.message_type,
+    (row) => hostOrText(row.peer),
+    (row) => hostOrText(row.target),
+    (row) => row.score === null || row.score === undefined ? "—" : numeric(row.score).toFixed(3),
+    (row) => row.confidence === null || row.confidence === undefined
+      ? "—" : numeric(row.confidence).toFixed(3),
+  ], openP2PMessage);
+}
+
+/** Open the complete retained content for a P2P message or report. */
+function openP2PMessage(record) {
+  openDrawer("P2P MESSAGE", `${record.message_type} · ${record.direction}`);
+  const body = byId("drawer-body");
+  const facts = [
+    ["Time", formatTime(record.timestamp)],
+    ["Direction", record.direction],
+    ["Type", record.message_type],
+    ["Peer", record.peer || "—"],
+    ["Target", record.target || "—"],
+    ["Score", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
+    ["Confidence", record.confidence === null || record.confidence === undefined
+      ? "—" : numeric(record.confidence).toFixed(3)],
+  ];
+  if (record.report_time) facts.splice(1, 0, ["Peer report time", formatTime(record.report_time)]);
+  body.append(investigationStats(facts));
+  const content = record.message && typeof record.message === "object"
+    ? record.message : record.archived_report
+      ? { key: record.target, evaluation: { score: record.score, confidence: record.confidence } }
+      : record;
+  body.append(text("h3", record.archived_report ? "Stored report fields" : "Message content"));
+  if (record.archived_report) body.append(text("p", "The original message is no longer retained; these report fields remain in the trust database.", "muted"));
+  body.append(text("pre", JSON.stringify(content, null, 2), "p2p-message-content"));
+}
+
 async function loadP2P() {
   const range = byId("p2p-range").value;
   const payload = await api("p2p", `/api/p2p?range=${encodeURIComponent(range)}`);
   if (!payload) return;
+  state.p2p = payload;
   const counts = payload.counts || {};
   byId("p2p-badge").textContent = compact(counts.connected);
   byId("p2p-disabled").hidden = payload.enabled;
@@ -2007,25 +2105,7 @@ async function loadP2P() {
     (row) => compact(row.reports_received),
     (row) => formatTime(row.last_seen),
   ]);
-  renderTable("p2p-trust-table", (payload.trust_history || []).slice(0, 100), [
-    (row) => formatTime(row.timestamp),
-    (row) => text("code", row.peer_id),
-    (row) => numeric(row.reliability).toFixed(3),
-  ]);
-  renderTable("p2p-reports-table", payload.reports || [], [
-    (row) => formatTime(row.timestamp),
-    (row) => text("code", row.peer_id),
-    (row) => hostOrText(row.target),
-    (row) => numeric(row.score).toFixed(3),
-    (row) => numeric(row.confidence).toFixed(3),
-  ]);
-  renderTable("p2p-activity-table", payload.activity || [], [
-    (row) => formatTime(row.timestamp),
-    (row) => row.direction || "—",
-    (row) => row.message_type || "unknown",
-    (row) => hostOrText(row.peer),
-    (row) => hostOrText(row.target),
-  ]);
+  renderP2PMessages();
 }
 
 async function loadHosts() {
@@ -3707,6 +3787,8 @@ byId("load-module-evidence").addEventListener("click", () =>
   loadOverviewEvidenceCounts().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));
 byId("p2p-range").addEventListener("change", () => loadP2P().catch(() => {}));
+byId("p2p-message-filter").addEventListener("change", renderP2PMessages);
+bindLocalTableSort("p2p-activity-table", renderP2PMessages);
 byId("module-search").addEventListener("input", () =>
   state.overview && renderModules(state.overview.modules));
 byId("drawer-close").addEventListener("click", closeDrawer);

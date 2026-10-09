@@ -208,6 +208,7 @@ tbody tr:hover { background: #1b2a3540; }
 .log-console-raw { margin-top: 1.2rem; padding-top: .85rem; border-top: 1px dashed #29404f; }
 .log-console-raw small { display: block; margin-bottom: .4rem; color: #61798a; font: 700 .6rem ui-sans-serif, system-ui, sans-serif; letter-spacing: .1em; }
 .log-console-raw pre { max-height: none; margin: 0; padding: 0; border: 0; background: transparent; color: #9eb2c0; font: inherit; white-space: pre-wrap; }
+.p2p-message-content { padding: 1rem; overflow-wrap: anywhere; white-space: pre-wrap; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); color: var(--text); font: .78rem/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 .host-heading { align-items: flex-end; }
 .detail-grid { display: grid; grid-template-columns: 140px 1fr; gap: .55rem 1rem; margin-bottom: 1.2rem; font-size: .8rem; }
 .detail-grid dt { color: var(--muted); }

@@ -5555,7 +5555,7 @@ class RunDataReader:
         }
         activity = [
             self._loads(raw, {})
-            for raw in self.redis.lrange("p2p_message_history", 0, 199)
+            for raw in self.redis.lrange("p2p_message_history", 0, 999)
         ]
         analysis = self.redis.hgetall("analysis")
         run_start = self._event_timestamp(analysis.get("analysis_start"))
@@ -5761,7 +5761,16 @@ class RunDataReader:
             "trust_history": trust_history,
             "trust_range": trust_range,
             "reports": current_reports[:200],
-            "activity": [item for item in activity if isinstance(item, dict)],
+            "activity": [
+                item
+                for item in activity
+                if isinstance(item, dict)
+                and (
+                    not run_start
+                    or self._event_timestamp(item.get("timestamp"))
+                    >= run_start
+                )
+            ],
             "counts": {
                 "connected": len(connected),
                 "known": len(peers),

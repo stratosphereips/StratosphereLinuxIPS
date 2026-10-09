@@ -3862,6 +3862,46 @@ def test_p2p_reports_enabled_listener_and_healthy_empty_network(
     assert result["peers"] == []
 
 
+def test_p2p_activity_keeps_report_content_from_retained_history(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Expose the full bounded telemetry message for report inspection."""
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.return_value = {}
+    reader.redis.zrange.return_value = []
+    record = {
+        "direction": "received",
+        "message_type": "report",
+        "peer": "QmRemotePeer",
+        "target": "8.8.8.8",
+        "report_time": 100.0,
+        "timestamp": 101.0,
+        "message": {
+            "key": "8.8.8.8",
+            "evaluation": {"score": 0.7, "confidence": 0.8},
+        },
+    }
+    reader.redis.lrange.return_value = [json.dumps(record)]
+
+    result = reader.p2p()
+
+    reader.redis.lrange.assert_called_once_with(
+        "p2p_message_history", 0, 999
+    )
+    assert result["activity"][0]["message"]["evaluation"] == {
+        "score": 0.7,
+        "confidence": 0.8,
+    }
+
+
 def test_p2p_uses_redis_identity_and_live_peer_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

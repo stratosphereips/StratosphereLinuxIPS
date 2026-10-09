@@ -326,7 +326,7 @@ search applies to isolation state, transition history, and ARP evidence.
 
 ### P2P
 
-The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, a compact per-peer reliability history chart with Live, 1-hour, 24-hour, 7-day, and full-history ranges, peer reports received during the current run, and bounded recent send/receive activity. An enabled module with zero connected peers is shown as healthy and listening.
+The P2P tab combines current Redis connectivity with the persistent local P2P trust database. It shows the local Pigeon identity and listen address, connected and previously known peers, peer trust and reliability, and a compact per-peer reliability history chart with Live, 1-hour, 24-hour, 7-day, and full-history ranges. A full-width message table combines bounded send/receive telemetry with retained reports from the current run. Filter it to received reports or other message types, sort any column, and select a row to inspect the message content. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
 
 Message counters begin when telemetry-capable P2P code starts. Reliability history can span earlier runs because `permanent/p2p_trust_runtime/trustdb.db` is persistent; both the received-report total and each peer's received-report count include only reports from this run. Previously known peers remain visible as offline until a live authenticated connection is reported.
 
