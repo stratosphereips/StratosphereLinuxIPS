@@ -46,6 +46,7 @@ import pickle
 import random
 import copy
 import shutil
+import sqlite3
 import time
 import traceback
 from typing import Dict, Optional
@@ -57,6 +58,7 @@ import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
 
 import slips_files.common.abstracts.ml_module_base as ml_base
+from slips_files.common.output_paths import get_this_db_path_inside_output_dir
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.structures.evidence import EvidenceType
 
@@ -714,13 +716,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.alignment_buffer_y: list = []
 
         # Flow tracking
-        self.window_flows: dict = {}  # flow_id -> flow_dict
         self._buffered_flow_ids: set = (
             set()
         )  # flows already in training buffer
-
-        # Alerts buffered during a training window (evidence IDs + IPs)
-        self.pending_alerts: list = []
 
         # Peer models storage
         self.peer_models: Dict[str, dict] = (
@@ -755,7 +753,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.merge_count: int = 0
 
         # Training counters
-        self.training_count_alert: int = 0
         # Label-flip instrumentation: flows that trained with one label whose
         # final (later-alert) label contradicts it. Not label-vs-GT - our own
         # pipeline's self-contradiction. flow_id -> {label,uid,saddr,daddr};
@@ -785,9 +782,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._local_test: dict = self._blank_test_statistics()
         self._local_stream_used: bool = False
 
-        # Store test-time predictions per flow for comparison against alert labels
-        self.test_time_predictions: dict = {}  # flow_id -> predicted_label
-
         # Centralized logger
         self.logger = ModuleLogger(self.output_dir, self.enable_logs)
 
@@ -811,14 +805,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "time_window_width", default=1200
         )
 
-        # Alert-labelling FINALIZATION delay in training windows.
-        # Flows sit in a small ring for N windows so *late* alerts can still
+        # Alert-labelling FINALIZATION delay in training windows (K).
+        # Flows sit in a small ring for K windows so *late* alerts can still
         # match them; on exit they are labeled MALICIOUS only if an alert's
         # evidence cites their uid, else BENIGN — and trained exactly once
-        # with their final label. 0 = finalize at the window's own close.
-        # Config key: label_finalize_delay_windows
+        # with their final label. K=1 resolves >99% of flips in our runs
+        # (flip1-k0 / flip2-k0). Config key: label_finalize_delay_windows
         self.label_finalize_delay_windows = self._read_module_config_int(
-            "label_finalize_delay_windows", default=2
+            "label_finalize_delay_windows", default=1
         )
         # Label matching is flow-exact (uid) by design and by methodology:
         # a flow labels malicious only when an alert's evidence cites that
@@ -830,11 +824,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             collections.deque()
         )  # ring cells: {"flows": dict, "mal_ids": set}
 
-        # Alert -> evidence -> flow-uid sets are RETAINED for the whole SLIPS
-        # time window (the "large" window), not only the 5-minute close they
-        # arrived in: a flow can reach this module AFTER its alert (SLIPS
-        # delivers flows with lag), and must still be labeled by it. One
-        # set per close; a deque keeps exactly the retention span.
+        # Train mode reads SLIPS's own sqlite at every window close instead
+        # of consuming the new_flow / new_alert channels: conn flows
+        # ("flows") and ARP records ("altflows", flow_type 'arp') by
+        # insertion-order cursor, and alert -> evidence -> flow-uid matches
+        # by one indexed query. Alerts older than the lookback (default the
+        # SLIPS time window, the "large" window) no longer label flows.
         slips_tw_seconds = float(
             conf.read_configuration("parameters", "time_window_width", 3600)
         )
@@ -844,15 +839,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1, -(-int(slips_tw_seconds) // self.window_size_seconds)
             ),
         )
-        self._alert_uid_memory: collections.deque = collections.deque(
-            maxlen=self.alert_uid_retention_windows
-        )
         self.print(
             f"Alert uid retention: {self.alert_uid_retention_windows} windows "
             f"(SLIPS TW {slips_tw_seconds:.0f}s / {self.window_size_seconds}s)",
             1,
             1,
         )
+        self._db_conn = None  # read-only connection, opened on first close
+        self._flow_rowid = 0  # last flows.rowid read
+        self._arp_rowid = 0  # last altflows.rowid read (ARP rows)
+        self._seen_uids: set = set()  # every uid already placed in a cell
+        self._next_window_flows: list = []  # ts after the current boundary
+        self._window_bounds: dict = {}  # window n -> (start, end), wall clock
+        self._last_alert_cut: float = 0.0  # alert_time of the previous close
 
         # Deterministic per-instance sub-window offset (0–5 minutes).
         # Uses hostname hash to avoid all peers getting the same offset
@@ -904,13 +903,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._load_local_model()
 
     def subscribe_to_channels(self):
-        """Subscribe to flows, alerts, and P2P channels."""
-        self.c_flows = self.db.subscribe("new_flow")
-        self.c_alerts = self.db.subscribe("new_alert")
-        self.channels = {
-            "new_flow": self.c_flows,
-            "new_alert": self.c_alerts,
-        }
+        """Train mode reads flows and alerts from SLIPS's sqlite at every
+        window close, so it subscribes to no flow/alert channel (an unread
+        subscription would only pile up in redis); test mode still
+        classifies new_flow messages as they arrive. P2P is attached later
+        (_try_p2p_subscribe)."""
+        self.channels = {}
+        if self.mode != "train":
+            self.c_flows = self.db.subscribe("new_flow")
+            self.channels["new_flow"] = self.c_flows
         # Training uses an independent wall-clock window; Slips tw_closed is ignored.
         self._p2p_connected = False
 
@@ -1450,61 +1451,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """Bypass version check - this module handles all messages directly."""
         return True
 
-    # Upper bound of queued messages consumed per channel per loop pass, so
-    # the p2p channel and the window clock are still serviced under load.
-    _DRAIN_BATCH = 2000
-
-    def _ingest_flow_msg(self, msg: dict) -> None:
-        """Buffer one new_flow message and run the live testing streams."""
-        data = json.loads(msg["data"])
-        flow = data["flow"]
-        flow_ts = float(data.get("stime", 0))
-
-        # Buffer flow for the next training window
-        self.handle_new_flow(flow, flow_ts)
-
-        # Test with local model (if fitted)
-        if self._is_fitted:
-            predicted = self._classify_flow(flow)
-            if predicted is not None:
-                gt_label = self._get_simulated_gt(flow) or BENIGN
-                self.store_testing_results(gt_label, predicted)
-                self.test_time_predictions[self._get_flow_id(flow)] = predicted
-                # Second testing stream (L1): while merged, also
-                # evaluate with the frozen last-locally-trained model.
-                if (
-                    self._using_merged_model
-                    and self._local_only_model is not None
-                ):
-                    local_pred = self._predict_with(
-                        self._local_only_model, flow
-                    )
-                    if local_pred is not None:
-                        self._store_local_stream(gt_label, local_pred)
-
-    def _drain(self, limit=None) -> int:
-        """Consume queued flows and alerts (all of them when limit is None).
-
-        Flows are read before alerts so a window close never overtakes a
-        flow that was already waiting. Returns the number of messages read.
-        """
-        consumed = 0
-        while limit is None or consumed < limit:
-            msg = self.get_msg("new_flow")
-            if not msg:
-                break
-            self._ingest_flow_msg(msg)
-            consumed += 1
-        while msg := self.get_msg("new_alert"):
-            self.handle_new_alert(json.loads(msg["data"]))
-            consumed += 1
-        return consumed
-
     def _main_training(self) -> bool:
-        """Training main loop: drain flows/alerts, close windows in order."""
+        """Training main loop: serve p2p, close wall-clock windows. Flows
+        and alerts are read from SLIPS's sqlite at each close."""
         try:
-            consumed = self._drain(self._DRAIN_BATCH)
-
             # Only check P2P channel if it exists (uses p2p_gopy)
             if "p2p_gopy" in self.channels:
                 if msg := self.get_msg("p2p_gopy"):
@@ -1543,17 +1493,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
 
-            # Wall-clock training window trigger (independent of Slips
-            # windows). Order before timing: everything already queued is
-            # consumed first, then the window is labeled and trained.
+            # Wall-clock training window trigger (independent of Slips windows)
             if (
                 time.time() - self.training_window_start
                 >= self.window_size_seconds
             ):
-                consumed += self._drain()
                 self._close_training_window()
-
-            if not consumed:
+            else:
                 time.sleep(0.1)
             return False
         except Exception:
@@ -1590,147 +1536,228 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             return None
 
-    def handle_new_flow(self, flow: dict, flow_ts: float = 0.0):
-        """Store flow in the current training window.
-
-        Training windows are closed on a wall-clock timer (see _main_training),
-        not on flow timestamps, to keep time independent of Slips global windows.
-        """
-        flow_id = self._get_flow_id(flow)
-        self.window_flows[flow_id] = flow
-
-    def handle_new_alert(self, alert: dict):
-        """
-        Buffer alert evidence for the next wall-clock training window.
-
-        Flows are not labeled or trained immediately. All alerts received
-        during a window are aggregated and used to label flows when the
-        window closes (see _close_training_window).
-
-        Alert structure:
-        - profile: {"ip": "..."}
-        - timewindow: {"number": N, ...}
-        - last_evidence: {"attacker": {"direction": ..., "ioc_type": ...,
-                          "value": "<ip/domain/url>", ...},
-                          "victim": {"value": "...", ...} | None, "ID": "..."}
-        - correl_id: [list of evidence IDs]
-        - id: alert ID
-
-        Note: SLIPS serializes the Evidence dataclasses with the address in
-        the field "value" (utils.to_dict = asdict passthrough). "ip" is kept
-        as a fallback for hypothetical older payloads; "value" is what this
-        SLIPS lineage (>=2023-12) actually emits.
-        """
-        try:
-            self.print("Alert received, buffering evidence", 1, 1)
-            self.logger.log_timeline(
-                "ALERT", f"alert_{self.training_count_alert}"
-            )
-
-            profile_ip = alert.get("profile", {}).get("ip")
-            tw_number = alert.get("timewindow", {}).get("number")
-            if not profile_ip or not tw_number:
-                self.print(
-                    "Invalid alert structure: missing profile/twid",
-                    0,
-                    1,
-                )
-                return
-
-            correl_id = alert.get("correl_id", [])
-            last_evidence = alert.get("last_evidence", {})
-
-            evidence_ids = set()
-            if correl_id:
-                evidence_ids.update(correl_id)
-            if last_evidence.get("ID"):
-                evidence_ids.add(last_evidence["ID"])
-
-            if not evidence_ids:
-                self.print("No evidence IDs in alert, skipping", 1, 1)
-                return
-
-            # Labels are flow-exact: only the alert's evidence ids matter
-            # (resolved to flow uids at window close). Attacker/victim
-            # addresses are deliberately not used.
-            self.pending_alerts.append({"evidence_ids": list(evidence_ids)})
-            self.training_count_alert += 1
-            self.print(
-                f"Buffered alert {self.training_count_alert} with "
-                f"{len(evidence_ids)} evidence IDs",
-                1,
-                1,
-            )
-
-        except Exception:
-            self.print(f"Error handling alert: {traceback.format_exc()}", 1, 1)
-
-    def _collect_alert_uids(self):
-        """This close's alerts -> all their correlated evidences -> all the
-        flow uids those evidences cite (one db lookup per evidence id).
-
-        :return: (uid set, number of distinct evidence ids)
-        """
-        uids: set = set()
-        evidence_ids: set = set()
-        for alert in self.pending_alerts:
-            for evid_id in alert.get("evidence_ids", []):
-                if evid_id in evidence_ids:
-                    continue
-                evidence_ids.add(evid_id)
-                try:
-                    found = self.db.get_flows_causing_evidence(evid_id)
-                except Exception:  # noqa: BLE001
-                    found = None
-                uids.update(u for u in (found or []) if u)
-        return uids, len(evidence_ids)
-
     def _flow_matches(self, flow, malicious_uids) -> bool:
         """Flow-exact matching: the flow's uid is cited by an alert's
         evidence. The flip detector uses the same rule."""
         uid = (flow.get("uid") or "").strip()
         return bool(uid and uid in malicious_uids)
 
-    def _label_ring_then_finalize(self, malicious_uids: set):
-        """Delay-then-finalize labelling (every K, K=0 included).
+    # ------------------------------------------------------------------
+    # DB ingestion (train mode)
+    # ------------------------------------------------------------------
+    _SQL_CHUNK = 900  # stay below SQLite's host-parameter limit
 
-        Push this window's flows onto the ring, match the retained alert
-        uids against ALL ring cells (late alerts still land), then finalize
-        the oldest cell once the ring is longer than K. Returns the
-        finalized lists (None while warming up) plus bookkeeping stats.
+    def _db(self):
+        """Read-only connection to SLIPS's flows.sqlite (WAL: readers never
+        block SLIPS's writers; no SLIPS lock is taken)."""
+        if self._db_conn is None:
+            path = get_this_db_path_inside_output_dir(
+                self.parent_output_dir, "flows.sqlite"
+            )
+            self._db_conn = sqlite3.connect(
+                f"file:{path}?mode=ro",
+                uri=True,
+                timeout=20,
+                check_same_thread=False,
+            )
+        return self._db_conn
+
+    def _fetch_new_flows(self):
+        """Every conn flow and ARP record SLIPS stored since the last close,
+        in insertion order, deduplicated by uid.
+
+        :return: (flows, number of conn rows read, number of ARP rows read)
         """
-        cell = {"flows": dict(self.window_flows), "mal_ids": set()}
+        db = self._db()
+        conn_rows = db.execute(
+            "SELECT rowid, uid, flow FROM flows WHERE rowid > ? ORDER BY rowid",
+            (self._flow_rowid,),
+        ).fetchall()
+        if conn_rows:
+            self._flow_rowid = conn_rows[-1][0]
+        arp_rows = db.execute(
+            "SELECT rowid, uid, flow FROM altflows "
+            "WHERE rowid > ? AND flow_type = 'arp' ORDER BY rowid",
+            (self._arp_rowid,),
+        ).fetchall()
+        if arp_rows:
+            self._arp_rowid = arp_rows[-1][0]
+        flows = []
+        for _rowid, uid, raw in conn_rows + arp_rows:
+            if not uid or uid in self._seen_uids:
+                continue
+            try:
+                flow = json.loads(raw)
+            except (TypeError, ValueError):
+                continue
+            self._seen_uids.add(uid)
+            flows.append(flow)
+        return flows, len(conn_rows), len(arp_rows)
+
+    @staticmethod
+    def _flow_ts(flow: dict) -> float:
+        """Zeek ts (flow start) of a flow, 0.0 when unparseable."""
+        try:
+            return float(flow.get("starttime") or 0.0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _place_flows(self, window_n: int, flows: list) -> dict:
+        """Open the cell of window_n and put every flow into the open cell
+        whose window contains its ts. ts after this window's end waits for
+        the next close; ts older than every open cell goes to the oldest
+        open cell (counted as late).
+        """
+        cell = {
+            "window": window_n,
+            "flows": {},
+            "mal_ids": set(),
+            "preds": {},
+            "tested": set(),
+        }
         self._flow_ring.append(cell)
+        end = self._window_bounds[window_n][1]
+        pending = self._next_window_flows + flows
+        self._next_window_flows = []
+        late = 0
+        newest_ts = 0.0
+        for flow in pending:
+            ts = self._flow_ts(flow)
+            newest_ts = max(newest_ts, ts)
+            if ts > end:
+                self._next_window_flows.append(flow)
+                continue
+            target = None
+            for open_cell in reversed(self._flow_ring):
+                if ts > self._window_bounds[open_cell["window"]][0]:
+                    target = open_cell
+                    break
+            if target is None:
+                target = self._flow_ring[0]
+                late += 1
+            target["flows"][self._get_flow_id(flow)] = flow
+        return {
+            "late": late,
+            "next": len(self._next_window_flows),
+            "newest_ts": newest_ts,
+        }
 
+    def _alerted_uids(self, uids, since: float, until: float) -> set:
+        """Which of these flow uids an alert created in [since, until] cites
+        through its evidence (alerts -> alert_evidence -> evidence_flows)."""
+        db = self._db()
+        uids = list(uids)
+        found: set = set()
+        for i in range(0, len(uids), self._SQL_CHUNK):
+            chunk = uids[i : i + self._SQL_CHUNK]
+            marks = ",".join("?" * len(chunk))
+            found.update(
+                row[0]
+                for row in db.execute(
+                    "SELECT DISTINCT ef.uid FROM evidence_flows ef "
+                    "JOIN alert_evidence ae ON ae.evidence_id = ef.evidence_id "
+                    "JOIN alerts a ON a.alert_id = ae.alert_id "
+                    f"WHERE ef.uid IN ({marks}) "
+                    "AND a.alert_time >= ? AND a.alert_time <= ?",
+                    (*chunk, since, until),
+                )
+            )
+        return found
+
+    def _new_alerts(self, since: float, until: float):
+        """Alerts created in (since, until]: their count, the number of
+        their evidences, and every flow uid those evidences cite."""
+        db = self._db()
+        alert_count = db.execute(
+            "SELECT COUNT(*) FROM alerts WHERE alert_time > ? AND alert_time <= ?",
+            (since, until),
+        ).fetchone()[0]
+        rows = db.execute(
+            "SELECT ae.evidence_id, ef.uid FROM alerts a "
+            "JOIN alert_evidence ae ON ae.alert_id = a.alert_id "
+            "LEFT JOIN evidence_flows ef ON ef.evidence_id = ae.evidence_id "
+            "WHERE a.alert_time > ? AND a.alert_time <= ?",
+            (since, until),
+        ).fetchall()
+        evidence_ids = {evidence_id for evidence_id, _ in rows}
+        uids = {uid for _, uid in rows if uid}
+        return alert_count, len(evidence_ids), uids
+
+    def _label_open_cells(self, since: float, until: float) -> int:
+        """Mark every flow of every open cell that an alert in [since,
+        until] cites. Returns the number of new matches."""
+        open_uids = set()
+        for cell in self._flow_ring:
+            for fid, flow in cell["flows"].items():
+                uid = (flow.get("uid") or "").strip()
+                if uid and fid not in cell["mal_ids"]:
+                    open_uids.add(uid)
+        cited = (
+            self._alerted_uids(open_uids, since, until) if open_uids else set()
+        )
         new_hits = 0
-        for ring_cell in self._flow_ring:
-            for fid, flow in ring_cell["flows"].items():
-                if fid in ring_cell["mal_ids"]:
-                    continue
-                if self._flow_matches(flow, malicious_uids):
-                    ring_cell["mal_ids"].add(fid)
+        for cell in self._flow_ring:
+            for fid, flow in cell["flows"].items():
+                if fid not in cell["mal_ids"] and self._flow_matches(
+                    flow, cited
+                ):
+                    cell["mal_ids"].add(fid)
                     new_hits += 1
+        return new_hits
 
-        finalized = None
-        if len(self._flow_ring) > self.label_finalize_delay_windows:
-            finalized = self._flow_ring.popleft()
+    def _predict_batch_with(self, model, x_scaled: np.ndarray) -> np.ndarray:
+        """Labels of a scaled batch from an arbitrary (frozen) model."""
+        model.eval()
+        with torch.no_grad():
+            outputs = model(torch.FloatTensor(x_scaled).to(self.device))
+            idx = (
+                torch.argmax(torch.softmax(outputs, dim=1), dim=1)
+                .cpu()
+                .numpy()
+            )
+        return np.array([MALICIOUS if p == 1 else BENIGN for p in idx])
 
-        stats = {"ring_cells": len(self._flow_ring), "new_hits": new_hits}
-        if finalized is None:
-            return None, None, None, stats
-        malicious_flows = [
-            f
-            for fid, f in finalized["flows"].items()
-            if fid in finalized["mal_ids"]
+    def _test_cell(self, cell: dict) -> None:
+        """Classify the cell's not-yet-tested flows with the current model
+        (and the frozen local model while merged); store test results and
+        keep each prediction until the cell is finalized."""
+        if not self._is_fitted:
+            return
+        todo = [
+            (fid, f)
+            for fid, f in cell["flows"].items()
+            if fid not in cell["tested"]
         ]
-        benign_flows = [
-            f
-            for fid, f in finalized["flows"].items()
-            if fid not in finalized["mal_ids"]
-        ]
-        stats["finalized_mal"] = len(malicious_flows)
-        stats["finalized_ben"] = len(benign_flows)
-        return malicious_flows, benign_flows, finalized["mal_ids"], stats
+        if not todo:
+            return
+        cell["tested"].update(fid for fid, _ in todo)
+        feats, kept = [], []
+        for fid, flow in todo:
+            x = self._extract_flow_features(flow)
+            if x is not None:
+                feats.append(x)
+                kept.append((fid, flow))
+        if not kept:
+            return
+        try:
+            x_scaled = self.scaler.transform(np.array(feats, dtype=np.float32))
+            preds = self.predict_batch(x_scaled)
+            local = None
+            if self._using_merged_model and self._local_only_model is not None:
+                local = self._predict_batch_with(
+                    self._local_only_model, x_scaled
+                )
+        except Exception:
+            self.print(
+                f"Error testing window flows: {traceback.format_exc()}", 0, 1
+            )
+            return
+        for i, (fid, flow) in enumerate(kept):
+            gt_label = self._get_simulated_gt(flow) or BENIGN
+            self.store_testing_results(gt_label, preds[i])
+            cell["preds"][fid] = preds[i]
+            if local is not None:
+                self._store_local_stream(gt_label, local[i])
 
     def _record_pending_labels(
         self, malicious_flows: list, benign_flows: list
@@ -1853,15 +1880,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         fresh_uids: set,
         alert_count: int,
         evidence_count: int,
-        retained_uid_count: int,
+        open_cell_matches: int,
     ) -> None:
         """Persist this close's alert->evidence->uid contagion.
 
         :param window_n: current training window index
-        :param fresh_uids: uids cited by THIS close's alerts
-        :param alert_count: alerts received during this window
+        :param fresh_uids: uids cited by alerts created since the last close
+        :param alert_count: alerts created since the last close
         :param evidence_count: distinct evidence ids of those alerts
-        :param retained_uid_count: size of the retained uid union used to label
+        :param open_cell_matches: open-cell flows newly labeled this close
         """
         import json as _json
 
@@ -1873,7 +1900,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "alert_count": alert_count,
                     "evidence_count": evidence_count,
                     "uid_count": len(fresh_uids),
-                    "retained_uid_count": retained_uid_count,
+                    "open_cell_matches": open_cell_matches,
                     "uids": sorted(fresh_uids),
                 }
             ),
@@ -1905,6 +1932,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         benign_flows: list,
         malicious_flow_ids: set,
         window_header: str,
+        predictions: dict,
     ):
         """
         Log inferred-vs-GT and prediction-vs-label comparisons for the window.
@@ -1914,6 +1942,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             benign_flows: Flows labeled BENIGN.
             malicious_flow_ids: Set of flow IDs labeled MALICIOUS.
             window_header: Header string for comparison logs.
+            predictions: flow id -> test-time prediction, kept with the cell
+                until it is finalized (K windows after it was tested).
         """
         self.logger.log_comp_header("comp_inferred_gt", window_header)
         self.logger.log_comp_header("comp_test_inferred", window_header)
@@ -1969,7 +1999,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         pred_data = []
         for flow in all_flows:
             fid = self._get_flow_id(flow)
-            pred = self.test_time_predictions.pop(fid, None)
+            pred = predictions.get(fid)
             if pred is not None:
                 inferred = MALICIOUS if fid in malicious_flow_ids else BENIGN
                 gt_norm = self._get_simulated_gt(flow)
@@ -2030,71 +2060,104 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _close_training_window(self):
         """
-        Close the current wall-clock training window.
+        Close the current wall-clock training window (order, not timing).
 
-        Labels flows using all buffered alerts, adds them to the training
-        buffer, logs comparisons, and trains if min_training_samples is met.
+        1. read every conn flow and ARP record SLIPS stored since the last
+           close from its sqlite; each goes to the open cell whose window
+           contains its ts (flow start);
+        2. label every open cell: a flow is malicious when the evidence of
+           an alert (within the lookback) cites its uid;
+        3. test the still-untested flows of the cell about to finalize with
+           the current model (it trains on them next);
+        4. finalize the K-old cell and train on it (deferred training);
+        5. test the remaining open cells with the fresh model;
+        6. flips: alerts created since the last close vs trained flows.
         """
         try:
             self.training_count_window += 1
             window_n = self.training_count_window
+            now = time.time()
+            start = self.training_window_start
+            self._window_bounds[window_n] = (
+                start,
+                start + self.window_size_seconds,
+            )
             self.print(
                 f"Training window {window_n} closed, preparing batch", 1, 1
             )
 
-            # This close's alerts -> evidences -> flow uids (one db pass),
-            # retained for the large SLIPS window; the union labels flows.
-            alert_count = len(self.pending_alerts)
-            fresh_uids, evidence_count = self._collect_alert_uids()
-            self._alert_uid_memory.append(fresh_uids)
-            malicious_uids = set().union(*self._alert_uid_memory)
-            self._write_alert_uids(
-                window_n,
-                fresh_uids,
-                alert_count,
-                evidence_count,
-                len(malicious_uids),
-            )
-            # Flips: this close's alerts against earlier-TRAINED flows (before
-            # this close's labels are committed). Set-dedup keeps it once.
-            self._detect_label_flips(fresh_uids)
+            # 1. flows from the DB, placed by ts
+            fetched, n_conn, n_arp = self._fetch_new_flows()
+            placed = self._place_flows(window_n, fetched)
 
-            (
-                malicious_flows,
-                benign_flows,
-                malicious_flow_ids,
-                ring_stats,
-            ) = self._label_ring_then_finalize(malicious_uids)
-            if malicious_flows is None:
-                # ring warming up; finalize nothing this window
+            # 2. label all open cells; alerts since the last close for flips
+            lookback = (
+                self.alert_uid_retention_windows * self.window_size_seconds
+            )
+            new_hits = self._label_open_cells(now - lookback, now)
+            alert_count, evidence_count, fresh_uids = self._new_alerts(
+                self._last_alert_cut, now
+            )
+            self._last_alert_cut = now
+            self._write_alert_uids(
+                window_n, fresh_uids, alert_count, evidence_count, new_hits
+            )
+            self.logger.log_comp_header(
+                "local_train",
+                f"db | window_{window_n} | read conn {n_conn} arp {n_arp} | "
+                f"placed {len(fetched)} late {placed['late']} "
+                f"next {placed['next']} | newest ts lag "
+                f"{now - placed['newest_ts'] if placed['newest_ts'] else -1:.0f}s",
+            )
+
+            finalized = None
+            if len(self._flow_ring) > self.label_finalize_delay_windows:
+                finalized = self._flow_ring[0]
+                # 3. late arrivals of the cell trained now meet the model
+                #    as it was before training on them
+                self._test_cell(finalized)
+                self._flow_ring.popleft()
+
+            if finalized is None:
                 self.print(
                     f"Window {window_n}: ring warm-up "
-                    f"({ring_stats['ring_cells']}/{self.label_finalize_delay_windows} cells), "
+                    f"({len(self._flow_ring)}/{self.label_finalize_delay_windows} cells), "
                     f"no finalized batch; {alert_count} alerts"
-                    f" -> {ring_stats['new_hits']} ring matches",
+                    f" -> {new_hits} ring matches",
                     1,
                     1,
                 )
-                self.window_flows.clear()
-                self.pending_alerts.clear()
-                self.test_time_predictions.clear()
-                self.training_window_start += self.window_size_seconds
+                self._detect_label_flips(fresh_uids)
+                for cell in self._flow_ring:
+                    self._test_cell(cell)
+                self._end_window()
                 return
 
+            malicious_flows = [
+                f
+                for fid, f in finalized["flows"].items()
+                if fid in finalized["mal_ids"]
+            ]
+            benign_flows = [
+                f
+                for fid, f in finalized["flows"].items()
+                if fid not in finalized["mal_ids"]
+            ]
             self.print(
                 f"Window {window_n}: {len(malicious_flows)} malicious, "
                 f"{len(benign_flows)} benign flows from {alert_count} alerts",
                 0,
                 1,
             )
+            # flips: fresh alerts against flows trained at earlier closes
+            self._detect_label_flips(fresh_uids)
 
             total_labeled = len(malicious_flows) + len(benign_flows)
             if total_labeled == 0:
                 self.print(f"No flows in window {window_n}, skipping", 0, 1)
-                self.window_flows.clear()
-                self.pending_alerts.clear()
-                self.test_time_predictions.clear()
-                self.training_window_start += self.window_size_seconds
+                for cell in self._flow_ring:
+                    self._test_cell(cell)
+                self._end_window()
                 return
 
             self._add_flows_to_buffers(malicious_flows, MALICIOUS)
@@ -2108,19 +2171,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"{total_labeled} total"
             )
             self._log_window_comparisons(
-                malicious_flows, benign_flows, malicious_flow_ids, header
+                malicious_flows,
+                benign_flows,
+                finalized["mal_ids"],
+                header,
+                finalized["preds"],
             )
             # audit marker: finalization lag is visible directly in
             # local_train.log next to the batch lines
             self.logger.log_comp_header(
                 "local_train",
-                f"ring | pending {ring_stats['ring_cells']} cells | "
-                f"finalized mal {ring_stats['finalized_mal']} ben "
-                f"{ring_stats['finalized_ben']} | "
-                f"ring matches {ring_stats['new_hits']} | alerts "
+                f"ring | pending {len(self._flow_ring)} cells | "
+                f"finalized mal {len(malicious_flows)} ben "
+                f"{len(benign_flows)} | "
+                f"ring matches {new_hits} | alerts "
                 f"{alert_count} | flips {len(self._flip_events)}",
             )
 
+            # 4. deferred training on the finalized cell
             self._record_pending_labels(malicious_flows, benign_flows)
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
@@ -2153,16 +2221,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self._local_test = self._blank_test_statistics()
                     self._local_stream_used = False
 
-            self.window_flows.clear()
-            self.pending_alerts.clear()
-            self.test_time_predictions.clear()
-            self.training_window_start += self.window_size_seconds
-
-            if (
-                self.testing_flows_since_last_log > 0
-                and self._using_merged_model
-            ):
-                self.flush_testing_results()
+            # 5. the open cells meet the freshly trained model
+            for cell in self._flow_ring:
+                self._test_cell(cell)
+            self._end_window()
 
         except Exception:
             self.print(
@@ -2170,6 +2232,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 0,
                 1,
             )
+
+    def _end_window(self) -> None:
+        """Advance the wall-clock window and forget bounds no open cell uses."""
+        self.training_window_start += self.window_size_seconds
+        oldest = (
+            self._flow_ring[0]["window"]
+            if self._flow_ring
+            else self.training_count_window
+        )
+        for w in [w for w in self._window_bounds if w < oldest]:
+            del self._window_bounds[w]
+        if self.testing_flows_since_last_log > 0 and self._using_merged_model:
+            self.flush_testing_results()
 
     def handle_p2p_model(self, model_data: dict):
         """
@@ -2754,92 +2829,77 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "history_len",
         ]
 
+    @staticmethod
+    def _to_num(value) -> float:
+        """One value through pd.to_numeric(errors="coerce").fillna(0.0)."""
+        if value is None or isinstance(value, (list, dict)):
+            return 0.0
+        try:
+            num = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return 0.0 if num != num else num
+
     def _extract_flow_features(self, flow: dict) -> Optional[list]:
         """
-        Extract exactly 18 features from a Slips flow dictionary.
+        Extract exactly 18 features from a Slips flow dictionary (conn flow
+        or ARP record), in the fixed order of _get_feature_order().
 
-        Uses same logic as process_features() to ensure consistent feature
-        extraction matching the FIXED_INPUT_DIM constant.
+        Pure Python (no per-flow DataFrame): the value-for-value equivalent
+        of the former pandas implementation, which the unit tests keep as
+        the oracle. Missing numeric fields are 0, appproto defaults to 10,
+        IPs map to int(ip) % 1e6, direction "->" is 1.
 
         Returns list of 18 numeric values or None if extraction fails.
         """
         try:
-            df = pd.DataFrame([flow])
-
-            # Coerce base numerics (matching other ML modules)
-            for col in [
-                "dur",
-                "sport",
-                "dport",
-                "spkts",
-                "dpkts",
-                "sbytes",
-                "dbytes",
-            ]:
-                if col in df.columns:
-                    df[col] = pd.to_numeric(df[col], errors="coerce").fillna(
-                        0.0
-                    )
-                else:
-                    df[col] = 0.0
-
-            # Encode proto using base class method (inclusive)
-            proto_val = str(df.iloc[0].get("proto", ""))
-            df["proto"] = self._encode_proto(proto_val)
-
-            # Encode appproto
-            appproto_val = df.iloc[0].get("appproto")
-            if pd.notna(appproto_val):
-                df["appproto"] = self._encode_appproto(str(appproto_val))
-            else:
-                df["appproto"] = 10.0
-
-            # Infer state using base class method
-            state_str = str(df.iloc[0].get("state", ""))
-            spkts = df.iloc[0]["spkts"]
-            dpkts = df.iloc[0]["dpkts"]
-            df["state"] = self._infer_state(state_str, spkts, dpkts)
-
-            # IP to numeric via ipaddress
-            saddr = df.iloc[0].get("saddr")
-            daddr = df.iloc[0].get("daddr")
-            df["saddr_num"] = (
-                int(ipaddress.ip_address(str(saddr))) % 1000000
-                if saddr and pd.notna(saddr)
-                else 0.0
-            )
-            df["daddr_num"] = (
-                int(ipaddress.ip_address(str(daddr))) % 1000000
-                if daddr and pd.notna(daddr)
-                else 0.0
-            )
-
-            # Direction numeric
-            dir_val = str(df.iloc[0].get("dir_", "->"))
-            df["dir_num"] = 1.0 if dir_val == "->" else 0.0
-
-            # Derived features
-            sbytes = df.iloc[0]["sbytes"]
-            dbytes = df.iloc[0]["dbytes"]
-            dur_val = df.iloc[0]["dur"]
-            df["total_bytes"] = sbytes + dbytes
-            df["total_pkts"] = df.iloc[0]["spkts"] + df.iloc[0]["dpkts"]
-            df["avg_pkt_size"] = sbytes / max(float(spkts), 1.0)
-            df["throughput"] = df["total_bytes"] / max(dur_val, 0.001)
-            history = df.iloc[0].get("history")
-            df["history_len"] = float(len(str(history))) if history else 0.0
-
-            # Extract features in fixed order
-            feature_order = self._get_feature_order()
-            features = []
-            for feat in feature_order:
-                val = df.iloc[0].get(feat, 0.0)
-                if val is None:
-                    val = 0.0
-                features.append(
-                    float(val) if not isinstance(val, str) else 0.0
-                )
-
+            dur = self._to_num(flow.get("dur"))
+            spkts = self._to_num(flow.get("spkts"))
+            dpkts = self._to_num(flow.get("dpkts"))
+            sbytes = self._to_num(flow.get("sbytes"))
+            dbytes = self._to_num(flow.get("dbytes"))
+            appproto = flow.get("appproto")
+            saddr = flow.get("saddr")
+            daddr = flow.get("daddr")
+            history = flow.get("history")
+            total_bytes = sbytes + dbytes
+            values = {
+                "dur": dur,
+                "sport": self._to_num(flow.get("sport")),
+                "dport": self._to_num(flow.get("dport")),
+                "spkts": spkts,
+                "dpkts": dpkts,
+                "sbytes": sbytes,
+                "dbytes": dbytes,
+                "proto": self._encode_proto(str(flow.get("proto", ""))),
+                "appproto": (
+                    self._encode_appproto(str(appproto))
+                    if appproto is not None and appproto == appproto
+                    else 10.0
+                ),
+                "state": self._infer_state(
+                    str(flow.get("state", "")), spkts, dpkts
+                ),
+                "saddr_num": (
+                    int(ipaddress.ip_address(str(saddr))) % 1000000
+                    if saddr
+                    else 0.0
+                ),
+                "daddr_num": (
+                    int(ipaddress.ip_address(str(daddr))) % 1000000
+                    if daddr
+                    else 0.0
+                ),
+                "dir_num": 1.0 if str(flow.get("dir_", "->")) == "->" else 0.0,
+                "total_bytes": total_bytes,
+                "total_pkts": spkts + dpkts,
+                "avg_pkt_size": sbytes / max(spkts, 1.0),
+                "throughput": total_bytes / max(dur, 0.001),
+                "history_len": float(len(str(history))) if history else 0.0,
+            }
+            features = [
+                float(values[feat]) for feat in self._get_feature_order()
+            ]
             if len(features) != SimpleFederatedNet.FIXED_INPUT_DIM:
                 self.print(
                     f"Feature extraction produced {len(features)} features "
@@ -2848,18 +2908,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     1,
                 )
                 return None
-
             return features
         except Exception:
             return None
-
-    def _get_flows_for_ip_in_window(self, ip: str) -> list:
-        """Get flows for an IP in current window."""
-        return [
-            flow
-            for flow_id, flow in self.window_flows.items()
-            if flow.get("saddr") == ip or flow.get("daddr") == ip
-        ]
 
     def _get_simulated_gt(self, flow: dict) -> Optional[str]:
         """
