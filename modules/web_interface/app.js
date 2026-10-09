@@ -34,7 +34,6 @@ const state = {
   drawerGeneration: 0,
   runIdentity: null,
   rangesInitialized: false,
-  titleCounts: { alerts: 0, hosts: 0 },
   localSorts: {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
@@ -846,13 +845,18 @@ function setSummaryCards(items, target = "summary-cards") {
 }
 
 /**
- * Keep the browser title focused on the two primary detection totals.
+ * Show alert and host totals from the rolling live window in the tab title.
  *
- * @param {Object} counts Updated alert or host totals.
+ * @param {Object} counts Live alert and host totals.
  */
-function updatePageTitle(counts = {}) {
-  state.titleCounts = { ...state.titleCounts, ...counts };
-  document.title = `Slips ${compact(state.titleCounts.alerts)} alerts · ${compact(state.titleCounts.hosts)} hosts`;
+function updatePageTitle(counts) {
+  document.title = `Slips ${compact(counts.alerts)} alerts · ${compact(counts.hosts)} hosts`;
+}
+
+/** Refresh live title totals independently of the selected tab and filters. */
+async function loadLiveTitleCounts() {
+  const payload = await api("liveTitleCounts", "/api/live-counts", false, true);
+  if (payload && !payload.not_found) updatePageTitle(payload);
 }
 
 /**
@@ -905,7 +909,6 @@ function renderRunContext(data) {
   byId("evidence-badge").textContent = compact(data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
   byId("logs-badge").textContent = compact(data.counts.module_errors);
-  updatePageTitle({ alerts: data.counts.alerts, hosts: data.counts.hosts });
 }
 
 /** Render the operational overview without supporting metadata or logs. */
@@ -1345,9 +1348,6 @@ function applyPage(name, payload) {
   page.next = payload.next_cursor;
   if (payload.full_total !== undefined) {
     byId(`${name}-badge`).textContent = compact(payload.full_total);
-    if (["alerts", "hosts"].includes(name)) {
-      updatePageTitle({ [name]: payload.full_total });
-    }
   }
   byId(`${name}-count`).textContent = `${payload.page_size} shown · ${compact(payload.total)} match`;
   applySortIndicators(name);
@@ -3625,6 +3625,7 @@ async function pollBackendStatus() {
   if (document.hidden) return;
   try {
     await api("backendStatus", "/api/identity", false);
+    await loadLiveTitleCounts();
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
@@ -3784,4 +3785,5 @@ initDrawerResize();
 window.setInterval(renderHeaderUptime, 1000);
 loadOverview().then(schedulePoll).catch(schedulePoll);
 loadWhitelists().catch(() => {});
+loadLiveTitleCounts().catch(() => {});
 scheduleBackendStatusPoll();

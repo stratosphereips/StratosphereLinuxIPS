@@ -10,6 +10,11 @@ shows **This device** and the hostname separately from the run name. When no nam
 has been learned, the interface says **Name unknown** beside the IP. Name lookup
 uses bounded batches of addresses already visible in the current view.
 
+The browser tab title shows alert and host counts from the rolling one-hour
+**Live** range. It refreshes while the page is visible, regardless of the
+selected tab, search, or date filter. Overview and navigation badges continue
+to show their own totals.
+
 ## Start it
 
 Enable the interface with -w:

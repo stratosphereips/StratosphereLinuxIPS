@@ -688,6 +688,9 @@ def test_overview_prioritizes_operational_data() -> None:
     app_source = Path("modules/web_interface/app.js").read_text(
         encoding="utf-8"
     )
+    server_source = Path("modules/web_interface/server.py").read_text(
+        encoding="utf-8"
+    )
     index_source = Path("modules/web_interface/index.html").read_text(
         encoding="utf-8"
     )
@@ -721,6 +724,63 @@ def test_overview_prioritizes_operational_data() -> None:
     assert '"/api/overview/evidence-counts"' in app_source
     assert "async function loadOverviewEvidenceCounts" in app_source
     assert "document.title = `Slips ${compact" in app_source
+    assert 'api("liveTitleCounts", "/api/live-counts", false, true)' in app_source
+    assert 'path == "/api/live-counts"' in server_source
+    assert "updatePageTitle({ alerts: data.counts.alerts" not in app_source
+    assert "updatePageTitle({ [name]: payload.full_total" not in app_source
+
+
+@pytest.mark.parametrize(
+    "input_type, offset",
+    [("interface", 0), ("file", -5 * 24 * 60 * 60)],
+)
+def test_live_title_counts_match_alert_and_host_ranges(
+    tmp_path: Path, input_type: str, offset: int
+) -> None:
+    """Count only alerts and hosts in the live window for each input clock.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        input_type: Live capture or saved-file input.
+        offset: Age of the newest saved-file events.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = input_type
+    newest = time.time() + offset
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE alerts (alert_time REAL)")
+        connection.executemany(
+            "INSERT INTO alerts VALUES (?)",
+            [(newest - 60,), (newest - 7200,)],
+        )
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.execute(
+            "CREATE TABLE host_snapshots (ip TEXT, observed_at REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE flow_index (event_time REAL, src_ip TEXT, dst_ip TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?)",
+            [
+                ("192.0.2.1", newest - 5000),
+                ("192.0.2.2", newest - 7200),
+                ("192.0.2.3", newest - 300),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO flow_index VALUES (?, ?, ?)",
+            [
+                (newest - 120, "192.0.2.1", "192.0.2.10"),
+                (newest - 7200, "192.0.2.2", "192.0.2.10"),
+            ],
+        )
+
+    assert reader.live_counts() == {"alerts": 1, "hosts": 2}
 
 
 def test_overview_uses_counter_without_scanning_retained_evidence(

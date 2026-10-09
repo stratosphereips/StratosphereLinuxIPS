@@ -1470,6 +1470,50 @@ class RunDataReader:
             **self.validate_run_identity(),
         }
 
+    def live_counts(self) -> Dict[str, int]:
+        """Count alerts and hosts in the lists' rolling live range.
+
+        Returns:
+            Alert and host totals for the same one-hour window used by
+            the live Alerts and Hosts filters.
+        """
+        live_query = {"range": ["live"]}
+        with self._connect_sqlite() as connection:
+            latest_alert = connection.execute(
+                "SELECT MAX(CAST(alert_time AS REAL)) FROM alerts"
+            ).fetchone()[0]
+            alert_start, alert_end, _ = self._time_bounds(
+                live_query, latest_alert
+            )
+            alerts = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM alerts "
+                    "WHERE CAST(alert_time AS REAL) BETWEEN ? AND ?",
+                    (alert_start, alert_end),
+                ).fetchone()[0]
+            )
+        with connect_history(self.history_path, read_only=True) as history:
+            latest_host = history.execute(
+                "SELECT MAX(event_time) FROM flow_index"
+            ).fetchone()[0]
+            if not latest_host:
+                latest_host = history.execute(
+                    "SELECT MAX(observed_at) FROM host_snapshots"
+                ).fetchone()[0]
+            host_start, host_end, _ = self._time_bounds(
+                live_query, latest_host
+            )
+            hosts = int(
+                history.execute(
+                    "SELECT COUNT(*) FROM host_snapshots hs WHERE "
+                    "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
+                    "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip), "
+                    "hs.observed_at) BETWEEN ? AND ?",
+                    (host_start, host_end),
+                ).fetchone()[0]
+            )
+        return {"alerts": alerts, "hosts": hosts}
+
     def response_metadata(self) -> Dict[str, Any]:
         """Return bounded source freshness and indexing checkpoints."""
         with connect_history(self.history_path, read_only=True) as connection:
@@ -5864,6 +5908,8 @@ class RequestHandler(BaseHTTPRequestHandler):
         reader.validate_run_identity()
         if path == "/api/identity":
             payload = reader.identity()
+        elif path == "/api/live-counts":
+            payload = reader.live_counts()
         elif path == "/api/overview":
             payload = reader.overview()
         elif path == "/api/overview/evidence-counts":
