@@ -6040,9 +6040,10 @@ class RequestHandler(BaseHTTPRequestHandler):
         if (
             path == "/api/whitelists"
             and not ipaddress.ip_address(self.client_address[0]).is_loopback
+            and not self._require_password()
         ):
             self._send_json(
-                {"error": "Whitelist changes require a local connection"},
+                {"error": "Remote whitelist changes require web login"},
                 HTTPStatus.FORBIDDEN,
             )
             return

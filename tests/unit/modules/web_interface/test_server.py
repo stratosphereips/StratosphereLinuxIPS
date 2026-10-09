@@ -1,5 +1,6 @@
 from collections import Counter
 import argparse
+from http import HTTPStatus
 from io import BytesIO
 import json
 import socket
@@ -527,6 +528,58 @@ def test_local_web_request_can_add_whitelist_rule() -> None:
         server.shutdown()
         server.server_close()
         worker.join(timeout=5)
+
+
+@pytest.mark.parametrize("requires_password", [True, False])
+def test_remote_whitelist_write_requires_web_login(
+    requires_password: bool,
+) -> None:
+    """Permit authenticated remote writes and reject unprotected ones.
+
+    Parameters:
+        requires_password: Whether web login protects this listener.
+    """
+    _module_factory = ModuleFactory()
+    body = json.dumps(
+        {
+            "action": "add",
+            "value": "192.0.2.4:443",
+            "direction": "dst",
+            "ignore": "alerts",
+        }
+    ).encode()
+    reader = Mock()
+    reader.save_whitelist_rule.return_value = {"value": "192.0.2.4:443"}
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/api/whitelists"
+    handler.client_address = ("192.168.1.20", 54321)
+    handler.headers = {
+        "Host": "192.168.1.10:55000",
+        "Origin": "http://192.168.1.10:55000",
+        "Content-Type": "application/json",
+        "Content-Length": str(len(body)),
+    }
+    handler.rfile = BytesIO(body)
+    handler.server = SimpleNamespace(reader=reader)
+    handler._send_json = Mock()
+    handler._require_password = Mock(return_value=requires_password)
+    handler._session_ok = Mock(return_value=True)
+
+    handler.do_POST()
+
+    if requires_password:
+        reader.save_whitelist_rule.assert_called_once_with(
+            "add", "192.0.2.4:443", "dst", "alerts"
+        )
+        handler._send_json.assert_called_once_with(
+            reader.save_whitelist_rule.return_value
+        )
+    else:
+        reader.save_whitelist_rule.assert_not_called()
+        handler._send_json.assert_called_once_with(
+            {"error": "Remote whitelist changes require web login"},
+            HTTPStatus.FORBIDDEN,
+        )
 
 
 def test_whitelisted_evidence_explains_ip_port_rule() -> None:

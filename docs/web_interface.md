@@ -368,8 +368,9 @@ Web-added rules appear in the Whitelists table with a **Remove** action.
 The web interface writes these rules beside the configured local whitelist in
 a separate `.web.conf` file. Slips reads that file after the configured
 whitelist on future starts. The shipped `config/whitelist.conf` is never
-modified. Saving changes requires a local browser connection, enabled local
-whitelisting, and an active Slips run.
+modified. Saving changes requires enabled local whitelisting and an active
+Slips run. Remote browser connections must use the password-protected web
+interface; an unprotected web interface accepts these changes only locally.
 
 ### Host score history
 
