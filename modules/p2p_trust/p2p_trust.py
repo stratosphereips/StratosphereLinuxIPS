@@ -536,22 +536,22 @@ class Trust(IModule):
                 f"from {saddr} Source: Slips P2P network.{peer_source}"
             )
 
-        for ip in (saddr, attacker_ip):
-            evidence = Evidence(
-                evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
-                attacker=Attacker(
-                    direction=Direction.SRC, ioc_type=IoCType.IP, value=ip
-                ),
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=attacker_ip),
-                timewindow=TimeWindow(number=twid_int),
-                uid=[ip_info.get("uid")],
-                timestamp=str(ip_info.get("stime")),
-            )
-
-            self.db.set_evidence(evidence)
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=attacker_ip,
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=attacker_ip),
+            timewindow=TimeWindow(number=twid_int),
+            uid=[ip_info.get("uid")],
+            timestamp=str(ip_info.get("stime")),
+        )
+        self.db.set_evidence(evidence)
 
     def handle_data_request(self, message_data: str) -> None:
         """

@@ -449,6 +449,47 @@ def test_check_high_entropy_dns_answers_with_call():
 
 
 @pytest.mark.parametrize(
+    "query",
+    [
+        "encoded._slips._udp.local",
+        "encoded._rpi-isolated-a._udp.LOCAL.",
+    ],
+)
+def test_mdns_txt_does_not_raise_high_entropy_evidence(
+    query: str,
+) -> None:
+    """Ignore encoded service discovery TXT records from unicast senders.
+
+    Parameters:
+        query: mDNS service name being answered.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.shannon_entropy_threshold = 4.0
+    dns.estimate_shannon_entropy = Mock(return_value=6.0)
+    dns.set_evidence.suspicious_dns_answer = Mock()
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="mdns-flow",
+        saddr="fe80::8aa2:9eff:fe5e:9342",
+        daddr="ff02::fb",
+        query=query,
+        qclass_name="",
+        qtype_name="TXT",
+        rcode_name="NOERROR",
+        dport="5353",
+        sport="5353",
+        proto="udp",
+        answers=["TXT dnsaddr=/ip4/127.0.0.1/tcp/6668/p2p/QmExample"],
+        TTLs="",
+    )
+
+    dns.check_high_entropy_dns_answers(twid, flow)
+
+    dns.estimate_shannon_entropy.assert_not_called()
+    dns.set_evidence.suspicious_dns_answer.assert_not_called()
+
+
+@pytest.mark.parametrize(
     "domain, saddr, answers, expected_entropy, "
     "estimate_shannon_entropy_call_count",
     [

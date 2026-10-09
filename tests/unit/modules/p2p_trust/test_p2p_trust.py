@@ -44,6 +44,7 @@ def create_trust():
 
 
 @pytest.mark.parametrize("ip_state", ["srcip", "dstip"])
+@pytest.mark.parametrize("source_ip", ["10.0.0.1", "8.8.8.8"])
 @pytest.mark.parametrize(
     "peer_ips, expected_peers",
     [
@@ -58,12 +59,16 @@ def create_trust():
     ],
 )
 def test_p2p_evidence_names_reporting_peers(
-    ip_state: str, peer_ips: list[tuple], expected_peers: str
+    ip_state: str,
+    source_ip: str,
+    peer_ips: list[tuple],
+    expected_peers: str,
 ) -> None:
-    """Include each reporting peer's known IP in P2P evidence.
+    """Emit one finding per flow and include the reporting peers' IPs.
 
     Parameters:
         ip_state: Direction of the reported address in the flow.
+        source_ip: Flow source, which can also be the reported IP.
         peer_ips: Latest stored timestamp and address for each reporter.
         expected_peers: Reporter labels expected in the alert.
     """
@@ -79,7 +84,7 @@ def test_p2p_evidence_names_reporting_peers(
     trust.set_evidence_malicious_ip(
         {
             "ip": "8.8.8.8",
-            "profileid": "profile_10.0.0.1",
+            "profileid": f"profile_{source_ip}",
             "twid": "timewindow1",
             "ip_state": ip_state,
             "uid": "flow-1",
@@ -92,12 +97,11 @@ def test_p2p_evidence_names_reporting_peers(
     trust.trust_db.get_reporter_peerids_for_ip.assert_called_once_with(
         "8.8.8.8"
     )
-    assert trust.db.set_evidence.call_count == 2
-    for call_args in trust.db.set_evidence.call_args_list:
-        assert (
-            f"Reported by peers: {expected_peers}."
-            in call_args.args[0].description
-        )
+    trust.db.set_evidence.assert_called_once()
+    evidence = trust.db.set_evidence.call_args.args[0]
+    assert evidence.attacker.value == "8.8.8.8"
+    assert str(evidence.profile) == "profile_8.8.8.8"
+    assert f"Reported by peers: {expected_peers}." in evidence.description
     assert trust.trust_db.get_ip_of_peer.call_args_list == [
         call("peer-a"),
         call("peer-b"),

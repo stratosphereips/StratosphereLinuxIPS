@@ -440,9 +440,12 @@ class DNS(IFlowalertsAnalyzer):
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
         """
-        # to avoid FPs when devices announce their presence in the TXT
-        # records of mDNS answers
-        if ipaddress.ip_address(flow.saddr).is_multicast:
+        # mDNS service discovery often publishes encoded TXT values, including
+        # Pigeon's peer addresses. These local announcements are not DNS
+        # tunneling signals, regardless of the source address.
+        if ipaddress.ip_address(flow.saddr).is_multicast or (
+            flow.query or ""
+        ).rstrip(".").lower().endswith(".local"):
             return
 
         if not flow.answers:
