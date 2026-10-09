@@ -6,12 +6,14 @@ from typing import Set, Tuple
 
 from flask import (
     Flask,
+    Response,
     abort,
     jsonify,
     make_response,
     redirect,
     render_template,
     request,
+    send_file,
 )
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -44,7 +46,7 @@ from .utils import (
     is_redis_rdb_file,
 )
 
-UNAUTHENTICATED_PATHS = {"/login", "/favicon.ico"}
+UNAUTHENTICATED_PATHS = {"/login", "/favicon.ico", "/slips-logo.png"}
 
 MAX_RDB_UPLOAD_SIZE = 512 * 1024 * 1024
 RDB_UPLOAD_DIR = "webinterface/uploaded_rdb"
@@ -277,14 +279,18 @@ def index() -> str:
 
 
 @app.route("/favicon.ico")
-def favicon() -> Tuple[str, int]:
+@app.route("/slips-logo.png")
+def favicon() -> Response:
     """
-    Return an empty favicon response to avoid browser 404 noise.
+    Serve the shared Slips logo for the tab icon and login page.
 
     Return:
-    Empty response body and HTTP 204 status code.
+    The logo PNG response.
     """
-    return "", 204
+    return send_file(
+        Path("../modules/web_interface/slips-logo.png"),
+        mimetype="image/png",
+    )
 
 
 @app.route("/db/<int:new_port>", methods=["POST"])

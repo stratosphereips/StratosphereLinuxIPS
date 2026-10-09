@@ -3,6 +3,7 @@
 
 import ipaddress
 import os
+import re
 import sqlite3
 import time
 from contextlib import nullcontext
@@ -75,6 +76,11 @@ class HostProfileStore:
                 "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
                 "name TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', "
                 "updated_at REAL NOT NULL, PRIMARY KEY (network_id, ip))"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS device_annotations ("
+                "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
             )
         if os.geteuid() == 0:
             os.chown(path, owner.st_uid, owner.st_gid)
@@ -276,7 +282,7 @@ class HostProfileStore:
     def set_host_annotation(
         path: Path, ip: str, network_id: str, name: str, note: str
     ) -> None:
-        """Persist a user name and note for one network-specific host.
+        """Persist a user name and note for a host and its known device MAC.
 
         Parameters:
             path: Permanent host profile database.
@@ -287,6 +293,11 @@ class HostProfileStore:
         """
         normalized = str(ipaddress.ip_address(ip))
         with sqlite3.connect(path, timeout=5) as connection:
+            mac_row = connection.execute(
+                "SELECT value FROM facts WHERE network_id=? AND ip=? "
+                "AND kind='mac' ORDER BY last_seen DESC LIMIT 1",
+                (network_id, normalized),
+            ).fetchone()
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS host_annotations ("
                 "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
@@ -306,12 +317,124 @@ class HostProfileStore:
                     "DELETE FROM host_annotations WHERE network_id=? AND ip=?",
                     (network_id, normalized),
                 )
+            mac = HostProfileStore._usable_mac(mac_row[0] if mac_row else "")
+            if mac and network_id.startswith("gateway:"):
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS device_annotations ("
+                    "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+                    "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO device_annotations VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(mac) DO UPDATE SET name=excluded.name, "
+                    "note=excluded.note, updated_at=excluded.updated_at",
+                    (mac, name, note, time.time()),
+                )
+
+    @staticmethod
+    def _usable_mac(value: str | None) -> str:
+        """Accept a specific unicast MAC for matching one device.
+
+        Parameters:
+            value: MAC address stored with a host profile.
+
+        Returns:
+            Normalized MAC, or an empty string for an unusable address.
+        """
+        mac = str(value or "").strip().lower()
+        if not re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", mac):
+            return ""
+        if mac == "00:00:00:00:00:00" or int(mac[:2], 16) & 1:
+            return ""
+        return mac
+
+    @staticmethod
+    def _resolved_annotations(
+        connection: sqlite3.Connection, ips: Iterable[str]
+    ) -> dict[tuple[str, str], dict[str, str]]:
+        """Resolve profile names by device MAC, then exact host profile.
+
+        Parameters:
+            connection: Open permanent host database connection.
+            ips: IP addresses whose network profiles are being displayed.
+
+        Returns:
+            Effective annotations indexed by network identity and IP.
+        """
+        keys = list(dict.fromkeys(ips))
+        if not keys:
+            return {}
+        placeholders = ",".join("?" for _ in keys)
+        mac_query = (
+            "(SELECT lower(f.value) FROM facts f WHERE f.network_id=h.network_id "
+            "AND f.ip=h.ip AND f.kind='mac' "
+            "ORDER BY f.last_seen DESC LIMIT 1)"
+        )
+        try:
+            rows = connection.execute(
+                "SELECT h.network_id, h.ip, a.name, a.note, "
+                f"{mac_query} AS mac FROM hosts h "
+                "LEFT JOIN host_annotations a ON a.network_id=h.network_id "
+                "AND a.ip=h.ip WHERE h.ip IN (" + placeholders + ") "
+                "ORDER BY h.last_seen DESC",
+                keys,
+            ).fetchall()
+        except sqlite3.OperationalError:
+            return {}
+        macs = {
+            HostProfileStore._usable_mac(row[4])
+            for row in rows
+            if row[0].startswith("gateway:")
+        } - {""}
+        device_annotations: dict[str, dict[str, str]] = {}
+        try:
+            for mac, name, note in connection.execute(
+                "SELECT mac, name, note FROM device_annotations"
+            ):
+                if mac in macs:
+                    device_annotations[mac] = {
+                        "name": name or "",
+                        "note": note or "",
+                    }
+        except sqlite3.OperationalError:
+            pass
+        legacy_annotations: dict[str, dict[str, str]] = {}
+        for name, note, mac in connection.execute(
+            "SELECT a.name, a.note, "
+            "(SELECT lower(f.value) FROM facts f "
+            "WHERE f.network_id=a.network_id AND f.ip=a.ip "
+            "AND f.kind='mac' ORDER BY f.last_seen DESC LIMIT 1) AS mac "
+            "FROM host_annotations a WHERE a.network_id LIKE 'gateway:%' "
+            "ORDER BY a.updated_at DESC"
+        ):
+            mac = HostProfileStore._usable_mac(mac)
+            if mac in macs and (name or note):
+                legacy_annotations.setdefault(
+                    mac, {"name": name or "", "note": note or ""}
+                )
+        resolved: dict[tuple[str, str], dict[str, str]] = {}
+        for network_id, ip, name, note, mac in rows:
+            mac = (
+                HostProfileStore._usable_mac(mac)
+                if network_id.startswith("gateway:")
+                else ""
+            )
+            direct = {"name": name or "", "note": note or ""}
+            if mac in device_annotations:
+                resolved[(network_id, ip)] = device_annotations[mac]
+            elif name or note:
+                resolved[(network_id, ip)] = direct
+            else:
+                resolved[(network_id, ip)] = legacy_annotations.get(
+                    mac, direct
+                )
+        return resolved
 
     @staticmethod
     def annotations_for_ips(
         path: Path, ips: Iterable[str]
     ) -> dict[str, dict[str, str]]:
-        """Read one latest network annotation per IP in a bounded query.
+        """Read each displayed device's effective saved annotation.
 
         Parameters:
             path: Permanent host profile database.
@@ -323,23 +446,13 @@ class HostProfileStore:
         keys = list(dict.fromkeys(ips))
         if not keys or not path.exists():
             return {}
-        placeholders = ",".join("?" for _ in keys)
         with sqlite3.connect(
             f"file:{path}?mode=ro", uri=True, timeout=1
         ) as connection:
-            try:
-                rows = connection.execute(
-                    "SELECT h.ip, a.name, a.note FROM hosts h "
-                    "LEFT JOIN host_annotations a ON a.network_id=h.network_id "
-                    "AND a.ip=h.ip WHERE h.ip IN (" + placeholders + ") "
-                    "ORDER BY h.last_seen DESC",
-                    keys,
-                ).fetchall()
-            except sqlite3.OperationalError:
-                return {}
+            rows = HostProfileStore._resolved_annotations(connection, keys)
         result: dict[str, dict[str, str]] = {}
-        for ip, name, note in rows:
-            result.setdefault(ip, {"name": name or "", "note": note or ""})
+        for (_, ip), annotation in rows.items():
+            result.setdefault(ip, annotation)
         return result
 
     def _network_state(self, interface: str) -> dict[str, Any]:
@@ -661,17 +774,9 @@ class HostProfileStore:
             names = HostProfileStore._network_names_from_connection(
                 conn, (host["network_id"] for host in hosts)
             )
-            try:
-                annotations = {
-                    network_id: {"user_name": name, "user_note": note}
-                    for network_id, name, note in conn.execute(
-                        "SELECT network_id, name, note FROM host_annotations "
-                        "WHERE ip=?",
-                        (normalized,),
-                    )
-                }
-            except sqlite3.OperationalError:
-                annotations = {}
+            annotations = HostProfileStore._resolved_annotations(
+                conn, (normalized,)
+            )
             profiles = []
             for host in hosts:
                 facts = conn.execute(
@@ -688,10 +793,12 @@ class HostProfileStore:
                         "network_label": names.get(
                             host["network_id"], host["network_label"]
                         ),
-                        **annotations.get(
-                            host["network_id"],
-                            {"user_name": "", "user_note": ""},
-                        ),
+                        "user_name": annotations.get(
+                            (host["network_id"], normalized), {}
+                        ).get("name", ""),
+                        "user_note": annotations.get(
+                            (host["network_id"], normalized), {}
+                        ).get("note", ""),
                         "facts": [
                             dict(fact)
                             for fact in facts

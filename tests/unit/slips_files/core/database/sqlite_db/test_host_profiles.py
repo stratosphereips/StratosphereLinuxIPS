@@ -184,6 +184,97 @@ def test_user_annotation_persists_for_exact_network_host(
     assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
 
 
+def test_device_annotation_survives_network_and_address_changes(
+    tmp_path: Path,
+) -> None:
+    """Keep an old saved name on the same MAC, without naming a reused IP.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "host_profiles.sqlite"
+    network = {
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }
+    old = HostProfileStore(path, "old-run", lambda _: network, ["en0"])
+    old.observe_flow(
+        SimpleNamespace(
+            interface="en0", starttime="100", type_="dhcp",
+            saddr="192.168.1.20", daddr="192.168.1.1",
+            host_name="", smac="02:00:00:00:00:20",
+        )
+    )
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?)",
+            (
+                "gateway:aa:bb:cc:dd:ee:01", "192.168.1.20",
+                "Cherry", "My device", 150.0,
+            ),
+        )
+
+    network["gateway_mac"] = "aa:bb:cc:dd:ee:02"
+    current = HostProfileStore(path, "new-run", lambda _: network, ["en0"])
+    for ip, mac, when in (
+        ("192.168.1.21", "02:00:00:00:00:20", "200"),
+        ("192.168.1.20", "02:00:00:00:00:21", "201"),
+    ):
+        current.observe_flow(
+            SimpleNamespace(
+                interface="en0", starttime=when, type_="dhcp",
+                saddr=ip, daddr="192.168.1.1", host_name="", smac=mac,
+            )
+        )
+    with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE device_annotations")
+
+    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry"
+    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == ""
+    assert HostProfileStore.annotations_for_ips(
+        path, ["192.168.1.21", "192.168.1.20"]
+    ) == {
+        "192.168.1.21": {"name": "Cherry", "note": "My device"},
+        "192.168.1.20": {"name": "", "note": ""},
+    }
+
+    HostProfileStore.set_host_annotation(
+        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02",
+        "Cherry II", "Updated note",
+    )
+    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry II"
+    assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == "Cherry II"
+
+    HostProfileStore.set_host_annotation(
+        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
+    )
+    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == ""
+    assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("02:AA:BB:CC:DD:EE", "02:aa:bb:cc:dd:ee"),
+        ("00:00:00:00:00:00", ""),
+        ("01:00:5e:00:00:01", ""),
+        ("unknown", ""),
+    ],
+)
+def test_device_annotation_uses_only_unicast_macs(
+    value: str, expected: str
+) -> None:
+    """Reject shared and invalid MACs before linking saved host names.
+
+    Parameters:
+        value: Candidate stored MAC value.
+        expected: Safe normalized device MAC, if any.
+    """
+    _module_factory = ModuleFactory()
+    assert HostProfileStore._usable_mac(value) == expected
+
+
 @pytest.mark.parametrize(
     "port, expected_kind",
     [("5353", "mdns_name"), ("53", "dns_name")],

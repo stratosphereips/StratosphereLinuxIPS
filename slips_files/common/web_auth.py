@@ -104,6 +104,7 @@ def login_page_html(error: Optional[str], post_path: str = "/login") -> str:
     return f"""<!doctype html>
 <html><head><title>Slips - login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
 <style>
 :root {{
   color-scheme: dark;
@@ -141,7 +142,7 @@ button:hover {{ opacity:.9; }}
 <body>
 <form method="post" action="{post_path}">
 <div class="login-brand">
-<img class="login-logo" src="/slips-logo.png" alt="Slips">
+<img class="login-logo" src="/slips-logo.png?v=4" alt="Slips">
 <h2>Slips</h2>
 <p class="password-hint">{escape(_password_hint())}</p>
 </div>

@@ -5969,7 +5969,6 @@ class RequestHandler(BaseHTTPRequestHandler):
     UNAUTHENTICATED_PATHS = {
         "/login",
         "/style.css",
-        "/favicon.svg",
         "/slips-logo.png",
     }
 
@@ -6003,10 +6002,6 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/": ("index.html", "text/html; charset=utf-8"),
             "/app.js": ("app.js", "text/javascript; charset=utf-8"),
             "/style.css": ("style.css", "text/css; charset=utf-8"),
-            "/favicon.svg": (
-                Path(__file__).with_name("favicon.svg"),
-                "image/svg+xml",
-            ),
             "/slips-logo.png": (
                 Path(__file__).with_name("slips-logo.png"),
                 "image/png",

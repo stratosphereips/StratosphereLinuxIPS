@@ -83,18 +83,10 @@ def test_idle_connection_does_not_block_page_requests() -> None:
             page = response.read()
             assert b"Slips" in page
             assert b'class="brand-logo"' in page
-            assert b'src="/favicon.svg?v=3"' in page
+            assert b'src="/slips-logo.png?v=4"' in page
             assert b'<p class="brand-name">SLIPS</p>' in page
         with urlopen(
-            f"http://127.0.0.1:{port}/favicon.svg", timeout=10
-        ) as response:
-            assert response.status == 200
-            assert response.headers["Content-Type"] == "image/svg+xml"
-            favicon = response.read()
-            assert b"<svg" in favicon
-            assert b'xmlns="http://www.w3.org/2000/svg"' in favicon
-        with urlopen(
-            f"http://127.0.0.1:{port}/slips-logo.png", timeout=10
+            f"http://127.0.0.1:{port}/slips-logo.png?v=4", timeout=10
         ) as response:
             assert response.status == 200
             assert response.headers["Content-Type"] == "image/png"
@@ -699,15 +691,9 @@ def test_overview_prioritizes_operational_data() -> None:
     )[0]
 
     assert (
-        'rel="icon" href="/favicon.svg?v=2" type="image/svg+xml" sizes="any"'
+        'rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512"'
         in index_source
     )
-    favicon_source = Path("modules/web_interface/favicon.svg").read_text(
-        encoding="utf-8"
-    )
-    assert "<rect" not in favicon_source
-    assert 'viewBox="0 0 128 128"' in favicon_source
-    assert 'stroke-width="7.5"' in favicon_source
     assert 'data-tab="logs"' in index_source
     assert 'data-tab="metadata"' in index_source
     assert 'id="logs-table"' in index_source
