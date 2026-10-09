@@ -128,7 +128,8 @@ waits no more than 30 seconds for modules to finish, even when
 `wait_for_modules_to_finish` is configured for a much longer natural analysis
 completion. A second Ctrl-C forces immediate cleanup. If modules exceed the
 grace period, Slips reports this and stops them before asking about the web
-interface.
+interface. The web-interface question is also recorded in `slips.log`, so the
+log shows when shutdown is waiting for a console answer.
 
 If the `slipsBlocking` chain contains Slips-managed rules at shutdown, Slips
 first asks `Keep the installed firewall rules? [Y/n]`. Press Enter or answer
