@@ -23,6 +23,99 @@ def create_flow_database(path) -> None:
         )
 
 
+def test_tail_errors_retains_traceback_across_polls(tmp_path) -> None:
+    """Keep continuation lines with their event when they arrive later."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    first = "2026/10/09 13:54:02.445783 [brute_force_detector] Traceback (most recent call last):"
+    second = "2026/10/09 13:54:03.000000 [other_module] Another error"
+    error_path.write_text(f"{first}\n  File \"detector.py\", line 461\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+
+    assert collector.tail_errors() == 1
+    with error_path.open("a") as handle:
+        handle.write(f"RecursionError: maximum recursion depth exceeded\n{second}\n")
+    assert collector.tail_errors() == 1
+
+    with connect_history(history_path, read_only=True) as connection:
+        rows = connection.execute(
+            "SELECT module, message, line FROM error_events ORDER BY id"
+        ).fetchall()
+    assert len(rows) == 2
+    assert rows[0]["module"] == "brute_force_detector"
+    assert rows[0]["message"] == "Traceback (most recent call last):"
+    assert '  File "detector.py", line 461' in rows[0]["line"]
+    assert "RecursionError: maximum recursion depth exceeded" in rows[0]["line"]
+    assert rows[1]["line"] == second
+
+
+def test_tail_errors_backfills_existing_header_only_events(tmp_path) -> None:
+    """Repair an already imported traceback without duplicating its row."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    header = "2026/10/09 13:54:02.445783 [brute_force_detector] Traceback (most recent call last):"
+    error_path.write_text(f"{header}\n  File \"detector.py\", line 461\nValueError: bad data\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "brute_force_detector", "Traceback (most recent call last):", header),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            ("error_offset:errors.log", str(error_path.stat().st_size)),
+        )
+
+    assert collector.tail_errors() == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = connection.execute("SELECT line FROM error_events").fetchall()
+    assert len(rows) == 1
+    assert '  File "detector.py", line 461' in rows[0]["line"]
+    assert rows[0]["line"].endswith("ValueError: bad data")
+
+
+def test_tail_errors_backfill_preserves_repeated_event_order(tmp_path) -> None:
+    """Match repeated headers to the correct historical occurrence."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    header = "2026/10/09 13:54:02.445783 [worker] Traceback (most recent call last):"
+    first = f"{header}\nValueError: first"
+    error_path.write_text(f"{first}\n{header}\nValueError: second\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "worker", "Traceback (most recent call last):", first),
+        )
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "worker", "Traceback (most recent call last):", header),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            ("error_offset:errors.log", str(error_path.stat().st_size)),
+        )
+
+    assert collector.tail_errors() == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = [row[0] for row in connection.execute(
+            "SELECT line FROM error_events ORDER BY id"
+        )]
+    assert rows == [first, f"{header}\nValueError: second"]
+
+
 def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
     _module_factory = ModuleFactory()
     output_dir = tmp_path / "run"

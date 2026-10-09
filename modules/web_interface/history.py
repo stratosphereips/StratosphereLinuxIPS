@@ -6,6 +6,7 @@ import json
 import re
 import sqlite3
 import time
+from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -17,6 +18,7 @@ ERROR_LINE = re.compile(
     r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+"
     r"\[(?P<module>[^]]+)]\s+(?P<message>.*)$"
 )
+MAX_ERROR_EVENT_CHARS = 256 * 1024
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
 FLOW_INDEX_BATCH_SIZE = 5000
 FLOW_RECONCILE_BATCH_SIZE = 500
@@ -428,6 +430,106 @@ class HistoryCollector:
         except ValueError:
             return time.time()
 
+    @staticmethod
+    def _store_error_event(
+        connection: sqlite3.Connection,
+        event_id: Optional[int],
+        event_time: float,
+        module: str,
+        message: str,
+        raw_text: str,
+    ) -> int:
+        """Insert a log event or extend its raw multiline source.
+
+        Parameters:
+            connection: Writable history database connection.
+            event_id: Existing event ID when extending an earlier block.
+            event_time: Timestamp from the event header.
+            module: Module in the event header.
+            message: Summary from the event header.
+            raw_text: Header and retained continuation lines.
+
+        Returns:
+            Stored event ID.
+        """
+        if event_id is not None:
+            connection.execute(
+                "UPDATE error_events SET line = ? WHERE id = ?",
+                (raw_text, event_id),
+            )
+            return event_id
+        cursor = connection.execute(
+            "INSERT INTO error_events "
+            "(event_time, module, message, line) VALUES (?, ?, ?, ?)",
+            (event_time, module, message, raw_text),
+        )
+        return int(cursor.lastrowid)
+
+    @staticmethod
+    def _backfill_error_continuations(
+        connection: sqlite3.Connection, error_path: Path
+    ) -> int:
+        """Attach existing traceback lines to imported header-only events.
+
+        Parameters:
+            connection: Writable history database connection.
+            error_path: Current Slips error log.
+
+        Returns:
+            Number of existing events repaired.
+        """
+        matching_ids: dict[str, deque[Optional[int]]] = defaultdict(deque)
+        for row in connection.execute(
+            "SELECT id, line FROM error_events ORDER BY id"
+        ):
+            raw_text = str(row["line"])
+            header = raw_text.split("\n", 1)[0]
+            matching_ids[header].append(
+                int(row["id"]) if "\n" not in raw_text else None
+            )
+        if not matching_ids:
+            return 0
+
+        repaired = 0
+        current_id: Optional[int] = None
+        current_lines: list[str] = []
+        current_size = 0
+        try:
+            with error_path.open(
+                "r", encoding="utf-8", errors="replace"
+            ) as handle:
+                for line in handle:
+                    header = line.rstrip()
+                    if ERROR_LINE.match(header):
+                        if current_id is not None and len(current_lines) > 1:
+                            connection.execute(
+                                "UPDATE error_events SET line = ? WHERE id = ?",
+                                ("\n".join(current_lines), current_id),
+                            )
+                            repaired += 1
+                        ids = matching_ids.get(header)
+                        current_id = ids.popleft() if ids else None
+                        current_lines = (
+                            [header] if current_id is not None else []
+                        )
+                        current_size = len(header)
+                    elif (
+                        current_id is not None
+                        and current_size < MAX_ERROR_EVENT_CHARS
+                    ):
+                        continuation = line.rstrip("\r\n")
+                        current_lines.append(continuation)
+                        current_size += len(continuation) + 1
+        except OSError:
+            return repaired
+        if current_id is not None and len(current_lines) > 1:
+            connection.execute(
+                "UPDATE error_events SET line = ? WHERE id = ?",
+                ("\n".join(current_lines), current_id),
+            )
+            repaired += 1
+        return repaired
+
     def tail_errors(self) -> int:
         """
         Archive newly appended module log events.
@@ -441,14 +543,47 @@ class HistoryCollector:
         if not error_path.exists():
             return 0
         offset_key = f"error_offset:{error_path.name}"
+        last_event_key = f"error_last_event_id:{error_path.name}"
         with connect_history(self.history_path) as connection:
+            backfill_key = f"error_multiline_backfilled:{error_path.name}"
+            if self._metadata_get(connection, backfill_key, "0") != "1":
+                self._backfill_error_continuations(connection, error_path)
+                self._metadata_set(connection, backfill_key, 1)
             offset = int(self._metadata_get(connection, offset_key, "0"))
             try:
                 if error_path.stat().st_size < offset:
                     offset = 0
             except OSError:
                 return 0
-            events: List[tuple[Any, ...]] = []
+            active_id: Optional[int] = None
+            active_event: Optional[tuple[float, str, str]] = None
+            active_lines: list[str] = []
+            active_size = 0
+            dirty = False
+            if offset:
+                previous_id = int(
+                    self._metadata_get(connection, last_event_key, "0")
+                )
+                if previous_id == 0:
+                    latest = connection.execute(
+                        "SELECT id FROM error_events ORDER BY id DESC LIMIT 1"
+                    ).fetchone()
+                    previous_id = int(latest["id"]) if latest else 0
+                previous = connection.execute(
+                    "SELECT id, event_time, module, message, line "
+                    "FROM error_events WHERE id = ?",
+                    (previous_id,),
+                ).fetchone()
+                if previous is not None:
+                    active_id = int(previous["id"])
+                    active_event = (
+                        float(previous["event_time"]),
+                        str(previous["module"]),
+                        str(previous["message"]),
+                    )
+                    active_lines = str(previous["line"]).split("\n")
+                    active_size = len(str(previous["line"]))
+            event_count = 0
             new_offset = offset
             try:
                 with error_path.open(
@@ -465,30 +600,49 @@ class HistoryCollector:
                             break
                         new_offset = handle.tell()
                         match = ERROR_LINE.match(line.rstrip())
-                        if not match:
-                            continue
-                        events.append(
-                            (
+                        if match:
+                            if active_event is not None and dirty:
+                                active_id = self._store_error_event(
+                                    connection,
+                                    active_id,
+                                    *active_event,
+                                    "\n".join(active_lines),
+                                )
+                            header = line.rstrip()
+                            active_event = (
                                 self._error_timestamp(
-                                    match.group("date"),
-                                    match.group("clock"),
+                                    match.group("date"), match.group("clock")
                                 ),
                                 match.group("module"),
                                 match.group("message"),
-                                line.rstrip(),
                             )
-                        )
+                            active_id = None
+                            active_lines = [header]
+                            active_size = len(header)
+                            dirty = True
+                            event_count += 1
+                        elif (
+                            active_event is not None
+                            and active_size < MAX_ERROR_EVENT_CHARS
+                        ):
+                            continuation = line.rstrip("\r\n")
+                            active_lines.append(continuation)
+                            active_size += len(continuation) + 1
+                            dirty = True
             except OSError:
                 return 0
-            if events:
-                connection.executemany(
-                    "INSERT INTO error_events "
-                    "(event_time, module, message, line) VALUES (?, ?, ?, ?)",
-                    events,
+            if active_event is not None and dirty:
+                active_id = self._store_error_event(
+                    connection,
+                    active_id,
+                    *active_event,
+                    "\n".join(active_lines),
                 )
+            if active_id is not None:
+                self._metadata_set(connection, last_event_key, active_id)
             self._metadata_set(connection, offset_key, new_offset)
             self._metadata_set(connection, "error_log_name", error_path.name)
-            return len(events)
+            return event_count
 
     def snapshot_hosts(self) -> int:
         """

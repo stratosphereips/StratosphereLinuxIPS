@@ -1446,6 +1446,31 @@ def test_metadata_and_logs_endpoints_are_bounded(tmp_path: Path) -> None:
     assert logs["items"][0]["line"] == "raw line"
 
 
+def test_logs_show_the_final_exception_in_traceback_summary(tmp_path: Path) -> None:
+    """Make the cause visible in the log table as well as the raw drawer."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as history:
+        history.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (
+                100.0,
+                "brute_force_detector",
+                "Traceback (most recent call last):",
+                "Traceback (most recent call last):\n"
+                "  File \"detector.py\", line 461\n"
+                "RecursionError: maximum recursion depth exceeded",
+            ),
+        )
+
+    item = reader.logs()["items"][0]
+    assert "RecursionError: maximum recursion depth exceeded" in item["message"]
+    assert "  File \"detector.py\", line 461" in item["line"]
+
+
 def test_log_rows_open_the_colored_raw_console() -> None:
     """Keep each log row clickable with its exact source line visible."""
     _module_factory = ModuleFactory()

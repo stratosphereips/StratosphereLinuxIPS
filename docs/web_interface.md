@@ -201,7 +201,7 @@ the durable evidence table is empty; afterward, the append-only alerts file is
 processed incrementally from its saved byte offset once per minute. The web
 workers never rescan all retained profile/time-window keys on a timer.
 
-The canonical error source is output/<run>/errors.log. For older runs, output/<run>/error.log is used only when errors.log does not exist. It is tailed from a saved byte offset and is never reread completely.
+The canonical error source is output/<run>/errors.log. For older runs, output/<run>/error.log is used only when errors.log does not exist. New lines are tailed from a saved byte offset. On upgrade, the collector scans the current log once to attach traceback continuation lines to previously imported events.
 
 The web server's own log is:
 
@@ -275,8 +275,9 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 The Logs tab shows the newest bounded runtime events parsed from the run's
 `errors.log`. Select any row to open a console-style investigation panel with
-the complete timestamp, module, presentation severity, full message, and the
-untouched raw source line. Colors highlight severity, paths, and IP addresses
+the complete timestamp, module, presentation severity, and raw multiline source
+block. Traceback rows also show the final exception when one is available.
+Colors highlight severity, paths, and IP addresses
 without rewriting the stored log. Keyboard users can open a selected row with
 Enter.
 

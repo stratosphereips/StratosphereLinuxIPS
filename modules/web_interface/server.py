@@ -4309,6 +4309,17 @@ class RunDataReader:
                     "LIMIT 100"
                 ).fetchall()
             ]
+        for item in items:
+            if not str(item["message"]).startswith("Traceback"):
+                continue
+            for line in reversed(str(item["line"]).splitlines()):
+                cause = line.strip()
+                if re.match(
+                    r"^(?:[A-Za-z_][\w.]*)(?:Error|Exception|Interrupt):",
+                    cause,
+                ):
+                    item["message"] = f"{item['message']} — {cause[:240]}"
+                    break
         return {"items": items, "total": total, "updated_at": time.time()}
 
     @staticmethod
