@@ -107,6 +107,10 @@ def test_ask_user_to_stop_web_interface(
         result = process_manager._ask_user_to_stop_web_interface()
 
     assert result is expected_stop
+    process_manager.main.print.assert_any_call(
+        "Slips analysis has stopped. Stop the web interface? [y/N]",
+        log_to_logfiles_only=True,
+    )
 
 
 def test_stop_web_interface_reports_status_after_server_stops() -> None:
