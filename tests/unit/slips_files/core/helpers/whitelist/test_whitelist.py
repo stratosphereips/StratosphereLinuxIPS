@@ -47,9 +47,12 @@ def test_live_flow_whitelist_requires_exact_slips_socket(
     whitelist._flow_contains_whitelisted_mac = Mock(return_value=False)
     whitelist.org_analyzer.is_whitelisted = Mock(return_value=False)
     flow = SimpleNamespace(
-        saddr="192.0.2.10", sport=51234,
-        daddr="198.51.100.43", dport=43,
-        proto="tcp", type_="conn",
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=43,
+        proto="tcp",
+        type_="conn",
     )
 
     assert whitelist.is_whitelisted_flow(flow) is expected
@@ -64,8 +67,11 @@ def test_offline_flow_ignores_live_slips_socket_registry() -> None:
     whitelist = factory.create_whitelist_obj()
     whitelist._filter_slips_own_traffic = False
     flow = SimpleNamespace(
-        saddr="192.0.2.10", sport=51234,
-        daddr="198.51.100.43", dport=43, proto="tcp",
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=43,
+        proto="tcp",
     )
 
     assert whitelist._is_slips_own_flow(flow) is False
@@ -99,8 +105,10 @@ def test_whois_subprocess_allowance_is_limited_to_tcp_43(
     whitelist.db.is_slips_own_service_port.return_value = marked
     whitelist.db.is_slips_own_source_ip.return_value = False
     flow = SimpleNamespace(
-        saddr="192.0.2.10", sport=51234,
-        daddr="198.51.100.43", dport=dst_port,
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=dst_port,
         proto=proto,
     )
 
@@ -250,9 +258,7 @@ def test_known_apple_and_google_ip_ranges_match_whitelist(
     whitelist = ModuleFactory().create_whitelist_obj()
     analyzer = whitelist.org_analyzer
     first_octet = ip.split(".")[0]
-    analyzer.bloom_filters = {
-        org: {"asns": [], "first_octets": [first_octet]}
-    }
+    analyzer.bloom_filters = {org: {"asns": [], "first_octets": [first_octet]}}
     whitelist.db.get_asn_info.return_value = None
     whitelist.db.is_ip_in_org_ips.return_value = [cidr]
 
@@ -683,8 +689,8 @@ def test_ip_port_rule_matching(
         "[fe80::1]:5353": {"from": "dst", "what_to_ignore": "alerts"},
     }
     whitelist.bloom_filters.ips = rules
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(rules[key]) if key in rules else None
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
     )
 
     assert (
@@ -706,8 +712,8 @@ def test_ip_port_rule_coexists_with_unscoped_rule() -> None:
         },
     }
     whitelist.bloom_filters.ips = rules
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(rules[key]) if key in rules else None
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
     )
 
     assert whitelist.ip_analyzer.is_whitelisted(
@@ -718,6 +724,29 @@ def test_ip_port_rule_coexists_with_unscoped_rule() -> None:
     )
     assert not whitelist.ip_analyzer.is_whitelisted(
         "192.168.1.163", Direction.DST, "flows", 80
+    )
+
+
+def test_web_added_ip_rule_refreshes_a_running_analyzer() -> None:
+    """A new Redis rule must pass the worker's process-local Bloom filter."""
+    whitelist = ModuleFactory().create_whitelist_obj()
+    rule = {"from": "dst", "what_to_ignore": "alerts"}
+    whitelist.db.get_whitelist.return_value = {
+        "192.0.2.4:443": json.dumps(rule)
+    }
+    whitelist.db.is_whitelisted.side_effect = lambda value, _type: (
+        json.dumps(rule) if value == "192.0.2.4:443" else None
+    )
+    whitelist.bloom_filters._create_bloom_filter.return_value = {
+        "192.0.2.4:443"
+    }
+    whitelist.ip_analyzer._next_whitelist_refresh = 0
+
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.4", Direction.DST, "alerts", 443
+    )
+    whitelist.bloom_filters._create_bloom_filter.assert_called_once_with(
+        {"192.0.2.4:443"}, 0.001
     )
 
 
@@ -751,10 +780,8 @@ def test_flow_ip_port_uses_matching_side(
     address = flow.saddr if side == "src" else flow.daddr
     rule = f"{address}:5353"
     whitelist.bloom_filters.ips = [rule]
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(
-            {"from": side, "what_to_ignore": "flows"}
-        )
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps({"from": side, "what_to_ignore": "flows"})
         if key == rule
         else None
     )
@@ -797,10 +824,8 @@ def test_evidence_ip_port_uses_matching_side(
     setattr(evidence, "attacker" if side == "src" else "victim", entity)
     rule = f"{address}:5353"
     whitelist.bloom_filters.ips = [rule]
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(
-            {"from": side, "what_to_ignore": "alerts"}
-        )
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps({"from": side, "what_to_ignore": "alerts"})
         if key == rule
         else None
     )
@@ -810,12 +835,17 @@ def test_evidence_ip_port_uses_matching_side(
     )
     whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
 
-    assert whitelist._is_whitelisted_entity(
-        evidence, "attacker" if side == "src" else "victim"
-    ) == expected
+    assert (
+        whitelist._is_whitelisted_entity(
+            evidence, "attacker" if side == "src" else "victim"
+        )
+        == expected
+    )
 
 
-@pytest.mark.parametrize("destination_port, expected", [(5353, True), (80, False)])
+@pytest.mark.parametrize(
+    "destination_port, expected", [(5353, True), (80, False)]
+)
 def test_private_ip_evidence_port_whitelist(
     destination_port: int, expected: bool
 ) -> None:
@@ -831,8 +861,8 @@ def test_private_ip_evidence_port_whitelist(
     )
     rules = whitelist.parser.whitelisted_ips
     whitelist.bloom_filters.ips = rules
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(rules[key]) if key in rules else None
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
     )
     whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
     whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(
@@ -889,8 +919,8 @@ def test_wildcard_ip_port_rule_matches_evidence(
     )
     rules = whitelist.parser.whitelisted_ips
     whitelist.bloom_filters.ips = rules
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(rules[key]) if key in rules else None
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
     )
     whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
     whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(
@@ -909,11 +939,17 @@ def test_wildcard_ip_port_rule_matches_evidence(
     evidence = Mock(src_port=src_port, dst_port=dst_port)
     setattr(evidence, "attacker" if side == "src" else "victim", entity)
 
-    assert whitelist._is_whitelisted_entity(
-        evidence, "attacker" if side == "src" else "victim"
-    ) == expected
+    assert (
+        whitelist._is_whitelisted_entity(
+            evidence, "attacker" if side == "src" else "victim"
+        )
+        == expected
+    )
     assert not whitelist.ip_analyzer.is_whitelisted(
-        address, entity.direction, "flows", src_port if side == "src" else dst_port
+        address,
+        entity.direction,
+        "flows",
+        src_port if side == "src" else dst_port,
     )
 
 
@@ -945,8 +981,8 @@ def test_wildcard_ip_port_rule_matches_flow(
     )
     rules = whitelist.parser.whitelisted_ips
     whitelist.bloom_filters.ips = rules
-    whitelist.db.is_whitelisted.side_effect = (
-        lambda key, type_: json.dumps(rules[key]) if key in rules else None
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
     )
     flow = Mock(
         saddr="192.168.1.10",

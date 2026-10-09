@@ -382,6 +382,15 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .whitelist-notice h3 { color: #d5c8ff; }
 .whitelist-notice p, .whitelist-notice li { color: #c8c0dc; font-size: .8rem; line-height: 1.5; }
 .whitelist-notice ul { margin: .6rem 0 0; padding-left: 1.2rem; }
+.whitelist-editor { margin: .8rem 0 1rem; }
+.whitelist-editor h3 { margin: 0 0 .4rem; }
+.whitelist-editor p { margin: .3rem 0 .75rem; }
+.whitelist-form { display: flex; align-items: end; flex-wrap: wrap; gap: .65rem; }
+.whitelist-form label { display: flex; min-width: 135px; flex: 1 1 150px; flex-direction: column; gap: .3rem; color: var(--muted); font-size: .7rem; font-weight: 700; }
+.whitelist-form label:first-child { flex: 2 1 220px; }
+.whitelist-form input, .whitelist-form select { width: 100%; }
+.whitelist-form button { flex: 0 0 auto; }
+.whitelist-feedback { min-height: 1em; }
 pre { max-height: 380px; overflow: auto; padding: .8rem; border: 1px solid var(--line); border-radius: 7px; background: #080d12; color: #b8c9d6; font-size: .72rem; white-space: pre-wrap; word-break: break-word; }
 .toast { position: fixed; z-index: 30; left: 50%; bottom: 1.5rem; padding: .65rem .9rem; border: 1px solid var(--danger); border-radius: 7px; background: #2a1418; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity .2s; }
 .toast.show { opacity: 1; }

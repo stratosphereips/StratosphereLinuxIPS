@@ -3,6 +3,7 @@
 
 import argparse
 import base64
+import fcntl
 import ipaddress
 import json
 import math
@@ -10,6 +11,7 @@ import os
 import re
 import socket
 import sqlite3
+import tempfile
 import time
 import traceback
 from datetime import datetime
@@ -27,6 +29,9 @@ import yaml
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from modules.supported_module_names import Modules
+from slips_files.core.helpers.whitelist.whitelist_parser import (
+    web_whitelist_path,
+)
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
@@ -468,6 +473,33 @@ class RunDataReader:
         except (redis.RedisError, TypeError):
             rules = []
         if rules:
+            config, _ = self._run_config()
+            settings = config.get("whitelists", {})
+            if not isinstance(settings, dict):
+                settings = {}
+            managed_path = web_whitelist_path(
+                str(
+                    settings.get(
+                        "local_whitelist_path", "config/whitelist.conf"
+                    )
+                )
+            )
+            try:
+                managed = {
+                    line.split(",", 3)[1]
+                    for line in managed_path.read_text(
+                        encoding="utf-8"
+                    ).splitlines()
+                    if line.startswith("ip,") and len(line.split(",", 3)) == 4
+                }
+            except OSError:
+                managed = set()
+            for rule in rules:
+                rule["managed"] = (
+                    rule["type"] == "IP address" and rule["value"] in managed
+                )
+                if rule["managed"]:
+                    rule["source"] = "Added from web"
             return sorted(
                 rules, key=lambda item: (item["type"], item["value"])
             )
@@ -545,6 +577,145 @@ class RunDataReader:
         }
 
     @staticmethod
+    def _normalize_whitelist_ip(value: Any) -> str:
+        """Validate one IP, IP:port, or port-only whitelist value.
+
+        Parameters:
+            value: Untrusted value from the browser.
+
+        Returns:
+            Canonical rule value accepted by the Slips whitelist parser.
+        """
+        if not isinstance(value, str) or not value or len(value) > 128:
+            raise ValueError("Enter an IP address, IP:port, or *:port")
+        candidate = value.strip()
+        if not candidate or "%" in candidate:
+            raise ValueError("Invalid IP address or port")
+        if candidate.startswith("["):
+            address, separator, port = candidate[1:].partition("]:")
+            if not separator:
+                raise ValueError("Use [IPv6]:port for an IPv6 port rule")
+            try:
+                normalized = str(ipaddress.IPv6Address(address))
+            except ValueError as error:
+                raise ValueError("Invalid IPv6 address") from error
+            prefix = f"[{normalized}]"
+        elif candidate.startswith("*:"):
+            prefix, port = "*", candidate[2:]
+        elif candidate.count(":") == 1:
+            address, port = candidate.rsplit(":", 1)
+            try:
+                prefix = str(ipaddress.IPv4Address(address))
+            except ValueError as error:
+                raise ValueError("Invalid IPv4 address") from error
+        else:
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError as error:
+                raise ValueError("Invalid IP address") from error
+        if not port.isdecimal() or not 1 <= int(port) <= 65535:
+            raise ValueError("Port must be between 1 and 65535")
+        return f"{prefix}:{int(port)}"
+
+    def save_whitelist_rule(
+        self, action: Any, value: Any, direction: Any, ignored: Any
+    ) -> Dict[str, Any]:
+        """Persist a web-managed IP rule and update the current run.
+
+        Parameters:
+            action: Add or remove the rule.
+            value: IP address, IP:port, or port-only value.
+            direction: Source, destination, or both sides.
+            ignored: Flows, evidence and alerts, or both.
+
+        Returns:
+            The saved rule and whether it was added or removed.
+        """
+        if not isinstance(action, str) or action not in {"add", "remove"}:
+            raise ValueError("Invalid whitelist action")
+        if not isinstance(direction, str) or direction not in {
+            "src",
+            "dst",
+            "both",
+        }:
+            raise ValueError("Choose source, destination, or both")
+        if not isinstance(ignored, str) or ignored not in {
+            "alerts",
+            "flows",
+            "both",
+        }:
+            raise ValueError("Choose what the rule suppresses")
+        normalized = self._normalize_whitelist_ip(value)
+        config, _ = self._run_config()
+        settings = config.get("whitelists", {})
+        if not isinstance(settings, dict) or not settings.get(
+            "enable_local_whitelist", True
+        ):
+            raise ValueError("Local whitelisting is disabled for this run")
+        if not self.response_metadata()["backend_status"]["connected"]:
+            raise ValueError("Slips must be running to change whitelist rules")
+        source = str(
+            settings.get("local_whitelist_path", "config/whitelist.conf")
+        )
+        path = web_whitelist_path(source)
+        if not path.parent.is_dir():
+            raise ValueError("The configured whitelist directory is missing")
+        lock_path = path.with_name(path.name + ".lock")
+        with lock_path.open("a", encoding="utf-8") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            lines = (
+                path.read_text(encoding="utf-8").splitlines()
+                if path.exists()
+                else ["; Rules added through the Slips web interface"]
+            )
+            existing = {
+                parts[1]: line
+                for line in lines
+                if (parts := line.split(",", 3))
+                and len(parts) == 4
+                and parts[0] == "ip"
+            }
+            if action == "add":
+                if normalized in existing or self.redis.hexists(
+                    "whitelist_IPs", normalized
+                ):
+                    raise ValueError("This value already has a whitelist rule")
+                lines.append(f"ip,{normalized},{direction},{ignored}")
+            else:
+                if normalized not in existing:
+                    raise ValueError(
+                        "Only web-managed rules can be removed here"
+                    )
+                lines = [
+                    line for line in lines if line != existing[normalized]
+                ]
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=path.parent, delete=False
+            ) as temporary:
+                temporary.write("\n".join(lines) + "\n")
+                temporary.flush()
+                os.fsync(temporary.fileno())
+                temporary_path = Path(temporary.name)
+            try:
+                os.replace(temporary_path, path)
+            finally:
+                temporary_path.unlink(missing_ok=True)
+            if action == "add":
+                self.redis.hset(
+                    "whitelist_IPs",
+                    normalized,
+                    json.dumps({"from": direction, "what_to_ignore": ignored}),
+                )
+            else:
+                self.redis.hdel("whitelist_IPs", normalized)
+        return {
+            "action": action,
+            "value": normalized,
+            "direction": direction,
+            "ignore": ignored,
+        }
+
+    @staticmethod
     def _direction_matches(entity_direction: Any, rule_direction: str) -> bool:
         """
         Check whether an evidence entity is covered by a whitelist side.
@@ -576,7 +747,7 @@ class RunDataReader:
         Returns:
             Matching entity and rule details that can be explained in the UI.
         """
-        candidates: List[tuple[str, str, str, Any]] = []
+        candidates: List[tuple[str, str, str, Any, Any]] = []
         for role in ("attacker", "victim"):
             entity = record.get(role)
             if not isinstance(entity, dict):
@@ -585,25 +756,40 @@ class RunDataReader:
             value = entity.get("value")
             indicator = str(entity.get("ioc_type") or "").upper()
             if value and indicator == "IP":
-                candidates.append((role, "IP address", str(value), direction))
+                port = (
+                    record.get("src_port")
+                    if self._direction_matches(direction, "src")
+                    else record.get("dst_port")
+                )
+                candidates.append(
+                    (role, "IP address", str(value), direction, port)
+                )
             if value and indicator == "DOMAIN":
-                candidates.append((role, "Domain", str(value), "dst"))
+                candidates.append((role, "Domain", str(value), "dst", None))
             for ip in entity.get("DNS_resolution") or []:
-                candidates.append((role, "IP address", str(ip), direction))
+                candidates.append(
+                    (role, "IP address", str(ip), direction, None)
+                )
             domains = list(entity.get("queries") or [])
             domains.extend(entity.get("CNAME") or [])
             if entity.get("SNI"):
                 domains.append(entity["SNI"])
             for domain in domains:
-                candidates.append((role, "Domain", str(domain), "dst"))
+                candidates.append((role, "Domain", str(domain), "dst", None))
         matches = []
         seen = set()
-        for role, type_name, value, direction in candidates:
+        for role, type_name, value, direction, port in candidates:
             for rule in rules:
                 if rule.get("type") != type_name:
                     continue
                 rule_value = str(rule.get("value") or "")
                 value_matches = value == rule_value
+                if type_name == "IP address" and port is not None:
+                    address = f"[{value}]" if ":" in value else value
+                    value_matches = value_matches or rule_value in {
+                        f"{address}:{port}",
+                        f"*:{port}",
+                    }
                 if type_name == "Domain":
                     value_matches = value == rule_value or value.endswith(
                         f".{rule_value}"
@@ -5788,7 +5974,7 @@ class RequestHandler(BaseHTTPRequestHandler):
     MAX_LOGIN_BODY_BYTES = 1024
 
     def do_POST(self) -> None:
-        """Only /login is a valid POST target - everything else is 405."""
+        """Handle login and authenticated API changes."""
         parsed = urlparse(self.path)
         if parsed.path != "/login":
             self._post_annotation(parsed.path)
@@ -5834,7 +6020,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         )
 
     def _post_annotation(self, path: str) -> None:
-        """Save an authenticated host annotation or network name.
+        """Save an authenticated annotation, network name, or whitelist rule.
 
         Parameters:
             path: Requested API path.
@@ -5844,8 +6030,21 @@ class RequestHandler(BaseHTTPRequestHandler):
                 {"error": "login required"}, HTTPStatus.UNAUTHORIZED
             )
             return
-        if path not in {"/api/network-name", "/api/host-annotation"}:
+        if path not in {
+            "/api/network-name",
+            "/api/host-annotation",
+            "/api/whitelists",
+        }:
             self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
+            return
+        if (
+            path == "/api/whitelists"
+            and not ipaddress.ip_address(self.client_address[0]).is_loopback
+        ):
+            self._send_json(
+                {"error": "Whitelist changes require a local connection"},
+                HTTPStatus.FORBIDDEN,
+            )
             return
         origin = self.headers.get("Origin", "")
         if origin and urlparse(origin).netloc != self.headers.get("Host", ""):
@@ -5878,7 +6077,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Expected an object")
             self.server.reader.validate_run_identity()
-            if path == "/api/host-annotation":
+            if path == "/api/whitelists":
+                saved = self.server.reader.save_whitelist_rule(
+                    payload.get("action"),
+                    payload.get("value"),
+                    payload.get("direction"),
+                    payload.get("ignore"),
+                )
+            elif path == "/api/host-annotation":
                 saved = self.server.reader.save_host_annotation(
                     payload.get("ip"),
                     payload.get("network_id"),
@@ -5912,7 +6118,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             traceback.print_exc()
             self._send_json(
                 {
-                    "error": "Unable to save the requested name or note",
+                    "error": "Unable to save the requested change",
                     "detail": str(error),
                 },
                 HTTPStatus.SERVICE_UNAVAILABLE,

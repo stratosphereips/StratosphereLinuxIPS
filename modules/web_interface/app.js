@@ -1567,6 +1567,178 @@ async function loadConfiguration() {
   renderConfiguration();
 }
 
+/** Save a whitelist change through the run-scoped local API.
+ * @param {object} change - Rule value, direction, suppression, and action.
+ * @returns {Promise<object>} The saved rule returned by the server.
+ */
+async function saveWhitelistRule(change) {
+  const response = await fetch("/api/whitelists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(change),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+  await loadWhitelists();
+  return payload;
+}
+
+/** Offer IP and port values present in an evidence and its linked flows.
+ * @param {object|null} record - Individual evidence, if available.
+ * @param {object[]} groups - Triggering flow groups.
+ * @returns {Map<string, object>} Suggested values and their directions.
+ */
+function whitelistSuggestions(record, groups = []) {
+  const choices = new Map();
+  /** Add one suggested value, merging directions when it appears on both sides.
+   * @param {string} value - Rule value.
+   * @param {string} direction - Traffic side.
+   * @param {string} label - Browser suggestion label.
+   */
+  const add = (value, direction, label) => {
+    if (value === null || value === undefined || value === "" || choices.size >= 200) return;
+    const key = String(value);
+    const existing = choices.get(key);
+    if (existing?.label === "Profile host IP" && direction !== "both") {
+      choices.set(key, { direction, label });
+      return;
+    }
+    choices.set(key, {
+      direction: existing && existing.direction !== direction ? "both" : direction,
+      label: existing?.label || label,
+    });
+  };
+  /** Suggest an IP, its exact port, and the corresponding port-only rule.
+   * @param {string|null} ip - Address on this side, if known.
+   * @param {number|string|null} port - Port on this side, if known.
+   * @param {string} direction - Traffic side.
+   * @param {string} label - Browser suggestion label.
+   */
+  const addSide = (ip, port, direction, label) => {
+    if (ip) add(ip, direction, `${label} IP`);
+    if (port !== null && port !== undefined && /^\d+$/.test(String(port))
+        && Number(port) > 0 && Number(port) <= 65535) {
+      if (ip) add(`${String(ip).includes(":") ? `[${ip}]` : ip}:${port}`,
+        direction, `${label} IP and port`);
+      add(`*:${port}`, direction, `${label} port on any IP`);
+    }
+  };
+  if (record?.profile_ip) add(record.profile_ip, "both", "Profile host IP");
+  addSide(null, record?.src_port, "src", "Evidence source");
+  addSide(null, record?.dst_port, "dst", "Evidence destination");
+  for (const role of ["attacker", "victim"]) {
+    const entity = record?.[role];
+    if (String(entity?.ioc_type || "").toUpperCase() !== "IP") continue;
+    const direction = String(entity.direction || "").toLowerCase().includes("src")
+      ? "src" : String(entity.direction || "").toLowerCase().includes("dst") ? "dst" : "both";
+    const port = direction === "src" ? record.src_port
+      : direction === "dst" ? record.dst_port : null;
+    addSide(entity.value, port, direction, role);
+  }
+  groups.forEach((group) => {
+    [group.network_flow, ...(group.protocol_flows || [])].filter(Boolean).forEach((row) => {
+      const flow = row.flow && typeof row.flow === "object" ? row.flow : row;
+      addSide(flowValue(flow, "saddr", "src_ip", "id.orig_h"),
+        flowValue(flow, "sport", "src_port", "id.orig_p"), "src", "Flow source");
+      addSide(flowValue(flow, "daddr", "dst_ip", "id.resp_h"),
+        flowValue(flow, "dport", "dst_port", "id.resp_p"), "dst", "Flow destination");
+    });
+  });
+  return choices;
+}
+
+/** Fill one whitelist editor with values from an evidence or linked flows.
+ * @param {Element} editor - Editor containing the suggestion list.
+ * @param {object|null} record - Individual evidence, if available.
+ * @param {object[]} groups - Triggering flow groups.
+ */
+function updateWhitelistSuggestions(editor, record, groups = []) {
+  const list = editor.querySelector("datalist");
+  if (!list) return;
+  list.replaceChildren();
+  whitelistSuggestions(record, groups).forEach((choice, value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.label = `${choice.label} · ${choice.direction}`;
+    option.dataset.direction = choice.direction;
+    list.append(option);
+  });
+}
+
+/** Build an IP whitelist editor for the tab or an individual evidence.
+ * @param {string} kind - Unique list prefix for tab or evidence.
+ * @param {object|null} record - Individual evidence, if available.
+ * @returns {Element} Editor with its own submit handler.
+ */
+function whitelistEditor(kind, record = null) {
+  const section = document.createElement("section");
+  section.className = "surface whitelist-editor";
+  section.append(
+    text("h3", record ? "Whitelist future matches from this evidence" : "Add an IP or port rule"),
+    text("p", "Choose an IP, IP:port, [IPv6]:port, or *:port. Port-only rules affect that port on any IP. Existing evidence stays in the record.", "muted"),
+  );
+  const form = document.createElement("form");
+  form.className = "whitelist-form";
+  const valueLabel = document.createElement("label");
+  valueLabel.append(text("span", "IP or port"));
+  const value = document.createElement("input");
+  value.type = "text";
+  value.required = true;
+  value.maxLength = 128;
+  value.placeholder = "192.168.1.10:443 or *:443";
+  value.setAttribute("list", `${kind}-whitelist-values`);
+  valueLabel.append(value);
+  const list = document.createElement("datalist");
+  list.id = `${kind}-whitelist-values`;
+  const directionLabel = document.createElement("label");
+  directionLabel.append(text("span", "Applies on"));
+  const direction = document.createElement("select");
+  [["dst", "Destination"], ["src", "Source"], ["both", "Both sides"]].forEach(([key, label]) => {
+    const option = text("option", label);
+    option.value = key;
+    direction.append(option);
+  });
+  directionLabel.append(direction);
+  value.addEventListener("input", () => {
+    const selected = Array.from(list.options).find((option) => option.value === value.value);
+    if (selected) direction.value = selected.dataset.direction;
+  });
+  const ignoreLabel = document.createElement("label");
+  ignoreLabel.append(text("span", "Suppress"));
+  const ignored = document.createElement("select");
+  [["alerts", "Future evidence and alerts"], ["flows", "Flows"],
+    ["both", "Flows, evidence and alerts"]].forEach(([key, label]) => {
+    const option = text("option", label);
+    option.value = key;
+    ignored.append(option);
+  });
+  ignoreLabel.append(ignored);
+  const save = text("button", "Add rule", "secondary");
+  save.type = "submit";
+  const feedback = text("p", "Rules take effect for future traffic and detections while Slips is running.", "muted whitelist-feedback");
+  form.append(valueLabel, list, directionLabel, ignoreLabel, save);
+  section.append(form, feedback);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    feedback.textContent = "Saving rule…";
+    try {
+      const result = await saveWhitelistRule({
+        action: "add", value: value.value, direction: direction.value, ignore: ignored.value,
+      });
+      feedback.textContent = `${result.value} was added. New matching activity will be suppressed within a few seconds.`;
+      value.value = "";
+      toast("Whitelist rule added");
+    } catch (error) {
+      feedback.textContent = `Could not add rule: ${error.message}`;
+    } finally {
+      save.disabled = false;
+    }
+  });
+  updateWhitelistSuggestions(section, record);
+  return section;
+}
+
 function renderWhitelists() {
   const payload = state.whitelists;
   if (!payload) return;
@@ -1582,6 +1754,26 @@ function renderWhitelists() {
     (row) => row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
     (row) => row.effect,
     (row) => row.source,
+    (row) => {
+      if (!row.managed) return "—";
+      const remove = text("button", "Remove", "secondary");
+      remove.type = "button";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm(`Remove whitelist rule ${row.value}?`)) return;
+        remove.disabled = true;
+        try {
+          await saveWhitelistRule({
+            action: "remove", value: row.value, direction: row.direction,
+            ignore: row.ignore,
+          });
+          toast("Whitelist rule removed");
+        } catch (error) {
+          remove.disabled = false;
+          toast(`Could not remove rule: ${error.message}`);
+        }
+      });
+      return remove;
+    },
   ]);
 }
 
@@ -2523,6 +2715,8 @@ async function openEvidence(record) {
       ["Alert links", alertCount ? compact(alertCount) : "None"],
     ]),
   );
+  const whitelistSection = whitelistEditor("evidence", record);
+  body.append(whitelistSection);
   if (alertCount) {
     const identifiers = document.createElement("div");
     identifiers.className = "identifier-list";
@@ -2556,6 +2750,7 @@ async function openEvidence(record) {
   try {
     const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
     if (!payload || generation !== state.drawerGeneration) return;
+    updateWhitelistSuggestions(whitelistSection, record, payload.items);
     if (numeric(payload.recovered_flow_count) > 0) {
       body.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from current Zeek logs after their SQLite rows were pruned.`, "muted"));
     }
@@ -3552,6 +3747,7 @@ bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts)
 byId("configuration-search").addEventListener("input", renderConfiguration);
 byId("whitelists-search").addEventListener("input", renderWhitelists);
 byId("whitelists-type").addEventListener("change", renderWhitelists);
+byId("whitelists-editor").append(whitelistEditor("tab"));
 bindView("alerts", loadAlerts);
 bindView("evidence", loadEvidence);
 bindRange("alerts", "alerts", loadAlerts);

@@ -23,6 +23,7 @@ from modules.web_interface.server import (
     ipv4_address,
 )
 from slips_files.common.web_auth import SESSION_COOKIE_NAME, issue_token
+from slips_files.common.slips_utils import utils
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
@@ -32,6 +33,7 @@ def _authenticated_request(url: str) -> Request:
     return Request(
         url, headers={"Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}"}
     )
+
 
 def test_current_network_profile_precedes_newer_run_fallback() -> None:
     """Restore host annotations when an earlier run missed its router."""
@@ -405,6 +407,154 @@ def test_whitelists_returns_parsed_runtime_rules(tmp_path) -> None:
     assert result["rules"][0]["effect"] == (
         "Suppresses evidence and alerts when this value appears on the source or destination side."
     )
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("192.0.2.4", "192.0.2.4"),
+        ("192.0.2.4:443", "192.0.2.4:443"),
+        ("[2001:db8::1]:443", "[2001:db8::1]:443"),
+        ("2001:db8::1", "2001:db8::1"),
+        ("*:443", "*:443"),
+    ],
+)
+def test_normalize_web_whitelist_ip(value: str, expected: str) -> None:
+    """Accept the exact IP and port forms supported by Slips.
+
+    Parameters:
+        value: Browser input.
+        expected: Stored rule value.
+    """
+    _module_factory = ModuleFactory()
+    assert RunDataReader._normalize_whitelist_ip(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["*:0", "*:65536", "192.0.2.4:abc", "192.0.2.0/24", "bad,src,flows"],
+)
+def test_reject_invalid_web_whitelist_ip(value: str) -> None:
+    """Reject invalid rules before they can be written to the file.
+
+    Parameters:
+        value: Invalid browser input.
+    """
+    _module_factory = ModuleFactory()
+    with pytest.raises(ValueError):
+        RunDataReader._normalize_whitelist_ip(value)
+
+
+def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
+    """Save a live IP:port rule separately and let the parser reload it."""
+    factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "whitelist.conf"
+    configured.write_text("ip,192.0.2.1,both,alerts\n", encoding="utf-8")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(
+        return_value={"backend_status": {"connected": True}}
+    )
+
+    saved = reader.save_whitelist_rule("add", "192.0.2.4:443", "dst", "alerts")
+
+    assert saved["value"] == "192.0.2.4:443"
+    managed = tmp_path / "whitelist.conf.web.conf"
+    assert "ip,192.0.2.4:443,dst,alerts" in managed.read_text(encoding="utf-8")
+    assert configured.read_text(encoding="utf-8") == (
+        "ip,192.0.2.1,both,alerts\n"
+    )
+    reader.redis.hset.assert_called_once()
+    whitelist = factory.create_whitelist_obj()
+    whitelist.parser.local_whitelist_path = str(configured)
+    whitelist.parser.parse()
+    assert whitelist.parser.whitelisted_ips["192.0.2.4:443"] == {
+        "from": "dst",
+        "what_to_ignore": "alerts",
+    }
+
+    reader.save_whitelist_rule("remove", "192.0.2.4:443", "dst", "alerts")
+    assert "192.0.2.4:443" not in managed.read_text(encoding="utf-8")
+    reader.redis.hdel.assert_called_once_with("whitelist_IPs", "192.0.2.4:443")
+
+
+def test_local_web_request_can_add_whitelist_rule() -> None:
+    """Route a local JSON request to the whitelist writer."""
+    _module_factory = ModuleFactory()
+    reader = Mock()
+    reader.save_whitelist_rule.return_value = {
+        "action": "add",
+        "value": "192.0.2.4:443",
+        "direction": "dst",
+        "ignore": "alerts",
+    }
+    server = SlipsHTTPServer(("127.0.0.1", 0), RequestHandler, reader)
+    worker = threading.Thread(target=server.serve_forever, daemon=True)
+    utils.start_thread(worker, Mock())
+    request = Request(
+        f"http://127.0.0.1:{server.server_address[1]}/api/whitelists",
+        data=json.dumps(
+            {
+                "action": "add",
+                "value": "192.0.2.4:443",
+                "direction": "dst",
+                "ignore": "alerts",
+            }
+        ).encode(),
+        headers={
+            "Content-Type": "application/json",
+            "Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}",
+        },
+        method="POST",
+    )
+    try:
+        with urlopen(request, timeout=5) as response:
+            assert response.status == 200
+            assert json.load(response)["value"] == "192.0.2.4:443"
+        reader.save_whitelist_rule.assert_called_once_with(
+            "add", "192.0.2.4:443", "dst", "alerts"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        worker.join(timeout=5)
+
+
+def test_whitelisted_evidence_explains_ip_port_rule() -> None:
+    """Report an exact IP:port rule that excluded later evidence."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    record = {
+        "dst_port": 443,
+        "victim": {
+            "value": "2001:db8::1",
+            "ioc_type": "IP",
+            "direction": "DST",
+        },
+    }
+    rules = [
+        {
+            "type": "IP address",
+            "value": "[2001:db8::1]:443",
+            "direction": "dst",
+            "ignore": "alerts",
+            "effect": "Suppressed",
+        }
+    ]
+
+    matches = reader._whitelist_matches_for_record(record, rules)
+
+    assert len(matches) == 1
+    assert matches[0]["rule"] == "[2001:db8::1]:443"
 
 
 def test_whitelisted_evidence_reports_matching_victim_rule() -> None:

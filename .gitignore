@@ -21,6 +21,8 @@ daemon/
 
 # Ignore private AGENTS.md, may contain private paths
 private/AGENTS.md
+*.web.conf
+*.web.conf.lock
 scripts/
 tasks/*
 

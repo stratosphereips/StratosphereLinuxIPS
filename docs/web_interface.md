@@ -139,6 +139,13 @@ Only one web-enabled Slips run is supported on a host. A new -w run replaces an 
 
 When a file or folder analysis finishes naturally, or after the first Ctrl-C stops a web-enabled live analysis, Slips asks `Slips analysis has stopped. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
 
+After Ctrl-C, Slips reports its module shutdown grace period immediately. It
+waits no more than 30 seconds for modules to finish, even when
+`wait_for_modules_to_finish` is configured for a much longer natural analysis
+completion. A second Ctrl-C forces immediate cleanup. If modules exceed the
+grace period, Slips reports this and stops them before asking about the web
+interface.
+
 If the `slipsBlocking` chain contains Slips-managed rules at shutdown, Slips
 first asks `Keep the installed firewall rules? [Y/n]`. Press Enter or answer
 `y` to retain enforcement; answer `n` or `delete` to remove the complete Slips
@@ -346,6 +353,22 @@ the captured local filename, the configured online benign-domain source and
 limit, its refresh period, and the number of domains currently present in the
 shared cache. The latter is explicitly current cache state because that cache
 can be refreshed independently of an already completed run.
+
+While Slips is running, use **Add an IP or port rule** in the Whitelists tab,
+or **Whitelist future matches from this evidence** in an individual evidence
+drawer. The evidence editor suggests source and destination IPs, exact
+IP:port pairs, and `*:port` rules from the evidence and linked flows. A
+port-only rule applies to that port on any IP, so choose its source or
+destination side carefully. Rules can suppress future evidence and alerts
+(the default), flows, or both. Existing evidence and alerts remain in the
+record. New IP rules become active in running workers within a few seconds.
+Web-added rules appear in the Whitelists table with a **Remove** action.
+
+The web interface writes these rules beside the configured local whitelist in
+a separate `.web.conf` file. Slips reads that file after the configured
+whitelist on future starts. The shipped `config/whitelist.conf` is never
+modified. Saving changes requires a local browser connection, enabled local
+whitelisting, and an active Slips run.
 
 ### Host score history
 
