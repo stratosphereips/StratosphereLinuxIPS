@@ -64,9 +64,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         message_data = json.loads(message_data)
         ip_address = message_data.get("ip")
         # time_since_cached = int(message_data.get('cache_age', 0))
-        return (
-            message_data if p2p_utils.validate_ip_address(ip_address) else None
-        )
+        return message_data if p2p_utils.is_unicast_ip(ip_address) else None
     except ValueError:
         # message has wrong format
         print(
@@ -356,6 +354,9 @@ class Trust(IModule):
             # we only share ips with other peers.
             return False
 
+        if not p2p_utils.is_unicast_ip(evidence.attacker.value):
+            return False
+
         confidence = self.extract_confidence(evidence)
         if not confidence:
             return False
@@ -503,8 +504,11 @@ class Trust(IModule):
         :param confidence: how confident the network opinion is about this opinion
         """
         attacker_ip: str = ip_info.get("ip")
+        report_after_id = ip_info.get("report_after_id")
         peer_ids = sorted(
-            self.trust_db.get_reporter_peerids_for_ip(attacker_ip)
+            self.trust_db.get_reporter_peerids_for_ip(
+                attacker_ip, report_after_id
+            )
         )
         peer_labels = []
         for peer_id in peer_ids:
@@ -513,10 +517,10 @@ class Trust(IModule):
                 f"{peer_id} ({peer_ip})" if peer_ip else peer_id
             )
         peer_source = (
-            f" Reported by peer{'s' if len(peer_ids) != 1 else ''}: "
+            f" Replied to this lookup, peer{'s' if len(peer_ids) != 1 else ''}: "
             f"{', '.join(peer_labels)}."
             if peer_ids
-            else " Reporting peer unavailable."
+            else " No peer reply was recorded for this lookup."
         )
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
@@ -624,6 +628,7 @@ class Trust(IModule):
         #       I do not remember writing this comment. I have no idea
         #       in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
+        report_after_id = self.trust_db.get_latest_report_id()
         p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
         self.print(f"[Slips -> The Network] request about {ip_address}")
 
@@ -638,7 +643,11 @@ class Trust(IModule):
         (
             combined_score,
             combined_confidence,
-        ) = self.reputation_model.get_opinion_on_ip(ip_address)
+        ) = self.reputation_model.get_opinion_on_ip(
+            ip_address, report_after_id
+        )
+
+        ip_info["report_after_id"] = report_after_id
 
         self.process_network_response(
             ip_address,
@@ -658,6 +667,8 @@ class Trust(IModule):
         stores the reported score and confidence about the ip and adds an
         evidence if necessary like when the peers report a malicious ip
         """
+        if not p2p_utils.is_unicast_ip(ip):
+            return
         # no data in db - this happens when testing,
         # if there is not enough data on peers
         if combined_score is None or combined_confidence is None:
@@ -871,6 +882,8 @@ class Trust(IModule):
             return
 
         key = data["key"]
+        if not p2p_utils.is_unicast_ip(key):
+            return
 
         # the network's trust-weighted opinion on this IP, aggregated
         # over every peer that reported on it so far (not just this

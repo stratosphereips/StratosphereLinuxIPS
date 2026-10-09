@@ -162,9 +162,15 @@ The network then replies with a score and confidence for the IP. The higher the 
 
 Once we get the score of the IP, we store it in the database,
 and we alert if the score of this IP is more than 0 (threat level=info).
-The alert description lists each reporting peer's ID and latest known IP
-address, for example `peer-id (192.0.2.10)`. If no IP address is known for a
-peer, the alert still lists its ID.
+New peer-network alerts use only replies received for that lookup. The alert
+description lists each peer that replied, with its latest known IP address,
+for example `peer-id (192.0.2.10)`. This list is not a list of all connected
+peers. Old reports and disconnected peers remain in the trust database for
+history, but do not contribute to a new lookup's score or reporter list.
+The web interface labels older alerts that used all-time reporter lists as
+historical. Multicast, unspecified, loopback, and limited broadcast IPs are
+not sent for peer reputation checks or shared as malicious IP reports; this
+includes the mDNS multicast address `224.0.0.251`.
 
 The persistent local P2P runtime directory is stored under the directory configured by ```parameters.permanent_dir``` in ```config/slips.yaml```. By default, this is ```permanent/p2p_trust_runtime/```.
 
@@ -183,7 +189,8 @@ delete `permanent/p2p_trust_runtime/trustdb.db` to reclaim space: Slips performs
 the migration without resetting peer reports or reputation.
 
 Slips compacts stored IP reports in batches of up to 1,000 rows every five
-seconds. For each reported IP, peer ID, and reporter IP at report time, it
+seconds. New reports stay raw for at least 30 seconds so the current lookup
+can identify its replies. For each reported IP, peer ID, and reporter IP at report time, it
 keeps the report count and score/confidence totals. The trust calculation
 still uses each peer's current reliability and the reporter IP's current
 reputation, so new peer information continues to affect past reports. Reports

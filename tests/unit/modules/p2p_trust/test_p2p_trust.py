@@ -14,7 +14,10 @@ from unittest.mock import Mock, call, patch
 import pytest
 
 from modules.p2p_trust.p2p_trust import Trust, netifaces
-from modules.p2p_trust.utils.utils import get_ip_info_from_slips
+from modules.p2p_trust.utils.utils import (
+    get_ip_info_from_slips,
+    is_unicast_ip,
+)
 from slips_files.common.abstracts.imodule import IModule
 from tests.module_factory import ModuleFactory
 
@@ -41,6 +44,68 @@ def create_trust():
     trust.rendezvous = "slips"
     trust._pigeon_supports_flag = Mock(return_value=True)
     return trust
+
+
+@pytest.mark.parametrize(
+    "address,expected",
+    [
+        ("192.168.1.196", True),
+        ("fe80::1", True),
+        ("224.0.0.251", False),
+        ("ff02::fb", False),
+        ("255.255.255.255", False),
+        ("127.0.0.1", False),
+        ("not-an-ip", False),
+    ],
+)
+def test_peer_reputation_checks_only_unicast_ips(
+    address: str, expected: bool
+) -> None:
+    """Keep mDNS and other non-host IPs out of peer reputation checks."""
+    _module_factory = ModuleFactory()
+    assert is_unicast_ip(address) is expected
+
+
+@pytest.mark.parametrize(
+    "address,should_request",
+    [("8.8.8.8", True), ("224.0.0.251", False)],
+)
+def test_peer_lookup_uses_only_replies_after_request(
+    address: str, should_request: bool
+) -> None:
+    """Ask for a host IP and exclude earlier reports from its opinion."""
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.trust_db = Mock()
+    trust.trust_db.get_cached_network_opinion.return_value = (
+        None,
+        None,
+        None,
+        None,
+    )
+    trust.trust_db.get_latest_report_id.return_value = 42
+    trust.reputation_model = Mock()
+    trust.reputation_model.get_opinion_on_ip.return_value = (None, None)
+    trust.process_network_response = Mock()
+    trust.pygo_channel = "p2p_pygo"
+
+    with patch("modules.p2p_trust.p2p_trust.time.sleep"), patch(
+        "modules.p2p_trust.p2p_trust.p2p_utils.send_request_to_go"
+    ) as send_request:
+        trust.handle_data_request(json.dumps({"ip": address, "cache_age": 1}))
+
+    if should_request:
+        send_request.assert_called_once_with(
+            address, "p2p_pygo", trust.db
+        )
+        trust.reputation_model.get_opinion_on_ip.assert_called_once_with(
+            address, 42
+        )
+        result_info = trust.process_network_response.call_args.args[3]
+        assert result_info["report_after_id"] == 42
+    else:
+        send_request.assert_not_called()
+        trust.reputation_model.get_opinion_on_ip.assert_not_called()
 
 
 @pytest.mark.parametrize("ip_state", ["srcip", "dstip"])
@@ -89,19 +154,23 @@ def test_p2p_evidence_names_reporting_peers(
             "ip_state": ip_state,
             "uid": "flow-1",
             "stime": "2026/10/04 10:00:00.000000+0000",
+            "report_after_id": 12,
         },
         0.8,
         0.9,
     )
 
     trust.trust_db.get_reporter_peerids_for_ip.assert_called_once_with(
-        "8.8.8.8"
+        "8.8.8.8", 12
     )
     trust.db.set_evidence.assert_called_once()
     evidence = trust.db.set_evidence.call_args.args[0]
     assert evidence.attacker.value == "8.8.8.8"
     assert str(evidence.profile) == "profile_8.8.8.8"
-    assert f"Reported by peers: {expected_peers}." in evidence.description
+    assert (
+        f"Replied to this lookup, peers: {expected_peers}."
+        in evidence.description
+    )
     assert trust.trust_db.get_ip_of_peer.call_args_list == [
         call("peer-a"),
         call("peer-b"),

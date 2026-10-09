@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import sqlite3
+import time
 import pytest
 from contextlib import nullcontext
 from unittest.mock import (
@@ -532,6 +533,43 @@ def test_compact_reports_preserves_opinions_and_unmapped_raw_reports(
     assert opinion[0][-1] == 2
 
 
+def test_new_lookup_ignores_compacted_history_and_keeps_fresh_replies(
+    tmp_path,
+) -> None:
+    """Only newly received reports contribute to the current lookup."""
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn = sqlite3.connect(tmp_path / "fresh-reports.db")
+    trust_db.create_tables()
+    now = time.time()
+    trust_db.insert_go_ip_pairing("old-peer", "192.0.2.10", now - 100)
+    trust_db.insert_go_ip_pairing("new-peer", "192.0.2.20", now - 100)
+    for peer_id, peer_ip in (
+        ("old-peer", "192.0.2.10"),
+        ("new-peer", "192.0.2.20"),
+    ):
+        trust_db.insert_go_reliability(peer_id, 0.8, now - 100)
+        trust_db.insert_slips_score(peer_ip, 0.6, 0.9, now - 100)
+    trust_db.insert_new_go_report(
+        "old-peer", "ip", "8.8.8.8", 0.9, 0.9, now - 90
+    )
+    trust_db.compact_reports()
+    after_id = trust_db.get_latest_report_id()
+    trust_db.insert_new_go_report(
+        "new-peer", "ip", "8.8.8.8", 0.2, 0.8, now
+    )
+
+    assert trust_db.get_latest_report_id() > after_id
+    assert trust_db.get_reporter_peerids_for_ip("8.8.8.8", after_id) == {
+        "new-peer"
+    }
+    assert len(trust_db.get_reports_for_ip("8.8.8.8", after_id)) == 1
+    opinion = trust_db.get_opinion_on_ip("8.8.8.8", after_id)
+    assert len(opinion) == 1
+    assert opinion[0][0] == pytest.approx(0.2)
+    trust_db.compact_reports()
+    assert len(trust_db.get_reports_for_ip("8.8.8.8", after_id)) == 1
+
+
 @pytest.mark.parametrize(
     "reporter_peerid, key_type, reported_key, score, confidence, "
     "timestamp, expected_query, expected_params",
@@ -571,7 +609,7 @@ def test_insert_new_go_report(
     expected_params,
 ):
     trust_db = ModuleFactory().create_trust_db_obj()
-    trust_db.insert = Mock()
+    trust_db.execute = Mock()
 
     if timestamp is None:
         with patch("time.time", return_value=1678887000.0):
@@ -593,11 +631,10 @@ def test_insert_new_go_report(
             timestamp,
         )
 
-    trust_db.insert.assert_called_once_with(
-        "reports",
-        expected_params,
-        "reporter_peerid, key_type, reported_key, score, confidence, update_time",
-    )
+    trust_db.execute.assert_called_once()
+    query, params = trust_db.execute.call_args.args
+    assert query.startswith("INSERT INTO reports (id, reporter_peerid")
+    assert params == expected_params
 
 
 @pytest.mark.parametrize(

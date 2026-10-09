@@ -387,11 +387,13 @@ class TrustDB(ISQLite):
             confidence,
             timestamp,
         )
-        self.insert(
-            "reports",
+        self.execute(
+            "INSERT INTO reports (id, reporter_peerid, key_type, "
+            "reported_key, score, confidence, update_time) "
+            "SELECT MAX(COALESCE((SELECT MAX(id) FROM reports), 0), "
+            "(SELECT last_report_id FROM report_compaction_state WHERE id = 1)) "
+            "+ 1, ?, ?, ?, ?, ?, ?",
             parameters,
-            "reporter_peerid, key_type, reported_key, score, "
-            "confidence, update_time",
         )
 
     def update_cached_network_opinion(
@@ -439,35 +441,72 @@ class TrustDB(ISQLite):
         )
         return res if res else (False, False)
 
-    def get_reports_for_ip(self, ipaddress):
+    def get_latest_report_id(self) -> int:
+        """Return the report cursor before a new peer lookup.
+
+        Returns:
+            Highest stored report ID, or zero for an empty database.
         """
-        Returns a list of all reports for the given IP address.
+        cursor = self.execute(
+            "SELECT MAX(COALESCE((SELECT MAX(id) FROM reports), 0), "
+            "(SELECT last_report_id FROM report_compaction_state WHERE id = 1))"
+        )
+        row = self.fetchone(cursor) if cursor else None
+        return int(row[0]) if row else 0
+
+    def get_reports_for_ip(
+        self, ipaddress: str, after_id: int | None = None
+    ) -> list[tuple]:
         """
+        Return reports for an IP, optionally after a lookup cursor.
+
+        Parameters:
+            ipaddress: Reported IP address.
+            after_id: Exclude reports received before or at this ID.
+
+        Returns:
+            Matching raw report rows.
+        """
+        condition = "reported_key = ? AND key_type = ?"
+        params: tuple = (ipaddress, "ip")
+        if after_id is not None:
+            condition += " AND id > ?"
+            params += (after_id,)
         return self.select(
             table_name="reports",
             columns="reporter_peerid, update_time, score, confidence, reported_key",
-            condition="reported_key = ? AND key_type = ?",
-            params=(ipaddress, "ip"),
+            condition=condition,
+            params=params,
         )
 
-    def get_reporter_peerids_for_ip(self, ipaddress: str) -> set[str]:
+    def get_reporter_peerids_for_ip(
+        self, ipaddress: str, after_id: int | None = None
+    ) -> set[str]:
         """Return the peer IDs represented by raw or compacted IP reports.
 
         Parameters:
             ipaddress: The reported IP address.
+            after_id: Restrict to replies received after this lookup cursor.
 
         Returns:
             The peer IDs whose reports contributed to this IP.
         """
+        condition = "reported_key = ? AND key_type = ?"
+        params: tuple = (ipaddress, "ip")
+        if after_id is not None:
+            condition += " AND id > ?"
+            params += (after_id,)
         raw_reporters = (
             self.select(
                 table_name="reports",
                 columns="DISTINCT reporter_peerid",
-                condition="reported_key = ? AND key_type = ?",
-                params=(ipaddress, "ip"),
+                condition=condition,
+                params=params,
             )
             or []
         )
+        if after_id is not None:
+            return {row[0] for row in raw_reporters if row[0]}
         compact_reporters = (
             self.select(
                 table_name="report_aggregates",
@@ -516,6 +555,8 @@ class TrustDB(ISQLite):
                         compaction_complete = True
                         should_vacuum = database_vacuumed == 0
                     else:
+                        processed_last_id = last_id
+                        recent_cutoff = time.time() - 30
                         for (
                             report_id,
                             reporter_peerid,
@@ -525,6 +566,9 @@ class TrustDB(ISQLite):
                             confidence,
                             report_time,
                         ) in reports:
+                            if report_time >= recent_cutoff:
+                                break
+                            processed_last_id = report_id
                             if key_type != "ip":
                                 continue
                             mapping = cursor.execute(
@@ -561,11 +605,12 @@ class TrustDB(ISQLite):
                                 (report_id,),
                             )
 
-                        cursor.execute(
-                            "UPDATE report_compaction_state "
-                            "SET last_report_id = ? WHERE id = 1",
-                            (reports[-1][0],),
-                        )
+                        if processed_last_id != last_id:
+                            cursor.execute(
+                                "UPDATE report_compaction_state "
+                                "SET last_report_id = ? WHERE id = 1",
+                                (processed_last_id,),
+                            )
                         self.conn.commit()
                 except Exception:
                     self.conn.rollback()
@@ -662,24 +707,35 @@ class TrustDB(ISQLite):
 
         return res or (None, None)
 
-    def get_opinion_on_ip(self, ipaddress):
+    def get_opinion_on_ip(
+        self, ipaddress: str, after_id: int | None = None
+    ) -> list[tuple]:
         """
         Returns a list of tuples, where each tuple contains the report score, report confidence,
         reporter reliability, reporter score, and reporter confidence for a given IP address.
+
+        Parameters:
+            ipaddress: Reported IP address.
+            after_id: Restrict the opinion to replies to the current lookup.
+
+        Returns:
+            Report and reporter reputation tuples.
         """
         grouped_reports = {}
-        compact_reports = (
-            self.select(
-                table_name="report_aggregates",
-                columns=(
-                    "reporter_peerid, reporter_ip, report_count, score_sum, "
-                    "confidence_sum"
-                ),
-                condition="reported_key = ? AND key_type = ?",
-                params=(ipaddress, "ip"),
+        compact_reports = []
+        if after_id is None:
+            compact_reports = (
+                self.select(
+                    table_name="report_aggregates",
+                    columns=(
+                        "reporter_peerid, reporter_ip, report_count, score_sum, "
+                        "confidence_sum"
+                    ),
+                    condition="reported_key = ? AND key_type = ?",
+                    params=(ipaddress, "ip"),
+                )
+                or []
             )
-            or []
-        )
         for (
             reporter_peerid,
             reporter_ip,
@@ -700,7 +756,7 @@ class TrustDB(ISQLite):
             report_confidence,
             _reported_ip,
         ) in (
-            self.get_reports_for_ip(ipaddress) or []
+            self.get_reports_for_ip(ipaddress, after_id) or []
         ):
             reporter_ip = self.get_reporter_ip(
                 reporter_peerid, report_timestamp

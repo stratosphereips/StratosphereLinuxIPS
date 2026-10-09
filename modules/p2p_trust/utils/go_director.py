@@ -11,6 +11,7 @@ from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 from modules.p2p_trust.utils.utils import (
     validate_ip_address,
+    is_unicast_ip,
     validate_timestamp,
     get_ip_info_from_slips,
     send_evaluation_to_go,
@@ -87,7 +88,7 @@ class GoDirector:
         self.evaluation_processors = {
             "score_confidence": self.process_evaluation_score_confidence
         }
-        self.key_type_processors = {"ip": validate_ip_address}
+        self.key_type_processors = {"ip": is_unicast_ip}
         self.read_configuration()
         self.db = db
 

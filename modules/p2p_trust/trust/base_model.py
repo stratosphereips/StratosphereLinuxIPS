@@ -29,7 +29,9 @@ class BaseModel:
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
 
-    def get_opinion_on_ip(self, ipaddr: str) -> (float, float):
+    def get_opinion_on_ip(
+        self, ipaddr: str, after_id: int | None = None
+    ) -> tuple[float | None, float | None]:
         """
         Compute the network's opinion for a given IP
 
@@ -38,6 +40,7 @@ class BaseModel:
         computed and cached in the database for later use.
 
         :param ipaddr: The IP address for which the opinion is computed
+        :param after_id: Restrict reports to replies received for this lookup
         :return: average peer reputation, final score and final confidence
         """
 
@@ -46,7 +49,11 @@ class BaseModel:
         # reports_on_ip looks like this:
         # [(report_score, report_confidence, reporter_reliability,
         # reporter_score, reporter_confidence, reporter_ipaddress), ...]
-        reports_on_ip: List[tuple] = self.trustdb.get_opinion_on_ip(ipaddr)
+        reports_on_ip: List[tuple] = (
+            self.trustdb.get_opinion_on_ip(ipaddr, after_id)
+            if after_id is not None
+            else self.trustdb.get_opinion_on_ip(ipaddr)
+        )
         if len(reports_on_ip) == 0:
             return None, None
         combined_score, combined_confidence = self.assemble_peer_opinion(

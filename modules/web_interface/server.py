@@ -851,53 +851,31 @@ class RunDataReader:
             )
 
     def _annotate_p2p_reporters(self, items: List[Dict[str, Any]]) -> None:
-        """Add known reporter peer IDs to P2P evidence on one bounded page.
+        """Use each finding's recorded replies for its reporting peer list.
 
         Parameters:
             items: Individual or grouped evidence API records.
         """
-        relevant = [
-            item
-            for item in items
-            if item.get("evidence_type") == "MALICIOUS_IP_FROM_P2P_NETWORK"
-        ]
-        if not relevant:
-            return
-        targets = sorted(
-            {
-                str(item.get("profile_ip") or "")
-                for item in relevant
-                if item.get("profile_ip")
-            }
-        )
-        reporters: Dict[str, List[str]] = {}
-        trust_path = getattr(
-            self,
-            "p2p_trust_path",
-            Path("permanent") / "p2p_trust_runtime" / "trustdb.db",
-        )
-        if targets and trust_path.exists():
-            try:
-                placeholders = ",".join("?" for _ in targets)
-                with sqlite3.connect(
-                    f"file:{trust_path}?mode=ro", uri=True, timeout=1
-                ) as connection:
-                    for target, peer_id in connection.execute(
-                        "SELECT DISTINCT reported_key, reporter_peerid "
-                        "FROM reports WHERE key_type = 'ip' "
-                        f"AND reported_key IN ({placeholders}) "
-                        "ORDER BY reporter_peerid",
-                        targets,
-                    ):
-                        reporters.setdefault(str(target), []).append(
-                            str(peer_id)
-                        )
-            except sqlite3.Error:
-                pass
-        for item in relevant:
-            item["reporting_peers"] = reporters.get(
-                str(item.get("profile_ip") or ""), []
+        for item in items:
+            if item.get("evidence_type") != "MALICIOUS_IP_FROM_P2P_NETWORK":
+                continue
+            description = str(item.get("description") or "")
+            match = re.search(
+                r"Replied to this lookup, peers?: (.*?)(?:\.(?:\s|$)|$)",
+                description,
             )
+            item["reporting_peers"] = (
+                [label.split(" (")[0] for label in match.group(1).split(", ")]
+                if match
+                else []
+            )
+            if "Reported by peer" in description:
+                item["description"] = re.sub(
+                    r"Reported by peers?:",
+                    "Historical reports from peers (possibly offline):",
+                    description,
+                    count=1,
+                )
 
     @staticmethod
     def _clarify_legacy_p2p_report(item: Dict[str, Any]) -> None:

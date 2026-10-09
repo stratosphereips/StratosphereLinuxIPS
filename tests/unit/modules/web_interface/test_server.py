@@ -3175,29 +3175,16 @@ def test_p2p_evidence_page_shows_reporter_peer_ids(tmp_path) -> None:
     """
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
-    reader.p2p_trust_path = tmp_path / "trustdb.db"
-    with sqlite3.connect(reader.p2p_trust_path) as connection:
-        connection.execute(
-            "CREATE TABLE reports (reporter_peerid TEXT, key_type TEXT, "
-            "reported_key TEXT)"
-        )
-        connection.executemany(
-            "INSERT INTO reports VALUES (?, ?, ?)",
-            [
-                ("peer-b", "ip", "8.8.8.8"),
-                ("peer-a", "ip", "8.8.8.8"),
-                ("peer-a", "ip", "8.8.8.8"),
-                ("other", "ip", "1.1.1.1"),
-            ],
-        )
     items = [
         {
             "evidence_type": "MALICIOUS_IP_FROM_P2P_NETWORK",
             "profile_ip": "8.8.8.8",
+            "description": "Replied to this lookup, peers: peer-a (192.0.2.1), peer-b (192.0.2.2).",
         },
         {
             "evidence_type": "MALICIOUS_IP_FROM_P2P_NETWORK",
             "profile_ip": "9.9.9.9",
+            "description": "Reported by peers: old-peer (192.0.2.3).",
         },
         {"evidence_type": "DNS_WITHOUT_CONNECTION", "profile_ip": "8.8.8.8"},
     ]
@@ -3206,6 +3193,7 @@ def test_p2p_evidence_page_shows_reporter_peer_ids(tmp_path) -> None:
 
     assert items[0]["reporting_peers"] == ["peer-a", "peer-b"]
     assert items[1]["reporting_peers"] == []
+    assert "Historical reports from peers" in items[1]["description"]
     assert "reporting_peers" not in items[2]
 
 
