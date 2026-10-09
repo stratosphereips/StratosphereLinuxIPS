@@ -102,3 +102,44 @@ def test_peer_init_seed_is_stable_and_peer_specific():
         SEED, "slips-2"
     )
     assert 0 <= fnm.peer_init_seed(SEED, "slips-1") < 2**31
+
+
+def test_two_layer_second_projection_frozen_shared_and_forward(tmp_path):
+    """RP-L-RP-L-H: a second frozen projection that is identical across peers,
+    while only the two trainable linears are shared and the net runs forward.
+    """
+    a = _build(
+        fnm._build_random_projection_two_layer,
+        fnm.peer_init_seed(SEED, "slips-1"),
+        str(tmp_path / "a.bin"),
+    )
+    b = _build(
+        fnm._build_random_projection_two_layer,
+        fnm.peer_init_seed(SEED, "slips-2"),
+        str(tmp_path / "b.bin"),
+    )
+    # RP2 exists, is frozen, and is identical on both peers (shared by seed)
+    assert hasattr(a, "random_projection2")
+    assert a.random_projection2.weight.requires_grad is False
+    assert torch.equal(
+        a.random_projection2.weight.data, b.random_projection2.weight.data
+    )
+    # RP1 also still shared; the two RPs are different matrices
+    assert torch.equal(
+        a.random_projection.weight.data, b.random_projection.weight.data
+    )
+    assert not torch.equal(
+        a.random_projection.weight.data, a.random_projection2.weight.data
+    )
+    # shared/federated weights are exactly the two trainable linears
+    assert set(a.weights_for_sharing()) == {
+        "fc1_weight",
+        "fc1_bias",
+        "fc2_weight",
+        "fc2_bias",
+    }
+    # the frozen projections must NOT be shared
+    assert not any("projection" in k for k in a.weights_for_sharing())
+    # end-to-end forward produces 2-class logits
+    out = a(torch.randn(4, fnm.SimpleFederatedNet.FIXED_INPUT_DIM))
+    assert out.shape == (4, 2)

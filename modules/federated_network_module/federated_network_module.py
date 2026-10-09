@@ -319,18 +319,23 @@ class SimpleMLP3Layer(nn.Module):
 
 
 class RandomProjectionTwoLayerNet(SimpleFederatedNet):
-    """Model 3: RP + 2 federated linears + head.
+    """Model 3: RP -> L -> RP -> L -> H (two frozen projections interleaved
+    with two federated linears, then a local head).
 
-        input(18) -> RP(18->256, frozen, He) -> /sqrt(256) -> Linear(256->64) -> ReLU
-        -> Linear(64->32) -> ReLU -> head(32->2)
+        input(18) -> RP1(18->256, frozen, seed) -> /sqrt(256) -> fc1(256->64) -> ReLU
+        -> RP2(64->256, frozen, seed2) -> /sqrt(256) -> lin2(256->32) -> ReLU -> head(32->2)
 
-    Federated: BOTH linears (fc1 256->64 and fc2 64->32); head fine-tuned
-    around merges exactly like the base model. Shares the same frozen
-    projection as the base class (same seed -> same weights, required for
-    peers to agree on the projection). No class weighting.
+    Federated: fc1 + lin2 (the two trainable linears, shared under keys
+    fc1_*/fc2_*). BOTH projections are frozen and reconstructed from the shared
+    config seed on every peer (RP1 from `seed`, RP2 from a fixed derived seed),
+    so all peers agree on them; only fc1/lin2/head are trainable and per-peer
+    seeded. Head is fine-tuned around merges exactly like the base model.
+    Sending/sharing/merging are unchanged (generic over the shared keys); only
+    the forward pass gained the second projection. No class weighting.
     """
 
     USE_CLASS_WEIGHTING = False
+    RP2_SEED_SALT = 0x9E3779B1  # fixed -> RP2 identical on every peer
 
     def __init__(
         self,
@@ -339,6 +344,7 @@ class RandomProjectionTwoLayerNet(SimpleFederatedNet):
         seed: int = 1111,
         hidden1: int = 256,
         hidden2: int = 64,
+        proj2: int = 256,
         mid2: int = 32,
     ):
         super().__init__(
@@ -348,13 +354,26 @@ class RandomProjectionTwoLayerNet(SimpleFederatedNet):
             rp_path=rp_path,
             seed=seed,
         )
-        self.lin2 = nn.Linear(hidden2, mid2)
+        # Second frozen projection: drawn from a fixed derived seed (never the
+        # per-peer trainable RNG), so it is identical on every peer just like
+        # RP1. Not saved to rp_path; reconstructed from the seed each build.
+        rp2 = shared_random_projection(
+            hidden2, proj2, seed ^ self.RP2_SEED_SALT
+        )
+        self.random_projection2 = nn.Linear(hidden2, proj2, bias=False)
+        self.random_projection2.weight.data = rp2.T
+        self.random_projection2.weight.requires_grad = False
+        self.projection2_scale = proj2**0.5
+        # Second federated linear + local head.
+        self.lin2 = nn.Linear(proj2, mid2)
         self.head = nn.Linear(mid2, 2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x = self.random_projection(x)
         x = x / self.projection_scale
         x = self.relu(self.fc1(x))
+        x = self.random_projection2(x)
+        x = x / self.projection2_scale
         x = self.relu(self.lin2(x))
         return self.head(x)
 
@@ -462,6 +481,32 @@ def merge_blending(
     return {k: candidates[best][k].clone() for k in shared_keys}
 
 
+def merge_byzantine(
+    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
+) -> dict:
+    """Byzantine-robust, block-by-block (layer-wise) selection. For EACH shared
+    layer independently: take all candidate layers (own + every peer), compute
+    that layer's mean, and keep ONLY the single candidate layer closest to the
+    mean in L2. Outlier layers (e.g. a poisoned peer's) are rejected per layer,
+    so different layers may come from different peers. This is the per-layer
+    analogue of `blending` (which selects one whole model)."""
+    candidates = {"own": own_shared}
+    candidates.update(peer_models)
+    merged = {}
+    for key in shared_keys:
+        mean = torch.stack([candidates[c][key] for c in candidates]).mean(
+            dim=0
+        )
+        best = min(
+            candidates,
+            key=lambda c: torch.norm(
+                (candidates[c][key] - mean).reshape(-1)
+            ).item(),
+        )
+        merged[key] = candidates[best][key].clone()
+    return merged
+
+
 def merge_trust_weighted(
     own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
 ) -> dict:
@@ -499,6 +544,7 @@ MERGE_REGISTRY = {
     "average": merge_average,
     "trust_weighted": merge_trust_weighted,
     "blending": merge_blending,
+    "byzantine": merge_byzantine,
     # "my_rule": merge_my_rule,
 }
 
@@ -895,6 +941,31 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
         self.print(f"merge_rule: {self.merge_rule}", 0, 2)
 
+        # Class-balance policy for training batches. When set it supersedes the
+        # class_weighting bool: 'weighting' = per-class weighted loss (as
+        # before); 'undersample' = randomly drop the majority label to 50/50
+        # (plain loss); 'none' = plain loss, no balancing. Empty keeps the
+        # legacy class_weighting behaviour.
+        self.balancing = (
+            str(conf.read_configuration(section, "balancing", "") or "")
+            .strip()
+            .lower()
+        )
+        if self.balancing and self.balancing not in (
+            "weighting",
+            "undersample",
+            "none",
+        ):
+            self.print(
+                f"unknown balancing '{self.balancing}' "
+                "(known: weighting, undersample, none); ignoring",
+                0,
+                1,
+            )
+            self.balancing = ""
+        self._undersample = self.balancing == "undersample"
+        self.print(f"balancing: {self.balancing or '(class_weighting)'}", 0, 2)
+
         # Load existing local model if present and not training from scratch
         train_from_scratch = self._read_module_config_bool(
             "train_from_scratch", default=False
@@ -1009,6 +1080,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         model.USE_CLASS_WEIGHTING = self._read_module_config_bool(
             "class_weighting", getattr(model, "USE_CLASS_WEIGHTING", True)
         )
+        # `balancing`, when set, is authoritative over class_weighting: only
+        # 'weighting' uses the weighted loss; 'undersample'/'none' train on a
+        # plain loss (undersample balances the data instead).
+        if self.balancing in ("weighting", "undersample", "none"):
+            model.USE_CLASS_WEIGHTING = self.balancing == "weighting"
         return model
 
     def create_empty_preprocessor(self) -> StandardScaler:
@@ -2299,6 +2375,43 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 state["v"].zero_()
                 state["step"] = 0
 
+    def _undersample_majority(self, X: np.ndarray, y: np.ndarray):
+        """Randomly undersample the majority label to a 50/50 class balance.
+
+        Reproducible per window (seed = config seed + window index). When one
+        class is absent or the batch is already balanced, returns it unchanged.
+
+        :param X: feature matrix (rows aligned with y)
+        :param y: label vector of BENIGN/MALICIOUS
+        :return: (X_balanced, y_balanced) with equal per-class counts
+        """
+        y = np.asarray(y)
+        idx_mal = np.where(y == MALICIOUS)[0]
+        idx_ben = np.where(y == BENIGN)[0]
+        n = min(len(idx_mal), len(idx_ben))
+        if n == 0 or len(idx_mal) == len(idx_ben):
+            return X, y
+        rng = np.random.default_rng(
+            int(self.seed) + int(self.training_count_window)
+        )
+        keep_mal = (
+            rng.choice(idx_mal, n, replace=False)
+            if len(idx_mal) > n
+            else idx_mal
+        )
+        keep_ben = (
+            rng.choice(idx_ben, n, replace=False)
+            if len(idx_ben) > n
+            else idx_ben
+        )
+        keep = np.sort(np.concatenate([keep_mal, keep_ben]))
+        self.print(
+            f"undersample: {len(idx_mal)} mal / {len(idx_ben)} ben -> {n}/{n}",
+            1,
+            1,
+        )
+        return X[keep], y[keep]
+
     def _train_batch(self):
         """Train on accumulated training buffer: local fc1+head, local head, merge head."""
         try:
@@ -2314,6 +2427,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             X = np.array(self.training_buffer_x)
             y = np.array(self.training_buffer_y)
+            if self._undersample:
+                X, y = self._undersample_majority(X, y)
             epochs = self.local_training_epochs
 
             mal_count = int(np.sum(y == MALICIOUS))
