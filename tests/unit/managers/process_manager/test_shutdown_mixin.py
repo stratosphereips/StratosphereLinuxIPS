@@ -175,6 +175,62 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
 
 
 @pytest.mark.parametrize(
+    "interrupted, expected_seconds",
+    [(False, 604800), (True, 30)],
+)
+def test_interrupt_caps_module_shutdown_wait(
+    interrupted: bool, expected_seconds: int
+) -> None:
+    """Keep a long normal wait while bounding Ctrl-C shutdown.
+
+    Parameters:
+        interrupted: Whether Ctrl-C requested shutdown.
+        expected_seconds: Effective module grace period.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.wait_for_modules_to_finish.return_value = 10080
+    process_manager.shutdown_signal_received = interrupted
+
+    assert process_manager._module_shutdown_timeout() == expected_seconds
+
+
+def test_interrupt_wait_uses_remaining_global_deadline() -> None:
+    """Do not wait three seconds for every pending module after Ctrl-C."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    children = [Mock(name="first"), Mock(name="second")]
+    for child in children:
+        child.is_alive.return_value = True
+
+    with patch(
+        "managers.process_manager.shutdown_mixin.time.monotonic",
+        return_value=100.0,
+    ):
+        process_manager.wait_for_processes_to_finish(children, 100.1)
+
+    children[0].join.assert_called_once_with(pytest.approx(0.1))
+    children[1].join.assert_called_once_with(pytest.approx(0.1))
+
+
+def test_forced_child_cleanup_skips_another_grace_wait() -> None:
+    """Start killing children immediately when the grace period expires."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = True
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children(force=True)
+
+    process_manager.kill_process_tree.assert_called_once_with(123)
+    child.join.assert_called_once_with(1)
+
+
+@pytest.mark.parametrize(
     "end_date_str, start_time_str, expected_analysis_time",
     [
         # Test case 1: Analysis time is 10 minutes
@@ -852,8 +908,8 @@ def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop(
 
     assert result == (None, None)
     assert mock_wait.call_args_list == [
-        call([first_process]),
-        call([last_process]),
+        call([first_process], None),
+        call([last_process], None),
     ]
     mock_set.assert_called_once_with()
 
@@ -882,7 +938,7 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
         )
 
     assert result == ([pending_process], [last_process])
-    mock_wait.assert_called_once_with([pending_process])
+    mock_wait.assert_called_once_with([pending_process], None)
     mock_warn.assert_called_once_with([pending_process, last_process])
     mock_set.assert_not_called()
 

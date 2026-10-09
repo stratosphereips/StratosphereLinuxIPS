@@ -2,11 +2,25 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
 import os
+from pathlib import Path
 from typing import TextIO, List, Dict, Optional
 import validators
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+
+
+def web_whitelist_path(local_path: str) -> Path:
+    """Locate web-managed rules beside the configured local whitelist.
+
+    Parameters:
+        local_path: Configured local whitelist filename.
+
+    Returns:
+        Path of the separate web-managed rule file.
+    """
+    path = Path(local_path)
+    return path.with_name(path.name + ".web.conf")
 
 
 class WhitelistParser:
@@ -273,42 +287,44 @@ class WhitelistParser:
         return org_subnets
 
     def parse(self) -> bool:
-        """parses the whitelist specified in the slips.yaml"""
-        line_number = 0
+        """Parse the configured whitelist, then persistent web-managed rules.
 
-        whitelist = self.open_whitelist_for_reading()
-        if not whitelist:
-            return False
-
-        while line := whitelist.readline():
-            line_number += 1
-            if line.startswith('"IoCType"'):
-                continue
-
-            if line.startswith(";"):
-                # user comment
-                continue
-
-            # check if the user commented an org, ip or domain that
-            # was whitelisted before, we need to remove it from the db
-            if line.startswith("#"):
-                self.remove_entry_from_cache_db(
-                    self.parse_line(line.replace("#", ""))
+        Returns:
+            Whether at least one whitelist file was available.
+        """
+        sources = [self.open_whitelist_for_reading()]
+        try:
+            sources.append(
+                web_whitelist_path(self.local_whitelist_path).open(
+                    encoding="utf-8"
                 )
+            )
+        except FileNotFoundError:
+            pass
+
+        found = False
+        for whitelist in sources:
+            if not whitelist:
                 continue
-
-            try:
-                parsed_line: Dict[str, str] = self.parse_line(line)
-                if not parsed_line:
-                    continue
-            except Exception:
-                self.manager.print(
-                    f"Line {line_number} in whitelist.conf is invalid."
-                    f" Skipping."
-                )
-                continue
-
-            self.call_handler(parsed_line)
-
-        whitelist.close()
-        return True
+            found = True
+            with whitelist:
+                for line_number, line in enumerate(whitelist, start=1):
+                    if line.startswith(('"IoCType"', ";")):
+                        continue
+                    if line.startswith("#"):
+                        self.remove_entry_from_cache_db(
+                            self.parse_line(line.replace("#", ""))
+                        )
+                        continue
+                    try:
+                        parsed_line: Dict[str, str] = self.parse_line(line)
+                        if not parsed_line:
+                            continue
+                    except Exception:
+                        self.manager.print(
+                            f"Line {line_number} in whitelist.conf is invalid."
+                            f" Skipping."
+                        )
+                        continue
+                    self.call_handler(parsed_line)
+        return found

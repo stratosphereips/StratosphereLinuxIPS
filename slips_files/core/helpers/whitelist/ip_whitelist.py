@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import time
 from typing import List, Dict
+
+import redis
 
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -21,6 +24,25 @@ class IPAnalyzer(IWhitelistAnalyzer):
         # for debugging
         self.bf_hits = 0
         self.bf_misses = 0
+        self._next_whitelist_refresh = time.monotonic() + 2
+        self._known_ip_rules: set[str] | None = None
+
+    def _refresh_ip_rules(self) -> None:
+        """Refresh the process-local IP filter after a web rule changes."""
+        now = time.monotonic()
+        if now < self._next_whitelist_refresh:
+            return
+        self._next_whitelist_refresh = now + 2
+        try:
+            rules = set(self.db.get_whitelist("IPs"))
+        except redis.RedisError:
+            return
+        if rules == self._known_ip_rules:
+            return
+        self.manager.bloom_filters.ips = (
+            self.manager.bloom_filters._create_bloom_filter(rules, 0.001)
+        )
+        self._known_ip_rules = rules
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -52,6 +74,8 @@ class IPAnalyzer(IWhitelistAnalyzer):
 
         if not utils.is_valid_ip(ip):
             return False
+
+        self._refresh_ip_rules()
 
         candidates = [ip]
         if port is not None and str(port).isdecimal():
