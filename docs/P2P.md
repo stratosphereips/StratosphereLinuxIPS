@@ -211,6 +211,12 @@ contributes to the reported IP's score. This avoids scoring the same peer
 opinion once on receipt and again on observation, or twice when both endpoints
 of the flow are the reported IP.
 
+A received report identifies the sending peer and the IP it rated, with a
+maliciousness score and confidence. It does not identify an attack victim or
+describe traffic between the two IPs. Evidence descriptions state these roles
+explicitly; a score of zero is an opinion that the IP is benign, while higher
+scores indicate greater suspected maliciousness.
+
 The DNS high-entropy TXT detector ignores `.local` mDNS service discovery
 answers. Pigeon advertises encoded peer addresses through these local TXT
 records, and their entropy alone is not evidence of DNS tunneling.

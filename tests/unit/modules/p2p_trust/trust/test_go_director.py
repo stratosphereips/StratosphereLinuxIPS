@@ -250,6 +250,8 @@ def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluato
     )
     go_director.blame_evaluator.assert_not_called()
     go_director.evaluation_processors["score_confidence"].assert_not_called()
+
+
 def test_received_message_marks_peer_recently_active() -> None:
     """Save recent activity without discarding known peer metadata."""
     go_director = ModuleFactory().create_go_director_obj()
@@ -257,12 +259,12 @@ def test_received_message_marks_peer_recently_active() -> None:
         {"ip": "192.0.2.10", "reliability": 0.8}
     )
 
-    with patch("modules.p2p_trust.utils.go_director.time.time", return_value=1234):
+    with patch(
+        "modules.p2p_trust.utils.go_director.time.time", return_value=1234
+    ):
         go_director._record_peer_activity("peer-a")
 
-    stored = json.loads(
-        go_director.db.store_peer_trust_data.call_args.args[1]
-    )
+    stored = json.loads(go_director.db.store_peer_trust_data.call_args.args[1])
     assert stored == {
         "ip": "192.0.2.10",
         "reliability": 0.8,
@@ -357,37 +359,55 @@ def test_validate_message_request(
 
 
 @pytest.mark.parametrize(
-    "ip, reporter, score, confidence, timestamp, "
+    "ip, reporter, reporter_ip, score, confidence, timestamp, "
     "profileid_of_attacker, "
     "expected_description, expected_threat_level",
     [
-        # Test case 1: Basic test with valid data
         (
             "192.168.1.1",
             "test_reporter",
+            "192.168.1.147",
             0.5,
             0.8,
             1649445643,
             "profile_192.168.1.1",
-            "attacking another peer:  (test_reporter).",
+            "Received from P2P peer 192.168.1.147 (test_reporter): "
+            "reputation report about IP 192.168.1.1; maliciousness "
+            "score 0.5, confidence 0.8.",
             "medium",
         ),
-        # Test case 2: Test with a different score and confidence
         (
             "10.0.0.1",
             "another_reporter",
+            "",
             0.9,
             0.6,
             1649445644,
             "profile_10.0.0.1",
-            "attacking another peer:  (another_reporter).",
+            "Received from P2P peer another_reporter (IP unavailable): "
+            "reputation report about IP 10.0.0.1; maliciousness "
+            "score 0.9, confidence 0.6.",
             "critical",
+        ),
+        (
+            "192.168.1.147",
+            "self_reporter",
+            "192.168.1.147",
+            0.0,
+            1.0,
+            1649445645,
+            "profile_192.168.1.147",
+            "Received from P2P peer 192.168.1.147 (self_reporter): "
+            "reputation report about IP 192.168.1.147; maliciousness "
+            "score 0.0, confidence 1.0.",
+            "info",
         ),
     ],
 )
 def test_set_evidence_p2p_report(
     ip,
     reporter,
+    reporter_ip,
     score,
     confidence,
     timestamp,
@@ -396,7 +416,10 @@ def test_set_evidence_p2p_report(
     expected_threat_level,
 ):
     go_director = ModuleFactory().create_go_director_obj()
-    go_director.trustdb.get_ip_of_peer.return_value = (timestamp, "")
+    go_director.trustdb.get_ip_of_peer.return_value = (
+        timestamp,
+        reporter_ip,
+    )
 
     go_director.set_evidence_p2p_report(
         ip, reporter, score, confidence, timestamp, profileid_of_attacker
@@ -406,6 +429,10 @@ def test_set_evidence_p2p_report(
     call_args = go_director.db.set_evidence.call_args[0][0]
     assert call_args.attacker.value == ip
     assert expected_description in call_args.description
+    assert (
+        "No victim or attack details were provided." in call_args.description
+    )
+    assert "attacking another peer" not in call_args.description
     assert call_args.threat_level == expected_threat_level
 
 

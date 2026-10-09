@@ -436,6 +436,10 @@ Evidence and Host tables also show **Reporting peers** for both new and older
 P2P evidence, using reporter IDs retained in the permanent P2P trust database.
 For older evidence, this column identifies peers that reported the same IP;
 the original evidence did not record which subset contributed to its score.
+Older `P2P_REPORT` descriptions are clarified when served by the web API: the
+peer is identified as the sender, the host IP as the subject of its reputation
+report, and the absence of victim or attack details is made explicit. Stored
+evidence is not rewritten.
 
 The displayed score is not calculated by the web interface. For interface,
 standard-input, and CYST runs it is Slips' risk-adjusted accumulated threat

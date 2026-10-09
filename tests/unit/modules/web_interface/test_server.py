@@ -3163,6 +3163,60 @@ def test_p2p_evidence_page_shows_reporter_peer_ids(tmp_path) -> None:
     assert "reporting_peers" not in items[2]
 
 
+@pytest.mark.parametrize(
+    "description, evidence_type, expected",
+    [
+        (
+            "attacking another peer: 192.168.1.147 (peer-1). "
+            "confidence: 1.0",
+            "P2P_REPORT",
+            "Received from P2P peer 192.168.1.147 (peer-1): "
+            "reputation report about IP 198.51.100.7; confidence 1.0. "
+            "No victim or attack details were provided.",
+        ),
+        (
+            "attacking another peer:  (peer-2). confidence: 0.05",
+            "P2P_REPORT",
+            "Received from P2P peer peer-2 (IP unavailable): "
+            "reputation report about IP 198.51.100.7; confidence 0.05. "
+            "No victim or attack details were provided.",
+        ),
+        (
+            "Received from P2P peer peer-2: reputation report",
+            "P2P_REPORT",
+            "Received from P2P peer peer-2: reputation report",
+        ),
+        (
+            "attacking another peer: 192.168.1.147 (peer-1). "
+            "confidence: 1.0",
+            "MALICIOUS_IP_FROM_P2P_NETWORK",
+            "attacking another peer: 192.168.1.147 (peer-1). "
+            "confidence: 1.0",
+        ),
+    ],
+)
+def test_legacy_p2p_report_description_names_sender_and_subject(
+    description: str, evidence_type: str, expected: str
+) -> None:
+    """Clarify older report text while preserving unrelated evidence.
+
+    Parameters:
+        description: Stored evidence description.
+        evidence_type: Signal type associated with the description.
+        expected: Wording served by the web API.
+    """
+    _module_factory = ModuleFactory()
+    item = {
+        "description": description,
+        "evidence_type": evidence_type,
+        "profile_ip": "198.51.100.7",
+    }
+
+    RunDataReader._clarify_legacy_p2p_report(item)
+
+    assert item["description"] == expected
+
+
 def test_host_evidence_excludes_mac_alias_profiles(
     tmp_path,
 ) -> None:

@@ -899,6 +899,39 @@ class RunDataReader:
                 str(item.get("profile_ip") or ""), []
             )
 
+    @staticmethod
+    def _clarify_legacy_p2p_report(item: Dict[str, Any]) -> None:
+        """Explain an older P2P report without inventing an attack victim.
+
+        Parameters:
+            item: Evidence API record, updated in place when its description
+                uses the former ambiguous P2P wording.
+        """
+        if item.get("evidence_type") != "P2P_REPORT":
+            return
+        description = str(item.get("description") or "")
+        match = re.match(
+            r"^attacking another peer:\s*(?:(?P<address>\S+)\s+)?"
+            r"\((?P<peer_id>[^)]+)\)\.\s*confidence:\s*"
+            r"(?P<confidence>\S+)",
+            description,
+        )
+        if not match:
+            return
+        peer_id = match.group("peer_id")
+        address = match.group("address")
+        reporter_label = (
+            f"{address} ({peer_id})"
+            if address
+            else f"{peer_id} (IP unavailable)"
+        )
+        item["description"] = (
+            f"Received from P2P peer {reporter_label}: reputation report "
+            f"about IP {item.get('profile_ip') or 'unknown'}; confidence "
+            f"{match.group('confidence')}. No victim or attack details "
+            "were provided."
+        )
+
     def _detector_score_settings(self) -> tuple[str, float]:
         """
         Read the run's real Slips alert-score mode and threshold.
@@ -1530,6 +1563,7 @@ class RunDataReader:
                 evidence["timestamp"] = self._event_timestamp(
                     evidence.get("timestamp")
                 )
+                self._clarify_legacy_p2p_report(evidence)
                 records.append(evidence)
         records.sort(
             key=lambda item: float(item.get("timestamp") or 0),
@@ -1598,6 +1632,7 @@ class RunDataReader:
                 "when this evidence was recorded",
             )
         )
+        self._clarify_legacy_p2p_report(record)
         return record
 
     @staticmethod

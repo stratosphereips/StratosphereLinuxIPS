@@ -600,33 +600,37 @@ class GoDirector:
             )
 
     def set_evidence_p2p_report(
-        self: str,
+        self,
         ip: str,
         reporter: str,
         score: float,
         confidence: float,
-        timestamp: str,
+        timestamp: float,
         profileid_of_attacker: str,
-    ):
-        """
-        set evidence for the newly created attacker
-        profile stating that it attacked another peer
+    ) -> None:
+        """Record a peer's opinion about an IP without implying an attack.
+
+        Parameters:
+            ip: IP address evaluated by the reporting peer.
+            reporter: Peer ID that sent the report.
+            score: Reported maliciousness score.
+            confidence: Reported confidence in that score.
+            timestamp: Time at which the report was received.
+            profileid_of_attacker: Profile for the reported IP.
         """
         threat_level = utils.threat_level_to_string(score)
 
-        # confidence depends on how long the connection
-        # scale the confidence from 0 to 1, 1 means 24 hours long
-        last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
-
-        # this should never happen. if we have a report,
-        # we will have a reporter and will have the ip of the reporter
-        # but just in case
-        if not reporter_ip:
-            reporter_ip = ""
+        _last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+        reporter_label = (
+            f"{reporter_ip} ({reporter})"
+            if reporter_ip
+            else f"{reporter} (IP unavailable)"
+        )
 
         description = (
-            f"attacking another peer: {reporter_ip} "
-            f"({reporter}). confidence: {confidence}"
+            f"Received from P2P peer {reporter_label}: reputation report "
+            f"about IP {ip}; maliciousness score {score}, confidence "
+            f"{confidence}. No victim or attack details were provided."
         )
 
         # get the tw of this report time
