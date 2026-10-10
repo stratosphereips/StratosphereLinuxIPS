@@ -233,6 +233,10 @@ records, and their entropy alone is not evidence of DNS tunneling.
 Slips contains a minimal log file for reports received by other peers and peer updates in
 ```output/p2p_reports.log```
 
+Routine received reports, peer requests, and P2P message details are written to
+Slips log files without filling the main terminal. Invalid peer messages and
+other P2P errors remain visible in the terminal.
+
 For a more detailed p2p logs, for example (peer ping pongs, peer lists, errors, etc.)
 you can enable p2p.log in slips.yaml by setting ```create_p2p_logfile``` to ```yes```
 and a ```p2p.log``` will be available in the output dir

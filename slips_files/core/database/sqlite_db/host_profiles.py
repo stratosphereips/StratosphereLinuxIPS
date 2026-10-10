@@ -82,6 +82,11 @@ class HostProfileStore:
                 "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
                 "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS mdns_annotations ("
+                "mdns_name TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+            )
         if os.geteuid() == 0:
             os.chown(path, owner.st_uid, owner.st_gid)
         path.chmod(0o600)
@@ -298,6 +303,19 @@ class HostProfileStore:
                 "AND kind='mac' ORDER BY last_seen DESC LIMIT 1",
                 (network_id, normalized),
             ).fetchone()
+            mdns_rows = connection.execute(
+                "SELECT value FROM facts WHERE network_id=? AND ip=? "
+                "AND kind='mdns_name' ORDER BY last_seen DESC",
+                (network_id, normalized),
+            ).fetchall()
+            mdns_name = next(
+                (
+                    stable
+                    for (value,) in mdns_rows
+                    if (stable := HostProfileStore._stable_mdns_name(value))
+                ),
+                "",
+            )
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS host_annotations ("
                 "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
@@ -330,6 +348,41 @@ class HostProfileStore:
                     "note=excluded.note, updated_at=excluded.updated_at",
                     (mac, name, note, time.time()),
                 )
+            if mdns_name:
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS mdns_annotations ("
+                    "mdns_name TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
+                    "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO mdns_annotations VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(mdns_name) DO UPDATE SET name=excluded.name, "
+                    "note=excluded.note, updated_at=excluded.updated_at",
+                    (mdns_name, name, note, time.time()),
+                )
+
+    @staticmethod
+    def _stable_mdns_name(value: str | None) -> str:
+        """Select a device mDNS hostname, excluding services and random IDs.
+
+        Parameters:
+            value: Observed mDNS name.
+
+        Returns:
+            Canonical hostname, or an empty string when it is unsuitable.
+        """
+        name = str(value or "").strip().lower().rstrip(".")
+        match = re.fullmatch(r"([a-z0-9][a-z0-9-]{0,62})\.local", name)
+        if not match:
+            return ""
+        label = match.group(1)
+        if re.fullmatch(
+            r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+            r"[0-9a-f]{4}-[0-9a-f]{12}",
+            label,
+        ):
+            return ""
+        return name
 
     @staticmethod
     def _usable_mac(value: str | None) -> str:
@@ -386,6 +439,43 @@ class HostProfileStore:
             for row in rows
             if row[0].startswith("gateway:")
         } - {""}
+        mdns_by_host: dict[tuple[str, str], str] = {}
+        for network_id, ip, value in connection.execute(
+            "SELECT network_id, ip, value FROM facts WHERE kind='mdns_name' "
+            "AND ip IN (" + placeholders + ") ORDER BY last_seen DESC",
+            keys,
+        ):
+            stable = HostProfileStore._stable_mdns_name(value)
+            if stable:
+                mdns_by_host.setdefault((network_id, ip), stable)
+        mdns_names = set(mdns_by_host.values())
+        saved_mdns: dict[str, dict[str, str]] = {}
+        if mdns_names:
+            mdns_placeholders = ",".join("?" for _ in mdns_names)
+            try:
+                for mdns_name, name, note in connection.execute(
+                    "SELECT mdns_name, name, note FROM mdns_annotations "
+                    "WHERE mdns_name IN (" + mdns_placeholders + ")",
+                    tuple(mdns_names),
+                ):
+                    saved_mdns[mdns_name] = {
+                        "name": name or "",
+                        "note": note or "",
+                    }
+            except sqlite3.OperationalError:
+                pass
+        legacy_mdns: dict[str, dict[str, str]] = {}
+        for name, note, value in connection.execute(
+            "SELECT a.name, a.note, f.value FROM host_annotations a "
+            "JOIN facts f ON f.network_id=a.network_id AND f.ip=a.ip "
+            "AND f.kind='mdns_name' WHERE a.name!='' OR a.note!='' "
+            "ORDER BY a.updated_at DESC, f.last_seen DESC"
+        ):
+            stable = HostProfileStore._stable_mdns_name(value)
+            if stable:
+                legacy_mdns.setdefault(
+                    stable, {"name": name or "", "note": note or ""}
+                )
         device_annotations: dict[str, dict[str, str]] = {}
         try:
             for mac, name, note in connection.execute(
@@ -420,10 +510,15 @@ class HostProfileStore:
                 else ""
             )
             direct = {"name": name or "", "note": note or ""}
+            mdns_name = mdns_by_host.get((network_id, ip), "")
             if mac in device_annotations:
                 resolved[(network_id, ip)] = device_annotations[mac]
             elif name or note:
                 resolved[(network_id, ip)] = direct
+            elif mdns_name in saved_mdns:
+                resolved[(network_id, ip)] = saved_mdns[mdns_name]
+            elif mdns_name in legacy_mdns:
+                resolved[(network_id, ip)] = legacy_mdns[mdns_name]
             else:
                 resolved[(network_id, ip)] = legacy_annotations.get(
                     mac, direct

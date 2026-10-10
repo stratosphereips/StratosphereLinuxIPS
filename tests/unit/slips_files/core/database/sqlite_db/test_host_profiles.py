@@ -124,9 +124,7 @@ def test_ipv6_link_local_uses_the_captured_network(tmp_path: Path) -> None:
 
     profile = HostProfileStore.read(path, "fe80::1234")[0]
     assert profile["network_id"] == "gateway:aa:bb:cc:dd:ee:01"
-    assert profile["network_label"] == (
-        "Link-local on en0 · router aa:bb:cc:dd:ee:01"
-    )
+    assert profile["network_label"] == ("Link-local on en0 · router aa:bb:cc:dd:ee:01")
 
 
 def test_user_annotation_persists_for_exact_network_host(
@@ -178,10 +176,58 @@ def test_user_annotation_persists_for_exact_network_host(
         "192.168.1.20"
     ] == {"name": "", "note": ""}
 
-    HostProfileStore.set_host_annotation(
-        path, "192.168.1.20", network_id, "", ""
-    )
+    HostProfileStore.set_host_annotation(path, "192.168.1.20", network_id, "", "")
     assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
+
+
+def test_saved_name_follows_stable_mdns_across_ip_and_mac_changes(
+    tmp_path: Path,
+) -> None:
+    """Recover existing names when a device changes address and private MAC.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "host_profiles.sqlite"
+    HostProfileStore(path, "run-one", lambda _: {}, ["en0"])
+    with sqlite3.connect(path) as connection:
+        for index, ip in enumerate(("192.168.1.20", "192.168.1.21", "192.168.1.22")):
+            network_id = f"gateway:aa:bb:cc:dd:ee:0{index + 1}"
+            connection.execute(
+                "INSERT INTO hosts VALUES (?, ?, ?, ?, ?)",
+                (network_id, ip, "Home", float(index), float(index)),
+            )
+            connection.execute(
+                "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (network_id, ip, "mdns_name", "cherry.local", 1, 1, 1),
+            )
+            connection.execute(
+                "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (
+                    network_id,
+                    ip,
+                    "mac",
+                    f"02:00:00:00:00:0{index + 1}",
+                    1,
+                    1,
+                    1,
+                ),
+            )
+        connection.execute(
+            "INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?)",
+            ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20", "Cherry", "", 1),
+        )
+
+    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry"
+    HostProfileStore.set_host_annotation(
+        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "Cherry II", ""
+    )
+    assert HostProfileStore.read(path, "192.168.1.22")[0]["user_name"] == "Cherry II"
+    HostProfileStore.set_host_annotation(
+        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
+    )
+    assert HostProfileStore.read(path, "192.168.1.22")[0]["user_name"] == ""
 
 
 def test_device_annotation_survives_network_and_address_changes(
@@ -201,17 +247,24 @@ def test_device_annotation_survives_network_and_address_changes(
     old = HostProfileStore(path, "old-run", lambda _: network, ["en0"])
     old.observe_flow(
         SimpleNamespace(
-            interface="en0", starttime="100", type_="dhcp",
-            saddr="192.168.1.20", daddr="192.168.1.1",
-            host_name="", smac="02:00:00:00:00:20",
+            interface="en0",
+            starttime="100",
+            type_="dhcp",
+            saddr="192.168.1.20",
+            daddr="192.168.1.1",
+            host_name="",
+            smac="02:00:00:00:00:20",
         )
     )
     with sqlite3.connect(path) as connection:
         connection.execute(
             "INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?)",
             (
-                "gateway:aa:bb:cc:dd:ee:01", "192.168.1.20",
-                "Cherry", "My device", 150.0,
+                "gateway:aa:bb:cc:dd:ee:01",
+                "192.168.1.20",
+                "Cherry",
+                "My device",
+                150.0,
             ),
         )
 
@@ -223,8 +276,13 @@ def test_device_annotation_survives_network_and_address_changes(
     ):
         current.observe_flow(
             SimpleNamespace(
-                interface="en0", starttime=when, type_="dhcp",
-                saddr=ip, daddr="192.168.1.1", host_name="", smac=mac,
+                interface="en0",
+                starttime=when,
+                type_="dhcp",
+                saddr=ip,
+                daddr="192.168.1.1",
+                host_name="",
+                smac=mac,
             )
         )
     with sqlite3.connect(path) as connection:
@@ -240,8 +298,11 @@ def test_device_annotation_survives_network_and_address_changes(
     }
 
     HostProfileStore.set_host_annotation(
-        path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02",
-        "Cherry II", "Updated note",
+        path,
+        "192.168.1.21",
+        "gateway:aa:bb:cc:dd:ee:02",
+        "Cherry II",
+        "Updated note",
     )
     assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry II"
     assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == "Cherry II"
@@ -262,9 +323,7 @@ def test_device_annotation_survives_network_and_address_changes(
         ("unknown", ""),
     ],
 )
-def test_device_annotation_uses_only_unicast_macs(
-    value: str, expected: str
-) -> None:
+def test_device_annotation_uses_only_unicast_macs(value: str, expected: str) -> None:
     """Reject shared and invalid MACs before linking saved host names.
 
     Parameters:
@@ -332,8 +391,7 @@ def test_unknown_private_networks_do_not_merge_across_runs(
         "run:two",
     }
     assert {
-        tuple(fact["value"] for fact in profile["facts"])
-        for profile in profiles
+        tuple(fact["value"] for fact in profile["facts"]) for profile in profiles
     } == {("device-one",), ("device-two",)}
 
 
@@ -449,9 +507,7 @@ def test_country_facts_are_real_public_geolocations(
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
     store = HostProfileStore(path, "run", lambda _: {}, [])
-    store.observe_ip_info(
-        ip, {"reverse_dns": "example.org", "geocountry": country}
-    )
+    store.observe_ip_info(ip, {"reverse_dns": "example.org", "geocountry": country})
     profile = HostProfileStore.read(path, ip)[0]
     saved_countries = {
         fact["value"] for fact in profile["facts"] if fact["kind"] == "country"

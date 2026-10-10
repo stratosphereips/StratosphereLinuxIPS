@@ -3,7 +3,7 @@
 import base64
 import binascii
 import json
-from typing import Dict
+from typing import Any, Dict
 import time
 
 
@@ -92,7 +92,16 @@ class GoDirector:
         self.read_configuration()
         self.db = db
 
-    def print(self, *args, **kwargs):
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        """Keep routine peer traffic in logs while showing validation errors.
+
+        Parameters:
+            args: Positional arguments forwarded to the module printer.
+            kwargs: Keyword arguments forwarded to the module printer.
+        """
+        debug = args[2] if len(args) > 2 else kwargs.get("debug", 0)
+        if debug == 0:
+            kwargs.setdefault("log_to_logfiles_only", True)
         return self.printer.print(*args, **kwargs)
 
     def read_configuration(self):

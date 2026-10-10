@@ -675,7 +675,12 @@ class Trust(IModule):
         # no data in db - this happens when testing,
         # if there is not enough data on peers
         if combined_score is None or combined_confidence is None:
-            self.print(f"No data received from the network about {ip}\n", 0, 2)
+            self.print(
+                f"No data received from the network about {ip}\n",
+                0,
+                2,
+                log_to_logfiles_only=True,
+            )
             return
 
         self.print(
@@ -684,6 +689,7 @@ class Trust(IModule):
             f"confidence={combined_confidence} saving it now!\n",
             0,
             2,
+            log_to_logfiles_only=True,
         )
 
         if combined_score * combined_confidence > 0:
@@ -900,6 +906,7 @@ class Trust(IModule):
                 f"Not forwarding this blame report.",
                 0,
                 2,
+                log_to_logfiles_only=True,
             )
             return
         network_opinion = network_score * network_confidence
@@ -923,6 +930,7 @@ class Trust(IModule):
                 f"{self.blame_threshold}). Not blocking it.",
                 0,
                 2,
+                log_to_logfiles_only=True,
             )
             return
 
@@ -932,6 +940,7 @@ class Trust(IModule):
             f"module.",
             0,
             2,
+            log_to_logfiles_only=True,
         )
         # give the report to evidenceProcess to decide whether to block or not
         self.db.publish("new_blame", json.dumps(data))
