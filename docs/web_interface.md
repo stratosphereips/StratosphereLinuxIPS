@@ -152,8 +152,9 @@ grace period, Slips reports this and stops them before asking about the web
 interface. The web-interface question is also recorded in `slips.log`, so the
 log shows when shutdown is waiting for a console answer.
 
-If the `slipsBlocking` chain contains Slips-managed rules at shutdown, Slips
-first asks `Keep the installed firewall rules? [Y/n]`. Press Enter or answer
+If blocking was enabled with `-p` and the `slipsBlocking` chain contains
+Slips-managed rules at shutdown, Slips first asks
+`Keep the installed firewall rules? [Y/n]`. Press Enter or answer
 `y` to retain enforcement; answer `n` or `delete` to remove the complete Slips
 chain and its local recovery records. Non-interactive and forced shutdowns
 keep the rules because silently dropping enforcement would be unsafe.

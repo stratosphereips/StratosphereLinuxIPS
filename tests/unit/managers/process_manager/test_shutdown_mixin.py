@@ -1094,6 +1094,31 @@ def test_firewall_shutdown_skips_non_linux_systems(system: str) -> None:
     has_rules.assert_not_called()
 
 
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_skips_runs_without_blocking(system: str) -> None:
+    """Avoid privileged firewall checks when blocking was not enabled.
+
+    Parameters:
+        system: Operating system reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.blocking = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
+
+
 @pytest.mark.parametrize("finished", [False, True])
 def test_stdin_eof_allows_normal_shutdown(finished: bool) -> None:
     """Keep stdin live until EOF, then allow normal input/profiler completion.
