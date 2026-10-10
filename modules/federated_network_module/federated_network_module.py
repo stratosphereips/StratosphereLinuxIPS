@@ -476,7 +476,9 @@ def merge_blending(
     mean_flat = _flat(mean)
     best = min(
         candidates,
-        key=lambda cid: torch.norm(_flat(candidates[cid]) - mean_flat).item(),
+        key=lambda candidate_id: torch.norm(
+            _flat(candidates[candidate_id]) - mean_flat
+        ).item(),
     )
     return {k: candidates[best][k].clone() for k in shared_keys}
 
@@ -494,13 +496,13 @@ def merge_byzantine(
     candidates.update(peer_models)
     merged = {}
     for key in shared_keys:
-        mean = torch.stack([candidates[c][key] for c in candidates]).mean(
-            dim=0
-        )
+        mean = torch.stack(
+            [candidates[cand][key] for cand in candidates]
+        ).mean(dim=0)
         best = min(
             candidates,
-            key=lambda c: torch.norm(
-                (candidates[c][key] - mean).reshape(-1)
+            key=lambda cand: torch.norm(
+                (candidates[cand][key] - mean).reshape(-1)
             ).item(),
         )
         merged[key] = candidates[best][key].clone()
@@ -748,18 +750,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
         self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
-        # Training state
-        self.optimizer = None  # manual Adam (fork-safe, no torch.optim)
+        # Training state (manual Adam via self._adam_state; no torch.optim,
+        # fork-safe). The loss criterion is built locally per batch in
+        # fit_incremental_model (it needs per-batch class weights).
         self._adam_state: Dict[str, dict] = {}
-        self.criterion = nn.CrossEntropyLoss()
 
-        # Buffers
+        # Buffers: features/labels of the finalized cell trained this window.
         self.training_buffer_x: list = []
         self.training_buffer_y: list = []
         self._last_train_X: Optional[np.ndarray] = None
         self._last_train_Y: Optional[np.ndarray] = None
-        self.alignment_buffer_x: list = []
-        self.alignment_buffer_y: list = []
 
         # Flow tracking
         self._buffered_flow_ids: set = (
@@ -795,7 +795,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
 
         # Metrics
-        self.last_batch_loss: float = 0.0
         self.merge_count: int = 0
 
         # Training counters
@@ -812,7 +811,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # label here; the registry/jsonl write at TRAIN time (window truthful).
         # Carried-over (sub-threshold) batches wait here instead of vanishing.
         self._pending_labeled: dict = {}
-        self.training_count_twclose: int = 0
         self.training_count_window: int = 0
         self._training_trigger: str = ""
 
@@ -1034,7 +1032,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             if self.model is None:
                 self.model = self.create_empty_model().to(self.device)
-                self.optimizer = None  # manual Adam, fork-safe
 
             state = torch.load(
                 self.local_state_path,
@@ -1112,168 +1109,26 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def process_features(self, dataset: pd.DataFrame) -> pd.DataFrame:
         """
-        Process Zeek flows into exactly 18 features matching ml_online_model patterns.
+        Process raw Zeek flows into the fixed 18-feature set, in
+        _get_feature_order() order.
 
-        Feature list (fixed order):
-        1. dur         - Duration in seconds
-        2. proto       - Encoded via _encode_proto (tcp=0, udp=1, icmp=2, icmp-ipv6=3, arp=4)
-        3. appproto    - Encoded via _encode_appproto (http=0, dns=1, ssl=2, ...)
-        4. sport       - Source port
-        5. dport       - Destination port
-        6. spkts       - Source packets
-        7. dpkts       - Destination packets
-        8. sbytes      - Source bytes
-        9. dbytes      - Destination bytes
-        10. state      - Inferred via _infer_state (established=1.0, failed=0.0)
-        11. total_bytes - Derived: sbytes + dbytes
-        12. total_pkts  - Derived: spkts + dpkts
-        13. avg_pkt_size - Derived: sbytes / max(spkts, 1)
-        14. throughput  - Derived: total_bytes / max(dur, 0.001)
-        15. history_len - len(history or "")
-        16. saddr_num   - IP address to numeric via ipaddress
-        17. daddr_num   - IP address to numeric via ipaddress
-        18. dir_num     - Direction: 1.0 if "->", else 0.0
+        Thin wrapper over the SINGLE feature extractor _extract_flow_features
+        (the one definitive implementation): each row is turned into a flow dict
+        and extracted, so the pandas (base-class / oracle) path and the runtime
+        dict path cannot diverge. Rows whose extraction fails become all-zero
+        feature rows. See _extract_flow_features for the per-feature semantics.
 
-        Protocol encoding is INCLUSIVE (no filtering of icmp, arp, icmp-ipv6).
-
-        Returns DataFrame with exactly 18 columns in fixed order.
+        :param dataset: DataFrame of raw flow fields (one flow per row).
+        :return: DataFrame with exactly 18 columns in _get_feature_order() order.
         """
+        order = self._get_feature_order()
         if dataset.empty:
-            return pd.DataFrame(columns=self._get_feature_order())
-
-        df = dataset.copy()
-
-        # Coerce base numeric fields (matching other ML modules)
-        for col in [
-            "dur",
-            "sport",
-            "dport",
-            "spkts",
-            "dpkts",
-            "sbytes",
-            "dbytes",
-        ]:
-            if col not in df.columns:
-                df[col] = 0.0
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0.0)
-
-        # Encode proto using base class method (inclusive: tcp, udp, icmp, arp all kept)
-        if "proto" in df.columns:
-            df["proto"] = df["proto"].apply(
-                lambda x: self._encode_proto(str(x))
-            )
-
-        # Encode appproto using module-specific mapping
-        if "appproto" in df.columns:
-            df["appproto"] = df["appproto"].apply(
-                lambda x: (
-                    self._encode_appproto(str(x)) if pd.notna(x) else 10.0
-                )
-            )
-
-        # Inline appproto if missing
-        if "appproto" not in df.columns:
-            df["appproto"] = 10.0
-
-        # Infer state using base class method (state, spkts, dpkts -> float)
-        if "state" in df.columns:
-            df["state"] = df.apply(
-                lambda row: self._infer_state(
-                    str(row.get("state", "")),
-                    row.get("spkts", 0.0),
-                    row.get("dpkts", 0.0),
-                ),
-                axis=1,
-            )
-
-        # Convert IPs to numeric using ipaddress
-        if "saddr" in df.columns:
-            df["saddr_num"] = df["saddr"].apply(
-                lambda x: (
-                    int(ipaddress.ip_address(str(x))) % 1000000
-                    if pd.notna(x)
-                    else 0.0
-                )
-            )
-        if "daddr" in df.columns:
-            df["daddr_num"] = df["daddr"].apply(
-                lambda x: (
-                    int(ipaddress.ip_address(str(x))) % 1000000
-                    if pd.notna(x)
-                    else 0.0
-                )
-            )
-
-        # Convert direction to numeric
-        if "dir_" in df.columns:
-            df["dir_num"] = (df["dir_"].astype(str) == "->").astype(float)
-        else:
-            df["dir_num"] = 0.0
-
-        # Derived features
-        df["total_bytes"] = df["sbytes"] + df["dbytes"]
-        df["total_pkts"] = df["spkts"] + df["dpkts"]
-        df["avg_pkt_size"] = df.apply(
-            lambda row: (row["sbytes"] / max(float(row["spkts"]), 1.0)),
-            axis=1,
-        )
-        df["throughput"] = df.apply(
-            lambda row: (row["total_bytes"] / max(row["dur"], 0.001)),
-            axis=1,
-        )
-        df["history_len"] = (
-            df.get("history", "").astype(str).str.len().fillna(0.0)
-        )
-
-        # Select and order features to match FIXED_INPUT_DIM = 18
-        feature_order = self._get_feature_order()
-        for col in feature_order:
-            if col not in df.columns:
-                df[col] = 0.0
-
-        result = df[feature_order].fillna(0.0).astype("float64")
-
-        # Validate final dimension
-        expected_dim = SimpleFederatedNet.FIXED_INPUT_DIM
-        if len(result.columns) != expected_dim:
-            self.print(
-                f"Warning: process_features produced {len(result.columns)} "
-                f"features instead of {expected_dim}. "
-                f"Missing: {set(feature_order) - set(result.columns)}",
-                0,
-                1,
-            )
-
-        return result
-
-    def _get_feature_order(self) -> list:
-        """
-        Return the fixed order of 18 features.
-
-        All Zeek-native: dur, proto, appproto, sport, dport, spkts, dpkts,
-        sbytes, dbytes, state, total_bytes, total_pkts, avg_pkt_size,
-        throughput, history_len, saddr_num, daddr_num, dir_num
-        """
-        return [
-            "dur",
-            "proto",
-            "appproto",
-            "sport",
-            "dport",
-            "spkts",
-            "dpkts",
-            "sbytes",
-            "dbytes",
-            "state",
-            "total_bytes",
-            "total_pkts",
-            "avg_pkt_size",
-            "throughput",
-            "history_len",
-            "saddr_num",
-            "daddr_num",
-            "dir_num",
+            return pd.DataFrame(columns=order)
+        rows = [
+            self._extract_flow_features(record) or [0.0] * len(order)
+            for record in dataset.to_dict("records")
         ]
+        return pd.DataFrame(rows, columns=order, dtype="float64")
 
     def _encode_appproto(self, appproto) -> float:
         """Encode application protocol to numeric value."""
@@ -1304,9 +1159,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         Train model on provided batch.
 
-        Note: This implementation uses internal config values for epochs.
-        For head-only training, set _freeze_fc1_for_training=True before calling.
-        For fc1-only training, set _freeze_head_for_training=True before calling.
+        Note: epochs come from config. Set _freeze_fc1_for_training=True for
+        head-only fine-tuning (freezes ALL federated/shared layers, trains the
+        head only). The head is never frozen.
 
         Args:
             x_train: Normalized features
@@ -1318,11 +1173,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         self.print("fit_incremental_model: entering", 1, 1)
 
-        freeze_fc1 = getattr(self, "_freeze_fc1_for_training", False)
-        freeze_head = getattr(self, "_freeze_head_for_training", False)
+        # head-only fine-tuning freezes ALL federated/shared layers (the head is
+        # never frozen). Legacy flag name _freeze_fc1_for_training kept for its
+        # existing set-sites.
+        freeze_shared = getattr(self, "_freeze_fc1_for_training", False)
         epochs = (
             self.merge_finetune_epochs
-            if freeze_fc1
+            if freeze_shared
             else self.local_training_epochs
         )
 
@@ -1338,26 +1195,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if self.model is None:
             self.print("fit_incremental_model: creating model...", 1, 1)
             self.model = self.create_empty_model().to(self.device)
-            self.print(
-                "fit_incremental_model: model created, creating optimizer...",
-                1,
-                1,
-            )
-            self.optimizer = None  # manual Adam, fork-safe
-            self.print(
-                "fit_incremental_model: using manual Adam (fork-safe)", 1, 1
-            )
 
-        if freeze_fc1:
+        if freeze_shared:
+            # head-only fine-tuning: freeze every federated layer, train head
             self.model.set_shared_frozen(True)
             self.model.set_head_frozen(False)
-        elif freeze_head:
-            self.model.set_shared_frozen(False)
-            self.model.set_head_frozen(True)
         else:
             self.model.set_shared_frozen(False)
             self.model.set_head_frozen(False)
-        self.optimizer = None  # manual Adam, fork-safe
 
         self.print(
             f"fit_incremental_model: creating tensors, x_shape={x_train.shape}",
@@ -1441,8 +1286,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     param.addcdiv_(m_hat, v_hat.sqrt().add_(eps), value=-lr)
 
                     param.grad.zero_()
-
-            self.last_batch_loss = loss.item()
 
             self.print(
                 f"fit_incremental_model: epoch {epoch+1}/{epochs} done loss={loss.item():.6f}",
@@ -1984,7 +1827,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _add_flows_to_buffers(self, flows: list, label: str):
         """
-        Add flows to training and alignment buffers if not already present.
+        Add new (not-yet-buffered) flows' feature vectors to the training buffer.
 
         Args:
             flows: List of flow dictionaries to add.
@@ -1998,8 +1841,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if x is not None:
                 self.training_buffer_x.append(x)
                 self.training_buffer_y.append(label)
-                self.alignment_buffer_x.append(x)
-                self.alignment_buffer_y.append(label)
                 self._buffered_flow_ids.add(fid)
 
     def _log_window_comparisons(
@@ -2565,8 +2406,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             path = getattr(self.db, "trust_db_path", None)
         if path and os.path.exists(path):
             try:
-                import sqlite3
-
                 conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
                 cur = conn.cursor()
                 for pid in set(peer_ids):
@@ -2880,21 +2719,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     1,
                 )
                 self.db.publish("p2p_pygo", json.dumps(go_message))
-                self.print(
-                    "send_model_to_peers: published to p2p_pygo, result=True",
-                    self.logger.log_timeline(
-                        "MODEL_SENT",
-                        f"peer={getattr(self, 'my_peer_id', '?' )} n_params={n_params}",
-                    ),
-                    1,
-                    1,
+                self.logger.log_timeline(
+                    "MODEL_SENT",
+                    f"peer={getattr(self, 'my_peer_id', '?')} n_params={n_params}",
                 )
-            except Exception:
-                self.print(
-                    "P2P publish channel not available, model not sent",
-                    1,
-                    1,
-                )
+                self.print("send_model_to_peers: published to p2p_pygo", 1, 1)
             except Exception:
                 self.print(
                     "P2P publish channel not available, model not sent",
@@ -3066,8 +2895,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Path can be overridden via env FL_SIM_ATTACKERS. Missing file -> no
         extra rules (matches pre-runtime behavior, benign by default).
         """
-        import os
-
         path = os.environ.get("FL_SIM_ATTACKERS", self._SIM_ATTACKERS_PATH)
         try:
             mtime = os.path.getmtime(path)
@@ -3096,12 +2923,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if uid:
             return str(uid)
         return f"{flow.get('saddr', '')}:{flow.get('sport', '')}-{flow.get('daddr', '')}:{flow.get('dport', '')}-{flow.get('starttime', '')}"
-
-    def _compute_accuracy(self, X: np.ndarray, y: np.ndarray) -> float:
-        """Compute accuracy."""
-        preds = self.predict_batch(X)
-        correct = sum(1 for p, t in zip(preds, y) if p == t)
-        return correct / len(y) if len(y) > 0 else 0.0
 
     def _save_local_model(self):
         """Save latest local model (full state dict + scaler)."""
@@ -3199,10 +3020,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             ground_truth = self._get_simulated_gt(flow) or BENIGN
             self.store_testing_results(ground_truth, predicted)
 
-            src_ip = flow.get("saddr", "unknown")
-            dst_ip = flow.get("daddr", "unknown")
-            self.print(f"Flow {src_ip}->{dst_ip}: {predicted}", 1, 1)
-
         except Exception:
             self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
 
@@ -3221,73 +3038,46 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "flows_since_snapshot": 0,
         }
 
-    def _predict_with(self, model, flow):
-        """Classify one flow with an arbitrary frozen model instance.
-
-        Uses the module's own feature extraction, scaler and device; callers
-        pass a deep-copied (frozen) model so the ACTIVE model is untouched.
-        Returns  MALICIOUS/BENIGN or None.
-        """
-        if model is None or not self._is_fitted:
-            return None
-        try:
-            features = self._extract_flow_features(flow)
-            if features is None:
-                return None
-            X = np.array([features], dtype=np.float32)
-            X_scaled = self.scaler.transform(X)
-            model.eval()
-            with torch.no_grad():
-                outputs = model(torch.FloatTensor(X_scaled).to(self.device))
-                probs = torch.softmax(outputs, dim=1)
-                return (
-                    MALICIOUS
-                    if int(torch.argmax(probs, dim=1).item()) == 1
-                    else BENIGN
-                )
-        except Exception:
-            return None
-
     def _store_local_stream(self, gt_label: str, predicted: str) -> None:
         """Accumulate local-only (pre-merge snapshot) testing counters."""
         self._local_stream_used = True
-        st = self._local_test
-        st["flows_since_snapshot"] += 1
+        stats = self._local_test
+        stats["flows_since_snapshot"] += 1
         if gt_label == MALICIOUS:
-            st["gt_mal"] += 1
+            stats["gt_mal"] += 1
         else:
-            st["gt_ben"] += 1
+            stats["gt_ben"] += 1
         if predicted == MALICIOUS:
-            st["pred_mal"] += 1
+            stats["pred_mal"] += 1
         else:
-            st["pred_ben"] += 1
+            stats["pred_ben"] += 1
         if gt_label == MALICIOUS and predicted == MALICIOUS:
-            st["tp"] += 1
+            stats["tp"] += 1
         elif gt_label != MALICIOUS and predicted == MALICIOUS:
-            st["fp"] += 1
+            stats["fp"] += 1
         elif gt_label == MALICIOUS:
-            st["fn"] += 1
+            stats["fn"] += 1
         else:
-            st["tn"] += 1
-        if st["flows_since_snapshot"] >= self.testing_log_batch_size:
+            stats["tn"] += 1
+        if stats["flows_since_snapshot"] >= self.testing_log_batch_size:
             self._flush_local_stream()
 
     def _flush_local_stream(self) -> None:
         """Write the pending local-only testing snapshot to local_test.log."""
-        st = self._local_test
-        if st["flows_since_snapshot"] <= 0:
+        stats = self._local_test
+        if stats["flows_since_snapshot"] <= 0:
             return
-        total = st["tp"] + st["fp"] + st["tn"] + st["fn"]
-        acc = (st["tp"] + st["tn"]) / total if total else 0.0
+        total = stats["tp"] + stats["fp"] + stats["tn"] + stats["fn"]
+        acc = (stats["tp"] + stats["tn"]) / total if total else 0.0
         self.logger._write(
             "local_test",
             f"  flows={total} | "
-            f"GT(Mal/Ben): {st['gt_mal']}/{st['gt_ben']} | "
-            f"Pred(Mal/Ben): {st['pred_mal']}/{st['pred_ben']} | "
-            f"TP/FP/TN/FN: {st['tp']}/{st['fp']}/{st['tn']}/{st['fn']} | "
+            f"GT(Mal/Ben): {stats['gt_mal']}/{stats['gt_ben']} | "
+            f"Pred(Mal/Ben): {stats['pred_mal']}/{stats['pred_ben']} | "
+            f"TP/FP/TN/FN: {stats['tp']}/{stats['fp']}/{stats['tn']}/{stats['fn']} | "
             f"Acc={acc:.4f}",
         )
-        st["flows_since_snapshot"] = 0
+        stats["flows_since_snapshot"] = 0
 
     def _write_testing_snapshot(self, batch_flows: int) -> None:
         """Write cumulative TP/FP/TN/FN/Acc snapshot (tests against GT)."""

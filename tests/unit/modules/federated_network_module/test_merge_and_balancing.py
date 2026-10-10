@@ -114,3 +114,39 @@ def test_undersample_noop_on_single_class_or_balanced():
     y_bal = np.array([fnm.MALICIOUS, fnm.BENIGN, fnm.MALICIOUS, fnm.BENIGN])
     Xb2, yb2 = m._undersample_majority(X, y_bal)
     assert len(yb2) == 4  # already 50/50 -> unchanged
+
+
+# --------------------------------------------------------------------------
+# feature extraction: one definitive extractor (process_features delegates)
+# --------------------------------------------------------------------------
+def test_process_features_delegates_to_single_extractor():
+    """process_features is a thin wrapper over _extract_flow_features: same 18
+    features, same _get_feature_order order, same values."""
+    import pandas as pd
+
+    m = object.__new__(fnm.FederatedNetworkModule)
+    m.print = lambda *a, **k: None
+    flow = {
+        "dur": 1.5,
+        "sport": 1234,
+        "dport": 80,
+        "spkts": 5,
+        "dpkts": 3,
+        "sbytes": 100,
+        "dbytes": 200,
+        "proto": "tcp",
+        "appproto": "http",
+        "state": "SF",
+        "saddr": "10.0.0.1",
+        "daddr": "10.0.0.2",
+        "dir_": "->",
+        "history": "ShADad",
+    }
+    order = m._get_feature_order()
+    assert len(order) == 18
+    direct = m._extract_flow_features(flow)
+    via_pf = m.process_features(pd.DataFrame([flow]))
+    assert list(via_pf.columns) == order
+    assert via_pf.iloc[0].tolist() == [float(v) for v in direct]
+    # empty frame -> empty, correctly-columned
+    assert list(m.process_features(pd.DataFrame()).columns) == order
