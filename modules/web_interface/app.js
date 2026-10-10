@@ -2,14 +2,37 @@
 
 const state = {
   activeTab: "overview",
+  hideExcluded: true,
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
+  metadata: null,
   metrics: [],
   configuration: null,
   whitelists: null,
   arpPoisoning: null,
+  p2p: null,
   host: null,
+  hostActivity: "alerts",
+  alertsWorkspace: {
+    severity: "", host: null, alert: null, items: [], next: null,
+    total: 0, listGeneration: 0, detailGeneration: 0,
+    listLoadedAt: 0, listSignature: "",
+  },
+  evidenceWorkspace: {
+    group: null, record: null, records: [], next: null, total: 0, typeFilter: "",
+    generation: 0, listLoadedAt: 0, listSignature: "", threatCounts: null,
+  },
+  hostNames: new Map(),
+  pendingHostNames: new Set(),
+  hostNamesLoading: false,
+  hostNamesScheduled: false,
+  networkNameDrafts: new Map(),
+  networkNameEditorOpen: new Set(),
+  hostAnnotationDrafts: new Map(),
+  hostAnnotationEditorOpen: new Set(),
+  ownAddresses: new Set(),
+  computerName: "",
   failures: 0,
   connected: false,
   lastSuccessfulRequest: null,
@@ -23,18 +46,19 @@ const state = {
   drawerGeneration: 0,
   runIdentity: null,
   rangesInitialized: false,
-  titleCounts: { alerts: 0, hosts: 0 },
   localSorts: {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
+    "p2p-activity-table": { key: "timestamp", order: "desc" },
   },
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
-    hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "last_seen", order: "desc" },
+    hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "peak_score", order: "desc", revision: 0, loadingMore: false },
     modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "cpu_percent", order: "desc" },
     firewall: { items: [], total: 0, next: null, cursors: [null], index: 0 },
+    hostAlerts: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     hostFlows: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     "host-evidence": { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
   },
@@ -75,6 +99,15 @@ const formatTime = (value) => {
   }
   return new Date(amount * 1000).toLocaleString();
 };
+/** Format a recent event as a short age for the Overview alert list. */
+function formatAge(value) {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - numeric(value)));
+  if (!numeric(value)) return "—";
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
 /** Convert standalone Unix timestamps to localized, human-readable text. */
 function displayValue(value) {
   const candidate = typeof value === "string" ? value.trim() : value;
@@ -119,6 +152,149 @@ const cell = (value, className = "") => {
   if (className) td.className = className;
   return td;
 };
+
+/** Set the visible name for one rendered IP address. */
+function updateHostLabel(element) {
+  const ip = element.dataset.hostIp;
+  const own = state.ownAddresses.has(ip);
+  element.classList.toggle("own-host", own);
+  const identity = state.hostNames.get(ip);
+  const name = own
+    ? `This device${identity?.source === "User name"
+      ? ` · ${identity.name}`
+      : state.computerName ? ` · ${state.computerName}` : ""}`
+    : identity?.name || "Name unknown";
+  const source = own && identity?.source !== "User name"
+    ? "Monitored computer" : identity?.source || "No stored hostname";
+  element.querySelector(".host-name").textContent = name;
+  element.title = `${ip} · ${source}: ${name}`;
+}
+
+/** Update all visible host labels after identity information changes. */
+function refreshHostLabels() {
+  document.querySelectorAll("[data-host-ip]").forEach(updateHostLabel);
+  const displayedName = byId("host-displayed-name");
+  if (displayedName && state.host?.ip) {
+    const identity = state.hostNames.get(state.host.ip);
+    const source = identity?.source === "rDNS" ? "reverse DNS" : identity?.source;
+    displayedName.textContent = identity?.name
+      ? `${identity.name} · ${source || "stored name"}` : "—";
+  }
+}
+
+/** Keep a learned name without replacing it with missing metadata. */
+function rememberHostName(ip, name, source) {
+  if (!ip || !name) return;
+  const existing = state.hostNames.get(ip);
+  if (existing?.name && hostNamePriority(existing.source) > hostNamePriority(source)) return;
+  state.hostNames.set(ip, { name, source, checkedAt: Date.now() });
+}
+
+/** Rank user names above learned names and vendor fallback. */
+function hostNamePriority(source) {
+  return { "User name": 4, Hostname: 3, DNS: 2, rDNS: 2, "MAC vendor": 1 }[source] || 0;
+}
+
+/** Remember the best currently available identity from a Host record. */
+function rememberHostRecord(record) {
+  if (!record?.ip) return;
+  if (record.user_name) rememberHostName(record.ip, record.user_name, "User name");
+  else if (record.hostname) rememberHostName(record.ip, record.hostname, "Hostname");
+  else if (record.dns_name) rememberHostName(record.ip, record.dns_name, record.dns_name_source || "DNS");
+  else if (record.mac_vendor) rememberHostName(record.ip, `${record.mac_vendor} device`, "MAC vendor");
+}
+
+/** Fetch names for visible addresses in bounded batches. */
+async function loadHostNames() {
+  if (state.hostNamesLoading) return;
+  state.hostNamesLoading = true;
+  try {
+    while (state.pendingHostNames.size) {
+      const ips = Array.from(state.pendingHostNames).slice(0, 100);
+      ips.forEach((ip) => state.pendingHostNames.delete(ip));
+      const params = new URLSearchParams();
+      ips.forEach((ip) => params.append("ip", ip));
+      const response = await fetch(`/api/host-names?${params}`, { cache: "no-store" });
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      const payload = await response.json();
+      applyRunIdentity(payload.run_identity);
+      ips.forEach((ip) => {
+        const fetched = payload.names?.[ip] || {};
+        const existing = state.hostNames.get(ip);
+        if (existing?.name && (!fetched.name
+            || hostNamePriority(existing.source) > hostNamePriority(fetched.source))) return;
+        state.hostNames.set(ip, { ...fetched, checkedAt: Date.now() });
+      });
+      refreshHostLabels();
+    }
+  } catch (_) {
+    // Keep addresses visible when optional name metadata is unavailable.
+  } finally {
+    state.hostNamesLoading = false;
+    if (state.pendingHostNames.size) {
+      window.setTimeout(loadHostNames, 1000);
+    }
+  }
+}
+
+/** Render an IP and its stored name together. */
+function hostIdentity(ip) {
+  const element = document.createElement("span");
+  element.className = "host-label";
+  if (!ip) {
+    element.append(text("code", "Unknown"));
+    return element;
+  }
+  element.dataset.hostIp = String(ip);
+  element.append(text("code", ip), text("small", "Name unknown", "host-name"));
+  updateHostLabel(element);
+  const cached = state.hostNames.get(String(ip));
+  if ((!cached || Date.now() - cached.checkedAt > 60000)
+      && !state.ownAddresses.has(String(ip))) {
+    state.pendingHostNames.add(String(ip));
+    if (!state.hostNamesScheduled) {
+      state.hostNamesScheduled = true;
+      window.setTimeout(() => {
+        state.hostNamesScheduled = false;
+        loadHostNames();
+      }, 0);
+    }
+  }
+  return element;
+}
+
+/** Add host names beside addresses mentioned in a detection description. */
+function hostDescription(record, className = "") {
+  const description = String(record.description || "—");
+  const addresses = new Set(description.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []);
+  [record.attacker, record.victim].forEach((entity) => {
+    if (String(entity?.ioc_type || "").toUpperCase() === "IP"
+        && description.includes(entity.value)) addresses.add(entity.value);
+  });
+  const element = document.createElement("span");
+  if (className) element.className = className;
+  if (!addresses.size) {
+    element.textContent = description;
+    return element;
+  }
+  const escaped = Array.from(addresses).sort((left, right) => right.length - left.length)
+    .map((ip) => ip.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+  const matcher = new RegExp(`(${escaped.join("|")})`, "g");
+  description.split(matcher).forEach((part) => {
+    if (addresses.has(part)) element.append(hostIdentity(part));
+    else element.append(part);
+  });
+  return element;
+}
+
+/** Show an indicator as a named host when it is an IP address. */
+function hostOrText(value) {
+  const candidate = String(value || "");
+  const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(candidate);
+  const ipv6 = /^[0-9a-fA-F:.]+$/.test(candidate)
+    && (candidate.includes("::") || candidate.split(":").length === 8);
+  return ipv4 || ipv6 ? hostIdentity(candidate) : text("code", value || "—");
+}
 const threat = (value) => {
   const level = String(value || "info").toLowerCase();
   return text("span", level, `status threat-${level}`);
@@ -169,6 +345,17 @@ const whitelistHandling = (record) => {
   marker.title = "Slips excluded this evidence from score accumulation because a whitelist rule matched.";
   return marker;
 };
+/**
+ * Show the peer IDs that reported an IP in P2P evidence.
+ *
+ * @param {Object} record Evidence or grouped evidence row.
+ * @returns {Node|string} Reporter IDs, or an unavailable marker.
+ */
+function reportingPeers(record) {
+  if (record.evidence_type !== "MALICIOUS_IP_FROM_P2P_NETWORK") return "—";
+  const peers = record.reporting_peers || [];
+  return peers.length ? text("code", peers.join(", ")) : "Unavailable";
+}
 const escapePath = (value) => encodeURIComponent(String(value));
 
 function showError(message) {
@@ -252,17 +439,31 @@ function applyRunIdentity(identity) {
     closeDrawer();
     closeHost();
     Object.keys(state.pages).forEach((name) => resetPage(name));
+    Object.assign(state.evidenceWorkspace, {
+      group: null, record: null, records: [], next: null, total: 0,
+      typeFilter: "", listLoadedAt: 0, listSignature: "", threatCounts: null,
+      generation: state.evidenceWorkspace.generation + 1,
+    });
+    renderEvidenceEmptyState();
     state.overview = null;
     state.overviewEvidence = null;
     state.overviewEvidenceLoading = false;
+    state.metadata = null;
     state.metrics = [];
+    state.configuration = null;
     state.rangesInitialized = false;
+    state.hostNames.clear();
+    state.pendingHostNames.clear();
+    state.networkNameDrafts.clear();
+    state.networkNameEditorOpen.clear();
+    state.ownAddresses.clear();
+    state.computerName = "";
     toast("A new Slips run is now active. Investigation state was cleared.");
   }
   state.runIdentity = token;
 }
 
-async function api(key, path, trackFailures = true) {
+async function api(key, path, trackFailures = true, allowNotFound = false) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
   state.requests.set(key, controller);
@@ -271,6 +472,7 @@ async function api(key, path, trackFailures = true) {
       cache: "no-store", signal: controller.signal,
     });
     const payload = await response.json().catch(() => ({}));
+    if (allowNotFound && response.status === 404) return { not_found: true };
     if (!response.ok) {
       const error = new Error(payload.detail || payload.error || `HTTP ${response.status}`);
       error.status = response.status;
@@ -336,7 +538,9 @@ function sortLocalRows(id, rows) {
   return [...rows].sort((left, right) => {
     const first = left[sort.key];
     const second = right[sort.key];
-    if (first === null || first === undefined) return 1;
+    if (first === null || first === undefined) {
+      return second === null || second === undefined ? 0 : 1;
+    }
     if (second === null || second === undefined) return -1;
     const firstNumber = Number(first);
     const secondNumber = Number(second);
@@ -402,6 +606,11 @@ function resetPage(name) {
   Object.assign(state.pages[name], {
     items: [], total: 0, next: null, cursors: [null], index: 0,
   });
+  if (name === "hosts") {
+    state.pages.hosts.revision += 1;
+    state.pages.hosts.loadingMore = false;
+    state.requests.get("hostsMore")?.abort();
+  }
 }
 
 function rangeQuery(prefix) {
@@ -451,10 +660,80 @@ function formatChartTime(value, span) {
   return new Date(timestamp * 1000).toLocaleString([], options);
 }
 
+/** Find the plotted sample nearest a time along one sorted series.
+ * @param {Array<object>} points - Samples with Unix-second timestamps.
+ * @param {number} timestamp - Time under the pointer, in Unix seconds.
+ * @returns {object} The nearest plotted sample.
+ */
+function nearestChartPoint(points, timestamp) {
+  let low = 0;
+  let high = points.length;
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2);
+    if (numeric(points[middle].ts) < timestamp) low = middle + 1;
+    else high = middle;
+  }
+  if (low === 0) return points[0];
+  if (low === points.length) return points.at(-1);
+  return timestamp - numeric(points[low - 1].ts) <= numeric(points[low].ts) - timestamp
+    ? points[low - 1] : points[low];
+}
+
+/** Reuse one HTML hover label outside the SVG drawing area.
+ * @param {SVGElement} svg - Chart whose parent holds the label.
+ * @returns {HTMLElement} The chart's hover label.
+ */
+function chartTooltip(svg) {
+  const container = svg.parentElement;
+  let tooltip = container.querySelector(".chart-tooltip");
+  if (!tooltip) {
+    tooltip = document.createElement("div");
+    tooltip.className = "chart-tooltip";
+    tooltip.hidden = true;
+    container.append(tooltip);
+  }
+  return tooltip;
+}
+
+/** Show the nearest sample time and values while the plot is hovered.
+ * @param {SVGElement} svg - Rendered chart.
+ * @param {SVGElement} target - Hit area covering the plot.
+ * @param {Array<object>} points - Chronologically sorted chart samples.
+ * @param {Array<object>} series - Plotted series and display labels.
+ * @param {Function} formatValue - Value formatter for this chart.
+ * @param {number} maximum - Highest value on the chart.
+ * @param {number} left - Plot's left coordinate.
+ * @param {number} plotWidth - Plot's SVG width.
+ * @param {number} minimumTime - Earliest chart timestamp.
+ * @param {number} span - Chart time span in seconds.
+ */
+function bindChartHover(svg, target, points, series, formatValue, maximum, left, plotWidth, minimumTime, span) {
+  const tooltip = chartTooltip(svg);
+  target.addEventListener("pointermove", (event) => {
+    const bounds = svg.getBoundingClientRect();
+    if (!bounds.width) return;
+    const x = (event.clientX - bounds.left) * svg.viewBox.baseVal.width / bounds.width;
+    const timestamp = minimumTime + Math.max(0, Math.min(1, (x - left) / plotWidth)) * span;
+    const point = nearestChartPoint(points, timestamp);
+    const values = series.filter((item) => point[item.key] !== null
+      && point[item.key] !== undefined && Number.isFinite(Number(point[item.key])))
+      .map((item) => `${item.label || item.key.replaceAll("_", " ")}: ${formatValue(point[item.key], maximum)}`);
+    tooltip.textContent = `${formatTime(point.ts)}\n${values.join("\n")}`;
+    tooltip.hidden = false;
+    const containerBounds = svg.parentElement.getBoundingClientRect();
+    tooltip.style.left = `${Math.max(4, Math.min(event.clientX - containerBounds.left + 12,
+      containerBounds.width - tooltip.offsetWidth - 4))}px`;
+    tooltip.style.top = `${Math.max(4, Math.min(event.clientY - containerBounds.top + 12,
+      containerBounds.height - tooltip.offsetHeight - 4))}px`;
+  });
+  target.addEventListener("pointerleave", () => { tooltip.hidden = true; });
+}
+
 /** Render a performance chart with numeric and time axes. */
 function renderLineChart(id, points, series, formatValue = formatChartValue) {
   const svg = byId(id);
   svg.replaceChildren();
+  chartTooltip(svg).hidden = true;
   const height = numeric(svg.viewBox?.baseVal?.height) || 180;
   const renderedWidth = numeric(svg.clientWidth);
   const renderedHeight = numeric(svg.clientHeight);
@@ -530,11 +809,6 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
-    if (item.label) {
-      const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-      title.textContent = item.label;
-      path.append(title);
-    }
     svg.append(path);
     if (seriesPoints.length === 1) {
       const point = seriesPoints[0];
@@ -546,6 +820,15 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
       svg.append(marker);
     }
   }
+  const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  hitArea.setAttribute("x", String(left));
+  hitArea.setAttribute("y", String(top));
+  hitArea.setAttribute("width", String(plotWidth));
+  hitArea.setAttribute("height", String(plotHeight));
+  hitArea.setAttribute("class", "chart-hit-area");
+  svg.append(hitArea);
+  bindChartHover(svg, hitArea, points, series, formatValue, maximum,
+    left, plotWidth, minimumTime, span);
   points.filter((point) => point.reset_reason).forEach((point) => {
     const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
     const marker = document.createElementNS("http://www.w3.org/2000/svg", "line");
@@ -575,7 +858,8 @@ function renderBars(id, rows) {
     const meter = document.createElement("span");
     meter.className = "bar-meter";
     meter.style.width = `${numeric(row.value) / maximum * 100}%`;
-    item.append(text("code", row.name || "unknown"), meter, text("strong", compact(row.value)));
+    item.append(id === "host-peers" ? hostIdentity(row.name) : text("code", row.name || "unknown"),
+      meter, text("strong", compact(row.value)));
     container.append(item);
   });
 }
@@ -595,13 +879,18 @@ function setSummaryCards(items, target = "summary-cards") {
 }
 
 /**
- * Keep the browser title focused on the two primary detection totals.
+ * Show alert and host totals from the rolling live window in the tab title.
  *
- * @param {Object} counts Updated alert or host totals.
+ * @param {Object} counts Live alert and host totals.
  */
-function updatePageTitle(counts = {}) {
-  state.titleCounts = { ...state.titleCounts, ...counts };
-  document.title = `Slips ${compact(state.titleCounts.alerts)} alerts · ${compact(state.titleCounts.hosts)} hosts`;
+function updatePageTitle(counts) {
+  document.title = `Slips ${compact(counts.alerts)} alerts · ${compact(counts.hosts)} hosts`;
+}
+
+/** Refresh live title totals independently of the selected tab and filters. */
+async function loadLiveTitleCounts() {
+  const payload = await api("liveTitleCounts", "/api/live-counts", false, true);
+  if (payload && !payload.not_found) updatePageTitle(payload);
 }
 
 /**
@@ -620,26 +909,52 @@ function renderRunContext(data) {
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
   const metadata = data.run_metadata || {};
-  byId("run-meta").textContent = [
-    metadata.File || run.input_type || "input",
-    metadata.Branch ? `branch ${metadata.Branch}` : "",
-    metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
-    metadata.Commit ? `commit ${metadata.Commit}` : "",
-  ].filter(Boolean).join(" · ");
+  const connectedNetwork = (data.network_states || []).find((network) =>
+    network.connected && network.interface === run.interface)
+    || (data.network_states || []).find((network) => network.connected);
+  const primaryIp = data.host_addresses?.ipv4?.[0] || data.host_addresses?.ipv6?.[0];
+  const detailsLink = text("button", "run details", "overview-link");
+  detailsLink.type = "button";
+  detailsLink.addEventListener("click", () => switchTab("metadata"));
+  byId("run-meta").replaceChildren(
+    text("span", [
+      run.interface || metadata.File || run.input_type || "input",
+      connectedNetwork?.name || "",
+      primaryIp || "",
+      metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
+    ].filter(Boolean).join(" · ")),
+    text("span", " · "), detailsLink,
+  );
   const addresses = data.host_addresses || {};
-  const addressParts = [
-    addresses.ipv4?.length ? `IPv4: ${addresses.ipv4.join(", ")}` : "",
-    addresses.ipv6?.length ? `IPv6: ${addresses.ipv6.join(", ")}` : "",
-  ].filter(Boolean);
+  const computerAddresses = data.computer_addresses || {};
+  state.computerName = data.computer_name || "";
+  byId("run-device").textContent = state.computerName
+    || addresses.ipv4?.[0] || addresses.ipv6?.[0] || "Name unavailable";
+  state.ownAddresses = new Set([
+    ...(addresses.ipv4 || []), ...(addresses.ipv6 || []),
+    ...(computerAddresses.ipv4 || []), ...(computerAddresses.ipv6 || []),
+    "127.0.0.1", "::1",
+  ]);
   const addressLine = byId("run-addresses");
-  addressLine.textContent = addressParts.join(" · ");
-  addressLine.hidden = !addressParts.length;
+  addressLine.replaceChildren();
+  [["IPv4", addresses.ipv4 || []], ["IPv6", addresses.ipv6 || []]]
+    .filter(([, ips]) => ips.length).forEach(([kind, ips], index) => {
+      if (index) addressLine.append(" · ");
+      addressLine.append(`${kind}: `);
+      ips.forEach((ip, position) => {
+        if (position) addressLine.append(", ");
+        addressLine.append(hostIdentity(ip));
+      });
+    });
+  addressLine.hidden = !addressLine.childNodes.length;
+  refreshHostLabels();
   renderConnectionState(backendConnected);
   byId("alerts-badge").textContent = compact(data.counts.alerts);
   byId("evidence-badge").textContent = compact(data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
   byId("logs-badge").textContent = compact(data.counts.module_errors);
-  updatePageTitle({ alerts: data.counts.alerts, hosts: data.counts.hosts });
+  byId("firewall-badge").textContent = (data.modules || []).some((module) => module.name === "blocking")
+    ? compact(data.firewall?.current) : "off";
 }
 
 /** Render the operational overview without supporting metadata or logs. */
@@ -647,17 +962,19 @@ function renderOverview() {
   const data = state.overview;
   if (!data) return;
   renderRunContext(data);
+  renderNetworkStates(data.network_states || []);
+  renderOverviewStatus(data);
+  renderOverviewSystem(data);
   const firewall = data.firewall || {};
   setSummaryCards([
     ["Alerts", compact(data.counts.alerts)],
-    ["Hosts", compact(data.counts.hosts)],
-    ["Uptime", formatDuration(data.run.uptime_seconds)],
     ["Evidence", compact(data.counts.evidence)],
-    ["Processed flows", compact(data.counts.processed_flows)],
-    ["FW active", compact(firewall.current)],
-    ["FW added", compact(firewall.added)],
-    ["FW discarded", compact(firewall.discarded)],
+    ["Hosts seen", compact(data.counts.hosts)],
+    ["Flows processed", compact(data.counts.processed_flows)],
+    ["Firewall blocks", firewall.current ? compact(firewall.current)
+      : (data.modules || []).some((module) => module.name === "blocking") ? "0" : "off"],
   ]);
+  byId("summary-cards").classList.toggle("has-alerts", numeric(data.counts.alerts) > 0);
   const firewallImpact = data.firewall_impact || {};
   setSummaryCards([
     ["Packets stopped (estimated)", compact(firewallImpact.packets)],
@@ -666,21 +983,27 @@ function renderOverview() {
   ], "overview-firewall-impact");
   const system = data.system;
   const metrics = [
-    ["CPU", `${numeric(system.cpu_percent).toFixed(1)}%`],
-    ["Memory", `${numeric(system.memory_percent).toFixed(1)}%`],
-    ["Load 1 / 5 / 15m", system.load_average.map((value) => numeric(value).toFixed(2)).join(" / ")],
-    ["Output disk", `${numeric(system.output_disk_percent).toFixed(1)}% · ${formatBytes(system.output_disk_free)} free${system.disk_warning ? ` · ${system.disk_warning.toUpperCase()}` : ""}`],
-    ["flows.sqlite", formatBytes(system.flows_db_size)],
-    ["Recent growth", `${formatBytes(system.flows_db_growth_bps)}/s`],
+    ["CPU", numeric(system.cpu_percent), `${numeric(system.cpu_percent).toFixed(1)}%`],
+    ["Memory", numeric(system.memory_percent), `${numeric(system.memory_percent).toFixed(1)}%`],
+    ["Output disk", numeric(system.output_disk_percent),
+      `${numeric(system.output_disk_percent).toFixed(1)}% · ${formatBytes(system.output_disk_free)} free`],
   ];
   const load = byId("system-load");
   load.replaceChildren();
-  metrics.forEach(([label, value]) => {
+  metrics.forEach(([label, percent, value]) => {
     const row = document.createElement("div");
-    row.className = "metric";
-    row.append(text("small", label), text("strong", value));
+    row.className = `metric ${percent >= 90 ? "danger" : percent >= 75 ? "warning" : ""}`;
+    const heading = document.createElement("div");
+    heading.className = "metric-heading";
+    heading.append(text("span", label), text("strong", value));
+    const track = text("span", "", "metric-track");
+    const fill = text("span", "", "metric-fill");
+    fill.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+    track.append(fill);
+    row.append(heading, track);
     load.append(row);
   });
+  load.append(text("p", `load ${(system.load_average || []).map((value) => numeric(value).toFixed(2)).join(" / ")} · flows.sqlite ${formatBytes(system.flows_db_size)}`, "overview-load-foot"));
   const evidenceButton = byId("load-module-evidence");
   evidenceButton.disabled = state.overviewEvidenceLoading;
   evidenceButton.textContent = state.overviewEvidenceLoading
@@ -690,30 +1013,261 @@ function renderOverview() {
   renderModules(data.modules);
 }
 
+/** Show either the quiet state or the hosts with the highest severity alerts. */
+function renderOverviewStatus(data) {
+  const hasAlerts = numeric(data.counts.alerts) > 0;
+  const panel = byId("overview-status");
+  panel.classList.toggle("has-alerts", hasAlerts);
+  byId("overview-alerts-link").hidden = !hasAlerts;
+  byId("overview-status-description").hidden = hasAlerts;
+  const list = byId("overview-alert-hosts");
+  list.replaceChildren();
+  if (!hasAlerts) {
+    byId("overview-status-title").textContent = "No alerts in this run";
+    const top = data.highest_score;
+    const threshold = numeric(data.alert_threshold) || 5;
+    byId("overview-status-description").textContent =
+      `${compact(data.counts.evidence)} evidence records from ${compact(data.counts.hosts)} hosts. `
+      + `No host crossed the alert threshold (${threshold}).`
+      + (top?.ip && top.score !== null ? ` Highest current score: ${numeric(top.score).toFixed(2)} on ${top.ip}.` : "");
+    return;
+  }
+  const summary = data.alert_hosts || {};
+  const total = numeric(summary.total);
+  byId("overview-status-title").textContent = total
+    ? `${total} ${total === 1 ? "host is" : "hosts are"} generating alerts`
+    : `${compact(data.counts.alerts)} alerts in this run`;
+  (summary.items || []).slice(0, 4).forEach((host) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "overview-alert-row";
+    const level = host.threat_level || "info";
+    row.append(text("span", level, `overview-alert-severity threat-${level}`),
+      hostIdentity(host.ip_alerted),
+      text("span", `${compact(host.alert_count)} alerts`, "overview-alert-count"),
+      text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2), "overview-alert-score"),
+      text("span", formatAge(host.alert_time), "overview-alert-time"));
+    row.title = `Last alert ${formatTime(host.alert_time)}`;
+    row.addEventListener("click", () => inspectHost(host.ip_alerted).catch(() => {}));
+    list.append(row);
+  });
+}
+
+/** Summarize actionable resource and runtime problems in the Overview. */
+function renderOverviewSystem(data) {
+  const system = data.system || {};
+  const items = byId("overview-system-items");
+  items.replaceChildren();
+  const warnings = [];
+  if (system.disk_warning) warnings.push({
+    text: `Output disk ${numeric(system.output_disk_percent).toFixed(1)}% full · ${formatBytes(system.output_disk_free)} free`,
+    tone: system.disk_warning === "critical" ? "danger" : "warning",
+  });
+  if (numeric(system.cpu_percent) >= 90) warnings.push({
+    text: `Host CPU ${numeric(system.cpu_percent).toFixed(1)}% · load ${numeric(system.load_average?.[0]).toFixed(2)}`,
+    tone: "danger", action: "Modules", open: () => {
+      switchTab("metadata");
+      byId("modules-table").scrollIntoView({ block: "nearest" });
+    },
+  });
+  if (numeric(system.memory_percent) >= 90) warnings.push({
+    text: `Host memory ${numeric(system.memory_percent).toFixed(1)}%`, tone: "warning",
+  });
+  if (numeric(data.counts.module_errors)) warnings.push({
+    text: `${compact(data.counts.module_errors)} errors in logs`, tone: "warning",
+    action: "Logs", open: () => switchTab("logs"),
+  });
+  byId("overview-system-label").textContent = warnings.length
+    ? `SYSTEM NEEDS ATTENTION · ${warnings.length}` : "SYSTEM";
+  byId("overview-system").classList.toggle("needs-attention", warnings.length > 0);
+  if (!warnings.length) {
+    const running = (data.modules || []).filter((module) => module.running).length;
+    warnings.push({ text: data.run.state === "complete"
+      ? "Analysis complete · resources normal"
+      : `${running} modules running · resources normal`, tone: "ok" });
+    if (!(data.modules || []).some((module) => module.name === "blocking")) warnings.push({
+      text: "Firewall blocking is off", tone: "muted",
+      action: "How to enable", open: () => switchTab("configuration"),
+    });
+  }
+  warnings.slice(0, 4).forEach((warning) => {
+    const row = text("div", "", `overview-system-row ${warning.tone}`);
+    row.append(text("span", warning.text));
+    if (warning.action) {
+      const action = text("button", warning.action, "overview-link");
+      action.type = "button";
+      action.addEventListener("click", warning.open);
+      row.append(action);
+    }
+    items.append(row);
+  });
+}
+
+/** Show the monitored network and its editable name in one compact card. */
+function renderNetworkStates(networkStates) {
+  const runNetwork = byId("run-network");
+  runNetwork.hidden = true;
+  const container = byId("network-states");
+  if (container.contains(document.activeElement)
+      && document.activeElement.closest(".network-name-form")) return;
+  container.replaceChildren();
+  if (!networkStates.length) {
+    container.append(text("p", "Live network settings are available when Slips monitors an interface.", "muted"));
+    return;
+  }
+  const monitored = networkStates.find((network) =>
+    network.interface === state.overview?.run?.interface && network.connected)
+    || networkStates.find((network) => network.connected)
+    || networkStates[0];
+  [monitored].forEach((network) => {
+    const card = document.createElement("div");
+    card.className = "network-state";
+    const head = text("div", "", "overview-card-head");
+    head.append(text("h3", `${network.name || network.interface} · ${network.connected ? "connected" : "disconnected"}`));
+    const rename = text("button", "Rename", "overview-link");
+    rename.type = "button";
+    rename.disabled = !network.connected || !network.network_id;
+    rename.addEventListener("click", () => {
+      if (form.hidden) state.networkNameEditorOpen.add(network.network_id);
+      else state.networkNameEditorOpen.delete(network.network_id);
+      form.hidden = !form.hidden;
+      if (!form.hidden) input.focus();
+    });
+    head.append(rename);
+    card.append(head);
+    const form = document.createElement("form");
+    form.className = "network-name-form";
+    form.hidden = !state.networkNameEditorOpen.has(network.network_id);
+    const label = text("label", "Network name");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 80;
+    input.placeholder = "e.g. Home Wi-Fi";
+    input.autocomplete = "off";
+    input.value = state.networkNameDrafts.get(network.network_id)
+      ?? network.name ?? "";
+    input.disabled = !network.connected || !network.network_id;
+    input.addEventListener("input", () => {
+      state.networkNameDrafts.set(network.network_id, input.value);
+    });
+    label.append(input);
+    const save = text("button", "Save name", "secondary");
+    save.type = "submit";
+    save.disabled = input.disabled;
+    form.append(label, save);
+    if (!network.network_id) {
+      form.append(text("small", "Restart Slips to enable network naming.", "muted"));
+    } else if (!network.connected) {
+      form.append(text("small", "Connect to this network to edit its name.", "muted"));
+    } else if (network.name_scope === "run") {
+      form.append(text("small", "Router identity unavailable; this name applies to the current run.", "muted"));
+    }
+    const feedback = text("small", "", "network-name-feedback");
+    form.append(feedback);
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      save.disabled = true;
+      feedback.textContent = "Saving…";
+      try {
+        const response = await fetch("/api/network-name", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            interface: network.interface,
+            network_id: network.network_id,
+            name: input.value,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+        network.name = payload.name;
+        state.networkNameDrafts.delete(network.network_id);
+        state.networkNameEditorOpen.delete(network.network_id);
+        document.activeElement?.blur();
+        if (state.overview) renderRunContext(state.overview);
+        renderNetworkStates(networkStates);
+        toast(payload.name ? "Network name saved." : "Network name removed.");
+      } catch (error) {
+        feedback.textContent = error.message;
+        save.disabled = false;
+      }
+    });
+    card.append(form);
+    const facts = text("div", "", "network-facts");
+    const computer = text("div", "", "network-fact");
+    computer.append(text("span", "This computer"), hostIdentity(network.host_ip));
+    facts.append(computer);
+    const local = text("div", "", "network-fact");
+    local.append(text("span", "Local network"), text("code", network.local_network || "Unknown"));
+    facts.append(local);
+    const router = text("div", "", "network-fact");
+    router.append(text("span", "Router"), hostIdentity(network.gateway_ip));
+    facts.append(router);
+    const mac = text("div", "", "network-fact");
+    mac.append(text("span", "Router MAC"), text("code", network.gateway_mac || "Unknown"));
+    facts.append(mac);
+    const dns = text("div", "", "network-fact");
+    dns.append(text("span", "DNS"));
+    const servers = text("span", "");
+    (network.dns_servers || []).forEach((ip, index) => {
+      if (index) servers.append(", ");
+      servers.append(hostIdentity(ip));
+    });
+    if (!(network.dns_servers || []).length) servers.append("Unknown");
+    dns.append(servers);
+    facts.append(dns);
+    card.append(facts);
+    container.append(card);
+  });
+}
+
 /**
  * Render the metadata captured for this run.
  *
  * @param {Object} metadata Parsed metadata labels and values.
+ * @param {Object|null} overview Current run and interface details.
  */
-function renderMetadata(metadata) {
+function renderMetadata(metadata, overview = null) {
   const runMetadata = byId("run-metadata");
   runMetadata.replaceChildren();
-  const metadataOrder = [
-    "Slips version", "File", "Branch", "Commit", "Command",
-    "Slips start date", "Zeek version",
-  ];
-  metadataOrder.filter((label) => metadata[label] !== undefined).forEach((label) => {
-    const row = document.createElement("div");
-    row.className = "source-row";
-    row.append(text("span", label), text(
-      label === "Commit" || label === "Command" ? "code" : "span",
-      metadata[label] || "unavailable",
-    ));
-    runMetadata.append(row);
-  });
-  if (!runMetadata.children.length) {
-    runMetadata.append(text("p", "metadata/info.txt is not available.", "muted"));
+  const version = metadata["Slips version"] || overview?.run_metadata?.["Slips version"] || "";
+  runMetadata.append(
+    metadataRow("Version", version ? (/^slips\b/i.test(version) ? version : `Slips ${version}`) : "Unavailable"),
+    metadataRow("Branch", metadata.Branch || overview?.run_metadata?.Branch || "Unavailable"),
+    metadataRow("Commit", metadata.Commit || overview?.run_metadata?.Commit || "Unavailable"),
+  );
+  const extras = ["File", "Command", "Slips start date", "Zeek version"]
+    .filter((label) => metadata[label] !== undefined);
+  if (extras.length) {
+    const details = document.createElement("details");
+    details.className = "metadata-more";
+    details.append(text("summary", "More run facts"));
+    extras.forEach((label) => details.append(metadataRow(label, metadata[label] || "Unavailable")));
+    runMetadata.append(details);
   }
+  const device = byId("metadata-device");
+  device.replaceChildren();
+  const addresses = overview?.host_addresses || {};
+  const name = overview?.computer_name || "This device";
+  byId("metadata-device-title").textContent = `This device · ${name}`;
+  device.append(metadataRow("Interface", overview?.run?.interface || "Unavailable"));
+  [["IPv4", addresses.ipv4 || []], ["IPv6", addresses.ipv6 || []]].forEach(([label, values]) => {
+    device.append(metadataRow(label, values.length ? values.join("\n") : "None"));
+  });
+}
+
+/**
+ * Build one compact, accessible metadata label and value.
+ *
+ * @param {string} label Label shown at the left of the row.
+ * @param {string} value Metadata value to display.
+ * @returns {HTMLElement} The labeled metadata row.
+ */
+function metadataRow(label, value) {
+  const row = document.createElement("div");
+  row.className = "metadata-row";
+  row.append(text("span", label), text("code", value));
+  return row;
 }
 
 /** Infer a display severity without changing the retained raw log line. */
@@ -806,13 +1360,22 @@ function renderLogs(payload) {
   ], openLog);
 }
 
-/** Render a module resource value with a 0–100 red heat-map background. */
-function usageCell(percentage, label, resource) {
+/**
+ * Draw one module's CPU share as a bounded bar and readable percentage.
+ *
+ * @param {number} percentage CPU share of one core.
+ * @returns {HTMLElement} The percentage bar.
+ */
+function moduleCpuUsage(percentage) {
   const actual = Math.max(0, numeric(percentage));
-  const intensity = Math.min(actual, 100);
-  const element = text("span", label, "usage-cell");
-  element.style.backgroundColor = `rgba(239, 107, 115, ${intensity / 100})`;
-  element.title = `${actual.toFixed(1)}% of ${resource}`;
+  const element = document.createElement("span");
+  element.className = `module-cpu ${actual >= 50 ? "hot" : ""}`;
+  const track = text("span", "", "module-cpu-track");
+  const fill = text("span", "", "module-cpu-fill");
+  fill.style.width = `${Math.min(actual, 100)}%`;
+  track.append(fill);
+  element.append(track, text("strong", `${actual.toFixed(1)}%`));
+  element.title = `${actual.toFixed(1)}% of one CPU core`;
   return element;
 }
 
@@ -835,17 +1398,18 @@ function renderModules(modules) {
     (row) => text("code", row.name),
     (row) => text("span", row.state, `status ${row.running ? "ok" : "warn"}`),
     (row) => row.pid,
-    (row) => usageCell(
-      row.cpu_percent, `${numeric(row.cpu_percent).toFixed(1)}%`, "one CPU core",
-    ),
-    (row) => usageCell(
-      row.memory_percent, `${numeric(row.memory_mb).toFixed(1)} MiB`, "host memory",
-    ),
+    (row) => moduleCpuUsage(row.cpu_percent),
+    (row) => {
+      const value = text("span", `${numeric(row.memory_mb).toFixed(1)} MiB`, "module-memory");
+      value.title = `${numeric(row.memory_percent).toFixed(1)}% of host memory`;
+      return value;
+    },
     (row) => compact(row.flows_per_minute),
     (row) => row.evidence_count === null || row.evidence_count === undefined
       ? text("span", "Not loaded", "muted") : compact(row.evidence_count),
     (row) => row.error_count,
   ]);
+  byId("modules-table").classList.toggle("show-evidence", Boolean(state.overview?.evidence_details_loaded));
   applySortIndicators("modules");
 }
 
@@ -872,10 +1436,17 @@ function initializeRanges(run) {
   if (state.rangesInitialized) return;
   const inputType = String(run.input_type || "").toLowerCase();
   const range = ["interface", "stdin", "cyst"].includes(inputType) ? "live" : "all";
+  const activeRange = ["alerts", "evidence", "hosts"].includes(state.activeTab)
+    ? byId(`${state.activeTab}-range`) : null;
+  const refreshActiveRange = activeRange && activeRange.value !== range;
   ["alerts", "evidence", "hosts", "host"].forEach((name) => {
     byId(`${name}-range`).value = range;
   });
   state.rangesInitialized = true;
+  if (refreshActiveRange) {
+    resetPage(state.activeTab);
+    currentLoader()().catch(() => {}).finally(schedulePoll);
+  }
 }
 
 /** Apply explicitly requested evidence details to a fast Overview payload. */
@@ -922,9 +1493,21 @@ async function loadOverviewEvidenceCounts() {
 
 /** Load and render run metadata in its dedicated tab. */
 async function loadMetadata() {
-  const payload = await api("metadata", "/api/metadata");
-  if (!payload) return;
-  renderMetadata(payload.items || {});
+  if (state.overview) {
+    renderMetadata(state.metadata?.items || {}, state.overview);
+  }
+  const [metadata, overview] = await Promise.all([
+    state.metadata || api("metadata", "/api/metadata"),
+    api("metadataOverview", "/api/overview"),
+  ]);
+  if (!metadata) return;
+  state.metadata = metadata;
+  if (overview) {
+    applyOverviewEvidence(overview);
+    state.overview = overview;
+    renderOverview();
+  }
+  renderMetadata(metadata.items || {}, overview || state.overview);
 }
 
 /** Load and render parsed runtime messages in their dedicated tab. */
@@ -940,27 +1523,33 @@ function listPath(name) {
   params.set("limit", "100");
   params.set("sort", page.sort);
   params.set("order", page.order);
+  if (state.hideExcluded && ["alerts", "evidence"].includes(name)) {
+    params.set("hide_excluded", "1");
+  }
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const search = byId(`${name}-search`).value.trim();
   if (search) params.set("search", search);
   if (name === "alerts") {
-    if (byId("alerts-view").value === "grouped") params.set("group", "host");
+    params.set("group", "host");
     params.set("details", "false");
-    const level = byId("alerts-threat").value;
-    if (level) params.set("threat", level);
   } else if (name === "evidence") {
-    if (byId("evidence-view").value === "grouped") {
-      params.set("group", "host_type");
+    const mode = byId("evidence-view").value;
+    if (mode !== "individual") {
+      params.set("group", mode === "grouped" ? "host_type" : mode);
+      params.set("compact", "1");
     }
     const level = byId("evidence-threat").value;
     const association = byId("evidence-link").value;
     if (level) params.set("threat", level);
     if (association) params.set("association", association);
+    if (byId("evidence-scored-only").checked) params.set("scored_only", "1");
+    if (state.evidenceWorkspace.typeFilter) params.set("type", state.evidenceWorkspace.typeFilter);
   } else {
     const scope = byId("hosts-scope").value;
     const level = byId("hosts-threat").value;
     if (scope) params.set("scope", scope);
     if (level) params.set("threat", level);
+    if (byId("hosts-alerts-only").checked) params.set("alerts_only", "1");
   }
   return `/api/${name}?${params}`;
 }
@@ -972,9 +1561,6 @@ function applyPage(name, payload) {
   page.next = payload.next_cursor;
   if (payload.full_total !== undefined) {
     byId(`${name}-badge`).textContent = compact(payload.full_total);
-    if (["alerts", "hosts"].includes(name)) {
-      updatePageTitle({ [name]: payload.full_total });
-    }
   }
   byId(`${name}-count`).textContent = `${payload.page_size} shown · ${compact(payload.total)} match`;
   applySortIndicators(name);
@@ -1041,93 +1627,867 @@ function configureTable(name, layout, headers, loader) {
   bindTableSort(name, loader);
 }
 
+/** Fit the Alerts workspace below the shared navigation. */
+function updateAlertViewportHeight() {
+  const bottom = document.querySelector(".tabs").getBoundingClientRect().bottom;
+  byId("alerts").style.setProperty("--alerts-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
+}
+
+/** Reveal only the panes reached by the current host and alert selection. */
+function setAlertPaneCount(count) {
+  const workspace = byId("alerts-workspace");
+  if (Number(workspace.dataset.panes) !== count) {
+    workspace.style.setProperty("--alerts-host-width", count === 2 ? "38%" : "26%");
+    workspace.style.setProperty("--alerts-list-width", "26%");
+  }
+  workspace.dataset.panes = String(count);
+  byId("alerts-host-divider").hidden = count < 2;
+  byId("alerts-list-pane").hidden = count < 2;
+  byId("alerts-detail-divider").hidden = count < 3;
+  byId("alerts-detail-pane").hidden = count < 3;
+}
+
+/** Render severity chips from the currently loaded host page. */
+function renderAlertSeverityFilters() {
+  const page = state.pages.alerts;
+  const selected = state.alertsWorkspace.severity;
+  const counts = new Map();
+  (page.items || []).forEach((item) => {
+    const level = String(item.threat_level || "info").toLowerCase();
+    counts.set(level, (counts.get(level) || 0) + 1);
+  });
+  const container = byId("alerts-severity-filters");
+  container.replaceChildren();
+  [["", "All", page.total], ...["critical", "high", "medium", "low", "info"]
+    .filter((level) => counts.get(level) || selected === level)
+    .map((level) => [level, level[0].toUpperCase() + level.slice(1), counts.get(level) || 0])]
+    .forEach(([level, label, count]) => {
+      const button = text("button", `${label} ${compact(count)}`, "alerts-filter");
+      button.type = "button";
+      button.dataset.level = level;
+      button.classList.toggle("active", selected === level);
+      button.setAttribute("aria-pressed", String(selected === level));
+      button.addEventListener("click", () => {
+        state.alertsWorkspace.severity = level;
+        if (state.alertsWorkspace.host && level
+            && state.alertsWorkspace.host.threat_level !== level) {
+          closeAlertHostPane();
+        }
+        renderAlertSeverityFilters();
+        renderAlertHostList();
+      });
+      container.append(button);
+    });
+}
+
+/** Render the grouped host list without opening another overlay. */
+function renderAlertHostList() {
+  const container = byId("alerts-host-list");
+  const selected = state.alertsWorkspace.host?.ip_alerted;
+  const level = state.alertsWorkspace.severity;
+  const rows = (state.pages.alerts.items || []).filter((item) =>
+    !level || String(item.threat_level || "info").toLowerCase() === level);
+  container.replaceChildren();
+  if (!rows.length) {
+    container.append(text("p", "No matching hosts in this page.", "empty-state"));
+    return;
+  }
+  rows.forEach((host) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "alerts-host-row";
+    row.classList.toggle("selected", host.ip_alerted === selected);
+    row.append(
+      hostIdentity(host.ip_alerted),
+      text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2),
+        `alerts-host-score threat-${host.threat_level || "info"}`),
+      text("span", `${compact(host.alert_count)} · ${formatAge(host.alert_time)}`, "alerts-host-meta"),
+    );
+    row.title = `${host.alert_count} alerts · ${host.evidence_count} evidence links`;
+    row.addEventListener("click", () => selectAlertHostPane(host));
+    container.append(row);
+  });
+}
+
+/** Show one host in the middle pane and load its individual alerts. */
+function selectAlertHostPane(host) {
+  const workspace = state.alertsWorkspace;
+  const changed = workspace.host?.ip_alerted !== host.ip_alerted;
+  workspace.host = host;
+  if (changed) {
+    workspace.alert = null;
+    workspace.items = [];
+    workspace.next = null;
+    workspace.detailGeneration += 1;
+    byId("alerts-detail").replaceChildren();
+  }
+  setAlertPaneCount(workspace.alert ? 3 : 2);
+  renderAlertHostList();
+  renderAlertSelectedHost();
+  if (changed || !workspace.items.length) loadAlertHostAlerts(true).catch(() => {});
+}
+
+/** Close the selected host and return to the first pane. */
+function closeAlertHostPane() {
+  const workspace = state.alertsWorkspace;
+  workspace.host = null;
+  workspace.alert = null;
+  workspace.items = [];
+  workspace.next = null;
+  workspace.listGeneration += 1;
+  workspace.detailGeneration += 1;
+  setAlertPaneCount(1);
+  renderAlertHostList();
+}
+
+/** Render the host heading above its individual alert timeline. */
+function renderAlertSelectedHost() {
+  const host = state.alertsWorkspace.host;
+  const container = byId("alerts-selected-host");
+  container.replaceChildren();
+  if (!host) return;
+  const close = text("button", "×", "alerts-pane-close");
+  close.type = "button";
+  close.title = "Close this host";
+  close.setAttribute("aria-label", "Close host alerts pane");
+  close.addEventListener("click", closeAlertHostPane);
+  container.append(close, text("strong", host.ip_alerted));
+  container.append(hostIdentity(host.ip_alerted));
+  const meta = document.createElement("div");
+  meta.className = "alerts-selected-meta";
+  meta.append(threat(host.threat_level), text("span", `${compact(host.alert_count)} alerts`),
+    text("span", `${compact(host.evidence_count)} evidence`));
+  container.append(meta);
+}
+
+/** Fetch one bounded page of alerts for the selected host. */
+async function loadAlertHostAlerts(reset = true, quiet = false) {
+  const workspace = state.alertsWorkspace;
+  const host = workspace.host?.ip_alerted;
+  if (!host) return;
+  const generation = ++workspace.listGeneration;
+  const params = rangeQuery("alerts");
+  params.set("profile", host);
+  params.set("limit", "50");
+  params.set("sort", "time");
+  params.set("order", "desc");
+  params.set("details", "false");
+  params.set("summary", "1");
+  if (state.hideExcluded) params.set("hide_excluded", "1");
+  if (!reset && workspace.next) params.set("cursor", workspace.next);
+  if (reset && !quiet) {
+    workspace.items = [];
+    workspace.next = null;
+    byId("alerts-list").replaceChildren(text("p", "Loading alerts…", "empty-state"));
+  }
+  const payload = await api("alertPaneList", `/api/alerts?${params}`);
+  if (!payload || generation !== workspace.listGeneration || workspace.host?.ip_alerted !== host) return;
+  workspace.items = reset ? payload.items : [...workspace.items, ...payload.items];
+  workspace.next = payload.next_cursor;
+  workspace.total = payload.total;
+  workspace.listLoadedAt = Date.now();
+  workspace.listSignature = `${rangeQuery("alerts")}&${state.hideExcluded}`;
+  renderAlertTimeline();
+}
+
+/** Render the middle-pane timeline and its bounded next-page control. */
+function renderAlertTimeline() {
+  const workspace = state.alertsWorkspace;
+  const container = byId("alerts-list");
+  container.replaceChildren();
+  if (!workspace.items.length) {
+    container.append(text("p", "No alerts in this range for this host.", "empty-state"));
+  }
+  workspace.items.forEach((record) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "alerts-alert-row";
+    row.classList.toggle("selected", record.alert_id === workspace.alert?.alert_id);
+    const top = document.createElement("div");
+    top.className = "alerts-alert-row-top";
+    top.append(text("span", formatTime(record.alert_time)),
+      text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
+    const title = record.summary || record.evidence_type?.replaceAll("_", " ")
+      || record.label || "Alert";
+    row.append(top, text("span", title, "alerts-alert-row-title"),
+      text("span", `${compact(record.evidence_count)} evidence · ${record.evidence_type || record.label || "Alert"}`, "alerts-alert-row-meta"));
+    row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
+    container.append(row);
+  });
+  const more = byId("alerts-list-more");
+  more.replaceChildren();
+  if (workspace.next) {
+    const button = text("button", `Load more · ${compact(workspace.items.length)} of ${compact(workspace.total)}`, "secondary");
+    button.type = "button";
+    button.addEventListener("click", () => loadAlertHostAlerts(false).catch(() => {}));
+    more.append(button);
+  }
+}
+
+/** Render an individual alert and its evidence in the right pane. */
+function renderAlertDetailPane(record) {
+  const container = byId("alerts-detail");
+  container.replaceChildren();
+  const firstEvidence = record.evidence?.[0] || {};
+  const header = document.createElement("div");
+  header.className = "alerts-detail-head";
+  const context = document.createElement("div");
+  context.append(threat(record.threat_level),
+    text("small", `alert · ${formatTime(record.alert_time)} · ${record.label || "unclassified"}`));
+  const actions = document.createElement("div");
+  actions.className = "alerts-detail-actions";
+  const whitelist = text("button", "Whitelist", "secondary");
+  whitelist.type = "button";
+  const close = text("button", "×", "secondary");
+  close.type = "button";
+  close.title = "Close alert details";
+  close.setAttribute("aria-label", "Close alert details pane");
+  close.addEventListener("click", () => {
+    state.alertsWorkspace.alert = null;
+    setAlertPaneCount(2);
+    renderAlertTimeline();
+  });
+  actions.append(whitelist, close);
+  header.append(context, actions);
+  const title = record.summary?.split(". ")[0].slice(0, 110)
+    || firstEvidence.evidence_type?.replaceAll("_", " ") || "Alert details";
+  container.append(header, text("h3", title));
+  if (firstEvidence.description) container.append(text("p", firstEvidence.description, "alerts-detail-summary"));
+  container.append(investigationStats([
+    ["Score / threshold", slipsScore(record), "danger"],
+    ["Network", networkContext(record)],
+    ["Time window", record.timewindow || "—"],
+    ["Evidence", compact(record.evidence_count)],
+  ]));
+  const editor = whitelistEditor("alert-pane", firstEvidence.profile_ip
+    ? firstEvidence : { profile_ip: record.ip_alerted });
+  editor.hidden = true;
+  whitelist.addEventListener("click", () => {
+    editor.hidden = !editor.hidden;
+    whitelist.setAttribute("aria-expanded", String(!editor.hidden));
+  });
+  container.append(editor, investigationHeading("Related evidence", "Select evidence to inspect its triggering flows"));
+  const evidence = document.createElement("div");
+  evidence.className = "investigation-list";
+  (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item)));
+  if (!record.evidence?.length) evidence.append(text("p", "No related evidence is available.", "muted"));
+  container.append(evidence, investigationHeading("Identifiers"),
+    text("p", record.alert_id, "mono"), rawBlock(record, "alert"));
+}
+
+/** Open one alert in the right pane and load its linked evidence. */
+async function selectAlertDetailPane(record) {
+  const workspace = state.alertsWorkspace;
+  workspace.alert = record;
+  const generation = ++workspace.detailGeneration;
+  setAlertPaneCount(3);
+  renderAlertTimeline();
+  byId("alerts-detail").replaceChildren(text("p", "Loading alert evidence…", "empty-state"));
+  const params = new URLSearchParams({ range: "all", limit: "1", search: record.alert_id });
+  const payload = await api("alertPaneDetail", `/api/alerts?${params}`);
+  if (!payload || generation !== workspace.detailGeneration
+      || workspace.alert?.alert_id !== record.alert_id) return;
+  const detailed = payload.items.find((item) => item.alert_id === record.alert_id);
+  if (!detailed) {
+    byId("alerts-detail").replaceChildren(text("p", "This alert is no longer available.", "empty-state"));
+    return;
+  }
+  workspace.alert = { ...detailed, summary: record.summary };
+  renderAlertDetailPane(workspace.alert);
+}
+
+/** Resize the pane immediately before a draggable Alerts divider. */
+function resizeAlertPane(kind, desiredWidth) {
+  const workspace = byId("alerts-workspace");
+  const total = workspace.getBoundingClientRect().width;
+  const host = document.querySelector(".alerts-host-pane").getBoundingClientRect().width;
+  const middle = byId("alerts-list-pane").getBoundingClientRect().width;
+  const panes = Number(workspace.dataset.panes);
+  if (kind === "host") {
+    const remaining = panes === 3 ? middle + 320 + 16 : 240 + 8;
+    const width = Math.max(240, Math.min(desiredWidth, total - remaining));
+    workspace.style.setProperty("--alerts-host-width", `${Math.round(width)}px`);
+  } else if (panes === 3) {
+    const width = Math.max(240, Math.min(desiredWidth, total - host - 320 - 16));
+    workspace.style.setProperty("--alerts-list-width", `${Math.round(width)}px`);
+  }
+}
+
+/** Enable pointer and keyboard resizing between visible Alerts panes. */
+function initAlertPaneResize() {
+  [["alerts-host-divider", "host", ".alerts-host-pane"],
+    ["alerts-detail-divider", "detail", "#alerts-list-pane"]]
+    .forEach(([id, kind, paneSelector]) => {
+      const divider = byId(id);
+      divider.addEventListener("pointerdown", (event) => {
+        if (divider.hidden) return;
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = document.querySelector(paneSelector).getBoundingClientRect().width;
+        divider.setPointerCapture(event.pointerId);
+        document.body.classList.add("alerts-resizing");
+        const move = (next) => resizeAlertPane(kind, startWidth + next.clientX - startX);
+        const finish = () => {
+          divider.removeEventListener("pointermove", move);
+          divider.removeEventListener("pointerup", finish);
+          divider.removeEventListener("pointercancel", finish);
+          document.body.classList.remove("alerts-resizing");
+        };
+        divider.addEventListener("pointermove", move);
+        divider.addEventListener("pointerup", finish);
+        divider.addEventListener("pointercancel", finish);
+      });
+      divider.addEventListener("keydown", (event) => {
+        if (divider.hidden || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        const width = document.querySelector(paneSelector).getBoundingClientRect().width;
+        resizeAlertPane(kind, width + (event.key === "ArrowRight" ? 24 : -24));
+      });
+    });
+  window.addEventListener("resize", updateAlertViewportHeight);
+}
+
+/** Refresh the host list while retaining an open investigation. */
 async function loadAlerts() {
-  const grouped = byId("alerts-view").value === "grouped";
-  configureTable("alerts", grouped ? "grouped" : "individual", grouped ? [
-    ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
-    ["Peak Slips score", "score"],
-    ["Name / domain", null], ["TI feeds", null],
-    ["Alerts", "alerts"], ["Evidence links", "evidence"], ["Labels", "label"],
-  ] : [
-    ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
-    ["Slips score", "score"],
-    ["TW", "tw"], ["Window start", "tw_start"], ["Window end", "tw_end"],
-    ["Name / domain", null], ["TI feeds", null], ["Label", "label"],
-    ["Evidence", "evidence"], ["Alert ID", "id"],
-  ], loadAlerts);
-  byId("alerts-description").textContent = grouped
-    ? "Grouped by host. Select a host, then an alert, its evidence, and triggering flows."
-    : "Individual durable alerts. Select one to inspect its evidence and triggering flows.";
   const payload = await api("alerts", listPath("alerts"));
   if (!payload) return;
   applyPage("alerts", payload);
-  if (grouped) {
-    renderTable("alerts-table", payload.items, [
-      (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
-      (row) => threat(row.threat_level), (row) => slipsScore(row),
-      (row) => contextName(row),
-      (row) => tiFeeds(row), (row) => compact(row.alert_count),
-      (row) => compact(row.evidence_count), (row) => row.label || "—",
-    ], openAlertGroup);
-  } else {
-    renderTable("alerts-table", payload.items, [
-      (row) => formatTime(row.alert_time), (row) => text("code", row.ip_alerted),
-      (row) => threat(row.threat_level),
-      (row) => slipsScore(row),
-      (row) => text("code", row.timewindow || "—"),
-      (row) => row.tw_start || "—", (row) => row.tw_end || "—",
-      (row) => contextName(row), (row) => tiFeeds(row), (row) => row.label || "—",
-      (row) => compact(row.evidence_count), (row) => text("code", row.alert_id),
-    ], openAlert);
-  }
+  byId("alerts-count").textContent = compact(payload.total);
+  renderAlertSeverityFilters();
+  renderAlertHostList();
   pager("alerts", "alerts-pager", loadAlerts);
+  const workspace = state.alertsWorkspace;
+  if (workspace.host) {
+    const current = payload.items.find((item) => item.ip_alerted === workspace.host.ip_alerted);
+    if (current) {
+      workspace.host = current;
+      renderAlertSelectedHost();
+    }
+    const signature = `${rangeQuery("alerts")}&${state.hideExcluded}`;
+    if (workspace.listSignature !== signature || Date.now() - workspace.listLoadedAt > 15000) {
+      loadAlertHostAlerts(true, true).catch(() => {});
+    }
+  }
 }
 
-async function loadEvidence() {
-  const grouped = byId("evidence-view").value === "grouped";
-  configureTable("evidence", grouped ? "grouped" : "individual", grouped ? [
-    ["Latest", "time"], ["Host", "host"], ["Highest threat", "threat"],
-    ["Peak Slips score", "score"],
-    ["Type", "type"], ["Module", "module"], ["Evidence", "evidence"],
-    ["Flows", "flows"], ["Alert links", "alert"], ["Score handling", null],
-  ] : [
-    ["Time", "time"], ["Host", "host"], ["Threat", "threat"],
-    ["Slips score", "score"],
-    ["Type", "type"], ["Module", "module"], ["Score handling", null], ["Flows", "flows"],
-    ["Alerts", "alert"], ["Description", null],
+/** Fit the Evidence workspace below the shared navigation. */
+function updateEvidenceViewportHeight() {
+  const bottom = document.querySelector(".tabs").getBoundingClientRect().bottom;
+  byId("evidence").style.setProperty("--evidence-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
+}
+
+/** Clear a selected group when the filtering context changes. */
+function clearEvidenceSelection() {
+  const workspace = state.evidenceWorkspace;
+  workspace.group = null;
+  workspace.record = null;
+  workspace.records = [];
+  workspace.next = null;
+  workspace.generation += 1;
+  highlightEvidenceSelection();
+  renderEvidenceEmptyState();
+}
+
+/** Highlight the table row represented by the current group or record. */
+function highlightEvidenceSelection() {
+  const mode = byId("evidence-view").value;
+  document.querySelectorAll("#evidence-table tbody tr").forEach((row, index) => {
+    const item = state.pages.evidence.items[index];
+    row.classList.toggle("selected", Boolean(item && (mode === "individual"
+      ? item.id === state.evidenceWorkspace.record?.id
+      : item.id === state.evidenceWorkspace.group?.id)));
+  });
+}
+
+/** Render compact severity filters using counts from an unfiltered page. */
+function renderEvidenceThreatChips() {
+  const selected = byId("evidence-threat").value;
+  const counts = state.evidenceWorkspace.threatCounts || new Map();
+  const container = byId("evidence-threat-chips");
+  container.replaceChildren();
+  [["", "All"], ...["critical", "high", "medium", "low", "info"]
+    .filter((level) => counts.get(level) || selected === level)
+    .map((level) => [level, level[0].toUpperCase() + level.slice(1)]),
+    ...[["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"]]]
+    .forEach(([level, label]) => {
+      const button = text("button", level.endsWith("_or_more")
+        ? label : `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
+      button.type = "button";
+      button.dataset.level = level;
+      button.classList.toggle("active", level === selected);
+      button.setAttribute("aria-pressed", String(level === selected));
+      button.addEventListener("click", () => {
+        if (selected === level) return;
+        byId("evidence-threat").value = level;
+        clearEvidenceSelection();
+        renderEvidenceThreatChips();
+        byId("evidence-threat").dispatchEvent(new Event("change"));
+      });
+      container.append(button);
+    });
+}
+
+/** Render grouping controls for the four Evidence table modes. */
+function renderEvidenceGroupControls() {
+  const mode = byId("evidence-view").value;
+  const container = byId("evidence-group-controls");
+  container.replaceChildren();
+  [["grouped", "Host + type"], ["type", "Type"], ["host", "Host"], ["individual", "None"]]
+    .forEach(([value, label]) => {
+      const button = text("button", label, "evidence-group-button");
+      button.type = "button";
+      button.classList.toggle("active", value === mode);
+      button.setAttribute("aria-pressed", String(value === mode));
+      button.addEventListener("click", () => {
+        if (mode === value) return;
+        byId("evidence-view").value = value;
+        byId("evidence-threat").value = "";
+        state.evidenceWorkspace.threatCounts = null;
+        clearEvidenceSelection();
+        renderEvidenceGroupControls();
+        byId("evidence-view").dispatchEvent(new Event("change"));
+      });
+      container.append(button);
+    });
+}
+
+/** Show the selected Evidence page as a compact, keyboard-accessible table.
+ * @param {object} payload Bounded API page with grouped or individual records.
+ */
+function renderEvidenceTable(payload) {
+  const mode = byId("evidence-view").value;
+  configureTable("evidence", mode, [
+    ["Latest", "time"], ["Host", "host"], ["Type · module", "type"],
+    ["Threat", "threat"], ["Score", "score"],
+    [mode === "individual" ? "Flows" : "Records", mode === "individual" ? "flows" : "evidence"],
+    ["Alerts", "alert"],
   ], loadEvidence);
-  byId("evidence-description").textContent = grouped
-    ? "Grouped by host and type, including records that never formed an alert."
-    : "Individual durable evidence, including records that never formed an alert.";
+  renderTable("evidence-table", payload.items, [
+    (row) => evidenceClock(row.timestamp),
+    (row) => row.profile_ip ? hostIdentity(row.profile_ip) : "All hosts",
+    (row) => {
+      const cell = document.createElement("span");
+      cell.append(text("code", row.evidence_type || "All types"));
+      if (row.module) cell.append(text("small", ` ${row.module}`, "muted"));
+      return cell;
+    },
+    (row) => threat(row.threat_level),
+    (row) => slipsScore(row),
+    (row) => compact(mode === "individual" ? row.flow_count : row.evidence_count),
+    (row) => compact(mode === "individual" ? row.alert_ids?.length : row.alert_count),
+  ], (row) => {
+    if (mode === "individual") selectEvidenceRecord(row);
+    else selectEvidenceGroup(row);
+  });
+  document.querySelectorAll("#evidence-table tbody tr").forEach((row, index) => {
+    const record = payload.items[index];
+    if (!record) return;
+    row.addEventListener("keydown", (event) => {
+      if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+      event.preventDefault();
+      const rows = [...row.parentElement.querySelectorAll('tr[data-clickable="true"]')];
+      rows[Math.max(0, Math.min(rows.length - 1,
+        index + (event.key === "ArrowDown" ? 1 : -1)))]?.focus();
+    });
+  });
+  highlightEvidenceSelection();
+}
+
+/** Format a persisted Evidence timestamp as a compact local clock time.
+ * @param {number} timestamp Seconds from the run clock.
+ * @returns {string} Local clock time or a relative capture timestamp.
+ */
+function evidenceClock(timestamp) {
+  const value = numeric(timestamp);
+  return value >= 946684800 ? new Date(value * 1000).toLocaleTimeString() : formatTime(value);
+}
+
+/** Draw the overview shown before an Evidence group is selected. */
+function renderEvidenceEmptyState() {
+  const right = byId("evidence-right");
+  right.replaceChildren();
+  const payload = state.pages.evidence;
+  const mode = byId("evidence-view").value;
+  const prompt = document.createElement("div");
+  prompt.className = "evidence-right-panel";
+  prompt.append(text("h3", mode === "individual" ? "Select a record to inspect it" : "Select a group to see its records"),
+    text("p", "Use ↑↓ and Enter in the table. The summary below covers the groups loaded on this page."));
+  right.append(prompt);
+  if (mode === "individual" || !payload.items.length) return;
+  const typeCounts = new Map();
+  const hostScores = new Map();
+  payload.items.forEach((item) => {
+    if (item.evidence_type) typeCounts.set(item.evidence_type,
+      (typeCounts.get(item.evidence_type) || 0) + numeric(item.evidence_count));
+    if (item.profile_ip && !item.whitelisted) {
+      const previous = hostScores.get(item.profile_ip);
+      if (!previous || numeric(item.alert_score) > numeric(previous.alert_score)) {
+        hostScores.set(item.profile_ip, item);
+      }
+    }
+  });
+  if (typeCounts.size) {
+    const panel = document.createElement("div");
+    panel.className = "evidence-right-panel";
+    panel.append(text("h3", "By type"));
+    const bars = document.createElement("div");
+    bars.className = "evidence-bars";
+    const allTypes = [...typeCounts].sort((a, b) => b[1] - a[1]);
+    const sorted = allTypes.slice(0, 7);
+    if (allTypes.length > 7) {
+      sorted.push([`Other (${allTypes.length - 7} types)`,
+        allTypes.slice(7).reduce((sum, [, count]) => sum + count, 0)]);
+    }
+    const max = sorted[0]?.[1] || 1;
+    sorted.forEach(([type, count]) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "evidence-bar-row";
+      const track = text("span", "", "evidence-bar-track");
+      const fill = document.createElement("span");
+      fill.style.width = `${Math.max(1, 100 * count / max)}%`;
+      track.append(fill);
+      row.append(text("span", type, "evidence-bar-label"), track,
+        text("span", compact(count), "evidence-bar-count"));
+      if (typeCounts.has(type)) row.addEventListener("click", () => {
+        state.evidenceWorkspace.typeFilter = type;
+        clearEvidenceSelection();
+        resetPage("evidence");
+        loadEvidence().catch(() => {});
+      });
+      bars.append(row);
+    });
+    panel.append(bars);
+    right.append(panel);
+  }
+  if (hostScores.size) {
+    const panel = document.createElement("div");
+    panel.className = "evidence-right-panel";
+    panel.append(text("h3", "Hosts closest to the alert threshold"));
+    const bars = document.createElement("div");
+    bars.className = "evidence-bars";
+    [...hostScores.values()].sort((a, b) => numeric(b.alert_score) - numeric(a.alert_score))
+      .slice(0, 5).forEach((host) => {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "evidence-bar-row";
+        const track = text("span", "", "evidence-bar-track evidence-score-track");
+        const fill = document.createElement("span");
+        fill.style.width = `${Math.min(100, numeric(host.alert_score) * 10)}%`;
+        fill.style.background = numeric(host.alert_score) >= 5 ? "#f36575" : "#e6b543";
+        track.append(fill);
+        row.append(text("span", host.profile_ip, "evidence-bar-label"), track,
+          text("span", numeric(host.alert_score).toFixed(2), "evidence-bar-count"));
+        row.addEventListener("click", () => {
+          byId("evidence-search").value = host.profile_ip;
+          clearEvidenceSelection();
+          resetPage("evidence");
+          loadEvidence().catch(() => {});
+        });
+        bars.append(row);
+      });
+    panel.append(bars, text("p", "The marker is the alert threshold: 5.0 on a scale to 10."));
+    right.append(panel);
+  }
+}
+
+/** Select a group and load its newest bounded record page.
+ * @param {object} group Grouped evidence API row.
+ */
+function selectEvidenceGroup(group) {
+  const workspace = state.evidenceWorkspace;
+  if (workspace.group?.id === group.id) return;
+  workspace.group = group;
+  workspace.record = null;
+  workspace.records = [];
+  workspace.next = null;
+  workspace.total = 0;
+  byId("evidence-right").replaceChildren();
+  highlightEvidenceSelection();
+  renderEvidenceGroup();
+  loadEvidenceGroupRecords(true).catch(() => {});
+}
+
+/** Return query parameters for the selected group's individual records.
+ * @returns {URLSearchParams} Active range, group, and visibility filters.
+ */
+function evidenceGroupQuery() {
+  const workspace = state.evidenceWorkspace;
+  const params = rangeQuery("evidence");
+  if (workspace.group?.profile_ip) params.set("profile", workspace.group.profile_ip);
+  if (workspace.group?.evidence_type || workspace.typeFilter) {
+    params.set("type", workspace.group?.evidence_type || workspace.typeFilter);
+  }
+  params.set("limit", "50");
+  params.set("sort", "time");
+  params.set("order", "desc");
+  const level = byId("evidence-threat").value;
+  const association = byId("evidence-link").value;
+  const search = byId("evidence-search").value.trim();
+  if (level) params.set("threat", level);
+  if (association) params.set("association", association);
+  if (search) params.set("search", search);
+  if (state.hideExcluded) params.set("hide_excluded", "1");
+  if (byId("evidence-scored-only").checked) params.set("scored_only", "1");
+  return params;
+}
+
+/** Load one page of individual evidence inside a selected group.
+ * @param {boolean} reset Whether to replace the currently loaded records.
+ * @returns {Promise<void>} Completes when the bounded page has rendered.
+ */
+async function loadEvidenceGroupRecords(reset = true) {
+  const workspace = state.evidenceWorkspace;
+  if (!workspace.group) return;
+  const groupId = workspace.group.id;
+  const generation = ++workspace.generation;
+  const params = evidenceGroupQuery();
+  if (!reset && workspace.next) params.set("cursor", workspace.next);
+  const payload = await api("evidenceGroupPane", `/api/evidence?${params}`);
+  if (!payload || generation !== workspace.generation || workspace.group?.id !== groupId) return;
+  workspace.records = reset ? payload.items : [...workspace.records, ...payload.items];
+  workspace.next = payload.next_cursor;
+  workspace.total = payload.total;
+  workspace.listLoadedAt = Date.now();
+  workspace.listSignature = evidenceGroupQuery().toString();
+  if (workspace.record) {
+    workspace.record = workspace.records.find((item) => item.id === workspace.record.id) || null;
+  }
+  if (!document.activeElement?.closest("#evidence-right .whitelist-editor")) {
+    renderEvidenceGroup();
+  }
+}
+
+/** Name a reporting peer in retained P2P report text.
+ * @param {object} record Individual P2P evidence record.
+ * @returns {string} Recorded peer address and ID, when available.
+ */
+function evidenceReporter(record) {
+  const description = String(record.description || "");
+  const received = description.match(/Received from P2P peer (.+?): reputation report/i);
+  if (received) return received[1];
+  const legacy = description.match(/attacking another peer:\s*(.+?)\. confidence:/i);
+  return legacy ? legacy[1] : "Peer not recorded";
+}
+
+/** Render the selected group's summary, record list, and record details. */
+function renderEvidenceGroup() {
+  const workspace = state.evidenceWorkspace;
+  const group = workspace.group;
+  if (!group) return renderEvidenceEmptyState();
+  const right = byId("evidence-right");
+  const listScroll = right.querySelector(".evidence-record-list")?.scrollTop || 0;
+  const openPeers = new Map([...right.querySelectorAll(".evidence-peer-group")]
+    .map((details) => [details.dataset.peer, details.open]));
+  right.replaceChildren();
+  const summary = document.createElement("div");
+  summary.className = "evidence-right-panel evidence-group-summary";
+  const head = document.createElement("div");
+  head.className = "evidence-right-head";
+  const label = document.createElement("div");
+  label.append(text("span", group.evidence_type || "All types", "type-chip"),
+    text("small", `${group.module || "Module unknown"} · ${compact(group.evidence_count)} records · ${formatTime(group.timestamp)}`, "muted"));
+  const close = text("button", "×");
+  close.type = "button";
+  close.title = "Close evidence group";
+  close.setAttribute("aria-label", "Close evidence group");
+  close.addEventListener("click", clearEvidenceSelection);
+  head.append(label, close);
+  summary.append(head);
+  const p2pReports = group.evidence_type === "P2P_REPORT";
+  const peerCount = new Set(workspace.records.map(evidenceReporter)).size;
+  const title = p2pReports && group.profile_ip && workspace.records.length
+      && workspace.total <= workspace.records.length
+    ? `${peerCount} peer${peerCount === 1 ? "" : "s"} reported ${group.profile_ip} as malicious`
+    : group.profile_ip && group.evidence_type
+      ? `${group.evidence_type} · ${group.profile_ip}`
+      : group.profile_ip || group.evidence_type || "Evidence group";
+  summary.append(text("h3", title));
+  if (p2pReports) summary.append(text("p", `Reputation reports received from Slips P2P peers. A report identifies its sender and subject; it does not by itself describe an attack or prove a local connection to that peer.${numeric(group.alert_score) === 0 ? " These reports have not increased the local score." : ""}`));
+  else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
+  summary.append(investigationStats([
+    ["Host", group.profile_ip ? hostIdentity(group.profile_ip) : "All hosts"],
+    ["Threat", threat(group.threat_level)],
+    ["Local score", slipsScore(group)],
+    ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
+  ]));
+  right.append(summary);
+  const list = document.createElement("div");
+  list.className = "evidence-right-panel evidence-record-list";
+  const listHead = document.createElement("div");
+  listHead.className = "evidence-right-head";
+  listHead.append(text("h3", `Records · ${compact(workspace.total || group.evidence_count)}`),
+    text("small", p2pReports ? "Grouped by reporting peer" : "Newest first", "muted"));
+  list.append(listHead);
+  if (!workspace.records.length) list.append(text("p", "Loading records…"));
+  const appendRecord = (container, record) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "evidence-record-row";
+    button.classList.toggle("selected", record.id === workspace.record?.id);
+    button.append(text("span", evidenceClock(record.timestamp)),
+      text("span", p2pReports ? `maliciousness · confidence ${numeric(record.confidence).toFixed(2)}` : record.description || record.evidence_type),
+      text("span", record.twid || "—"),
+      text("span", `${compact(record.flow_count)} flow${numeric(record.flow_count) === 1 ? "" : "s"}`));
+    button.addEventListener("click", () => selectEvidenceRecord(record));
+    container.append(button);
+  };
+  if (p2pReports) {
+    const peers = new Map();
+    workspace.records.forEach((record) => {
+      const peer = evidenceReporter(record);
+      if (!peers.has(peer)) peers.set(peer, []);
+      peers.get(peer).push(record);
+    });
+    peers.forEach((records, peer) => {
+      const details = document.createElement("details");
+      details.className = "evidence-peer-group";
+      details.dataset.peer = peer;
+      details.open = openPeers.get(peer) ?? true;
+      details.append(text("summary", `${peer} · ${compact(records.length)} report${records.length === 1 ? "" : "s"}`));
+      records.forEach((record) => appendRecord(details, record));
+      list.append(details);
+    });
+  } else workspace.records.forEach((record) => appendRecord(list, record));
+  if (workspace.next) {
+    const actions = document.createElement("div");
+    actions.className = "evidence-record-actions";
+    const more = text("button", `Load more · ${compact(workspace.records.length)} of ${compact(workspace.total)}`, "secondary");
+    more.type = "button";
+    more.addEventListener("click", () => loadEvidenceGroupRecords(false).catch(() => {}));
+    actions.append(more);
+    list.append(actions);
+  }
+  right.append(list);
+  list.scrollTop = listScroll;
+  if (workspace.record) renderEvidenceRecordDetail(workspace.record);
+}
+
+/** Select one evidence record for inline investigation.
+ * @param {object} record Individual durable evidence record.
+ */
+function selectEvidenceRecord(record) {
+  state.evidenceWorkspace.record = record;
+  highlightEvidenceSelection();
+  if (byId("evidence-view").value === "individual") {
+    renderEvidenceRecordDetail(record, true);
+  } else renderEvidenceGroup();
+}
+
+/** Copy an evidence identifier in secure and local HTTP browser contexts.
+ * @param {string} identifier Durable evidence UUID.
+ * @returns {Promise<void>} Completes after the copy result is reported.
+ */
+async function copyEvidenceId(identifier) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(identifier);
+  } else {
+    const input = document.createElement("textarea");
+    input.value = identifier;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.append(input);
+    input.select();
+    const copied = document.execCommand("copy");
+    input.remove();
+    if (!copied) throw new Error("Browser denied clipboard access");
+  }
+  toast("Evidence ID copied.");
+}
+
+/** Show a record's identity, linked flows, whitelist editor, and raw JSON.
+ * @param {object} record Individual durable evidence record.
+ * @param {boolean} replace Whether to replace the right-pane contents.
+ */
+function renderEvidenceRecordDetail(record, replace = false) {
+  const right = byId("evidence-right");
+  if (replace) right.replaceChildren();
+  const panel = document.createElement("div");
+  panel.className = "evidence-right-panel evidence-record-detail";
+  const head = document.createElement("div");
+  head.className = "evidence-right-head";
+  head.append(text("h3", `Record · ${formatTime(record.timestamp)}`));
+  const actions = document.createElement("div");
+  const close = text("button", "×");
+  close.type = "button";
+  close.title = "Close evidence record";
+  close.setAttribute("aria-label", "Close evidence record");
+  close.addEventListener("click", () => {
+    state.evidenceWorkspace.record = null;
+    highlightEvidenceSelection();
+    if (state.evidenceWorkspace.group) renderEvidenceGroup();
+    else renderEvidenceEmptyState();
+  });
+  const copy = text("button", "Copy ID");
+  copy.type = "button";
+  copy.addEventListener("click", () => copyEvidenceId(record.id)
+    .catch(() => toast("Could not copy the evidence ID.")));
+  const json = text("button", "JSON");
+  json.type = "button";
+  json.addEventListener("click", () => panel.querySelector(".json-details")?.setAttribute("open", ""));
+  actions.append(copy, json, close);
+  head.append(actions);
+  panel.append(head, hostDescription(record, "evidence-record-description"));
+  const fields = document.createElement("dl");
+  [["Host", record.profile_ip], ["From peer", record.evidence_type === "P2P_REPORT" ? evidenceReporter(record) : ""],
+    ["Threat", record.threat_level], ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`],
+    ["Time window", record.twid || "—"], ["Triggering flows", `${compact(record.flow_count)} stored`],
+    ["Alert links", compact(record.alert_ids?.length)], ["Evidence ID", record.id]]
+    .filter(([, value]) => value !== "").forEach(([label, value]) => {
+      fields.append(text("dt", label), text("dd", value));
+    });
+  panel.append(fields);
+  const flowButton = text("button", "Inspect triggering flows", "secondary");
+  flowButton.type = "button";
+  flowButton.addEventListener("click", () => openEvidence(record).catch(() => {}));
+  panel.append(flowButton, whitelistEditor("evidence-pane", record), rawBlock(record, "evidence"));
+  right.append(panel);
+}
+
+/** Refresh the Evidence table while retaining a valid open investigation. */
+async function loadEvidence() {
+  renderEvidenceGroupControls();
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
-  byId("evidence-summary").textContent = `Total Evidence (including whitelisted): ${compact(payload.full_total)}. `
-    + (grouped
-      ? `Evidence grouped by host and type: ${compact(payload.total)}.`
-      : `Individual durable evidence: ${compact(payload.total)}.`);
-  if (grouped) {
-    renderTable("evidence-table", payload.items, [
-      (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
-      (row) => threat(row.threat_level), (row) => slipsScore(row),
-      (row) => text("code", row.evidence_type),
-      (row) => text("code", row.module), (row) => compact(row.evidence_count),
-      (row) => compact(row.flow_count),
-      (row) => row.alert_count ? `${compact(row.alert_count)} linked` : "none",
-      (row) => whitelistHandling(row),
-    ], openEvidenceGroup);
-  } else {
-    renderTable("evidence-table", payload.items, [
-      (row) => formatTime(row.timestamp), (row) => text("code", row.profile_ip),
-      (row) => threat(row.threat_level), (row) => slipsScore(row),
-      (row) => text("code", row.evidence_type),
-      (row) => text("code", row.module), (row) => whitelistHandling(row),
-      (row) => compact(row.flow_count),
-      (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
-      (row) => row.description || "—",
-    ], openEvidence);
+  const mode = byId("evidence-view").value;
+  if (!byId("evidence-threat").value && !state.evidenceWorkspace.typeFilter) {
+    const counts = new Map([["", payload.total]]);
+    payload.items.forEach((item) => {
+      const level = String(item.threat_level || "info").toLowerCase();
+      counts.set(level, (counts.get(level) || 0) + 1);
+    });
+    state.evidenceWorkspace.threatCounts = counts;
   }
+  renderEvidenceThreatChips();
+  renderEvidenceTable(payload);
+  const loadedRecords = mode === "individual"
+    ? payload.items.length
+    : payload.items.reduce((sum, item) => sum + numeric(item.evidence_count), 0);
+  const recordsLabel = payload.page_size === payload.total
+    ? `${compact(loadedRecords)} records`
+    : `${compact(loadedRecords)} records on this page`;
+  const activeType = byId("evidence-active-type");
+  activeType.hidden = !state.evidenceWorkspace.typeFilter;
+  activeType.textContent = state.evidenceWorkspace.typeFilter
+    ? `${state.evidenceWorkspace.typeFilter} ×` : "";
+  byId("evidence-count").textContent = mode === "individual"
+    ? `${compact(payload.total)} records`
+    : `${compact(payload.total)} groups · ${recordsLabel}`;
+  const selectedRange = byId("evidence-range");
+  byId("evidence-range-badge").textContent = selectedRange.selectedOptions[0]?.textContent || "Full run";
+  byId("evidence-summary").textContent = `${payload.page_size} of ${compact(payload.total)} ${mode === "individual" ? "records" : "groups"}${state.evidenceWorkspace.typeFilter ? ` · ${state.evidenceWorkspace.typeFilter}` : ""}`;
   pager("evidence", "evidence-pager", loadEvidence);
+  const workspace = state.evidenceWorkspace;
+  if (workspace.group) {
+    workspace.group = payload.items.find((item) => item.id === workspace.group.id) || workspace.group;
+    const signature = evidenceGroupQuery().toString();
+    if (workspace.listSignature !== signature || Date.now() - workspace.listLoadedAt > 15000) {
+      loadEvidenceGroupRecords(true).catch(() => {});
+    }
+  } else if (workspace.record && mode === "individual") {
+    renderEvidenceRecordDetail(workspace.record, true);
+  } else renderEvidenceEmptyState();
 }
 
 function renderConfiguration() {
@@ -1187,6 +2547,200 @@ async function loadConfiguration() {
   renderConfiguration();
 }
 
+/** Save a whitelist change through the run-scoped local API.
+ * @param {object} change - Rule value, direction, suppression, and action.
+ * @returns {Promise<object>} The saved rule returned by the server.
+ */
+async function saveWhitelistRule(change) {
+  const response = await fetch("/api/whitelists", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(change),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+  await loadWhitelists();
+  return payload;
+}
+
+/** Offer IP and port values present in an evidence and its linked flows.
+ * @param {object|null} record - Individual evidence, if available.
+ * @param {object[]} groups - Triggering flow groups.
+ * @returns {Map<string, object>} Suggested values and their directions.
+ */
+function whitelistSuggestions(record, groups = []) {
+  const choices = new Map();
+  /** Add one suggested value, merging directions when it appears on both sides.
+   * @param {string} value - Rule value.
+   * @param {string} direction - Traffic side.
+   * @param {string} label - Browser suggestion label.
+   */
+  const add = (value, direction, label) => {
+    if (value === null || value === undefined || value === "" || choices.size >= 200) return;
+    const key = String(value);
+    const existing = choices.get(key);
+    if (existing?.label === "Profile host IP" && direction !== "both") {
+      choices.set(key, { direction, label });
+      return;
+    }
+    choices.set(key, {
+      direction: existing && existing.direction !== direction ? "both" : direction,
+      label: existing?.label || label,
+    });
+  };
+  /** Suggest an IP, its exact port, and the corresponding port-only rule.
+   * @param {string|null} ip - Address on this side, if known.
+   * @param {number|string|null} port - Port on this side, if known.
+   * @param {string} direction - Traffic side.
+   * @param {string} label - Browser suggestion label.
+   */
+  const addSide = (ip, port, direction, label) => {
+    if (ip) add(ip, direction, `${label} IP`);
+    if (port !== null && port !== undefined && /^\d+$/.test(String(port))
+        && Number(port) > 0 && Number(port) <= 65535) {
+      if (ip) add(`${String(ip).includes(":") ? `[${ip}]` : ip}:${port}`,
+        direction, `${label} IP and port`);
+      add(`*:${port}`, direction, `${label} port on any IP`);
+    }
+  };
+  if (record?.profile_ip) add(record.profile_ip, "both", "Profile host IP");
+  addSide(null, record?.src_port, "src", "Evidence source");
+  addSide(null, record?.dst_port, "dst", "Evidence destination");
+  for (const role of ["attacker", "victim"]) {
+    const entity = record?.[role];
+    if (String(entity?.ioc_type || "").toUpperCase() !== "IP") continue;
+    const direction = String(entity.direction || "").toLowerCase().includes("src")
+      ? "src" : String(entity.direction || "").toLowerCase().includes("dst") ? "dst" : "both";
+    const port = direction === "src" ? record.src_port
+      : direction === "dst" ? record.dst_port : null;
+    addSide(entity.value, port, direction, role);
+  }
+  groups.forEach((group) => {
+    [group.network_flow, ...(group.protocol_flows || [])].filter(Boolean).forEach((row) => {
+      const flow = row.flow && typeof row.flow === "object" ? row.flow : row;
+      addSide(flowValue(flow, "saddr", "src_ip", "id.orig_h"),
+        flowValue(flow, "sport", "src_port", "id.orig_p"), "src", "Flow source");
+      addSide(flowValue(flow, "daddr", "dst_ip", "id.resp_h"),
+        flowValue(flow, "dport", "dst_port", "id.resp_p"), "dst", "Flow destination");
+    });
+  });
+  return choices;
+}
+
+/** Fill one whitelist editor with values from an evidence or linked flows.
+ * @param {Element} editor - Editor containing the suggestion list.
+ * @param {object|null} record - Individual evidence, if available.
+ * @param {object[]} groups - Triggering flow groups.
+ */
+function updateWhitelistSuggestions(editor, record, groups = []) {
+  const list = editor.querySelector("datalist");
+  if (!list) return;
+  list.replaceChildren();
+  whitelistSuggestions(record, groups).forEach((choice, value) => {
+    const option = document.createElement("option");
+    option.value = value;
+    option.label = `${choice.label} · ${choice.direction}`;
+    option.dataset.direction = choice.direction;
+    list.append(option);
+  });
+}
+
+/** Build an IP whitelist editor for the tab or an individual evidence.
+ * @param {string} kind - Unique list prefix for tab or evidence.
+ * @param {object|null} record - Individual evidence, if available.
+ * @returns {Element} Editor with its own submit handler.
+ */
+function whitelistEditor(kind, record = null) {
+  const section = document.createElement("section");
+  section.className = "surface whitelist-editor";
+  section.append(
+    text("h3", record ? "Whitelist future matches from this evidence" : "Add an IP or port rule"),
+    text("p", "Choose an IP, IP:port, [IPv6]:port, or *:port. Port-only rules affect that port on any IP. Existing evidence stays in the record.", "muted"),
+  );
+  const form = document.createElement("form");
+  form.className = "whitelist-form";
+  const valueLabel = document.createElement("label");
+  valueLabel.append(text("span", "IP or port"));
+  const value = document.createElement("input");
+  value.type = "text";
+  value.required = true;
+  value.maxLength = 128;
+  value.placeholder = "192.168.1.10:443 or *:443";
+  value.setAttribute("list", `${kind}-whitelist-values`);
+  valueLabel.append(value);
+  const list = document.createElement("datalist");
+  list.id = `${kind}-whitelist-values`;
+  const directionLabel = document.createElement("label");
+  directionLabel.append(text("span", "Applies on"));
+  const direction = document.createElement("select");
+  [["dst", "Destination"], ["src", "Source"], ["both", "Both sides"]].forEach(([key, label]) => {
+    const option = text("option", label);
+    option.value = key;
+    direction.append(option);
+  });
+  directionLabel.append(direction);
+  value.addEventListener("input", () => {
+    const selected = Array.from(list.options).find((option) => option.value === value.value);
+    if (selected) direction.value = selected.dataset.direction;
+  });
+  const ignoreLabel = document.createElement("label");
+  ignoreLabel.append(text("span", "Suppress"));
+  const ignored = document.createElement("select");
+  [["alerts", "Future evidence and alerts"], ["flows", "Flows"],
+    ["both", "Flows, evidence and alerts"]].forEach(([key, label]) => {
+    const option = text("option", label);
+    option.value = key;
+    ignored.append(option);
+  });
+  ignoreLabel.append(ignored);
+  const typeLabel = document.createElement("label");
+  typeLabel.append(text("span", "Evidence type"));
+  const evidenceType = document.createElement("select");
+  evidenceType.className = "whitelist-evidence-type";
+  const allTypes = text("option", "All evidence types");
+  allTypes.value = "";
+  evidenceType.append(allTypes);
+  const typeNames = new Set(state.whitelists?.evidence_types || []);
+  if (record?.evidence_type) typeNames.add(record.evidence_type);
+  typeNames.forEach((name) => {
+    const option = text("option", name);
+    option.value = name;
+    evidenceType.append(option);
+  });
+  if (record?.evidence_type) evidenceType.value = record.evidence_type;
+  evidenceType.addEventListener("change", () => {
+    if (evidenceType.value) ignored.value = "alerts";
+    ignored.disabled = Boolean(evidenceType.value);
+  });
+  ignored.disabled = Boolean(evidenceType.value);
+  typeLabel.append(evidenceType);
+  const save = text("button", "Add rule", "secondary");
+  save.type = "submit";
+  const feedback = text("p", "Rules take effect for future traffic and detections while Slips is running.", "muted whitelist-feedback");
+  form.append(valueLabel, list, directionLabel, ignoreLabel, typeLabel, save);
+  section.append(form, feedback);
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    feedback.textContent = "Saving rule…";
+    try {
+      const result = await saveWhitelistRule({
+        action: "add", value: value.value, direction: direction.value,
+        ignore: ignored.value, evidence_type: evidenceType.value,
+      });
+      feedback.textContent = `${result.value} was added. New matching activity will be suppressed within a few seconds.`;
+      value.value = "";
+      toast("Whitelist rule added");
+    } catch (error) {
+      feedback.textContent = `Could not add rule: ${error.message}`;
+    } finally {
+      save.disabled = false;
+    }
+  });
+  updateWhitelistSuggestions(section, record);
+  return section;
+}
+
 function renderWhitelists() {
   const payload = state.whitelists;
   if (!payload) return;
@@ -1200,8 +2754,29 @@ function renderWhitelists() {
     (row) => text("code", row.value),
     (row) => row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
     (row) => row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
+    (row) => row.evidence_type || "All",
     (row) => row.effect,
     (row) => row.source,
+    (row) => {
+      if (!row.managed) return "—";
+      const remove = text("button", "Remove", "secondary");
+      remove.type = "button";
+      remove.addEventListener("click", async () => {
+        if (!window.confirm(`Remove whitelist rule ${row.value}?`)) return;
+        remove.disabled = true;
+        try {
+          await saveWhitelistRule({
+            action: "remove", value: row.value, direction: row.direction,
+            ignore: row.ignore, evidence_type: row.evidence_type,
+          });
+          toast("Whitelist rule removed");
+        } catch (error) {
+          remove.disabled = false;
+          toast(`Could not remove rule: ${error.message}`);
+        }
+      });
+      return remove;
+    },
   ]);
 }
 
@@ -1209,6 +2784,19 @@ async function loadWhitelists() {
   const payload = await api("whitelists", "/api/whitelists");
   if (!payload) return;
   state.whitelists = payload;
+  document.querySelectorAll(".whitelist-evidence-type").forEach((select) => {
+    const selected = select.value;
+    select.replaceChildren();
+    const all = text("option", "All evidence types");
+    all.value = "";
+    select.append(all);
+    (payload.evidence_types || []).forEach((name) => {
+      const option = text("option", name);
+      option.value = name;
+      select.append(option);
+    });
+    select.value = selected;
+  });
   byId("whitelists-badge").textContent = compact(payload.total);
   byId("whitelists-status").textContent = `${payload.total} local rules were parsed for this run. Evidence marked “Whitelisted” was excluded by Slips before score accumulation.`;
   setSummaryCards([
@@ -1255,7 +2843,7 @@ async function loadFirewall() {
     ["Evidence while blocked", compact(impact.evidence)],
   ], "firewall-impact-summary");
   renderTable("firewall-table", payload.items, [
-    (row) => text("code", row.ip),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
     (row) => row.recovered
       ? `${row.recovery_status || "Recovered"}${row.origin_run ? ` · ${row.origin_run}` : ""}`
@@ -1277,7 +2865,7 @@ async function loadFirewall() {
   byId("firewall-history-count").textContent = `${payload.history_total || 0} block/unblock event${payload.history_total === 1 ? "" : "s"} match this view.`;
   renderTable("firewall-history-table", history, [
     (row) => formatTime(row.timestamp),
-    (row) => text("code", row.ip),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.action, `status ${row.action === "unblocked" ? "ok" : "bad"}`),
     (row) => row.details || "—",
   ], (row) => openHost(row.ip));
@@ -1297,7 +2885,7 @@ function renderArpPoisoning() {
   byId("arp-poisoning-count").textContent = `${hosts.length} shown · ${payload.counts.hosts} hosts`;
   renderTable("arp-poisoning-hosts-table",
     sortLocalRows("arp-poisoning-hosts-table", hosts), [
-      (row) => text("code", row.ip),
+      (row) => hostIdentity(row.ip),
       (row) => text("span", row.status,
         `status ${row.status === "released" ? "ok" : "bad"}`),
       (row) => formatTime(row.poisoned_at),
@@ -1313,7 +2901,7 @@ function renderArpPoisoning() {
   renderTable("arp-poisoning-events-table",
     sortLocalRows("arp-poisoning-events-table", events), [
       (row) => formatTime(row.timestamp),
-      (row) => text("code", row.ip),
+      (row) => hostIdentity(row.ip),
       (row) => text("span", row.action,
         `status ${row.action === "released" ? "ok" : "bad"}`),
       (row) => row.current_tw ?? "—",
@@ -1325,19 +2913,21 @@ function renderArpPoisoning() {
   renderTable("arp-poisoning-evidence-table",
     sortLocalRows("arp-poisoning-evidence-table", evidence), [
       (row) => formatTime(row.timestamp),
-      (row) => text("code", row.profile_ip),
+      (row) => hostIdentity(row.profile_ip),
       (row) => threat(row.threat_level),
       (row) => text("code", row.evidence_type),
       (row) => `${Math.round(numeric(row.confidence) * 100)}%`,
       (row) => compact(row.flow_count),
       (row) => compact(row.alert_count),
-      (row) => row.description || "—",
+      (row) => hostDescription(row),
     ], (row) => openHost(row.profile_ip));
 }
 
 /** Load the bounded, run-scoped ARP poisoner and detector view. */
 async function loadArpPoisoning() {
-  const payload = await api("arpPoisoning", "/api/arp-poisoning");
+  const path = state.hideExcluded
+    ? "/api/arp-poisoning?hide_excluded=1" : "/api/arp-poisoning";
+  const payload = await api("arpPoisoning", path);
   if (!payload) return;
   state.arpPoisoning = payload;
   const counts = payload.counts || {};
@@ -1385,23 +2975,115 @@ function renderP2PTrustChart(history, peers) {
   const legend = byId("p2p-trust-legend");
   legend.replaceChildren();
   peerIds.forEach((peerId, index) => {
-    const item = text(
-      "span",
-      peerIps.get(peerId) || peerId,
-      "p2p-trust-legend-item",
-    );
+    const item = document.createElement("span");
+    item.className = "p2p-trust-legend-item";
     const marker = document.createElement("i");
     marker.className = `peer-trust-key peer-trust-line-${index % 8}`;
-    item.prepend(marker);
+    item.append(marker, peerIps.get(peerId)
+      ? hostIdentity(peerIps.get(peerId)) : text("code", peerId));
     item.title = peerId;
     legend.append(item);
   });
+}
+
+/** Combine retained message telemetry with reports still present in the trust DB. */
+function p2pMessageRows(payload) {
+  const activity = (payload.activity || []).filter((record) => record && typeof record === "object")
+    .map((record) => {
+      const content = record.message && typeof record.message === "object" ? record.message : null;
+      const evaluation = content?.evaluation && typeof content.evaluation === "object"
+        ? content.evaluation : {};
+      return {
+        ...record,
+        message_type: String(record.message_type || "unknown"),
+        direction: String(record.direction || "unknown"),
+        peer: String(record.peer || record.peer_id || ""),
+        target: String(record.target || content?.key || ""),
+        score: evaluation.score !== null && evaluation.score !== undefined
+          && Number.isFinite(Number(evaluation.score)) ? Number(evaluation.score) : null,
+        confidence: evaluation.confidence !== null && evaluation.confidence !== undefined
+          && Number.isFinite(Number(evaluation.confidence)) ? Number(evaluation.confidence) : null,
+      };
+    });
+  const reportKey = (peer, target, timestamp) =>
+    `${peer}\u0000${target}\u0000${Number(timestamp).toFixed(3)}`;
+  const retained = new Set(activity
+    .filter((row) => row.direction === "received" && ["report", "blame"].includes(row.message_type))
+    .map((row) => reportKey(row.peer, row.target, row.report_time || row.timestamp)));
+  for (const report of payload.reports || []) {
+    const key = reportKey(report.peer_id, report.target, report.timestamp);
+    if (retained.has(key)) continue;
+    retained.add(key);
+    activity.push({
+      timestamp: report.timestamp,
+      direction: "received",
+      message_type: "report",
+      peer: report.peer_id,
+      target: report.target,
+      score: report.score,
+      confidence: report.confidence,
+      archived_report: true,
+    });
+  }
+  return activity;
+}
+
+/** Apply the selected report/message filter and render the sortable table. */
+function renderP2PMessages() {
+  const payload = state.p2p || {};
+  const filter = byId("p2p-message-filter").value;
+  const rows = p2pMessageRows(payload);
+  const visible = rows.filter((row) => {
+    if (filter === "all") return true;
+    if (filter === "received-report") return row.direction === "received"
+      && row.message_type === "report";
+    if (filter === "sent-report") return row.direction === "sent"
+      && row.message_type === "report";
+    return row.message_type === filter;
+  });
+  byId("p2p-message-count").textContent = `${visible.length} shown · ${rows.length} retained`;
+  renderTable("p2p-activity-table", sortLocalRows("p2p-activity-table", visible), [
+    (row) => formatTime(row.timestamp),
+    (row) => row.direction,
+    (row) => row.message_type,
+    (row) => hostOrText(row.peer),
+    (row) => hostOrText(row.target),
+    (row) => row.score === null || row.score === undefined ? "—" : numeric(row.score).toFixed(3),
+    (row) => row.confidence === null || row.confidence === undefined
+      ? "—" : numeric(row.confidence).toFixed(3),
+  ], openP2PMessage);
+}
+
+/** Open the complete retained content for a P2P message or report. */
+function openP2PMessage(record) {
+  openDrawer("P2P MESSAGE", `${record.message_type} · ${record.direction}`);
+  const body = byId("drawer-body");
+  const facts = [
+    ["Time", formatTime(record.timestamp)],
+    ["Direction", record.direction],
+    ["Type", record.message_type],
+    ["Peer", record.peer || "—"],
+    ["Target", record.target || "—"],
+    ["Score", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
+    ["Confidence", record.confidence === null || record.confidence === undefined
+      ? "—" : numeric(record.confidence).toFixed(3)],
+  ];
+  if (record.report_time) facts.splice(1, 0, ["Peer report time", formatTime(record.report_time)]);
+  body.append(investigationStats(facts));
+  const content = record.message && typeof record.message === "object"
+    ? record.message : record.archived_report
+      ? { key: record.target, evaluation: { score: record.score, confidence: record.confidence } }
+      : record;
+  body.append(text("h3", record.archived_report ? "Stored report fields" : "Message content"));
+  if (record.archived_report) body.append(text("p", "The original message is no longer retained; these report fields remain in the trust database.", "muted"));
+  body.append(text("pre", JSON.stringify(content, null, 2), "p2p-message-content"));
 }
 
 async function loadP2P() {
   const range = byId("p2p-range").value;
   const payload = await api("p2p", `/api/p2p?range=${encodeURIComponent(range)}`);
   if (!payload) return;
+  state.p2p = payload;
   const counts = payload.counts || {};
   byId("p2p-badge").textContent = compact(counts.connected);
   byId("p2p-disabled").hidden = payload.enabled;
@@ -1428,55 +3110,155 @@ async function loadP2P() {
   renderP2PTrustChart(payload.trust_history || [], payload.peers || []);
   renderTable("p2p-peers-table", payload.peers || [], [
     (row) => text("code", row.peer_id),
-    (row) => text("code", row.ip || "—"),
+    (row) => hostIdentity(row.ip),
     (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
     (row) => row.trust === null ? "—" : numeric(row.trust).toFixed(3),
     (row) => row.reliability === null ? "—" : numeric(row.reliability).toFixed(3),
     (row) => compact(row.reports_received),
     (row) => formatTime(row.last_seen),
   ]);
-  renderTable("p2p-trust-table", (payload.trust_history || []).slice(0, 100), [
-    (row) => formatTime(row.timestamp),
-    (row) => text("code", row.peer_id),
-    (row) => numeric(row.reliability).toFixed(3),
-  ]);
-  renderTable("p2p-reports-table", payload.reports || [], [
-    (row) => formatTime(row.timestamp),
-    (row) => text("code", row.peer_id),
-    (row) => text("code", row.target),
-    (row) => numeric(row.score).toFixed(3),
-    (row) => numeric(row.confidence).toFixed(3),
-  ]);
-  renderTable("p2p-activity-table", payload.activity || [], [
-    (row) => formatTime(row.timestamp),
-    (row) => row.direction || "—",
-    (row) => row.message_type || "unknown",
-    (row) => text("code", row.peer || "—"),
-    (row) => text("code", row.target || "—"),
-  ]);
+  renderP2PMessages();
 }
 
 async function loadHosts() {
-  const payload = await api("hosts", listPath("hosts"));
-  if (!payload) return;
+  const page = state.pages.hosts;
+  const revision = page.revision;
+  const path = listPath("hosts");
+  const payload = await api("hosts", path);
+  if (!payload || page.revision !== revision || listPath("hosts") !== path) return;
+  payload.items.forEach(rememberHostRecord);
+  refreshHostLabels();
+  const retained = page.items.slice(100);
+  const retainedNext = page.next;
   applyPage("hosts", payload);
-  renderTable("hosts-table", payload.items, [
-    (row) => text("code", row.ip),
-    (row) => text("span", row.scope, `status ${row.scope === "public" ? "warn" : "ok"}`),
-    (row) => row.hostname || "—",
-    (row) => contextName(row),
-    (row) => tiFeeds(row),
-    (row) => text("code", row.mac || "—"),
-    (row) => threat(row.max_threat_level),
-    (row) => slipsScore(row),
-    (row) => pastPeakSlipsScore(row),
+  if (retained.length) {
+    const known = new Set(page.items.map((row) => row.ip));
+    retained.forEach((row) => {
+      if (!known.has(row.ip)) page.items.push(row);
+    });
+    page.next = retainedNext;
+  }
+  renderHostFilterChips(payload);
+  renderHostsPage();
+}
+
+/** Append the next server page while keeping the initial Hosts load bounded. */
+async function loadMoreHosts() {
+  const page = state.pages.hosts;
+  if (!page.next || page.loadingMore) return;
+  page.loadingMore = true;
+  const revision = page.revision;
+  const params = new URLSearchParams(listPath("hosts").split("?", 2)[1]);
+  params.set("cursor", page.next);
+  try {
+    const payload = await api("hostsMore", `/api/hosts?${params}`);
+    if (!payload || page.revision !== revision) return;
+    payload.items.forEach(rememberHostRecord);
+    const known = new Set(page.items.map((row) => row.ip));
+    page.items.push(...payload.items.filter((row) => !known.has(row.ip)));
+    page.next = payload.next_cursor;
+    page.total = payload.total;
+    renderHostsPage();
+  } finally {
+    if (page.revision === revision) page.loadingMore = false;
+  }
+}
+
+/** Fetch the next Hosts page when the table scrolls near its end. */
+function maybeLoadMoreHosts() {
+  if (state.activeTab !== "hosts" || state.host || byId("hosts-list-view").hidden) return;
+  const table = document.querySelector(".hosts-list-table");
+  if (table.scrollTop + table.clientHeight >= table.scrollHeight - 250) {
+    loadMoreHosts().catch(() => {});
+  }
+}
+
+/** Show every loaded host with compact score and identity columns. */
+function renderHostsPage() {
+  const page = state.pages.hosts;
+  renderTable("hosts-table", page.items, [
+    (row) => hostIdentity(row.ip),
+    (row) => {
+      const value = document.createElement("span");
+      value.className = "hosts-mac-vendor";
+      value.append(text("code", row.mac || "—"), text("small", row.mac_vendor || ""));
+      return value;
+    },
+    (row) => text("span", row.scope || "—", `hosts-scope-${row.scope || "unknown"}`),
+    (row) => hostPeakScoreCell(row),
     (row) => compact(row.load?.flows),
     (row) => formatBytes(row.load?.bytes),
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
-    (row) => formatTime(row.load?.last_seen || row.observed_at),
+    (row) => formatShortTime(row.load?.last_seen || row.observed_at),
+    (row) => row.hostname || "—",
+    (row) => tiFeeds(row),
+    (row) => slipsScore(row),
   ], (row) => openHost(row.ip, row));
-  pager("hosts", "hosts-pager", loadHosts);
+  document.querySelectorAll("#hosts-table tbody tr").forEach((row) => {
+    ["hostname", "ti", "score"].forEach((key, index) => {
+      const td = row.cells[9 + index];
+      if (td) td.hidden = !document.querySelector(`[data-host-column="${key}"]`).checked;
+    });
+  });
+  const shown = page.items.length;
+  byId("hosts-count").textContent = `${compact(page.total)} hosts · sorted by ${page.sort.replaceAll("_", " ")}`;
+  byId("hosts-list-status").textContent = `${shown} of ${compact(page.total)} hosts loaded${page.next ? " · scroll for more" : ""} · threshold line at ${numeric(page.items[0]?.alert_threshold).toFixed(1)} · current score on hover`;
+  byId("hosts-more").hidden = !page.next;
+  applySortIndicators("hosts");
+}
+
+/** Format inventory timestamps without repeating the date in every row. */
+function formatShortTime(value) {
+  if (!numeric(value)) return "—";
+  return new Date(numeric(value) * 1000).toLocaleTimeString();
+}
+
+/** Draw the peak score and threshold in a single compact table cell. */
+function hostPeakScoreCell(row) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "hosts-peak-cell";
+  const level = String(row.max_threat_level || "info").toLowerCase();
+  const peak = row.peak_alert_score === null || row.peak_alert_score === undefined
+    ? null : Number(row.peak_alert_score);
+  const threshold = numeric(row.alert_threshold) || 5;
+  const label = text("span", level, `hosts-threat-level threat-${level}`);
+  const value = text("strong", peak === null ? "—" : peak.toFixed(2));
+  const track = text("span", "", "hosts-score-track");
+  const fill = text("span", "", `hosts-score-fill threat-${level}`);
+  fill.style.width = `${Math.min(100, Math.max(0, numeric(peak) / Math.max(threshold * 2, 1) * 100))}%`;
+  track.append(fill);
+  wrapper.title = `Current score: ${row.alert_score ?? "unavailable"} · peak: ${peak ?? "unavailable"} · alert threshold: ${threshold}`;
+  wrapper.append(label, value, track);
+  return wrapper;
+}
+
+/** Keep threat and scope chips synchronized with the server filters. */
+function renderHostFilterChips(payload) {
+  const groups = [
+    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["info", "Info"]], "max_threat_level"],
+    ["hosts-scope-chips", "hosts-scope", [["", "All scopes"], ["local", "Local"], ["public", "Public"]], "scope"],
+  ];
+  groups.forEach(([targetId, selectId, options, field]) => {
+    const target = byId(targetId);
+    const select = byId(selectId);
+    target.replaceChildren();
+    options.forEach(([value, label]) => {
+      const completePage = payload.items.length === payload.total;
+      const count = !value || select.value === value ? payload.total
+        : payload.items.filter((row) => String(row[field] || "").toLowerCase() === value).length;
+      const showCount = !value || select.value === value
+        || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value);
+      const button = text("button", `${label}${showCount ? ` ${compact(count)}` : ""}`, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
+      button.type = "button";
+      button.addEventListener("click", () => {
+        select.value = value;
+        resetPage("hosts");
+        loadHosts().catch(() => {});
+      });
+      target.append(button);
+    });
+  });
 }
 
 /** Render cached rDNS or the most recently associated DNS domain. */
@@ -1485,6 +3267,14 @@ function contextName(record) {
   const source = record.dns_name_source || "No cached DNS context";
   const element = text("code", value);
   element.title = source;
+  return element;
+}
+
+/** Show the saved network where a detection occurred. */
+function networkContext(record) {
+  const label = record.network_label || "Unknown network (not recorded)";
+  const element = text("span", label);
+  if (record.network_id) element.title = record.network_id;
   return element;
 }
 
@@ -1537,8 +3327,10 @@ async function inspectHost(ip) {
 
 /** Render an IP as a host-workspace navigation control. */
 function hostLink(ip) {
-  const button = text("button", ip || "Unknown", "ip-link");
+  const button = document.createElement("button");
+  button.className = "ip-link";
   button.type = "button";
+  button.append(hostIdentity(ip));
   button.title = ip ? `Open host workspace for ${ip}` : "No host address available";
   button.disabled = !ip;
   button.addEventListener("click", (event) => {
@@ -1769,7 +3561,7 @@ function evidenceCard(record) {
     text("span", record.evidence_type || "Unknown evidence", "type-chip"),
     threat(level),
   );
-  button.append(heading, text("p", record.description || "No description provided."));
+  button.append(heading, hostDescription(record, "investigation-description"));
   const metadata = document.createElement("div");
   metadata.className = "investigation-card-meta";
   metadata.append(
@@ -1956,13 +3748,14 @@ function protocolFlowCard(record) {
   }
   const context = document.createElement("div");
   context.className = "protocol-context";
-  const timestamp = flowValue(flow, "starttime", "ts");
+  const timestamp = flowValue(flow, "starttime", "ts") ?? record?.event_time;
   context.append(
     text("span", "Alternative protocol flow: " + displayType),
     text("span", "UID: " + (record.uid || flow.uid || "Unknown")),
   );
-  if (timestamp) {
-    const observed = numeric(timestamp) ? formatTime(timestamp) : String(timestamp);
+  if (timestamp !== null && timestamp !== undefined && timestamp !== "") {
+    const observed = Number.isFinite(Number(timestamp))
+      ? formatTime(timestamp) : String(timestamp);
     context.append(text("span", "Observed: " + observed));
   }
   const grid = document.createElement("div");
@@ -1989,6 +3782,9 @@ function flowCard(group) {
   const record = group.network_flow;
   const related = Array.isArray(group.protocol_flows) ? group.protocol_flows : [];
   const flow = record?.flow && typeof record.flow === "object" ? record.flow : {};
+  const timestamp = flowValue(flow, "starttime", "ts") ?? record?.event_time;
+  const observed = timestamp === null || timestamp === undefined || timestamp === ""
+    ? "—" : Number.isFinite(Number(timestamp)) ? formatTime(timestamp) : String(timestamp);
   const card = document.createElement("article");
   card.className = "flow-card flow-group";
   const heading = document.createElement("div");
@@ -2025,6 +3821,7 @@ function flowCard(group) {
     const metrics = document.createElement("div");
     metrics.className = "flow-metrics";
     [
+      ["Observed", observed],
       ["Transport", flowValue(flow, "proto", "protocol") || "—"],
       ["Application", flowValue(flow, "appproto", "app_proto", "service") || "—"],
       ["State", flowValue(flow, "state", "conn_state") || "—"],
@@ -2095,13 +3892,17 @@ async function openEvidence(record) {
     investigationStats([
       ["Detected", formatTime(record.timestamp)],
       ["Profile host", hostLink(record.profile_ip)],
+      ["Network", networkContext(record)],
       ["Threat", threat(record.threat_level)],
       ["Slips score", slipsScore(record), "accent"],
       ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`, "accent"],
     ]),
     investigationHeading("Detection summary", record.module ? `Generated by ${record.module}` : ""),
-    text("p", record.description || "No description provided.", "description-box"),
+    hostDescription(record, "description-box"),
   );
+  if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
+    body.append(detailRow("Reporting peers", reportingPeers(record)));
+  }
   if (record.attacker || record.victim) {
     const entities = document.createElement("div");
     entities.className = "entity-grid";
@@ -2121,6 +3922,8 @@ async function openEvidence(record) {
       ["Alert links", alertCount ? compact(alertCount) : "None"],
     ]),
   );
+  const whitelistSection = whitelistEditor("evidence", record);
+  body.append(whitelistSection);
   if (alertCount) {
     const identifiers = document.createElement("div");
     identifiers.className = "identifier-list";
@@ -2154,7 +3957,17 @@ async function openEvidence(record) {
   try {
     const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
     if (!payload || generation !== state.drawerGeneration) return;
-    if (!payload.items.length) body.append(text("p", "No triggering flow records are available."));
+    updateWhitelistSuggestions(whitelistSection, record, payload.items);
+    if (numeric(payload.recovered_flow_count) > 0) {
+      body.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from current Zeek logs after their SQLite rows were pruned.`, "muted"));
+    }
+    if (!payload.items.length) {
+      body.append(text("p", numeric(payload.unavailable_flow_count) > 0
+        ? "The evidence still has linked flow IDs, but their raw records are unavailable. They may have expired under retention or were never stored."
+        : "No triggering flow records are available."));
+    } else if (numeric(payload.unavailable_flow_count) > 0) {
+      body.append(text("p", `${compact(payload.unavailable_flow_count)} linked flow record(s) are unavailable; they may have expired under retention.`, "muted"));
+    }
     payload.items.forEach((flow) => body.append(flowCard(flow)));
   } catch (_) {
     if (generation !== state.drawerGeneration) return;
@@ -2167,7 +3980,7 @@ async function openEvidence(record) {
 }
 
 async function openAlert(record) {
-  const generation = openDrawer("ALERT", `Alert on ${record.ip_alerted}`);
+  const generation = openDrawer("ALERT", "Alert details");
   const body = byId("drawer-body");
   if (record.evidence === undefined) {
     body.append(text("p", "Loading alert evidence…", "muted"));
@@ -2194,6 +4007,7 @@ async function openAlert(record) {
     investigationStats([
       ["Created", formatTime(record.alert_time)],
       ["Affected host", hostLink(record.ip_alerted)],
+      ["Network", networkContext(record)],
       ["Highest threat", threat(record.threat_level)],
       ["Slips score", slipsScore(record), "danger"],
       ["Evidence", compact(record.evidence_count), "accent"],
@@ -2217,144 +4031,389 @@ async function openAlert(record) {
   );
 }
 
-async function openAlertGroup(group) {
-  const generation = openDrawer("HOST ALERTS", `Alerts for ${group.ip_alerted}`);
-  const body = byId("drawer-body");
-  body.append(
-    investigationStats([
-      ["Host", hostLink(group.ip_alerted)],
-      ["Alerts", compact(group.alert_count), "danger"],
-      ["Evidence links", compact(group.evidence_count), "accent"],
-      ["Highest threat", threat(group.threat_level)],
-    ]),
-    investigationHeading("Alert timeline", "Newest matching alerts first; select one for evidence"),
-  );
-  const params = rangeQuery("alerts");
-  params.set("profile", group.ip_alerted);
-  params.set("limit", "100");
-  params.set("sort", "time");
-  params.set("order", "desc");
-  params.set("details", "false");
-  const level = byId("alerts-threat").value;
-  const search = byId("alerts-search").value.trim();
-  if (level) params.set("threat", level);
-  if (search) params.set("search", search);
-  try {
-    const payload = await api("alertGroup", `/api/alerts?${params}`);
-    if (!payload || generation !== state.drawerGeneration) return;
-    const list = document.createElement("div");
-    list.className = "investigation-list";
-    payload.items.forEach((item) => list.append(alertCard(item)));
-    body.append(list);
-    if (!payload.items.length) body.append(text("p", "No matching alerts.", "muted"));
-    if (payload.total > payload.page_size) {
-      body.append(text("p", `Showing newest ${payload.page_size} of ${compact(payload.total)} matching alerts.`, "muted"));
-    }
-  } catch (_) {
-    if (generation !== state.drawerGeneration) return;
-    body.append(text("p", "Individual alerts could not be loaded.", "muted"));
-  }
-}
-
-async function openEvidenceGroup(group) {
-  const generation = openDrawer("HOST EVIDENCE", group.evidence_type);
-  const body = byId("drawer-body");
-  body.append(
-    investigationStats([
-      ["Host", hostLink(group.profile_ip)],
-      ["Evidence", compact(group.evidence_count), "accent"],
-      ["Triggering flows", compact(group.flow_count)],
-      ["Alert links", compact(group.alert_count)],
-      ["Highest threat", threat(group.threat_level)],
-      ["Module", group.module || "—"],
-    ]),
-    investigationHeading("Evidence timeline", "Newest matching evidence first; select one for flows"),
-  );
-  const params = rangeQuery("evidence");
-  params.set("profile", group.profile_ip);
-  params.set("type", group.evidence_type);
-  params.set("limit", "100");
-  params.set("sort", "time");
-  params.set("order", "desc");
-  const level = byId("evidence-threat").value;
-  const association = byId("evidence-link").value;
-  const search = byId("evidence-search").value.trim();
-  if (level) params.set("threat", level);
-  if (association) params.set("association", association);
-  if (search) params.set("search", search);
-  try {
-    const payload = await api("evidenceGroup", `/api/evidence?${params}`);
-    if (!payload || generation !== state.drawerGeneration) return;
-    const list = document.createElement("div");
-    list.className = "investigation-list";
-    payload.items.forEach((item) => list.append(evidenceCard(item)));
-    body.append(list);
-    if (!payload.items.length) body.append(text("p", "No matching evidence.", "muted"));
-    if (payload.total > payload.page_size) {
-      body.append(text("p", `Showing newest ${payload.page_size} of ${compact(payload.total)} matching records.`, "muted"));
-    }
-  } catch (_) {
-    if (generation !== state.drawerGeneration) return;
-    body.append(text("p", "Individual evidence could not be loaded.", "muted"));
-  }
-}
-
 function hostRangeParams() {
   const params = rangeQuery("host");
   return params;
 }
 
+/**
+ * Show host clues saved across runs, separated by local network.
+ * @param {Object[]} profiles Permanent host records for this IP.
+ * @param {HTMLElement|null} currentEditorTarget Editor location in the identity card.
+ */
+function renderPermanentProfiles(profiles, currentEditorTarget = null) {
+  const container = byId("host-permanent-profiles");
+  const profileIp = profiles?.[0]?.ip || "";
+  if (container.dataset.profileIp === profileIp
+      && document.activeElement?.closest(".profile-network-name-form, .host-annotation-form")
+      && (container.contains(document.activeElement)
+        || currentEditorTarget?.contains(document.activeElement))) return;
+  const openSections = new Map();
+  if (container.dataset.profileIp === profileIp) {
+    container.querySelectorAll("details.host-profile-facts").forEach((details) => {
+      openSections.set(details.dataset.key, details.open);
+    });
+  }
+  container.replaceChildren();
+  container.dataset.profileIp = profileIp;
+  if (!profiles?.length) {
+    container.append(text("p", "No permanent identity clues recorded yet.", "muted"));
+    return;
+  }
+  const labels = {
+    hostname: "Names", reverse_dns: "Reverse DNS", dns_name: "DNS names",
+    mdns_name: "Multicast DNS names", sni: "HTTPS SNI",
+    http_host: "HTTP hosts", url: "Requested URLs", mac: "MAC addresses",
+    asn: "ASN", country: "Country",
+    threat_feed: "Threat feed appearances",
+  };
+  profiles.forEach((profile, index) => {
+    const group = document.createElement("section");
+    group.className = "permanent-host-profile";
+    const title = text("strong", `Network: ${profile.network_label || profile.network_id}`);
+    group.append(title);
+    group.append(text("small", `First seen ${formatTime(profile.first_seen)} · Last seen ${formatTime(profile.last_seen)}`, "muted"));
+    const annotationKey = JSON.stringify([profile.network_id, profile.ip]);
+    const annotation = document.createElement("form");
+    annotation.className = "host-annotation-form";
+    annotation.hidden = !state.hostAnnotationEditorOpen.has(annotationKey);
+    const nameLabel = text("label", "Custom name");
+    const nameInput = document.createElement("input");
+    nameInput.type = "text";
+    nameInput.maxLength = 80;
+    nameInput.placeholder = "e.g. Sebastian's iPad";
+    nameInput.value = state.hostAnnotationDrafts.get(annotationKey)?.name ?? profile.user_name ?? "";
+    const noteLabel = text("label", "Note");
+    const noteInput = document.createElement("textarea");
+    noteInput.maxLength = 1000;
+    noteInput.rows = 3;
+    noteInput.placeholder = "How you recognize this host";
+    noteInput.value = state.hostAnnotationDrafts.get(annotationKey)?.note ?? profile.user_note ?? "";
+    const rememberDraft = () => state.hostAnnotationDrafts.set(annotationKey, {
+      name: nameInput.value, note: noteInput.value,
+    });
+    nameInput.addEventListener("input", rememberDraft);
+    noteInput.addEventListener("input", rememberDraft);
+    nameLabel.append(nameInput);
+    noteLabel.append(noteInput);
+    const annotationSave = text("button", "Save identification", "secondary");
+    annotationSave.type = "submit";
+    const annotationFeedback = text("small", "", "network-name-feedback");
+    annotation.append(nameLabel, noteLabel, annotationSave, annotationFeedback);
+    const annotationEdit = text("button", profile.user_name || profile.user_note
+      ? "Edit name and note" : "Name this host", "secondary profile-network-name-action");
+    annotationEdit.type = "button";
+    annotationEdit.addEventListener("click", () => {
+      annotation.hidden = !annotation.hidden;
+      if (annotation.hidden) state.hostAnnotationEditorOpen.delete(annotationKey);
+      else {
+        state.hostAnnotationEditorOpen.add(annotationKey);
+        nameInput.focus();
+      }
+    });
+    annotation.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      annotationSave.disabled = true;
+      annotationFeedback.textContent = "Saving…";
+      try {
+        const response = await fetch("/api/host-annotation", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip: profile.ip, network_id: profile.network_id,
+            name: nameInput.value, note: noteInput.value,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+        profile.user_name = payload.name;
+        profile.user_note = payload.note;
+        state.hostAnnotationDrafts.delete(annotationKey);
+        state.hostAnnotationEditorOpen.delete(annotationKey);
+        if (!state.host || state.host.ip !== profile.ip) return;
+        const currentProfile = state.host.permanent_profiles?.find(
+          (item) => item.network_id === profile.network_id,
+        );
+        if (currentProfile) {
+          currentProfile.user_name = payload.name;
+          currentProfile.user_note = payload.note;
+        }
+        if (state.host?.permanent_profiles?.[0]?.network_id === profile.network_id) {
+          state.host.user_name = payload.name;
+          state.host.user_note = payload.note;
+          state.hostNames.delete(profile.ip);
+          rememberHostRecord(state.host);
+          if (!payload.name) {
+            state.pendingHostNames.add(profile.ip);
+            loadHostNames();
+          }
+          refreshHostLabels();
+        }
+        annotation.hidden = true;
+        annotationFeedback.textContent = "";
+        document.activeElement?.blur();
+        renderHostCards(state.host);
+        toast(payload.name || payload.note ? "Host identification saved." : "Host identification removed.");
+      } catch (error) {
+        annotationFeedback.textContent = error.message;
+        annotationSave.disabled = false;
+      }
+    });
+    if (profile.user_name) group.append(text("p", `Custom name: ${profile.user_name}`, "host-user-name"));
+    if (profile.user_note) group.append(text("p", profile.user_note, "host-user-note"));
+    if (index === 0 && currentEditorTarget) {
+      currentEditorTarget.append(annotationEdit, annotation);
+    } else {
+      group.append(annotationEdit, annotation);
+    }
+    const form = document.createElement("form");
+    form.className = "network-name-form profile-network-name-form";
+    form.hidden = !state.networkNameEditorOpen.has(profile.network_id);
+    const label = text("label", "Network name");
+    const input = document.createElement("input");
+    input.type = "text";
+    input.maxLength = 80;
+    input.placeholder = "Name this network";
+    input.autocomplete = "off";
+    input.value = state.networkNameDrafts.get(profile.network_id)
+      ?? profile.network_name ?? "";
+    input.disabled = profile.network_name === undefined;
+    input.addEventListener("input", () => {
+      state.networkNameDrafts.set(profile.network_id, input.value);
+    });
+    label.append(input);
+    const save = text("button", "Save name", "secondary");
+    save.type = "submit";
+    save.disabled = input.disabled;
+    form.append(label, save);
+    const feedback = text("small", "", "network-name-feedback");
+    form.append(feedback);
+    const edit = text("button", profile.network_name ? "Edit name" : "Name network", "secondary profile-network-name-action");
+    edit.type = "button";
+    edit.disabled = input.disabled;
+    edit.addEventListener("click", () => {
+      form.hidden = !form.hidden;
+      if (form.hidden) state.networkNameEditorOpen.delete(profile.network_id);
+      else {
+        state.networkNameEditorOpen.add(profile.network_id);
+        input.focus();
+      }
+    });
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      save.disabled = true;
+      feedback.textContent = "Saving…";
+      try {
+        const response = await fetch("/api/network-name", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ip: profile.ip,
+            network_id: profile.network_id,
+            name: input.value,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+        profile.network_name = payload.name;
+        profile.network_label = payload.name || profile.default_network_label;
+        title.textContent = profile.network_label;
+        renderHostNetworkClues(state.host?.permanent_profiles || []);
+        feedback.textContent = "";
+        state.networkNameDrafts.delete(profile.network_id);
+        state.networkNameEditorOpen.delete(profile.network_id);
+        form.hidden = true;
+        edit.textContent = payload.name ? "Edit name" : "Name network";
+        document.activeElement?.blur();
+        toast(payload.name ? "Network name saved." : "Network name removed.");
+      } catch (error) {
+        feedback.textContent = error.message;
+        save.disabled = false;
+      }
+    });
+    group.append(edit, form);
+    const byKind = new Map();
+    (profile.facts || []).forEach((fact) => {
+      if (fact.kind === "country" && ["private", "unknown"].includes(String(fact.value).trim().toLowerCase())) return;
+      if (!byKind.has(fact.kind)) byKind.set(fact.kind, []);
+      byKind.get(fact.kind).push(fact);
+    });
+    Object.entries(labels).forEach(([kind, label]) => {
+      const values = byKind.get(kind) || [];
+      if (!values.length) return;
+      const details = document.createElement("details");
+      details.className = "host-profile-facts";
+      details.dataset.key = JSON.stringify([profile.network_id, kind]);
+      details.open = openSections.has(details.dataset.key)
+        ? openSections.get(details.dataset.key)
+        : ["hostname", "mdns_name", "dns_name"].includes(kind);
+      const summary = document.createElement("summary");
+      summary.append(text("span", label), text("span", compact(values.length), "count-chip"));
+      details.append(summary);
+      const list = document.createElement("ul");
+      values.forEach((fact) => {
+        const item = document.createElement("li");
+        item.append(text("span", fact.value, "host-profile-value"));
+        item.append(text("small", `Seen ${compact(fact.observations)}× · ${formatTime(fact.first_seen)} to ${formatTime(fact.last_seen)}`, "muted"));
+        list.append(item);
+      });
+      details.append(list);
+      group.append(details);
+    });
+    container.append(group);
+  });
+}
+
+/** Summarize saved mDNS names and networks beside the selected host's traffic. */
+function renderHostNetworkClues(profiles) {
+  const mdns = byId("host-mdns-names");
+  const networks = byId("host-networks-seen");
+  mdns.replaceChildren();
+  networks.replaceChildren();
+  const names = new Map();
+  profiles.forEach((profile) => (profile.facts || []).forEach((fact) => {
+    if (fact.kind !== "mdns_name" || !fact.value) return;
+    const previous = names.get(fact.value) || { observations: 0, last_seen: 0 };
+    names.set(fact.value, {
+      observations: previous.observations + numeric(fact.observations),
+      last_seen: Math.max(previous.last_seen, numeric(fact.last_seen)),
+    });
+  }));
+  const sortedNames = [...names].sort((left, right) => right[1].last_seen - left[1].last_seen);
+  sortedNames.slice(0, 4).forEach(([name, details]) => {
+    const row = document.createElement("div");
+    row.className = "host-clue-row";
+    row.append(text("code", name), text("small", `${compact(details.observations)}× · ${formatShortTime(details.last_seen)}`));
+    mdns.append(row);
+  });
+  if (!sortedNames.length) mdns.append(text("p", "No mDNS names recorded.", "muted"));
+  if (sortedNames.length > 4) mdns.append(text("small", `+ ${sortedNames.length - 4} more saved names`, "muted"));
+  profiles.slice(0, 4).forEach((profile) => {
+    const row = document.createElement("div");
+    row.className = "host-clue-row";
+    row.append(text("strong", profile.network_label || profile.network_id || "Unidentified network"),
+      text("small", `${new Date(numeric(profile.first_seen) * 1000).toLocaleDateString()} – ${new Date(numeric(profile.last_seen) * 1000).toLocaleDateString()}`));
+    networks.append(row);
+  });
+  if (!profiles.length) networks.append(text("p", "No permanent network history recorded.", "muted"));
+  if (profiles.length > 4) networks.append(text("small", `+ ${profiles.length - 4} more networks`, "muted"));
+}
+
 function renderHostCards(host) {
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
-    ["Flows", exactAggregates ? compact(host.load?.flows) : "—"],
-    ["Inbound flows", exactAggregates ? compact(host.load?.inbound_flows) : "—"],
-    ["Outbound flows", exactAggregates ? compact(host.load?.outbound_flows) : "—"],
-    ["Traffic", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
-    ["Inbound bytes", exactAggregates ? formatBytes(host.load?.inbound_bytes) : "—"],
-    ["Outbound bytes", exactAggregates ? formatBytes(host.load?.outbound_bytes) : "—"],
-    ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
-    ["Current Slips score", slipsScore(host)],
-    ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
     ["Alerts", exactAggregates ? compact(host.alert_count) : "—"],
+    ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
+    ["Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
+    ["Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
+    ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
+    ["Seen on", `${compact(host.permanent_profiles?.length || 0)} networks`],
   ], "host-summary");
+  const summaryCards = byId("host-summary").children;
+  summaryCards[2].append(text("small", `${compact(host.load?.inbound_flows)} in / ${compact(host.load?.outbound_flows)} out`));
+  summaryCards[3].append(text("small", `${formatBytes(host.load?.inbound_bytes)} in / ${formatBytes(host.load?.outbound_bytes)} out`));
+  byId("host-flows-tab-count").textContent = "";
+  byId("host-alerts-tab-count").textContent = "";
+  byId("host-evidence-tab-count").textContent = "";
+  const scorePill = byId("host-score-pill");
+  scorePill.replaceChildren(text("span", "Score "), slipsScore(host));
   const identity = byId("host-identity");
-  identity.replaceChildren(
-    detailRow("Addresses", host.all_ips?.join(", ") || host.ip),
-    detailRow("Hostname", host.hostname || "Unknown"),
-    detailRow("MAC", host.mac || "Unknown"),
-    detailRow("Vendor", host.mac_vendor || "Unknown"),
-    detailRow("Scope", host.scope || "Unknown"),
-    detailRow("Status", host.live ? "Current Redis metadata" : "Last-known persisted metadata"),
-    detailRow("DNS", renderDnsDetails(host.dns)),
-  );
+  const editingCurrentHost = identity.dataset.profileIp === host.ip
+    && identity.contains(document.activeElement)
+    && document.activeElement.closest(".host-annotation-form");
+  if (!editingCurrentHost) {
+    const annotationEntry = document.createElement("div");
+    annotationEntry.id = "host-annotation-entry";
+    const displayedName = text("span", "—");
+    displayedName.id = "host-displayed-name";
+    identity.replaceChildren(
+      detailRow("Name", host.user_name || displayedName),
+      detailRow("Note", host.user_note || "—"),
+      ...(host.permanent_profiles?.length
+        ? [detailRow("Edit identification", annotationEntry)] : []),
+      detailRow("Hostname", host.hostname || "Unknown"),
+      detailRow("MAC", host.mac || "Unknown"),
+      detailRow("Vendor", host.mac_vendor || "Unknown"),
+      detailRow("DNS", host.dns?.domains?.[0] || "No A/AAAA record"),
+    );
+    identity.dataset.profileIp = host.ip;
+    refreshHostLabels();
+  }
+  renderPermanentProfiles(host.permanent_profiles || [], byId("host-annotation-entry"));
+  renderHostNetworkClues(host.permanent_profiles || []);
+  byId("host-dns-details").replaceChildren(renderDnsDetails(host.dns));
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
     : "No cached threat-intelligence data.";
-  byId("host-alerts-title").textContent = exactAggregates
-    ? "Related alerts · " + host.alert_count
-    : "Related alerts · exact profile IP only";
-  const alerts = byId("host-alerts");
-  alerts.replaceChildren();
-  const exactAlerts = host.alerts?.filter((item) => item.ip_alerted === host.ip) || [];
-  exactAlerts.slice(0, 100).forEach((item) => {
+}
+
+/** Show the selected host's alerts, evidence, or flows and load that page. */
+function showHostActivity(name) {
+  state.hostActivity = name;
+  ["alerts", "evidence", "flows"].forEach((item) => {
+    byId(`host-${item}-panel`).hidden = item !== name;
+    const tab = document.querySelector(`[data-host-activity="${item}"]`);
+    tab.classList.toggle("active", item === name);
+    tab.setAttribute("aria-selected", String(item === name));
+  });
+  byId("host-evidence-search").hidden = name !== "evidence";
+  byId("host-flow-search").hidden = name !== "flows";
+  if (!state.host) return Promise.resolve();
+  return ({ alerts: loadHostAlerts, evidence: loadHostEvidence, flows: loadHostFlows })[name]().catch(() => {});
+}
+
+/** Filter the currently loaded flow rows without requesting a new server page. */
+function filterVisibleHostFlows() {
+  const query = byId("host-flow-search").value.trim().toLowerCase();
+  document.querySelectorAll("#host-flows-table tbody tr").forEach((row) => {
+    row.hidden = Boolean(query) && !row.textContent.toLowerCase().includes(query);
+  });
+}
+
+/** Load one bounded alert page for the exact host IP and selected time range. */
+async function loadHostAlerts() {
+  if (!state.host) return;
+  const ip = state.host.ip;
+  const page = state.pages.hostAlerts;
+  const params = hostRangeParams();
+  params.set("profile", ip);
+  params.set("limit", "50");
+  params.set("details", "false");
+  params.set("summary", "1");
+  if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
+  const payload = await api("hostAlerts", `/api/alerts?${params}`);
+  if (!payload || state.host?.ip !== ip) return;
+  const alerts = payload.items.filter((item) => item.ip_alerted === ip);
+  page.items = alerts;
+  page.total = payload.total;
+  page.next = payload.next_cursor;
+  byId("host-alerts-tab-count").textContent = compact(payload.total);
+  byId("host-alerts-title").textContent = "Alerts for this host";
+  byId("host-alert-count").textContent = `${alerts.length} shown · ${compact(payload.total)} alerts in this range`;
+  const list = byId("host-alerts");
+  list.replaceChildren();
+  alerts.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "host-alert-chip";
+    button.classList.add(String(item.threat_level || "info").toLowerCase());
     button.append(
-      threat(item.threat_level),
-      text("span", item.label || "Unlabeled alert", "host-alert-label"),
       text("time", formatTime(item.alert_time)),
-      text("span", compact(item.evidence_count) + " evidence", "count-chip"),
+      threat(item.threat_level),
+      text("strong", item.evidence_type?.replaceAll("_", " ") || item.label || "Alert", "host-alert-label"),
+      text("span", `${compact(item.evidence_count)} evidence`, "count-chip"),
     );
+    if (item.summary) button.append(text("small", item.summary, "host-alert-summary"));
     button.addEventListener("click", () => openAlert(item));
-    alerts.append(button);
+    list.append(button);
   });
-  if (!exactAlerts.length) alerts.append(text("p", "No related alerts.", "muted"));
+  if (!alerts.length) list.append(text("p", "No alerts for this host in the selected range.", "muted"));
+  pager("hostAlerts", "host-alerts-pager", loadHostAlerts);
 }
 
 async function loadHostEvidence() {
   if (!state.host) return;
+  const ip = state.host.ip;
   const page = state.pages["host-evidence"];
   const params = hostRangeParams();
   params.set("limit", "100");
@@ -2363,14 +4422,16 @@ async function loadHostEvidence() {
   const search = byId("host-evidence-search").value.trim();
   if (search) params.set("search", search);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  params.set("profile", state.host.ip);
+  params.set("profile", ip);
   params.set("details", "false");
+  if (state.hideExcluded) params.set("hide_excluded", "1");
   const path = "/api/evidence?" + params;
   const payload = await api("hostEvidence", path);
-  if (!payload) return;
+  if (!payload || state.host?.ip !== ip) return;
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
+  byId("host-evidence-tab-count").textContent = compact(payload.total);
   byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
   byId("host-evidence-count").textContent =
     payload.page_size + " shown · " + compact(payload.total) + " evidence records" +
@@ -2379,13 +4440,14 @@ async function loadHostEvidence() {
     (row) => formatTime(row.timestamp),
     (row) => threat(row.threat_level),
     (row) => text("code", row.evidence_type),
+    (row) => reportingPeers(row),
     (row) => text("code", row.module || "—"),
     (row) => whitelistHandling(row),
     (row) => Math.round(numeric(row.confidence) * 100) + "%",
     (row) => compact(row.flow_count),
     (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
     (row) => {
-      const description = text("span", row.description || "—", "host-evidence-description");
+      const description = hostDescription(row, "host-evidence-description");
       description.title = row.description || "";
       return description;
     },
@@ -2396,19 +4458,22 @@ async function loadHostEvidence() {
 
 async function loadHostFlows() {
   if (!state.host) return;
+  const ip = state.host.ip;
   const page = state.pages.hostFlows;
   const params = hostRangeParams();
   params.set("limit", byId("host-flow-limit").value);
+  if (state.hideExcluded) params.set("hide_excluded", "1");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  const path = `/api/hosts/${escapePath(state.host.ip)}/flows?${params}`;
+  const path = `/api/hosts/${escapePath(ip)}/flows?${params}`;
   const payload = await api("hostFlows", path);
-  if (!payload) return;
+  if (!payload || state.host?.ip !== ip) return;
   const exactItems = payload.items.filter((row) =>
-    row.src_ip === state.host.ip || row.dst_ip === state.host.ip);
+    row.src_ip === ip || row.dst_ip === ip);
   const discarded = payload.items.length - exactItems.length;
   page.items = exactItems;
   page.total = discarded ? exactItems.length : payload.total;
   page.next = payload.next_cursor;
+  byId("host-flows-tab-count").textContent = compact(page.total);
   byId("host-flow-count").textContent =
     `${exactItems.length} shown · exact profile IP only` +
     (discarded ? ` · ${discarded} stale MAC-alias rows discarded` :
@@ -2416,7 +4481,7 @@ async function loadHostFlows() {
   renderTable("host-flows-table", exactItems, [
     (row) => formatTime(row.event_time),
     (row) => text("span", row.direction, `status ${row.direction === "inbound" ? "ok" : "warn"}`),
-    (row) => text("code", row.peer),
+    (row) => hostIdentity(row.peer),
     (row) => [row.proto, row.app_proto].filter(Boolean).join(" / "),
     (row) => `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`,
     (row) => row.state || "—",
@@ -2428,13 +4493,14 @@ async function loadHostFlows() {
     openDrawer("FLOW", row.uid);
     byId("drawer-body").append(
       detailRow("Direction", row.direction),
-      detailRow("Peer", row.peer),
+      detailRow("Peer", hostIdentity(row.peer)),
       detailRow("Source", hostLink(row.src_ip)),
       detailRow("Destination", hostLink(row.dst_ip)),
       detailRow("Ports", `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`),
       rawBlock(row.raw, "flow"),
     );
   });
+  filterVisibleHostFlows();
   pager("hostFlows", "host-flows-pager", loadHostFlows);
 }
 
@@ -2516,6 +4582,7 @@ async function loadLegacyScoreHistory(params) {
     query.set("sort", "time");
     query.set("order", "desc");
     query.set("details", "false");
+    if (state.hideExcluded) query.set("hide_excluded", "1");
     if (cursor) query.set("cursor", cursor);
     const response = await fetch(`/api/evidence?${query}`, { cache: "no-store" });
     const page = await response.json().catch(() => ({}));
@@ -2545,7 +4612,7 @@ async function loadLegacyScoreHistory(params) {
     point.reset_reason = previous && point.timewindow !== previous.timewindow
       ? "time window changed"
       : previous && point.score < previous.score
-        ? "score reset after an alert"
+        ? "score decreased (possible reset)"
         : "";
     if (point.reset_reason) resetCount += 1;
     previous = point;
@@ -2588,9 +4655,47 @@ async function loadHostScoreHistory() {
   }
 }
 
+/** Explain why an address seen in evidence has no Slips host profile.
+ * @param {string} ip - Address selected from evidence or traffic.
+ */
+async function showUnprofiledHost(ip) {
+  let direction = "";
+  try {
+    let config = state.configuration;
+    if (!config) {
+      const response = await fetch("/api/configuration", { cache: "no-store" });
+      if (response.ok) {
+        config = await response.json();
+        applyRunIdentity(config.run_identity);
+        state.configuration = config;
+      }
+    }
+    direction = config?.sections?.find((section) => section.key === "parameters")
+      ?.settings?.find((setting) => setting.key === "analysis_direction")?.value || "";
+  } catch (error) {
+    // The profile explanation still works if the captured config is unavailable.
+  }
+  const explanation = direction === "out"
+    ? "This run analyzes outgoing traffic only (analysis_direction: out). Slips profiles the source IP; a destination can appear in evidence or a flow without getting its own Host profile."
+    : "This IP appears in evidence or traffic, but Slips did not create a Host profile for it in this run. Host workspaces show only profiled IPs.";
+  state.host = null;
+  byId("hosts-list-view").hidden = true;
+  byId("host-detail-view").hidden = false;
+  byId("host-detail-view").classList.add("unprofiled");
+  byId("host-title").replaceChildren(hostIdentity(ip));
+  byId("host-subtitle").textContent = "No Slips profile in this run";
+  byId("host-unprofiled-reason").textContent = explanation;
+  byId("host-unprofiled").hidden = false;
+  clearError();
+}
+
 async function openHost(ip, summary = null) {
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}`);
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}`, true, true);
   if (!detail) return;
+  if (detail.not_found) {
+    await showUnprofiledHost(ip);
+    return;
+  }
   const detailHasScore = detail.alert_score !== null
     && detail.alert_score !== undefined
     && Number.isFinite(Number(detail.alert_score))
@@ -2620,48 +4725,89 @@ async function openHost(ip, summary = null) {
   host.exact_aggregates = staleAliases.length === 0;
   host.ignored_aliases = staleAliases;
   host.all_ips = [ip];
+  ["hostAlerts", "hostEvidence", "hostFlows", "hostSummary"].forEach((key) => {
+    state.requests.get(key)?.abort();
+  });
   state.host = host;
+  rememberHostRecord(host);
+  refreshHostLabels();
+  resetPage("hostAlerts");
   resetPage("hostFlows");
   resetPage("host-evidence");
+  byId("host-alerts").replaceChildren(text("p", "Loading alerts…", "muted"));
+  byId("host-evidence-table").querySelector("tbody").replaceChildren();
+  byId("host-flows-table").querySelector("tbody").replaceChildren();
+  ["host-alert-count", "host-evidence-count", "host-flow-count"].forEach((id) => {
+    byId(id).textContent = "";
+  });
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
-  byId("host-title").textContent = host.ip;
+  byId("host-detail-view").classList.remove("unprofiled");
+  byId("host-unprofiled").hidden = true;
+  byId("host-title").replaceChildren(hostIdentity(host.ip));
   byId("host-subtitle").textContent =
-    `${host.hostname || "Unnamed host"} · ${host.scope} · ${host.live ? "current" : "last known"}`;
+    `${host.scope || "unknown scope"} · ${host.permanent_profiles?.[0]?.network_label || "network not recorded"} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"} · ${host.live ? "current" : "last-known metadata"}`;
   renderHostCards(host);
+  const hasExactAlerts = host.alerts?.some((alert) => alert.ip_alerted === ip);
+  const initialActivity = hasExactAlerts || (host.exact_aggregates !== false && host.alert_count)
+    ? "alerts" : host.evidence_count ? "evidence" : "flows";
   await Promise.all([
-    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+    showHostActivity(initialActivity), loadHostSummary(), loadHostScoreHistory(),
   ]);
 }
 
 async function refreshHostWorkspace() {
   if (!state.host) return;
-  const detail = await api("host", `/api/hosts/${escapePath(state.host.ip)}`);
-  if (!detail) return;
+  const ip = state.host.ip;
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}`);
+  if (!detail || !state.host || state.host.ip !== ip) return;
   const staleAliases = Array.isArray(detail.all_ips)
-    ? detail.all_ips.filter((address) => address !== state.host.ip)
+    ? detail.all_ips.filter((address) => address !== ip)
     : [];
   const host = {
     ...state.host,
     ...detail,
-    all_ips: [state.host.ip],
+    permanent_profiles: detail.permanent_profiles?.length
+      ? detail.permanent_profiles
+      : state.host.permanent_profiles || [],
+    all_ips: [ip],
     exact_aggregates: staleAliases.length === 0,
     ignored_aliases: staleAliases,
   };
   state.host = host;
+  rememberHostRecord(host);
+  refreshHostLabels();
   renderHostCards(host);
   await Promise.all([
-    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+    ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
+      flows: loadHostFlows })[state.hostActivity](),
+    loadHostSummary(), loadHostScoreHistory(),
   ]);
 }
 
 function closeHost() {
   state.host = null;
+  state.requests.get("hostAlerts")?.abort();
   state.requests.get("hostFlows")?.abort();
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
   byId("host-detail-view").hidden = true;
+  byId("host-detail-view").classList.remove("unprofiled");
+  byId("host-unprofiled").hidden = true;
   byId("hosts-list-view").hidden = false;
+  updateHostViewportHeight();
+}
+
+/** Match the Hosts workspace to the visible space below the shared navigation. */
+function updateHostViewportHeight() {
+  const bottom = byId("hosts").getBoundingClientRect().top;
+  byId("hosts").style.setProperty("--hosts-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
+}
+
+/** Keep Metadata's cards and module table within the visible browser height. */
+function updateMetadataViewportHeight() {
+  const bottom = byId("metadata").getBoundingClientRect().top;
+  byId("metadata").style.setProperty("--metadata-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
 function tabLoader(name) {
@@ -2698,11 +4844,15 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
-  if (["configuration", "whitelists", "metadata"].includes(state.activeTab)) return false;
+  if (["configuration", "whitelists"].includes(state.activeTab)) return false;
+  if (state.activeTab === "metadata") return true;
   if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
-    return rangeIsLive("host") && state.pages.hostFlows.index === 0;
+    const page = state.hostActivity === "alerts" ? state.pages.hostAlerts
+      : state.hostActivity === "evidence" ? state.pages["host-evidence"]
+        : state.pages.hostFlows;
+    return rangeIsLive("host") && page.index === 0;
   }
   return rangeIsLive(state.activeTab) && state.pages[state.activeTab].index === 0;
 }
@@ -2719,6 +4869,7 @@ async function pollBackendStatus() {
   if (document.hidden) return;
   try {
     await api("backendStatus", "/api/identity", false);
+    await loadLiveTitleCounts();
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
@@ -2735,12 +4886,20 @@ function scheduleBackendStatusPoll() {
 
 function switchTab(name) {
   state.activeTab = name;
+  document.body.classList.toggle("overview-active", name === "overview");
+  document.body.classList.toggle("alerts-active", name === "alerts");
+  document.body.classList.toggle("evidence-active", name === "evidence");
+  document.body.classList.toggle("hosts-active", name === "hosts");
+  document.body.classList.toggle("metadata-active", name === "metadata");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
     panel.classList.toggle("active", panel.id === name));
-  currentLoader()().catch(() => {});
-  schedulePoll();
+  if (name === "alerts") updateAlertViewportHeight();
+  if (name === "evidence") updateEvidenceViewportHeight();
+  if (name === "hosts") updateHostViewportHeight();
+  if (name === "metadata") updateMetadataViewportHeight();
+  currentLoader()().catch(() => {}).finally(schedulePoll);
 }
 
 function bindFilters(name, controls, loader) {
@@ -2752,8 +4911,7 @@ function bindFilters(name, controls, loader) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         resetPage(name);
-        loader().catch(() => {});
-        schedulePoll();
+        loader().catch(() => {}).finally(schedulePoll);
       }, element.type === "search" ? 250 : 0);
     });
   });
@@ -2771,8 +4929,7 @@ function bindView(name, loader) {
     page.sort = "time";
     page.order = "desc";
     resetPage(name);
-    loader().catch(() => {});
-    schedulePoll();
+    loader().catch(() => {}).finally(schedulePoll);
   });
 }
 
@@ -2783,8 +4940,7 @@ function bindRange(prefix, pageName, loader) {
     byId(`${prefix}-from`).hidden = !custom;
     byId(`${prefix}-to`).hidden = !custom;
     resetPage(pageName);
-    loader().catch(() => {});
-    schedulePoll();
+    loader().catch(() => {}).finally(schedulePoll);
   };
   select.addEventListener("change", update);
   [byId(`${prefix}-from`), byId(`${prefix}-to`)].forEach((input) =>
@@ -2796,19 +4952,90 @@ document.querySelectorAll(".tab").forEach((tab) =>
 document.querySelectorAll(".refresh-list").forEach((button) =>
   button.addEventListener("click", () => tabLoader(button.dataset.target)().catch(() => {})));
 byId("refresh-overview").addEventListener("click", () => loadOverview().catch(() => {}));
+byId("overview-alerts-link").addEventListener("click", () => switchTab("alerts"));
+byId("toggle-overview-details").addEventListener("click", () => {
+  const details = byId("overview-details");
+  details.hidden = !details.hidden;
+  byId("toggle-overview-details").setAttribute("aria-expanded", String(!details.hidden));
+  byId("toggle-overview-details").textContent = details.hidden ? "More run details" : "Hide run details";
+  if (!details.hidden) loadMetrics().catch(() => {});
+});
 byId("load-module-evidence").addEventListener("click", () =>
   loadOverviewEvidenceCounts().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));
 byId("p2p-range").addEventListener("change", () => loadP2P().catch(() => {}));
+byId("p2p-message-filter").addEventListener("change", renderP2PMessages);
+bindLocalTableSort("p2p-activity-table", renderP2PMessages);
 byId("module-search").addEventListener("input", () =>
   state.overview && renderModules(state.overview.modules));
 byId("drawer-close").addEventListener("click", closeDrawer);
 byId("drawer-back").addEventListener("click", backDrawer);
 byId("drawer-backdrop").addEventListener("click", closeDrawer);
 byId("host-back").addEventListener("click", closeHost);
+document.querySelectorAll("[data-host-activity]").forEach((button) =>
+  button.addEventListener("click", () => showHostActivity(button.dataset.hostActivity)));
+byId("host-flow-search").addEventListener("input", filterVisibleHostFlows);
+byId("host-whitelist-action").addEventListener("click", () => {
+  const ip = state.host?.ip;
+  switchTab("whitelists");
+  const input = byId("whitelists-editor").querySelector(".whitelist-form input");
+  if (input && ip) {
+    input.value = ip;
+    input.focus();
+    input.scrollIntoView({ block: "center" });
+  }
+});
+byId("hosts-alerts-only").addEventListener("change", () => {
+  resetPage("hosts");
+  loadHosts().catch(() => {});
+});
+document.querySelectorAll(".hosts-columns input").forEach((input) =>
+  input.addEventListener("change", () => {
+    document.querySelectorAll(`#hosts-table [data-host-column="${input.dataset.hostColumn}"]`)
+      .forEach((element) => { element.hidden = !input.checked; });
+    renderHostsPage();
+  }));
+byId("hosts-more").addEventListener("click", () => loadMoreHosts().catch(() => {}));
+document.querySelector(".hosts-list-table").addEventListener("scroll", maybeLoadMoreHosts);
+byId("hosts-export").addEventListener("click", () => {
+  const rows = state.pages.hosts.items;
+  const fields = ["ip", "user_name", "hostname", "mac", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
+  const escapeCsv = (value) => {
+    const plain = String(value ?? "");
+    const safe = /^[=+\-@\t\r]/.test(plain) ? `'${plain}` : plain;
+    return `"${safe.replaceAll('"', '""')}"`;
+  };
+  const csv = [fields.join(","), ...rows.map((row) => fields.map((key) =>
+    escapeCsv(["flows", "bytes", "last_seen"].includes(key)
+      ? row.load?.[key] : row[key])).join(","))].join("\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  link.download = "slips-hosts-page.csv";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
 byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
+});
+document.querySelectorAll(".excluded-visibility-select").forEach((select) => {
+  select.value = state.hideExcluded ? "hide" : "show";
+  select.addEventListener("change", () => {
+    state.hideExcluded = select.value === "hide";
+    document.querySelectorAll(".excluded-visibility-select").forEach((other) => {
+      other.value = select.value;
+    });
+    ["alerts", "evidence", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
+    if (state.activeTab === "hosts" && state.host) {
+      ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
+        flows: loadHostFlows })[state.hostActivity]().catch(() => {});
+    } else if (state.activeTab === "alerts" || state.activeTab === "evidence") {
+      currentLoader()().catch(() => {});
+    } else if (state.activeTab === "arp-poisoning") {
+      loadArpPoisoning().catch(() => {});
+    }
+    schedulePoll();
+  });
 });
 
 bindFilters("firewall", ["firewall-search"], loadFirewall);
@@ -2817,21 +5044,37 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
 ["arp-poisoning-hosts-table", "arp-poisoning-events-table",
   "arp-poisoning-evidence-table"].forEach((id) =>
   bindLocalTableSort(id, renderArpPoisoning));
-bindFilters("alerts", ["alerts-search", "alerts-threat"], loadAlerts);
+bindFilters("alerts", ["alerts-search"], loadAlerts);
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
+byId("evidence-scored-only").addEventListener("change", () => {
+  clearEvidenceSelection();
+  resetPage("evidence");
+  loadEvidence().catch(() => {});
+});
+byId("evidence-active-type").addEventListener("click", () => {
+  state.evidenceWorkspace.typeFilter = "";
+  clearEvidenceSelection();
+  resetPage("evidence");
+  loadEvidence().catch(() => {});
+});
+byId("evidence-search").addEventListener("input", clearEvidenceSelection);
+byId("evidence-link").addEventListener("change", clearEvidenceSelection);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
 byId("configuration-search").addEventListener("input", renderConfiguration);
 byId("whitelists-search").addEventListener("input", renderWhitelists);
 byId("whitelists-type").addEventListener("change", renderWhitelists);
-bindView("alerts", loadAlerts);
+byId("whitelists-editor").append(whitelistEditor("tab"));
 bindView("evidence", loadEvidence);
 bindRange("alerts", "alerts", loadAlerts);
 bindRange("evidence", "evidence", loadEvidence);
 bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
+  resetPage("hostAlerts");
   resetPage("host-evidence");
   await Promise.all([
-    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+    ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
+      flows: loadHostFlows })[state.hostActivity](),
+    loadHostSummary(), loadHostScoreHistory(),
   ]);
 });
 bindTableSort("modules", async () => {
@@ -2856,7 +5099,14 @@ window.addEventListener("beforeunload", () => {
 });
 
 initDrawerResize();
+initAlertPaneResize();
+window.addEventListener("resize", updateEvidenceViewportHeight);
+window.addEventListener("resize", updateHostViewportHeight);
+window.addEventListener("resize", updateMetadataViewportHeight);
 window.setInterval(renderHeaderUptime, 1000);
-loadOverview().then(schedulePoll).catch(schedulePoll);
+loadOverview().catch(() => {}).finally(() => {
+  if (state.activeTab === "overview") schedulePoll();
+});
 loadWhitelists().catch(() => {});
+loadLiveTitleCounts().catch(() => {});
 scheduleBackendStatusPoll();

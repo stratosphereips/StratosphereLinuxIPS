@@ -109,6 +109,28 @@ def test_assemble_peer_opinion(data, expected_score, expected_confidence):
     assert pytest.approx(confidence, 0.0001) == expected_confidence
 
 
+def test_aggregated_peer_reports_match_the_raw_report_opinion():
+    base_model = ModuleFactory().create_base_model_obj()
+    raw_reports = [
+        (0.4, 0.8, 0.7, 0.6, 0.9, "192.168.1.2"),
+        (0.8, 0.2, 0.7, 0.6, 0.9, "192.168.1.2"),
+        (0.3, 0.5, 0.9, 0.8, 0.7, "192.168.1.3"),
+    ]
+    aggregated_reports = [
+        (1.2, 1.0, 0.7, 0.6, 0.9, "192.168.1.2", 2),
+        (0.3, 0.5, 0.9, 0.8, 0.7, "192.168.1.3", 1),
+    ]
+
+    raw_opinion = base_model.assemble_peer_opinion(raw_reports)
+    aggregated_opinion = base_model.assemble_peer_opinion(
+        aggregated_reports
+    )
+
+    assert aggregated_opinion == pytest.approx(
+        raw_opinion, rel=1e-12, abs=1e-12
+    )
+
+
 @pytest.mark.parametrize(
     "peers, expected_weighted_trust",
     [

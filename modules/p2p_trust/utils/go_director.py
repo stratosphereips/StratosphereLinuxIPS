@@ -2,8 +2,9 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import base64
 import binascii
+import ipaddress
 import json
-from typing import Dict
+from typing import Any, Dict
 import time
 
 
@@ -11,6 +12,7 @@ from slips_files.common.printer import Printer
 from slips_files.core.output import Output
 from modules.p2p_trust.utils.utils import (
     validate_ip_address,
+    is_unicast_ip,
     validate_timestamp,
     get_ip_info_from_slips,
     send_evaluation_to_go,
@@ -87,11 +89,20 @@ class GoDirector:
         self.evaluation_processors = {
             "score_confidence": self.process_evaluation_score_confidence
         }
-        self.key_type_processors = {"ip": validate_ip_address}
+        self.key_type_processors = {"ip": is_unicast_ip}
         self.read_configuration()
         self.db = db
 
-    def print(self, *args, **kwargs):
+    def print(self, *args: Any, **kwargs: Any) -> None:
+        """Keep routine peer traffic in logs while showing validation errors.
+
+        Parameters:
+            args: Positional arguments forwarded to the module printer.
+            kwargs: Keyword arguments forwarded to the module printer.
+        """
+        debug = args[2] if len(args) > 2 else kwargs.get("debug", 0)
+        if debug == 0:
+            kwargs.setdefault("log_to_logfiles_only", True)
         return self.printer.print(*args, **kwargs)
 
     def read_configuration(self):
@@ -197,6 +208,20 @@ class GoDirector:
                 "connected": connected,
             },
         )
+        try:
+            remote_port = int(connection["remote_port"])
+        except (TypeError, ValueError):
+            return
+        remote_ip = str(connection["remote_ip"])
+        if (
+            remote_port < 1
+            or remote_port > 65535
+            or not validate_ip_address(remote_ip)
+        ):
+            return
+        self.trustdb.insert_go_peer_address(
+            str(connection["peer_id"]), remote_ip, remote_port
+        )
 
     def process_go_data(self, report: dict) -> None:
         """Process peer updates, requests and reports sent by the go layer
@@ -224,12 +249,15 @@ class GoDirector:
         # if the overlap of the two sets is smaller than the set of keys, some keys are missing. The & operator
         # picks the items that are present in both sets: {2, 4, 6, 8, 10, 12} & {3, 6, 9, 12, 15} = {3, 12}
 
+        reporter = str(report.get(key_reporter) or "")
+        if reporter:
+            self._record_peer_activity(reporter)
+
         report_time = validate_timestamp(report[key_report_time])
         if report_time is None:
             self.print("Invalid timestamp", 0, 2)
             return
 
-        reporter = report[key_reporter]
         message = report[key_message]
         # decode b64
         message_type, data = self.validate_message(message)
@@ -246,7 +274,6 @@ class GoDirector:
                 "message": data,
             },
         )
-
         self.print(
             f"[The Network -> Slips] Received msg {data} from peer {reporter}"
         )
@@ -279,6 +306,32 @@ class GoDirector:
                 2,
             )
             self.print("Peer sent unknown message type", 0, 2)
+
+    def _record_peer_activity(self, peer_id: str) -> None:
+        """Mark a peer active after receiving an authenticated P2P message.
+
+        Parameters:
+            peer_id: Authenticated sender identity from Pigeon.
+        """
+        state = self.db.get_peer_trust_data(peer_id)
+        if isinstance(state, bytes):
+            state = state.decode(errors="replace")
+        if isinstance(state, str):
+            try:
+                state = json.loads(state)
+            except json.JSONDecodeError:
+                state = {}
+        if not isinstance(state, dict):
+            state = {}
+        now = time.time()
+        state.update(
+            {
+                "connected": True,
+                "timestamp": now,
+                "last_activity": now,
+            }
+        )
+        self.db.store_peer_trust_data(peer_id, json.dumps(state))
 
     def validate_message(self, message: str) -> (str, dict):
         """
@@ -383,6 +436,9 @@ class GoDirector:
         """
         Gets the info about the IP the peer asked about, and send it to the network
         """
+        if key in utils.get_own_ips(ret="List", include_public=False):
+            self.print(f"Not reporting this peer's own IP {key}", 1, 0)
+            return
         score, confidence = get_ip_info_from_slips(key, self.db)
         if score is not None:
             send_evaluation_to_go(
@@ -439,6 +495,23 @@ class GoDirector:
             self.print("Provided key isn't a valid value for it's type", 0, 2)
             # TODO: lower reputation
             return
+
+        if key_type == "ip":
+            _last_seen, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+            try:
+                self_report = reporter_ip and (
+                    ipaddress.ip_address(reporter_ip)
+                    == ipaddress.ip_address(key)
+                )
+            except ValueError:
+                self_report = False
+            if self_report:
+                self.print(
+                    f"Ignoring self report from peer {reporter} about {key}",
+                    1,
+                    0,
+                )
+                return
 
         # validate evaluation type
         if evaluation_type not in self.evaluation_processors:
@@ -558,33 +631,37 @@ class GoDirector:
             )
 
     def set_evidence_p2p_report(
-        self: str,
+        self,
         ip: str,
         reporter: str,
         score: float,
         confidence: float,
-        timestamp: str,
+        timestamp: float,
         profileid_of_attacker: str,
-    ):
-        """
-        set evidence for the newly created attacker
-        profile stating that it attacked another peer
+    ) -> None:
+        """Record a peer's opinion about an IP without implying an attack.
+
+        Parameters:
+            ip: IP address evaluated by the reporting peer.
+            reporter: Peer ID that sent the report.
+            score: Reported maliciousness score.
+            confidence: Reported confidence in that score.
+            timestamp: Time at which the report was received.
+            profileid_of_attacker: Profile for the reported IP.
         """
         threat_level = utils.threat_level_to_string(score)
 
-        # confidence depends on how long the connection
-        # scale the confidence from 0 to 1, 1 means 24 hours long
-        last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
-
-        # this should never happen. if we have a report,
-        # we will have a reporter and will have the ip of the reporter
-        # but just in case
-        if not reporter_ip:
-            reporter_ip = ""
+        _last_update_time, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+        reporter_label = (
+            f"{reporter_ip} ({reporter})"
+            if reporter_ip
+            else f"{reporter} (IP unavailable)"
+        )
 
         description = (
-            f"attacking another peer: {reporter_ip} "
-            f"({reporter}). confidence: {confidence}"
+            f"Received from P2P peer {reporter_label}: reputation report "
+            f"about IP {ip}; maliciousness score {score}, confidence "
+            f"{confidence}. No victim or attack details were provided."
         )
 
         # get the tw of this report time
@@ -690,6 +767,8 @@ class GoDirector:
                 ),
             }
         )
+        if connected:
+            stored_state["last_activity"] = time.time()
         if ip_address:
             stored_state["ip"] = ip_address
         if reliability is not None:

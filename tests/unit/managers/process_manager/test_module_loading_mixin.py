@@ -55,7 +55,7 @@ def test_load_modules_starts_a_process_per_enabled_module() -> None:
     process_manager.termination_event = Mock(name="termination_event")
 
     with patch(
-        "managers.process_manager.module_loading_mixin.Process"
+        "managers.process_manager.module_loading_mixin.ModuleProcess"
     ) as mock_process_class:
         mock_process = Mock(pid=1234)
         mock_process_class.return_value = mock_process
@@ -63,19 +63,16 @@ def test_load_modules_starts_a_process_per_enabled_module() -> None:
         process_manager.load_modules()
 
         mock_process_class.assert_called_once_with(
-            target=process_manager._run_module,
-            name="arp",
-            args=(
-                "modules.arp.arp",
-                process_manager.main.logger,
-                process_manager.main.args.output,
-                process_manager.main.redis_port,
-                process_manager.termination_event,
-                process_manager.main.args,
-                process_manager.main.conf,
-                process_manager.main.pid,
-                process_manager.main.bloom_filters_man,
-            ),
+            "modules.arp.arp",
+            process_manager.main.logger,
+            process_manager.main.args.output,
+            process_manager.main.redis_port,
+            process_manager.termination_event,
+            process_manager.main.args,
+            process_manager.main.conf,
+            process_manager.main.pid,
+            process_manager.main.bloom_filters_man,
+            startup_total=process_manager.total_processes_to_start,
         )
         mock_process.start.assert_called_once_with()
         process_manager.main.db.store_pid.assert_called_once_with("arp", 1234)

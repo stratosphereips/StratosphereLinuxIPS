@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import time
 from typing import List, Dict
+
+import redis
 
 from slips_files.common.abstracts.iwhitelist_analyzer import IWhitelistAnalyzer
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -21,6 +24,25 @@ class IPAnalyzer(IWhitelistAnalyzer):
         # for debugging
         self.bf_hits = 0
         self.bf_misses = 0
+        self._next_whitelist_refresh = time.monotonic() + 2
+        self._known_ip_rules: set[str] | None = None
+
+    def _refresh_ip_rules(self) -> None:
+        """Refresh the process-local IP filter after a web rule changes."""
+        now = time.monotonic()
+        if now < self._next_whitelist_refresh:
+            return
+        self._next_whitelist_refresh = now + 2
+        try:
+            rules = set(self.db.get_whitelist("IPs"))
+        except redis.RedisError:
+            return
+        if rules == self._known_ip_rules:
+            return
+        self.manager.bloom_filters.ips = (
+            self.manager.bloom_filters._create_bloom_filter(rules, 0.001)
+        )
+        self._known_ip_rules = rules
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -34,13 +56,20 @@ class IPAnalyzer(IWhitelistAnalyzer):
         return flow.answers if flow.type_ == "dns" else []
 
     def is_whitelisted(
-        self, ip: str, direction: Direction, what_to_ignore: str
+        self,
+        ip: str,
+        direction: Direction,
+        what_to_ignore: str,
+        port: int | str | None = None,
+        evidence_type: str | None = None,
     ) -> bool:
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
         :param ip: ip to check if whitelisted
         :param direction: is the given ip a srcip or a dstip
         :param what_to_ignore: can be 'flows' or 'alerts'
+        :param port: Port on the same side as the IP, if available.
+        :param evidence_type: Restrict matching to this evidence type.
         """
         if not self.enable_local_whitelist:
             return False
@@ -48,29 +77,40 @@ class IPAnalyzer(IWhitelistAnalyzer):
         if not utils.is_valid_ip(ip):
             return False
 
-        if ip not in self.manager.bloom_filters.ips:
-            # defnitely not whitelisted
+        self._refresh_ip_rules()
+
+        candidates = [ip]
+        if port is not None and str(port).isdecimal():
+            port_number = int(port)
+            if 0 <= port_number <= 65535:
+                address = f"[{ip}]" if ":" in ip else ip
+                candidates.append(f"{address}:{port_number}")
+                candidates.append(f"*:{port_number}")
+
+        if evidence_type:
+            candidates = [
+                scoped
+                for candidate in candidates
+                for scoped in (f"{candidate}|{evidence_type}", candidate)
+            ]
+
+        for candidate in candidates:
+            if candidate not in self.manager.bloom_filters.ips:
+                self.bf_hits += 1
+                continue
+
+            ip_info: str | None = self.db.is_whitelisted(candidate, "IPs")
+            if not ip_info:
+                self.bf_misses += 1
+                continue
+
             self.bf_hits += 1
-            return False
+            rule: Dict[str, str] = json.loads(ip_info)
+            if not self.match.direction(direction, rule["from"]):
+                continue
+            if self.match.what_to_ignore(
+                what_to_ignore, rule["what_to_ignore"]
+            ):
+                return True
 
-        ip_info: str | None = self.db.is_whitelisted(ip, "IPs")
-        # reaching here means ip is in the bloom filter
-        if not ip_info:
-            # bloom filter FP
-            self.bf_misses += 1
-            return False
-
-        self.bf_hits += 1
-        ip_info: Dict[str, str] = json.loads(ip_info)
-        # Check if we should ignore src or dst alerts from this ip
-        # from_ can be: src, dst, both
-        # what_to_ignore can be: alerts or flows or both
-        whitelist_direction: str = ip_info["from"]
-        if not self.match.direction(direction, whitelist_direction):
-            return False
-
-        ignore: str = ip_info["what_to_ignore"]
-        if not self.match.what_to_ignore(what_to_ignore, ignore):
-            return False
-
-        return True
+        return False

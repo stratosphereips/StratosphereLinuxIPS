@@ -7,6 +7,7 @@ from dataclasses import asdict
 from slips_files.core.flows.zeek import DNS
 from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
+
 from numpy import arange
 from unittest.mock import (
     patch,
@@ -445,6 +446,47 @@ def test_check_high_entropy_dns_answers_with_call():
         flow.answers[1],
     )
     assert dns.estimate_shannon_entropy.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "encoded._slips._udp.local",
+        "encoded._rpi-isolated-a._udp.LOCAL.",
+    ],
+)
+def test_mdns_txt_does_not_raise_high_entropy_evidence(
+    query: str,
+) -> None:
+    """Ignore encoded service discovery TXT records from unicast senders.
+
+    Parameters:
+        query: mDNS service name being answered.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.shannon_entropy_threshold = 4.0
+    dns.estimate_shannon_entropy = Mock(return_value=6.0)
+    dns.set_evidence.suspicious_dns_answer = Mock()
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="mdns-flow",
+        saddr="fe80::8aa2:9eff:fe5e:9342",
+        daddr="ff02::fb",
+        query=query,
+        qclass_name="",
+        qtype_name="TXT",
+        rcode_name="NOERROR",
+        dport="5353",
+        sport="5353",
+        proto="udp",
+        answers=["TXT dnsaddr=/ip4/127.0.0.1/tcp/6668/p2p/QmExample"],
+        TTLs="",
+    )
+
+    dns.check_high_entropy_dns_answers(twid, flow)
+
+    dns.estimate_shannon_entropy.assert_not_called()
+    dns.set_evidence.suspicious_dns_answer.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -1002,3 +1044,23 @@ def test_check_pending_flows_timeout():
         "profile5678", "twid_123", dns_flow_to_check, waited_for_the_conn=False
     )
     assert back_to_queue == []
+
+
+def test_shutdown_drains_thread_queue() -> None:
+    """Finish pending DNS checks without multiprocessing queue cleanup."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.dns_without_connection_timeout_checker_thread = Mock()
+    dns.dns_without_connection_timeout_checker_thread.is_alive.return_value = (
+        False
+    )
+    dns.check_dns_without_connection = Mock()
+    flow = Mock()
+    dns.pending_dns_without_conn.put(("profile_1", "timewindow1", flow))
+
+    dns.shutdown_gracefully()
+
+    assert dns.stop_event.is_set()
+    assert dns.pending_dns_without_conn.empty()
+    dns.check_dns_without_connection.assert_called_once_with(
+        "profile_1", "timewindow1", flow, waited_for_the_conn=True
+    )

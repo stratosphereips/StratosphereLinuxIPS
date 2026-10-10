@@ -4,12 +4,67 @@ from tests.module_factory import ModuleFactory
 import pytest
 import json
 from unittest.mock import MagicMock, patch, Mock, mock_open
+from types import SimpleNamespace
 from slips_files.core.structures.evidence import (
     Direction,
+    EvidenceType,
     IoCType,
     Attacker,
     Victim,
 )
+
+
+@pytest.mark.parametrize(
+    "rule_side, evidence_side, evidence_type, expected",
+    [
+        ("src", Direction.SRC, EvidenceType.ARP_SCAN, True),
+        ("src", Direction.SRC, EvidenceType.DHCP_SCAN, False),
+        ("src", Direction.DST, EvidenceType.ARP_SCAN, False),
+        ("dst", Direction.DST, EvidenceType.ARP_SCAN, True),
+    ],
+)
+def test_alert_type_scoped_ip_rule(
+    rule_side: str,
+    evidence_side: Direction,
+    evidence_type: EvidenceType,
+    expected: bool,
+) -> None:
+    """Match a scoped rule by IP, side, and exact evidence type.
+
+    Parameters:
+        rule_side: Side configured in the whitelist.
+        evidence_side: Side of the evidence entity.
+        evidence_type: Detection type under test.
+        expected: Whether the evidence should be excluded.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(
+        whitelist.parser.parse_line(
+            f"ip,192.0.2.10,{rule_side},alerts,ARP_SCAN"
+        )
+    )
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    entity = Attacker(
+        ioc_type=IoCType.IP,
+        value="192.0.2.10",
+        direction=evidence_side,
+    )
+    evidence = Mock(
+        attacker=entity,
+        victim=None,
+        evidence_type=evidence_type,
+        src_port=None,
+        dst_port=None,
+    )
+
+    assert whitelist.is_whitelisted_evidence(evidence) is expected
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", evidence_side, "flows"
+    )
 
 
 def test_read_whitelist():
@@ -20,6 +75,104 @@ def test_read_whitelist():
     whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.db.get_whitelist.return_value = {}
     assert whitelist.parser.parse()
+
+
+@pytest.mark.parametrize(
+    "same_connection,expected",
+    [(True, True), (False, False)],
+)
+def test_live_flow_whitelist_requires_exact_slips_socket(
+    same_connection: bool, expected: bool
+) -> None:
+    """Keep unrelated browser traffic even when it shares the device IP.
+
+    Parameters:
+        same_connection: Whether Slips registered the full socket tuple.
+        expected: Whether this flow should be excluded from profiling.
+    """
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist._filter_slips_own_traffic = True
+    whitelist.db.main_pid = 123
+    whitelist.db.is_slips_own_source_ip.return_value = True
+    whitelist.db.is_slips_own_connection.return_value = same_connection
+    whitelist._check_if_whitelisted_domains_of_flow = Mock(return_value=False)
+    whitelist._flow_contains_whitelisted_ip = Mock(return_value=False)
+    whitelist._flow_contains_whitelisted_mac = Mock(return_value=False)
+    whitelist.org_analyzer.is_whitelisted = Mock(return_value=False)
+    flow = SimpleNamespace(
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=43,
+        proto="tcp",
+        type_="conn",
+    )
+
+    assert whitelist.is_whitelisted_flow(flow) is expected
+    whitelist.db.is_slips_own_connection.assert_called_once_with(
+        123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+
+
+def test_offline_flow_ignores_live_slips_socket_registry() -> None:
+    """Keep captured files independent of current machine sockets."""
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist._filter_slips_own_traffic = False
+    flow = SimpleNamespace(
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=43,
+        proto="tcp",
+    )
+
+    assert whitelist._is_slips_own_flow(flow) is False
+    whitelist.db.is_slips_own_source_ip.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "proto,dst_port,marked,expected",
+    [
+        ("tcp", 43, True, True),
+        ("tcp", 43, False, False),
+        ("udp", 43, True, False),
+        ("tcp", 443, True, False),
+    ],
+)
+def test_whois_subprocess_allowance_is_limited_to_tcp_43(
+    proto: str, dst_port: int, marked: bool, expected: bool
+) -> None:
+    """Apply the brief WHOIS mark only to its source and service port.
+
+    Parameters:
+        proto: Captured transport.
+        dst_port: Captured destination port.
+        marked: Whether the current local IP is in the WHOIS window.
+        expected: Whether this flow is excluded from profiling.
+    """
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist._filter_slips_own_traffic = True
+    whitelist.db.main_pid = 123
+    whitelist.db.is_slips_own_service_port.return_value = marked
+    whitelist.db.is_slips_own_source_ip.return_value = False
+    flow = SimpleNamespace(
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=dst_port,
+        proto=proto,
+    )
+
+    assert whitelist._is_slips_own_flow(flow) is expected
+    if proto == "tcp" and dst_port == 43:
+        whitelist.db.is_slips_own_service_port.assert_called_once_with(
+            123, "tcp", 43, "192.0.2.10"
+        )
+    else:
+        whitelist.db.is_slips_own_service_port.assert_not_called()
 
 
 @pytest.mark.parametrize("org,asn", [("google", "AS6432")])
@@ -140,6 +293,33 @@ def test_is_ip_in_org_complete(
 
 
 @pytest.mark.parametrize(
+    "ip, org, cidr",
+    [
+        ("17.253.73.205", "apple", "17.0.0.0/8"),
+        ("8.8.8.8", "google", "8.8.8.0/24"),
+    ],
+)
+def test_known_apple_and_google_ip_ranges_match_whitelist(
+    ip: str, org: str, cidr: str
+) -> None:
+    """Match representative public IPs from built-in organization ranges.
+
+    Parameters:
+        ip: IP address to check.
+        org: Organization owning the range.
+        cidr: Organization CIDR expected to contain the IP.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    analyzer = whitelist.org_analyzer
+    first_octet = ip.split(".")[0]
+    analyzer.bloom_filters = {org: {"asns": [], "first_octets": [first_octet]}}
+    whitelist.db.get_asn_info.return_value = None
+    whitelist.db.is_ip_in_org_ips.return_value = [cidr]
+
+    assert analyzer.is_ip_part_of_a_whitelisted_org(ip, org)
+
+
+@pytest.mark.parametrize(
     "domain, org, mock_bf_domains, mock_db_exact, mock_db_org_list, "
     "mock_tld_side_effect, expected_result",
     [
@@ -160,6 +340,15 @@ def test_is_ip_in_org_complete(
             ["google.com", "google.com"],  # 4. TLDs match (ads.google.com
             # -> google.com, google.com -> google.com)
             True,  # 5. Expected: True
+        ),
+        (
+            "captive.apple.com",
+            "apple",
+            ["apple.com"],
+            False,
+            ["apple.com"],
+            None,
+            True,
         ),
         # --- Case 4: Reverse Subdomain Match (domain IN org_domain) ---
         # 'google.com' (flow domain) is IN 'ads.google.com' (from db)
@@ -491,6 +680,373 @@ def test_ip_analyzer_is_whitelisted(ip, what_to_ignore, expected_result):
         whitelist.ip_analyzer.is_whitelisted(ip, Direction.SRC, what_to_ignore)
         == expected_result
     )
+
+
+@pytest.mark.parametrize(
+    "address, valid",
+    [
+        ("192.168.1.163:5353", True),
+        ("[fe80::1]:5353", True),
+        ("192.168.1.163", True),
+        ("192.168.1.163:65536", False),
+        ("192.168.1.163:abc", False),
+        ("192.168.1.163:05353", False),
+        ("*:5353", True),
+        ("*:65536", False),
+        ("*:abc", False),
+        ("fe80::1:5353", True),  # A valid unscoped IPv6 address.
+        ("[fe80::1]:abc", False),
+    ],
+)
+def test_parse_ip_port_rule(address: str, valid: bool) -> None:
+    """Parse IP and optional port rules without accepting invalid ports.
+
+    :param address: Rule value to parse.
+    :param valid: Whether the rule value should be stored.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    parsed = whitelist.parser.parse_line(f"ip,{address},dst,alerts")
+    whitelist.parser.call_handler(parsed)
+
+    assert (address in whitelist.parser.whitelisted_ips) == valid
+
+
+@pytest.mark.parametrize(
+    "address, port, direction, ignore_type, expected",
+    [
+        ("192.168.1.163", 5353, Direction.DST, "alerts", True),
+        ("192.168.1.163", "5353", Direction.SRC, "alerts", True),
+        ("192.168.1.163", 80, Direction.DST, "alerts", False),
+        ("192.168.1.163", None, Direction.DST, "alerts", False),
+        ("192.168.1.163", 5353, Direction.DST, "flows", False),
+        ("fe80::1", 5353, Direction.DST, "alerts", True),
+    ],
+)
+def test_ip_port_rule_matching(
+    address: str,
+    port: int | str | None,
+    direction: Direction,
+    ignore_type: str,
+    expected: bool,
+) -> None:
+    """Match a scoped IP rule only when its IP, port and ignore type fit.
+
+    :param address: IP address to check.
+    :param port: Port on the same side as the address.
+    :param direction: Side of the address in the traffic.
+    :param ignore_type: Suppression target being checked.
+    :param expected: Expected match result.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    rules = {
+        "192.168.1.163:5353": {"from": "both", "what_to_ignore": "alerts"},
+        "[fe80::1]:5353": {"from": "dst", "what_to_ignore": "alerts"},
+    }
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+
+    assert (
+        whitelist.ip_analyzer.is_whitelisted(
+            address, direction, ignore_type, port
+        )
+        == expected
+    )
+
+
+def test_ip_port_rule_coexists_with_unscoped_rule() -> None:
+    """Keep matching an unscoped rule when a port is available."""
+    whitelist = ModuleFactory().create_whitelist_obj()
+    rules = {
+        "192.168.1.163": {"from": "dst", "what_to_ignore": "alerts"},
+        "192.168.1.163:5353": {
+            "from": "dst",
+            "what_to_ignore": "flows",
+        },
+    }
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.168.1.163", Direction.DST, "alerts", 80
+    )
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.168.1.163", Direction.DST, "flows", 5353
+    )
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        "192.168.1.163", Direction.DST, "flows", 80
+    )
+
+
+def test_web_added_ip_rule_refreshes_a_running_analyzer() -> None:
+    """A new Redis rule must pass the worker's process-local Bloom filter."""
+    whitelist = ModuleFactory().create_whitelist_obj()
+    rule = {"from": "dst", "what_to_ignore": "alerts"}
+    whitelist.db.get_whitelist.return_value = {
+        "192.0.2.4:443": json.dumps(rule)
+    }
+    whitelist.db.is_whitelisted.side_effect = lambda value, _type: (
+        json.dumps(rule) if value == "192.0.2.4:443" else None
+    )
+    whitelist.bloom_filters._create_bloom_filter.return_value = {
+        "192.0.2.4:443"
+    }
+    whitelist.ip_analyzer._next_whitelist_refresh = 0
+
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.4", Direction.DST, "alerts", 443
+    )
+    whitelist.bloom_filters._create_bloom_filter.assert_called_once_with(
+        {"192.0.2.4:443"}, 0.001
+    )
+
+
+@pytest.mark.parametrize(
+    "side, src_port, dst_port, expected",
+    [
+        ("src", 5353, 80, True),
+        ("src", 80, 5353, False),
+        ("dst", 80, 5353, True),
+        ("dst", 5353, 80, False),
+    ],
+)
+def test_flow_ip_port_uses_matching_side(
+    side: str, src_port: int, dst_port: int, expected: bool
+) -> None:
+    """Use the source or destination port paired with the selected IP.
+
+    :param side: Side of the scoped IP rule.
+    :param src_port: Flow source port.
+    :param dst_port: Flow destination port.
+    :param expected: Expected match result.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    flow = Mock(
+        saddr="192.168.1.10",
+        daddr="192.168.1.163",
+        sport=src_port,
+        dport=dst_port,
+        type_="conn",
+    )
+    address = flow.saddr if side == "src" else flow.daddr
+    rule = f"{address}:5353"
+    whitelist.bloom_filters.ips = [rule]
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps({"from": side, "what_to_ignore": "flows"})
+        if key == rule
+        else None
+    )
+
+    assert whitelist._flow_contains_whitelisted_ip(flow) == expected
+
+
+@pytest.mark.parametrize(
+    "side, src_port, dst_port, expected",
+    [
+        ("src", 5353, 80, True),
+        ("src", 80, 5353, False),
+        ("dst", 80, 5353, True),
+        ("dst", 5353, 80, False),
+    ],
+)
+def test_evidence_ip_port_uses_matching_side(
+    side: str, src_port: int, dst_port: int, expected: bool
+) -> None:
+    """Use the port belonging to the direct IP entity in evidence.
+
+    :param side: Side of the scoped IP rule.
+    :param src_port: Evidence source port.
+    :param dst_port: Evidence destination port.
+    :param expected: Expected match result.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    direction = Direction.SRC if side == "src" else Direction.DST
+    address = "192.168.1.10" if side == "src" else "192.168.1.163"
+    entity = Mock(
+        ioc_type=IoCType.IP,
+        value=address,
+        direction=direction,
+        DNS_resolution=None,
+        queries=None,
+        CNAME=None,
+        SNI=None,
+    )
+    evidence = Mock(src_port=src_port, dst_port=dst_port)
+    setattr(evidence, "attacker" if side == "src" else "victim", entity)
+    rule = f"{address}:5353"
+    whitelist.bloom_filters.ips = [rule]
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps({"from": side, "what_to_ignore": "alerts"})
+        if key == rule
+        else None
+    )
+    whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(
+        return_value=False
+    )
+    whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
+
+    assert (
+        whitelist._is_whitelisted_entity(
+            evidence, "attacker" if side == "src" else "victim"
+        )
+        == expected
+    )
+
+
+@pytest.mark.parametrize(
+    "destination_port, expected", [(5353, True), (80, False)]
+)
+def test_private_ip_evidence_port_whitelist(
+    destination_port: int, expected: bool
+) -> None:
+    """Suppress only the configured private-IP destination port alert.
+
+    :param destination_port: Port of the private-IP evidence.
+    :param expected: Expected whitelist decision.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    rule = "192.168.1.163:5353"
+    whitelist.parser.call_handler(
+        whitelist.parser.parse_line(f"ip,{rule},dst,alerts")
+    )
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(
+        return_value=False
+    )
+    whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
+    evidence = Mock(
+        attacker=Attacker(
+            ioc_type=IoCType.IP,
+            value="192.168.1.10",
+            direction=Direction.SRC,
+        ),
+        victim=Victim(
+            ioc_type=IoCType.IP,
+            value="192.168.1.163",
+            direction=Direction.DST,
+        ),
+        src_port=49152,
+        dst_port=destination_port,
+    )
+
+    assert whitelist.is_whitelisted_evidence(evidence) == expected
+
+
+@pytest.mark.parametrize(
+    "side, address, src_port, dst_port, expected",
+    [
+        ("src", "192.168.1.10", 5353, 80, True),
+        ("dst", "192.168.1.163", 80, 5353, True),
+        ("src", "fe80::1", 5353, 80, True),
+        ("dst", "fe80::2", 80, 5353, True),
+        ("src", "192.168.1.10", 80, 5353, False),
+        ("dst", "192.168.1.163", 5353, 80, False),
+    ],
+)
+def test_wildcard_ip_port_rule_matches_evidence(
+    side: str,
+    address: str,
+    src_port: int,
+    dst_port: int,
+    expected: bool,
+) -> None:
+    """Match a wildcard port rule on the same side as an evidence IP.
+
+    :param side: Direction of the evidence IP.
+    :param address: IPv4 or IPv6 evidence address.
+    :param src_port: Evidence source port.
+    :param dst_port: Evidence destination port.
+    :param expected: Expected whitelist decision.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(
+        whitelist.parser.parse_line("ip,*:5353,both,alerts")
+    )
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(
+        return_value=False
+    )
+    whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
+    entity = Mock(
+        ioc_type=IoCType.IP,
+        value=address,
+        direction=Direction.SRC if side == "src" else Direction.DST,
+        DNS_resolution=None,
+        queries=None,
+        CNAME=None,
+        SNI=None,
+    )
+    evidence = Mock(src_port=src_port, dst_port=dst_port)
+    setattr(evidence, "attacker" if side == "src" else "victim", entity)
+
+    assert (
+        whitelist._is_whitelisted_entity(
+            evidence, "attacker" if side == "src" else "victim"
+        )
+        == expected
+    )
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        address,
+        entity.direction,
+        "flows",
+        src_port if side == "src" else dst_port,
+    )
+
+
+@pytest.mark.parametrize(
+    "side, src_port, dst_port, expected",
+    [
+        ("src", 5353, 80, True),
+        ("dst", 80, 5353, True),
+        ("src", 80, 5353, False),
+        ("dst", 5353, 80, False),
+        ("both", 5353, 80, True),
+        ("both", 80, 5353, True),
+        ("src", 80, 80, False),
+    ],
+)
+def test_wildcard_ip_port_rule_matches_flow(
+    side: str, src_port: int, dst_port: int, expected: bool
+) -> None:
+    """Match a wildcard port rule against either side of a flow.
+
+    :param side: Direction configured in the rule.
+    :param src_port: Flow source port.
+    :param dst_port: Flow destination port.
+    :param expected: Expected flow whitelist decision.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(
+        whitelist.parser.parse_line(f"ip,*:5353,{side},flows")
+    )
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    flow = Mock(
+        saddr="192.168.1.10",
+        daddr="192.168.1.163",
+        sport=src_port,
+        dport=dst_port,
+        type_="conn",
+    )
+
+    assert whitelist._flow_contains_whitelisted_ip(flow) == expected
 
 
 @pytest.mark.parametrize(

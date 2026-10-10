@@ -20,6 +20,7 @@ from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
     Evidence,
+    EvidenceType,
     ThreatLevel,
     TimeWindow,
     dict_to_evidence,
@@ -347,7 +348,7 @@ class EvidenceHandlerWorker(IModule):
 
     def is_blocking_modules_supported(self) -> bool:
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
-        blocking_module_enabled = "-p" in sys.argv
+        blocking_module_enabled = "-p" in sys.argv or "--blocking" in sys.argv
         return (
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled
@@ -453,7 +454,12 @@ class EvidenceHandlerWorker(IModule):
     def get_accumulated_threat_level(
         self, profileid, twid, evidence: Evidence
     ) -> float:
-        if evidence.threat_level == ThreatLevel.INFO:
+        # A received report is retained as evidence, while only the
+        # corresponding observed malicious-IP finding contributes to alerts.
+        if (
+            evidence.threat_level == ThreatLevel.INFO
+            or evidence.evidence_type == EvidenceType.P2P_REPORT
+        ):
             return self.db.get_accumulated_threat_level(profileid, twid)
 
         past_evidence_ids = self.get_evidence_that_were_part_of_a_past_alert(
@@ -682,7 +688,10 @@ class EvidenceHandlerWorker(IModule):
         # Informational evidence has no threat contribution and therefore
         # cannot be the event that triggers an alert. It remains processed and
         # may still be correlated with a later, score-contributing alert.
-        if evidence.threat_level == ThreatLevel.INFO:
+        if (
+            evidence.threat_level == ThreatLevel.INFO
+            or evidence.evidence_type == EvidenceType.P2P_REPORT
+        ):
             return
 
         if self.is_running_non_stop:

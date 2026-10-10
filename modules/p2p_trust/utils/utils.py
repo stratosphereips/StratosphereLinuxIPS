@@ -31,6 +31,27 @@ def validate_ip_address(ip: str) -> bool:
     return True
 
 
+def is_unicast_ip(ip: str) -> bool:
+    """Accept an individual IP address for peer reputation checks.
+
+    Parameters:
+        ip: Address to check.
+
+    Returns:
+        True for a unicast address, including private addresses.
+    """
+    try:
+        address = ipaddress.ip_address(ip)
+    except (TypeError, ValueError):
+        return False
+    return not (
+        address.is_multicast
+        or address.is_unspecified
+        or address.is_loopback
+        or str(address) == "255.255.255.255"
+    )
+
+
 threat_levels = {
     "info": 0,
     "low": 0.2,

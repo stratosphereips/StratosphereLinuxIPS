@@ -504,10 +504,7 @@ class TIFeedParserMixin:
 
         data_type = utils.detect_ioc_type(ioc)
         if data_type is None:
-            self.log(
-                f"The data {ioc} is not valid. It "
-                f"was found in {ti_file_path}."
-            )
+            self.log(f"Skipped invalid feed entry {ioc} in {ti_file_path}.")
             return False
         return True
 

@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from distutils.dir_util import copy_tree
 from typing import Set
 import logging
 
@@ -38,7 +37,6 @@ from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
 from slips_files.core.helpers.checker import Checker
-
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -73,6 +71,7 @@ class Main:
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
             self.checker.verify_given_flags()
+            self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
                 self.input_type: InputType
@@ -143,7 +142,7 @@ class Main:
                 return
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
-            copy_tree(zeek_dir, dest_zeek_dir)
+            shutil.copytree(zeek_dir, dest_zeek_dir, dirs_exist_ok=True)
             print(f"[Main] Stored a copy of zeek files to {dest_zeek_dir}")
 
     def delete_zeek_files(self):
@@ -187,6 +186,11 @@ class Main:
         if self.args.is_slips_started_by_an_update:
             # we should append to existing files in the output dir,
             # and never overwrite them.
+            return
+
+        if getattr(self.args, "keep_history", False) is True:
+            self.redis_man.validate_keep_history()
+            os.chmod(self.args.output, 0o777)
             return
 
         if not self.args.output:
@@ -733,7 +737,12 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.host_ip_man.update_host_ip(host_ips, modified_profiles)
+                host_ips = (
+                    self.host_ip_man.update_host_ip(
+                        host_ips, modified_profiles
+                    )
+                    or {}
+                )
                 if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 

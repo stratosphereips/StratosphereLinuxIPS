@@ -1,15 +1,17 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import errno
+import ipaddress
 import os
 import shutil
 import signal
+import sqlite3
 import subprocess
+import netifaces
 import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
 import json
-import socket
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
@@ -62,9 +64,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         message_data = json.loads(message_data)
         ip_address = message_data.get("ip")
         # time_since_cached = int(message_data.get('cache_age', 0))
-        return (
-            message_data if p2p_utils.validate_ip_address(ip_address) else None
-        )
+        return message_data if p2p_utils.is_unicast_ip(ip_address) else None
     except ValueError:
         # message has wrong format
         print(
@@ -95,6 +95,10 @@ class Trust(IModule):
     # levels.
     blame_threshold = 0.5
     start_pigeon = True
+    active_p2p_connection_ttl = 300
+    p2p_connection_heartbeat_interval = 60
+    local_ip_check_interval = 5
+    max_bootstrap_peers = 50
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
     pigeon_binary = pigeon_binary_dir / "p2p4slips"
@@ -115,6 +119,7 @@ class Trust(IModule):
 
         self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
+        self.last_local_ip_check = time.monotonic()
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
@@ -142,6 +147,10 @@ class Trust(IModule):
         self.mutliaddress_printed = False
         self.last_log_rotation_time = time.time()
         self.rotation_period = 86400  # 1 day in seconds
+        self.last_report_compaction_time = 0
+        self.report_compaction_interval = 5
+        self.report_compaction_batch_size = 1000
+        self.last_p2p_connection_heartbeat_time = 0
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("report_to_peers")
@@ -176,13 +185,31 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
         self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.rendezvous: str = conf.read_configuration(
+            "local_p2p", "rendezvous", "slips"
+        )
 
-    def get_local_IP(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+    def get_local_IP(self) -> str:
+        """Return the capture interface's IPv4 address without Internet access.
+
+        Returns:
+            IPv4 address on the selected interface or default-route interface.
+        """
+        interface = self.args.interface
+        if not interface:
+            gateway = (
+                netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+            )
+            interface = gateway[1] if gateway else None
+        if interface:
+            for address in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                if address.get("addr"):
+                    return address["addr"]
+        raise ValueError(
+            "Local P2P requires an interface with an IPv4 address."
+        )
 
     def _configure(self):
         self.trust_db = self.db.trust_db
@@ -316,7 +343,11 @@ class Trust(IModule):
         decides whether to report the given evidence to other
         peers
         """
-        if evidence.profile.ip in utils.get_own_ips():
+        own_ips = utils.get_own_ips(ret="List", include_public=False)
+        if (
+            evidence.profile.ip in own_ips
+            or evidence.attacker.value in own_ips
+        ):
             return False
 
         if evidence.evidence_type == EvidenceType.P2P_REPORT:
@@ -325,6 +356,9 @@ class Trust(IModule):
 
         if evidence.attacker.ioc_type != IoCType.IP.name:
             # we only share ips with other peers.
+            return False
+
+        if not p2p_utils.is_unicast_ip(evidence.attacker.value):
             return False
 
         confidence = self.extract_confidence(evidence)
@@ -409,6 +443,29 @@ class Trust(IModule):
         # except Exception as e:
         #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
 
+    def is_msg_version_compatible(self, message: dict, channel: str) -> bool:
+        """Validate Go envelopes separately from versioned Slips messages.
+
+        Parameters:
+            message: Redis message from a subscribed channel.
+            channel: Channel on which the message was received.
+
+        Returns:
+            Whether the message matches the channel's expected protocol.
+        """
+        if message and channel == self.gopy_channel:
+            try:
+                payload = json.loads(message["data"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            return (
+                isinstance(payload, dict)
+                and payload.get("message_type")
+                in ("peer_update", "connection_update", "go_data")
+                and isinstance(payload.get("message_contents"), dict)
+            )
+        return super().is_msg_version_compatible(message, channel)
+
     # def update_callback(self, msg: Dict):
     #     try:
     #         data = msg["data"]
@@ -431,7 +488,7 @@ class Trust(IModule):
 
     def set_evidence_malicious_ip(
         self, ip_info: dict, threat_level: float, confidence: float
-    ):
+    ) -> None:
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
@@ -451,6 +508,24 @@ class Trust(IModule):
         :param confidence: how confident the network opinion is about this opinion
         """
         attacker_ip: str = ip_info.get("ip")
+        report_after_id = ip_info.get("report_after_id")
+        peer_ids = sorted(
+            self.trust_db.get_reporter_peerids_for_ip(
+                attacker_ip, report_after_id
+            )
+        )
+        peer_labels = []
+        for peer_id in peer_ids:
+            _last_seen, peer_ip = self.trust_db.get_ip_of_peer(peer_id)
+            peer_labels.append(
+                f"{peer_id} ({peer_ip})" if peer_ip else peer_id
+            )
+        peer_source = (
+            f" Replied to this lookup, peer{'s' if len(peer_ids) != 1 else ''}: "
+            f"{', '.join(peer_labels)}."
+            if peer_ids
+            else " No peer reply was recorded for this lookup."
+        )
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
 
@@ -461,30 +536,30 @@ class Trust(IModule):
         if "src" in ip_info.get("ip_state"):
             description = (
                 f"Connection from blacklisted IP {attacker_ip} "
-                f"to {saddr} Source: Slips P2P network."
+                f"to {saddr} Source: Slips P2P network.{peer_source}"
             )
         else:
             description = (
                 f"Connection to blacklisted IP {attacker_ip} "
-                f"from {saddr} Source: Slips P2P network."
+                f"from {saddr} Source: Slips P2P network.{peer_source}"
             )
 
-        for ip in (saddr, attacker_ip):
-            evidence = Evidence(
-                evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
-                attacker=Attacker(
-                    direction=Direction.SRC, ioc_type=IoCType.IP, value=ip
-                ),
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=attacker_ip),
-                timewindow=TimeWindow(number=twid_int),
-                uid=[ip_info.get("uid")],
-                timestamp=str(ip_info.get("stime")),
-            )
-
-            self.db.set_evidence(evidence)
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=attacker_ip,
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=attacker_ip),
+            timewindow=TimeWindow(number=twid_int),
+            uid=[ip_info.get("uid")],
+            timestamp=str(ip_info.get("stime")),
+        )
+        self.db.set_evidence(evidence)
 
     def handle_data_request(self, message_data: str) -> None:
         """
@@ -557,8 +632,12 @@ class Trust(IModule):
         #       I do not remember writing this comment. I have no idea
         #       in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
+        report_after_id = self.trust_db.get_latest_report_id()
         p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
-        self.print(f"[Slips -> The Network] request about {ip_address}")
+        self.print(
+            f"[Slips -> The Network] request about {ip_address}",
+            log_to_logfiles_only=True,
+        )
 
         # go will send a reply in no longer than 10s (or whatever the
         # timeout there is set to). The reply will be
@@ -571,7 +650,11 @@ class Trust(IModule):
         (
             combined_score,
             combined_confidence,
-        ) = self.reputation_model.get_opinion_on_ip(ip_address)
+        ) = self.reputation_model.get_opinion_on_ip(
+            ip_address, report_after_id
+        )
+
+        ip_info["report_after_id"] = report_after_id
 
         self.process_network_response(
             ip_address,
@@ -591,10 +674,17 @@ class Trust(IModule):
         stores the reported score and confidence about the ip and adds an
         evidence if necessary like when the peers report a malicious ip
         """
+        if not p2p_utils.is_unicast_ip(ip):
+            return
         # no data in db - this happens when testing,
         # if there is not enough data on peers
         if combined_score is None or combined_confidence is None:
-            self.print(f"No data received from the network about {ip}\n", 0, 2)
+            self.print(
+                f"No data received from the network about {ip}\n",
+                0,
+                2,
+                log_to_logfiles_only=True,
+            )
             return
 
         self.print(
@@ -603,6 +693,7 @@ class Trust(IModule):
             f"confidence={combined_confidence} saving it now!\n",
             0,
             2,
+            log_to_logfiles_only=True,
         )
 
         if combined_score * combined_confidence > 0:
@@ -622,9 +713,158 @@ class Trust(IModule):
         """
         pass
 
+    def _pigeon_supports_flag(self, flag: str) -> bool:
+        """Check whether the installed Pigeon binary accepts a CLI flag.
+
+        Parameters:
+            flag: Command-line flag to look for in Pigeon's help output.
+
+        Returns:
+            True when the binary advertises the flag, otherwise False.
+        """
+        try:
+            result = subprocess.run(
+                [str(self.pigeon_binary), "-help"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return flag in f"{result.stdout}\n{result.stderr}"
+
+    def _get_pigeon_command(self) -> list[str]:
+        """Build a command compatible with the installed Pigeon binary.
+
+        Returns:
+            Sanitized Pigeon command and arguments.
+        """
+        params = {
+            "-port": str(self.port),
+            "-host": "0.0.0.0",
+            "-rendezvous": self.rendezvous,
+            "-key-file": self.pigeon_key_file,
+            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
+            "-redis-auth-conf": get_redis_auth_conf_path(),
+            "-redis-channel-pygo": self.pygo_channel_raw,
+            "-redis-channel-gopy": self.gopy_channel_raw,
+        }
+        if self._pigeon_supports_flag("-slips-version"):
+            params["-slips-version"] = self.slips_version
+        else:
+            self.print(
+                "Warning: The installed p2p4slips binary does not support "
+                "-slips-version; starting in legacy compatibility mode."
+            )
+
+        bootstrap_peers = self._get_bootstrap_peer_addresses()
+        if bootstrap_peers and self._pigeon_supports_flag("-bootstrap-peers"):
+            params["-bootstrap-peers"] = ",".join(bootstrap_peers)
+
+        return [str(self.pigeon_binary)] + [
+            utils.sanitize(item) for pair in params.items() for item in pair
+        ]
+
+    def _get_bootstrap_peer_addresses(self) -> list[str]:
+        """Build authenticated peer endpoints from this network's history.
+
+        Returns:
+            Recent peer multiaddresses on the monitored IPv4 subnet.
+        """
+        trust_db = getattr(self, "trust_db", None)
+        if trust_db is None:
+            return []
+
+        try:
+            subnets = self._get_local_subnets()
+        except (OSError, ValueError):
+            subnets = set()
+
+        addresses: dict[str, str] = {}
+        try:
+            known_addresses = trust_db.get_recent_peer_addresses(
+                self.max_bootstrap_peers
+            )
+        except (AttributeError, TypeError):
+            known_addresses = []
+        if isinstance(known_addresses, (list, tuple)):
+            for peer_id, address, port, _timestamp in known_addresses:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), port, subnets
+                )
+
+        try:
+            known_ips = trust_db.get_recent_peer_ips(self.max_bootstrap_peers)
+        except (AttributeError, TypeError):
+            known_ips = []
+        if isinstance(known_ips, (list, tuple)):
+            for peer_id, address, _timestamp in known_ips:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), self.port, subnets
+                )
+
+        return list(addresses.values())[: self.max_bootstrap_peers]
+
+    def _add_bootstrap_address(
+        self,
+        addresses: dict[str, str],
+        peer_id: str,
+        address: str,
+        port: int,
+        subnets: set[ipaddress.IPv4Network],
+    ) -> None:
+        """Add a valid peer endpoint once, if it belongs to this subnet.
+
+        Parameters:
+            addresses: Output mapping keyed by peer ID.
+            peer_id: Authenticated P2P identity.
+            address: Last observed IPv4 address.
+            port: Last observed P2P listening port.
+            subnet: Current monitored subnet, when available.
+        """
+        if peer_id in addresses:
+            return
+        try:
+            peer_ip = ipaddress.IPv4Address(address)
+            peer_port = int(port)
+        except (ipaddress.AddressValueError, TypeError, ValueError):
+            return
+        if peer_port < 1 or peer_port > 65535:
+            return
+        if subnets and not any(peer_ip in subnet for subnet in subnets):
+            return
+        if address == getattr(self, "host", ""):
+            return
+        addresses[peer_id] = f"/ip4/{peer_ip}/tcp/{peer_port}/p2p/{peer_id}"
+
+    def _get_local_subnets(self) -> set[ipaddress.IPv4Network]:
+        """Return directly connected IPv4 networks on local interfaces.
+
+        Returns:
+            IPv4 subnets for non-loopback interfaces with usable netmasks.
+        """
+        subnets = set()
+        for interface in netifaces.interfaces():
+            if interface == "lo0":
+                continue
+            for entry in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                address, netmask = entry.get("addr"), entry.get("netmask")
+                if not address or not netmask:
+                    continue
+                local_ip = ipaddress.IPv4Address(address)
+                if local_ip.is_loopback or local_ip.is_link_local:
+                    continue
+                subnets.add(
+                    ipaddress.ip_network(f"{address}/{netmask}", strict=False)
+                )
+        return subnets
+
     def evaluate_blame_report(
         self, reporter: str, report_time: int, data: dict
-    ):
+    ) -> None:
         """
         Decide whether a peer's "blame" (a request to block an IP)
         should be forwarded to the blocking module.
@@ -655,6 +895,8 @@ class Trust(IModule):
             return
 
         key = data["key"]
+        if not p2p_utils.is_unicast_ip(key):
+            return
 
         # the network's trust-weighted opinion on this IP, aggregated
         # over every peer that reported on it so far (not just this
@@ -668,6 +910,7 @@ class Trust(IModule):
                 f"Not forwarding this blame report.",
                 0,
                 2,
+                log_to_logfiles_only=True,
             )
             return
         network_opinion = network_score * network_confidence
@@ -691,6 +934,7 @@ class Trust(IModule):
                 f"{self.blame_threshold}). Not blocking it.",
                 0,
                 2,
+                log_to_logfiles_only=True,
             )
             return
 
@@ -700,6 +944,7 @@ class Trust(IModule):
             f"module.",
             0,
             2,
+            log_to_logfiles_only=True,
         )
         # give the report to evidenceProcess to decide whether to block or not
         self.db.publish("new_blame", json.dumps(data))
@@ -726,31 +971,20 @@ class Trust(IModule):
             )
             return
 
-        params = {
-            "-port": str(self.port),
-            "-host": self.host,
-            "-key-file": self.pigeon_key_file,
-            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
-            # slips starts every redis-server with the shared requirepass
-            # from this conf, so the pigeon reads its password from it too
-            "-redis-auth-conf": get_redis_auth_conf_path(),
-            "-redis-channel-pygo": self.pygo_channel_raw,
-            "-redis-channel-gopy": self.gopy_channel_raw,
-            "-slips-version": self.slips_version,
-        }
-        self.print(f"P2P is listening on {self.host} port {self.port}.")
-        executable = [self.pigeon_binary] + [
-            utils.sanitize(item) for pair in params.items() for item in pair
-        ]
+        executable = self._get_pigeon_command()
 
         if self.create_p2p_logfile:
-            outfile = open(self.pigeon_logfile, "+w")
+            pigeon_log_path = self.pigeon_logfile
         else:
-            outfile = open(os.devnull, "+w")
+            pigeon_log_path = os.devnull
+        outfile = open(pigeon_log_path, "+w")
 
         try:
             self.pigeon = subprocess.Popen(
-                executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
+                executable,
+                cwd=self.p2p_trust_runtime_dir,
+                stdout=outfile,
+                stderr=subprocess.STDOUT,
             )
         except OSError as error:
             if error.errno != errno.ENOEXEC:
@@ -767,19 +1001,36 @@ class Trust(IModule):
                 return
 
             try:
+                executable = self._get_pigeon_command()
                 self.pigeon = subprocess.Popen(
                     executable,
                     cwd=self.p2p_trust_runtime_dir,
                     stdout=outfile,
+                    stderr=subprocess.STDOUT,
                 )
             except OSError as retry_error:
                 self.print(
                     "Warning: Failed to start p2p4slips after rebuilding. "
                     f"Error: {retry_error}"
                 )
+                return
 
-    def shutdown_gracefully(self):
+        time.sleep(0.1)
+        return_code = self.pigeon.poll()
+        if return_code is not None:
+            self.print(
+                "Warning: p2p4slips exited during startup with return code "
+                f"{return_code}. Check {pigeon_log_path}."
+            )
+            self.pigeon = None
+            return
+
+        self.print(f"P2P is listening on {self.host} port {self.port}.")
+
+    def shutdown_gracefully(self) -> None:
+        """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
@@ -816,6 +1067,48 @@ class Trust(IModule):
 
         self.pigeon = None
 
+    def _refresh_pigeon_address(self) -> None:
+        """Restart Pigeon when the monitored interface gets a new IPv4.
+
+        Wi-Fi and Ethernet interfaces can change addresses while Slips is
+        running. Pigeon binds to its startup address and advertises that
+        address through mDNS, so it must be restarted to join the new network.
+        """
+        now = time.monotonic()
+        if (
+            now - getattr(self, "last_local_ip_check", 0)
+            < self.local_ip_check_interval
+        ):
+            return
+        self.last_local_ip_check = now
+
+        if not hasattr(self, "host"):
+            return
+
+        try:
+            current_ip = self.get_local_IP()
+        except (OSError, ValueError):
+            return
+
+        if (
+            current_ip == self.host
+            and getattr(self, "pigeon", None) is not None
+        ):
+            return
+
+        if current_ip != self.host:
+            self.print(
+                f"Monitored interface address changed from {self.host} to "
+                f"{current_ip}; restarting Pigeon to reconnect to local peers."
+            )
+            self._stop_pigeon()
+            self.db.clear_authenticated_p2p_connections()
+            self.db.store_connected_peers([])
+            self.host = current_ip
+            self.mutliaddress_printed = False
+
+        self._start_pigeon()
+
     def run(self) -> None:
         """Run p2p_trust and guarantee its Go child cannot be orphaned."""
         try:
@@ -827,6 +1120,7 @@ class Trust(IModule):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
@@ -839,6 +1133,14 @@ class Trust(IModule):
 
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
+
+    def should_stop(self) -> bool:
+        """Stop peer callbacks as soon as Slips begins shutting down.
+
+        Returns:
+            True when the shared termination event is set.
+        """
+        return self.termination_event.is_set()
 
     def main(self):
         if self.create_p2p_logfile:
@@ -865,6 +1167,12 @@ class Trust(IModule):
                     1,
                 )
 
+        self._refresh_pigeon_address()
+
+        if self.pigeon is None:
+            self.termination_event.wait(0.05)
+            return
+
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):
             # The pigeon stopped with some error
@@ -884,3 +1192,29 @@ class Trust(IModule):
 
         except Exception:
             pass
+
+        now = time.time()
+        if now - getattr(
+            self, "last_p2p_connection_heartbeat_time", 0
+        ) >= getattr(self, "p2p_connection_heartbeat_interval", 60):
+            self.db.refresh_authenticated_p2p_connections(
+                getattr(self, "active_p2p_connection_ttl", 300)
+            )
+            self.last_p2p_connection_heartbeat_time = now
+
+        if now - getattr(self, "last_report_compaction_time", now) >= getattr(
+            self, "report_compaction_interval", 5
+        ):
+            try:
+                self.trust_db.compact_reports(
+                    getattr(self, "report_compaction_batch_size", 1000)
+                )
+            except sqlite3.OperationalError as error:
+                if "locked" not in str(error).lower():
+                    raise
+                self.print(f"Deferring P2P report compaction: {error}", 0, 1)
+            self.last_report_compaction_time = now
+
+        # Channel reads are nonblocking. Yield between polls so an idle
+        # P2P module does not consume a CPU core.
+        self.termination_event.wait(0.05)

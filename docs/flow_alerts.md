@@ -140,6 +140,10 @@ Slips considers an IP belongs to an org if:
 
 Otherwise, Slips triggers and "unknown port" evidence.
 
+Unknown-port and connection-to-private-IP evidence are skipped when either
+endpoint is multicast, the IPv4 limited-broadcast address, or the monitored
+interface's subnet-directed broadcast address.
+
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
 The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
@@ -355,7 +359,7 @@ Here's how it works
 
 ## Connection to private IPs
 
-Slips detects when a private IP is connected to another private IP with threat level info.
+Slips detects when a private IP is connected to another private IP with threat level info. ICMP traffic does not produce `CONNECTION_TO_PRIVATE_IP` evidence.
 
 But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.

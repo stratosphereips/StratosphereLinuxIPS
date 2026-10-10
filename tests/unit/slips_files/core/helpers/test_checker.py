@@ -217,6 +217,28 @@ def test_check_input_type_filepath(filepath, is_file, is_dir, expected_result):
         assert result == expected_result
 
 
+@pytest.mark.parametrize("source", ["zeek", "argus", "suricata"])
+def test_check_stdin_token_overrides_existing_directory(source: str) -> None:
+    """Recognize stdin formats even when a same-named directory exists.
+
+    Parameters:
+        source: Supported format used as the stdin token.
+    """
+    checker = ModuleFactory().create_checker_obj()
+    checker.main.args.interface = None
+    checker.main.args.access_point = None
+    checker.main.args.db = None
+    checker.main.args.input_module = None
+    checker.main.args.filepath = source
+    checker.main.handle_flows_from_stdin.return_value = (
+        InputType.STDIN,
+        source,
+    )
+    with mock.patch("os.path.isdir", return_value=True):
+        assert checker.get_input_type() == (InputType.STDIN, source, source)
+    checker.main.get_input_file_type.assert_not_called()
+
+
 def test_check_input_type_stdin():
     checker = ModuleFactory().create_checker_obj()
     checker.main.args.interface = None

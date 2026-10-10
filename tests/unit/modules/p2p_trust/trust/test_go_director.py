@@ -4,8 +4,32 @@ import json
 from unittest.mock import Mock, patch
 import pytest
 from tests.module_factory import ModuleFactory
+from modules.p2p_trust.utils.go_director import GoDirector
 import tempfile
 import os
+
+
+@pytest.mark.parametrize("debug, log_only", [(0, True), (2, False)])
+def test_peer_messages_stay_in_logs_unless_they_are_errors(
+    debug: int, log_only: bool
+) -> None:
+    """Route routine peer reports away from the main terminal.
+
+    Parameters:
+        debug: Printer severity of the peer message.
+        log_only: Whether the message should stay in log files.
+    """
+    director = ModuleFactory().create_go_director_obj()
+    director.printer.print = Mock()
+
+    GoDirector.print(director, "peer report", 1, debug)
+
+    if log_only:
+        director.printer.print.assert_called_once_with(
+            "peer report", 1, debug, log_to_logfiles_only=True
+        )
+    else:
+        director.printer.print.assert_called_once_with("peer report", 1, debug)
 
 
 @pytest.mark.parametrize(
@@ -178,6 +202,7 @@ def test_process_message_report_forwards_blame_to_blame_evaluator():
     left untouched.
     """
     go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (False, False)
     go_director.report_func = Mock()
     go_director.blame_evaluator = Mock()
     go_director.evaluation_processors["score_confidence"] = Mock()
@@ -206,6 +231,7 @@ def test_process_message_report_does_not_forward_plain_reports():
     model's blocking decision.
     """
     go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (False, False)
     go_director.blame_evaluator = Mock()
     go_director.evaluation_processors["score_confidence"] = Mock()
 
@@ -223,6 +249,53 @@ def test_process_message_report_does_not_forward_plain_reports():
     go_director.blame_evaluator.assert_not_called()
 
 
+@pytest.mark.parametrize("message_type", ["report", "blame"])
+def test_process_message_report_rejects_peer_self_report(
+    message_type: str,
+) -> None:
+    """Reject a report about the sending peer before storage or blocking.
+
+    Parameters:
+        message_type: Regular reputation report or blame message.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (
+        1649445643,
+        "192.168.1.170",
+    )
+    go_director.report_func = Mock()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+    data = {
+        "message_type": message_type,
+        "key": "192.168.1.170",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.2, "confidence": 0.1},
+    }
+
+    go_director.process_message_report("peer-170", 1649445643, data)
+
+    go_director.evaluation_processors["score_confidence"].assert_not_called()
+    go_director.blame_evaluator.assert_not_called()
+    go_director.report_func.assert_not_called()
+
+
+def test_respond_to_request_does_not_report_own_ip() -> None:
+    """Do not answer a peer query with this Slips node's own reputation."""
+    go_director = ModuleFactory().create_go_director_obj()
+    with patch(
+        "modules.p2p_trust.utils.go_director.utils.get_own_ips",
+        return_value=["192.168.1.170"],
+    ) as own_ips, patch(
+        "modules.p2p_trust.utils.go_director.send_evaluation_to_go"
+    ) as send:
+        go_director.respond_to_message_request("192.168.1.170", "peer-a")
+
+    own_ips.assert_called_once_with(ret="List", include_public=False)
+    send.assert_not_called()
+
+
 def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluator():
     """
     The override_p2p escape hatch is a separate mechanism from blame
@@ -230,6 +303,7 @@ def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluato
     report_func instead of ever touching storage or blame_evaluator.
     """
     go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (False, False)
     go_director.override_p2p = True
     go_director.report_func = Mock()
     go_director.blame_evaluator = Mock()
@@ -245,11 +319,29 @@ def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluato
 
     go_director.process_message_report("test_reporter", 1649445643, data)
 
-    go_director.report_func.assert_called_once_with(
-        "test_reporter", 1649445643, data
-    )
+    go_director.report_func.assert_called_once_with("test_reporter", 1649445643, data)
     go_director.blame_evaluator.assert_not_called()
     go_director.evaluation_processors["score_confidence"].assert_not_called()
+
+
+def test_received_message_marks_peer_recently_active() -> None:
+    """Save recent activity without discarding known peer metadata."""
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.0.2.10", "reliability": 0.8}
+    )
+
+    with patch("modules.p2p_trust.utils.go_director.time.time", return_value=1234):
+        go_director._record_peer_activity("peer-a")
+
+    stored = json.loads(go_director.db.store_peer_trust_data.call_args.args[1])
+    assert stored == {
+        "ip": "192.0.2.10",
+        "reliability": 0.8,
+        "connected": True,
+        "timestamp": 1234,
+        "last_activity": 1234,
+    }
 
 
 @pytest.mark.parametrize(
@@ -337,30 +429,34 @@ def test_validate_message_request(
 
 
 @pytest.mark.parametrize(
-    "ip, reporter, score, confidence, timestamp, "
+    "ip, reporter, reporter_ip, score, confidence, timestamp, "
     "profileid_of_attacker, "
     "expected_description, expected_threat_level",
     [
-        # Test case 1: Basic test with valid data
         (
             "192.168.1.1",
             "test_reporter",
+            "192.168.1.147",
             0.5,
             0.8,
             1649445643,
             "profile_192.168.1.1",
-            "attacking another peer:  (test_reporter).",
+            "Received from P2P peer 192.168.1.147 (test_reporter): "
+            "reputation report about IP 192.168.1.1; maliciousness "
+            "score 0.5, confidence 0.8.",
             "medium",
         ),
-        # Test case 2: Test with a different score and confidence
         (
             "10.0.0.1",
             "another_reporter",
+            "",
             0.9,
             0.6,
             1649445644,
             "profile_10.0.0.1",
-            "attacking another peer:  (another_reporter).",
+            "Received from P2P peer another_reporter (IP unavailable): "
+            "reputation report about IP 10.0.0.1; maliciousness "
+            "score 0.9, confidence 0.6.",
             "critical",
         ),
     ],
@@ -368,6 +464,7 @@ def test_validate_message_request(
 def test_set_evidence_p2p_report(
     ip,
     reporter,
+    reporter_ip,
     score,
     confidence,
     timestamp,
@@ -376,7 +473,10 @@ def test_set_evidence_p2p_report(
     expected_threat_level,
 ):
     go_director = ModuleFactory().create_go_director_obj()
-    go_director.trustdb.get_ip_of_peer.return_value = (timestamp, "")
+    go_director.trustdb.get_ip_of_peer.return_value = (
+        timestamp,
+        reporter_ip,
+    )
 
     go_director.set_evidence_p2p_report(
         ip, reporter, score, confidence, timestamp, profileid_of_attacker
@@ -386,6 +486,8 @@ def test_set_evidence_p2p_report(
     call_args = go_director.db.set_evidence.call_args[0][0]
     assert call_args.attacker.value == ip
     assert expected_description in call_args.description
+    assert "No victim or attack details were provided." in call_args.description
+    assert "attacking another peer" not in call_args.description
     assert call_args.threat_level == expected_threat_level
 
 
@@ -436,15 +538,12 @@ def test_process_message_request_valid_request():
         "evaluation_type": "score_confidence",
     }
 
-    with patch.object(
-        go_director, "respond_to_message_request"
-    ) as mock_respond:
+    with patch.object(go_director, "respond_to_message_request") as mock_respond:
         go_director.process_message_request("test_reporter", 1649445643, data)
 
     mock_respond.assert_called_once_with("192.168.1.1", "test_reporter")
     go_director.print.assert_called_once_with(
-        "[The Network -> Slips] request about "
-        "192.168.1.1 from: test_reporter"
+        "[The Network -> Slips] request about " "192.168.1.1 from: test_reporter"
     )
 
 
@@ -468,8 +567,7 @@ def test_process_message_request_valid_request():
                 "evaluation_type": "score_confidence",
             },
             (
-                "Provided key invalid_ip isn't a "
-                "valid value for it's type ip",
+                "Provided key invalid_ip isn't a " "valid value for it's type ip",
                 0,
                 2,
             ),
@@ -510,9 +608,7 @@ def test_process_message_request_override_p2p():
 
     go_director.process_message_request("test_reporter", 1649445643, data)
 
-    go_director.request_func.assert_called_once_with(
-        "192.168.1.1", "test_reporter"
-    )
+    go_director.request_func.assert_called_once_with("192.168.1.1", "test_reporter")
 
 
 @pytest.mark.parametrize(
@@ -692,14 +788,11 @@ def test_process_go_update_publishes_live_peer_state(
         }
     )
 
-    stored_state = json.loads(
-        go_director.db.store_peer_trust_data.call_args.args[1]
-    )
+    stored_state = json.loads(go_director.db.store_peer_trust_data.call_args.args[1])
     assert stored_state["connected"] is connected
     assert stored_state["timestamp"] == 1649445643
-    go_director.db.store_connected_peers.assert_called_once_with(
-        expected_peers
-    )
+    assert ("last_activity" in stored_state) is connected
+    go_director.db.store_connected_peers.assert_called_once_with(expected_peers)
 
 
 def test_respond_to_message_request_with_info():
@@ -796,6 +889,9 @@ def test_connection_update_is_validated_and_recorded() -> None:
         "tcp|192.0.2.10|6668|198.51.100.20|51000",
         {**connection, "authenticated": True},
         go_director.ACTIVE_P2P_CONNECTION_TTL,
+    )
+    go_director.trustdb.insert_go_peer_address.assert_called_once_with(
+        "peer-a", "198.51.100.20", 51000
     )
     go_director.db.remove_authenticated_p2p_connection.assert_not_called()
 

@@ -5,6 +5,9 @@ from typing import List, Dict
 import os.path
 import json
 import csv
+import math
+import time
+import sqlite3
 from dataclasses import asdict
 
 from slips_files.common.abstracts.isqlite import ISQLite
@@ -36,6 +39,7 @@ class SQLiteDB(ISQLite):
 
     def __init__(self, logger: Output, output_dir: str, main_pid: int):
         self.printer = Printer(logger, self.name)
+        self.output_dir = output_dir
         self._flows_db = get_this_db_path_inside_output_dir(
             output_dir, "flows.sqlite"
         )
@@ -50,9 +54,40 @@ class SQLiteDB(ISQLite):
         super().__init__(self.name.lower(), main_pid, self._flows_db)
 
         if db_newly_created:
+            self._enable_incremental_vacuum()
             self.init_tables()
         else:
             self._ensure_history_schema()
+        self._ensure_retention_schema()
+
+    def _enable_incremental_vacuum(self) -> None:
+        """Let new run databases return freed pages without full VACUUM."""
+        with self.conn_lock:
+            with self._acquire_flock():
+                self.conn.execute("PRAGMA auto_vacuum=INCREMENTAL")
+                self.conn.execute("VACUUM")
+
+    def _ensure_retention_schema(self) -> None:
+        """Add indexed flow age and retention class to old and new runs."""
+        for table in ("flows", "altflows"):
+            columns = set(self.get_columns(table))
+            if "event_time" not in columns:
+                self.execute(f"ALTER TABLE {table} ADD COLUMN event_time REAL")
+            if "retention_class" not in columns:
+                self.execute(
+                    f"ALTER TABLE {table} ADD COLUMN retention_class "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+            self.execute(
+                f"CREATE INDEX IF NOT EXISTS {table}_retention_idx "
+                f"ON {table}(retention_class, event_time) "
+                "WHERE event_time IS NOT NULL"
+            )
+        self.create_table(
+            "flow_retention_state",
+            "table_name TEXT PRIMARY KEY, backfill_rowid INTEGER NOT NULL, "
+            "backfill_max_rowid INTEGER NOT NULL",
+        )
 
     def _ensure_history_schema(self) -> None:
         """Add durable detection tables when opening an older run database."""
@@ -133,6 +168,10 @@ class SQLiteDB(ISQLite):
             "ON evidence(evidence_time DESC, evidence_id)",
             "CREATE INDEX IF NOT EXISTS evidence_profile_time_idx "
             "ON evidence(profile_ip, evidence_time DESC, evidence_id)",
+            "CREATE INDEX IF NOT EXISTS evidence_profile_ratl_idx "
+            "ON evidence(profile_ip, accumulated_ratl DESC)",
+            "CREATE INDEX IF NOT EXISTS evidence_profile_threat_score_idx "
+            "ON evidence(profile_ip, accumulated_threat_level DESC)",
             "CREATE INDEX IF NOT EXISTS evidence_whitelisted_tw_idx "
             "ON evidence(profile_ip, timewindow, whitelisted)",
             "CREATE INDEX IF NOT EXISTS evidence_type_idx "
@@ -314,8 +353,10 @@ class SQLiteDB(ISQLite):
         def row_generator():
             # select all flows and altflows
             cursor = self.execute(
-                "SELECT * FROM flows UNION SELECT uid, flow, label, profileid,"
-                " twid FROM altflows"
+                "SELECT uid, flow, label, profileid, twid, aid, "
+                "event_time, retention_class FROM flows UNION "
+                "SELECT uid, flow, label, profileid, twid, NULL, "
+                "event_time, retention_class FROM altflows"
             )
 
             while True:
@@ -342,35 +383,41 @@ class SQLiteDB(ISQLite):
         res = res[0][1] if res else {}
         return {uid: res}
 
-    def add_flow(self, flow, profileid: str, twid: str, label="benign"):
-        if hasattr(flow, "aid"):
-            parameters = (
-                profileid,
-                twid,
-                flow.uid,
-                json.dumps(asdict(flow)),
-                label,
-                flow.aid,
-            )
-            self.execute(
-                "INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label, aid) "
-                "VALUES (?, ?, ?, ?, ?, ?);",
-                parameters,
-            )
-        else:
-            parameters = (
-                profileid,
-                twid,
-                flow.uid,
-                json.dumps(asdict(flow)),
-                label,
-            )
+    @staticmethod
+    def _flow_event_time(flow) -> float:
+        """Read a flow timestamp, falling back to insertion time if invalid.
 
-            self.execute(
-                "INSERT OR REPLACE INTO flows (profileid, twid, uid, flow, label) "
-                "VALUES (?, ?, ?, ?, ?);",
-                parameters,
-            )
+        Parameters:
+            flow: Parsed traffic record.
+
+        Returns:
+            Finite Unix timestamp used for retention ordering.
+        """
+        try:
+            timestamp = float(flow.starttime)
+        except (AttributeError, TypeError, ValueError):
+            return time.time()
+        return timestamp if math.isfinite(timestamp) else time.time()
+
+    def add_flow(self, flow, profileid: str, twid: str, label="benign"):
+        parameters = (
+            profileid,
+            twid,
+            flow.uid,
+            json.dumps(asdict(flow)),
+            label,
+            getattr(flow, "aid", None),
+            self._flow_event_time(flow),
+        )
+        self.execute(
+            "INSERT INTO flows (profileid, twid, uid, flow, label, aid, "
+            "event_time) VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(uid) DO UPDATE SET "
+            "profileid=excluded.profileid, twid=excluded.twid, "
+            "flow=excluded.flow, label=excluded.label, aid=excluded.aid, "
+            "event_time=excluded.event_time",
+            parameters,
+        )
 
     def get_flows_count(self, profileid=None, twid=None) -> int:
         """
@@ -413,13 +460,364 @@ class SQLiteDB(ISQLite):
             json.dumps(asdict(flow)),
             label,
             flow.type_,
+            self._flow_event_time(flow),
         )
         self.execute(
-            "INSERT OR REPLACE INTO altflows (profileid, twid, uid, "
-            "flow, label, flow_type) "
-            "VALUES (?, ?, ?, ?, ?, ?);",
+            "INSERT INTO altflows (profileid, twid, uid, "
+            "flow, label, flow_type, event_time) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?) "
+            "ON CONFLICT(uid) DO UPDATE SET "
+            "profileid=excluded.profileid, twid=excluded.twid, "
+            "flow=excluded.flow, label=excluded.label, "
+            "flow_type=excluded.flow_type, event_time=excluded.event_time",
             parameters,
         )
+
+    @staticmethod
+    def _stored_flow_event_time(raw_flow: str) -> float:
+        """Recover a legacy row's timestamp from its serialized flow.
+
+        Parameters:
+            raw_flow: Flow JSON stored before the indexed timestamp existed.
+
+        Returns:
+            Finite Unix timestamp, or the current time for invalid data.
+        """
+        try:
+            value = float(json.loads(raw_flow)["starttime"])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return time.time()
+        return value if math.isfinite(value) else time.time()
+
+    def _backfill_retention_times(
+        self, cursor, table: str, batch_size: int
+    ) -> int:
+        """Migrate one bounded batch of legacy flow timestamps.
+
+        Parameters:
+            cursor: Cursor in the retention transaction.
+            table: The flows or altflows table.
+            batch_size: Maximum number of legacy rows to update.
+
+        Returns:
+            Number of timestamps populated in this batch.
+        """
+        state = cursor.execute(
+            "SELECT backfill_rowid, backfill_max_rowid "
+            "FROM flow_retention_state WHERE table_name = ?",
+            (table,),
+        ).fetchone()
+        if state is None:
+            max_rowid = cursor.execute(
+                f"SELECT COALESCE(MAX(rowid), 0) FROM {table}"
+            ).fetchone()[0]
+            cursor.execute(
+                "INSERT INTO flow_retention_state "
+                "(table_name, backfill_rowid, backfill_max_rowid) "
+                "VALUES (?, 0, ?)",
+                (table, max_rowid),
+            )
+            last_rowid = 0
+        else:
+            last_rowid, max_rowid = state
+        if last_rowid < 0:
+            return 0
+        rows = cursor.execute(
+            f"SELECT rowid, flow FROM {table} WHERE rowid > ? "
+            "AND rowid <= ? AND event_time IS NULL "
+            "ORDER BY rowid LIMIT ?",
+            (last_rowid, max_rowid, batch_size),
+        ).fetchall()
+        if not rows:
+            cursor.execute(
+                "UPDATE flow_retention_state SET backfill_rowid = -1 "
+                "WHERE table_name = ?",
+                (table,),
+            )
+            return 0
+        cursor.executemany(
+            f"UPDATE {table} SET event_time = ? WHERE rowid = ?",
+            [
+                (self._stored_flow_event_time(raw), rowid)
+                for rowid, raw in rows
+            ],
+        )
+        cursor.execute(
+            "UPDATE flow_retention_state SET backfill_rowid = ? "
+            "WHERE table_name = ?",
+            (rows[-1][0], table),
+        )
+        return len(rows)
+
+    def _prune_flow_table(
+        self,
+        cursor,
+        table: str,
+        ordinary_cutoff: float,
+        linked_cutoff: float,
+        batch_size: int,
+    ) -> list[str]:
+        """Classify old flows by evidence and delete expired rows.
+
+        Parameters:
+            cursor: Cursor in the retention transaction.
+            table: The flows or altflows table.
+            ordinary_cutoff: Oldest age allowed for ordinary flow rows.
+            linked_cutoff: Oldest age allowed for evidence-linked rows.
+            batch_size: Maximum rows per retention class to inspect.
+
+        Returns:
+            UIDs deleted from this table.
+        """
+        candidates = [
+            row[0]
+            for row in cursor.execute(
+                f"SELECT uid FROM {table} WHERE retention_class = 0 "
+                "AND event_time < ? ORDER BY event_time LIMIT ?",
+                (ordinary_cutoff, batch_size),
+            ).fetchall()
+        ]
+        deleted: list[str] = []
+        if candidates:
+            placeholders = ",".join("?" for _ in candidates)
+            linked = {
+                row[0]
+                for row in cursor.execute(
+                    "SELECT DISTINCT ef.uid FROM evidence_flows ef "
+                    "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+                    f"WHERE ef.uid IN ({placeholders}) "
+                    "AND COALESCE(e.whitelisted, 0) = 0",
+                    candidates,
+                ).fetchall()
+            }
+            if linked:
+                linked_placeholders = ",".join("?" for _ in linked)
+                cursor.execute(
+                    f"UPDATE {table} SET retention_class = 1 "
+                    f"WHERE uid IN ({linked_placeholders})",
+                    tuple(linked),
+                )
+            ordinary = [uid for uid in candidates if uid not in linked]
+            if ordinary:
+                ordinary_placeholders = ",".join("?" for _ in ordinary)
+                cursor.execute(
+                    f"DELETE FROM {table} WHERE uid IN "
+                    f"({ordinary_placeholders})",
+                    ordinary,
+                )
+                deleted.extend(ordinary)
+        expired_linked = [
+            row[0]
+            for row in cursor.execute(
+                f"SELECT f.uid FROM {table} f WHERE f.retention_class = 1 "
+                f"AND {self._linked_priority_time('f')} < ? "
+                f"ORDER BY {self._linked_priority_time('f')} LIMIT ?",
+                (linked_cutoff, batch_size),
+            ).fetchall()
+        ]
+        if expired_linked:
+            placeholders = ",".join("?" for _ in expired_linked)
+            cursor.execute(
+                f"DELETE FROM {table} WHERE uid IN ({placeholders})",
+                expired_linked,
+            )
+            deleted.extend(expired_linked)
+        return deleted
+
+    def maintain_flow_retention(
+        self,
+        ordinary_cutoff: float,
+        linked_cutoff: float,
+        batch_size: int = 500,
+        max_size_bytes: int = 512 * 1024 * 1024,
+    ) -> list[str]:
+        """Prune bounded flow batches while retaining recent evidence flows.
+
+        Parameters:
+            ordinary_cutoff: Unix time before which ordinary flows expire.
+            linked_cutoff: Unix time before which linked flows expire.
+            batch_size: Maximum rows per table and class per pass.
+            max_size_bytes: Logical database size target; zero disables it.
+
+        Returns:
+            Connection UIDs removed, for the web's compact index cleanup.
+        """
+        if not 1 <= batch_size <= 800:
+            raise ValueError("batch_size must be between 1 and 800")
+        if linked_cutoff > ordinary_cutoff:
+            raise ValueError(
+                "linked flows cannot expire before ordinary flows"
+            )
+        if max_size_bytes < 0:
+            raise ValueError("max_size_bytes cannot be negative")
+        with self.conn_lock:
+            with self._acquire_flock():
+                cursor = self.conn.cursor()
+                try:
+                    cursor.execute("BEGIN IMMEDIATE")
+                    removed: list[str] = []
+                    any_removed = False
+                    for table in ("flows", "altflows"):
+                        self._backfill_retention_times(
+                            cursor, table, batch_size * 4
+                        )
+                        deleted = self._prune_flow_table(
+                            cursor,
+                            table,
+                            ordinary_cutoff,
+                            linked_cutoff,
+                            batch_size,
+                        )
+                        any_removed = any_removed or bool(deleted)
+                        if table == "flows":
+                            removed.extend(deleted)
+                    if (
+                        max_size_bytes
+                        and self._logical_size_bytes(cursor) > max_size_bytes
+                    ):
+                        for linked_only in (False, True):
+                            deleted = self._prune_for_size(
+                                cursor,
+                                batch_size,
+                                linked_only,
+                                ordinary_cutoff,
+                            )
+                            any_removed = any_removed or any(deleted.values())
+                            removed.extend(deleted["flows"])
+                            if (
+                                self._logical_size_bytes(cursor)
+                                <= max_size_bytes
+                            ):
+                                break
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+                if any_removed:
+                    cursor.execute("PRAGMA incremental_vacuum(2048)")
+        return removed
+
+    def _logical_size_bytes(self, cursor) -> int:
+        """Return the SQLite database size excluding reusable free pages."""
+        page_count = cursor.execute("PRAGMA page_count").fetchone()[0]
+        free_pages = cursor.execute("PRAGMA freelist_count").fetchone()[0]
+        page_size = cursor.execute("PRAGMA page_size").fetchone()[0]
+        return (page_count - free_pages) * page_size
+
+    @staticmethod
+    def _linked_priority_time(alias: str) -> str:
+        """Use the newest linked evidence time when deciding flow retention.
+
+        Parameters:
+            alias: SQL alias of a flows or altflows row.
+
+        Returns:
+            SQL expression for the latest flow or non-excluded evidence time.
+        """
+        return (
+            f"MAX({alias}.event_time, COALESCE(("
+            "SELECT MAX(e.evidence_time) FROM evidence_flows ef "
+            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+            f"WHERE ef.uid = {alias}.uid "
+            "AND COALESCE(e.whitelisted, 0) = 0), "
+            f"{alias}.event_time))"
+        )
+
+    def _prune_for_size(
+        self,
+        cursor,
+        batch_size: int,
+        linked_only: bool,
+        linked_size_cutoff: float,
+    ) -> dict[str, list[str]]:
+        """Delete the oldest cross-table batch of a requested evidence class.
+
+        Parameters:
+            cursor: Cursor in the active retention transaction.
+            batch_size: Maximum rows to delete in this pass.
+            linked_only: Select evidence-linked rows when true, otherwise
+                select rows without non-excluded evidence.
+            linked_size_cutoff: Oldest age eligible for linked size pruning.
+
+        Returns:
+            Deleted UIDs grouped by raw flow table.
+        """
+        evidence_condition = "EXISTS" if linked_only else "NOT EXISTS"
+        priority_time = (
+            self._linked_priority_time("f") if linked_only else "f.event_time"
+        )
+        age_filter = f" AND {priority_time} < ?" if linked_only else ""
+        parameters = (
+            (linked_size_cutoff, linked_size_cutoff, batch_size)
+            if linked_only
+            else (batch_size,)
+        )
+        candidates = cursor.execute(
+            "SELECT table_name, uid FROM ("
+            "SELECT 'flows' AS table_name, f.uid AS uid, "
+            f"f.event_time AS event_time, {priority_time} AS priority_time, "
+            "f.rowid AS flow_rowid "
+            "FROM flows f WHERE "
+            f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
+            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
+            f"{age_filter} "
+            "UNION ALL "
+            "SELECT 'altflows' AS table_name, f.uid AS uid, "
+            f"f.event_time AS event_time, {priority_time} AS priority_time, "
+            "f.rowid AS flow_rowid "
+            "FROM altflows f WHERE "
+            f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
+            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
+            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
+            f"{age_filter}"
+            ") ORDER BY priority_time ASC, event_time ASC, "
+            "table_name ASC, flow_rowid ASC "
+            "LIMIT ?",
+            parameters,
+        ).fetchall()
+        deleted: dict[str, list[str]] = {"flows": [], "altflows": []}
+        for table, uid in candidates:
+            deleted[table].append(uid)
+        for table, uids in deleted.items():
+            if not uids:
+                continue
+            placeholders = ",".join("?" for _ in uids)
+            cursor.execute(
+                f"DELETE FROM {table} WHERE uid IN ({placeholders})", uids
+            )
+        return deleted
+
+    def remove_flow_index_uids(self, uids: list[str]) -> int:
+        """Drop compact web index rows after their raw flows are pruned.
+
+        Parameters:
+            uids: Deleted connection flow identifiers.
+
+        Returns:
+            Number of removed index rows, or zero when history is absent.
+        """
+        history_path = os.path.join(
+            self.output_dir, "web_interface", "history.sqlite"
+        )
+        if not uids or not os.path.exists(history_path):
+            return 0
+        deleted = 0
+        try:
+            with sqlite3.connect(history_path, timeout=3) as history:
+                for start in range(0, len(uids), 500):
+                    batch = uids[start : start + 500]
+                    placeholders = ",".join("?" for _ in batch)
+                    cursor = history.execute(
+                        f"DELETE FROM flow_index WHERE uid IN "
+                        f"({placeholders})",
+                        batch,
+                    )
+                    deleted += cursor.rowcount
+        except sqlite3.Error:
+            # The web collector reconciles orphaned index rows later.
+            return 0
+        return deleted
 
     def _execute_detection_transaction(
         self, statements: List[tuple[str, tuple]]

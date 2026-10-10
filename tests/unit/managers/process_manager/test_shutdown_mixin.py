@@ -175,6 +175,62 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
 
 
 @pytest.mark.parametrize(
+    "interrupted, expected_seconds",
+    [(False, 604800), (True, 30)],
+)
+def test_interrupt_caps_module_shutdown_wait(
+    interrupted: bool, expected_seconds: int
+) -> None:
+    """Keep a long normal wait while bounding Ctrl-C shutdown.
+
+    Parameters:
+        interrupted: Whether Ctrl-C requested shutdown.
+        expected_seconds: Effective module grace period.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.wait_for_modules_to_finish.return_value = 10080
+    process_manager.shutdown_signal_received = interrupted
+
+    assert process_manager._module_shutdown_timeout() == expected_seconds
+
+
+def test_interrupt_wait_uses_remaining_global_deadline() -> None:
+    """Do not wait three seconds for every pending module after Ctrl-C."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    children = [Mock(name="first"), Mock(name="second")]
+    for child in children:
+        child.is_alive.return_value = True
+
+    with patch(
+        "managers.process_manager.shutdown_mixin.time.monotonic",
+        return_value=100.0,
+    ):
+        process_manager.wait_for_processes_to_finish(children, 100.1)
+
+    children[0].join.assert_called_once_with(pytest.approx(0.1))
+    children[1].join.assert_called_once_with(pytest.approx(0.1))
+
+
+def test_forced_child_cleanup_skips_another_grace_wait() -> None:
+    """Start killing children immediately when the grace period expires."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = True
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children(force=True)
+
+    process_manager.kill_process_tree.assert_called_once_with(123)
+    child.join.assert_called_once_with(1)
+
+
+@pytest.mark.parametrize(
     "end_date_str, start_time_str, expected_analysis_time",
     [
         # Test case 1: Analysis time is 10 minutes
@@ -741,10 +797,44 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
 
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
+    assert process_manager.profiler_queue._closed
+    assert process_manager.aid_queue._closed
+    assert process_manager.evidence_worker_queue._closed
+    assert process_manager.evidence_logger_q._closed
+    process_manager.main.logger._startup_queue.close.assert_called_once_with()
     process_manager.main.print.assert_any_call(
         "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
+
+
+@pytest.mark.parametrize("still_alive", [False, True])
+def test_kill_all_children_only_kills_running_processes(
+    still_alive: bool,
+) -> None:
+    """Reap exited children and force-kill only children still running.
+
+    Parameters:
+        still_alive: Whether the child survived the initial join.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = still_alive
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children()
+
+    assert child.join.call_count == (2 if still_alive else 1)
+    if still_alive:
+        process_manager.kill_process_tree.assert_called_once_with(123)
+    else:
+        process_manager.kill_process_tree.assert_not_called()
 
 
 def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
@@ -818,8 +908,8 @@ def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop(
 
     assert result == (None, None)
     assert mock_wait.call_args_list == [
-        call([first_process]),
-        call([last_process]),
+        call([first_process], None),
+        call([last_process], None),
     ]
     mock_set.assert_called_once_with()
 
@@ -848,7 +938,7 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
         )
 
     assert result == ([pending_process], [last_process])
-    mock_wait.assert_called_once_with([pending_process])
+    mock_wait.assert_called_once_with([pending_process], None)
     mock_warn.assert_called_once_with([pending_process, last_process])
     mock_set.assert_not_called()
 
@@ -890,8 +980,15 @@ def test_ask_to_keep_firewall_rules(
     assert result is expected_keep
 
 
-def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
-    """Delete inherited rules and every corresponding Redis record."""
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_delete_removes_rules_and_local_state(
+    system: str,
+) -> None:
+    """Delete inherited rules and every corresponding Redis record.
+
+    Parameters:
+        system: Operating system whose firewall rules are removed.
+    """
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.mode = "interactive"
     process_manager.force_shutdown_requested = False
@@ -903,6 +1000,10 @@ def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
     }
 
     with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
         patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
@@ -932,14 +1033,23 @@ def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
     ]
 
 
-def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
-    """Retain managed rules when the operator accepts the default choice."""
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_keep_leaves_rules_installed(system: str) -> None:
+    """Retain managed rules when the operator accepts the default choice.
+
+    Parameters:
+        system: Operating system whose firewall rules are retained.
+    """
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.mode = "interactive"
     process_manager.force_shutdown_requested = False
     process_manager.sigterm_received = False
 
     with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
         patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
@@ -958,3 +1068,71 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
+
+
+@pytest.mark.parametrize("system", ["Windows"])
+def test_firewall_shutdown_skips_non_linux_systems(system: str) -> None:
+    """Avoid invoking Linux firewall commands on unsupported systems.
+
+    Parameters:
+        system: Non-Linux operating-system name reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
+
+
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_skips_runs_without_blocking(system: str) -> None:
+    """Avoid privileged firewall checks when blocking was not enabled.
+
+    Parameters:
+        system: Operating system reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.blocking = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
+
+
+@pytest.mark.parametrize("finished", [False, True])
+def test_stdin_eof_allows_normal_shutdown(finished: bool) -> None:
+    """Keep stdin live until EOF, then allow normal input/profiler completion.
+
+    Parameters:
+        finished: Whether the input process has signalled end of input.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = InputType.STDIN
+    process_manager.main.db.is_running_non_stop.return_value = True
+    process_manager.is_input_done_event.is_set = Mock(return_value=finished)
+    process_manager.is_debugger_active = Mock(return_value=False)
+    process_manager.input_process = Mock(exitcode=0)
+    process_manager.profiler_process = Mock(exitcode=0)
+    process_manager.evidence_process = Mock(exitcode=None)
+    assert process_manager.should_run_non_stop() is not finished
+    assert process_manager._did_a_core_module_fail() is not finished

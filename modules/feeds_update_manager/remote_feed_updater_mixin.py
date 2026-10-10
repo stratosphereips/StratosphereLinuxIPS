@@ -71,6 +71,22 @@ class RemoteFeedUpdaterMixin:
                 self.path_to_remote_ti_files_dir, file_name_to_download
             )
             self.write_file_to_disk(response, feed_local_path)
+            is_blank = True
+            with open(feed_local_path, "rb") as feed_file:
+                while chunk := feed_file.read(CHUNK_SIZE):
+                    if chunk.strip():
+                        is_blank = False
+                        break
+            if is_blank:
+                self.db.set_feed_last_update_time(
+                    link_to_download, time.time()
+                )
+                self.log(
+                    f"Skipped empty remote feed {link_to_download}; "
+                    "retained previously loaded entries."
+                )
+                os.remove(feed_local_path)
+                return False
 
             # File is updated in the server and was in our database.
             # Delete previous iocs of this file.

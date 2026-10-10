@@ -45,6 +45,7 @@ class Constants:
     MSGS_PUBLISHED_AT_RUNTIME = "msgs_published_at_runtime"
     ZEEK_FILES = "zeekfiles"
     DEFAULT_GATEWAY = "default_gateway"
+    NETWORK_STATES = "network_states"
     IS_CYST_ENABLED = "is_cyst_enabled"
     LOCAL_NETWORK = "local_network"
     ZEEK_PATH = "zeek_path"
@@ -123,6 +124,11 @@ class Constants:
     P2P_CONNECTIONS_LAST_SEEN = "p2p:connections:last_seen"
     P2P_ACTIVE_CONNECTIONS = "p2p:active_connections"
     P2P_ACTIVE_CONNECTION_PREFIX = "p2p:active_connection:"
+    SLIPS_OWN_CONNECTION_PREFIX = "slips:own_connection:"
+    SLIPS_OWN_SOURCE_PREFIX = "slips:own_sources:"
+    SLIPS_OWN_SERVICE_PORT_PREFIX = "slips:own_service_port:"
+    SLIPS_OWN_CONNECTION_TTL = 3600
+    SLIPS_OWN_SERVICE_PORT_TTL = 10
     FIDES_CACHE_KEY = "fides_cache"
     FIDES_CACHE_CREATED_SECONDS = "created_seconds"
     FLOWS_PER_MINUTE = "flows_per_minute"

@@ -199,6 +199,9 @@ class IAsyncModule(IModule):
 
                     return
 
+                # main() may only schedule tasks, so explicitly let them run.
+                await asyncio.sleep(0)
+
             except (KeyboardInterrupt, asyncio.CancelledError):
                 self.keyboard_int_ctr += 1
                 if self.keyboard_int_ctr >= 2:

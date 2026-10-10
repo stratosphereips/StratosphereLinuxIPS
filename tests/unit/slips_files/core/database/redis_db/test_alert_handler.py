@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from typing import Dict
+from types import SimpleNamespace
 
 import pytest
 from unittest.mock import MagicMock, Mock
@@ -23,6 +24,35 @@ from slips_files.core.structures.evidence import (
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.risk_weights import RiskWeight
+
+
+@pytest.mark.parametrize(
+    "threat_info, expected",
+    [
+        ({"source": "feed-one"}, "feed-one"),
+        ('{"source": "feed-two"}', "feed-two"),
+        ("legacy-feed", "legacy-feed"),
+    ],
+)
+def test_domain_evidence_accepts_legacy_threat_intelligence_values(
+    threat_info: object, expected: str
+) -> None:
+    """Malformed cached TI must not crash evidence generation.
+
+    Parameters:
+        threat_info: Cached domain intelligence in a legacy representation.
+        expected: Source shown on the evidence entity.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.get_domain_data = Mock(
+        return_value={"threatintelligence": threat_info}
+    )
+    attacker = SimpleNamespace(ioc_type=IoCType.DOMAIN, value="example.test")
+    evidence = SimpleNamespace(attacker=attacker, victim=None)
+
+    result = handler._get_more_info_about_evidence(evidence)
+
+    assert result.attacker.TI == expected
 
 
 @pytest.mark.parametrize(
