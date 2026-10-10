@@ -55,7 +55,7 @@ const state = {
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
-    hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "peak_score", order: "desc", visible: 14 },
+    hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "peak_score", order: "desc", revision: 0, loadingMore: false },
     modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "cpu_percent", order: "desc" },
     firewall: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     hostAlerts: { items: [], total: 0, next: null, cursors: [null], index: 0 },
@@ -606,7 +606,11 @@ function resetPage(name) {
   Object.assign(state.pages[name], {
     items: [], total: 0, next: null, cursors: [null], index: 0,
   });
-  if (name === "hosts") state.pages.hosts.visible = 14;
+  if (name === "hosts") {
+    state.pages.hosts.revision += 1;
+    state.pages.hosts.loadingMore = false;
+    state.requests.get("hostsMore")?.abort();
+  }
 }
 
 function rangeQuery(prefix) {
@@ -3117,11 +3121,13 @@ async function loadP2P() {
 }
 
 async function loadHosts() {
-  const payload = await api("hosts", listPath("hosts"));
-  if (!payload) return;
+  const page = state.pages.hosts;
+  const revision = page.revision;
+  const path = listPath("hosts");
+  const payload = await api("hosts", path);
+  if (!payload || page.revision !== revision || listPath("hosts") !== path) return;
   payload.items.forEach(rememberHostRecord);
   refreshHostLabels();
-  const page = state.pages.hosts;
   const retained = page.items.slice(100);
   const retainedNext = page.next;
   applyPage("hosts", payload);
@@ -3136,32 +3142,41 @@ async function loadHosts() {
   renderHostsPage();
 }
 
-/** Append the next server page when the visible inventory reaches its end. */
+/** Append the next server page while keeping the initial Hosts load bounded. */
 async function loadMoreHosts() {
   const page = state.pages.hosts;
-  if (page.visible < page.items.length) {
-    page.visible += 14;
-    renderHostsPage();
-    return;
-  }
-  if (!page.next) return;
+  if (!page.next || page.loadingMore) return;
+  page.loadingMore = true;
+  const revision = page.revision;
   const params = new URLSearchParams(listPath("hosts").split("?", 2)[1]);
   params.set("cursor", page.next);
-  const payload = await api("hostsMore", `/api/hosts?${params}`);
-  if (!payload) return;
-  payload.items.forEach(rememberHostRecord);
-  page.items.push(...payload.items);
-  page.next = payload.next_cursor;
-  page.total = payload.total;
-  page.visible = Math.min(page.items.length, page.visible + 14);
-  renderHostsPage();
+  try {
+    const payload = await api("hostsMore", `/api/hosts?${params}`);
+    if (!payload || page.revision !== revision) return;
+    payload.items.forEach(rememberHostRecord);
+    const known = new Set(page.items.map((row) => row.ip));
+    page.items.push(...payload.items.filter((row) => !known.has(row.ip)));
+    page.next = payload.next_cursor;
+    page.total = payload.total;
+    renderHostsPage();
+  } finally {
+    if (page.revision === revision) page.loadingMore = false;
+  }
 }
 
-/** Show the bounded inventory page with compact score and identity columns. */
+/** Fetch the next Hosts page when the table scrolls near its end. */
+function maybeLoadMoreHosts() {
+  if (state.activeTab !== "hosts" || state.host || byId("hosts-list-view").hidden) return;
+  const table = document.querySelector(".hosts-list-table");
+  if (table.scrollTop + table.clientHeight >= table.scrollHeight - 250) {
+    loadMoreHosts().catch(() => {});
+  }
+}
+
+/** Show every loaded host with compact score and identity columns. */
 function renderHostsPage() {
   const page = state.pages.hosts;
-  const rows = page.items.slice(0, page.visible);
-  renderTable("hosts-table", rows, [
+  renderTable("hosts-table", page.items, [
     (row) => hostIdentity(row.ip),
     (row) => {
       const value = document.createElement("span");
@@ -3186,10 +3201,10 @@ function renderHostsPage() {
       if (td) td.hidden = !document.querySelector(`[data-host-column="${key}"]`).checked;
     });
   });
-  const shown = Math.min(page.visible, page.items.length);
+  const shown = page.items.length;
   byId("hosts-count").textContent = `${compact(page.total)} hosts · sorted by ${page.sort.replaceAll("_", " ")}`;
-  byId("hosts-list-status").textContent = `${shown} of ${compact(page.total)} hosts · threshold line at ${numeric(page.items[0]?.alert_threshold).toFixed(1)} · current score on hover`;
-  byId("hosts-more").hidden = shown >= page.items.length && !page.next;
+  byId("hosts-list-status").textContent = `${shown} of ${compact(page.total)} hosts loaded${page.next ? " · scroll for more" : ""} · threshold line at ${numeric(page.items[0]?.alert_threshold).toFixed(1)} · current score on hover`;
+  byId("hosts-more").hidden = !page.next;
   applySortIndicators("hosts");
 }
 
@@ -3238,7 +3253,6 @@ function renderHostFilterChips(payload) {
       button.type = "button";
       button.addEventListener("click", () => {
         select.value = value;
-        state.pages.hosts.visible = 14;
         resetPage("hosts");
         loadHosts().catch(() => {});
       });
@@ -4972,7 +4986,6 @@ byId("host-whitelist-action").addEventListener("click", () => {
   }
 });
 byId("hosts-alerts-only").addEventListener("change", () => {
-  state.pages.hosts.visible = 14;
   resetPage("hosts");
   loadHosts().catch(() => {});
 });
@@ -4983,6 +4996,7 @@ document.querySelectorAll(".hosts-columns input").forEach((input) =>
     renderHostsPage();
   }));
 byId("hosts-more").addEventListener("click", () => loadMoreHosts().catch(() => {}));
+document.querySelector(".hosts-list-table").addEventListener("scroll", maybeLoadMoreHosts);
 byId("hosts-export").addEventListener("click", () => {
   const rows = state.pages.hosts.items;
   const fields = ["ip", "user_name", "hostname", "mac", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
