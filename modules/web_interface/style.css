@@ -369,10 +369,14 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .host-alerts-panel { padding: .85rem 1rem; }
 .host-section-heading h3, .host-section-heading p { margin: 0; }
 .host-section-heading p { margin-top: .2rem; color: var(--muted); font-size: .72rem; }
-.host-alert-list { display: flex; max-height: 180px; flex-wrap: wrap; gap: .5rem; margin-top: .7rem; overflow: auto; }
-.host-alert-chip { display: inline-flex; align-items: center; gap: .55rem; padding: .48rem .65rem; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 7px; background: #101d26; color: var(--text); cursor: pointer; }
+.host-alert-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: .3rem; margin-top: .35rem; overflow: auto; }
+.host-alert-chip { display: grid; width: 100%; grid-template-columns: 140px 80px minmax(0, 1fr) auto; align-items: center; gap: .35rem .6rem; padding: .55rem .65rem; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 6px; background: #101d26; color: var(--text); text-align: left; cursor: pointer; }
+.host-alert-chip.high { border-left-color: var(--warn); }
+.host-alert-chip.medium { border-left-color: #e9c36f; }
+.host-alert-chip.low, .host-alert-chip.info { border-left-color: var(--accent); }
 .host-alert-chip:hover, .host-alert-chip:focus-visible { border-color: var(--accent); outline: none; background: #152630; }
-.host-alert-label { color: #dce9f1; font-weight: 700; }
+.host-alert-label { min-width: 0; color: #dce9f1; font-size: .76rem; font-weight: 700; }
+.host-alert-summary { grid-column: 3 / -1; overflow: hidden; color: var(--muted); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .host-alert-chip time { color: var(--muted); font: .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .host-evidence-panel { margin-top: 0; }
 .host-evidence-panel .table-heading input { width: min(340px, 100%); }
@@ -624,7 +628,7 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-mini-charts .line-chart { height: 65px; min-height: 65px; border: 0; background: transparent; }
 .host-activity-panel { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; }
 .host-activity-tabs { display: flex; min-height: 32px; align-items: center; gap: .15rem; border-bottom: 1px solid var(--line); }
-.host-activity-tabs button { padding: .4rem .5rem; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); font-size: .72rem; cursor: pointer; }
+.host-activity-tabs button { padding: .45rem .65rem; border: 0; border-bottom: 3px solid transparent; background: transparent; color: var(--muted); font-size: .78rem; cursor: pointer; }
 .host-activity-tabs button.active { border-bottom-color: var(--accent); color: var(--text); font-weight: 750; }
 .host-activity-tabs span { color: var(--muted); }
 .host-activity-tabs input { width: 180px; min-width: 100px; margin-left: auto; padding: .3rem .4rem; font-size: .69rem; }

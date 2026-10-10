@@ -13,6 +13,7 @@ const state = {
   arpPoisoning: null,
   p2p: null,
   host: null,
+  hostActivity: "alerts",
   alertsWorkspace: {
     severity: "", host: null, alert: null, items: [], next: null,
     total: 0, listGeneration: 0, detailGeneration: 0,
@@ -57,6 +58,7 @@ const state = {
     hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "peak_score", order: "desc", visible: 14 },
     modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "cpu_percent", order: "desc" },
     firewall: { items: [], total: 0, next: null, cursors: [null], index: 0 },
+    hostAlerts: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     hostFlows: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     "host-evidence": { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
   },
@@ -4299,9 +4301,9 @@ function renderHostCards(host) {
   const summaryCards = byId("host-summary").children;
   summaryCards[2].append(text("small", `${compact(host.load?.inbound_flows)} in / ${compact(host.load?.outbound_flows)} out`));
   summaryCards[3].append(text("small", `${formatBytes(host.load?.inbound_bytes)} in / ${formatBytes(host.load?.outbound_bytes)} out`));
-  byId("host-flows-tab-count").textContent = compact(host.load?.flows);
-  byId("host-alerts-tab-count").textContent = compact(host.alert_count);
-  byId("host-evidence-tab-count").textContent = compact(host.evidence_count);
+  byId("host-flows-tab-count").textContent = "";
+  byId("host-alerts-tab-count").textContent = "";
+  byId("host-evidence-tab-count").textContent = "";
   const scorePill = byId("host-score-pill");
   scorePill.replaceChildren(text("span", "Score "), slipsScore(host));
   const identity = byId("host-identity");
@@ -4332,36 +4334,21 @@ function renderHostCards(host) {
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
     : "No cached threat-intelligence data.";
-  byId("host-alerts-title").textContent = exactAggregates
-    ? "Related alerts · " + host.alert_count
-    : "Related alerts · exact profile IP only";
-  const alerts = byId("host-alerts");
-  alerts.replaceChildren();
-  const exactAlerts = host.alerts?.filter((item) => item.ip_alerted === host.ip) || [];
-  exactAlerts.slice(0, 100).forEach((item) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "host-alert-chip";
-    button.append(
-      threat(item.threat_level),
-      text("span", item.label || "Unlabeled alert", "host-alert-label"),
-      text("time", formatTime(item.alert_time)),
-      text("span", compact(item.evidence_count) + " evidence", "count-chip"),
-    );
-    button.addEventListener("click", () => openAlert(item));
-    alerts.append(button);
-  });
-  if (!exactAlerts.length) alerts.append(text("p", "No related alerts.", "muted"));
 }
 
-/** Switch the host activity table without reloading its data. */
+/** Show the selected host's alerts, evidence, or flows and load that page. */
 function showHostActivity(name) {
-  ["flows", "alerts", "evidence"].forEach((item) => {
+  state.hostActivity = name;
+  ["alerts", "evidence", "flows"].forEach((item) => {
     byId(`host-${item}-panel`).hidden = item !== name;
-    document.querySelector(`[data-host-activity="${item}"]`).classList.toggle("active", item === name);
+    const tab = document.querySelector(`[data-host-activity="${item}"]`);
+    tab.classList.toggle("active", item === name);
+    tab.setAttribute("aria-selected", String(item === name));
   });
   byId("host-evidence-search").hidden = name !== "evidence";
   byId("host-flow-search").hidden = name !== "flows";
+  if (!state.host) return Promise.resolve();
+  return ({ alerts: loadHostAlerts, evidence: loadHostEvidence, flows: loadHostFlows })[name]().catch(() => {});
 }
 
 /** Filter the currently loaded flow rows without requesting a new server page. */
@@ -4372,8 +4359,50 @@ function filterVisibleHostFlows() {
   });
 }
 
+/** Load one bounded alert page for the exact host IP and selected time range. */
+async function loadHostAlerts() {
+  if (!state.host) return;
+  const ip = state.host.ip;
+  const page = state.pages.hostAlerts;
+  const params = hostRangeParams();
+  params.set("profile", ip);
+  params.set("limit", "50");
+  params.set("details", "false");
+  params.set("summary", "1");
+  if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
+  const payload = await api("hostAlerts", `/api/alerts?${params}`);
+  if (!payload || state.host?.ip !== ip) return;
+  const alerts = payload.items.filter((item) => item.ip_alerted === ip);
+  page.items = alerts;
+  page.total = payload.total;
+  page.next = payload.next_cursor;
+  byId("host-alerts-tab-count").textContent = compact(payload.total);
+  byId("host-alerts-title").textContent = "Alerts for this host";
+  byId("host-alert-count").textContent = `${alerts.length} shown · ${compact(payload.total)} alerts in this range`;
+  const list = byId("host-alerts");
+  list.replaceChildren();
+  alerts.forEach((item) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "host-alert-chip";
+    button.classList.add(String(item.threat_level || "info").toLowerCase());
+    button.append(
+      text("time", formatTime(item.alert_time)),
+      threat(item.threat_level),
+      text("strong", item.evidence_type?.replaceAll("_", " ") || item.label || "Alert", "host-alert-label"),
+      text("span", `${compact(item.evidence_count)} evidence`, "count-chip"),
+    );
+    if (item.summary) button.append(text("small", item.summary, "host-alert-summary"));
+    button.addEventListener("click", () => openAlert(item));
+    list.append(button);
+  });
+  if (!alerts.length) list.append(text("p", "No alerts for this host in the selected range.", "muted"));
+  pager("hostAlerts", "host-alerts-pager", loadHostAlerts);
+}
+
 async function loadHostEvidence() {
   if (!state.host) return;
+  const ip = state.host.ip;
   const page = state.pages["host-evidence"];
   const params = hostRangeParams();
   params.set("limit", "100");
@@ -4382,15 +4411,16 @@ async function loadHostEvidence() {
   const search = byId("host-evidence-search").value.trim();
   if (search) params.set("search", search);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  params.set("profile", state.host.ip);
+  params.set("profile", ip);
   params.set("details", "false");
   if (state.hideExcluded) params.set("hide_excluded", "1");
   const path = "/api/evidence?" + params;
   const payload = await api("hostEvidence", path);
-  if (!payload) return;
+  if (!payload || state.host?.ip !== ip) return;
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
+  byId("host-evidence-tab-count").textContent = compact(payload.total);
   byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
   byId("host-evidence-count").textContent =
     payload.page_size + " shown · " + compact(payload.total) + " evidence records" +
@@ -4417,20 +4447,22 @@ async function loadHostEvidence() {
 
 async function loadHostFlows() {
   if (!state.host) return;
+  const ip = state.host.ip;
   const page = state.pages.hostFlows;
   const params = hostRangeParams();
   params.set("limit", byId("host-flow-limit").value);
   if (state.hideExcluded) params.set("hide_excluded", "1");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  const path = `/api/hosts/${escapePath(state.host.ip)}/flows?${params}`;
+  const path = `/api/hosts/${escapePath(ip)}/flows?${params}`;
   const payload = await api("hostFlows", path);
-  if (!payload) return;
+  if (!payload || state.host?.ip !== ip) return;
   const exactItems = payload.items.filter((row) =>
-    row.src_ip === state.host.ip || row.dst_ip === state.host.ip);
+    row.src_ip === ip || row.dst_ip === ip);
   const discarded = payload.items.length - exactItems.length;
   page.items = exactItems;
   page.total = discarded ? exactItems.length : payload.total;
   page.next = payload.next_cursor;
+  byId("host-flows-tab-count").textContent = compact(page.total);
   byId("host-flow-count").textContent =
     `${exactItems.length} shown · exact profile IP only` +
     (discarded ? ` · ${discarded} stale MAC-alias rows discarded` :
@@ -4682,11 +4714,21 @@ async function openHost(ip, summary = null) {
   host.exact_aggregates = staleAliases.length === 0;
   host.ignored_aliases = staleAliases;
   host.all_ips = [ip];
+  ["hostAlerts", "hostEvidence", "hostFlows", "hostSummary"].forEach((key) => {
+    state.requests.get(key)?.abort();
+  });
   state.host = host;
   rememberHostRecord(host);
   refreshHostLabels();
+  resetPage("hostAlerts");
   resetPage("hostFlows");
   resetPage("host-evidence");
+  byId("host-alerts").replaceChildren(text("p", "Loading alerts…", "muted"));
+  byId("host-evidence-table").querySelector("tbody").replaceChildren();
+  byId("host-flows-table").querySelector("tbody").replaceChildren();
+  ["host-alert-count", "host-evidence-count", "host-flow-count"].forEach((id) => {
+    byId(id).textContent = "";
+  });
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
   byId("host-detail-view").classList.remove("unprofiled");
@@ -4694,10 +4736,12 @@ async function openHost(ip, summary = null) {
   byId("host-title").replaceChildren(hostIdentity(host.ip));
   byId("host-subtitle").textContent =
     `${host.scope || "unknown scope"} · ${host.permanent_profiles?.[0]?.network_label || "network not recorded"} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"} · ${host.live ? "current" : "last-known metadata"}`;
-  showHostActivity("flows");
   renderHostCards(host);
+  const hasExactAlerts = host.alerts?.some((alert) => alert.ip_alerted === ip);
+  const initialActivity = hasExactAlerts || (host.exact_aggregates !== false && host.alert_count)
+    ? "alerts" : host.evidence_count ? "evidence" : "flows";
   await Promise.all([
-    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+    showHostActivity(initialActivity), loadHostSummary(), loadHostScoreHistory(),
   ]);
 }
 
@@ -4724,12 +4768,15 @@ async function refreshHostWorkspace() {
   refreshHostLabels();
   renderHostCards(host);
   await Promise.all([
-    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+    ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
+      flows: loadHostFlows })[state.hostActivity](),
+    loadHostSummary(), loadHostScoreHistory(),
   ]);
 }
 
 function closeHost() {
   state.host = null;
+  state.requests.get("hostAlerts")?.abort();
   state.requests.get("hostFlows")?.abort();
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
@@ -4791,7 +4838,10 @@ function activeRangeIsLive() {
   if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
-    return rangeIsLive("host") && state.pages.hostFlows.index === 0;
+    const page = state.hostActivity === "alerts" ? state.pages.hostAlerts
+      : state.hostActivity === "evidence" ? state.pages["host-evidence"]
+        : state.pages.hostFlows;
+    return rangeIsLive("host") && page.index === 0;
   }
   return rangeIsLive(state.activeTab) && state.pages[state.activeTab].index === 0;
 }
@@ -4964,9 +5014,10 @@ document.querySelectorAll(".excluded-visibility-select").forEach((select) => {
     document.querySelectorAll(".excluded-visibility-select").forEach((other) => {
       other.value = select.value;
     });
-    ["alerts", "evidence", "host-evidence", "hostFlows"].forEach(resetPage);
+    ["alerts", "evidence", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
     if (state.activeTab === "hosts" && state.host) {
-      Promise.all([loadHostEvidence(), loadHostFlows()]).catch(() => {});
+      ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
+        flows: loadHostFlows })[state.hostActivity]().catch(() => {});
     } else if (state.activeTab === "alerts" || state.activeTab === "evidence") {
       currentLoader()().catch(() => {});
     } else if (state.activeTab === "arp-poisoning") {
@@ -5007,9 +5058,12 @@ bindRange("alerts", "alerts", loadAlerts);
 bindRange("evidence", "evidence", loadEvidence);
 bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
+  resetPage("hostAlerts");
   resetPage("host-evidence");
   await Promise.all([
-    loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
+    ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
+      flows: loadHostFlows })[state.hostActivity](),
+    loadHostSummary(), loadHostScoreHistory(),
   ]);
 });
 bindTableSort("modules", async () => {

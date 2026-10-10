@@ -254,11 +254,12 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         assert "height * renderedWidth / renderedHeight" in app_source
         assert "async function loadLegacyScoreHistory(params)" in app_source
         assert "compatibility_limited: total > records.length" in app_source
-        assert 'params.set("profile", state.host.ip)' in app_source
+        assert 'params.set("profile", ip)' in app_source
         assert (
-            "row.src_ip === state.host.ip || row.dst_ip === state.host.ip"
+            "row.src_ip === ip || row.dst_ip === ip"
             in app_source
         )
+        assert "if (!payload || state.host?.ip !== ip) return;" in app_source
         assert (
             "host.exact_aggregates = staleAliases.length === 0" in app_source
         )
