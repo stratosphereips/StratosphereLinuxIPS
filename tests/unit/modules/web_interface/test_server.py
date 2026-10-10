@@ -198,10 +198,10 @@ def test_header_tracks_backend_heartbeat_and_freezes_uptime() -> None:
 
 @pytest.mark.parametrize("tab", ["alerts", "evidence", "hosts"])
 def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
-    """Keep the real Slips score visible in all three requested tables.
+    """Keep the real Slips score visible in the primary detection views.
 
     Parameters:
-        tab: Web-interface table whose score header and cell are verified.
+        tab: Web-interface view whose score display is verified.
     """
     _module_factory = ModuleFactory()
     app_source = Path("modules/web_interface/app.js").read_text(
@@ -212,14 +212,12 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
     )
 
     if tab == "alerts":
-        section = app_source.split("async function loadAlerts()", 1)[1].split(
-            "async function loadEvidence()", 1
-        )[0]
-        assert '["Network", null]' in section
-        assert "networkContext(row)" in section
-        assert '["Peak Slips score", "score"]' in section
-        assert '["Slips score", "score"]' in section
-        assert "(row) => slipsScore(row)" in section
+        section = app_source.split("function renderAlertDetailPane(record)", 1)[
+            1
+        ].split("async function selectAlertDetailPane", 1)[0]
+        assert '"Score / threshold", slipsScore(record)' in section
+        assert '"Network", networkContext(record)' in section
+        assert 'id="alerts-detail-pane"' in index_source
     elif tab == "evidence":
         section = app_source.split("async function loadEvidence()", 1)[
             1
@@ -3664,7 +3662,10 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
         )
         connection.execute(
             "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            ("e1", 1.0, "10.0.0.1", "tw", "high", "SCAN", "", 1.0, "{}"),
+            (
+                "e1", 1.0, "10.0.0.1", "tw", "high", "SCAN",
+                "Scan detected", 1.0, "{}",
+            ),
         )
         connection.executemany(
             "INSERT INTO alert_evidence VALUES (?, ?)",
@@ -3684,6 +3685,7 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
             "range": ["all"],
             "search": ["a1"],
             "details": ["false"],
+            "summary": ["1"],
         }
     )
 
@@ -3709,6 +3711,8 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert second_page["next_cursor"] is None
     assert compact_result["items"][0]["evidence_count"] == 1
     assert compact_result["items"][0]["threat_level"] == "high"
+    assert compact_result["items"][0]["evidence_type"] == "SCAN"
+    assert compact_result["items"][0]["summary"] == "Scan detected"
     assert "evidence" not in compact_result["items"][0]
 
 
@@ -4529,7 +4533,7 @@ def test_p2p_trust_chart_uses_compact_range_control() -> None:
 
 
 def test_alerts_default_to_grouped_by_host() -> None:
-    """Default the Alerts tab to its host-grouped API and table layout."""
+    """Open only the host pane before the user selects an alert."""
     _module_factory = ModuleFactory()
     html_source = Path("modules/web_interface/index.html").read_text(
         encoding="utf-8"
@@ -4538,11 +4542,13 @@ def test_alerts_default_to_grouped_by_host() -> None:
         encoding="utf-8"
     )
 
-    assert (
-        '<option value="grouped" selected>Group by host</option>'
-        in html_source
-    )
+    assert 'id="alerts-workspace" class="alerts-workspace" data-panes="1"' in html_source
+    assert 'id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden' in html_source
+    assert 'id="alerts-detail-pane" class="alerts-pane alerts-detail-pane" hidden' in html_source
+    assert 'id="alerts-host-divider"' in html_source
+    assert 'id="alerts-detail-divider"' in html_source
     assert 'params.set("group", "host")' in app_source
+    assert "function initAlertPaneResize()" in app_source
     assert "Grouped by host. Select a host" in html_source
 
 

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261010-overview">
+  <link rel="stylesheet" href="/style.css?v=20261010-alerts">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -73,19 +73,35 @@
     </section>
 
     <section id="alerts" class="panel" aria-labelledby="alerts-title">
-      <div class="section-heading"><div><p class="eyebrow">DETECTIONS</p><h2 id="alerts-title">Alerts</h2><p id="alerts-description">Grouped by host. Select a host, then an alert, its evidence, and triggering flows.</p></div><button class="secondary refresh-list" data-target="alerts">Refresh</button></div>
-      <div class="toolbar">
-        <input id="alerts-search" type="search" placeholder="Search ID, host, label…">
-        <select id="alerts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
-        <select id="alerts-view" aria-label="Alert display mode"><option value="individual">Individual alerts</option><option value="grouped" selected>Group by host</option></select>
-        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
-        <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
-        <input id="alerts-from" class="custom-time" type="datetime-local" hidden>
-        <input id="alerts-to" class="custom-time" type="datetime-local" hidden>
-        <span id="alerts-count" class="result-count"></span>
+      <h2 id="alerts-title" class="visually-hidden">Alerts</h2>
+      <p id="alerts-description" class="visually-hidden">Grouped by host. Select a host, then an alert, its evidence, and triggering flows.</p>
+      <div id="alerts-workspace" class="alerts-workspace" data-panes="1">
+        <div class="alerts-pane alerts-host-pane">
+          <div class="alerts-pane-head"><strong>Hosts with alerts</strong><span id="alerts-count" class="alerts-pane-count"></span></div>
+          <div class="alerts-host-controls">
+            <input id="alerts-search" type="search" placeholder="Search host, ID, label…" aria-label="Search alert hosts">
+            <div id="alerts-severity-filters" class="alerts-severity-filters" role="group" aria-label="Filter alert hosts by severity"></div>
+            <details class="alerts-more-filters"><summary>Time and visibility</summary><div class="alerts-more-fields">
+              <label>Range <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select></label>
+              <input id="alerts-from" class="custom-time" type="datetime-local" aria-label="From time" hidden>
+              <input id="alerts-to" class="custom-time" type="datetime-local" aria-label="To time" hidden>
+              <label>Excluded <select class="excluded-visibility-select" aria-label="Excluded alerts visibility"><option value="hide" selected>Hide</option><option value="show">Show</option></select></label>
+            </div></details>
+          </div>
+          <div id="alerts-host-list" class="alerts-host-list" aria-live="polite"></div>
+          <div id="alerts-pager" class="alerts-host-pager"></div>
+        </div>
+        <div id="alerts-host-divider" class="alerts-pane-divider" role="separator" aria-label="Resize hosts and alerts panes" aria-orientation="vertical" tabindex="0" hidden></div>
+        <div id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden>
+          <div id="alerts-selected-host" class="alerts-selected-host"></div>
+          <div id="alerts-list" class="alerts-list" aria-live="polite"></div>
+          <div id="alerts-list-more" class="alerts-list-more"></div>
+        </div>
+        <div id="alerts-detail-divider" class="alerts-pane-divider" role="separator" aria-label="Resize alerts and details panes" aria-orientation="vertical" tabindex="0" hidden></div>
+        <div id="alerts-detail-pane" class="alerts-pane alerts-detail-pane" hidden>
+          <div id="alerts-detail" class="alerts-detail"></div>
+        </div>
       </div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="alerts-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
-      <div id="alerts-pager" class="pager"></div>
     </section>
 
     <section id="evidence" class="panel" aria-labelledby="evidence-title">
@@ -263,6 +279,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261010-overview"></script>
+  <script src="/app.js?v=20261010-alerts"></script>
 </body>
 </html>

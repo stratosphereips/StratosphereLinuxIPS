@@ -277,6 +277,12 @@ module row.
 CPU, resident memory, and processed flows per second are sampled from the complete Slips process tree every second. CPU is a percentage of total host capacity. Exact samples are retained for 24 hours. Complete old minutes are transactionally compacted into permanent average, maximum, and flow-total rollups. Charts support 5 minutes, 15 minutes, 1 hour, 24 hours, and Full run.
 Flow totals use exact profiler counter deltas rather than assuming every sample is exactly one second apart. Existing web history databases are upgraded in place when the module starts.
 
+### Alerts
+
+Alerts opens with only the **Hosts with alerts** pane. Choose a host to open its individual alert timeline in a second pane, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record in a third pane. Evidence cards open the existing investigation drawer for triggering flows. The two dividers can be dragged or adjusted with the left and right arrow keys. Closing an alert returns to two panes; closing the host returns to the initial pane.
+
+Search, severity chips, range, and excluded-record visibility remain in the host pane. Individual alerts load 50 at a time, with **Load more** for older alerts. The middle pane includes a short description from each alert's newest linked evidence without loading every full evidence record. The selected host and alert stay open while the list refreshes.
+
 ### Logs
 
 The Logs tab shows the newest bounded runtime events parsed from the run's

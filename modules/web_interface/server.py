@@ -2657,6 +2657,7 @@ class RunDataReader:
         include_details = (
             self._query_value(query, "details").lower() != "false"
         )
+        include_summary = self._query_value(query, "summary") == "1"
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         threat_expression = (
             "COALESCE((SELECT MAX(CASE LOWER(e.threat_level) "
@@ -2777,6 +2778,23 @@ class RunDataReader:
                             str(item.get("threat_level", "info")).lower()
                             for item in related
                         ]
+                    )
+                elif include_summary:
+                    summary = connection.execute(
+                        "SELECT e.evidence_type, e.description "
+                        "FROM alert_evidence ae JOIN evidence e "
+                        "ON e.evidence_id = ae.evidence_id "
+                        "WHERE ae.alert_id = ? "
+                        "ORDER BY e.evidence_time DESC LIMIT 1",
+                        (alert["alert_id"],),
+                    ).fetchone()
+                    alert["evidence_type"] = (
+                        str(summary["evidence_type"] or "") if summary else ""
+                    )
+                    alert["summary"] = (
+                        str(summary["description"] or "")[:240]
+                        if summary
+                        else ""
                     )
                 alert.update(self._ip_context_for_ip(str(alert["ip_alerted"])))
                 items.append(alert)
