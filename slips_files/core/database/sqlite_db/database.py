@@ -168,6 +168,10 @@ class SQLiteDB(ISQLite):
             "ON evidence(evidence_time DESC, evidence_id)",
             "CREATE INDEX IF NOT EXISTS evidence_profile_time_idx "
             "ON evidence(profile_ip, evidence_time DESC, evidence_id)",
+            "CREATE INDEX IF NOT EXISTS evidence_profile_ratl_idx "
+            "ON evidence(profile_ip, accumulated_ratl DESC)",
+            "CREATE INDEX IF NOT EXISTS evidence_profile_threat_score_idx "
+            "ON evidence(profile_ip, accumulated_threat_level DESC)",
             "CREATE INDEX IF NOT EXISTS evidence_whitelisted_tw_idx "
             "ON evidence(profile_ip, timewindow, whitelisted)",
             "CREATE INDEX IF NOT EXISTS evidence_type_idx "

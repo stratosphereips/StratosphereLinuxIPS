@@ -251,6 +251,9 @@ Uptime is elapsed wall-clock time since this Slips run started and freezes at th
 
 The first Overview response is deliberately lightweight even when `-p` retains a large Redis history. It reads the constant-time evidence counter and does not scan historical profile/time-window keys. Exact evidence attribution for each module is deferred behind **Load evidence counts** in the Modules heading; opening **Evidence** likewise loads the retained evidence records only when that tab is requested. Performance-history charts use their separate bounded endpoint.
 
+Overview finds the four leading alert hosts by reading alert totals first and checking linked severity from highest to lowest until the visible rows are known. The grouped Alerts view calculates host totals once and looks up linked severity in indexed batches. Hosts uses the source and destination flow indexes for last-seen sorting and score indexes for past peak values. Existing run databases receive the score indexes when Slips next initializes their SQLite schema.
+The ARP view reads its latest evidence in timestamp order from the evidence type index, so opening that tab does not sort every matching record.
+
 The header uses a one-second heartbeat written by the Slips-owned history collector, not HTTP reachability to the retained web server. A clean backend shutdown marks disconnection immediately; an unexpected loss is detected after 15 seconds without a heartbeat. While disconnected, the indicator and last uptime are red, the status reads **Disconnected from backend**, and uptime remains frozen at the final heartbeat even though historical API pages remain available.
 
 Overview also shows the run-wide estimated firewall impact: packets and flows

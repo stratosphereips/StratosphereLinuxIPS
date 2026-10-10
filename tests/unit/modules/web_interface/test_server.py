@@ -3693,6 +3693,20 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert result["items"][0]["alert_count"] == 2
     assert result["items"][0]["evidence_count"] == 2
     assert result["items"][0]["threat_level"] == "high"
+    first_page = reader.alerts({
+        "range": ["all"], "group": ["host"],
+        "sort": ["alerts"], "order": ["desc"], "limit": ["1"],
+    })
+    second_page = reader.alerts({
+        "range": ["all"], "group": ["host"],
+        "sort": ["alerts"], "order": ["desc"], "limit": ["1"],
+        "cursor": [first_page["next_cursor"]],
+    })
+    assert first_page["total"] == second_page["total"] == 2
+    assert first_page["items"][0]["ip_alerted"] == "10.0.0.1"
+    assert second_page["items"][0]["ip_alerted"] == "10.0.0.2"
+    assert second_page["items"][0]["threat_level"] == "info"
+    assert second_page["next_cursor"] is None
     assert compact_result["items"][0]["evidence_count"] == 1
     assert compact_result["items"][0]["threat_level"] == "high"
     assert "evidence" not in compact_result["items"][0]

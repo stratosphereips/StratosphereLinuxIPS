@@ -1540,8 +1540,10 @@ class RunDataReader:
             hosts = int(
                 history.execute(
                     "SELECT COUNT(*) FROM host_snapshots hs WHERE "
+                    "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
+                    "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
                     "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-                    "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip), "
+                    "WHERE fi.dst_ip = hs.ip), -1e300)), -1e300), "
                     "hs.observed_at) BETWEEN ? AND ?",
                     (host_start, host_end),
                 ).fetchone()[0]
@@ -2260,6 +2262,226 @@ class RunDataReader:
         }
         return max(levels or ["info"], key=lambda item: rank.get(item, 0))
 
+    def _grouped_alerts_fast(
+        self, query: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
+        """Group hosts before looking up linked severity in indexed batches.
+
+        Parameters:
+            query: Alert filters, sort order, and cursor.
+
+        Returns:
+            One page of host aggregates and its pagination metadata.
+        """
+        limit = self._limit(query)
+        search = self._query_value(query, "search").lower()
+        profile = self._query_value(query, "profile")
+        cursor = self._decode_cursor(self._query_value(query, "cursor"))
+        sort_key, _, direction = self._sort_spec(
+            query,
+            {
+                key: key
+                for key in (
+                    "time",
+                    "host",
+                    "threat",
+                    "label",
+                    "alerts",
+                    "evidence",
+                    "score",
+                )
+            },
+            "time",
+        )
+        with self._connect_sqlite() as connection:
+            connection.execute("BEGIN")
+            score = self._detector_score_expression(connection, "alerts")
+            latest = float(
+                connection.execute(
+                    "SELECT MAX(CAST(alert_time AS REAL)) FROM alerts"
+                ).fetchone()[0]
+                or 0
+            )
+            start, end, range_name = self._time_bounds(query, latest)
+            full_total = int(
+                connection.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
+            )
+            clauses = ["1 = 1"]
+            params: List[Any] = []
+            if start is not None:
+                clauses.append("CAST(a.alert_time AS REAL) >= ?")
+                params.append(start)
+            if end is not None:
+                clauses.append("CAST(a.alert_time AS REAL) <= ?")
+                params.append(end)
+            if search:
+                clauses.append(
+                    "(LOWER(a.alert_id) LIKE ? OR LOWER(a.ip_alerted) "
+                    "LIKE ? OR LOWER(a.label) LIKE ?)"
+                )
+                params.extend([f"%{search}%"] * 3)
+            if profile:
+                clauses.append("a.ip_alerted = ?")
+                params.append(profile)
+            where = " AND ".join(clauses)
+            rows = [
+                dict(row)
+                for row in connection.execute(
+                    "SELECT a.ip_alerted, a.ip_alerted AS group_id, "
+                    "MAX(CAST(a.alert_time AS REAL)) AS alert_time, "
+                    "MIN(CAST(a.alert_time AS REAL)) AS first_alert_time, "
+                    "COUNT(*) AS alert_count, "
+                    "SUM((SELECT COUNT(*) FROM alert_evidence ae "
+                    "WHERE ae.alert_id = a.alert_id)) AS evidence_count, "
+                    f"MAX({score}) AS alert_score, "
+                    "GROUP_CONCAT(DISTINCT COALESCE(a.label, '')) AS labels "
+                    f"FROM alerts a WHERE {where} GROUP BY a.ip_alerted",
+                    params,
+                ).fetchall()
+            ]
+            ranks: Dict[str, int] = {}
+            if rows:
+                upper_levels = [
+                    str(row[0])
+                    for row in connection.execute(
+                        "SELECT DISTINCT threat_level FROM evidence "
+                        "WHERE threat_level IS NOT NULL"
+                    ).fetchall()
+                    if str(row[0]).lower() in {"critical", "high", "medium"}
+                ]
+                if upper_levels:
+                    placeholders = ",".join("?" for _ in upper_levels)
+                    upper_rows = connection.execute(
+                        "SELECT a.ip_alerted, MAX(CASE LOWER(e.threat_level) "
+                        "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
+                        "WHEN 'medium' THEN 2 ELSE 0 END) AS threat_rank "
+                        "FROM evidence e JOIN alert_evidence ae "
+                        "ON ae.evidence_id = e.evidence_id JOIN alerts a "
+                        "ON a.alert_id = ae.alert_id "
+                        f"WHERE e.threat_level IN ({placeholders}) "
+                        f"AND {where} GROUP BY a.ip_alerted",
+                        (*upper_levels, *params),
+                    ).fetchall()
+                    ranks.update(
+                        {
+                            str(row["ip_alerted"]): int(row["threat_rank"])
+                            for row in upper_rows
+                        }
+                    )
+                remaining = [
+                    str(row["ip_alerted"])
+                    for row in rows
+                    if str(row["ip_alerted"]) not in ranks
+                ]
+                if remaining:
+                    placeholders = ",".join("?" for _ in remaining)
+                    lower_rows = connection.execute(
+                        "SELECT a.ip_alerted, MAX(CASE LOWER(e.threat_level) "
+                        "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
+                        "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 "
+                        "ELSE 0 END) AS threat_rank "
+                        "FROM alerts a JOIN alert_evidence ae "
+                        "ON ae.alert_id = a.alert_id JOIN evidence e "
+                        "ON e.evidence_id = ae.evidence_id "
+                        f"WHERE {where} AND a.ip_alerted IN "
+                        f"({placeholders}) GROUP BY a.ip_alerted",
+                        (*params, *remaining),
+                    ).fetchall()
+                    ranks.update(
+                        {
+                            str(row["ip_alerted"]): int(row["threat_rank"])
+                            for row in lower_rows
+                        }
+                    )
+        for row in rows:
+            row["threat_rank"] = ranks.get(str(row["ip_alerted"]), 0)
+
+        def sort_value(row: Dict[str, Any]) -> Any:
+            """Return the selected sort value for a grouped host.
+
+            Parameters:
+                row: One grouped alert host.
+
+            Returns:
+                Comparable number or normalized text.
+            """
+            field = {
+                "time": "alert_time",
+                "host": "ip_alerted",
+                "threat": "threat_rank",
+                "label": "labels",
+                "alerts": "alert_count",
+                "evidence": "evidence_count",
+                "score": "alert_score",
+            }[sort_key]
+            value = row[field]
+            return (
+                str(value or "").lower()
+                if sort_key in {"host", "label"}
+                else float(value or 0)
+            )
+
+        rows.sort(
+            key=lambda row: (sort_value(row), str(row["group_id"])),
+            reverse=direction == "DESC",
+        )
+        total = len(rows)
+        if cursor:
+            rows = [
+                row
+                for row in rows
+                if (
+                    (sort_value(row), str(row["group_id"]))
+                    > (cursor[0], cursor[1])
+                    if direction == "ASC"
+                    else (sort_value(row), str(row["group_id"]))
+                    < (cursor[0], cursor[1])
+                )
+            ]
+        page = rows[:limit]
+        items = []
+        for row in page:
+            item = dict(row)
+            item["id"] = str(item.pop("group_id"))
+            item["threat_level"] = self._threat_from_rank(
+                item.pop("threat_rank")
+            )
+            item["alert_time"] = float(item["alert_time"] or 0)
+            item["first_alert_time"] = float(item["first_alert_time"] or 0)
+            item["alert_count"] = int(item["alert_count"] or 0)
+            item["evidence_count"] = int(item["evidence_count"] or 0)
+            item["label"] = str(item.pop("labels") or "")
+            item.update(
+                self._score_fields(
+                    item["alert_score"],
+                    item["alert_score"],
+                    "highest threshold-crossing score for this host",
+                )
+            )
+            item.update(self._ip_context_for_ip(str(item["ip_alerted"])))
+            items.append(item)
+        self._annotate_detection_networks(
+            items, "ip_alerted", "alert_time", "first_alert_time"
+        )
+        next_cursor = (
+            self._encode_cursor(
+                sort_value(page[-1]), str(page[-1]["group_id"])
+            )
+            if len(rows) > limit and page
+            else None
+        )
+        return {
+            "items": items,
+            "total": total,
+            "full_total": full_total,
+            "page_size": len(items),
+            "next_cursor": next_cursor,
+            "range": range_name,
+            "sort": sort_key,
+            "order": direction.lower(),
+            "group": "host",
+        }
+
     def _grouped_alerts(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """
         Return alerts aggregated by affected host.
@@ -2270,6 +2492,8 @@ class RunDataReader:
         Returns:
             Bounded host aggregate page with raw durable alert total.
         """
+        if not self._query_value(query, "threat"):
+            return self._grouped_alerts_fast(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
         threat = self._query_value(query, "threat").lower()
@@ -3141,8 +3365,11 @@ class RunDataReader:
             evidence_expression = "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip)"
             alert_expression = "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip)"
             last_seen_expression = (
+                "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
+                "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
                 "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-                "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip), hs.observed_at)"
+                "WHERE fi.dst_ip = hs.ip), -1e300)), -1e300), "
+                "hs.observed_at)"
             )
             threat_expression = (
                 "CASE LOWER(COALESCE(json_extract(hs.data, '$.max_threat_level'), "
@@ -4691,35 +4918,65 @@ class RunDataReader:
         with self._connect_sqlite() as connection:
             score = self._detector_score_expression(connection, "alerts")
             rows = connection.execute(
-                "WITH host_alerts AS ("
                 "SELECT ip_alerted, COUNT(*) AS alert_count, "
                 "MAX(CAST(alert_time AS REAL)) AS alert_time, "
                 f"MAX({score}) AS alert_score FROM alerts GROUP BY ip_alerted"
-                "), host_threats AS ("
-                "SELECT a.ip_alerted, MAX(CASE LOWER(e.threat_level) "
-                "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
-                "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END) "
-                "AS threat_rank FROM alerts a "
-                "JOIN alert_evidence ae ON ae.alert_id = a.alert_id "
-                "JOIN evidence e ON e.evidence_id = ae.evidence_id "
-                "GROUP BY a.ip_alerted) "
-                "SELECT h.*, COALESCE(t.threat_rank, 0) AS threat_rank, "
-                "COUNT(*) OVER () AS total_hosts FROM host_alerts h "
-                "LEFT JOIN host_threats t ON t.ip_alerted = h.ip_alerted "
-                "ORDER BY threat_rank DESC, alert_count DESC, "
-                "alert_time DESC LIMIT 4"
             ).fetchall()
+            ranks: Dict[str, int] = {}
+            available_levels = [
+                str(row[0])
+                for row in connection.execute(
+                    "SELECT DISTINCT threat_level FROM evidence "
+                    "WHERE threat_level IS NOT NULL"
+                ).fetchall()
+            ]
+            for level, rank in (
+                ("critical", 4),
+                ("high", 3),
+                ("medium", 2),
+                ("low", 1),
+            ):
+                variants = [
+                    value
+                    for value in available_levels
+                    if value.lower() == level
+                ]
+                if not variants:
+                    continue
+                placeholders = ",".join("?" for _ in variants)
+                matching = connection.execute(
+                    "SELECT DISTINCT a.ip_alerted FROM evidence e "
+                    "JOIN alert_evidence ae ON ae.evidence_id = e.evidence_id "
+                    "JOIN alerts a ON a.alert_id = ae.alert_id "
+                    f"WHERE e.threat_level IN ({placeholders})",
+                    variants,
+                ).fetchall()
+                for match in matching:
+                    ranks.setdefault(str(match["ip_alerted"]), rank)
+                if len(ranks) >= min(4, len(rows)):
+                    break
+        ranked = sorted(
+            rows,
+            key=lambda row: (
+                ranks.get(str(row["ip_alerted"]), 0),
+                int(row["alert_count"]),
+                float(row["alert_time"] or 0),
+            ),
+            reverse=True,
+        )[:4]
         return {
-            "total": int(rows[0]["total_hosts"]) if rows else 0,
+            "total": len(rows),
             "items": [
                 {
                     "ip_alerted": row["ip_alerted"],
                     "alert_count": int(row["alert_count"]),
                     "alert_time": float(row["alert_time"] or 0),
                     "alert_score": row["alert_score"],
-                    "threat_level": self._threat_from_rank(row["threat_rank"]),
+                    "threat_level": self._threat_from_rank(
+                        ranks.get(str(row["ip_alerted"]), 0)
+                    ),
                 }
-                for row in rows
+                for row in ranked
             ],
         }
 
@@ -5214,7 +5471,7 @@ class RunDataReader:
                     f"(SELECT COUNT(*) FROM alert_evidence ae WHERE "
                     f"ae.evidence_id = evidence.evidence_id) AS alert_count "
                     f"FROM evidence WHERE {where} "
-                    f"ORDER BY evidence_time DESC, evidence_id DESC LIMIT ?",
+                    f"ORDER BY evidence_time DESC LIMIT ?",
                     (*ARP_EVIDENCE_TYPES, MAX_PAGE_SIZE),
                 ).fetchall()
                 records = [
