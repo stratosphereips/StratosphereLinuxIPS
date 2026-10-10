@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261010-alerts">
+  <link rel="stylesheet" href="/style.css?v=20261010-evidence">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -82,7 +82,7 @@
             <input id="alerts-search" type="search" placeholder="Search host, ID, label…" aria-label="Search alert hosts">
             <div id="alerts-severity-filters" class="alerts-severity-filters" role="group" aria-label="Filter alert hosts by severity"></div>
             <details class="alerts-more-filters"><summary>Time and visibility</summary><div class="alerts-more-fields">
-              <label>Range <select id="alerts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select></label>
+              <label>Range <select id="alerts-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select></label>
               <input id="alerts-from" class="custom-time" type="datetime-local" aria-label="From time" hidden>
               <input id="alerts-to" class="custom-time" type="datetime-local" aria-label="To time" hidden>
               <label>Excluded <select class="excluded-visibility-select" aria-label="Excluded alerts visibility"><option value="hide" selected>Hide</option><option value="show">Show</option></select></label>
@@ -105,21 +105,32 @@
     </section>
 
     <section id="evidence" class="panel" aria-labelledby="evidence-title">
-      <div class="section-heading"><div><p class="eyebrow">DETECTION EVENTS</p><h2 id="evidence-title">Evidence</h2><p id="evidence-description">Grouped by host and type, including records that never formed an alert.</p><p id="evidence-summary" class="muted"></p></div><button class="secondary refresh-list" data-target="evidence">Refresh</button></div>
-      <div class="toolbar">
-        <input id="evidence-search" type="search" placeholder="Search description, type, host…">
-        <select id="evidence-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
-        <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select>
-        <select id="evidence-view" aria-label="Evidence display mode"><option value="grouped" selected>Group by host and type</option><option value="individual">Individual evidence</option></select>
-        <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
-        <select id="evidence-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
-        <input id="evidence-from" class="custom-time" type="datetime-local" hidden>
-        <input id="evidence-to" class="custom-time" type="datetime-local" hidden>
+      <div class="evidence-toolbar">
+        <h2 id="evidence-title">Evidence</h2>
+        <input id="evidence-search" type="search" placeholder="Search description, type, host…" aria-label="Search evidence">
+        <button id="evidence-active-type" class="evidence-active-type" type="button" hidden></button>
+        <select id="evidence-threat" aria-label="Evidence threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+        <div id="evidence-threat-chips" class="evidence-threat-chips" role="group" aria-label="Filter by threat"></div>
+        <select id="evidence-view" aria-label="Evidence grouping" hidden><option value="grouped" selected>Host + type</option><option value="type">Type</option><option value="host">Host</option><option value="individual">None</option></select>
+        <div id="evidence-group-controls" class="evidence-group-controls" role="group" aria-label="Group evidence"></div>
+        <label class="evidence-toolbar-check"><input id="evidence-scored-only" type="checkbox">Only scored &gt; 0</label>
+        <select class="excluded-visibility-select evidence-excluded" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded ✓</option><option value="show">Show excluded</option></select>
+        <details class="evidence-more-filters"><summary>More filters</summary><div>
+          <label>Alert links <select id="evidence-link"><option value="">All evidence</option><option value="linked">In an alert</option><option value="unlinked">Without alert</option></select></label>
+          <label>Range <select id="evidence-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select></label>
+          <input id="evidence-from" class="custom-time" type="datetime-local" aria-label="From time" hidden>
+          <input id="evidence-to" class="custom-time" type="datetime-local" aria-label="To time" hidden>
+        </div></details>
         <span id="evidence-count" class="result-count"></span>
+        <span id="evidence-range-badge" class="status ok">Live</span>
       </div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div></div>
-      <div id="evidence-pager" class="pager"></div>
-
+      <div id="evidence-workspace" class="evidence-workspace">
+        <div class="evidence-left">
+          <div class="evidence-table-scroll"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div>
+          <div class="evidence-footer"><span id="evidence-summary"></span><div id="evidence-pager" class="pager"></div></div>
+        </div>
+        <div id="evidence-right" class="evidence-right" aria-live="polite"></div>
+      </div>
     </section>
 
     <section id="firewall" class="panel" aria-labelledby="firewall-title">
@@ -207,7 +218,7 @@
           <input id="hosts-search" type="search" placeholder="Search IP, MAC, vendor, hostname, DNS…">
           <select id="hosts-scope"><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
           <select id="hosts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
-          <select id="hosts-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+          <select id="hosts-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select>
           <input id="hosts-from" class="custom-time" type="datetime-local" hidden>
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
           <span id="hosts-count" class="result-count"></span>
@@ -222,7 +233,7 @@
           <div class="toolbar compact-toolbar">
             <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
             <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
-            <select id="host-range" class="range-select"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full run</option><option value="custom">Custom</option></select>
+            <select id="host-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select>
             <input id="host-from" class="custom-time" type="datetime-local" hidden>
             <input id="host-to" class="custom-time" type="datetime-local" hidden>
           </div>
@@ -279,6 +290,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261010-alerts"></script>
+  <script src="/app.js?v=20261010-evidence"></script>
 </body>
 </html>

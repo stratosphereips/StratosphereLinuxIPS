@@ -891,10 +891,16 @@ class RunDataReader:
         """
         if not items:
             return
-        rules = self._runtime_whitelist_rules()
+        rules = (
+            []
+            if all(item.get("_grouped_evidence") for item in items)
+            else self._runtime_whitelist_rules()
+        )
         for item in items:
             grouped_ids = item.pop("_evidence_ids", None)
-            if isinstance(grouped_ids, list):
+            if item.pop("_grouped_evidence", False) or isinstance(
+                grouped_ids, list
+            ):
                 item["whitelisted"] = (
                     int(item.get("whitelisted_count") or 0) > 0
                 )
@@ -1734,7 +1740,7 @@ class RunDataReader:
 
     def _grouped_evidence(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """
-        Return evidence aggregated by host and evidence type.
+        Return evidence aggregated by host, type, or their combination.
 
         Parameters:
             query: Request filters, sort, range, and cursor values.
@@ -1743,11 +1749,28 @@ class RunDataReader:
             Bounded aggregate page with raw durable total metadata.
         """
         limit = self._limit(query)
+        group_mode = self._query_value(query, "group", "host_type")
+        if group_mode == "type":
+            group_fields = ("'' AS profile_ip, evidence_type", "evidence_type")
+            group_id = "evidence_type"
+        elif group_mode == "host":
+            group_fields = ("profile_ip, '' AS evidence_type", "profile_ip")
+            group_id = "profile_ip"
+        else:
+            group_fields = (
+                "profile_ip, evidence_type",
+                "profile_ip, evidence_type",
+            )
+            group_id = "profile_ip || char(31) || evidence_type"
         search = self._query_value(query, "search").lower()
         threat = self._query_value(query, "threat").lower()
         association = self._query_value(query, "association")
         profile = self._query_value(query, "profile")
         evidence_type = self._query_value(query, "type")
+        compact_groups = (
+            self._query_value(query, "compact") == "1"
+            and self._query_value(query, "sort") != "flows"
+        )
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         threat_expression = (
             "CASE LOWER(threat_level) WHEN 'critical' THEN 4 "
@@ -1829,21 +1852,23 @@ class RunDataReader:
                     "NOT EXISTS (SELECT 1 FROM alert_evidence ae "
                     "WHERE ae.evidence_id = evidence.evidence_id)"
                 )
+            if self._query_value(query, "scored_only") == "1":
+                clauses.append(f"COALESCE({score_expression}, 0) > 0")
             grouped_sql = (
-                "SELECT profile_ip, evidence_type, "
-                "profile_ip || char(31) || evidence_type AS group_id, "
+                f"SELECT {group_fields[0]}, "
+                f"{group_id} AS group_id, "
                 "MAX(evidence_time) AS timestamp, "
                 "MIN(evidence_time) AS first_timestamp, "
                 f"MAX({threat_expression}) AS threat_rank, "
                 f"GROUP_CONCAT(DISTINCT {module_expression}) AS module, "
                 "COUNT(*) AS evidence_count, "
-                "GROUP_CONCAT(evidence_id) AS evidence_ids, "
                 f"SUM({whitelist_expression}) AS persisted_whitelisted_count, "
-                f"SUM({flow_expression}) AS flow_count, "
+                f"{('0' if compact_groups else f'SUM({flow_expression})')} "
+                "AS flow_count, "
                 f"SUM({alert_expression}) AS alert_count, "
                 f"MAX({score_expression}) AS alert_score "
                 f"FROM evidence WHERE {' AND '.join(clauses)} "
-                "GROUP BY profile_ip, evidence_type"
+                f"GROUP BY {group_fields[1]}"
             )
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
@@ -1868,12 +1893,16 @@ class RunDataReader:
                     "CASE WHEN persisted_whitelisted_count > 0 "
                     f"THEN {excluded_value} ELSE COALESCE(alert_score, 0) END"
                 )
-            total = int(
-                connection.execute(
-                    f"SELECT COUNT(*) AS count FROM ({grouped_sql})",
-                    params,
-                ).fetchone()["count"]
-            )
+            total = None
+            if cursor:
+                total = int(
+                    connection.execute(
+                        "SELECT COUNT(*) AS count FROM (SELECT 1 FROM "
+                        f"evidence WHERE {' AND '.join(clauses)} "
+                        f"GROUP BY {group_fields[1]})",
+                        params,
+                    ).fetchone()["count"]
+                )
             outer_clauses: List[str] = []
             outer_params: List[Any] = []
             if cursor:
@@ -1885,18 +1914,22 @@ class RunDataReader:
                 f"WHERE {' AND '.join(outer_clauses)}" if outer_clauses else ""
             )
             rows = connection.execute(
-                f"SELECT grouped.*, {sort_expression} AS sort_value "
+                "SELECT grouped.*, COUNT(*) OVER () AS total_groups, "
+                f"{sort_expression} AS sort_value "
                 f"FROM ({grouped_sql}) grouped {outer_where} "
                 f"ORDER BY {sort_expression} {direction}, "
                 f"group_id {direction} LIMIT ?",
                 (*params, *outer_params, limit + 1),
             ).fetchall()
+        if total is None:
+            total = int(rows[0]["total_groups"] or 0) if rows else 0
         has_more = len(rows) > limit
         rows = rows[:limit]
         items = []
         for row in rows:
             item = dict(row)
             item.pop("sort_value", None)
+            item.pop("total_groups", None)
             item["id"] = str(item.pop("group_id"))
             item["threat_level"] = self._threat_from_rank(
                 item.pop("threat_rank")
@@ -1904,17 +1937,13 @@ class RunDataReader:
             item["timestamp"] = float(item["timestamp"] or 0)
             item["first_timestamp"] = float(item["first_timestamp"] or 0)
             item["evidence_count"] = int(item["evidence_count"] or 0)
-            item["_evidence_ids"] = [
-                evidence_id
-                for evidence_id in str(item.pop("evidence_ids") or "").split(
-                    ","
-                )
-                if evidence_id
-            ]
+            item["_grouped_evidence"] = True
             item["whitelisted_count"] = int(
                 item.pop("persisted_whitelisted_count") or 0
             )
-            item["flow_count"] = int(item["flow_count"] or 0)
+            item["flow_count"] = (
+                None if compact_groups else int(item["flow_count"] or 0)
+            )
             item["alert_count"] = int(item["alert_count"] or 0)
             item.update(
                 self._score_fields(
@@ -1924,9 +1953,10 @@ class RunDataReader:
                 )
             )
             items.append(item)
-        self._annotate_detection_networks(
-            items, "profile_ip", "timestamp", "first_timestamp"
-        )
+        if group_mode != "type":
+            self._annotate_detection_networks(
+                items, "profile_ip", "timestamp", "first_timestamp"
+            )
         self._annotate_whitelisted_evidence(items)
         self._annotate_p2p_reporters(items)
         next_cursor = (
@@ -1943,12 +1973,12 @@ class RunDataReader:
             "range": range_name,
             "sort": sort_key,
             "order": direction.lower(),
-            "group": "host_type",
+            "group": group_mode,
         }
 
     def evidence(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return one filtered, cursor-bounded evidence page."""
-        if self._query_value(query, "group") == "host_type":
+        if self._query_value(query, "group") in {"host_type", "type", "host"}:
             return self._grouped_evidence(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
@@ -2082,6 +2112,8 @@ class RunDataReader:
                         "NOT EXISTS (SELECT 1 FROM alert_evidence ae "
                         "WHERE ae.evidence_id = evidence.evidence_id)"
                     )
+                if self._query_value(query, "scored_only") == "1":
+                    clauses.append(f"COALESCE({score_expression}, 0) > 0")
                 count_where = " AND ".join(clauses)
                 count_params = list(params)
                 if cursor:

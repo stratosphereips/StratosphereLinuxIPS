@@ -212,21 +212,23 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
     )
 
     if tab == "alerts":
-        section = app_source.split("function renderAlertDetailPane(record)", 1)[
-            1
-        ].split("async function selectAlertDetailPane", 1)[0]
+        section = app_source.split(
+            "function renderAlertDetailPane(record)", 1
+        )[1].split("async function selectAlertDetailPane", 1)[0]
         assert '"Score / threshold", slipsScore(record)' in section
         assert '"Network", networkContext(record)' in section
         assert 'id="alerts-detail-pane"' in index_source
     elif tab == "evidence":
-        section = app_source.split("async function loadEvidence()", 1)[
+        section = app_source.split("function renderEvidenceTable(payload)", 1)[
             1
-        ].split("async function loadFirewall()", 1)[0]
-        assert '["Network", null]' in section
-        assert "networkContext(row)" in section
-        assert '["Peak Slips score", "score"]' in section
-        assert '["Slips score", "score"]' in section
+        ].split("function evidenceClock(timestamp)", 1)[0]
+        assert '["Score", "score"]' in section
         assert "(row) => slipsScore(row)" in section
+        assert 'id="evidence-right"' in index_source
+        assert (
+            '["Network", group.profile_ip ? networkContext(group)'
+            in app_source
+        )
     else:
         section = app_source.split("async function loadHosts()", 1)[1].split(
             "function contextName", 1
@@ -777,8 +779,8 @@ def test_overview_prioritizes_operational_data() -> None:
     assert 'id="overview-system"' in overview
     assert 'id="summary-cards"' in overview
     assert 'id="overview-details" hidden' in overview
-    assert 'function renderOverviewStatus(data)' in app_source
-    assert 'function renderOverviewSystem(data)' in app_source
+    assert "function renderOverviewStatus(data)" in app_source
+    assert "function renderOverviewSystem(data)" in app_source
     assert '["Firewall blocks", firewall.current' in app_source
     assert 'sort: "cpu_percent", order: "desc"' in app_source
     assert 'id="load-module-evidence" disabled' in index_source
@@ -935,9 +937,11 @@ def test_overview_alert_hosts_are_bounded_and_ranked(tmp_path: Path) -> None:
         )
         connection.executemany(
             "INSERT INTO alerts VALUES (?, ?, ?, ?)",
-            [("a1", "192.0.2.1", 10, 5.2),
-             ("a2", "192.0.2.1", 20, 6.2),
-             ("a3", "192.0.2.2", 30, 5.5)],
+            [
+                ("a1", "192.0.2.1", 10, 5.2),
+                ("a2", "192.0.2.1", 20, 6.2),
+                ("a3", "192.0.2.2", 30, 5.5),
+            ],
         )
         connection.executemany(
             "INSERT INTO evidence VALUES (?, ?)",
@@ -3626,6 +3630,38 @@ def test_evidence_aggregation_groups_host_and_type(tmp_path) -> None:
     assert result["items"][0]["evidence_count"] == 2
     assert result["items"][0]["flow_count"] == 2
     assert result["items"][0]["threat_level"] == "high"
+    assert "_grouped_evidence" not in result["items"][0]
+
+    by_type = reader.evidence({"range": ["all"], "group": ["type"]})
+    by_host = reader.evidence({"range": ["all"], "group": ["host"]})
+    assert by_type["total"] == 2
+    assert by_type["items"][0]["profile_ip"] == ""
+    assert by_host["total"] == 1
+    assert by_host["items"][0]["evidence_type"] == ""
+    assert by_host["items"][0]["evidence_count"] == 3
+
+    compact_page = reader.evidence(
+        {
+            "range": ["all"],
+            "group": ["host_type"],
+            "compact": ["1"],
+            "limit": ["1"],
+        }
+    )
+    assert compact_page["total"] == 2
+    assert compact_page["items"][0]["flow_count"] is None
+    assert compact_page["next_cursor"]
+    next_page = reader.evidence(
+        {
+            "range": ["all"],
+            "group": ["host_type"],
+            "compact": ["1"],
+            "limit": ["1"],
+            "cursor": [compact_page["next_cursor"]],
+        }
+    )
+    assert next_page["total"] == 2
+    assert len(next_page["items"]) == 1
 
 
 def test_alert_aggregation_groups_each_host(tmp_path) -> None:
@@ -3663,8 +3699,15 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
         connection.execute(
             "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
-                "e1", 1.0, "10.0.0.1", "tw", "high", "SCAN",
-                "Scan detected", 1.0, "{}",
+                "e1",
+                1.0,
+                "10.0.0.1",
+                "tw",
+                "high",
+                "SCAN",
+                "Scan detected",
+                1.0,
+                "{}",
             ),
         )
         connection.executemany(
@@ -3695,15 +3738,25 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert result["items"][0]["alert_count"] == 2
     assert result["items"][0]["evidence_count"] == 2
     assert result["items"][0]["threat_level"] == "high"
-    first_page = reader.alerts({
-        "range": ["all"], "group": ["host"],
-        "sort": ["alerts"], "order": ["desc"], "limit": ["1"],
-    })
-    second_page = reader.alerts({
-        "range": ["all"], "group": ["host"],
-        "sort": ["alerts"], "order": ["desc"], "limit": ["1"],
-        "cursor": [first_page["next_cursor"]],
-    })
+    first_page = reader.alerts(
+        {
+            "range": ["all"],
+            "group": ["host"],
+            "sort": ["alerts"],
+            "order": ["desc"],
+            "limit": ["1"],
+        }
+    )
+    second_page = reader.alerts(
+        {
+            "range": ["all"],
+            "group": ["host"],
+            "sort": ["alerts"],
+            "order": ["desc"],
+            "limit": ["1"],
+            "cursor": [first_page["next_cursor"]],
+        }
+    )
     assert first_page["total"] == second_page["total"] == 2
     assert first_page["items"][0]["ip_alerted"] == "10.0.0.1"
     assert second_page["items"][0]["ip_alerted"] == "10.0.0.2"
@@ -4542,9 +4595,18 @@ def test_alerts_default_to_grouped_by_host() -> None:
         encoding="utf-8"
     )
 
-    assert 'id="alerts-workspace" class="alerts-workspace" data-panes="1"' in html_source
-    assert 'id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden' in html_source
-    assert 'id="alerts-detail-pane" class="alerts-pane alerts-detail-pane" hidden' in html_source
+    assert (
+        'id="alerts-workspace" class="alerts-workspace" data-panes="1"'
+        in html_source
+    )
+    assert (
+        'id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden'
+        in html_source
+    )
+    assert (
+        'id="alerts-detail-pane" class="alerts-pane alerts-detail-pane" hidden'
+        in html_source
+    )
     assert 'id="alerts-host-divider"' in html_source
     assert 'id="alerts-detail-divider"' in html_source
     assert 'params.set("group", "host")' in app_source

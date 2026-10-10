@@ -283,6 +283,14 @@ Alerts opens with only the **Hosts with alerts** pane. Choose a host to open its
 
 Search, severity chips, range, and excluded-record visibility remain in the host pane. Individual alerts load 50 at a time, with **Load more** for older alerts. The middle pane includes a short description from each alert's newest linked evidence without loading every full evidence record. The selected host and alert stay open while the list refreshes.
 
+### Evidence
+
+The Evidence tab keeps the group or record table on the left and an investigation panel on the right. Before selection, the right panel summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record shows its stored details, whitelist controls, original JSON, and a link to inspect its triggering flows in the full evidence drawer.
+
+The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
+
+The range controls initially use **Live** so opening a tab while Overview is still loading cannot accidentally start a full-run query. Once the input source is known, offline captures switch to **Full run** and refresh the active tab. Polling begins after each tab request completes so a slower first response is not canceled and restarted by the refresh timer.
+
 ### Logs
 
 The Logs tab shows the newest bounded runtime events parsed from the run's

@@ -17,6 +17,10 @@ const state = {
     total: 0, listGeneration: 0, detailGeneration: 0,
     listLoadedAt: 0, listSignature: "",
   },
+  evidenceWorkspace: {
+    group: null, record: null, records: [], next: null, total: 0, typeFilter: "",
+    generation: 0, listLoadedAt: 0, listSignature: "", threatCounts: null,
+  },
   hostNames: new Map(),
   pendingHostNames: new Set(),
   hostNamesLoading: false,
@@ -432,6 +436,12 @@ function applyRunIdentity(identity) {
     closeDrawer();
     closeHost();
     Object.keys(state.pages).forEach((name) => resetPage(name));
+    Object.assign(state.evidenceWorkspace, {
+      group: null, record: null, records: [], next: null, total: 0,
+      typeFilter: "", listLoadedAt: 0, listSignature: "", threatCounts: null,
+      generation: state.evidenceWorkspace.generation + 1,
+    });
+    renderEvidenceEmptyState();
     state.overview = null;
     state.overviewEvidence = null;
     state.overviewEvidenceLoading = false;
@@ -1387,10 +1397,17 @@ function initializeRanges(run) {
   if (state.rangesInitialized) return;
   const inputType = String(run.input_type || "").toLowerCase();
   const range = ["interface", "stdin", "cyst"].includes(inputType) ? "live" : "all";
+  const activeRange = ["alerts", "evidence", "hosts"].includes(state.activeTab)
+    ? byId(`${state.activeTab}-range`) : null;
+  const refreshActiveRange = activeRange && activeRange.value !== range;
   ["alerts", "evidence", "hosts", "host"].forEach((name) => {
     byId(`${name}-range`).value = range;
   });
   state.rangesInitialized = true;
+  if (refreshActiveRange) {
+    resetPage(state.activeTab);
+    currentLoader()().catch(() => {}).finally(schedulePoll);
+  }
 }
 
 /** Apply explicitly requested evidence details to a fast Overview payload. */
@@ -1465,13 +1482,17 @@ function listPath(name) {
     params.set("group", "host");
     params.set("details", "false");
   } else if (name === "evidence") {
-    if (byId("evidence-view").value === "grouped") {
-      params.set("group", "host_type");
+    const mode = byId("evidence-view").value;
+    if (mode !== "individual") {
+      params.set("group", mode === "grouped" ? "host_type" : mode);
+      params.set("compact", "1");
     }
     const level = byId("evidence-threat").value;
     const association = byId("evidence-link").value;
     if (level) params.set("threat", level);
     if (association) params.set("association", association);
+    if (byId("evidence-scored-only").checked) params.set("scored_only", "1");
+    if (state.evidenceWorkspace.typeFilter) params.set("type", state.evidenceWorkspace.typeFilter);
   } else {
     const scope = byId("hosts-scope").value;
     const level = byId("hosts-threat").value;
@@ -1897,56 +1918,522 @@ async function loadAlerts() {
   }
 }
 
-async function loadEvidence() {
-  const grouped = byId("evidence-view").value === "grouped";
-  configureTable("evidence", grouped ? "grouped" : "individual", grouped ? [
-    ["Latest", "time"], ["Host", "host"], ["Network", null], ["Highest threat", "threat"],
-    ["Peak Slips score", "score"],
-    ["Type", "type"], ["Reporting peers", null], ["Module", "module"], ["Evidence", "evidence"],
-    ["Flows", "flows"], ["Alert links", "alert"], ["Score handling", null],
-  ] : [
-    ["Time", "time"], ["Host", "host"], ["Network", null], ["Threat", "threat"],
-    ["Slips score", "score"],
-    ["Type", "type"], ["Reporting peers", null], ["Module", "module"], ["Score handling", null], ["Flows", "flows"],
-    ["Alerts", "alert"], ["Description", null],
+/** Fit the Evidence workspace below the shared navigation. */
+function updateEvidenceViewportHeight() {
+  const bottom = document.querySelector(".tabs").getBoundingClientRect().bottom;
+  byId("evidence").style.setProperty("--evidence-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
+}
+
+/** Clear a selected group when the filtering context changes. */
+function clearEvidenceSelection() {
+  const workspace = state.evidenceWorkspace;
+  workspace.group = null;
+  workspace.record = null;
+  workspace.records = [];
+  workspace.next = null;
+  workspace.generation += 1;
+  highlightEvidenceSelection();
+  renderEvidenceEmptyState();
+}
+
+/** Highlight the table row represented by the current group or record. */
+function highlightEvidenceSelection() {
+  const mode = byId("evidence-view").value;
+  document.querySelectorAll("#evidence-table tbody tr").forEach((row, index) => {
+    const item = state.pages.evidence.items[index];
+    row.classList.toggle("selected", Boolean(item && (mode === "individual"
+      ? item.id === state.evidenceWorkspace.record?.id
+      : item.id === state.evidenceWorkspace.group?.id)));
+  });
+}
+
+/** Render compact severity filters using counts from an unfiltered page. */
+function renderEvidenceThreatChips() {
+  const selected = byId("evidence-threat").value;
+  const counts = state.evidenceWorkspace.threatCounts || new Map();
+  const container = byId("evidence-threat-chips");
+  container.replaceChildren();
+  [["", "All"], ...["critical", "high", "medium", "low", "info"]
+    .filter((level) => counts.get(level) || selected === level)
+    .map((level) => [level, level[0].toUpperCase() + level.slice(1)])]
+    .forEach(([level, label]) => {
+      const button = text("button", `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
+      button.type = "button";
+      button.dataset.level = level;
+      button.classList.toggle("active", level === selected);
+      button.setAttribute("aria-pressed", String(level === selected));
+      button.addEventListener("click", () => {
+        if (selected === level) return;
+        byId("evidence-threat").value = level;
+        clearEvidenceSelection();
+        renderEvidenceThreatChips();
+        byId("evidence-threat").dispatchEvent(new Event("change"));
+      });
+      container.append(button);
+    });
+}
+
+/** Render grouping controls for the four Evidence table modes. */
+function renderEvidenceGroupControls() {
+  const mode = byId("evidence-view").value;
+  const container = byId("evidence-group-controls");
+  container.replaceChildren();
+  [["grouped", "Host + type"], ["type", "Type"], ["host", "Host"], ["individual", "None"]]
+    .forEach(([value, label]) => {
+      const button = text("button", label, "evidence-group-button");
+      button.type = "button";
+      button.classList.toggle("active", value === mode);
+      button.setAttribute("aria-pressed", String(value === mode));
+      button.addEventListener("click", () => {
+        if (mode === value) return;
+        byId("evidence-view").value = value;
+        byId("evidence-threat").value = "";
+        state.evidenceWorkspace.threatCounts = null;
+        clearEvidenceSelection();
+        renderEvidenceGroupControls();
+        byId("evidence-view").dispatchEvent(new Event("change"));
+      });
+      container.append(button);
+    });
+}
+
+/** Show the selected Evidence page as a compact, keyboard-accessible table.
+ * @param {object} payload Bounded API page with grouped or individual records.
+ */
+function renderEvidenceTable(payload) {
+  const mode = byId("evidence-view").value;
+  configureTable("evidence", mode, [
+    ["Latest", "time"], ["Host", "host"], ["Type · module", "type"],
+    ["Threat", "threat"], ["Score", "score"],
+    [mode === "individual" ? "Flows" : "Records", mode === "individual" ? "flows" : "evidence"],
+    ["Alerts", "alert"],
   ], loadEvidence);
-  byId("evidence-description").textContent = grouped
-    ? "Grouped by host and type, including records that never formed an alert."
-    : "Individual durable evidence, including records that never formed an alert.";
+  renderTable("evidence-table", payload.items, [
+    (row) => evidenceClock(row.timestamp),
+    (row) => row.profile_ip ? hostIdentity(row.profile_ip) : "All hosts",
+    (row) => {
+      const cell = document.createElement("span");
+      cell.append(text("code", row.evidence_type || "All types"));
+      if (row.module) cell.append(text("small", ` ${row.module}`, "muted"));
+      return cell;
+    },
+    (row) => threat(row.threat_level),
+    (row) => slipsScore(row),
+    (row) => compact(mode === "individual" ? row.flow_count : row.evidence_count),
+    (row) => compact(mode === "individual" ? row.alert_ids?.length : row.alert_count),
+  ], (row) => {
+    if (mode === "individual") selectEvidenceRecord(row);
+    else selectEvidenceGroup(row);
+  });
+  document.querySelectorAll("#evidence-table tbody tr").forEach((row, index) => {
+    const record = payload.items[index];
+    if (!record) return;
+    row.addEventListener("keydown", (event) => {
+      if (!["ArrowDown", "ArrowUp"].includes(event.key)) return;
+      event.preventDefault();
+      const rows = [...row.parentElement.querySelectorAll('tr[data-clickable="true"]')];
+      rows[Math.max(0, Math.min(rows.length - 1,
+        index + (event.key === "ArrowDown" ? 1 : -1)))]?.focus();
+    });
+  });
+  highlightEvidenceSelection();
+}
+
+/** Format a persisted Evidence timestamp as a compact local clock time.
+ * @param {number} timestamp Seconds from the run clock.
+ * @returns {string} Local clock time or a relative capture timestamp.
+ */
+function evidenceClock(timestamp) {
+  const value = numeric(timestamp);
+  return value >= 946684800 ? new Date(value * 1000).toLocaleTimeString() : formatTime(value);
+}
+
+/** Draw the overview shown before an Evidence group is selected. */
+function renderEvidenceEmptyState() {
+  const right = byId("evidence-right");
+  right.replaceChildren();
+  const payload = state.pages.evidence;
+  const mode = byId("evidence-view").value;
+  const prompt = document.createElement("div");
+  prompt.className = "evidence-right-panel";
+  prompt.append(text("h3", mode === "individual" ? "Select a record to inspect it" : "Select a group to see its records"),
+    text("p", "Use ↑↓ and Enter in the table. The summary below covers the groups loaded on this page."));
+  right.append(prompt);
+  if (mode === "individual" || !payload.items.length) return;
+  const typeCounts = new Map();
+  const hostScores = new Map();
+  payload.items.forEach((item) => {
+    if (item.evidence_type) typeCounts.set(item.evidence_type,
+      (typeCounts.get(item.evidence_type) || 0) + numeric(item.evidence_count));
+    if (item.profile_ip && !item.whitelisted) {
+      const previous = hostScores.get(item.profile_ip);
+      if (!previous || numeric(item.alert_score) > numeric(previous.alert_score)) {
+        hostScores.set(item.profile_ip, item);
+      }
+    }
+  });
+  if (typeCounts.size) {
+    const panel = document.createElement("div");
+    panel.className = "evidence-right-panel";
+    panel.append(text("h3", "By type"));
+    const bars = document.createElement("div");
+    bars.className = "evidence-bars";
+    const allTypes = [...typeCounts].sort((a, b) => b[1] - a[1]);
+    const sorted = allTypes.slice(0, 7);
+    if (allTypes.length > 7) {
+      sorted.push([`Other (${allTypes.length - 7} types)`,
+        allTypes.slice(7).reduce((sum, [, count]) => sum + count, 0)]);
+    }
+    const max = sorted[0]?.[1] || 1;
+    sorted.forEach(([type, count]) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "evidence-bar-row";
+      const track = text("span", "", "evidence-bar-track");
+      const fill = document.createElement("span");
+      fill.style.width = `${Math.max(1, 100 * count / max)}%`;
+      track.append(fill);
+      row.append(text("span", type, "evidence-bar-label"), track,
+        text("span", compact(count), "evidence-bar-count"));
+      if (typeCounts.has(type)) row.addEventListener("click", () => {
+        state.evidenceWorkspace.typeFilter = type;
+        clearEvidenceSelection();
+        resetPage("evidence");
+        loadEvidence().catch(() => {});
+      });
+      bars.append(row);
+    });
+    panel.append(bars);
+    right.append(panel);
+  }
+  if (hostScores.size) {
+    const panel = document.createElement("div");
+    panel.className = "evidence-right-panel";
+    panel.append(text("h3", "Hosts closest to the alert threshold"));
+    const bars = document.createElement("div");
+    bars.className = "evidence-bars";
+    [...hostScores.values()].sort((a, b) => numeric(b.alert_score) - numeric(a.alert_score))
+      .slice(0, 5).forEach((host) => {
+        const row = document.createElement("button");
+        row.type = "button";
+        row.className = "evidence-bar-row";
+        const track = text("span", "", "evidence-bar-track evidence-score-track");
+        const fill = document.createElement("span");
+        fill.style.width = `${Math.min(100, numeric(host.alert_score) * 10)}%`;
+        fill.style.background = numeric(host.alert_score) >= 5 ? "#f36575" : "#e6b543";
+        track.append(fill);
+        row.append(text("span", host.profile_ip, "evidence-bar-label"), track,
+          text("span", numeric(host.alert_score).toFixed(2), "evidence-bar-count"));
+        row.addEventListener("click", () => {
+          byId("evidence-search").value = host.profile_ip;
+          clearEvidenceSelection();
+          resetPage("evidence");
+          loadEvidence().catch(() => {});
+        });
+        bars.append(row);
+      });
+    panel.append(bars, text("p", "The marker is the alert threshold: 5.0 on a scale to 10."));
+    right.append(panel);
+  }
+}
+
+/** Select a group and load its newest bounded record page.
+ * @param {object} group Grouped evidence API row.
+ */
+function selectEvidenceGroup(group) {
+  const workspace = state.evidenceWorkspace;
+  if (workspace.group?.id === group.id) return;
+  workspace.group = group;
+  workspace.record = null;
+  workspace.records = [];
+  workspace.next = null;
+  workspace.total = 0;
+  byId("evidence-right").replaceChildren();
+  highlightEvidenceSelection();
+  renderEvidenceGroup();
+  loadEvidenceGroupRecords(true).catch(() => {});
+}
+
+/** Return query parameters for the selected group's individual records.
+ * @returns {URLSearchParams} Active range, group, and visibility filters.
+ */
+function evidenceGroupQuery() {
+  const workspace = state.evidenceWorkspace;
+  const params = rangeQuery("evidence");
+  if (workspace.group?.profile_ip) params.set("profile", workspace.group.profile_ip);
+  if (workspace.group?.evidence_type || workspace.typeFilter) {
+    params.set("type", workspace.group?.evidence_type || workspace.typeFilter);
+  }
+  params.set("limit", "50");
+  params.set("sort", "time");
+  params.set("order", "desc");
+  const level = byId("evidence-threat").value;
+  const association = byId("evidence-link").value;
+  const search = byId("evidence-search").value.trim();
+  if (level) params.set("threat", level);
+  if (association) params.set("association", association);
+  if (search) params.set("search", search);
+  if (state.hideExcluded) params.set("hide_excluded", "1");
+  if (byId("evidence-scored-only").checked) params.set("scored_only", "1");
+  return params;
+}
+
+/** Load one page of individual evidence inside a selected group.
+ * @param {boolean} reset Whether to replace the currently loaded records.
+ * @returns {Promise<void>} Completes when the bounded page has rendered.
+ */
+async function loadEvidenceGroupRecords(reset = true) {
+  const workspace = state.evidenceWorkspace;
+  if (!workspace.group) return;
+  const groupId = workspace.group.id;
+  const generation = ++workspace.generation;
+  const params = evidenceGroupQuery();
+  if (!reset && workspace.next) params.set("cursor", workspace.next);
+  const payload = await api("evidenceGroupPane", `/api/evidence?${params}`);
+  if (!payload || generation !== workspace.generation || workspace.group?.id !== groupId) return;
+  workspace.records = reset ? payload.items : [...workspace.records, ...payload.items];
+  workspace.next = payload.next_cursor;
+  workspace.total = payload.total;
+  workspace.listLoadedAt = Date.now();
+  workspace.listSignature = evidenceGroupQuery().toString();
+  if (workspace.record) {
+    workspace.record = workspace.records.find((item) => item.id === workspace.record.id) || null;
+  }
+  if (!document.activeElement?.closest("#evidence-right .whitelist-editor")) {
+    renderEvidenceGroup();
+  }
+}
+
+/** Name a reporting peer in retained P2P report text.
+ * @param {object} record Individual P2P evidence record.
+ * @returns {string} Recorded peer address and ID, when available.
+ */
+function evidenceReporter(record) {
+  const description = String(record.description || "");
+  const received = description.match(/Received from P2P peer (.+?): reputation report/i);
+  if (received) return received[1];
+  const legacy = description.match(/attacking another peer:\s*(.+?)\. confidence:/i);
+  return legacy ? legacy[1] : "Peer not recorded";
+}
+
+/** Render the selected group's summary, record list, and record details. */
+function renderEvidenceGroup() {
+  const workspace = state.evidenceWorkspace;
+  const group = workspace.group;
+  if (!group) return renderEvidenceEmptyState();
+  const right = byId("evidence-right");
+  const listScroll = right.querySelector(".evidence-record-list")?.scrollTop || 0;
+  const openPeers = new Map([...right.querySelectorAll(".evidence-peer-group")]
+    .map((details) => [details.dataset.peer, details.open]));
+  right.replaceChildren();
+  const summary = document.createElement("div");
+  summary.className = "evidence-right-panel evidence-group-summary";
+  const head = document.createElement("div");
+  head.className = "evidence-right-head";
+  const label = document.createElement("div");
+  label.append(text("span", group.evidence_type || "All types", "type-chip"),
+    text("small", `${group.module || "Module unknown"} · ${compact(group.evidence_count)} records · ${formatTime(group.timestamp)}`, "muted"));
+  const close = text("button", "×");
+  close.type = "button";
+  close.title = "Close evidence group";
+  close.setAttribute("aria-label", "Close evidence group");
+  close.addEventListener("click", clearEvidenceSelection);
+  head.append(label, close);
+  summary.append(head);
+  const p2pReports = group.evidence_type === "P2P_REPORT";
+  const peerCount = new Set(workspace.records.map(evidenceReporter)).size;
+  const title = p2pReports && group.profile_ip && workspace.records.length
+      && workspace.total <= workspace.records.length
+    ? `${peerCount} peer${peerCount === 1 ? "" : "s"} reported ${group.profile_ip} as malicious`
+    : group.profile_ip && group.evidence_type
+      ? `${group.evidence_type} · ${group.profile_ip}`
+      : group.profile_ip || group.evidence_type || "Evidence group";
+  summary.append(text("h3", title));
+  if (p2pReports) summary.append(text("p", `Reputation reports received from Slips P2P peers. A report identifies its sender and subject; it does not by itself describe an attack or prove a local connection to that peer.${numeric(group.alert_score) === 0 ? " These reports have not increased the local score." : ""}`));
+  else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
+  summary.append(investigationStats([
+    ["Host", group.profile_ip ? hostIdentity(group.profile_ip) : "All hosts"],
+    ["Threat", threat(group.threat_level)],
+    ["Local score", slipsScore(group)],
+    ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
+  ]));
+  right.append(summary);
+  const list = document.createElement("div");
+  list.className = "evidence-right-panel evidence-record-list";
+  const listHead = document.createElement("div");
+  listHead.className = "evidence-right-head";
+  listHead.append(text("h3", `Records · ${compact(workspace.total || group.evidence_count)}`),
+    text("small", p2pReports ? "Grouped by reporting peer" : "Newest first", "muted"));
+  list.append(listHead);
+  if (!workspace.records.length) list.append(text("p", "Loading records…"));
+  const appendRecord = (container, record) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "evidence-record-row";
+    button.classList.toggle("selected", record.id === workspace.record?.id);
+    button.append(text("span", evidenceClock(record.timestamp)),
+      text("span", p2pReports ? `maliciousness · confidence ${numeric(record.confidence).toFixed(2)}` : record.description || record.evidence_type),
+      text("span", record.twid || "—"),
+      text("span", `${compact(record.flow_count)} flow${numeric(record.flow_count) === 1 ? "" : "s"}`));
+    button.addEventListener("click", () => selectEvidenceRecord(record));
+    container.append(button);
+  };
+  if (p2pReports) {
+    const peers = new Map();
+    workspace.records.forEach((record) => {
+      const peer = evidenceReporter(record);
+      if (!peers.has(peer)) peers.set(peer, []);
+      peers.get(peer).push(record);
+    });
+    peers.forEach((records, peer) => {
+      const details = document.createElement("details");
+      details.className = "evidence-peer-group";
+      details.dataset.peer = peer;
+      details.open = openPeers.get(peer) ?? true;
+      details.append(text("summary", `${peer} · ${compact(records.length)} report${records.length === 1 ? "" : "s"}`));
+      records.forEach((record) => appendRecord(details, record));
+      list.append(details);
+    });
+  } else workspace.records.forEach((record) => appendRecord(list, record));
+  if (workspace.next) {
+    const actions = document.createElement("div");
+    actions.className = "evidence-record-actions";
+    const more = text("button", `Load more · ${compact(workspace.records.length)} of ${compact(workspace.total)}`, "secondary");
+    more.type = "button";
+    more.addEventListener("click", () => loadEvidenceGroupRecords(false).catch(() => {}));
+    actions.append(more);
+    list.append(actions);
+  }
+  right.append(list);
+  list.scrollTop = listScroll;
+  if (workspace.record) renderEvidenceRecordDetail(workspace.record);
+}
+
+/** Select one evidence record for inline investigation.
+ * @param {object} record Individual durable evidence record.
+ */
+function selectEvidenceRecord(record) {
+  state.evidenceWorkspace.record = record;
+  highlightEvidenceSelection();
+  if (byId("evidence-view").value === "individual") {
+    renderEvidenceRecordDetail(record, true);
+  } else renderEvidenceGroup();
+}
+
+/** Copy an evidence identifier in secure and local HTTP browser contexts.
+ * @param {string} identifier Durable evidence UUID.
+ * @returns {Promise<void>} Completes after the copy result is reported.
+ */
+async function copyEvidenceId(identifier) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(identifier);
+  } else {
+    const input = document.createElement("textarea");
+    input.value = identifier;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.append(input);
+    input.select();
+    const copied = document.execCommand("copy");
+    input.remove();
+    if (!copied) throw new Error("Browser denied clipboard access");
+  }
+  toast("Evidence ID copied.");
+}
+
+/** Show a record's identity, linked flows, whitelist editor, and raw JSON.
+ * @param {object} record Individual durable evidence record.
+ * @param {boolean} replace Whether to replace the right-pane contents.
+ */
+function renderEvidenceRecordDetail(record, replace = false) {
+  const right = byId("evidence-right");
+  if (replace) right.replaceChildren();
+  const panel = document.createElement("div");
+  panel.className = "evidence-right-panel evidence-record-detail";
+  const head = document.createElement("div");
+  head.className = "evidence-right-head";
+  head.append(text("h3", `Record · ${formatTime(record.timestamp)}`));
+  const actions = document.createElement("div");
+  const close = text("button", "×");
+  close.type = "button";
+  close.title = "Close evidence record";
+  close.setAttribute("aria-label", "Close evidence record");
+  close.addEventListener("click", () => {
+    state.evidenceWorkspace.record = null;
+    highlightEvidenceSelection();
+    if (state.evidenceWorkspace.group) renderEvidenceGroup();
+    else renderEvidenceEmptyState();
+  });
+  const copy = text("button", "Copy ID");
+  copy.type = "button";
+  copy.addEventListener("click", () => copyEvidenceId(record.id)
+    .catch(() => toast("Could not copy the evidence ID.")));
+  const json = text("button", "JSON");
+  json.type = "button";
+  json.addEventListener("click", () => panel.querySelector(".json-details")?.setAttribute("open", ""));
+  actions.append(copy, json, close);
+  head.append(actions);
+  panel.append(head, hostDescription(record, "evidence-record-description"));
+  const fields = document.createElement("dl");
+  [["Host", record.profile_ip], ["From peer", record.evidence_type === "P2P_REPORT" ? evidenceReporter(record) : ""],
+    ["Threat", record.threat_level], ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`],
+    ["Time window", record.twid || "—"], ["Triggering flows", `${compact(record.flow_count)} stored`],
+    ["Alert links", compact(record.alert_ids?.length)], ["Evidence ID", record.id]]
+    .filter(([, value]) => value !== "").forEach(([label, value]) => {
+      fields.append(text("dt", label), text("dd", value));
+    });
+  panel.append(fields);
+  const flowButton = text("button", "Inspect triggering flows", "secondary");
+  flowButton.type = "button";
+  flowButton.addEventListener("click", () => openEvidence(record).catch(() => {}));
+  panel.append(flowButton, whitelistEditor("evidence-pane", record), rawBlock(record, "evidence"));
+  right.append(panel);
+}
+
+/** Refresh the Evidence table while retaining a valid open investigation. */
+async function loadEvidence() {
+  renderEvidenceGroupControls();
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
-  byId("evidence-summary").textContent = (state.hideExcluded
-    ? "" : `Total Evidence (including whitelisted): ${compact(payload.full_total)}. `)
-    + (grouped
-      ? `Evidence grouped by host and type: ${compact(payload.total)}.`
-      : `Individual durable evidence: ${compact(payload.total)}.`);
-  if (grouped) {
-    renderTable("evidence-table", payload.items, [
-      (row) => formatTime(row.timestamp), (row) => hostIdentity(row.profile_ip),
-      (row) => networkContext(row),
-      (row) => threat(row.threat_level), (row) => slipsScore(row),
-      (row) => text("code", row.evidence_type),
-      (row) => reportingPeers(row),
-      (row) => text("code", row.module), (row) => compact(row.evidence_count),
-      (row) => compact(row.flow_count),
-      (row) => row.alert_count ? `${compact(row.alert_count)} linked` : "none",
-      (row) => whitelistHandling(row),
-    ], openEvidenceGroup);
-  } else {
-    renderTable("evidence-table", payload.items, [
-      (row) => formatTime(row.timestamp), (row) => hostIdentity(row.profile_ip),
-      (row) => networkContext(row),
-      (row) => threat(row.threat_level), (row) => slipsScore(row),
-      (row) => text("code", row.evidence_type),
-      (row) => reportingPeers(row),
-      (row) => text("code", row.module), (row) => whitelistHandling(row),
-      (row) => compact(row.flow_count),
-      (row) => row.alert_ids?.length ? compact(row.alert_ids.length) : "none",
-      (row) => hostDescription(row),
-    ], openEvidence);
+  const mode = byId("evidence-view").value;
+  if (!byId("evidence-threat").value && !state.evidenceWorkspace.typeFilter) {
+    const counts = new Map([["", payload.total]]);
+    payload.items.forEach((item) => {
+      const level = String(item.threat_level || "info").toLowerCase();
+      counts.set(level, (counts.get(level) || 0) + 1);
+    });
+    state.evidenceWorkspace.threatCounts = counts;
   }
+  renderEvidenceThreatChips();
+  renderEvidenceTable(payload);
+  const loadedRecords = mode === "individual"
+    ? payload.items.length
+    : payload.items.reduce((sum, item) => sum + numeric(item.evidence_count), 0);
+  const recordsLabel = payload.page_size === payload.total
+    ? `${compact(loadedRecords)} records`
+    : `${compact(loadedRecords)} records on this page`;
+  const activeType = byId("evidence-active-type");
+  activeType.hidden = !state.evidenceWorkspace.typeFilter;
+  activeType.textContent = state.evidenceWorkspace.typeFilter
+    ? `${state.evidenceWorkspace.typeFilter} ×` : "";
+  byId("evidence-count").textContent = mode === "individual"
+    ? `${compact(payload.total)} records`
+    : `${compact(payload.total)} groups · ${recordsLabel}`;
+  const selectedRange = byId("evidence-range");
+  byId("evidence-range-badge").textContent = selectedRange.selectedOptions[0]?.textContent || "Full run";
+  byId("evidence-summary").textContent = `${payload.page_size} of ${compact(payload.total)} ${mode === "individual" ? "records" : "groups"}${state.evidenceWorkspace.typeFilter ? ` · ${state.evidenceWorkspace.typeFilter}` : ""}`;
   pager("evidence", "evidence-pager", loadEvidence);
+  const workspace = state.evidenceWorkspace;
+  if (workspace.group) {
+    workspace.group = payload.items.find((item) => item.id === workspace.group.id) || workspace.group;
+    const signature = evidenceGroupQuery().toString();
+    if (workspace.listSignature !== signature || Date.now() - workspace.listLoadedAt > 15000) {
+      loadEvidenceGroupRecords(true).catch(() => {});
+    }
+  } else if (workspace.record && mode === "individual") {
+    renderEvidenceRecordDetail(workspace.record, true);
+  } else renderEvidenceEmptyState();
 }
 
 function renderConfiguration() {
@@ -3375,50 +3862,6 @@ async function openAlert(record) {
   );
 }
 
-async function openEvidenceGroup(group) {
-  const generation = openDrawer("HOST EVIDENCE", group.evidence_type);
-  const body = byId("drawer-body");
-  body.append(
-    investigationStats([
-      ["Host", hostLink(group.profile_ip)],
-      ["Evidence", compact(group.evidence_count), "accent"],
-      ["Triggering flows", compact(group.flow_count)],
-      ["Alert links", compact(group.alert_count)],
-      ["Highest threat", threat(group.threat_level)],
-      ["Module", group.module || "—"],
-    ]),
-    investigationHeading("Evidence timeline", "Newest matching evidence first; select one for flows"),
-  );
-  const params = rangeQuery("evidence");
-  params.set("profile", group.profile_ip);
-  params.set("type", group.evidence_type);
-  params.set("limit", "100");
-  params.set("sort", "time");
-  params.set("order", "desc");
-  const level = byId("evidence-threat").value;
-  const association = byId("evidence-link").value;
-  const search = byId("evidence-search").value.trim();
-  if (level) params.set("threat", level);
-  if (association) params.set("association", association);
-  if (search) params.set("search", search);
-  if (state.hideExcluded) params.set("hide_excluded", "1");
-  try {
-    const payload = await api("evidenceGroup", `/api/evidence?${params}`);
-    if (!payload || generation !== state.drawerGeneration) return;
-    const list = document.createElement("div");
-    list.className = "investigation-list";
-    payload.items.forEach((item) => list.append(evidenceCard(item)));
-    body.append(list);
-    if (!payload.items.length) body.append(text("p", "No matching evidence.", "muted"));
-    if (payload.total > payload.page_size) {
-      body.append(text("p", `Showing newest ${payload.page_size} of ${compact(payload.total)} matching records.`, "muted"));
-    }
-  } catch (_) {
-    if (generation !== state.drawerGeneration) return;
-    body.append(text("p", "Individual evidence could not be loaded.", "muted"));
-  }
-}
-
 function hostRangeParams() {
   const params = rangeQuery("host");
   return params;
@@ -4156,13 +4599,14 @@ function switchTab(name) {
   state.activeTab = name;
   document.body.classList.toggle("overview-active", name === "overview");
   document.body.classList.toggle("alerts-active", name === "alerts");
+  document.body.classList.toggle("evidence-active", name === "evidence");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
     panel.classList.toggle("active", panel.id === name));
   if (name === "alerts") updateAlertViewportHeight();
-  currentLoader()().catch(() => {});
-  schedulePoll();
+  if (name === "evidence") updateEvidenceViewportHeight();
+  currentLoader()().catch(() => {}).finally(schedulePoll);
 }
 
 function bindFilters(name, controls, loader) {
@@ -4174,8 +4618,7 @@ function bindFilters(name, controls, loader) {
       window.clearTimeout(timer);
       timer = window.setTimeout(() => {
         resetPage(name);
-        loader().catch(() => {});
-        schedulePoll();
+        loader().catch(() => {}).finally(schedulePoll);
       }, element.type === "search" ? 250 : 0);
     });
   });
@@ -4193,8 +4636,7 @@ function bindView(name, loader) {
     page.sort = "time";
     page.order = "desc";
     resetPage(name);
-    loader().catch(() => {});
-    schedulePoll();
+    loader().catch(() => {}).finally(schedulePoll);
   });
 }
 
@@ -4205,8 +4647,7 @@ function bindRange(prefix, pageName, loader) {
     byId(`${prefix}-from`).hidden = !custom;
     byId(`${prefix}-to`).hidden = !custom;
     resetPage(pageName);
-    loader().catch(() => {});
-    schedulePoll();
+    loader().catch(() => {}).finally(schedulePoll);
   };
   select.addEventListener("change", update);
   [byId(`${prefix}-from`), byId(`${prefix}-to`)].forEach((input) =>
@@ -4269,6 +4710,19 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
   bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search"], loadAlerts);
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
+byId("evidence-scored-only").addEventListener("change", () => {
+  clearEvidenceSelection();
+  resetPage("evidence");
+  loadEvidence().catch(() => {});
+});
+byId("evidence-active-type").addEventListener("click", () => {
+  state.evidenceWorkspace.typeFilter = "";
+  clearEvidenceSelection();
+  resetPage("evidence");
+  loadEvidence().catch(() => {});
+});
+byId("evidence-search").addEventListener("input", clearEvidenceSelection);
+byId("evidence-link").addEventListener("change", clearEvidenceSelection);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
 byId("configuration-search").addEventListener("input", renderConfiguration);
 byId("whitelists-search").addEventListener("input", renderWhitelists);
@@ -4307,8 +4761,11 @@ window.addEventListener("beforeunload", () => {
 
 initDrawerResize();
 initAlertPaneResize();
+window.addEventListener("resize", updateEvidenceViewportHeight);
 window.setInterval(renderHeaderUptime, 1000);
-loadOverview().then(schedulePoll).catch(schedulePoll);
+loadOverview().catch(() => {}).finally(() => {
+  if (state.activeTab === "overview") schedulePoll();
+});
 loadWhitelists().catch(() => {});
 loadLiveTitleCounts().catch(() => {});
 scheduleBackendStatusPoll();
