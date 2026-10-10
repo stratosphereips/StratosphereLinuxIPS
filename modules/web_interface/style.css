@@ -507,3 +507,24 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
   .overview-alert-row { grid-template-columns: 75px minmax(0, 1fr) 75px 50px; }
   .overview-alert-time { display: none; }
 }
+@media (min-width: 1151px) and (min-height: 680px) {
+  #overview { font-size: 1rem; }
+  #overview .surface { padding: 1.15rem; }
+  .overview-status h3 { font-size: 1.65rem; }
+  .overview-status p { font-size: 1rem; }
+  .overview-alert-row { min-height: 39px; }
+  .overview-alert-severity, .overview-alert-row .host-label code { font-size: .91rem; }
+  .overview-alert-row .host-name, .overview-alert-count, .overview-alert-time,
+  .overview-alert-score { font-size: .86rem; }
+  .overview-system-row { min-height: 30px; font-size: .92rem; }
+  #overview .summary-card { min-height: 84px; }
+  #overview .summary-card span { font-size: .86rem; }
+  #overview .summary-card strong { font-size: 1.82rem; }
+  #overview .overview-bottom .surface { min-height: 205px; }
+  .network-facts { gap: .38rem; }
+  .network-fact > code, .network-fact > .host-label,
+  .network-fact > span:last-child { font-size: .9rem; }
+  .metric-heading, .metric-heading strong { font-size: .9rem; }
+  .overview-load-foot { font-size: .8rem; }
+  .overview-performance .line-chart { min-height: 57px; height: 57px; }
+}
