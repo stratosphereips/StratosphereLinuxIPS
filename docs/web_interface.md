@@ -60,9 +60,9 @@ the web listener restarts on the new address. The new URL appears in
 slips.log. The browser must reconnect there.
 
 
-Hover over a line or plotted point in the Overview, P2P, or Host charts to see
-that sample's full local date and time, series name, and value. The hover area
-is wider than the visible line so points are easier to inspect.
+Hover anywhere inside an Overview, P2P, or Host plot to see the nearest sample's
+full local date and time and plotted values. Host score, flow, and byte charts
+show each series available at that sample.
 
 ## Live network changes
 

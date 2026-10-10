@@ -691,11 +691,11 @@ function chartTooltip(svg) {
   return tooltip;
 }
 
-/** Show the exact sample time and value while a line or point is hovered.
+/** Show the nearest sample time and values while the plot is hovered.
  * @param {SVGElement} svg - Rendered chart.
- * @param {SVGElement} target - Wide hit area over a series.
- * @param {Array<object>} points - Chronologically sorted samples in the series.
- * @param {object} item - Series key and optional display label.
+ * @param {SVGElement} target - Hit area covering the plot.
+ * @param {Array<object>} points - Chronologically sorted chart samples.
+ * @param {Array<object>} series - Plotted series and display labels.
  * @param {Function} formatValue - Value formatter for this chart.
  * @param {number} maximum - Highest value on the chart.
  * @param {number} left - Plot's left coordinate.
@@ -703,7 +703,7 @@ function chartTooltip(svg) {
  * @param {number} minimumTime - Earliest chart timestamp.
  * @param {number} span - Chart time span in seconds.
  */
-function bindChartHover(svg, target, points, item, formatValue, maximum, left, plotWidth, minimumTime, span) {
+function bindChartHover(svg, target, points, series, formatValue, maximum, left, plotWidth, minimumTime, span) {
   const tooltip = chartTooltip(svg);
   target.addEventListener("pointermove", (event) => {
     const bounds = svg.getBoundingClientRect();
@@ -711,8 +711,10 @@ function bindChartHover(svg, target, points, item, formatValue, maximum, left, p
     const x = (event.clientX - bounds.left) * svg.viewBox.baseVal.width / bounds.width;
     const timestamp = minimumTime + Math.max(0, Math.min(1, (x - left) / plotWidth)) * span;
     const point = nearestChartPoint(points, timestamp);
-    const label = item.label || item.key.replaceAll("_", " ");
-    tooltip.textContent = `${label}: ${formatValue(point[item.key], maximum)}\n${formatTime(point.ts)}`;
+    const values = series.filter((item) => point[item.key] !== null
+      && point[item.key] !== undefined && Number.isFinite(Number(point[item.key])))
+      .map((item) => `${item.label || item.key.replaceAll("_", " ")}: ${formatValue(point[item.key], maximum)}`);
+    tooltip.textContent = `${formatTime(point.ts)}\n${values.join("\n")}`;
     tooltip.hidden = false;
     const containerBounds = svg.parentElement.getBoundingClientRect();
     tooltip.style.left = `${Math.max(4, Math.min(event.clientX - containerBounds.left + 12,
@@ -804,12 +806,6 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
     svg.append(path);
-    const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    hitArea.setAttribute("d", d);
-    hitArea.setAttribute("class", "chart-hit-line");
-    svg.append(hitArea);
-    bindChartHover(svg, hitArea, seriesPoints, item, formatValue, maximum,
-      left, plotWidth, minimumTime, span);
     if (seriesPoints.length === 1) {
       const point = seriesPoints[0];
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "circle");
@@ -818,16 +814,17 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
       marker.setAttribute("r", "3");
       marker.setAttribute("class", `chart-point ${item.className || ""}`);
       svg.append(marker);
-      const hitPoint = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-      hitPoint.setAttribute("cx", marker.getAttribute("cx"));
-      hitPoint.setAttribute("cy", marker.getAttribute("cy"));
-      hitPoint.setAttribute("r", "10");
-      hitPoint.setAttribute("class", "chart-hit-point");
-      svg.append(hitPoint);
-      bindChartHover(svg, hitPoint, seriesPoints, item, formatValue, maximum,
-        left, plotWidth, minimumTime, span);
     }
   }
+  const hitArea = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  hitArea.setAttribute("x", String(left));
+  hitArea.setAttribute("y", String(top));
+  hitArea.setAttribute("width", String(plotWidth));
+  hitArea.setAttribute("height", String(plotHeight));
+  hitArea.setAttribute("class", "chart-hit-area");
+  svg.append(hitArea);
+  bindChartHover(svg, hitArea, points, series, formatValue, maximum,
+    left, plotWidth, minimumTime, span);
   points.filter((point) => point.reset_reason).forEach((point) => {
     const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
     const marker = document.createElementNS("http://www.w3.org/2000/svg", "line");
