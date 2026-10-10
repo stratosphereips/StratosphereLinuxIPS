@@ -6,6 +6,7 @@ const state = {
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
+  metadata: null,
   metrics: [],
   configuration: null,
   whitelists: null,
@@ -445,6 +446,7 @@ function applyRunIdentity(identity) {
     state.overview = null;
     state.overviewEvidence = null;
     state.overviewEvidenceLoading = false;
+    state.metadata = null;
     state.metrics = [];
     state.configuration = null;
     state.rangesInitialized = false;
@@ -1061,7 +1063,7 @@ function renderOverviewSystem(data) {
   if (numeric(system.cpu_percent) >= 90) warnings.push({
     text: `Host CPU ${numeric(system.cpu_percent).toFixed(1)}% · load ${numeric(system.load_average?.[0]).toFixed(2)}`,
     tone: "danger", action: "Modules", open: () => {
-      if (byId("overview-details").hidden) byId("toggle-overview-details").click();
+      switchTab("metadata");
       byId("modules-table").scrollIntoView({ block: "nearest" });
     },
   });
@@ -1220,26 +1222,49 @@ function renderNetworkStates(networkStates) {
  * Render the metadata captured for this run.
  *
  * @param {Object} metadata Parsed metadata labels and values.
+ * @param {Object|null} overview Current run and interface details.
  */
-function renderMetadata(metadata) {
+function renderMetadata(metadata, overview = null) {
   const runMetadata = byId("run-metadata");
   runMetadata.replaceChildren();
-  const metadataOrder = [
-    "Slips version", "File", "Branch", "Commit", "Command",
-    "Slips start date", "Zeek version",
-  ];
-  metadataOrder.filter((label) => metadata[label] !== undefined).forEach((label) => {
-    const row = document.createElement("div");
-    row.className = "source-row";
-    row.append(text("span", label), text(
-      label === "Commit" || label === "Command" ? "code" : "span",
-      metadata[label] || "unavailable",
-    ));
-    runMetadata.append(row);
-  });
-  if (!runMetadata.children.length) {
-    runMetadata.append(text("p", "metadata/info.txt is not available.", "muted"));
+  const version = metadata["Slips version"] || overview?.run_metadata?.["Slips version"] || "";
+  runMetadata.append(
+    metadataRow("Version", version ? (/^slips\b/i.test(version) ? version : `Slips ${version}`) : "Unavailable"),
+    metadataRow("Branch", metadata.Branch || overview?.run_metadata?.Branch || "Unavailable"),
+    metadataRow("Commit", metadata.Commit || overview?.run_metadata?.Commit || "Unavailable"),
+  );
+  const extras = ["File", "Command", "Slips start date", "Zeek version"]
+    .filter((label) => metadata[label] !== undefined);
+  if (extras.length) {
+    const details = document.createElement("details");
+    details.className = "metadata-more";
+    details.append(text("summary", "More run facts"));
+    extras.forEach((label) => details.append(metadataRow(label, metadata[label] || "Unavailable")));
+    runMetadata.append(details);
   }
+  const device = byId("metadata-device");
+  device.replaceChildren();
+  const addresses = overview?.host_addresses || {};
+  const name = overview?.computer_name || "This device";
+  byId("metadata-device-title").textContent = `This device · ${name}`;
+  device.append(metadataRow("Interface", overview?.run?.interface || "Unavailable"));
+  [["IPv4", addresses.ipv4 || []], ["IPv6", addresses.ipv6 || []]].forEach(([label, values]) => {
+    device.append(metadataRow(label, values.length ? values.join("\n") : "None"));
+  });
+}
+
+/**
+ * Build one compact, accessible metadata label and value.
+ *
+ * @param {string} label Label shown at the left of the row.
+ * @param {string} value Metadata value to display.
+ * @returns {HTMLElement} The labeled metadata row.
+ */
+function metadataRow(label, value) {
+  const row = document.createElement("div");
+  row.className = "metadata-row";
+  row.append(text("span", label), text("code", value));
+  return row;
 }
 
 /** Infer a display severity without changing the retained raw log line. */
@@ -1332,13 +1357,22 @@ function renderLogs(payload) {
   ], openLog);
 }
 
-/** Render a module resource value with a 0–100 red heat-map background. */
-function usageCell(percentage, label, resource) {
+/**
+ * Draw one module's CPU share as a bounded bar and readable percentage.
+ *
+ * @param {number} percentage CPU share of one core.
+ * @returns {HTMLElement} The percentage bar.
+ */
+function moduleCpuUsage(percentage) {
   const actual = Math.max(0, numeric(percentage));
-  const intensity = Math.min(actual, 100);
-  const element = text("span", label, "usage-cell");
-  element.style.backgroundColor = `rgba(239, 107, 115, ${intensity / 100})`;
-  element.title = `${actual.toFixed(1)}% of ${resource}`;
+  const element = document.createElement("span");
+  element.className = `module-cpu ${actual >= 50 ? "hot" : ""}`;
+  const track = text("span", "", "module-cpu-track");
+  const fill = text("span", "", "module-cpu-fill");
+  fill.style.width = `${Math.min(actual, 100)}%`;
+  track.append(fill);
+  element.append(track, text("strong", `${actual.toFixed(1)}%`));
+  element.title = `${actual.toFixed(1)}% of one CPU core`;
   return element;
 }
 
@@ -1361,17 +1395,18 @@ function renderModules(modules) {
     (row) => text("code", row.name),
     (row) => text("span", row.state, `status ${row.running ? "ok" : "warn"}`),
     (row) => row.pid,
-    (row) => usageCell(
-      row.cpu_percent, `${numeric(row.cpu_percent).toFixed(1)}%`, "one CPU core",
-    ),
-    (row) => usageCell(
-      row.memory_percent, `${numeric(row.memory_mb).toFixed(1)} MiB`, "host memory",
-    ),
+    (row) => moduleCpuUsage(row.cpu_percent),
+    (row) => {
+      const value = text("span", `${numeric(row.memory_mb).toFixed(1)} MiB`, "module-memory");
+      value.title = `${numeric(row.memory_percent).toFixed(1)}% of host memory`;
+      return value;
+    },
     (row) => compact(row.flows_per_minute),
     (row) => row.evidence_count === null || row.evidence_count === undefined
       ? text("span", "Not loaded", "muted") : compact(row.evidence_count),
     (row) => row.error_count,
   ]);
+  byId("modules-table").classList.toggle("show-evidence", Boolean(state.overview?.evidence_details_loaded));
   applySortIndicators("modules");
 }
 
@@ -1455,9 +1490,21 @@ async function loadOverviewEvidenceCounts() {
 
 /** Load and render run metadata in its dedicated tab. */
 async function loadMetadata() {
-  const payload = await api("metadata", "/api/metadata");
-  if (!payload) return;
-  renderMetadata(payload.items || {});
+  if (state.overview) {
+    renderMetadata(state.metadata?.items || {}, state.overview);
+  }
+  const [metadata, overview] = await Promise.all([
+    state.metadata || api("metadata", "/api/metadata"),
+    api("metadataOverview", "/api/overview"),
+  ]);
+  if (!metadata) return;
+  state.metadata = metadata;
+  if (overview) {
+    applyOverviewEvidence(overview);
+    state.overview = overview;
+    renderOverview();
+  }
+  renderMetadata(metadata.items || {}, overview || state.overview);
 }
 
 /** Load and render parsed runtime messages in their dedicated tab. */
@@ -4697,6 +4744,12 @@ function updateHostViewportHeight() {
   byId("hosts").style.setProperty("--hosts-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
+/** Keep Metadata's cards and module table within the visible browser height. */
+function updateMetadataViewportHeight() {
+  const bottom = byId("metadata").getBoundingClientRect().top;
+  byId("metadata").style.setProperty("--metadata-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
+}
+
 function tabLoader(name) {
   return {
     overview: loadOverview,
@@ -4731,7 +4784,8 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
-  if (["configuration", "whitelists", "metadata"].includes(state.activeTab)) return false;
+  if (["configuration", "whitelists"].includes(state.activeTab)) return false;
+  if (state.activeTab === "metadata") return true;
   if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
@@ -4773,6 +4827,7 @@ function switchTab(name) {
   document.body.classList.toggle("alerts-active", name === "alerts");
   document.body.classList.toggle("evidence-active", name === "evidence");
   document.body.classList.toggle("hosts-active", name === "hosts");
+  document.body.classList.toggle("metadata-active", name === "metadata");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
@@ -4780,6 +4835,7 @@ function switchTab(name) {
   if (name === "alerts") updateAlertViewportHeight();
   if (name === "evidence") updateEvidenceViewportHeight();
   if (name === "hosts") updateHostViewportHeight();
+  if (name === "metadata") updateMetadataViewportHeight();
   currentLoader()().catch(() => {}).finally(schedulePoll);
 }
 
@@ -4979,6 +5035,7 @@ initDrawerResize();
 initAlertPaneResize();
 window.addEventListener("resize", updateEvidenceViewportHeight);
 window.addEventListener("resize", updateHostViewportHeight);
+window.addEventListener("resize", updateMetadataViewportHeight);
 window.setInterval(renderHeaderUptime, 1000);
 loadOverview().catch(() => {}).finally(() => {
   if (state.activeTab === "overview") schedulePoll();

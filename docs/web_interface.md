@@ -245,11 +245,11 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ### Overview
 
-Overview puts the run state, most affected alert hosts, system warnings, five key counts, current network, host load, and two Slips performance sparklines on one desktop screen. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact, the memory chart, and the sortable Modules table. Each module row includes state, PID, CPU, resident memory, flows per minute, evidence, and parsed log events. CPU and memory cells are heat mapped from the normal table background at 0% to red at 100%; memory is scaled to total host RAM while the displayed value remains MiB.
+Overview puts the run state, most affected alert hosts, system warnings, five key counts, current network, host load, and two Slips performance sparklines on one desktop screen. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact and the memory chart. The sortable Modules table is in Metadata; the **Modules** action in a high-CPU warning opens it there.
 
 Uptime is elapsed wall-clock time since this Slips run started and freezes at the recorded analysis end time for completed runs. The compact header shows the run name, computer name, monitored interface, network name, address, version, state, and uptime. **Run details** opens Metadata for the full run facts, including branch and commit. Parsed runtime messages remain in **Logs**.
 
-The first Overview response is deliberately lightweight even when `-p` retains a large Redis history. It reads the constant-time evidence counter and does not scan historical profile/time-window keys. Exact evidence attribution for each module is deferred behind **Load evidence counts** in the Modules heading; opening **Evidence** likewise loads the retained evidence records only when that tab is requested. Performance-history charts use their separate bounded endpoint.
+The first Overview response is deliberately lightweight even when `-p` retains a large Redis history. It reads the constant-time evidence counter and does not scan historical profile/time-window keys. Exact evidence attribution for each module is deferred behind **Load evidence counts** in Metadata; opening **Evidence** likewise loads the retained evidence records only when that tab is requested. Performance-history charts use their separate bounded endpoint.
 
 Overview finds the four leading alert hosts by reading alert totals first and checking linked severity from highest to lowest until the visible rows are known. The grouped Alerts view calculates host totals once and looks up linked severity in indexed batches. Hosts uses the source and destination flow indexes for last-seen sorting and score indexes for past peak values. Existing run databases receive the score indexes when Slips next initializes their SQLite schema.
 The ARP view reads its latest evidence in timestamp order from the evidence type index, so opening that tab does not sort every matching record.
@@ -290,6 +290,10 @@ The Evidence tab keeps the group or record table on the left and an investigatio
 The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
 
 The range controls initially use **Live** so opening a tab while Overview is still loading cannot accidentally start a full-run query. Once the input source is known, offline captures switch to **Full run** and refresh the active tab. Polling begins after each tab request completes so a slower first response is not canceled and restarted by the refresh timer.
+
+### Metadata
+
+Metadata keeps the run version, branch, and commit beside the monitored device's interface and IPv4/IPv6 addresses. Other captured run fields are available under **More run facts**. The Modules table now lives below these cards and refreshes while this tab is open. It can be sorted and filtered by module name. CPU appears as a percentage and bar, while memory shows MiB with host-memory percentage on hover. **Load evidence counts** adds the Evidence column on demand; it avoids scanning retained evidence during the initial page load. The table scrolls inside the tab without moving the shared header.
 
 ### Logs
 

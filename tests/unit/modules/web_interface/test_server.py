@@ -763,6 +763,9 @@ def test_overview_prioritizes_operational_data() -> None:
     overview = index_source.split('<section id="overview"', 1)[1].split(
         '<section id="logs"', 1
     )[0]
+    metadata = index_source.split('<section id="metadata"', 1)[1].split(
+        '<section id="alerts"', 1
+    )[0]
 
     assert (
         'rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512"'
@@ -772,6 +775,10 @@ def test_overview_prioritizes_operational_data() -> None:
     assert 'data-tab="metadata"' in index_source
     assert 'id="logs-table"' in index_source
     assert 'id="run-metadata"' in index_source
+    assert 'id="metadata-device"' in metadata
+    assert 'id="modules-table"' in metadata
+    assert 'id="modules-table"' not in overview
+    assert 'api("metadataOverview", "/api/overview")' in app_source
     assert "Data sources" not in overview
     assert "Run metadata" not in overview
     assert "Recent log events" not in overview

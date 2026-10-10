@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261010-hosts">
+  <link rel="stylesheet" href="/style.css?v=20261011-metadata">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -57,7 +57,6 @@
       <div id="overview-details" hidden>
         <article class="surface"><h3>Estimated attacks stopped by the firewall</h3><div id="overview-firewall-impact" class="summary-grid impact-summary"></div></article>
         <article class="surface"><h3>Slips memory history</h3><div class="chart-grid"><figure><figcaption>Resident memory · Slips process tree</figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
-        <article class="surface table-surface"><div class="table-heading"><h3>Modules</h3><div class="table-actions"><button class="secondary" id="load-module-evidence" disabled>Load evidence counts</button><input id="module-search" type="search" placeholder="Filter modules"></div></div><div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div></article>
       </div>
     </section>
 
@@ -68,8 +67,15 @@
     </section>
 
     <section id="metadata" class="panel" aria-labelledby="metadata-title">
-      <div class="section-heading"><div><p class="eyebrow">RUN</p><h2 id="metadata-title">Metadata</h2></div><button class="secondary refresh-list" data-target="metadata">Refresh</button></div>
-      <article class="surface"><div id="run-metadata" class="metadata-grid"></div></article>
+      <h2 id="metadata-title" class="visually-hidden">Metadata</h2>
+      <div class="metadata-top">
+        <article class="surface metadata-card"><h3>Run</h3><div id="run-metadata"></div></article>
+        <article class="surface metadata-card"><h3 id="metadata-device-title">This device</h3><div id="metadata-device"></div></article>
+      </div>
+      <article class="surface table-surface metadata-modules">
+        <div class="table-heading"><h3>Modules <small>· moved from Overview</small></h3><div class="table-actions"><button class="secondary" id="load-module-evidence" disabled>Load evidence counts</button><input id="module-search" type="search" placeholder="Filter modules" aria-label="Filter modules"></div></div>
+        <div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div>
+      </article>
     </section>
 
     <section id="alerts" class="panel" aria-labelledby="alerts-title">
@@ -284,6 +290,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261010-hosts"></script>
+  <script src="/app.js?v=20261011-metadata"></script>
 </body>
 </html>
