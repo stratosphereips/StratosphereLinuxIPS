@@ -62,9 +62,7 @@ def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
     db.r = Mock()
     db.constants = Constants()
 
-    db.record_slips_own_connection(
-        123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43
-    )
+    db.record_slips_own_connection(123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43)
 
     key = "slips:own_connection:123:" "tcp|192.0.2.10|51234|198.51.100.43|43"
     source_key = "slips:own_sources:123"
@@ -90,9 +88,7 @@ def test_slips_own_service_port_window_expires() -> None:
     db.r = Mock()
     db.constants = Constants()
 
-    db.record_slips_own_service_port(
-        123, "tcp", 43, ["192.0.2.10", "2001:db8::10"]
-    )
+    db.record_slips_own_service_port(123, "tcp", 43, ["192.0.2.10", "2001:db8::10"])
 
     key = "slips:own_service_port:123:tcp:43"
     pipe = db.r.pipeline.return_value
@@ -466,9 +462,7 @@ def test_add_mac_addr_with_ipv6_association():
         call(profile_ipv4, mac_addr),  # call with the ipv4 profileid
         call(profile_ipv6, mac_addr),  # call with the ipv6 profileid
     ]
-    db.rdb.update_mac_of_profile.assert_has_calls(
-        expected_calls, any_order=True
-    )
+    db.rdb.update_mac_of_profile.assert_has_calls(expected_calls, any_order=True)
 
 
 def test_get_the_other_ip_version():
@@ -617,15 +611,11 @@ def test_current_timewindow_wrappers_delegate_to_redis_db():
         patch.object(type(db.rdb), "_set_max_seen_risk_weight") as mock_set,
     ):
         assert db.get_current_timewindow() == "7"
-        redis_mock.get.assert_called_once_with(
-            db.rdb.constants.CURRENT_TIMEWINDOW
-        )
+        redis_mock.get.assert_called_once_with(db.rdb.constants.CURRENT_TIMEWINDOW)
 
         db.incr_current_timewindow()
 
-        redis_mock.incr.assert_called_once_with(
-            db.rdb.constants.CURRENT_TIMEWINDOW
-        )
+        redis_mock.incr.assert_called_once_with(db.rdb.constants.CURRENT_TIMEWINDOW)
         mock_set.assert_called_once_with(None, RiskWeight.LOW)
 
 
@@ -657,13 +647,9 @@ def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
     assert db.rdb.rcache.type(key) in ("none", b"none")
 
 
-def test_setup_config_file_uses_isolated_path_and_preserves_save(
-    tmp_path, monkeypatch
-):
+def test_setup_config_file_uses_isolated_path_and_preserves_save(tmp_path, monkeypatch):
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
     monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
@@ -672,9 +658,7 @@ def test_setup_config_file_uses_isolated_path_and_preserves_save(
 
     RedisDB._setup_config_file()
 
-    expected_conf = (
-        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
-    )
+    expected_conf = tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     assert RedisDB._conf_file == str(expected_conf)
 
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
@@ -692,9 +676,7 @@ def test_setup_config_file_enables_autosave_when_save_enabled(
 ) -> None:
     """Test Redis autosave options are set when save is enabled."""
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
     monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
@@ -703,9 +685,7 @@ def test_setup_config_file_enables_autosave_when_save_enabled(
 
     RedisDB._setup_config_file()
 
-    expected_conf = (
-        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
-    )
+    expected_conf = tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
 
     assert "save 30 500" in conf_contents
@@ -719,15 +699,11 @@ def test_setup_config_file_uses_absolute_redis_paths(
 ) -> None:
     """Test generated Redis configs use absolute paths for dir and logfile."""
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
-    monkeypatch.setattr(
-        RedisDB, "output_dir", "relative-output", raising=False
-    )
+    monkeypatch.setattr(RedisDB, "output_dir", "relative-output", raising=False)
     monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
     monkeypatch.setattr(RedisDB, "args", Mock(save=False), raising=False)
     monkeypatch.setattr(
@@ -745,9 +721,7 @@ def test_setup_config_file_uses_absolute_redis_paths(
         tmp_path / "relative-output" / "redis" / "redis-server-port-6379.log"
     )
     expected_dir = tmp_path / "relative-output" / "databases"
-    conf_contents = (
-        Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
-    )
+    conf_contents = Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
 
     assert f"logfile {expected_logfile}" in conf_contents
     assert f"dir {expected_dir}" in conf_contents
@@ -802,9 +776,7 @@ def test_save_copies_dump_from_configured_redis_dir(tmp_path: Path) -> None:
         str(backup_file.parent / "dump.rdb")
     )
     db.r.save.assert_called_once()
-    assert (backup_file.parent / "dump.rdb").read_text(
-        encoding="utf-8"
-    ) == "redis dump"
+    assert (backup_file.parent / "dump.rdb").read_text(encoding="utf-8") == "redis dump"
     assert not redis_dump.exists()
     db.print.assert_not_called()
 
@@ -893,6 +865,54 @@ def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
         "persistent_state", "p2p_trust_runtime", "trustdb.db"
     )
     assert os.path.isdir(os.path.join("persistent_state", "p2p_trust_runtime"))
+
+
+def test_backup_db_moves_wal_sidecars(tmp_path: Path) -> None:
+    """Keep the WAL and shared-memory files with a backed-up trust DB.
+
+    Parameters:
+        tmp_path: Temporary directory for SQLite files.
+    """
+    db = ModuleFactory().create_db_manager_obj(6386)
+    db_path = tmp_path / "trustdb.db"
+    for suffix in ("", "-wal", "-shm"):
+        (tmp_path / f"trustdb.db{suffix}").write_bytes(b"old")
+
+    DBManager.backup_db(db, str(db_path))
+
+    assert not db_path.exists()
+    assert not (tmp_path / "trustdb.db-wal").exists()
+    assert not (tmp_path / "trustdb.db-shm").exists()
+    backups = list(tmp_path.glob("trustdb.db.*.bak"))
+    assert len(backups) == 1
+    for suffix in ("", "-wal", "-shm"):
+        assert (tmp_path / f"{backups[0].name}{suffix}").read_bytes() == b"old"
+
+
+def test_init_p2p_trust_db_backs_up_malformed_db_once(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Skip the write check after a malformed trust DB was moved aside.
+
+    Parameters:
+        tmp_path: Temporary directory for the trust database.
+        monkeypatch: Replaces the permanent directory and database probes.
+    """
+    db = ModuleFactory().create_db_manager_obj(6386)
+    monkeypatch.setattr(
+        "slips_files.core.database.database_manager.get_this_filepath_inside_permanent_dir",
+        lambda filename: str(tmp_path / filename),
+    )
+    db_path = tmp_path / "p2p_trust_runtime" / "trustdb.db"
+    db_path.parent.mkdir()
+    db_path.write_bytes(b"malformed")
+    db.is_db_malformed = Mock(return_value=True)
+    db.has_write_access_to_sqlite = Mock(return_value=False)
+    db.backup_db = Mock(side_effect=lambda path: os.remove(path))
+
+    assert DBManager.init_p2p_trust_db(db) == str(db_path)
+    db.backup_db.assert_called_once_with(str(db_path))
+    db.has_write_access_to_sqlite.assert_not_called()
 
 
 @pytest.mark.parametrize("add_version", [True, False])

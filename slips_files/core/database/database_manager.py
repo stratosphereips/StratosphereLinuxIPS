@@ -117,10 +117,12 @@ class DBManager:
             self.print(f"Database error during integrity_check: {e}")
             return True
 
-    def backup_db(self, db_path: str):
+    def backup_db(self, db_path: str) -> None:
         """
-        Backs up the database file to a new file with a timestamp. and
-        deleted the file at db_path if successfully backed up.
+        Back up a SQLite database and its WAL sidecars before replacement.
+
+        Parameters:
+            db_path: Path to the SQLite database file.
         """
         try:
             # backup the DB aside (optional safety)
@@ -129,6 +131,10 @@ class DBManager:
             )
             backup_path = f"{db_path}.{date_time}.bak"
             shutil.move(db_path, backup_path)
+            for suffix in ("-wal", "-shm"):
+                sidecar_path = f"{db_path}{suffix}"
+                if os.path.exists(sidecar_path):
+                    shutil.move(sidecar_path, f"{backup_path}{suffix}")
 
             db_short = Path(db_path).parent.name + "/" + Path(db_path).name
             backup_short = (
@@ -167,14 +173,12 @@ class DBManager:
                     "trustdb.db is malformed. Backing it up and creating another one..."
                 )
                 self.backup_db(db_path)
-            if not self.has_write_access_to_sqlite(db_path):
+            elif not self.has_write_access_to_sqlite(db_path):
                 self.print(
                     "trustdb.db is not writable. Backing it up and "
                     "creating another one..."
                 )
                 self.backup_db(db_path)
-                # TODO LAST THING HERE IS WE'RE NOT CREATING A NEW DB AFTER
-                #  BACKING UP THE OLDONE??
 
         return db_path
 
