@@ -775,10 +775,13 @@ def test_overview_prioritizes_operational_data() -> None:
     assert "Data sources" not in overview
     assert "Run metadata" not in overview
     assert "Recent log events" not in overview
-    assert '["Uptime", formatDuration(data.run.uptime_seconds)]' in app_source
-    assert '["FW active", compact(firewall.current)]' in app_source
-    assert '["FW added", compact(firewall.added)]' in app_source
-    assert '["FW discarded", compact(firewall.discarded)]' in app_source
+    assert 'id="overview-status"' in overview
+    assert 'id="overview-system"' in overview
+    assert 'id="summary-cards"' in overview
+    assert 'id="overview-details" hidden' in overview
+    assert 'function renderOverviewStatus(data)' in app_source
+    assert 'function renderOverviewSystem(data)' in app_source
+    assert '["Firewall blocks", firewall.current' in app_source
     assert 'sort: "cpu_percent", order: "desc"' in app_source
     assert 'id="load-module-evidence" disabled' in index_source
     assert '"/api/overview/evidence-counts"' in app_source
@@ -909,6 +912,52 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     assert result["evidence_details_loaded"] is False
     reader._redis_evidence.assert_not_called()
     reader._module_rows.assert_called_once_with(None, {}, False)
+
+
+def test_overview_alert_hosts_are_bounded_and_ranked(tmp_path: Path) -> None:
+    """Show the busiest hosts with their strongest linked alert severity.
+
+    Parameters:
+        tmp_path: Isolated durable run database directory.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.score_mode = "ratl"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE alerts (alert_id TEXT, ip_alerted TEXT, "
+            "alert_time REAL, accumulated_ratl REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT, threat_level TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO alerts VALUES (?, ?, ?, ?)",
+            [("a1", "192.0.2.1", 10, 5.2),
+             ("a2", "192.0.2.1", 20, 6.2),
+             ("a3", "192.0.2.2", 30, 5.5)],
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?)",
+            [("e1", "high"), ("e2", "critical"), ("e3", "medium")],
+        )
+        connection.executemany(
+            "INSERT INTO alert_evidence VALUES (?, ?)",
+            [("a1", "e1"), ("a2", "e2"), ("a3", "e3")],
+        )
+
+    result = reader._overview_alert_hosts()
+
+    assert result["total"] == 2
+    assert result["items"][0]["ip_alerted"] == "192.0.2.1"
+    assert result["items"][0]["alert_count"] == 2
+    assert result["items"][0]["alert_score"] == 6.2
+    assert result["items"][0]["threat_level"] == "critical"
+    assert result["items"][1]["threat_level"] == "medium"
 
 
 @pytest.mark.parametrize(

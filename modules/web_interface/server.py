@@ -4682,6 +4682,47 @@ class RunDataReader:
         )
         return {"ip": ip, "network_id": network_id, "name": name, "note": note}
 
+    def _overview_alert_hosts(self) -> Dict[str, Any]:
+        """Return the highest severity alert hosts for the first screen.
+
+        Returns:
+            Host count and up to four hosts ordered by severity and volume.
+        """
+        with self._connect_sqlite() as connection:
+            score = self._detector_score_expression(connection, "alerts")
+            rows = connection.execute(
+                "WITH host_alerts AS ("
+                "SELECT ip_alerted, COUNT(*) AS alert_count, "
+                "MAX(CAST(alert_time AS REAL)) AS alert_time, "
+                f"MAX({score}) AS alert_score FROM alerts GROUP BY ip_alerted"
+                "), host_threats AS ("
+                "SELECT a.ip_alerted, MAX(CASE LOWER(e.threat_level) "
+                "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
+                "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END) "
+                "AS threat_rank FROM alerts a "
+                "JOIN alert_evidence ae ON ae.alert_id = a.alert_id "
+                "JOIN evidence e ON e.evidence_id = ae.evidence_id "
+                "GROUP BY a.ip_alerted) "
+                "SELECT h.*, COALESCE(t.threat_rank, 0) AS threat_rank, "
+                "COUNT(*) OVER () AS total_hosts FROM host_alerts h "
+                "LEFT JOIN host_threats t ON t.ip_alerted = h.ip_alerted "
+                "ORDER BY threat_rank DESC, alert_count DESC, "
+                "alert_time DESC LIMIT 4"
+            ).fetchall()
+        return {
+            "total": int(rows[0]["total_hosts"]) if rows else 0,
+            "items": [
+                {
+                    "ip_alerted": row["ip_alerted"],
+                    "alert_count": int(row["alert_count"]),
+                    "alert_time": float(row["alert_time"] or 0),
+                    "alert_score": row["alert_score"],
+                    "threat_level": self._threat_from_rank(row["threat_rank"]),
+                }
+                for row in rows
+            ],
+        }
+
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
@@ -4793,6 +4834,27 @@ class RunDataReader:
                 analysis, saved_network_states, host_addresses
             )
         )
+        alert_hosts = {"total": 0, "items": []}
+        if alert_count:
+            try:
+                alert_hosts = self._overview_alert_hosts()
+            except sqlite3.Error:
+                pass
+        highest_score = None
+        if not alert_count:
+            score_field = (
+                "accumulated_ratl"
+                if getattr(self, "score_mode", "ratl") == "ratl"
+                else "accumulated_threat_level"
+            )
+            with connect_history(self.history_path, read_only=True) as history:
+                row = history.execute(
+                    "SELECT ip, CAST(json_extract(data, ?) AS REAL) AS score "
+                    "FROM host_snapshots ORDER BY score DESC LIMIT 1",
+                    (f"$.{score_field}",),
+                ).fetchone()
+                if row:
+                    highest_score = {"ip": row["ip"], "score": row["score"]}
         return {
             "run": {
                 **analysis,
@@ -4819,6 +4881,9 @@ class RunDataReader:
             ),
             "computer_name": socket.gethostname(),
             "network_states": current_network_states,
+            "alert_hosts": alert_hosts,
+            "highest_score": highest_score,
+            "alert_threshold": getattr(self, "alert_threshold", 5.0),
             "sources": {
                 "redis": True,
                 "sqlite": self.sqlite_path.exists(),

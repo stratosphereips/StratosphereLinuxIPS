@@ -87,6 +87,15 @@ const formatTime = (value) => {
   }
   return new Date(amount * 1000).toLocaleString();
 };
+/** Format a recent event as a short age for the Overview alert list. */
+function formatAge(value) {
+  const seconds = Math.max(0, Math.floor(Date.now() / 1000 - numeric(value)));
+  if (!numeric(value)) return "—";
+  if (seconds < 60) return "just now";
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+  return `${Math.floor(seconds / 86400)}d ago`;
+}
 /** Convert standalone Unix timestamps to localized, human-readable text. */
 function displayValue(value) {
   const candidate = typeof value === "string" ? value.trim() : value;
@@ -879,17 +888,27 @@ function renderRunContext(data) {
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
   const metadata = data.run_metadata || {};
-  byId("run-meta").textContent = [
-    metadata.File || run.input_type || "input",
-    metadata.Branch ? `branch ${metadata.Branch}` : "",
-    metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
-    metadata.Commit ? `commit ${metadata.Commit}` : "",
-  ].filter(Boolean).join(" · ");
+  const connectedNetwork = (data.network_states || []).find((network) =>
+    network.connected && network.interface === run.interface)
+    || (data.network_states || []).find((network) => network.connected);
+  const primaryIp = data.host_addresses?.ipv4?.[0] || data.host_addresses?.ipv6?.[0];
+  const detailsLink = text("button", "run details", "overview-link");
+  detailsLink.type = "button";
+  detailsLink.addEventListener("click", () => switchTab("metadata"));
+  byId("run-meta").replaceChildren(
+    text("span", [
+      run.interface || metadata.File || run.input_type || "input",
+      connectedNetwork?.name || "",
+      primaryIp || "",
+      metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
+    ].filter(Boolean).join(" · ")),
+    text("span", " · "), detailsLink,
+  );
   const addresses = data.host_addresses || {};
   const computerAddresses = data.computer_addresses || {};
   state.computerName = data.computer_name || "";
-  byId("run-device").textContent = `This device: ${state.computerName
-    || addresses.ipv4?.[0] || addresses.ipv6?.[0] || "Name unavailable"}`;
+  byId("run-device").textContent = state.computerName
+    || addresses.ipv4?.[0] || addresses.ipv6?.[0] || "Name unavailable";
   state.ownAddresses = new Set([
     ...(addresses.ipv4 || []), ...(addresses.ipv6 || []),
     ...(computerAddresses.ipv4 || []), ...(computerAddresses.ipv6 || []),
@@ -913,6 +932,8 @@ function renderRunContext(data) {
   byId("evidence-badge").textContent = compact(data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
   byId("logs-badge").textContent = compact(data.counts.module_errors);
+  byId("firewall-badge").textContent = (data.modules || []).some((module) => module.name === "blocking")
+    ? compact(data.firewall?.current) : "off";
 }
 
 /** Render the operational overview without supporting metadata or logs. */
@@ -921,17 +942,18 @@ function renderOverview() {
   if (!data) return;
   renderRunContext(data);
   renderNetworkStates(data.network_states || []);
+  renderOverviewStatus(data);
+  renderOverviewSystem(data);
   const firewall = data.firewall || {};
   setSummaryCards([
     ["Alerts", compact(data.counts.alerts)],
-    ["Hosts", compact(data.counts.hosts)],
-    ["Uptime", formatDuration(data.run.uptime_seconds)],
     ["Evidence", compact(data.counts.evidence)],
-    ["Processed flows", compact(data.counts.processed_flows)],
-    ["FW active", compact(firewall.current)],
-    ["FW added", compact(firewall.added)],
-    ["FW discarded", compact(firewall.discarded)],
+    ["Hosts seen", compact(data.counts.hosts)],
+    ["Flows processed", compact(data.counts.processed_flows)],
+    ["Firewall blocks", firewall.current ? compact(firewall.current)
+      : (data.modules || []).some((module) => module.name === "blocking") ? "0" : "off"],
   ]);
+  byId("summary-cards").classList.toggle("has-alerts", numeric(data.counts.alerts) > 0);
   const firewallImpact = data.firewall_impact || {};
   setSummaryCards([
     ["Packets stopped (estimated)", compact(firewallImpact.packets)],
@@ -940,21 +962,27 @@ function renderOverview() {
   ], "overview-firewall-impact");
   const system = data.system;
   const metrics = [
-    ["CPU", `${numeric(system.cpu_percent).toFixed(1)}%`],
-    ["Memory", `${numeric(system.memory_percent).toFixed(1)}%`],
-    ["Load 1 / 5 / 15m", system.load_average.map((value) => numeric(value).toFixed(2)).join(" / ")],
-    ["Output disk", `${numeric(system.output_disk_percent).toFixed(1)}% · ${formatBytes(system.output_disk_free)} free${system.disk_warning ? ` · ${system.disk_warning.toUpperCase()}` : ""}`],
-    ["flows.sqlite", formatBytes(system.flows_db_size)],
-    ["Recent growth", `${formatBytes(system.flows_db_growth_bps)}/s`],
+    ["CPU", numeric(system.cpu_percent), `${numeric(system.cpu_percent).toFixed(1)}%`],
+    ["Memory", numeric(system.memory_percent), `${numeric(system.memory_percent).toFixed(1)}%`],
+    ["Output disk", numeric(system.output_disk_percent),
+      `${numeric(system.output_disk_percent).toFixed(1)}% · ${formatBytes(system.output_disk_free)} free`],
   ];
   const load = byId("system-load");
   load.replaceChildren();
-  metrics.forEach(([label, value]) => {
+  metrics.forEach(([label, percent, value]) => {
     const row = document.createElement("div");
-    row.className = "metric";
-    row.append(text("small", label), text("strong", value));
+    row.className = `metric ${percent >= 90 ? "danger" : percent >= 75 ? "warning" : ""}`;
+    const heading = document.createElement("div");
+    heading.className = "metric-heading";
+    heading.append(text("span", label), text("strong", value));
+    const track = text("span", "", "metric-track");
+    const fill = text("span", "", "metric-fill");
+    fill.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+    track.append(fill);
+    row.append(heading, track);
     load.append(row);
   });
+  load.append(text("p", `load ${(system.load_average || []).map((value) => numeric(value).toFixed(2)).join(" / ")} · flows.sqlite ${formatBytes(system.flows_db_size)}`, "overview-load-foot"));
   const evidenceButton = byId("load-module-evidence");
   evidenceButton.disabled = state.overviewEvidenceLoading;
   evidenceButton.textContent = state.overviewEvidenceLoading
@@ -964,16 +992,100 @@ function renderOverview() {
   renderModules(data.modules);
 }
 
-/** Show current settings of every monitored network interface. */
+/** Show either the quiet state or the hosts with the highest severity alerts. */
+function renderOverviewStatus(data) {
+  const hasAlerts = numeric(data.counts.alerts) > 0;
+  const panel = byId("overview-status");
+  panel.classList.toggle("has-alerts", hasAlerts);
+  byId("overview-alerts-link").hidden = !hasAlerts;
+  byId("overview-status-description").hidden = hasAlerts;
+  const list = byId("overview-alert-hosts");
+  list.replaceChildren();
+  if (!hasAlerts) {
+    byId("overview-status-title").textContent = "No alerts in this run";
+    const top = data.highest_score;
+    const threshold = numeric(data.alert_threshold) || 5;
+    byId("overview-status-description").textContent =
+      `${compact(data.counts.evidence)} evidence records from ${compact(data.counts.hosts)} hosts. `
+      + `No host crossed the alert threshold (${threshold}).`
+      + (top?.ip && top.score !== null ? ` Highest current score: ${numeric(top.score).toFixed(2)} on ${top.ip}.` : "");
+    return;
+  }
+  const summary = data.alert_hosts || {};
+  const total = numeric(summary.total);
+  byId("overview-status-title").textContent = total
+    ? `${total} ${total === 1 ? "host is" : "hosts are"} generating alerts`
+    : `${compact(data.counts.alerts)} alerts in this run`;
+  (summary.items || []).slice(0, 4).forEach((host) => {
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = "overview-alert-row";
+    const level = host.threat_level || "info";
+    row.append(text("span", level, `overview-alert-severity threat-${level}`),
+      hostIdentity(host.ip_alerted),
+      text("span", `${compact(host.alert_count)} alerts`, "overview-alert-count"),
+      text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2), "overview-alert-score"),
+      text("span", formatAge(host.alert_time), "overview-alert-time"));
+    row.title = `Last alert ${formatTime(host.alert_time)}`;
+    row.addEventListener("click", () => inspectHost(host.ip_alerted).catch(() => {}));
+    list.append(row);
+  });
+}
+
+/** Summarize actionable resource and runtime problems in the Overview. */
+function renderOverviewSystem(data) {
+  const system = data.system || {};
+  const items = byId("overview-system-items");
+  items.replaceChildren();
+  const warnings = [];
+  if (system.disk_warning) warnings.push({
+    text: `Output disk ${numeric(system.output_disk_percent).toFixed(1)}% full · ${formatBytes(system.output_disk_free)} free`,
+    tone: system.disk_warning === "critical" ? "danger" : "warning",
+  });
+  if (numeric(system.cpu_percent) >= 90) warnings.push({
+    text: `Host CPU ${numeric(system.cpu_percent).toFixed(1)}% · load ${numeric(system.load_average?.[0]).toFixed(2)}`,
+    tone: "danger", action: "Modules", open: () => {
+      if (byId("overview-details").hidden) byId("toggle-overview-details").click();
+      byId("modules-table").scrollIntoView({ block: "nearest" });
+    },
+  });
+  if (numeric(system.memory_percent) >= 90) warnings.push({
+    text: `Host memory ${numeric(system.memory_percent).toFixed(1)}%`, tone: "warning",
+  });
+  if (numeric(data.counts.module_errors)) warnings.push({
+    text: `${compact(data.counts.module_errors)} errors in logs`, tone: "warning",
+    action: "Logs", open: () => switchTab("logs"),
+  });
+  byId("overview-system-label").textContent = warnings.length
+    ? `SYSTEM NEEDS ATTENTION · ${warnings.length}` : "SYSTEM";
+  byId("overview-system").classList.toggle("needs-attention", warnings.length > 0);
+  if (!warnings.length) {
+    const running = (data.modules || []).filter((module) => module.running).length;
+    warnings.push({ text: data.run.state === "complete"
+      ? "Analysis complete · resources normal"
+      : `${running} modules running · resources normal`, tone: "ok" });
+    if (!(data.modules || []).some((module) => module.name === "blocking")) warnings.push({
+      text: "Firewall blocking is off", tone: "muted",
+      action: "How to enable", open: () => switchTab("configuration"),
+    });
+  }
+  warnings.slice(0, 4).forEach((warning) => {
+    const row = text("div", "", `overview-system-row ${warning.tone}`);
+    row.append(text("span", warning.text));
+    if (warning.action) {
+      const action = text("button", warning.action, "overview-link");
+      action.type = "button";
+      action.addEventListener("click", warning.open);
+      row.append(action);
+    }
+    items.append(row);
+  });
+}
+
+/** Show the monitored network and its editable name in one compact card. */
 function renderNetworkStates(networkStates) {
   const runNetwork = byId("run-network");
-  const namedNetworks = networkStates.filter((network) => network.connected && network.name);
-  runNetwork.textContent = namedNetworks.length
-    ? `${namedNetworks.length === 1 ? "Network" : "Networks"}: ${namedNetworks
-      .map((network) => namedNetworks.length === 1
-        ? network.name : `${network.name} (${network.interface})`).join(" · ")}`
-    : "";
-  runNetwork.hidden = !namedNetworks.length;
+  runNetwork.hidden = true;
   const container = byId("network-states");
   if (container.contains(document.activeElement)
       && document.activeElement.closest(".network-name-form")) return;
@@ -982,13 +1094,29 @@ function renderNetworkStates(networkStates) {
     container.append(text("p", "Live network settings are available when Slips monitors an interface.", "muted"));
     return;
   }
-  networkStates.forEach((network) => {
+  const monitored = networkStates.find((network) =>
+    network.interface === state.overview?.run?.interface && network.connected)
+    || networkStates.find((network) => network.connected)
+    || networkStates[0];
+  [monitored].forEach((network) => {
     const card = document.createElement("div");
     card.className = "network-state";
-    card.append(text("strong", `${network.name || network.interface} · ${network.connected ? "Connected" : "Disconnected"}`));
-    if (network.name) card.append(text("small", `Interface ${network.interface}`, "muted"));
+    const head = text("div", "", "overview-card-head");
+    head.append(text("h3", `${network.name || network.interface} · ${network.connected ? "connected" : "disconnected"}`));
+    const rename = text("button", "Rename", "overview-link");
+    rename.type = "button";
+    rename.disabled = !network.connected || !network.network_id;
+    rename.addEventListener("click", () => {
+      if (form.hidden) state.networkNameEditorOpen.add(network.network_id);
+      else state.networkNameEditorOpen.delete(network.network_id);
+      form.hidden = !form.hidden;
+      if (!form.hidden) input.focus();
+    });
+    head.append(rename);
+    card.append(head);
     const form = document.createElement("form");
     form.className = "network-name-form";
+    form.hidden = !state.networkNameEditorOpen.has(network.network_id);
     const label = text("label", "Network name");
     const input = document.createElement("input");
     input.type = "text";
@@ -1033,7 +1161,9 @@ function renderNetworkStates(networkStates) {
         if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
         network.name = payload.name;
         state.networkNameDrafts.delete(network.network_id);
+        state.networkNameEditorOpen.delete(network.network_id);
         document.activeElement?.blur();
+        if (state.overview) renderRunContext(state.overview);
         renderNetworkStates(networkStates);
         toast(payload.name ? "Network name saved." : "Network name removed.");
       } catch (error) {
@@ -1042,27 +1172,30 @@ function renderNetworkStates(networkStates) {
       }
     });
     card.append(form);
-    const computer = document.createElement("span");
-    computer.append("Computer: ", hostIdentity(network.host_ip));
-    card.append(computer);
-    card.append(text("span", `Local network: ${network.local_network || "Unknown"}`));
-    const router = document.createElement("span");
-    router.append("Router: ", hostIdentity(network.gateway_ip));
-    card.append(router);
-    card.append(text("span", `Router MAC: ${network.gateway_mac || "Unknown"}`));
-    const dns = document.createElement("span");
-    dns.append("DNS servers: ");
+    const facts = text("div", "", "network-facts");
+    const computer = text("div", "", "network-fact");
+    computer.append(text("span", "This computer"), hostIdentity(network.host_ip));
+    facts.append(computer);
+    const local = text("div", "", "network-fact");
+    local.append(text("span", "Local network"), text("code", network.local_network || "Unknown"));
+    facts.append(local);
+    const router = text("div", "", "network-fact");
+    router.append(text("span", "Router"), hostIdentity(network.gateway_ip));
+    facts.append(router);
+    const mac = text("div", "", "network-fact");
+    mac.append(text("span", "Router MAC"), text("code", network.gateway_mac || "Unknown"));
+    facts.append(mac);
+    const dns = text("div", "", "network-fact");
+    dns.append(text("span", "DNS"));
+    const servers = text("span", "");
     (network.dns_servers || []).forEach((ip, index) => {
-      if (index) dns.append(", ");
-      dns.append(hostIdentity(ip));
+      if (index) servers.append(", ");
+      servers.append(hostIdentity(ip));
     });
-    if (!(network.dns_servers || []).length) dns.append("Unknown");
-    card.append(dns);
-    if (network.live_reading) {
-      card.append(text("small", `Live reading: ${formatTime(network.observed_at)} · Saved state last changed: ${formatTime(network.saved_changed_at)}`, "muted"));
-    } else {
-      card.append(text("small", `Last changed: ${formatTime(network.changed_at)}`, "muted"));
-    }
+    if (!(network.dns_servers || []).length) servers.append("Unknown");
+    dns.append(servers);
+    facts.append(dns);
+    card.append(facts);
     container.append(card);
   });
 }
@@ -3758,6 +3891,7 @@ function scheduleBackendStatusPoll() {
 
 function switchTab(name) {
   state.activeTab = name;
+  document.body.classList.toggle("overview-active", name === "overview");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
@@ -3819,6 +3953,14 @@ document.querySelectorAll(".tab").forEach((tab) =>
 document.querySelectorAll(".refresh-list").forEach((button) =>
   button.addEventListener("click", () => tabLoader(button.dataset.target)().catch(() => {})));
 byId("refresh-overview").addEventListener("click", () => loadOverview().catch(() => {}));
+byId("overview-alerts-link").addEventListener("click", () => switchTab("alerts"));
+byId("toggle-overview-details").addEventListener("click", () => {
+  const details = byId("overview-details");
+  details.hidden = !details.hidden;
+  byId("toggle-overview-details").setAttribute("aria-expanded", String(!details.hidden));
+  byId("toggle-overview-details").textContent = details.hidden ? "More run details" : "Hide run details";
+  if (!details.hidden) loadMetrics().catch(() => {});
+});
 byId("load-module-evidence").addEventListener("click", () =>
   loadOverviewEvidenceCounts().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));

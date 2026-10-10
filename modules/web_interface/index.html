@@ -5,29 +5,24 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261004-device-identity">
+  <link rel="stylesheet" href="/style.css?v=20261010-overview">
 </head>
-<body>
+<body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
   <header class="topbar">
     <div class="brand">
       <img class="brand-logo" src="/slips-logo.png?v=4" alt="" aria-hidden="true">
       <div class="brand-copy">
         <p class="brand-name">SLIPS</p>
-        <h1 id="run-name">Current run</h1>
-        <p id="run-device" class="run-device">This device: identifying…</p>
+        <div class="run-heading"><h1 id="run-name">Current run</h1><span id="run-device" class="run-device">Identifying…</span></div>
         <p id="run-meta" class="muted">Connecting to run data…</p>
         <p id="run-network" class="run-addresses muted" hidden></p>
         <p id="run-addresses" class="run-addresses muted" hidden></p>
       </div>
     </div>
     <div class="run-state">
-      <span id="state-dot" class="state-dot"></span>
-      <div>
-        <strong id="run-state">Connecting</strong>
-        <small id="updated-at">Not updated</small>
-        <small id="run-uptime">Uptime —</small>
-      </div>
+      <div class="run-state-pill"><span id="state-dot" class="state-dot"></span><strong id="run-state">Connecting</strong></div>
+      <div class="run-state-meta"><small id="run-uptime">Uptime —</small><small id="updated-at">Not updated</small></div>
     </div>
   </header>
 
@@ -47,42 +42,23 @@
 
   <main>
     <section id="overview" class="panel active" aria-labelledby="overview-title">
-      <div class="section-heading">
-        <div><p class="eyebrow">RUN</p><h2 id="overview-title">Overview</h2></div>
-        <button class="secondary" id="refresh-overview">Refresh</button>
+      <h2 id="overview-title" class="visually-hidden">Overview</h2>
+      <div class="overview-top">
+        <article id="overview-status" class="surface overview-status"><div class="overview-card-head"><span class="eyebrow">STATUS</span><button id="overview-alerts-link" class="overview-link" type="button" hidden>Open alerts →</button></div><h3 id="overview-status-title">Loading status…</h3><p id="overview-status-description" class="muted"></p><div id="overview-alert-hosts" class="overview-alert-hosts"></div></article>
+        <article id="overview-system" class="surface overview-system"><span id="overview-system-label" class="eyebrow">SYSTEM</span><div id="overview-system-items" class="overview-system-items"></div></article>
       </div>
       <div id="summary-cards" class="summary-grid overview-summary"></div>
-      <article class="surface"><h3>Current network</h3>
-        <p class="muted">Slips checks these settings while monitoring a live interface. They update when the computer changes network.</p>
-        <div id="network-states" class="network-states"></div>
-      </article>
-      <article class="surface"><h3>Current host load</h3><div id="system-load" class="metrics"></div></article>
-      <article class="surface">
-        <h3>Estimated attacks stopped by the firewall</h3>
-        <p class="muted">Traffic attempts observed from an IP after its block was installed. Packets remain visible to Zeek before iptables drops them.</p>
-        <div id="overview-firewall-impact" class="summary-grid impact-summary"></div>
-      </article>
-      <article class="surface">
-        <div class="table-heading">
-          <div><h3>Slips performance history</h3><p>Bounded view; exact seconds for 24 hours, minute rollups afterward.</p></div>
-          <select id="metrics-range" aria-label="Performance history range">
-            <option value="5m">5 minutes</option>
-            <option value="15m" selected>15 minutes</option>
-            <option value="1h">1 hour</option>
-            <option value="24h">24 hours</option>
-            <option value="all">Full run</option>
-          </select>
-        </div>
-        <div class="chart-grid">
-          <figure><figcaption>CPU · Slips process tree (% of host capacity)<small><i class="chart-key average"></i>Average <i class="chart-key peak"></i>Peak in each displayed interval</small></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
-          <figure><figcaption>Resident memory · Slips process tree<small>Axis uses MiB or GiB <i class="chart-key average"></i>Average <i class="chart-key peak"></i>Peak in each displayed interval</small></figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
-          <figure><figcaption>Processed flows · per second</figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
-        </div>
-      </article>
-      <article class="surface table-surface">
-        <div class="table-heading"><h3>Modules</h3><div class="table-actions"><button class="secondary" id="load-module-evidence" disabled>Load evidence counts</button><input id="module-search" type="search" placeholder="Filter modules"></div></div>
-        <div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div>
-      </article>
+      <div class="overview-bottom">
+        <article class="surface overview-network"><div id="network-states" class="network-states"></div></article>
+        <article class="surface overview-load"><h3>Host load</h3><div id="system-load" class="metrics"></div></article>
+        <article class="surface overview-performance"><div class="overview-card-head"><h3>Slips performance</h3><select id="metrics-range" aria-label="Performance history range"><option value="5m">5 min</option><option value="15m" selected>15 min</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="all">Full run</option></select></div><div class="chart-grid"><figure><figcaption>CPU <span id="overview-cpu-peak"></span></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure><figure><figcaption>Flows / s <span id="overview-fps-peak"></span></figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
+      </div>
+      <div class="overview-detail-actions"><button class="secondary" id="refresh-overview">Refresh</button><button class="secondary" id="toggle-overview-details" aria-expanded="false" aria-controls="overview-details">More run details</button></div>
+      <div id="overview-details" hidden>
+        <article class="surface"><h3>Estimated attacks stopped by the firewall</h3><div id="overview-firewall-impact" class="summary-grid impact-summary"></div></article>
+        <article class="surface"><h3>Slips memory history</h3><div class="chart-grid"><figure><figcaption>Resident memory · Slips process tree</figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
+        <article class="surface table-surface"><div class="table-heading"><h3>Modules</h3><div class="table-actions"><button class="secondary" id="load-module-evidence" disabled>Load evidence counts</button><input id="module-search" type="search" placeholder="Filter modules"></div></div><div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div></article>
+      </div>
     </section>
 
     <section id="logs" class="panel" aria-labelledby="logs-title">
@@ -287,6 +263,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261004-device-identity"></script>
+  <script src="/app.js?v=20261010-overview"></script>
 </body>
 </html>
