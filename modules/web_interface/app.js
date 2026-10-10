@@ -53,7 +53,7 @@ const state = {
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
     evidence: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
-    hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "last_seen", order: "desc" },
+    hosts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "peak_score", order: "desc", visible: 14 },
     modules: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "cpu_percent", order: "desc" },
     firewall: { items: [], total: 0, next: null, cursors: [null], index: 0 },
     hostFlows: { items: [], total: 0, next: null, cursors: [null], index: 0 },
@@ -602,6 +602,7 @@ function resetPage(name) {
   Object.assign(state.pages[name], {
     items: [], total: 0, next: null, cursors: [null], index: 0,
   });
+  if (name === "hosts") state.pages.hosts.visible = 14;
 }
 
 function rangeQuery(prefix) {
@@ -1498,6 +1499,7 @@ function listPath(name) {
     const level = byId("hosts-threat").value;
     if (scope) params.set("scope", scope);
     if (level) params.set("threat", level);
+    if (byId("hosts-alerts-only").checked) params.set("alerts_only", "1");
   }
   return `/api/${name}?${params}`;
 }
@@ -3071,25 +3073,130 @@ async function loadHosts() {
   if (!payload) return;
   payload.items.forEach(rememberHostRecord);
   refreshHostLabels();
+  const page = state.pages.hosts;
+  const retained = page.items.slice(100);
+  const retainedNext = page.next;
   applyPage("hosts", payload);
-  renderTable("hosts-table", payload.items, [
+  if (retained.length) {
+    const known = new Set(page.items.map((row) => row.ip));
+    retained.forEach((row) => {
+      if (!known.has(row.ip)) page.items.push(row);
+    });
+    page.next = retainedNext;
+  }
+  renderHostFilterChips(payload);
+  renderHostsPage();
+}
+
+/** Append the next server page when the visible inventory reaches its end. */
+async function loadMoreHosts() {
+  const page = state.pages.hosts;
+  if (page.visible < page.items.length) {
+    page.visible += 14;
+    renderHostsPage();
+    return;
+  }
+  if (!page.next) return;
+  const params = new URLSearchParams(listPath("hosts").split("?", 2)[1]);
+  params.set("cursor", page.next);
+  const payload = await api("hostsMore", `/api/hosts?${params}`);
+  if (!payload) return;
+  payload.items.forEach(rememberHostRecord);
+  page.items.push(...payload.items);
+  page.next = payload.next_cursor;
+  page.total = payload.total;
+  page.visible = Math.min(page.items.length, page.visible + 14);
+  renderHostsPage();
+}
+
+/** Show the bounded inventory page with compact score and identity columns. */
+function renderHostsPage() {
+  const page = state.pages.hosts;
+  const rows = page.items.slice(0, page.visible);
+  renderTable("hosts-table", rows, [
     (row) => hostIdentity(row.ip),
-    (row) => text("span", row.scope, `status ${row.scope === "public" ? "warn" : "ok"}`),
-    (row) => row.hostname || "—",
-    (row) => contextName(row),
-    (row) => tiFeeds(row),
-    (row) => text("code", row.mac || "—"),
-    (row) => row.mac_vendor || "—",
-    (row) => threat(row.max_threat_level),
-    (row) => slipsScore(row),
-    (row) => pastPeakSlipsScore(row),
+    (row) => {
+      const value = document.createElement("span");
+      value.className = "hosts-mac-vendor";
+      value.append(text("code", row.mac || "—"), text("small", row.mac_vendor || ""));
+      return value;
+    },
+    (row) => text("span", row.scope || "—", `hosts-scope-${row.scope || "unknown"}`),
+    (row) => hostPeakScoreCell(row),
     (row) => compact(row.load?.flows),
     (row) => formatBytes(row.load?.bytes),
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
-    (row) => formatTime(row.load?.last_seen || row.observed_at),
+    (row) => formatShortTime(row.load?.last_seen || row.observed_at),
+    (row) => row.hostname || "—",
+    (row) => tiFeeds(row),
+    (row) => slipsScore(row),
   ], (row) => openHost(row.ip, row));
-  pager("hosts", "hosts-pager", loadHosts);
+  document.querySelectorAll("#hosts-table tbody tr").forEach((row) => {
+    ["hostname", "ti", "score"].forEach((key, index) => {
+      const td = row.cells[9 + index];
+      if (td) td.hidden = !document.querySelector(`[data-host-column="${key}"]`).checked;
+    });
+  });
+  const shown = Math.min(page.visible, page.items.length);
+  byId("hosts-count").textContent = `${compact(page.total)} hosts · sorted by ${page.sort.replaceAll("_", " ")}`;
+  byId("hosts-list-status").textContent = `${shown} of ${compact(page.total)} hosts · threshold line at ${numeric(page.items[0]?.alert_threshold).toFixed(1)} · current score on hover`;
+  byId("hosts-more").hidden = shown >= page.items.length && !page.next;
+  applySortIndicators("hosts");
+}
+
+/** Format inventory timestamps without repeating the date in every row. */
+function formatShortTime(value) {
+  if (!numeric(value)) return "—";
+  return new Date(numeric(value) * 1000).toLocaleTimeString();
+}
+
+/** Draw the peak score and threshold in a single compact table cell. */
+function hostPeakScoreCell(row) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "hosts-peak-cell";
+  const level = String(row.max_threat_level || "info").toLowerCase();
+  const peak = row.peak_alert_score === null || row.peak_alert_score === undefined
+    ? null : Number(row.peak_alert_score);
+  const threshold = numeric(row.alert_threshold) || 5;
+  const label = text("span", level, `hosts-threat-level threat-${level}`);
+  const value = text("strong", peak === null ? "—" : peak.toFixed(2));
+  const track = text("span", "", "hosts-score-track");
+  const fill = text("span", "", `hosts-score-fill threat-${level}`);
+  fill.style.width = `${Math.min(100, Math.max(0, numeric(peak) / Math.max(threshold * 2, 1) * 100))}%`;
+  track.append(fill);
+  wrapper.title = `Current score: ${row.alert_score ?? "unavailable"} · peak: ${peak ?? "unavailable"} · alert threshold: ${threshold}`;
+  wrapper.append(label, value, track);
+  return wrapper;
+}
+
+/** Keep threat and scope chips synchronized with the server filters. */
+function renderHostFilterChips(payload) {
+  const groups = [
+    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["info", "Info"]], "max_threat_level"],
+    ["hosts-scope-chips", "hosts-scope", [["", "All scopes"], ["local", "Local"], ["public", "Public"]], "scope"],
+  ];
+  groups.forEach(([targetId, selectId, options, field]) => {
+    const target = byId(targetId);
+    const select = byId(selectId);
+    target.replaceChildren();
+    options.forEach(([value, label]) => {
+      const completePage = payload.items.length === payload.total;
+      const count = !value || select.value === value ? payload.total
+        : payload.items.filter((row) => String(row[field] || "").toLowerCase() === value).length;
+      const showCount = !value || select.value === value
+        || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value);
+      const button = text("button", `${label}${showCount ? ` ${compact(count)}` : ""}`, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
+      button.type = "button";
+      button.addEventListener("click", () => {
+        select.value = value;
+        state.pages.hosts.visible = 14;
+        resetPage("hosts");
+        loadHosts().catch(() => {});
+      });
+      target.append(button);
+    });
+  });
 }
 
 /** Render cached rDNS or the most recently associated DNS domain. */
@@ -4049,6 +4156,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
         profile.network_name = payload.name;
         profile.network_label = payload.name || profile.default_network_label;
         title.textContent = profile.network_label;
+        renderHostNetworkClues(state.host?.permanent_profiles || []);
         feedback.textContent = "";
         state.networkNameDrafts.delete(profile.network_id);
         state.networkNameEditorOpen.delete(profile.network_id);
@@ -4094,20 +4202,59 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
   });
 }
 
+/** Summarize saved mDNS names and networks beside the selected host's traffic. */
+function renderHostNetworkClues(profiles) {
+  const mdns = byId("host-mdns-names");
+  const networks = byId("host-networks-seen");
+  mdns.replaceChildren();
+  networks.replaceChildren();
+  const names = new Map();
+  profiles.forEach((profile) => (profile.facts || []).forEach((fact) => {
+    if (fact.kind !== "mdns_name" || !fact.value) return;
+    const previous = names.get(fact.value) || { observations: 0, last_seen: 0 };
+    names.set(fact.value, {
+      observations: previous.observations + numeric(fact.observations),
+      last_seen: Math.max(previous.last_seen, numeric(fact.last_seen)),
+    });
+  }));
+  const sortedNames = [...names].sort((left, right) => right[1].last_seen - left[1].last_seen);
+  sortedNames.slice(0, 4).forEach(([name, details]) => {
+    const row = document.createElement("div");
+    row.className = "host-clue-row";
+    row.append(text("code", name), text("small", `${compact(details.observations)}× · ${formatShortTime(details.last_seen)}`));
+    mdns.append(row);
+  });
+  if (!sortedNames.length) mdns.append(text("p", "No mDNS names recorded.", "muted"));
+  if (sortedNames.length > 4) mdns.append(text("small", `+ ${sortedNames.length - 4} more saved names`, "muted"));
+  profiles.slice(0, 4).forEach((profile) => {
+    const row = document.createElement("div");
+    row.className = "host-clue-row";
+    row.append(text("strong", profile.network_label || profile.network_id || "Unidentified network"),
+      text("small", `${new Date(numeric(profile.first_seen) * 1000).toLocaleDateString()} – ${new Date(numeric(profile.last_seen) * 1000).toLocaleDateString()}`));
+    networks.append(row);
+  });
+  if (!profiles.length) networks.append(text("p", "No permanent network history recorded.", "muted"));
+  if (profiles.length > 4) networks.append(text("small", `+ ${profiles.length - 4} more networks`, "muted"));
+}
+
 function renderHostCards(host) {
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
-    ["Flows", exactAggregates ? compact(host.load?.flows) : "—"],
-    ["Inbound flows", exactAggregates ? compact(host.load?.inbound_flows) : "—"],
-    ["Outbound flows", exactAggregates ? compact(host.load?.outbound_flows) : "—"],
-    ["Traffic", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
-    ["Inbound bytes", exactAggregates ? formatBytes(host.load?.inbound_bytes) : "—"],
-    ["Outbound bytes", exactAggregates ? formatBytes(host.load?.outbound_bytes) : "—"],
-    ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
-    ["Current Slips score", slipsScore(host)],
-    ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
     ["Alerts", exactAggregates ? compact(host.alert_count) : "—"],
+    ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
+    ["Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
+    ["Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
+    ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
+    ["Seen on", `${compact(host.permanent_profiles?.length || 0)} networks`],
   ], "host-summary");
+  const summaryCards = byId("host-summary").children;
+  summaryCards[2].append(text("small", `${compact(host.load?.inbound_flows)} in / ${compact(host.load?.outbound_flows)} out`));
+  summaryCards[3].append(text("small", `${formatBytes(host.load?.inbound_bytes)} in / ${formatBytes(host.load?.outbound_bytes)} out`));
+  byId("host-flows-tab-count").textContent = compact(host.load?.flows);
+  byId("host-alerts-tab-count").textContent = compact(host.alert_count);
+  byId("host-evidence-tab-count").textContent = compact(host.evidence_count);
+  const scorePill = byId("host-score-pill");
+  scorePill.replaceChildren(text("span", "Score "), slipsScore(host));
   const identity = byId("host-identity");
   const editingCurrentHost = identity.dataset.profileIp === host.ip
     && identity.contains(document.activeElement)
@@ -4118,23 +4265,21 @@ function renderHostCards(host) {
     const displayedName = text("span", "—");
     displayedName.id = "host-displayed-name";
     identity.replaceChildren(
-      detailRow("Addresses", hostIdentity(host.ip)),
-      detailRow("Displayed name", displayedName),
-      detailRow("Custom name", host.user_name || "—"),
-      detailRow("Custom note", host.user_note || "—"),
+      detailRow("Name", host.user_name || displayedName),
+      detailRow("Note", host.user_note || "—"),
       ...(host.permanent_profiles?.length
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
       detailRow("MAC", host.mac || "Unknown"),
       detailRow("Vendor", host.mac_vendor || "Unknown"),
-      detailRow("Scope", host.scope || "Unknown"),
-      detailRow("Status", host.live ? "Current Redis metadata" : "Last-known persisted metadata"),
-      detailRow("DNS", renderDnsDetails(host.dns)),
+      detailRow("DNS", host.dns?.domains?.[0] || "No A/AAAA record"),
     );
     identity.dataset.profileIp = host.ip;
     refreshHostLabels();
   }
   renderPermanentProfiles(host.permanent_profiles || [], byId("host-annotation-entry"));
+  renderHostNetworkClues(host.permanent_profiles || []);
+  byId("host-dns-details").replaceChildren(renderDnsDetails(host.dns));
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
     : "No cached threat-intelligence data.";
@@ -4158,6 +4303,24 @@ function renderHostCards(host) {
     alerts.append(button);
   });
   if (!exactAlerts.length) alerts.append(text("p", "No related alerts.", "muted"));
+}
+
+/** Switch the host activity table without reloading its data. */
+function showHostActivity(name) {
+  ["flows", "alerts", "evidence"].forEach((item) => {
+    byId(`host-${item}-panel`).hidden = item !== name;
+    document.querySelector(`[data-host-activity="${item}"]`).classList.toggle("active", item === name);
+  });
+  byId("host-evidence-search").hidden = name !== "evidence";
+  byId("host-flow-search").hidden = name !== "flows";
+}
+
+/** Filter the currently loaded flow rows without requesting a new server page. */
+function filterVisibleHostFlows() {
+  const query = byId("host-flow-search").value.trim().toLowerCase();
+  document.querySelectorAll("#host-flows-table tbody tr").forEach((row) => {
+    row.hidden = Boolean(query) && !row.textContent.toLowerCase().includes(query);
+  });
 }
 
 async function loadHostEvidence() {
@@ -4245,6 +4408,7 @@ async function loadHostFlows() {
       rawBlock(row.raw, "flow"),
     );
   });
+  filterVisibleHostFlows();
   pager("hostFlows", "host-flows-pager", loadHostFlows);
 }
 
@@ -4480,7 +4644,8 @@ async function openHost(ip, summary = null) {
   byId("host-unprofiled").hidden = true;
   byId("host-title").replaceChildren(hostIdentity(host.ip));
   byId("host-subtitle").textContent =
-    `${host.scope} · ${host.live ? "current" : "last known"}`;
+    `${host.scope || "unknown scope"} · ${host.permanent_profiles?.[0]?.network_label || "network not recorded"} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"} · ${host.live ? "current" : "last-known metadata"}`;
+  showHostActivity("flows");
   renderHostCards(host);
   await Promise.all([
     loadHostFlows(), loadHostSummary(), loadHostScoreHistory(), loadHostEvidence(),
@@ -4523,6 +4688,13 @@ function closeHost() {
   byId("host-detail-view").classList.remove("unprofiled");
   byId("host-unprofiled").hidden = true;
   byId("hosts-list-view").hidden = false;
+  updateHostViewportHeight();
+}
+
+/** Match the Hosts workspace to the visible space below the shared navigation. */
+function updateHostViewportHeight() {
+  const bottom = byId("hosts").getBoundingClientRect().top;
+  byId("hosts").style.setProperty("--hosts-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
 function tabLoader(name) {
@@ -4600,12 +4772,14 @@ function switchTab(name) {
   document.body.classList.toggle("overview-active", name === "overview");
   document.body.classList.toggle("alerts-active", name === "alerts");
   document.body.classList.toggle("evidence-active", name === "evidence");
+  document.body.classList.toggle("hosts-active", name === "hosts");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
     panel.classList.toggle("active", panel.id === name));
   if (name === "alerts") updateAlertViewportHeight();
   if (name === "evidence") updateEvidenceViewportHeight();
+  if (name === "hosts") updateHostViewportHeight();
   currentLoader()().catch(() => {}).finally(schedulePoll);
 }
 
@@ -4679,6 +4853,48 @@ byId("drawer-close").addEventListener("click", closeDrawer);
 byId("drawer-back").addEventListener("click", backDrawer);
 byId("drawer-backdrop").addEventListener("click", closeDrawer);
 byId("host-back").addEventListener("click", closeHost);
+document.querySelectorAll("[data-host-activity]").forEach((button) =>
+  button.addEventListener("click", () => showHostActivity(button.dataset.hostActivity)));
+byId("host-flow-search").addEventListener("input", filterVisibleHostFlows);
+byId("host-whitelist-action").addEventListener("click", () => {
+  const ip = state.host?.ip;
+  switchTab("whitelists");
+  const input = byId("whitelists-editor").querySelector(".whitelist-form input");
+  if (input && ip) {
+    input.value = ip;
+    input.focus();
+    input.scrollIntoView({ block: "center" });
+  }
+});
+byId("hosts-alerts-only").addEventListener("change", () => {
+  state.pages.hosts.visible = 14;
+  resetPage("hosts");
+  loadHosts().catch(() => {});
+});
+document.querySelectorAll(".hosts-columns input").forEach((input) =>
+  input.addEventListener("change", () => {
+    document.querySelectorAll(`#hosts-table [data-host-column="${input.dataset.hostColumn}"]`)
+      .forEach((element) => { element.hidden = !input.checked; });
+    renderHostsPage();
+  }));
+byId("hosts-more").addEventListener("click", () => loadMoreHosts().catch(() => {}));
+byId("hosts-export").addEventListener("click", () => {
+  const rows = state.pages.hosts.items;
+  const fields = ["ip", "user_name", "hostname", "mac", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
+  const escapeCsv = (value) => {
+    const plain = String(value ?? "");
+    const safe = /^[=+\-@\t\r]/.test(plain) ? `'${plain}` : plain;
+    return `"${safe.replaceAll('"', '""')}"`;
+  };
+  const csv = [fields.join(","), ...rows.map((row) => fields.map((key) =>
+    escapeCsv(["flows", "bytes", "last_seen"].includes(key)
+      ? row.load?.[key] : row[key])).join(","))].join("\n");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+  link.download = "slips-hosts-page.csv";
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
 byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
@@ -4762,6 +4978,7 @@ window.addEventListener("beforeunload", () => {
 initDrawerResize();
 initAlertPaneResize();
 window.addEventListener("resize", updateEvidenceViewportHeight);
+window.addEventListener("resize", updateHostViewportHeight);
 window.setInterval(renderHeaderUptime, 1000);
 loadOverview().catch(() => {}).finally(() => {
   if (state.activeTab === "overview") schedulePoll();

@@ -239,11 +239,11 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         summary_renderer = app_source.split("function setSummaryCards", 1)[
             1
         ].split("function renderOverview", 1)[0]
-        assert 'data-sort="score">Current Slips score</th>' in index_source
+        assert 'data-host-column="score" data-sort="score"' in index_source
         assert (
-            'data-sort="peak_score">Past peak Slips score</th>' in index_source
+            'data-sort="peak_score">Threat · Peak score</th>' in index_source
         )
-        assert "(row) => pastPeakSlipsScore(row)" in section
+        assert "(row) => hostPeakScoreCell(row)" in section
         assert (
             'id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"'
             in index_source
@@ -3914,6 +3914,7 @@ def test_hosts_show_and_sort_real_past_peak_score(tmp_path) -> None:
                 ("10.0.0.2", 9.0, 3.0),
             ],
         )
+        connection.execute("INSERT INTO alerts VALUES (?)", ("10.0.0.1",))
     with connect_history(reader.history_path) as connection:
         connection.executemany(
             "INSERT INTO host_snapshots VALUES (?, ?, ?)",
@@ -3945,6 +3946,8 @@ def test_hosts_show_and_sort_real_past_peak_score(tmp_path) -> None:
     ]
     assert result["sort"] == "peak_score"
     assert result["order"] == "desc"
+    alerted = reader.hosts({"range": ["all"], "alerts_only": ["1"]})
+    assert [item["ip"] for item in alerted["items"]] == ["10.0.0.1"]
 
 
 def test_hosts_live_range_uses_indexed_flow_clock(tmp_path) -> None:

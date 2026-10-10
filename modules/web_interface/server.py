@@ -3376,6 +3376,7 @@ class RunDataReader:
         search = self._query_value(query, "search").lower()
         scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
+        alerts_only = self._query_value(query, "alerts_only") == "1"
         current_threats = self._current_profile_threats() if threat else {}
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         with connect_history(self.history_path, read_only=True) as connection:
@@ -3477,6 +3478,11 @@ class RunDataReader:
             if scope:
                 clauses.append("json_extract(hs.data, '$.scope') = ?")
                 params.append(scope)
+            if alerts_only:
+                clauses.append(
+                    "EXISTS (SELECT 1 FROM run_db.alerts a "
+                    "WHERE a.ip_alerted = hs.ip)"
+                )
             if threat:
                 snapshot_threat = (
                     "LOWER(COALESCE(json_extract("

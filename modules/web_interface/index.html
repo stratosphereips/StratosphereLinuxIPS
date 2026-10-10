@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261010-evidence">
+  <link rel="stylesheet" href="/style.css?v=20261010-hosts">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -213,25 +213,31 @@
 
     <section id="hosts" class="panel" aria-labelledby="hosts-title">
       <div id="hosts-list-view">
-        <div class="section-heading"><div><p class="eyebrow">INVENTORY</p><h2 id="hosts-title">Hosts</h2><p>Current and last-known identity with indexed historical activity.</p></div><button class="secondary refresh-list" data-target="hosts">Refresh</button></div>
-        <div class="toolbar">
-          <input id="hosts-search" type="search" placeholder="Search IP, MAC, vendor, hostname, DNS…">
-          <select id="hosts-scope"><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
-          <select id="hosts-threat"><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
-          <select id="hosts-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select>
+        <div class="hosts-toolbar">
+          <h2 id="hosts-title">Hosts</h2>
+          <input id="hosts-search" type="search" placeholder="⌕ Search IP, MAC, vendor, name…" aria-label="Search hosts">
+          <select id="hosts-threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+          <div id="hosts-threat-chips" class="hosts-filter-group" role="group" aria-label="Threat level"></div>
+          <select id="hosts-scope" hidden><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
+          <div id="hosts-scope-chips" class="hosts-filter-group" role="group" aria-label="Host scope"></div>
+          <label class="hosts-alerts-only"><input id="hosts-alerts-only" type="checkbox">Only with alerts</label>
+          <span id="hosts-count" class="result-count"></span>
+          <details class="hosts-columns"><summary>Columns ▾</summary><div><label><input data-host-column="hostname" type="checkbox">Hostname</label><label><input data-host-column="ti" type="checkbox">TI feeds</label><label><input data-host-column="score" type="checkbox">Current score</label></div></details>
+          <select id="hosts-range" class="range-select" aria-label="Hosts time range"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select>
           <input id="hosts-from" class="custom-time" type="datetime-local" hidden>
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
-          <span id="hosts-count" class="result-count"></span>
         </div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="hosts-table"><thead><tr><th data-sort="ip">IP / name</th><th data-sort="scope">Scope</th><th data-sort="hostname">Hostname</th><th>Name / domain</th><th>TI feeds</th><th data-sort="mac">MAC</th><th>MAC vendor</th><th data-sort="threat">Threat</th><th data-sort="score">Current Slips score</th><th data-sort="peak_score">Past peak Slips score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div></div>
-        <div id="hosts-pager" class="pager"></div>
+        <div class="hosts-list-table"><table id="hosts-table"><thead><tr><th data-sort="ip">Host</th><th data-sort="mac">MAC · Vendor</th><th data-sort="scope">Scope</th><th data-sort="peak_score">Threat · Peak score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th><th data-host-column="hostname" data-sort="hostname" hidden>Hostname</th><th data-host-column="ti" hidden>TI feeds</th><th data-host-column="score" data-sort="score" hidden>Current score</th></tr></thead><tbody></tbody></table></div>
+        <div class="hosts-list-footer"><span id="hosts-list-status"></span><div><button id="hosts-export" type="button">Export CSV</button><button id="hosts-more" type="button">Load more</button></div></div>
+        <div id="hosts-pager" class="pager" hidden></div>
       </div>
 
       <div id="host-detail-view" hidden>
-        <div class="section-heading host-heading">
-          <div><button id="host-back" class="text-button">← Back to hosts</button><p class="eyebrow">HOST WORKSPACE</p><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div>
+        <div class="host-workspace-head">
+          <button id="host-back" class="text-button">← Hosts</button><div class="host-heading-copy"><h2 id="host-title">Host</h2><p id="host-subtitle"></p></div><span id="host-score-pill"></span>
           <div class="toolbar compact-toolbar">
-            <select id="host-flow-limit"><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
+            <button id="host-whitelist-action" type="button">Whitelist</button>
+            <select id="host-flow-limit" aria-label="Flows per page" hidden><option>25</option><option>50</option><option selected>100</option><option>250</option><option>500</option><option>1000</option></select>
             <select class="excluded-visibility-select" aria-label="Excluded records visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select>
             <select id="host-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select>
             <input id="host-from" class="custom-time" type="datetime-local" hidden>
@@ -243,35 +249,23 @@
           <p id="host-unprofiled-reason"></p>
         </article>
         <div id="host-summary" class="summary-grid"></div>
-        <div class="split-grid">
-          <article class="surface"><h3>Identity and DNS</h3><div id="host-identity"></div></article>
-          <article class="surface"><h3>Threat intelligence</h3><pre id="host-ti"></pre></article>
-        </div>
-        <article class="surface"><h3>Permanent host profile</h3><div id="host-permanent-profiles"></div></article>
-        <article class="surface">
-          <p id="host-traffic-status" class="muted">Traffic and peers match the exact profile IP only.</p>
-          <div class="chart-grid host-charts">
-            <figure class="score-history-figure"><figcaption>Slips score history<small><i class="chart-key average"></i>Score (latest sample in interval) <i class="chart-key peak"></i>Peak in interval <i class="chart-key threshold"></i>Alert threshold <i class="chart-key reset"></i>Score decrease or time-window change</small></figcaption><p id="host-score-history-status" class="score-history-status">Loading processed score samples…</p><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure>
-            <figure><figcaption>Inbound / outbound flows</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
-            <figure><figcaption>Inbound / outbound bytes</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure>
-            <figure><figcaption>Protocols and applications</figcaption><div id="host-protocols" class="bar-chart"></div></figure>
-            <figure><figcaption>Top peers</figcaption><div id="host-peers" class="bar-chart"></div></figure>
+        <div class="host-workspace-grid">
+          <div class="host-left-column">
+            <article class="surface"><div class="host-card-head"><h3>Identity</h3></div><div id="host-identity"></div><details class="host-extra"><summary>DNS and threat intelligence</summary><div id="host-dns-details"></div><pre id="host-ti"></pre></details></article>
+            <article class="surface"><h3>mDNS names</h3><div id="host-mdns-names"></div></article>
+            <article class="surface"><h3>Networks seen on</h3><div id="host-networks-seen"></div><details class="host-extra"><summary>All saved identity clues and network names</summary><div id="host-permanent-profiles"></div></details></article>
           </div>
-        </article>
-        <article class="surface host-alerts-panel">
-          <div class="host-section-heading"><div><h3 id="host-alerts-title">Related alerts</h3><p>Open an alert to inspect its evidence and triggering flows.</p></div></div>
-          <div id="host-alerts" class="host-alert-list"></div>
-        </article>
-        <article class="surface table-surface host-evidence-panel">
-          <div class="table-heading"><div><h3 id="host-evidence-title">Related evidence</h3><p id="host-evidence-count">Newest evidence for this exact profile IP.</p></div><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Search any evidence field…"></div>
-          <div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th>Reporting peers</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div>
-        </article>
-        <div id="host-evidence-pager" class="pager"></div>
-        <article class="surface table-surface">
-          <div class="table-heading"><div><h3>Historical traffic</h3><p id="host-flow-count"></p></div></div>
-          <div class="table-wrap"><table id="host-flows-table"><thead><tr><th>Time</th><th>Direction</th><th>Peer</th><th>Protocol</th><th>Ports</th><th>State</th><th>Packets</th><th>Bytes</th><th>Duration</th><th>Label</th></tr></thead><tbody></tbody></table></div>
-        </article>
-        <div id="host-flows-pager" class="pager"></div>
+          <div class="host-center-column">
+            <article class="surface host-score-panel"><figure class="score-history-figure"><figcaption>Slips score <small><i class="chart-key average"></i>score <i class="chart-key peak"></i>peak <i class="chart-key threshold"></i>alert threshold</small></figcaption><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure><p id="host-score-history-status" class="score-history-status">Loading score history…</p></article>
+            <div class="host-mini-charts"><article class="surface"><figure><figcaption>Flows / min</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article><article class="surface"><figure><figcaption>Bytes / min</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article></div>
+            <article class="surface host-activity-panel"><div class="host-activity-tabs" role="tablist" aria-label="Host activity"><button data-host-activity="flows" class="active" type="button">Flows <span id="host-flows-tab-count"></span></button><button data-host-activity="alerts" type="button">Alerts <span id="host-alerts-tab-count"></span></button><button data-host-activity="evidence" type="button">Evidence <span id="host-evidence-tab-count"></span></button><input id="host-flow-search" type="search" aria-label="Filter visible flows" placeholder="Filter flows…"><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Filter evidence…" hidden></div>
+              <div id="host-flows-panel" class="host-activity-content"><div class="table-wrap"><table id="host-flows-table"><thead><tr><th>Time</th><th>Direction</th><th>Peer</th><th>Protocol</th><th>Ports</th><th>State</th><th>Packets</th><th>Bytes</th><th>Duration</th><th>Label</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-flow-count"></span><div id="host-flows-pager" class="pager"></div></div></div>
+              <div id="host-alerts-panel" class="host-activity-content" hidden><h3 id="host-alerts-title">Related alerts</h3><div id="host-alerts" class="host-alert-list"></div></div>
+              <div id="host-evidence-panel" class="host-activity-content" hidden><div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th>Reporting peers</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-evidence-count"></span><div id="host-evidence-pager" class="pager"></div></div><h3 id="host-evidence-title" hidden>Related evidence</h3></div>
+            </article>
+          </div>
+          <div class="host-right-column"><article class="surface"><h3>Top peers</h3><div id="host-peers" class="bar-chart"></div></article><article class="surface"><h3>Protocols</h3><div id="host-protocols" class="bar-chart"></div></article><p id="host-traffic-status" class="muted">Traffic and peers match the exact profile IP only.</p></div>
+        </div>
       </div>
     </section>
   </main>
@@ -290,6 +284,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261010-evidence"></script>
+  <script src="/app.js?v=20261010-hosts"></script>
 </body>
 </html>
