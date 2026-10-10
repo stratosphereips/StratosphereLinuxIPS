@@ -918,6 +918,9 @@ class ConnAnalyzer(IAsyncModule):
         another private IP except for expected DNS and DHCP service traffic.
         """
 
+        if flow.proto.lower() in {"icmp", "icmp6", "icmpv6"}:
+            return
+
         if self.is_broadcast_or_multicast_flow(flow):
             return
 

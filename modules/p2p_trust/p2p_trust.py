@@ -343,7 +343,11 @@ class Trust(IModule):
         decides whether to report the given evidence to other
         peers
         """
-        if evidence.profile.ip in utils.get_own_ips():
+        own_ips = utils.get_own_ips(ret="List", include_public=False)
+        if (
+            evidence.profile.ip in own_ips
+            or evidence.attacker.value in own_ips
+        ):
             return False
 
         if evidence.evidence_type == EvidenceType.P2P_REPORT:

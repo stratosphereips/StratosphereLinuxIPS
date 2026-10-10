@@ -439,7 +439,7 @@ def test_reject_invalid_web_whitelist_ip(value: str) -> None:
 
 
 def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
-    """Save a live IP:port rule separately and let the parser reload it."""
+    """Save a live IP:port rule in the configured file and reload it."""
     factory = ModuleFactory()
     metadata = tmp_path / "metadata"
     metadata.mkdir()
@@ -461,11 +461,12 @@ def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
     saved = reader.save_whitelist_rule("add", "192.0.2.4:443", "dst", "alerts")
 
     assert saved["value"] == "192.0.2.4:443"
-    managed = tmp_path / "whitelist.conf.web.conf"
+    managed = configured
     assert "ip,192.0.2.4:443,dst,alerts" in managed.read_text(encoding="utf-8")
-    assert configured.read_text(encoding="utf-8") == (
-        "ip,192.0.2.1,both,alerts\n"
+    assert "ip,192.0.2.1,both,alerts" in configured.read_text(
+        encoding="utf-8"
     )
+    assert not (tmp_path / "whitelist.conf.web.conf").exists()
     reader.redis.hset.assert_called_once()
     whitelist = factory.create_whitelist_obj()
     whitelist.parser.local_whitelist_path = str(configured)
@@ -509,7 +510,7 @@ def test_web_whitelist_can_scope_ip_to_alert_type(tmp_path) -> None:
     )
 
     assert saved["evidence_type"] == "ARP_SCAN"
-    managed = tmp_path / "whitelist.conf.web.conf"
+    managed = configured
     assert "ip,192.0.2.4,src,alerts,ARP_SCAN" in managed.read_text(
         encoding="utf-8"
     )
@@ -530,6 +531,36 @@ def test_web_whitelist_can_scope_ip_to_alert_type(tmp_path) -> None:
     reader.redis.hdel.assert_called_once_with(
         "whitelist_IPs", "192.0.2.4|ARP_SCAN"
     )
+
+
+def test_web_whitelist_migrates_existing_sidecar(tmp_path: Path) -> None:
+    """Move old web rules into the configured file on the next save."""
+    _module_factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "whitelist.conf"
+    configured.write_text("ip,192.0.2.1,both,alerts\n", encoding="utf-8")
+    legacy = tmp_path / "whitelist.conf.web.conf"
+    legacy.write_text("ip,192.0.2.5,src,alerts,ARP_SCAN\n", encoding="utf-8")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(
+        return_value={"backend_status": {"connected": True}}
+    )
+
+    reader.save_whitelist_rule("add", "192.0.2.6", "src", "alerts")
+
+    content = configured.read_text(encoding="utf-8")
+    assert "ip,192.0.2.5,src,alerts,ARP_SCAN" in content
+    assert "ip,192.0.2.6,src,alerts" in content
+    assert not legacy.exists()
 
 
 @pytest.mark.parametrize(
@@ -2043,6 +2074,62 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
     assert alert_page["total"] == 1
     assert alert_page["items"][0]["evidence"][0]["id"] == "evidence-1"
     assert host["alerts"][0]["threat_level"] == "high"
+
+
+@pytest.mark.parametrize(
+    "threat, expected",
+    [
+        ("high", {"high"}),
+        ("high_or_more", {"high", "critical"}),
+        ("medium_or_more", {"medium", "high", "critical"}),
+        ("low_or_more", {"low", "medium", "high", "critical"}),
+    ],
+)
+@pytest.mark.parametrize("grouped", [False, True])
+def test_evidence_threat_minimum_filter(
+    tmp_path: Path, threat: str, expected: set[str], grouped: bool
+) -> None:
+    """Apply inclusive threat thresholds to grouped and individual evidence.
+
+    Parameters:
+        tmp_path: Isolated SQLite storage.
+        threat: Exact level or inclusive threshold.
+        expected: Levels that should remain visible.
+        grouped: Whether the query aggregates evidence by type.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._annotate_detection_networks = Mock()
+    reader._annotate_whitelisted_evidence = Mock()
+    reader._annotate_p2p_reporters = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT, evidence_time REAL, "
+            "profile_ip TEXT, timewindow TEXT, threat_level TEXT, "
+            "evidence_type TEXT, source_module TEXT, description TEXT, "
+            "confidence REAL, data TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        for rank, level in enumerate(("info", "low", "medium", "high", "critical")):
+            connection.execute(
+                "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (level, rank + 1, "10.0.0.1", "timewindow1", level,
+                 level.upper(), "test", level, 1.0, "{}"),
+            )
+
+    query = {"range": ["all"], "threat": [threat]}
+    if grouped:
+        query["group"] = ["type"]
+    page = reader.evidence(query)
+
+    assert {item["threat_level"] for item in page["items"]} == expected
+    assert page["total"] == len(expected)
 
 
 def test_host_names_resolves_live_and_historical_identity(

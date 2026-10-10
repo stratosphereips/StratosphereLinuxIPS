@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import base64
 import binascii
+import ipaddress
 import json
 from typing import Any, Dict
 import time
@@ -435,6 +436,9 @@ class GoDirector:
         """
         Gets the info about the IP the peer asked about, and send it to the network
         """
+        if key in utils.get_own_ips(ret="List", include_public=False):
+            self.print(f"Not reporting this peer's own IP {key}", 1, 0)
+            return
         score, confidence = get_ip_info_from_slips(key, self.db)
         if score is not None:
             send_evaluation_to_go(
@@ -491,6 +495,23 @@ class GoDirector:
             self.print("Provided key isn't a valid value for it's type", 0, 2)
             # TODO: lower reputation
             return
+
+        if key_type == "ip":
+            _last_seen, reporter_ip = self.trustdb.get_ip_of_peer(reporter)
+            try:
+                self_report = reporter_ip and (
+                    ipaddress.ip_address(reporter_ip)
+                    == ipaddress.ip_address(key)
+                )
+            except ValueError:
+                self_report = False
+            if self_report:
+                self.print(
+                    f"Ignoring self report from peer {reporter} about {key}",
+                    1,
+                    0,
+                )
+                return
 
         # validate evaluation type
         if evaluation_type not in self.evaluation_processors:

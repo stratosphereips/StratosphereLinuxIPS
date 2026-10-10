@@ -23,6 +23,7 @@ daemon/
 private/AGENTS.md
 *.web.conf
 *.web.conf.lock
+*.conf.lock
 scripts/
 tasks/*
 

@@ -398,14 +398,20 @@ Choose an **Evidence type** to limit an IP rule to one detection, for example
 `192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
 only that evidence type; they do not hide its flows or other detections.
 
-The web interface writes these rules beside the configured local whitelist in
-a separate `.web.conf` file. Slips reads that file after the configured
-whitelist on future starts. The shipped `config/whitelist.conf` is never
-modified. Saving changes requires enabled local whitelisting and an active
+The web interface writes these rules into the configured local whitelist file,
+between marked comments, so they survive Slips restarts and are visible in the
+same file as manually entered rules. On the next edit, any rules from an older
+`.web.conf` sidecar are moved into that marked section. Existing evidence and
+alerts are historical records; new matching evidence is excluded from scoring
+and alerts and is hidden by the default **Hide excluded** setting. Saving
+changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web
 interface; an unprotected web interface accepts these changes only locally.
 The optional fifth column in a local IP whitelist line is the canonical
 evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN`.
+
+Evidence threat chips support exact levels and inclusive `High+`, `Medium+`,
+and `Low+` filters. The inclusive filters include all more severe levels.
 
 ### Host score history
 

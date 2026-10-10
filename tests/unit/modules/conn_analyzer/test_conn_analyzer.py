@@ -1496,6 +1496,8 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
             "192.168.1.1",
             0,
         ),
+        ("192.168.1.2", 0, "icmp", "192.168.1.1", 0),
+        ("fd00::2", 0, "icmp6", "fd00::1", 0),
     ],
 )
 def test_check_connection_to_local_ip(

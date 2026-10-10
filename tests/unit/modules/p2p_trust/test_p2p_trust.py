@@ -46,6 +46,29 @@ def create_trust():
     return trust
 
 
+@pytest.mark.parametrize("own_field", ["profile", "attacker"])
+def test_should_share_rejects_own_ip(own_field: str) -> None:
+    """Keep local interface addresses out of outgoing P2P reports.
+
+    Parameters:
+        own_field: Evidence field carrying the local address.
+    """
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    evidence = Mock()
+    evidence.profile.ip = "192.168.1.170" if own_field == "profile" else "8.8.8.8"
+    evidence.attacker.value = (
+        "192.168.1.170" if own_field == "attacker" else "8.8.8.8"
+    )
+    with patch(
+        "modules.p2p_trust.p2p_trust.utils.get_own_ips",
+        return_value=["192.168.1.170"],
+    ) as own_ips:
+        assert trust.should_share(evidence) is False
+
+    own_ips.assert_called_once_with(ret="List", include_public=False)
+
+
 @pytest.mark.parametrize(
     "address,expected",
     [

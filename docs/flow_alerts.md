@@ -359,7 +359,7 @@ Here's how it works
 
 ## Connection to private IPs
 
-Slips detects when a private IP is connected to another private IP with threat level info.
+Slips detects when a private IP is connected to another private IP with threat level info. ICMP traffic does not produce `CONNECTION_TO_PRIVATE_IP` evidence.
 
 But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.

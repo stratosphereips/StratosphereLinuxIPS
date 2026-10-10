@@ -33,6 +33,7 @@ from modules.supported_module_names import Modules
 from slips_files.core.helpers.whitelist.whitelist_parser import (
     web_whitelist_path,
 )
+
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
@@ -59,6 +60,15 @@ from slips_files.common.web_auth import (
 )
 
 LOOPBACK_ADDRESS = "127.0.0.1"
+WEB_RULES_START = "; Begin rules added from the Slips web interface"
+WEB_RULES_END = "; End rules added from the Slips web interface"
+EVIDENCE_THREAT_RANKS = {
+    "info": 0,
+    "low": 1,
+    "medium": 2,
+    "high": 3,
+    "critical": 4,
+}
 PROFILE_PREFIX = "profile_"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
@@ -481,7 +491,7 @@ class RunDataReader:
             settings = config.get("whitelists", {})
             if not isinstance(settings, dict):
                 settings = {}
-            managed_path = web_whitelist_path(
+            managed_path = Path(
                 str(
                     settings.get(
                         "local_whitelist_path", "config/whitelist.conf"
@@ -489,11 +499,22 @@ class RunDataReader:
                 )
             )
             try:
+                content = managed_path.read_text(encoding="utf-8")
+                managed_lines = (
+                    content.split(WEB_RULES_START, 1)[1]
+                    .split(WEB_RULES_END, 1)[0]
+                    .splitlines()
+                    if WEB_RULES_START in content
+                    else []
+                )
+                legacy_path = web_whitelist_path(str(managed_path))
+                if legacy_path.exists():
+                    managed_lines.extend(
+                        legacy_path.read_text(encoding="utf-8").splitlines()
+                    )
                 managed = {
                     (parts[1], parts[4] if len(parts) > 4 else "")
-                    for line in managed_path.read_text(
-                        encoding="utf-8"
-                    ).splitlines()
+                    for line in managed_lines
                     if (parts := line.split(","))
                     and parts[0] == "ip"
                     and len(parts) >= 4
@@ -687,7 +708,7 @@ class RunDataReader:
         source = str(
             settings.get("local_whitelist_path", "config/whitelist.conf")
         )
-        path = web_whitelist_path(source)
+        path = Path(source)
         if not path.parent.is_dir():
             raise ValueError("The configured whitelist directory is missing")
         lock_path = path.with_name(path.name + ".lock")
@@ -696,11 +717,24 @@ class RunDataReader:
             lines = (
                 path.read_text(encoding="utf-8").splitlines()
                 if path.exists()
-                else ["; Rules added through the Slips web interface"]
+                else []
             )
+            if WEB_RULES_START in lines and WEB_RULES_END in lines:
+                start = lines.index(WEB_RULES_START)
+                end = lines.index(WEB_RULES_END, start)
+                base_lines = lines[:start] + lines[end + 1 :]
+                managed_lines = lines[start + 1 : end]
+            else:
+                base_lines = lines
+                managed_lines = []
+            legacy_path = web_whitelist_path(source)
+            if legacy_path.exists():
+                managed_lines.extend(
+                    legacy_path.read_text(encoding="utf-8").splitlines()
+                )
             existing = {
                 (parts[1], parts[4] if len(parts) > 4 else ""): line
-                for line in lines
+                for line in managed_lines
                 if (parts := line.split(","))
                 and len(parts) >= 4
                 and parts[0] == "ip"
@@ -714,17 +748,25 @@ class RunDataReader:
                 ):
                     raise ValueError("This value already has a whitelist rule")
                 suffix = f",{evidence_type}" if evidence_type else ""
-                lines.append(f"ip,{normalized},{direction},{ignored}{suffix}")
+                managed_lines.append(
+                    f"ip,{normalized},{direction},{ignored}{suffix}"
+                )
             else:
                 if (normalized, evidence_type) not in existing:
                     raise ValueError(
                         "Only web-managed rules can be removed here"
                     )
-                lines = [
+                managed_lines = [
                     line
-                    for line in lines
+                    for line in managed_lines
                     if line != existing[(normalized, evidence_type)]
                 ]
+            lines = (
+                base_lines
+                + [WEB_RULES_START]
+                + managed_lines
+                + [WEB_RULES_END]
+            )
             with tempfile.NamedTemporaryFile(
                 mode="w", encoding="utf-8", dir=path.parent, delete=False
             ) as temporary:
@@ -733,7 +775,10 @@ class RunDataReader:
                 os.fsync(temporary.fileno())
                 temporary_path = Path(temporary.name)
             try:
+                if path.exists():
+                    os.chmod(temporary_path, path.stat().st_mode & 0o777)
                 os.replace(temporary_path, path)
+                legacy_path.unlink(missing_ok=True)
             finally:
                 temporary_path.unlink(missing_ok=True)
             if action == "add":
@@ -1840,8 +1885,16 @@ class RunDataReader:
                 clauses.append("evidence_type = ?")
                 params.append(evidence_type)
             if threat:
-                clauses.append("LOWER(threat_level) = ?")
-                params.append(threat)
+                minimum = threat.removesuffix("_or_more")
+                if (
+                    threat.endswith("_or_more")
+                    and minimum in EVIDENCE_THREAT_RANKS
+                ):
+                    clauses.append(f"{threat_expression} >= ?")
+                    params.append(EVIDENCE_THREAT_RANKS[minimum])
+                else:
+                    clauses.append("LOWER(threat_level) = ?")
+                    params.append(threat)
             if association == "linked":
                 clauses.append(
                     "EXISTS (SELECT 1 FROM alert_evidence ae "
@@ -2100,8 +2153,16 @@ class RunDataReader:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
                 if threat:
-                    clauses.append("LOWER(threat_level) = ?")
-                    params.append(threat)
+                    minimum = threat.removesuffix("_or_more")
+                    if (
+                        threat.endswith("_or_more")
+                        and minimum in EVIDENCE_THREAT_RANKS
+                    ):
+                        clauses.append(f"{threat_expression} >= ?")
+                        params.append(EVIDENCE_THREAT_RANKS[minimum])
+                    else:
+                        clauses.append("LOWER(threat_level) = ?")
+                        params.append(threat)
                 if association == "linked":
                     clauses.append(
                         "EXISTS (SELECT 1 FROM alert_evidence ae "
@@ -2187,11 +2248,25 @@ class RunDataReader:
                     if str(item.get("evidence_type", "")) == evidence_type
                 ]
             if threat:
-                records = [
-                    item
-                    for item in records
-                    if str(item.get("threat_level", "")).lower() == threat
-                ]
+                minimum = threat.removesuffix("_or_more")
+                if (
+                    threat.endswith("_or_more")
+                    and minimum in EVIDENCE_THREAT_RANKS
+                ):
+                    records = [
+                        item
+                        for item in records
+                        if EVIDENCE_THREAT_RANKS.get(
+                            str(item.get("threat_level", "")).lower(), 0
+                        )
+                        >= EVIDENCE_THREAT_RANKS[minimum]
+                    ]
+                else:
+                    records = [
+                        item
+                        for item in records
+                        if str(item.get("threat_level", "")).lower() == threat
+                    ]
             if association:
                 records = [
                     item

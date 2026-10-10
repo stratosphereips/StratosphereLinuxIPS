@@ -202,6 +202,7 @@ def test_process_message_report_forwards_blame_to_blame_evaluator():
     left untouched.
     """
     go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (False, False)
     go_director.report_func = Mock()
     go_director.blame_evaluator = Mock()
     go_director.evaluation_processors["score_confidence"] = Mock()
@@ -230,6 +231,7 @@ def test_process_message_report_does_not_forward_plain_reports():
     model's blocking decision.
     """
     go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (False, False)
     go_director.blame_evaluator = Mock()
     go_director.evaluation_processors["score_confidence"] = Mock()
 
@@ -247,6 +249,53 @@ def test_process_message_report_does_not_forward_plain_reports():
     go_director.blame_evaluator.assert_not_called()
 
 
+@pytest.mark.parametrize("message_type", ["report", "blame"])
+def test_process_message_report_rejects_peer_self_report(
+    message_type: str,
+) -> None:
+    """Reject a report about the sending peer before storage or blocking.
+
+    Parameters:
+        message_type: Regular reputation report or blame message.
+    """
+    go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (
+        1649445643,
+        "192.168.1.170",
+    )
+    go_director.report_func = Mock()
+    go_director.blame_evaluator = Mock()
+    go_director.evaluation_processors["score_confidence"] = Mock()
+    data = {
+        "message_type": message_type,
+        "key": "192.168.1.170",
+        "key_type": "ip",
+        "evaluation_type": "score_confidence",
+        "evaluation": {"score": 0.2, "confidence": 0.1},
+    }
+
+    go_director.process_message_report("peer-170", 1649445643, data)
+
+    go_director.evaluation_processors["score_confidence"].assert_not_called()
+    go_director.blame_evaluator.assert_not_called()
+    go_director.report_func.assert_not_called()
+
+
+def test_respond_to_request_does_not_report_own_ip() -> None:
+    """Do not answer a peer query with this Slips node's own reputation."""
+    go_director = ModuleFactory().create_go_director_obj()
+    with patch(
+        "modules.p2p_trust.utils.go_director.utils.get_own_ips",
+        return_value=["192.168.1.170"],
+    ) as own_ips, patch(
+        "modules.p2p_trust.utils.go_director.send_evaluation_to_go"
+    ) as send:
+        go_director.respond_to_message_request("192.168.1.170", "peer-a")
+
+    own_ips.assert_called_once_with(ret="List", include_public=False)
+    send.assert_not_called()
+
+
 def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluator():
     """
     The override_p2p escape hatch is a separate mechanism from blame
@@ -254,6 +303,7 @@ def test_process_message_report_override_p2p_uses_report_func_not_blame_evaluato
     report_func instead of ever touching storage or blame_evaluator.
     """
     go_director = ModuleFactory().create_go_director_obj()
+    go_director.trustdb.get_ip_of_peer.return_value = (False, False)
     go_director.override_p2p = True
     go_director.report_func = Mock()
     go_director.blame_evaluator = Mock()
@@ -408,19 +458,6 @@ def test_validate_message_request(
             "reputation report about IP 10.0.0.1; maliciousness "
             "score 0.9, confidence 0.6.",
             "critical",
-        ),
-        (
-            "192.168.1.147",
-            "self_reporter",
-            "192.168.1.147",
-            0.0,
-            1.0,
-            1649445645,
-            "profile_192.168.1.147",
-            "Received from P2P peer 192.168.1.147 (self_reporter): "
-            "reputation report about IP 192.168.1.147; maliciousness "
-            "score 0.0, confidence 1.0.",
-            "info",
         ),
     ],
 )

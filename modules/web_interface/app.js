@@ -2004,9 +2004,11 @@ function renderEvidenceThreatChips() {
   container.replaceChildren();
   [["", "All"], ...["critical", "high", "medium", "low", "info"]
     .filter((level) => counts.get(level) || selected === level)
-    .map((level) => [level, level[0].toUpperCase() + level.slice(1)])]
+    .map((level) => [level, level[0].toUpperCase() + level.slice(1)]),
+    ...[["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"]]]
     .forEach(([level, label]) => {
-      const button = text("button", `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
+      const button = text("button", level.endsWith("_or_more")
+        ? label : `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
       button.type = "button";
       button.dataset.level = level;
       button.classList.toggle("active", level === selected);
