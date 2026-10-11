@@ -349,6 +349,8 @@ def test_configuration_explains_captured_run_snapshot(tmp_path) -> None:
     metadata.mkdir()
     (metadata / "run.yaml").write_text(
         "parameters:\n  time_window_width: 3600\n"
+        "detection:\n  evidence_detection_threshold: 0.43\n"
+        "alert_summary:\n  llm_max_tokens: 1024\n"
         "web_interface:\n  enabled: true\n  api_key: keep-private\n",
         encoding="utf-8",
     )
@@ -358,14 +360,25 @@ def test_configuration_explains_captured_run_snapshot(tmp_path) -> None:
     result = reader.configuration()
 
     assert result["source"] == "run.yaml"
-    assert result["total"] == 3
+    assert result["total"] == 5
     parameters = result["sections"][0]
     assert (
         "evidence is accumulated" in parameters["settings"][0]["explanation"]
     )
-    web_settings = result["sections"][1]["settings"]
+    assert parameters["settings"][0]["changed"] is False
+    detection = result["sections"][1]
+    assert detection["settings"][0]["changed"] is True
+    assert detection["settings"][0]["default"] == 0.25
+    assert result["changed_total"] >= 1
+    assert result["secret_total"] == 1
+    assert result["sections"][2]["settings"][0]["value"] == 1024
+    assert result["sections"][2]["settings"][0]["sensitive"] is False
+    web_settings = result["sections"][3]["settings"]
     assert web_settings[1]["value"] == "Configured — hidden"
     assert web_settings[1]["sensitive"] is True
+    assert web_settings[1]["default"] is None
+    assert "keep-private" not in result["redacted_yaml"]
+    assert "Configured — hidden" in result["redacted_yaml"]
 
 
 def test_whitelists_returns_parsed_runtime_rules(tmp_path) -> None:

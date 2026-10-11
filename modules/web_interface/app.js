@@ -9,6 +9,8 @@ const state = {
   metadata: null,
   metrics: [],
   configuration: null,
+  configurationSection: "detection",
+  configurationFilter: "all",
   whitelists: null,
   arpPoisoning: null,
   p2p: null,
@@ -2490,48 +2492,142 @@ async function loadEvidence() {
   } else renderEvidenceEmptyState();
 }
 
+/** Format a captured configuration value without interpreting it as a timestamp. */
+function configValue(value, sensitive = false) {
+  if (sensitive) return "Configured — hidden";
+  if (value === true) return "on";
+  if (value === false) return "off";
+  if (value === null || value === undefined || value === "") return "—";
+  if (Array.isArray(value)) return value.join(", ") || "none";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+/** Fill the six quick facts from settings captured at the start of this run. */
+function renderConfigurationSummary(sections) {
+  const setting = (path) => {
+    const [sectionKey, ...keys] = path.split(".");
+    return sections.find((section) => section.key === sectionKey)
+      ?.settings?.find((item) => item.key === keys.join("."))?.value;
+  };
+  const windowSeconds = Number(setting("parameters.time_window_width"));
+  const disabled = setting("modules.disable");
+  const disabledNames = Array.isArray(disabled)
+    ? disabled.filter((name) => name !== "template") : [];
+  const tiPeriod = Number(setting("threatintelligence.TI_files_update_period"));
+  const facts = [
+    ["Alert threshold", configValue(setting("detection.risk_accumulated_threat_level")), "score to raise an alert"],
+    ["Time window", Number.isFinite(windowSeconds) && windowSeconds > 0
+      ? windowSeconds % 3600 === 0 ? `${windowSeconds / 3600} h` : `${windowSeconds} s`
+      : configValue(setting("parameters.time_window_width")), `${windowSeconds || 0} s`],
+    ["Direction", configValue(setting("parameters.analysis_direction")),
+      setting("parameters.analysis_direction") === "out" ? "outbound only" : "traffic analyzed"],
+    ["Modules", `${disabledNames.length} off`, disabledNames.join(", ") || "all detection modules available"],
+    ["Threat-intel feeds", setting("threatintelligence.ti_files") ? "configured" : "none",
+      Number.isFinite(tiPeriod) && tiPeriod > 0 ? `updated every ${Math.round(tiPeriod / 3600)} h` : "update period unknown"],
+    ["P2P", setting("local_p2p.use_p2p") ? "on" : "off", "local peer network"],
+  ];
+  byId("configuration-summary").replaceChildren(...facts.map(([label, value, hint]) => {
+    const card = document.createElement("article");
+    card.className = "surface config-fact";
+    card.append(text("span", label), text("strong", value), text("small", hint));
+    return card;
+  }));
+}
+
+/** Render the selected section as compact, explained settings with defaults. */
 function renderConfiguration() {
   const payload = state.configuration;
   if (!payload) return;
   const query = byId("configuration-search").value.trim().toLowerCase();
   const container = byId("configuration-sections");
   container.replaceChildren();
-  let shown = 0;
-  (payload.sections || []).forEach((section) => {
-    const settings = (section.settings || []).filter((setting) => !query || [
-      section.title, section.description, setting.key, setting.label,
-      setting.explanation, JSON.stringify(setting.value),
-    ].join(" ").toLowerCase().includes(query));
-    if (!settings.length) return;
-    shown += settings.length;
-    const details = document.createElement("details");
-    details.className = "surface config-section";
-    details.open = Boolean(query) || ["parameters", "detection", "whitelists", "web_interface"]
-      .includes(section.key);
-    const summary = document.createElement("summary");
-    const heading = document.createElement("div");
-    heading.append(text("h3", section.title), text("p", section.description));
-    summary.append(heading, text("span", `${settings.length} settings`, "count-chip"));
-    const grid = document.createElement("div");
-    grid.className = "config-settings";
-    settings.forEach((setting) => {
-      const card = document.createElement("article");
-      card.className = "config-setting";
-      const value = setting.value && typeof setting.value === "object"
-        ? JSON.stringify(displayData(setting.value)) : displayValue(setting.value);
-      card.append(
-        text("small", `${section.key}.${setting.key}`, "config-key"),
-        text("h4", setting.label),
-        text("code", value === "" ? "Empty" : value, setting.sensitive ? "redacted" : ""),
-        text("p", setting.explanation),
-      );
-      grid.append(card);
-    });
-    details.append(summary, grid);
-    container.append(details);
+  const preferred = ["detection", "parameters", "modules", "update", "output", "Debug",
+    "threatintelligence", "global_p2p", "local_p2p", "alert_summary", "llm_proxy",
+    "exporting_alerts", "ml_linear_model", "virustotal", "web_interface", "whitelists"];
+  const sections = [...(payload.sections || [])].sort((left, right) => {
+    const leftOrder = preferred.indexOf(left.key);
+    const rightOrder = preferred.indexOf(right.key);
+    return (leftOrder < 0 ? 100 : leftOrder) - (rightOrder < 0 ? 100 : rightOrder);
   });
-  byId("configuration-count").textContent = `${shown} shown · ${payload.total} captured settings`;
-  if (!shown) container.append(text("p", "No settings match this search.", "surface empty-state"));
+  const matches = (section) => (section.settings || []).filter((setting) => {
+    if (state.configurationFilter === "changed" && !setting.changed) return false;
+    if (state.configurationFilter === "secrets" && !setting.sensitive) return false;
+    return !query || [section.title, section.description, setting.key, setting.label,
+      setting.explanation, configValue(setting.value, setting.sensitive)].join(" ").toLowerCase().includes(query);
+  });
+  const visible = sections.filter((section) => matches(section).length);
+  if (!visible.some((section) => section.key === state.configurationSection)) {
+    state.configurationSection = visible[0]?.key || "";
+  }
+  const navigation = byId("configuration-navigation");
+  navigation.replaceChildren(text("strong", `SECTIONS · ${sections.length}`, "config-nav-title"));
+  sections.forEach((section) => {
+    const count = matches(section).length;
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = `config-nav-item${section.key === state.configurationSection ? " active" : ""}`;
+    button.disabled = !count;
+    button.setAttribute("aria-current", section.key === state.configurationSection ? "true" : "false");
+    const label = section.key === "threatintelligence" ? "Threat intelligence"
+      : section.key === "global_p2p" ? "Global P2P"
+        : section.key === "local_p2p" ? "Local P2P" : section.title;
+    button.append(text("span", label), text("small", String(count), section.changed_count ? "changed" : ""));
+    button.addEventListener("click", () => {
+      state.configurationSection = section.key;
+      renderConfiguration();
+    });
+    navigation.append(button);
+  });
+  const selected = visible.find((section) => section.key === state.configurationSection);
+  if (!selected) {
+    container.append(text("p", "No settings match this search or filter.", "surface empty-state"));
+    byId("configuration-count").textContent = "Secrets are hidden; settings absent from the snapshot may use built-in defaults.";
+    return;
+  }
+  const settings = matches(selected);
+  if (selected.key === "detection") {
+    const order = ["risk_accumulated_threat_level", "evidence_detection_threshold",
+      "popup_alerts", "low_risk_weight", "medium_risk_weight", "high_risk_weight"];
+    settings.sort((left, right) => order.indexOf(left.key) - order.indexOf(right.key));
+  }
+  const panel = document.createElement("article");
+  panel.className = "surface config-table-panel";
+  const heading = document.createElement("div");
+  heading.className = "config-table-heading";
+  const label = text("h3", selected.key === "threatintelligence" ? "Threat intelligence" : selected.title);
+  const title = document.createElement("div");
+  title.append(label, text("span", selected.description));
+  heading.append(title, text("small", `${settings.length} settings · ${settings.filter((item) => item.changed).length} changed`));
+  const wrap = document.createElement("div");
+  wrap.className = "config-table-wrap";
+  const table = document.createElement("table");
+  table.className = "config-table";
+  table.innerHTML = "<thead><tr><th>Setting</th><th>Value</th><th>What it does</th><th>Default</th></tr></thead>";
+  const body = document.createElement("tbody");
+  settings.forEach((setting) => {
+    const row = document.createElement("tr");
+    if (setting.changed) row.className = "changed";
+    const name = document.createElement("td");
+    name.append(text("strong", setting.label), text("small", `${selected.key}.${setting.key}`));
+    const value = document.createElement("td");
+    value.append(text("code", configValue(setting.value, setting.sensitive),
+      setting.sensitive ? "config-secret" : "config-current"));
+    const explanation = text("td", setting.explanation);
+    const defaultCell = document.createElement("td");
+    defaultCell.append(text("span", setting.changed
+      ? `was ${configValue(setting.default, setting.sensitive)}`
+      : setting.has_default ? "default" : "—",
+    setting.changed ? "config-was" : "config-default"));
+    row.append(name, value, explanation, defaultCell);
+    body.append(row);
+  });
+  table.append(body);
+  wrap.append(table);
+  panel.append(heading, wrap);
+  container.append(panel);
+  byId("configuration-count").textContent =
+    `Showing ${settings.length} of ${payload.total} captured settings · Secrets show as “configured” and are never displayed. Settings absent from the snapshot may use built-in defaults.`;
 }
 
 async function loadConfiguration() {
@@ -2539,11 +2635,14 @@ async function loadConfiguration() {
   if (!payload) return;
   state.configuration = payload;
   byId("configuration-status").textContent = payload.captured
-    ? `${payload.total} settings from the immutable run snapshot.`
+    ? `${payload.source || "run.yaml"} · read-only snapshot taken at start · ${payload.total} settings`
     : "No configuration snapshot was captured for this run.";
-  byId("configuration-source").textContent = payload.source
-    ? `${payload.source} was copied into this run when Slips started. Values below are parsed, grouped, and explained; this is not a dump of the YAML text.`
-    : "Run metadata did not contain a YAML configuration snapshot.";
+  byId("configuration-source").textContent = payload.source || "Run YAML snapshot";
+  byId("configuration-yaml-content").textContent = payload.redacted_yaml || "No YAML snapshot is available.";
+  byId("configuration-all-count").textContent = payload.total;
+  byId("configuration-changed-count").textContent = payload.changed_total || 0;
+  byId("configuration-secret-count").textContent = payload.secret_total || 0;
+  renderConfigurationSummary(payload.sections || []);
   renderConfiguration();
 }
 
@@ -4891,6 +4990,7 @@ function switchTab(name) {
   document.body.classList.toggle("evidence-active", name === "evidence");
   document.body.classList.toggle("hosts-active", name === "hosts");
   document.body.classList.toggle("metadata-active", name === "metadata");
+  document.body.classList.toggle("configuration-active", name === "configuration");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
@@ -5061,6 +5161,27 @@ byId("evidence-search").addEventListener("input", clearEvidenceSelection);
 byId("evidence-link").addEventListener("change", clearEvidenceSelection);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
 byId("configuration-search").addEventListener("input", renderConfiguration);
+document.querySelectorAll("[data-config-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.configurationFilter = button.dataset.configFilter;
+    document.querySelectorAll("[data-config-filter]").forEach((item) => {
+      item.classList.toggle("active", item === button);
+      item.setAttribute("aria-pressed", String(item === button));
+    });
+    renderConfiguration();
+  });
+});
+byId("configuration-yaml-button").addEventListener("click", () => {
+  const panel = byId("configuration-yaml");
+  panel.hidden = !panel.hidden;
+  byId("configuration-yaml-button").setAttribute("aria-expanded", String(!panel.hidden));
+  if (!panel.hidden) panel.scrollIntoView({ block: "nearest" });
+});
+byId("configuration-yaml-close").addEventListener("click", () => {
+  byId("configuration-yaml").hidden = true;
+  byId("configuration-yaml-button").setAttribute("aria-expanded", "false");
+  byId("configuration-yaml-button").focus();
+});
 byId("whitelists-search").addEventListener("input", renderWhitelists);
 byId("whitelists-type").addEventListener("change", renderWhitelists);
 byId("whitelists-editor").append(whitelistEditor("tab"));

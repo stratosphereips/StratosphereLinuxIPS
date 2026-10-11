@@ -383,24 +383,63 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 #host-evidence-table { min-width: 1120px; }
 .host-evidence-description { display: block; max-width: 430px; color: #c7d5de; overflow-wrap: anywhere; }
 .status.whitelisted, .slips-score.whitelisted { border-color: #ad8cff55; background: #ad8cff18; color: #c8b4ff; }
-.configuration-sections { display: grid; gap: .8rem; }
-.config-provenance { border-left: 3px solid var(--blue); }
-.config-provenance p { margin-bottom: .45rem; line-height: 1.45; }
-.config-section { padding: 0; overflow: hidden; }
-.config-section > summary { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; cursor: pointer; list-style: none; }
-.config-section > summary::-webkit-details-marker { display: none; }
-.config-section > summary::before { color: var(--accent); content: "▸"; }
-.config-section[open] > summary::before { content: "▾"; }
-.config-section > summary > div { min-width: 0; flex: 1; }
-.config-section > summary h3, .config-section > summary p { margin: 0; }
-.config-section > summary p { margin-top: .22rem; color: var(--muted); font-size: .76rem; }
-.config-settings { display: grid; grid-template-columns: repeat(3, minmax(240px, 1fr)); gap: .7rem; padding: 0 1rem 1rem; border-top: 1px solid var(--line); }
-.config-setting { min-width: 0; padding: .85rem; border: 1px solid var(--line); border-radius: 8px; background: #0b151d; }
-.config-setting h4 { margin: .25rem 0 .5rem; font-size: .88rem; }
-.config-setting code { display: block; padding: .45rem .55rem; overflow-wrap: anywhere; border-radius: 5px; background: #071017; color: var(--accent); white-space: pre-wrap; }
-.config-setting code.redacted { color: var(--warn); }
-.config-setting p { margin: .55rem 0 0; color: var(--muted); font-size: .74rem; line-height: 1.4; }
-.config-key { color: var(--blue); font: .65rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+body.configuration-active main { max-width: none; padding: .75rem 1rem 2rem; }
+.config-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .65rem; }
+.config-heading { display: flex; align-items: baseline; gap: .75rem; min-width: 0; }
+.config-heading h2 { flex: none; margin: 0; font-size: 1.05rem; }
+.config-heading span { overflow: hidden; color: var(--muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.config-actions { display: flex; align-items: center; gap: .45rem; flex: none; }
+.config-actions input { width: 245px; padding: .42rem .65rem; border: 1px solid #1e2f3d; border-radius: 5px; background: #0c151e; color: var(--text); font-size: .76rem; }
+.config-actions .secondary { padding: .43rem .72rem; background: #0d1720; font-size: .75rem; white-space: nowrap; }
+.config-filters { display: flex; align-items: center; border: 1px solid #1e2f3d; border-radius: 5px; overflow: hidden; }
+.config-filters button { padding: .42rem .62rem; border: 0; border-right: 1px solid #1e2f3d; background: #0c151e; color: var(--muted); font-size: .75rem; cursor: pointer; white-space: nowrap; }
+.config-filters button:last-child { border-right: 0; }
+.config-filters button:hover, .config-filters button.active { background: #e0e8ed; color: #18222b; }
+.config-filters button[data-config-filter="changed"]:not(.active) { color: var(--warn); }
+.config-summary { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .5rem; margin-bottom: .6rem; }
+.config-fact { min-width: 0; min-height: 70px; margin: 0; padding: .65rem .8rem; background: #0e1721; }
+.config-fact span, .config-fact small { display: block; overflow: hidden; color: var(--muted); font-size: .72rem; text-overflow: ellipsis; white-space: nowrap; }
+.config-fact strong { display: block; margin: .12rem 0; overflow: hidden; font: 700 1.06rem ui-monospace, SFMono-Regular, Menlo, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.config-fact small { font-size: .64rem; }
+.config-workspace { display: grid; grid-template-columns: 210px minmax(0, 1fr); align-items: start; gap: .6rem; }
+.config-navigation { display: flex; flex-direction: column; max-height: calc(100vh - 290px); overflow-y: auto; padding: .4rem 0; border: 1px solid #1b2b38; border-radius: 6px; background: #0d1721; }
+.config-nav-title { padding: .2rem .7rem .55rem; color: #718697; font-size: .65rem; letter-spacing: .08em; }
+.config-nav-item { display: flex; align-items: center; justify-content: space-between; gap: .5rem; width: 100%; padding: .46rem .7rem; border: 0; border-left: 2px solid transparent; background: transparent; color: #9baebc; text-align: left; font-size: .75rem; cursor: pointer; }
+.config-nav-item:hover, .config-nav-item.active { background: #14242e; color: var(--text); }
+.config-nav-item.active { border-left-color: var(--accent); }
+.config-nav-item:disabled { opacity: .38; cursor: default; }
+.config-nav-item small { color: #718697; font: 700 .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.config-nav-item small.changed { color: var(--warn); }
+.configuration-sections { min-width: 0; }
+.config-table-panel { margin: 0; padding: 0; overflow: hidden; border-color: #1b2b38; background: #0c151e; }
+.config-table-heading { display: flex; align-items: center; justify-content: space-between; gap: 1rem; min-height: 39px; padding: .45rem .75rem; }
+.config-table-heading > div { display: flex; align-items: baseline; gap: .55rem; min-width: 0; }
+.config-table-heading h3 { margin: 0; font-size: .83rem; white-space: nowrap; }
+.config-table-heading span, .config-table-heading small { overflow: hidden; color: var(--muted); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+.config-table-heading small { flex: none; }
+.config-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.config-table th { padding: .42rem .75rem; border-top: 1px solid #1b2b38; border-bottom: 1px solid #1b2b38; color: #718697; text-align: left; text-transform: uppercase; font-size: .65rem; letter-spacing: .05em; }
+.config-table th:nth-child(1) { width: 27%; }
+.config-table th:nth-child(2) { width: 18%; }
+.config-table th:nth-child(3) { width: 43%; }
+.config-table th:nth-child(4) { width: 12%; text-align: right; }
+.config-table td { padding: .55rem .75rem; border-bottom: 1px solid #172530; color: #a7b8c4; font-size: .73rem; line-height: 1.35; vertical-align: middle; overflow-wrap: anywhere; }
+.config-table tr:last-child td { border-bottom: 0; }
+.config-table tr.changed td:first-child { box-shadow: inset 2px 0 var(--warn); }
+.config-table td:first-child strong { display: block; margin-bottom: .12rem; color: var(--text); font-size: .78rem; }
+.config-table td:first-child small { color: #718697; font: .66rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.config-table code { display: inline-block; max-width: 100%; padding: .2rem .38rem; border-radius: 4px; background: #132c48; color: #85b8fb; font: 700 .75rem ui-monospace, SFMono-Regular, Menlo, monospace; overflow-wrap: anywhere; }
+.config-table code.config-secret { background: #382b1b; color: #e9bb72; }
+.config-table td:last-child { text-align: right; }
+.config-was { color: var(--warn); font: 700 .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.config-default { color: #718697; font: .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.config-footnote { margin: .5rem 0 0 calc(210px + .6rem); color: #718697; font-size: .68rem; }
+.config-yaml { margin-top: .7rem; }
+.config-yaml[hidden] { display: none; }
+.config-yaml-head { display: flex; align-items: center; justify-content: space-between; }
+.config-yaml pre { max-height: 65vh; overflow: auto; color: #c4d2dc; font-size: .74rem; }
+@media (max-width: 1100px) { .config-toolbar { flex-wrap: wrap; } .config-actions { flex-wrap: wrap; } .config-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .config-workspace { grid-template-columns: 165px minmax(0, 1fr); } .config-footnote { margin-left: calc(165px + .6rem); } }
+@media (max-width: 800px) { .config-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); } .config-workspace { display: block; } .config-navigation { flex-direction: row; gap: .15rem; max-height: none; margin-bottom: .5rem; overflow-x: auto; white-space: nowrap; } .config-nav-title { display: none; } .config-nav-item { width: auto; flex: none; } .config-table-wrap { overflow-x: auto; } .config-table { min-width: 760px; } .config-footnote { margin-left: 0; } }
 .empty-state { padding: 2rem; color: var(--muted); text-align: center; }
 .permanent-host-profile { padding: 1rem 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
 .permanent-host-profile:first-child { border-top: 0; padding-top: .35rem; }

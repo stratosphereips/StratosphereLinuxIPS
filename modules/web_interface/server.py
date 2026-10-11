@@ -72,6 +72,7 @@ EVIDENCE_THREAT_RANKS = {
 PROFILE_PREFIX = "profile_"
 DEFAULT_PAGE_SIZE = 100
 MAX_PAGE_SIZE = 100
+MISSING_CONFIG_DEFAULT = object()
 MAX_FLOW_LIMIT = 1000
 MAX_ZEEK_FALLBACK_BYTES = 32 * 1024 * 1024
 ZEEK_FALLBACK_LOGS = (
@@ -175,7 +176,7 @@ SENSITIVE_CONFIG_TERMS = (
     "password",
     "private_key",
     "secret",
-    "token",
+    "credential",
 )
 WHITELIST_TYPES = {
     "IPs": "IP address",
@@ -282,6 +283,22 @@ class RunDataReader:
         """
         return str(name).replace("_", " ").strip().capitalize()
 
+    @staticmethod
+    def _is_sensitive_config_path(path: str) -> bool:
+        """Identify secret-bearing YAML keys without hiding token-count limits.
+
+        Parameters:
+            path: Dot-separated YAML key path.
+
+        Returns:
+            Whether the setting value must be hidden from the browser.
+        """
+        lowered = path.lower()
+        leaf = lowered.rsplit(".", 1)[-1]
+        return any(term in lowered for term in SENSITIVE_CONFIG_TERMS) or (
+            leaf == "token" or leaf.endswith("_token")
+        )
+
     @classmethod
     def _setting_explanation(cls, section: str, path: str) -> str:
         """
@@ -312,6 +329,18 @@ class RunDataReader:
             "detection.risk_accumulated_threat_level": (
                 "Risk-adjusted score a live host must reach before Slips forms "
                 "an alert."
+            ),
+            "detection.popup_alerts": (
+                "Show a desktop notification when Slips raises an alert."
+            ),
+            "detection.low_risk_weight": (
+                "Multiplier applied to low-threat evidence in the host score."
+            ),
+            "detection.medium_risk_weight": (
+                "Multiplier applied to medium-threat evidence in the host score."
+            ),
+            "detection.high_risk_weight": (
+                "Multiplier applied to high-threat evidence in the host score."
             ),
             "whitelists.local_whitelist_path": (
                 "Whitelist file captured with this run and parsed into the "
@@ -362,6 +391,7 @@ class RunDataReader:
         section: str,
         value: Any,
         prefix: str = "",
+        default_value: Any = MISSING_CONFIG_DEFAULT,
     ) -> List[Dict[str, Any]]:
         """
         Flatten a configuration section into displayable leaf settings.
@@ -370,6 +400,7 @@ class RunDataReader:
             section: Top-level configuration section.
             value: Current mapping or leaf value.
             prefix: Dot-separated path accumulated during recursion.
+            default_value: Value in the shipped configuration, if present.
 
         Returns:
             Ordered setting records for the web interface.
@@ -378,21 +409,40 @@ class RunDataReader:
             settings: List[Dict[str, Any]] = []
             for key, nested in value.items():
                 path = f"{prefix}.{key}" if prefix else str(key)
-                settings.extend(cls._flatten_settings(section, nested, path))
+                default_nested = (
+                    default_value.get(key, MISSING_CONFIG_DEFAULT)
+                    if isinstance(default_value, dict)
+                    else MISSING_CONFIG_DEFAULT
+                )
+                settings.extend(
+                    cls._flatten_settings(
+                        section, nested, path, default_nested
+                    )
+                )
             return settings
-        lowered_path = prefix.lower()
-        sensitive = any(
-            term in lowered_path for term in SENSITIVE_CONFIG_TERMS
-        )
+        sensitive = cls._is_sensitive_config_path(prefix)
+        has_default = default_value is not MISSING_CONFIG_DEFAULT
         return [
             {
                 "key": prefix,
-                "label": cls._setting_label(prefix.rsplit(".", 1)[-1]),
+                "label": (
+                    "Alert threshold"
+                    if section == "detection"
+                    and prefix == "risk_accumulated_threat_level"
+                    else cls._setting_label(prefix.rsplit(".", 1)[-1])
+                ),
                 "value": (
                     "Configured — hidden" if sensitive and value else value
                 ),
                 "value_type": type(value).__name__,
                 "sensitive": sensitive and bool(value),
+                "changed": has_default and value != default_value,
+                "has_default": has_default,
+                "default": (
+                    cls._redact_config(default_value, f"{section}.{prefix}")
+                    if has_default
+                    else None
+                ),
                 "explanation": cls._setting_explanation(section, prefix),
             }
         ]
@@ -405,11 +455,32 @@ class RunDataReader:
             Sectioned configuration snapshot without exposing secret values.
         """
         config, path = self._run_config()
+        try:
+            with Path("config/slips.yaml").open(encoding="utf-8") as handle:
+                defaults = yaml.safe_load(handle) or {}
+            if not isinstance(defaults, dict):
+                defaults = {}
+        except (OSError, yaml.YAMLError):
+            defaults = {}
         sections = []
         total = 0
+        changed_total = 0
+        secret_total = 0
         for name, value in config.items():
-            settings = self._flatten_settings(str(name), value)
+            settings = self._flatten_settings(
+                str(name),
+                value,
+                default_value=defaults.get(name, MISSING_CONFIG_DEFAULT),
+            )
             total += len(settings)
+            changed_count = sum(
+                bool(setting["changed"]) for setting in settings
+            )
+            secret_count = sum(
+                bool(setting["sensitive"]) for setting in settings
+            )
+            changed_total += changed_count
+            secret_total += secret_count
             sections.append(
                 {
                     "key": str(name),
@@ -419,14 +490,47 @@ class RunDataReader:
                         f"Settings used by the {self._setting_label(str(name)).lower()} component.",
                     ),
                     "settings": settings,
+                    "changed_count": changed_count,
+                    "secret_count": secret_count,
                 }
             )
         return {
             "source": path.name if path else None,
             "captured": path is not None,
             "total": total,
+            "changed_total": changed_total,
+            "secret_total": secret_total,
             "sections": sections,
+            "redacted_yaml": yaml.safe_dump(
+                self._redact_config(config),
+                sort_keys=False,
+                allow_unicode=True,
+            ),
         }
+
+    @classmethod
+    def _redact_config(cls, value: Any, path: str = "") -> Any:
+        """Hide secret values before returning the run YAML to the browser.
+
+        Parameters:
+            value: Parsed YAML subtree.
+            path: Dot-separated keys above this subtree.
+
+        Returns:
+            A copy safe to display in the web interface.
+        """
+        if cls._is_sensitive_config_path(path):
+            return "Configured — hidden" if value else value
+        if isinstance(value, dict):
+            return {
+                key: cls._redact_config(
+                    nested, f"{path}.{key}" if path else str(key)
+                )
+                for key, nested in value.items()
+            }
+        if isinstance(value, list):
+            return [cls._redact_config(item, path) for item in value]
+        return value
 
     @staticmethod
     def _whitelist_effect(direction: str, ignored: str) -> str:

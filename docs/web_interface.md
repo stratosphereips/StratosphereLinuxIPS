@@ -359,16 +359,20 @@ Pigeon adds the running Slips version to every Go-to-Python message. The P2P mod
 ### Configuration
 
 The Configuration tab reads the YAML snapshot copied to
-`output/<run>/metadata/` when this run started. It does not display the file as
-raw text. Every captured leaf setting is grouped by component and shown with a
-readable name, its parsed value, its complete YAML path, and a short explanation
-of what it controls. Sections can be expanded and searched by section, setting,
-value, or explanation.
+`output/<run>/metadata/` when this run started. It shows six quick facts, a
+section navigator, and a compact table with the setting name, captured value,
+complete YAML path, explanation, and shipped default where available. Search
+matches names, keys, values, and explanations across sections. The All,
+Changed, and Secrets filters narrow the section navigator and table. Changed
+compares the captured value with the current `config/slips.yaml` file, so the
+comparison can change after an update even though the captured value does not.
+View YAML opens the captured structure with secret values redacted.
 
 This is the configuration supplied to the run, not the current repository
 file. A setting omitted from the snapshot can still use a built-in default in
 Slips. Values whose names indicate API keys, passwords, private keys, secrets,
-or tokens are shown as configured but are never returned to the browser.
+authentication tokens, or credentials are shown as configured but are never returned to the
+browser.
 
 ### Whitelists
 
