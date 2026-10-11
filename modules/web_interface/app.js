@@ -54,6 +54,7 @@ const state = {
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
+  evidenceDetail: { record: null, records: [], generation: 0 },
   runIdentity: null,
   rangesInitialized: false,
   localSorts: {
@@ -452,6 +453,7 @@ function applyRunIdentity(identity) {
   if (!identity || !identity.output_dir || !identity.server_pid) return;
   const token = `${identity.output_dir}:${identity.server_pid}`;
   if (state.runIdentity && state.runIdentity !== token) {
+    closeEvidenceDetail(false);
     closeDrawer();
     closeHost();
     Object.keys(state.pages).forEach((name) => resetPage(name));
@@ -1927,7 +1929,7 @@ function renderAlertDetailPane(record) {
   container.append(editor, investigationHeading("Related evidence", "Select evidence to inspect its triggering flows"));
   const evidence = document.createElement("div");
   evidence.className = "investigation-list";
-  (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item)));
+  (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item, record.evidence)));
   if (!record.evidence?.length) evidence.append(text("p", "No related evidence is available.", "muted"));
   container.append(evidence, investigationHeading("Identifiers"),
     text("p", record.alert_id, "mono"), rawBlock(record, "alert"));
@@ -2851,13 +2853,36 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
   const list = editor.querySelector("datalist");
   if (!list) return;
   list.replaceChildren();
-  whitelistSuggestions(record, groups).forEach((choice, value) => {
+  const choices = whitelistSuggestions(record, groups);
+  choices.forEach((choice, value) => {
     const option = document.createElement("option");
     option.value = value;
     option.label = `${choice.label} · ${choice.direction}`;
     option.dataset.direction = choice.direction;
     option.dataset.ruleType = choice.ruleType;
     list.append(option);
+  });
+  const quick = editor.querySelector(".whitelist-quick-values");
+  if (!quick) return;
+  quick.replaceChildren();
+  const ranked = [...choices.entries()].sort(([leftValue, left], [rightValue, right]) => {
+    const rank = (value, choice) => choice.label.includes("Flow destination IP and port") ? 0
+      : choice.ruleType === "uri" ? 1 : value.startsWith("*:") ? 2
+        : choice.label.includes("IP and port") ? 3
+          : choice.label.includes("Flow source IP") ? 4 : 5;
+    return rank(leftValue, left) - rank(rightValue, right);
+  });
+  ranked.slice(0, 5).forEach(([suggestion]) => {
+    const chip = text("button", suggestion, "whitelist-quick-value");
+    chip.type = "button";
+    chip.title = choices.get(suggestion).label;
+    chip.addEventListener("click", () => {
+      const input = editor.querySelector(".whitelist-form input[list]");
+      input.value = suggestion;
+      input.dispatchEvent(new Event("input"));
+      input.focus();
+    });
+    quick.append(chip);
   });
 }
 
@@ -2875,6 +2900,7 @@ function whitelistEditor(kind, record = null) {
   );
   const form = document.createElement("form");
   form.className = "whitelist-form";
+  if (record) section.append(text("div", "", "whitelist-quick-values"));
   const ruleTypeLabel = document.createElement("label");
   ruleTypeLabel.append(text("span", "Rule type"));
   const ruleType = document.createElement("select");
@@ -4001,8 +4027,12 @@ function alertCard(record) {
   return button;
 }
 
-/** Create one accessible card for an individual evidence record. */
-function evidenceCard(record) {
+/** Create one accessible card for an individual evidence record.
+ * @param {object} record Durable evidence record.
+ * @param {object[]|null} contextRecords Records for previous/next navigation.
+ * @returns {HTMLElement} Evidence card.
+ */
+function evidenceCard(record, contextRecords = null) {
   const button = document.createElement("button");
   const level = String(record.threat_level || "info").toLowerCase();
   button.type = "button";
@@ -4023,7 +4053,7 @@ function evidenceCard(record) {
     text("span", record.module ? `Module: ${record.module}` : "Module unknown"),
   );
   button.append(metadata);
-  button.addEventListener("click", () => openEvidence(record));
+  button.addEventListener("click", () => openEvidence(record, contextRecords).catch(() => {}));
   return button;
 }
 
@@ -4224,8 +4254,52 @@ function protocolFlowCard(record) {
   return card;
 }
 
-/** Create one primary network-flow card and attach its protocol records. */
-function flowCard(group) {
+/** Show every stored field of a flow, with empty fields available on demand.
+ * @param {object} flow Parsed Zeek flow fields.
+ * @returns {HTMLElement} Key/value list and empty-field toggle.
+ */
+function flowFieldList(flow) {
+  const container = document.createElement("div");
+  container.className = "evidence-flow-fields";
+  const rows = document.createElement("div");
+  let emptyCount = 0;
+  Object.entries(flow || {}).forEach(([key, value]) => {
+    const empty = value === "" || value === null || value === undefined
+      || (Array.isArray(value) && value.length === 0);
+    const row = document.createElement("div");
+    row.className = "evidence-flow-field";
+    row.hidden = empty;
+    if (empty) emptyCount += 1;
+    row.append(text("code", key), text("span", empty ? "—" : protocolValueText(key, value)));
+    rows.append(row);
+  });
+  if (emptyCount) {
+    const toggle = text("button", `Show ${emptyCount} empty fields`, "evidence-flow-empty-toggle");
+    toggle.type = "button";
+    let showing = false;
+    toggle.addEventListener("click", () => {
+      showing = !showing;
+      rows.querySelectorAll(".evidence-flow-field").forEach((row) => {
+        if (row.dataset.empty === "true") row.hidden = !showing;
+      });
+      toggle.textContent = `${showing ? "Hide" : "Show"} ${emptyCount} empty fields`;
+    });
+    rows.querySelectorAll(".evidence-flow-field[hidden]").forEach((row) => {
+      row.dataset.empty = "true";
+    });
+    container.append(toggle);
+  }
+  container.append(rows);
+  return container;
+}
+
+/** Create one primary network-flow card with selectable protocol records.
+ * @param {object} group Connection and related protocol records sharing a UID.
+ * @param {number} position Position of this flow in the evidence.
+ * @param {number} total Total triggering flows shown for the evidence.
+ * @returns {HTMLElement} Complete flow inspector.
+ */
+function flowCard(group, position = 1, total = 1) {
   if (group.network_flow === undefined && group.protocol_flows === undefined) {
     group = group.table === "altflows"
       ? { uid: group.uid, network_flow: null, protocol_flows: [group] }
@@ -4241,15 +4315,19 @@ function flowCard(group) {
   card.className = "flow-card flow-group";
   const heading = document.createElement("div");
   heading.className = "flow-card-head";
-  heading.append(
-    text("code", group.uid || record?.uid || flow.uid || "Unknown UID"),
-    text("span", "Flow · conn", "type-chip network-flow-chip"),
-  );
-  if (related.length) heading.append(text(
-    "span", String(related.length) + " related protocol flow" + (related.length === 1 ? "" : "s"),
-    "count-chip",
-  ));
+  const uid = group.uid || record?.uid || flow.uid || "Unknown UID";
+  heading.append(text("strong", `Triggering flow · ${position} of ${total}`));
+  const flowActions = document.createElement("div");
+  flowActions.className = "evidence-flow-actions";
+  flowActions.append(text("code", `UID ${uid}`));
+  const copy = text("button", "Copy", "evidence-detail-link");
+  copy.type = "button";
+  copy.addEventListener("click", () => copyP2PText(uid, "Flow UID"));
+  flowActions.append(copy);
+  heading.append(flowActions);
   card.append(heading);
+  let path = null;
+  let metrics = null;
   if (record) {
     const srcIp = flowValue(flow, "saddr", "src_ip", "id.orig_h");
     const dstIp = flowValue(flow, "daddr", "dst_ip", "id.resp_h");
@@ -4259,7 +4337,7 @@ function flowCard(group) {
       ?? numeric(flowValue(flow, "spkts")) + numeric(flowValue(flow, "dpkts"));
     const bytes = flowValue(flow, "bytes")
       ?? numeric(flowValue(flow, "sbytes")) + numeric(flowValue(flow, "dbytes"));
-    const path = document.createElement("div");
+    path = document.createElement("div");
     path.className = "flow-path";
     const source = document.createElement("div");
     source.className = "flow-endpoint";
@@ -4270,7 +4348,7 @@ function flowCard(group) {
     destination.append(text("small", "Destination host"), hostLink(dstIp));
     if (dstPort !== null) destination.append(text("div", "Port " + dstPort, "port-label"));
     path.append(source, text("span", "→", "flow-arrow"), destination);
-    const metrics = document.createElement("div");
+    metrics = document.createElement("div");
     metrics.className = "flow-metrics";
     [
       ["Observed", observed],
@@ -4286,7 +4364,7 @@ function flowCard(group) {
       metric.append(text("small", label), text("strong", value));
       metrics.append(metric);
     });
-    card.append(path, metrics, rawBlock(record, "flow"));
+    card.append(path);
   } else {
     card.append(text(
       "p",
@@ -4294,146 +4372,258 @@ function flowCard(group) {
       "flow-missing",
     ));
   }
-  if (related.length) {
-    const section = document.createElement("div");
-    section.className = "related-protocols";
-    section.append(investigationHeading(
-      "Related protocol flows",
-      "Alternative protocol records associated by the same flow UID",
-    ));
-    related.forEach((protocol) => section.append(protocolFlowCard(protocol)));
-    card.append(section);
-  } else {
-    card.append(text("p", "No related protocol flows were recorded for this flow.", "muted protocol-empty"));
+  const tabs = document.createElement("div");
+  tabs.className = "evidence-flow-tabs";
+  tabs.setAttribute("role", "tablist");
+  tabs.setAttribute("aria-label", `Records for flow ${position}`);
+  const panels = document.createElement("div");
+  panels.className = "evidence-flow-panels";
+  const entries = [];
+  if (record) {
+    const connection = document.createElement("div");
+    connection.append(metrics, flowFieldList(flow), rawBlock(record, "flow"));
+    entries.push(["conn · flow", connection]);
   }
+  related.forEach((protocol, index) => {
+    const type = protocolType(protocol);
+    const panel = document.createElement("div");
+    panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol));
+    entries.push([`${type} · ${index + 1}`, panel]);
+  });
+  entries.forEach(([label, panel], index) => {
+    const tab = text("button", label, index === 0 ? "active" : "");
+    tab.type = "button";
+    tab.setAttribute("role", "tab");
+    tab.setAttribute("aria-selected", String(index === 0));
+    panel.setAttribute("role", "tabpanel");
+    panel.hidden = index !== 0;
+    tab.addEventListener("click", () => {
+      tabs.querySelectorAll("[role=tab]").forEach((button) => {
+        button.classList.toggle("active", button === tab);
+        button.setAttribute("aria-selected", String(button === tab));
+      });
+      panels.querySelectorAll("[role=tabpanel]").forEach((item) => {
+        item.hidden = item !== panel;
+      });
+    });
+    tabs.append(tab);
+    panels.append(panel);
+  });
+  if (entries.length) card.append(tabs, panels);
   return card;
 }
 
-async function openEvidence(record) {
-  const generation = openDrawer("EVIDENCE", record.evidence_type || record.id);
-  const body = byId("drawer-body");
+/** Return from a full-page evidence investigation to its previous view.
+ * @param {boolean} restoreFocus Whether to focus the opening control.
+ */
+function closeEvidenceDetail(restoreFocus = true) {
+  if (!state.evidenceDetail.record) return;
+  state.requests.get("evidenceFlows")?.abort();
+  state.evidenceDetail.generation += 1;
+  state.evidenceDetail.record = null;
+  state.evidenceDetail.records = [];
+  document.body.classList.remove("evidence-detail-active");
+  byId("evidence-detail").hidden = true;
+  byId("evidence-detail").classList.remove("active");
+  byId("evidence-detail-content").replaceChildren();
+  if (restoreFocus) state.evidenceDetail.trigger?.focus?.({ preventScroll: true });
+}
+
+/** Make an evidence headline from the saved detection and its first connection.
+ * @param {object} record Durable evidence record.
+ * @param {object[]} groups Triggering flow groups, if loaded.
+ * @returns {string} Concise description for the page banner.
+ */
+function evidenceDetailHeadline(record, groups = []) {
+  if (record.evidence_type === "UNKNOWN_PORT") {
+    const flow = groups[0]?.network_flow?.flow;
+    const source = flowValue(flow, "saddr");
+    const destination = flowValue(flow, "daddr");
+    const port = flowValue(flow, "dport") ?? record.dst_port;
+    const protocol = flowValue(flow, "proto") ?? record.proto;
+    if (source && destination && port) {
+      return `${source} connected to unknown port ${port}${protocol ? `/${String(protocol).toUpperCase()}` : ""} on ${state.ownAddresses.has(destination) ? "this device" : destination}`;
+    }
+  }
+  return String(record.description || record.evidence_type || "Evidence")
+    .split(/\.(?:\s|$)/)[0].slice(0, 180);
+}
+
+/** Open an evidence record in the full-width investigation page.
+ * @param {object} record Durable evidence record.
+ * @param {object[]|null} contextRecords Ordered records for previous/next navigation.
+ * @returns {Promise<void>} Completes after the triggering flows load.
+ */
+async function openEvidence(record, contextRecords = null) {
+  const detail = state.evidenceDetail;
+  if (!detail.record) detail.trigger = document.activeElement;
+  const groupRecords = state.evidenceWorkspace.records;
+  const pageRecords = state.pages.evidence.items;
+  const context = contextRecords || (
+    groupRecords.some((item) => item.id === record.id) ? groupRecords
+      : pageRecords.some((item) => item.id === record.id) ? pageRecords : [record]
+  );
+  detail.records = context;
+  detail.record = record;
+  const generation = ++detail.generation;
+  const position = context.findIndex((item) => item.id === record.id);
+  const page = byId("evidence-detail");
+  const content = byId("evidence-detail-content");
+  page.hidden = false;
+  page.classList.add("active");
+  document.body.classList.add("evidence-detail-active");
+  content.replaceChildren();
+  window.scrollTo(0, 0);
+
+  const toolbar = document.createElement("div");
+  toolbar.className = "evidence-detail-toolbar";
+  const breadcrumb = document.createElement("div");
+  breadcrumb.className = "evidence-detail-breadcrumb";
+  const back = text("button", "Evidence", "evidence-detail-link");
+  back.type = "button";
+  back.addEventListener("click", closeEvidenceDetail);
+  breadcrumb.append(back, text("span", "›"),
+    text("span", `${record.profile_ip || "Unknown host"} · ${record.evidence_type || "Evidence"}`),
+    text("span", "›"), text("code", record.id || ""));
+  const controls = document.createElement("div");
+  controls.className = "evidence-detail-controls";
+  if (context.length > 1 && position >= 0) {
+    controls.append(text("span", `Record ${position + 1} of ${context.length}`, "muted"));
+    [["↑ prev", position - 1], ["next ↓", position + 1]].forEach(([label, index]) => {
+      const button = text("button", label, "secondary");
+      button.type = "button";
+      button.disabled = index < 0 || index >= context.length;
+      button.addEventListener("click", () => openEvidence(context[index], context).catch(() => {}));
+      controls.append(button);
+    });
+  }
+  const close = text("button", "×", "secondary evidence-detail-close");
+  close.type = "button";
+  close.setAttribute("aria-label", "Close evidence details");
+  close.addEventListener("click", closeEvidenceDetail);
+  controls.append(close);
+  toolbar.append(breadcrumb, controls);
+
+  const banner = document.createElement("section");
+  banner.className = `evidence-detail-banner threat-${String(record.threat_level || "info").toLowerCase()}`;
+  const bannerCopy = document.createElement("div");
+  const meta = document.createElement("div");
+  meta.className = "evidence-detail-meta";
+  meta.append(text("span", record.evidence_type || "EVIDENCE", "type-chip"),
+    text("span", record.module || "Unknown module"),
+    text("span", formatTime(record.timestamp)),
+    text("span", record.twid || record.timewindow?.number || "—"),
+    networkContext(record));
+  const headline = text("h2", evidenceDetailHeadline(record));
+  bannerCopy.append(meta, headline, hostDescription(record, "evidence-detail-description"));
+  const bannerStats = document.createElement("div");
+  bannerStats.className = "evidence-detail-stats";
+  bannerStats.append(investigationStats([
+    ["Threat", threat(record.threat_level)],
+    ["Host score", slipsScore(record)],
+    ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`],
+  ]));
   const alertCount = record.alert_ids?.length || 0;
+  if (alertCount) bannerStats.append(text("span", `Part of ${compact(alertCount)} alert${alertCount === 1 ? "" : "s"}`, "evidence-detail-alert-count"));
+  banner.append(bannerCopy, bannerStats);
+
+  const columns = document.createElement("div");
+  columns.className = "evidence-detail-columns";
+  const flowSection = document.createElement("section");
+  flowSection.className = "evidence-detail-flows";
+  const flowHeading = investigationHeading("Triggering flows", "Each flow includes its related parsed protocol records.");
+  const flowList = document.createElement("div");
+  flowList.className = "evidence-detail-flow-list";
+  flowList.append(text("p", "Loading triggering flows…", "muted"));
+  flowSection.append(flowHeading, flowList);
+  const side = document.createElement("aside");
+  side.className = "evidence-detail-side";
+  const recordCard = document.createElement("section");
+  recordCard.className = "surface evidence-detail-record";
+  recordCard.append(text("h3", "Evidence record"),
+    detailRow("Evidence ID", text("code", record.id || "—")),
+    detailRow("Detected", formatTime(record.timestamp)),
+    detailRow("Profile host", hostLink(record.profile_ip)),
+    detailRow("Network", networkContext(record)),
+    detailRow("Time window", record.twid || record.timewindow?.number || "—"),
+    detailRow("Module", record.module || "—"),
+    detailRow("Method", record.method || "—"),
+    detailRow("Signal", record.evidence_signal || "—"),
+    detailRow("Protocol", record.proto || "—"),
+    detailRow("Source port", record.src_port ?? "—"),
+    detailRow("Destination port", record.dst_port ?? "—"));
+  if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
+    recordCard.append(detailRow("Reporting peers", reportingPeers(record)));
+  }
+  if (record.attacker) recordCard.append(evidenceEntity("Attacker / source", record.attacker));
+  if (record.victim) recordCard.append(evidenceEntity("Victim / destination", record.victim));
+  if (alertCount) {
+    const links = document.createElement("div");
+    links.className = "evidence-detail-alert-links";
+    record.alert_ids.forEach((id) => {
+      const button = text("button", id, "evidence-detail-link");
+      button.type = "button";
+      button.addEventListener("click", () => {
+        closeEvidenceDetail();
+        openAlert({ alert_id: id }).catch(() => {});
+      });
+      links.append(button);
+    });
+    recordCard.append(detailRow("Alerts", links));
+  } else recordCard.append(detailRow("Alerts", "None"));
+  const whitelistSection = whitelistEditor("evidence-detail", record);
+  side.append(recordCard, whitelistSection);
+  const json = document.createElement("section");
+  json.className = "surface evidence-detail-json";
+  json.append(rawBlock(record, "evidence"));
+  side.append(json);
+  columns.append(flowSection, side);
+  content.append(toolbar, banner, columns);
+
   if (record.whitelisted) {
     const notice = document.createElement("section");
     notice.className = "whitelist-notice";
-    notice.append(
-      text("h3", "Excluded from scoring by whitelist"),
-      text("p", "Slips detected and retained this evidence for visibility, but a whitelist rule matched an entity inside it. Evidence Handler therefore did not add it to the host score or use it to form an alert."),
-    );
-    const matches = Array.isArray(record.whitelist_matches)
-      ? record.whitelist_matches : [];
+    notice.append(text("h3", "Excluded from scoring by whitelist"),
+      text("p", "Slips retained this evidence for visibility, but a whitelist rule prevented it from raising the host score or an alert."));
+    const matches = Array.isArray(record.whitelist_matches) ? record.whitelist_matches : [];
     if (matches.length) {
       const list = document.createElement("ul");
-      matches.forEach((match) => {
-        list.append(text(
-          "li",
-          `${match.entity} ${match.type.toLowerCase()} ${match.value} matched rule ${match.rule} (${match.direction}; suppress ${match.ignore}).`,
-        ));
-      });
+      matches.forEach((match) => list.append(text("li",
+        `${match.entity} ${match.type.toLowerCase()} ${match.value} matched rule ${match.rule} (${match.direction}; suppress ${match.ignore}).`)));
       notice.append(list);
-    } else {
-      notice.append(text(
-        "p",
-        "The whitelist decision is recorded, but the exact matching entity cannot be reconstructed from the retained evidence data.",
-        "muted",
-      ));
-    }
-    body.append(notice);
+    } else notice.append(text("p", "The matching entity is unavailable in the retained evidence data.", "muted"));
+    flowSection.prepend(notice);
   }
-  body.append(
-    investigationStats([
-      ["Detected", formatTime(record.timestamp)],
-      ["Profile host", hostLink(record.profile_ip)],
-      ["Network", networkContext(record)],
-      ["Threat", threat(record.threat_level)],
-      ["Slips score", slipsScore(record), "accent"],
-      ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`, "accent"],
-    ]),
-    investigationHeading("Detection summary", record.module ? `Generated by ${record.module}` : ""),
-    hostDescription(record, "description-box"),
-  );
-  if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
-    body.append(detailRow("Reporting peers", reportingPeers(record)));
+  const portScan = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(String(record.evidence_type).toUpperCase());
+  if (portScan) flowHeading.querySelector("p").textContent = "Port-scan evidence links at most 20 flows; each includes related protocol records.";
+  if (String(record.evidence_type).toUpperCase() === "ARP_SCAN") {
+    const count = numeric(record.flow_count);
+    flowList.before(text("p", `ARP scan rule: at least 5 requests to 5 distinct destination IPs within 30 seconds. ${count < 5 ? `This legacy evidence retains only ${count} linked ARP records because its ARP records had no unique UIDs; it was not detected from one packet.` : `This evidence retains ${count} linked ARP records.`}`, count < 5 ? "flow-missing" : "muted"));
   }
-  if (record.attacker || record.victim) {
-    const entities = document.createElement("div");
-    entities.className = "entity-grid";
-    if (record.attacker) entities.append(evidenceEntity("Attacker / source", record.attacker));
-    if (record.victim) entities.append(evidenceEntity("Victim / destination", record.victim));
-    body.append(investigationHeading("Evidence entities"), entities);
-  }
-  body.append(
-    investigationStats([
-      ["Evidence ID", record.id],
-      ["Time window", record.twid || record.timewindow?.number || "—"],
-      ["Method", record.method || "—"],
-      ["Signal", record.evidence_signal || "—"],
-      ["Protocol", record.proto || "—"],
-      ["Source port", record.src_port ?? "—"],
-      ["Destination port", record.dst_port ?? "—"],
-      ["Alert links", alertCount ? compact(alertCount) : "None"],
-    ]),
-  );
-  const whitelistSection = whitelistEditor("evidence", record);
-  body.append(whitelistSection);
-  if (alertCount) {
-    const identifiers = document.createElement("div");
-    identifiers.className = "identifier-list";
-    record.alert_ids.forEach((id) => identifiers.append(text("code", id)));
-    body.append(investigationHeading("Related alert IDs"), identifiers);
-  }
-  const portScanEvidence = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(
-    String(record.evidence_type).toUpperCase(),
-  );
-  const arpScanEvidence = String(record.evidence_type).toUpperCase() === "ARP_SCAN";
-  if (arpScanEvidence) {
-    const retainedFlowCount = numeric(record.flow_count);
-    const retainedLabel = `${retainedFlowCount} linked ARP record${retainedFlowCount === 1 ? "" : "s"}`;
-    const retentionMessage = retainedFlowCount < 5
-      ? `This legacy evidence retains only ${retainedLabel} because its ARP records had no unique UIDs. It was not detected from one packet.`
-      : `This evidence retains ${retainedLabel}; the contributing requests are listed below.`;
-    body.append(text(
-      "p",
-      `ARP scan rule: at least 5 requests to 5 distinct destination IPs within 30 seconds. ${retentionMessage}`,
-      retainedFlowCount < 5 ? "flow-missing" : "description-box",
-    ));
-  }
-  body.append(
-    investigationHeading(
-      "Triggering flows",
-      portScanEvidence
-        ? "Port-scan evidence links at most 20 flows; each includes related parsed protocol flows."
-        : "Each flow includes its related parsed protocol flows.",
-    ),
-  );
   try {
     const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
-    if (!payload || generation !== state.drawerGeneration) return;
+    if (!payload || generation !== detail.generation) return;
     updateWhitelistSuggestions(whitelistSection, record, payload.items);
-    if (numeric(payload.recovered_flow_count) > 0) {
-      body.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from current Zeek logs after their SQLite rows were pruned.`, "muted"));
-    }
+    headline.textContent = evidenceDetailHeadline(record, payload.items);
+    flowList.replaceChildren();
+    if (numeric(payload.recovered_flow_count) > 0) flowList.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from Zeek logs after their SQLite rows were pruned.`, "muted"));
     if (!payload.items.length) {
       const noNoticeUid = record.evidence_type === "PASSWORD_GUESSING"
         && !numeric(payload.linked_uid_count)
         && String(record.description || "").includes("Zeek notice.log");
-      body.append(text("p", noNoticeUid
+      flowList.append(text("p", noNoticeUid
         ? "Zeek's password-guessing notice summarized multiple connections but supplied no connection IDs. This evidence was stored without a usable flow link; the missing sessions cannot be recovered from this notice."
         : numeric(payload.unavailable_flow_count) > 0
           ? "The evidence still has linked flow IDs, but their raw records are unavailable. They may have expired under retention or were never stored."
-          : "No triggering flow records are available."));
+          : "No triggering flow records are available.", "flow-missing"));
     } else if (numeric(payload.unavailable_flow_count) > 0) {
-      body.append(text("p", `${compact(payload.unavailable_flow_count)} linked flow record(s) are unavailable; they may have expired under retention.`, "muted"));
+      flowList.append(text("p", `${compact(payload.unavailable_flow_count)} linked flow record(s) are unavailable; they may have expired under retention.`, "flow-missing"));
     }
-    payload.items.forEach((flow) => body.append(flowCard(flow)));
+    payload.items.forEach((flow, index) => flowList.append(flowCard(flow, index + 1, payload.items.length)));
   } catch (_) {
-    if (generation !== state.drawerGeneration) return;
-    body.append(text("p", "Triggering flows could not be loaded.", "muted"));
+    if (generation !== detail.generation) return;
+    flowList.replaceChildren(text("p", "Triggering flows could not be loaded.", "flow-missing"));
   }
-  body.append(
-    investigationHeading("Complete evidence data", "Original durable evidence object"),
-    rawBlock(record, "evidence"),
-  );
 }
 
 async function openAlert(record) {
@@ -4480,7 +4670,7 @@ async function openAlert(record) {
   if (!record.evidence?.length) body.append(text("p", "No related durable evidence is available."));
   const evidenceList = document.createElement("div");
   evidenceList.className = "investigation-list";
-  record.evidence?.forEach((item) => evidenceList.append(evidenceCard(item)));
+  record.evidence?.forEach((item) => evidenceList.append(evidenceCard(item, record.evidence)));
   body.append(
     evidenceList,
     investigationHeading("Complete alert data", "Original durable alert object and evidence links"),
@@ -5359,6 +5549,7 @@ function scheduleBackendStatusPoll() {
 }
 
 function switchTab(name) {
+  closeEvidenceDetail(false);
   state.activeTab = name;
   document.body.classList.toggle("overview-active", name === "overview");
   document.body.classList.toggle("alerts-active", name === "alerts");
@@ -5473,6 +5664,13 @@ byId("module-search").addEventListener("input", () =>
 byId("drawer-close").addEventListener("click", closeDrawer);
 byId("drawer-back").addEventListener("click", backDrawer);
 byId("drawer-backdrop").addEventListener("click", closeDrawer);
+/** Close the evidence page with Escape while preserving the previous pane. */
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.evidenceDetail.record) {
+    event.preventDefault();
+    closeEvidenceDetail();
+  }
+});
 byId("host-back").addEventListener("click", closeHost);
 document.querySelectorAll("[data-host-activity]").forEach((button) =>
   button.addEventListener("click", () => showHostActivity(button.dataset.hostActivity)));
