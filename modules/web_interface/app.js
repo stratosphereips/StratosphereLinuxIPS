@@ -2164,7 +2164,7 @@ function renderEvidenceTable(payload) {
     (row) => compact(mode === "individual" ? row.flow_count : row.evidence_count),
     (row) => compact(mode === "individual" ? row.alert_ids?.length : row.alert_count),
   ], (row) => {
-    if (mode === "individual") selectEvidenceRecord(row);
+    if (mode === "individual") selectEvidenceRecord(row).catch(() => {});
     else selectEvidenceGroup(row);
   });
   document.querySelectorAll("#evidence-table tbody tr").forEach((row, index) => {
@@ -2199,7 +2199,7 @@ function renderEvidenceEmptyState() {
   const prompt = document.createElement("div");
   prompt.className = "evidence-right-panel";
   prompt.append(text("h3", mode === "individual" ? "Select a record to inspect it" : "Select a group to see its records"),
-    text("p", "Use ↑↓ and Enter in the table. The summary below covers the groups loaded on this page."));
+    text("p", "Use ↑↓ and Enter in the table. Selecting a record opens its full details and triggering flows. The summary below covers the groups loaded on this page."));
   right.append(prompt);
   if (mode === "individual" || !payload.items.length) return;
   const typeCounts = new Map();
@@ -2342,9 +2342,7 @@ async function loadEvidenceGroupRecords(reset = true) {
   if (workspace.record) {
     workspace.record = workspace.records.find((item) => item.id === workspace.record.id) || null;
   }
-  if (!document.activeElement?.closest("#evidence-right .whitelist-editor, #evidence-right .review-editor")) {
-    renderEvidenceGroup();
-  }
+  renderEvidenceGroup();
 }
 
 /** Name a reporting peer in retained P2P report text.
@@ -2413,12 +2411,13 @@ function renderEvidenceGroup() {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "evidence-record-row";
+    button.dataset.evidenceId = record.id;
     button.classList.toggle("selected", record.id === workspace.record?.id);
     button.append(text("span", evidenceClock(record.timestamp)),
       text("span", p2pReports ? `maliciousness · confidence ${numeric(record.confidence).toFixed(2)}` : record.description || record.evidence_type),
       text("span", `${record.twid || "—"}${record.review_status && record.review_status !== "unreviewed" ? ` · ${record.review_status.replaceAll("_", " ")}` : ""}`),
       text("span", `${compact(record.flow_count)} flow${numeric(record.flow_count) === 1 ? "" : "s"}`));
-    button.addEventListener("click", () => selectEvidenceRecord(record));
+    button.addEventListener("click", () => selectEvidenceRecord(record).catch(() => {}));
     container.append(button);
   };
   if (p2pReports) {
@@ -2449,18 +2448,15 @@ function renderEvidenceGroup() {
   }
   right.append(list);
   list.scrollTop = listScroll;
-  if (workspace.record) renderEvidenceRecordDetail(workspace.record);
 }
 
-/** Select one evidence record for inline investigation.
+/** Open one evidence record in the full-width investigation page.
  * @param {object} record Individual durable evidence record.
+ * @returns {Promise<void>} Completes after the triggering flows load.
  */
-function selectEvidenceRecord(record) {
+async function selectEvidenceRecord(record) {
   state.evidenceWorkspace.record = record;
-  highlightEvidenceSelection();
-  if (byId("evidence-view").value === "individual") {
-    renderEvidenceRecordDetail(record, true);
-  } else renderEvidenceGroup();
+  await openEvidence(record);
 }
 
 /** Copy an evidence identifier in secure and local HTTP browser contexts.
@@ -2482,56 +2478,6 @@ async function copyEvidenceId(identifier) {
     if (!copied) throw new Error("Browser denied clipboard access");
   }
   toast("Evidence ID copied.");
-}
-
-/** Show a record's identity, linked flows, whitelist editor, and raw JSON.
- * @param {object} record Individual durable evidence record.
- * @param {boolean} replace Whether to replace the right-pane contents.
- */
-function renderEvidenceRecordDetail(record, replace = false) {
-  const right = byId("evidence-right");
-  if (replace) right.replaceChildren();
-  const panel = document.createElement("div");
-  panel.className = "evidence-right-panel evidence-record-detail";
-  const head = document.createElement("div");
-  head.className = "evidence-right-head";
-  head.append(text("h3", `Record · ${formatTime(record.timestamp)}`));
-  const actions = document.createElement("div");
-  const close = text("button", "×");
-  close.type = "button";
-  close.title = "Close evidence record";
-  close.setAttribute("aria-label", "Close evidence record");
-  close.addEventListener("click", () => {
-    state.evidenceWorkspace.record = null;
-    highlightEvidenceSelection();
-    if (state.evidenceWorkspace.group) renderEvidenceGroup();
-    else renderEvidenceEmptyState();
-  });
-  const copy = text("button", "Copy ID");
-  copy.type = "button";
-  copy.addEventListener("click", () => copyEvidenceId(record.id)
-    .catch(() => toast("Could not copy the evidence ID.")));
-  const json = text("button", "JSON");
-  json.type = "button";
-  json.addEventListener("click", () => panel.querySelector(".json-details")?.setAttribute("open", ""));
-  actions.append(copy, json, close);
-  head.append(actions);
-  panel.append(head, hostDescription(record, "evidence-record-description"));
-  const fields = document.createElement("dl");
-  [["Host", record.profile_ip], ["From peer", record.evidence_type === "P2P_REPORT" ? evidenceReporter(record) : ""],
-    ["Threat", record.threat_level], ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`],
-    ["Time window", record.twid || "—"], ["Triggering flows", `${compact(record.flow_count)} stored`],
-    ["Alert links", compact(record.alert_ids?.length)], ["Evidence ID", record.id]]
-    .filter(([, value]) => value !== "").forEach(([label, value]) => {
-      fields.append(text("dt", label), text("dd", value));
-    });
-  panel.append(fields);
-  const flowButton = text("button", "Inspect triggering flows", "secondary");
-  flowButton.type = "button";
-  flowButton.addEventListener("click", () => openEvidence(record).catch(() => {}));
-  panel.append(flowButton, reviewEditor("evidence", record),
-    whitelistEditor("evidence-pane", record), rawBlock(record, "evidence"));
-  right.append(panel);
 }
 
 /** Refresh the Evidence table while retaining a valid open investigation. */
@@ -2575,8 +2521,6 @@ async function loadEvidence() {
     if (workspace.listSignature !== signature || Date.now() - workspace.listLoadedAt > 15000) {
       loadEvidenceGroupRecords(true).catch(() => {});
     }
-  } else if (workspace.record && mode === "individual") {
-    renderEvidenceRecordDetail(workspace.record, true);
   } else renderEvidenceEmptyState();
 }
 
@@ -4569,6 +4513,10 @@ function closeEvidenceDetail(restoreFocus = true) {
   byId("evidence-detail").hidden = true;
   byId("evidence-detail").classList.remove("active");
   byId("evidence-detail-content").replaceChildren();
+  if (state.activeTab === "evidence" && !state.evidenceWorkspace.group) {
+    state.evidenceWorkspace.record = null;
+    highlightEvidenceSelection();
+  }
   if (restoreFocus) state.evidenceDetail.trigger?.focus?.({ preventScroll: true });
 }
 
@@ -4606,6 +4554,15 @@ async function openEvidence(record, contextRecords = null) {
     groupRecords.some((item) => item.id === record.id) ? groupRecords
       : pageRecords.some((item) => item.id === record.id) ? pageRecords : [record]
   );
+  if (state.activeTab === "evidence"
+      && (context === groupRecords || context === pageRecords)) {
+    state.evidenceWorkspace.record = record;
+    if (state.evidenceWorkspace.group) {
+      document.querySelectorAll("#evidence-right .evidence-record-row").forEach((button) => {
+        button.classList.toggle("selected", button.dataset.evidenceId === record.id);
+      });
+    } else highlightEvidenceSelection();
+  }
   detail.records = context;
   detail.record = record;
   const generation = ++detail.generation;
@@ -4683,7 +4640,17 @@ async function openEvidence(record, contextRecords = null) {
   side.className = "evidence-detail-side";
   const recordCard = document.createElement("section");
   recordCard.className = "surface evidence-detail-record";
-  recordCard.append(text("h3", "Evidence record"),
+  const recordHead = document.createElement("div");
+  recordHead.className = "evidence-detail-record-head";
+  recordHead.append(text("h3", "Evidence record"));
+  const recordActions = document.createElement("div");
+  const copyId = text("button", "Copy ID", "evidence-detail-link");
+  copyId.type = "button";
+  copyId.addEventListener("click", () => copyEvidenceId(record.id)
+    .catch(() => toast("Could not copy the evidence ID.")));
+  recordActions.append(copyId);
+  recordHead.append(recordActions);
+  recordCard.append(recordHead,
     detailRow("Evidence ID", text("code", record.id || "—")),
     detailRow("Detected", formatTime(record.timestamp)),
     detailRow("Profile host", hostLink(record.profile_ip)),
@@ -4719,6 +4686,13 @@ async function openEvidence(record, contextRecords = null) {
   const json = document.createElement("section");
   json.className = "surface evidence-detail-json";
   json.append(rawBlock(record, "evidence"));
+  const showJson = text("button", "JSON", "evidence-detail-link");
+  showJson.type = "button";
+  showJson.addEventListener("click", () => {
+    json.querySelector("details").open = true;
+    json.scrollIntoView({ block: "nearest" });
+  });
+  recordActions.append(showJson);
   side.append(json);
   columns.append(flowSection, side);
   content.append(toolbar, banner, columns);
