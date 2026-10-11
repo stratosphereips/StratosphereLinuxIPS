@@ -5,6 +5,7 @@ import pytest
 import json
 from unittest.mock import MagicMock, patch, Mock, mock_open
 from types import SimpleNamespace
+from pathlib import Path
 from slips_files.core.structures.evidence import (
     Direction,
     EvidenceType,
@@ -107,6 +108,31 @@ def test_read_whitelist():
     whitelist = ModuleFactory().create_whitelist_obj()
     whitelist.db.get_whitelist.return_value = {}
     assert whitelist.parser.parse()
+
+
+@pytest.mark.parametrize("has_web_rules", [False, True])
+def test_missing_local_whitelist_does_not_crash(
+    tmp_path: Path, has_web_rules: bool
+) -> None:
+    """Continue startup when only the configured whitelist is missing.
+
+    Parameters:
+        tmp_path: Directory containing the test whitelist paths.
+        has_web_rules: Whether web-managed rules are still available.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    del whitelist.print  # The test factory otherwise hides the startup bug.
+    path = tmp_path / "missing-whitelist.conf"
+    whitelist.parser.local_whitelist_path = str(path)
+    if has_web_rules:
+        Path(f"{path}.web.conf").write_text(
+            "ip,192.0.2.10,src,alerts,ARP_SCAN\n", encoding="utf-8"
+        )
+
+    assert whitelist.parser.parse() is has_web_rules
+    assert (
+        "192.0.2.10|ARP_SCAN" in whitelist.parser.whitelisted_ips
+    ) is has_web_rules
 
 
 @pytest.mark.parametrize(

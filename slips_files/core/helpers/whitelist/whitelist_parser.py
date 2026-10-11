@@ -56,11 +56,16 @@ class WhitelistParser:
         conf = ConfigParser()
         self.local_whitelist_path = conf.local_whitelist_path()
 
-    def open_whitelist_for_reading(self) -> TextIO:
+    def open_whitelist_for_reading(self) -> Optional[TextIO]:
+        """Open the configured local whitelist if it exists.
+
+        Returns:
+            The open whitelist, or None when the file is missing.
+        """
         try:
             return open(self.local_whitelist_path)
         except FileNotFoundError:
-            self.manager.print(
+            self.manager.printer.print(
                 f"Can't find {self.local_whitelist_path}. "
                 f"Local whitelist disabled."
             )
@@ -219,7 +224,7 @@ class WhitelistParser:
 
         entry_type = parsed_line["type"]
         if entry_type not in handlers:
-            self.manager.print(
+            self.manager.printer.print(
                 f"{parsed_line['data']} is not a valid" f" {entry_type}.", 1, 0
             )
             return
@@ -235,7 +240,7 @@ class WhitelistParser:
                 or evidence_type not in EvidenceType.__members__
                 or entry_details["what_to_ignore"] != "alerts"
             ):
-                self.manager.print(
+                self.manager.printer.print(
                     "Invalid evidence-scoped whitelist rule.", 1, 0
                 )
                 return
@@ -371,7 +376,7 @@ class WhitelistParser:
                         if not parsed_line:
                             continue
                     except Exception:
-                        self.manager.print(
+                        self.manager.printer.print(
                             f"Line {line_number} in whitelist.conf is invalid."
                             f" Skipping."
                         )
