@@ -340,11 +340,11 @@ Check  []() section for more info #todo
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
-To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
-
-Then we alert when there is 10 or more NXDOMAINs.
-
-Every 10,15,20 ..etc slips generates an evidence.
+Slips counts distinct failed DNS names per source IP and time window. Repeated
+lookups and `.lan` search-suffix variants of the same public name count once;
+local service-discovery, reverse, `.local`, and reserved `.invalid` lookups are
+excluded. Evidence starts at 10 distinct failed names and recurs at 15, 20,
+and each additional five distinct names.
 
 ### Connection to multiple ports
 

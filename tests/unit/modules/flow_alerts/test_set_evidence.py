@@ -388,6 +388,7 @@ def test_dga(nxdomains, expected_confidence):
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["1234"]
     assert evidence.confidence == expected_confidence
+    assert "DNS filtering can also cause this" in evidence.description
 
 
 @pytest.mark.parametrize(

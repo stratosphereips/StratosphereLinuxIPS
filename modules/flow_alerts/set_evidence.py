@@ -319,8 +319,8 @@ class SetEvidenceHelper:
         confidence: float = min(1, (1 / 100) * (nxdomains - 100) + 1)
         confidence = round(confidence, 2)  # for readability
         description = (
-            f"Possible DGA or domain scanning. {flow.saddr} "
-            f"failed to resolve {nxdomains} different domains"
+            f"{flow.saddr} received NXDOMAIN for {nxdomains} distinct DNS names. "
+            "Possible DGA or domain scanning; DNS filtering can also cause this."
         )
 
         evidence: Evidence = Evidence(

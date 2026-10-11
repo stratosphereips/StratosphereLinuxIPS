@@ -216,11 +216,17 @@ The `flow_alerts` module still detects successful SSH sessions, but SSH password
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
-To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
+Slips counts distinct failed DNS names per source IP and time window. Retries,
+case changes, trailing dots, and a `.lan` search-suffix variant of the same
+public name count once. Local service-discovery names, reverse lookups,
+`.local`, and reserved `.invalid` names do not contribute to this DGA signal.
 
-Then we alert when there is 10 or more NXDOMAINs.
-
-Every 10,15,20 ..etc slips generates an evidence.
+Evidence starts at 10 distinct failed names and recurs for every five new
+distinct names (15, 20, and so on). Existing evidence remains in run history;
+the corrected counting applies to new DNS traffic after restarting Slips.
+DNS resolvers that block domains by returning NXDOMAIN can still contribute
+distinct names to this signal. Review the linked DNS flows and local resolver
+policy before treating a DGA evidence record as an infection.
 
 ## Connection to multiple ports
 

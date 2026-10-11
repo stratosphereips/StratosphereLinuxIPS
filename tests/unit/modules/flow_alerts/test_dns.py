@@ -676,7 +676,7 @@ async def test_analyze_new_flow_msg(test_case, expected_calls):
                     [uid] * 9,
                 )
             },
-            None,
+            False,
         ),
     ],
 )
@@ -762,8 +762,93 @@ def test_detect_dga_alert():
     result = dns.detect_dga(profileid, twid, flow)
     expected_result = True
     assert result == expected_result
-    assert dns.nxdomains == {f"{profileid}_{twid}": ([], [])}
+    assert dns.nxdomains == {
+        f"{profileid}_{twid}": (
+            [f"example{index}.com" for index in range(1, 11)],
+            [uid] * 10,
+        )
+    }
     dns.set_evidence.dga.assert_called_once_with(twid, flow, 10, [uid] * 10)
+
+
+@pytest.mark.parametrize(
+    "queries, expected_distinct",
+    [
+        (["example.com"] * 12, 1),
+        (["EXAMPLE.COM.", "example.com.lan"] * 6, 1),
+        (["probe.invalid"] * 12, 0),
+        (["_dns-sd._udp.lan"] * 12, 0),
+    ],
+)
+def test_detect_dga_counts_distinct_public_names(
+    queries: list[str], expected_distinct: int
+) -> None:
+    """Repeated and local DNS lookups do not create a DGA alert.
+
+    Parameters:
+        queries: Lookup names to replay.
+        expected_distinct: Number of names retained for DGA detection.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock(
+        return_value=False
+    )
+    dns.set_evidence.dga = Mock()
+
+    for index, query in enumerate(queries):
+        flow = DNS(
+            starttime="1726568479.5997488",
+            uid=f"{uid}{index}",
+            saddr="1.1.1.1",
+            daddr="192.168.1.5",
+            query=query,
+            qclass_name="",
+            qtype_name="A",
+            rcode_name="NXDOMAIN",
+            dport="53",
+            sport="12345",
+            proto="udp",
+            answers=[""],
+            TTLs="",
+        )
+        assert dns.detect_dga(profileid, twid, flow) is False
+
+    stored = dns.nxdomains.get(f"{profileid}_{twid}", ([], []))
+    assert len(stored[0]) == expected_distinct
+    dns.set_evidence.dga.assert_not_called()
+
+
+def test_detect_dga_realerts_only_for_new_distinct_names() -> None:
+    """The next DGA threshold requires five new names in the same window."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock(
+        return_value=False
+    )
+    dns.set_evidence.dga = Mock()
+
+    for index in range(15):
+        flow = DNS(
+            starttime="1726568479.5997488",
+            uid=f"{uid}{index}",
+            saddr="1.1.1.1",
+            daddr="192.168.1.5",
+            query=f"new{index}.example.com",
+            qclass_name="",
+            qtype_name="A",
+            rcode_name="NXDOMAIN",
+            dport="53",
+            sport="12345",
+            proto="udp",
+            answers=[""],
+            TTLs="",
+        )
+        assert dns.detect_dga(profileid, twid, flow) is (index in (9, 14))
+
+    assert [call.args[2] for call in dns.set_evidence.dga.call_args_list] == [
+        10,
+        15,
+    ]
+    assert len(dns.nxdomains[f"{profileid}_{twid}"][0]) == 15
 
 
 def test_detect_dga_whitelisted():

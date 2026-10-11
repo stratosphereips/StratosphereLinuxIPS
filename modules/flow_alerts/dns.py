@@ -31,6 +31,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.ips import LOCALHOST_HOSTNAME
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import DNS as DNSFlow
 from slips_files.core.structures.evidence import Direction
 
 
@@ -39,7 +40,7 @@ class DNS(IFlowalertsAnalyzer):
         self.read_configuration()
         # this dict will contain the number of nxdomains
         # found in every profile
-        self.nxdomains = {}
+        self.nxdomains: dict[str, tuple[list[str], list[str]]] = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
         # dict to keep track of arpa queries to check for DNS arpa scans later
@@ -489,56 +490,51 @@ class DNS(IFlowalertsAnalyzer):
                 # avoid FP "DNS without connection" evidence
                 self.db.delete_dns_resolution(answer)
 
-    def detect_dga(self, profileid, twid, flow):
+    def detect_dga(self, profileid: str, twid: str, flow: DNSFlow) -> bool:
         """
-        Detect DGA based on the amount of NXDOMAINs seen in dns.log
-        alerts when 10 15 20 etc. nxdomains are found
-        Ignore queries done to *.in-addr.arpa domains and to *.local domains
+        Detect ten or more distinct failed DNS names in a source time window.
+
+        Parameters:
+            profileid: Source profile identifier.
+            twid: Time window identifier.
+            flow: DNS flow with the failed lookup.
+
+        Returns:
+            Whether this lookup crossed a distinct-name alert threshold.
         """
         if not flow.rcode_name:
-            return
+            return False
 
-        # check whitelisted queries because we
-        # don't want to count nxdomains to cymru.com or
-        # spamhaus as DGA as they're made
-        # by slips
+        query = (flow.query or "").strip().rstrip(".").lower()
+
         if (
             "NXDOMAIN" not in flow.rcode_name
-            or not flow.query
-            or flow.query.endswith(".arpa")
-            or flow.query.endswith(".local")
+            or not query
+            or "." not in query
+            or query.endswith((".arpa", ".local", ".invalid"))
+            or any(label.startswith("_") for label in query.split("."))
             or self.flowalerts.whitelist.domain_analyzer.is_whitelisted(
                 flow.query, Direction.DST, "alerts"
             )
         ):
             return False
 
+        if query.endswith(".lan") and "." in query[:-4]:
+            query = query[:-4]
         profileid_twid = f"{profileid}_{twid}"
-
-        # found NXDOMAIN by this profile
-        try:
-            # make sure all domains are unique
-            if flow.query not in self.nxdomains[profileid_twid]:
-                queries, uids = self.nxdomains[profileid_twid]
-                queries.append(flow.query)
-                uids.append(flow.uid)
-                self.nxdomains[profileid_twid] = (queries, uids)
-        except KeyError:
-            # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: ([flow.query], [flow.uid])})
+        queries, uids = self.nxdomains.setdefault(profileid_twid, ([], []))
+        if query in queries:
             return False
-
-        # every 5 nxdomains, generate an alert.
-        queries, uids = self.nxdomains[profileid_twid]
+        queries.append(query)
+        uids.append(flow.uid)
         number_of_nxdomains = len(queries)
         if (
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
-            self.set_evidence.dga(twid, flow, number_of_nxdomains, uids)
-            # clear the list of alerted queries and uids
-            self.nxdomains[profileid_twid] = ([], [])
+            self.set_evidence.dga(twid, flow, number_of_nxdomains, uids.copy())
             return True
+        return False
 
     def check_dns_arpa_scan(self, profileid, twid, flow):
         """
