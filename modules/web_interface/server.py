@@ -1680,6 +1680,259 @@ class RunDataReader:
         return connection
 
     @staticmethod
+    def _review_clause(
+        connection: sqlite3.Connection, entity: str, status: str, alias: str
+    ) -> str:
+        """Build a review filter for both old and migrated run databases.
+
+        Parameters:
+            connection: Current run database connection.
+            entity: Either alert or evidence.
+            status: Requested review state.
+            alias: SQL alias of the outer record.
+
+        Returns:
+            A trusted SQL predicate without user supplied SQL.
+        """
+        table = f"{entity}_reviews"
+        key = f"{entity}_id"
+        if status == "all":
+            return "1 = 1"
+        if not RunDataReader._table_exists(connection, table):
+            return (
+                "1 = 1"
+                if status in {"open", "active", "unreviewed"}
+                else "0 = 1"
+            )
+        if entity == "alert" and status == "open":
+            return (
+                f"NOT EXISTS (SELECT 1 FROM {table} review "
+                f"WHERE review.{key} = {alias}.{key} "
+                "AND review.status = 'resolved')"
+            )
+        default = "active" if entity == "alert" else "unreviewed"
+        return (
+            f"COALESCE((SELECT review.status FROM {table} review "
+            f"WHERE review.{key} = {alias}.{key}), '{default}') = '{status}'"
+        )
+
+    def save_review(
+        self, entity: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Persist a review state or remove selected linked records atomically.
+
+        Parameters:
+            entity: Alert or evidence requested by the API route.
+            payload: Identifier, action, status or depth, and analyst note.
+
+        Returns:
+            Saved state or counts of deleted and protected shared records.
+        """
+        if entity not in {"alert", "evidence"}:
+            raise ValueError("Unknown review entity")
+        identifier = payload.get("id")
+        action = payload.get("action")
+        note = payload.get("note", "")
+        if not isinstance(identifier, str) or not 1 <= len(identifier) <= 160:
+            raise ValueError("Select a valid record")
+        if (
+            not isinstance(note, str)
+            or len(note) > 2000
+            or any(
+                (ord(char) < 32 and char not in "\n\t") or ord(char) == 127
+                for char in note
+            )
+        ):
+            raise ValueError(
+                "Review note must be at most 2000 printable characters"
+            )
+        note = note.strip()
+        if action == "review":
+            status = payload.get("status")
+            allowed = (
+                {"active", "in_review", "resolved"}
+                if entity == "alert"
+                else {
+                    "unreviewed",
+                    "in_review",
+                    "true_positive",
+                    "false_positive",
+                    "expected_behavior",
+                    "inconclusive",
+                }
+            )
+            if status not in allowed:
+                raise ValueError("Unknown review status")
+            if entity == "alert" and status == "resolved" and not note:
+                raise ValueError("Add a note before resolving an alert")
+        elif action == "delete":
+            depth = payload.get("depth")
+            allowed = (
+                {"alert", "evidence", "flows"}
+                if entity == "alert"
+                else {"evidence", "flows"}
+            )
+            if depth not in allowed:
+                raise ValueError("Unknown deletion depth")
+            if not note:
+                raise ValueError("Add a reason before deleting")
+        else:
+            raise ValueError("Unknown review action")
+        table = "alerts" if entity == "alert" else "evidence"
+        key = f"{entity}_id"
+        connection = sqlite3.connect(str(self.sqlite_path), timeout=15)
+        connection.row_factory = sqlite3.Row
+        try:
+            history_path = getattr(self, "history_path", None)
+            history_attached = bool(
+                history_path and Path(history_path).exists()
+            )
+            if history_attached:
+                connection.execute(
+                    "ATTACH DATABASE ? AS web_history", (str(history_path),)
+                )
+            connection.execute("BEGIN IMMEDIATE")
+            if not connection.execute(
+                f"SELECT 1 FROM {table} WHERE {key} = ?", (identifier,)
+            ).fetchone():
+                raise ValueError("Record no longer exists")
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS alert_reviews ("
+                "alert_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS evidence_reviews ("
+                "evidence_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+            )
+            if action == "review":
+                connection.execute(
+                    f"INSERT INTO {entity}_reviews "
+                    f"({key}, status, note, updated_at) VALUES (?, ?, ?, ?) "
+                    f"ON CONFLICT({key}) DO UPDATE SET "
+                    "status = excluded.status, note = excluded.note, "
+                    "updated_at = excluded.updated_at",
+                    (identifier, status, note, time.time()),
+                )
+                result = {"id": identifier, "status": status, "note": note}
+            else:
+                evidence_ids = (
+                    [
+                        str(row[0])
+                        for row in connection.execute(
+                            "SELECT evidence_id FROM alert_evidence WHERE alert_id = ?",
+                            (identifier,),
+                        ).fetchall()
+                    ]
+                    if entity == "alert"
+                    else [identifier]
+                )
+                if entity == "alert":
+                    connection.execute(
+                        "DELETE FROM alert_evidence WHERE alert_id = ?",
+                        (identifier,),
+                    )
+                    connection.execute(
+                        "DELETE FROM alerts WHERE alert_id = ?", (identifier,)
+                    )
+                    connection.execute(
+                        "DELETE FROM alert_reviews WHERE alert_id = ?",
+                        (identifier,),
+                    )
+                else:
+                    connection.execute(
+                        "DELETE FROM alert_evidence WHERE evidence_id = ?",
+                        (identifier,),
+                    )
+                removed_evidence = 0
+                removed_flows = 0
+                protected = 0
+                if depth != "alert":
+                    for evidence_id in evidence_ids:
+                        if connection.execute(
+                            "SELECT 1 FROM alert_evidence WHERE evidence_id = ? LIMIT 1",
+                            (evidence_id,),
+                        ).fetchone():
+                            protected += 1
+                            continue
+                        uids = [
+                            str(row[0])
+                            for row in connection.execute(
+                                "SELECT uid FROM evidence_flows WHERE evidence_id = ?",
+                                (evidence_id,),
+                            ).fetchall()
+                        ]
+                        connection.execute(
+                            "DELETE FROM evidence_flows WHERE evidence_id = ?",
+                            (evidence_id,),
+                        )
+                        connection.execute(
+                            "DELETE FROM evidence WHERE evidence_id = ?",
+                            (evidence_id,),
+                        )
+                        connection.execute(
+                            "DELETE FROM evidence_reviews WHERE evidence_id = ?",
+                            (evidence_id,),
+                        )
+                        removed_evidence += 1
+                        if depth == "flows":
+                            for uid in uids:
+                                if connection.execute(
+                                    "SELECT 1 FROM evidence_flows WHERE uid = ? LIMIT 1",
+                                    (uid,),
+                                ).fetchone():
+                                    continue
+                                for flow_table in ("flows", "altflows"):
+                                    removed_flows += connection.execute(
+                                        f"DELETE FROM {flow_table} WHERE uid = ?",
+                                        (uid,),
+                                    ).rowcount
+                                if history_attached:
+                                    connection.execute(
+                                        "DELETE FROM web_history.flow_index "
+                                        "WHERE uid = ?",
+                                        (uid,),
+                                    )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS review_deletions ("
+                    "entity TEXT NOT NULL, record_id TEXT NOT NULL, "
+                    "depth TEXT NOT NULL, note TEXT NOT NULL, deleted_at REAL NOT NULL, "
+                    "evidence_removed INTEGER NOT NULL, flows_removed INTEGER NOT NULL, "
+                    "shared_preserved INTEGER NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO review_deletions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        entity,
+                        identifier,
+                        depth,
+                        note,
+                        time.time(),
+                        removed_evidence,
+                        removed_flows,
+                        protected,
+                    ),
+                )
+                result = {
+                    "id": identifier,
+                    "deleted": True,
+                    "depth": depth,
+                    "evidence_removed": removed_evidence,
+                    "flows_removed": removed_flows,
+                    "shared_preserved": protected,
+                }
+            connection.commit()
+            if action == "delete" and depth == "flows":
+                connection.execute("PRAGMA incremental_vacuum(1000)")
+            return result
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    @staticmethod
     def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
         """Check whether a SQLite table exists."""
         row = connection.execute(
@@ -1730,6 +1983,7 @@ class RunDataReader:
         return {
             "service": "slips-web-interface",
             "pid": os.getpid(),
+            "review_actions": True,
             **self.validate_run_identity(),
         }
 
@@ -1751,7 +2005,10 @@ class RunDataReader:
             alerts = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM alerts "
-                    "WHERE CAST(alert_time AS REAL) BETWEEN ? AND ?",
+                    "WHERE CAST(alert_time AS REAL) BETWEEN ? AND ? AND "
+                    + self._review_clause(
+                        connection, "alert", "open", "alerts"
+                    ),
                     (alert_start, alert_end),
                 ).fetchone()[0]
             )
@@ -1942,6 +2199,21 @@ class RunDataReader:
                 "when this evidence was recorded",
             )
         )
+        if self._table_exists(connection, "evidence_reviews"):
+            review = connection.execute(
+                "SELECT status, note, updated_at FROM evidence_reviews "
+                "WHERE evidence_id = ?",
+                (evidence_id,),
+            ).fetchone()
+            if review:
+                record.update(
+                    {
+                        "review_status": review["status"],
+                        "review_note": review["note"],
+                        "review_updated_at": review["updated_at"],
+                    }
+                )
+        record.setdefault("review_status", "unreviewed")
         self._clarify_legacy_p2p_report(record)
         return record
 
@@ -2041,6 +2313,20 @@ class RunDataReader:
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            review_status = self._query_value(query, "review", "all")
+            if review_status in {
+                "unreviewed",
+                "in_review",
+                "true_positive",
+                "false_positive",
+                "expected_behavior",
+                "inconclusive",
+            }:
+                clauses.append(
+                    self._review_clause(
+                        connection, "evidence", review_status, "evidence"
+                    )
+                )
             if self._query_value(query, "hide_excluded") == "1":
                 clauses.append(f"{whitelist_expression} = 0")
             if start is not None:
@@ -2305,6 +2591,20 @@ class RunDataReader:
                     )
                 clauses = ["1 = 1"]
                 params: List[Any] = []
+                review_status = self._query_value(query, "review", "all")
+                if review_status in {
+                    "unreviewed",
+                    "in_review",
+                    "true_positive",
+                    "false_positive",
+                    "expected_behavior",
+                    "inconclusive",
+                }:
+                    clauses.append(
+                        self._review_clause(
+                            connection, "evidence", review_status, "evidence"
+                        )
+                    )
                 if self._query_value(query, "hide_excluded") == "1":
                     clauses.append(f"{whitelist_expression} = 0")
                 if start is not None:
@@ -2602,8 +2902,32 @@ class RunDataReader:
             full_total = int(
                 connection.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
             )
+            open_total = full_total - (
+                int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
+                    ).fetchone()[0]
+                )
+                if self._table_exists(connection, "alert_reviews")
+                else 0
+            )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            review_status = self._query_value(query, "review", "open")
+            if review_status not in {
+                "open",
+                "active",
+                "in_review",
+                "resolved",
+                "all",
+            }:
+                review_status = "open"
+            if review_status != "all":
+                clauses.append(
+                    self._review_clause(
+                        connection, "alert", review_status, "a"
+                    )
+                )
             if start is not None:
                 clauses.append("CAST(a.alert_time AS REAL) >= ?")
                 params.append(start)
@@ -2770,6 +3094,7 @@ class RunDataReader:
             "items": items,
             "total": total,
             "full_total": full_total,
+            "open_total": open_total,
             "page_size": len(items),
             "next_cursor": next_cursor,
             "range": range_name,
@@ -2823,8 +3148,32 @@ class RunDataReader:
                     "SELECT COUNT(*) AS count FROM alerts"
                 ).fetchone()["count"]
             )
+            open_total = full_total - (
+                int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
+                    ).fetchone()[0]
+                )
+                if self._table_exists(connection, "alert_reviews")
+                else 0
+            )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            review_status = self._query_value(query, "review", "open")
+            if review_status not in {
+                "open",
+                "active",
+                "in_review",
+                "resolved",
+                "all",
+            }:
+                review_status = "open"
+            if review_status != "all":
+                clauses.append(
+                    self._review_clause(
+                        connection, "alert", review_status, "alerts"
+                    )
+                )
             if start is not None:
                 clauses.append("CAST(alert_time AS REAL) >= ?")
                 params.append(start)
@@ -2935,6 +3284,7 @@ class RunDataReader:
             "items": items,
             "total": total,
             "full_total": full_total,
+            "open_total": open_total,
             "page_size": len(items),
             "next_cursor": next_cursor,
             "range": range_name,
@@ -2981,6 +3331,15 @@ class RunDataReader:
                     "SELECT COUNT(*) AS count FROM alerts"
                 ).fetchone()["count"]
             )
+            open_total = full_total - (
+                int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
+                    ).fetchone()[0]
+                )
+                if self._table_exists(connection, "alert_reviews")
+                else 0
+            )
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             sort_key, sort_expression, direction = self._sort_spec(
@@ -3001,6 +3360,21 @@ class RunDataReader:
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            review_status = self._query_value(query, "review", "open")
+            if review_status not in {
+                "open",
+                "active",
+                "in_review",
+                "resolved",
+                "all",
+            }:
+                review_status = "open"
+            if review_status != "all":
+                clauses.append(
+                    self._review_clause(
+                        connection, "alert", review_status, "alerts"
+                    )
+                )
             if start is not None:
                 clauses.append("CAST(alert_time AS REAL) >= ?")
                 params.append(start)
@@ -3059,6 +3433,21 @@ class RunDataReader:
                 alert["alert_time"] = float(alert["alert_time"] or 0)
                 alert["evidence_count"] = evidence_count
                 alert["threat_level"] = self._threat_from_rank(threat_rank)
+                if self._table_exists(connection, "alert_reviews"):
+                    review = connection.execute(
+                        "SELECT status, note, updated_at FROM alert_reviews "
+                        "WHERE alert_id = ?",
+                        (alert["alert_id"],),
+                    ).fetchone()
+                    if review:
+                        alert.update(
+                            {
+                                "review_status": review["status"],
+                                "review_note": review["note"],
+                                "review_updated_at": review["updated_at"],
+                            }
+                        )
+                alert.setdefault("review_status", "active")
                 alert.update(
                     self._score_fields(
                         alert.get("accumulated_threat_level"),
@@ -3110,6 +3499,7 @@ class RunDataReader:
             "items": items,
             "total": int(total),
             "full_total": full_total,
+            "open_total": open_total,
             "page_size": len(items),
             "next_cursor": next_cursor,
             "range": range_name,
@@ -3683,7 +4073,22 @@ class RunDataReader:
                 "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
             )
             evidence_expression = "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip)"
-            alert_expression = "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip)"
+            has_alert_reviews = bool(
+                connection.execute(
+                    "SELECT 1 FROM run_db.sqlite_master WHERE type = 'table' "
+                    "AND name = 'alert_reviews'"
+                ).fetchone()
+            )
+            alert_expression = (
+                "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip "
+                + (
+                    "AND NOT EXISTS (SELECT 1 FROM run_db.alert_reviews ar "
+                    "WHERE ar.alert_id = a.alert_id AND ar.status = 'resolved')"
+                    if has_alert_reviews
+                    else ""
+                )
+                + ")"
+            )
             last_seen_expression = (
                 "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
                 "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
@@ -3990,7 +4395,10 @@ class RunDataReader:
                 return int(
                     connection.execute(
                         "SELECT COUNT(*) AS count FROM alerts "
-                        f"WHERE ip_alerted IN ({placeholders})",
+                        f"WHERE ip_alerted IN ({placeholders}) AND "
+                        + self._review_clause(
+                            connection, "alert", "open", "alerts"
+                        ),
                         ips,
                     ).fetchone()["count"]
                 )
@@ -5393,10 +5801,12 @@ class RunDataReader:
         """
         with self._connect_sqlite() as connection:
             score = self._detector_score_expression(connection, "alerts")
+            open_clause = self._review_clause(connection, "alert", "open", "a")
             rows = connection.execute(
-                "SELECT ip_alerted, COUNT(*) AS alert_count, "
+                "SELECT a.ip_alerted, COUNT(*) AS alert_count, "
                 "MAX(CAST(alert_time AS REAL)) AS alert_time, "
-                f"MAX({score}) AS alert_score FROM alerts GROUP BY ip_alerted"
+                f"MAX({score}) AS alert_score FROM alerts a "
+                f"WHERE {open_clause} GROUP BY a.ip_alerted"
             ).fetchall()
             ranks: Dict[str, int] = {}
             available_levels = [
@@ -5424,7 +5834,8 @@ class RunDataReader:
                     "SELECT DISTINCT a.ip_alerted FROM evidence e "
                     "JOIN alert_evidence ae ON ae.evidence_id = e.evidence_id "
                     "JOIN alerts a ON a.alert_id = ae.alert_id "
-                    f"WHERE e.threat_level IN ({placeholders})",
+                    f"WHERE e.threat_level IN ({placeholders}) "
+                    f"AND {open_clause}",
                     variants,
                 ).fetchall()
                 for match in matching:
@@ -5466,7 +5877,10 @@ class RunDataReader:
             with self._connect_sqlite() as connection:
                 alert_count = int(
                     connection.execute(
-                        "SELECT COUNT(*) AS count FROM alerts"
+                        "SELECT COUNT(*) AS count FROM alerts WHERE "
+                        + self._review_clause(
+                            connection, "alert", "open", "alerts"
+                        )
                     ).fetchone()["count"]
                 )
                 durable_evidence = (
@@ -7019,11 +7433,14 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/network-name",
             "/api/host-annotation",
             "/api/whitelists",
+            "/api/alert-review",
+            "/api/evidence-review",
         }:
             self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
         if (
-            path == "/api/whitelists"
+            path
+            in {"/api/whitelists", "/api/alert-review", "/api/evidence-review"}
             and not ipaddress.ip_address(self.client_address[0]).is_loopback
             and not self._require_password()
         ):
@@ -7077,6 +7494,11 @@ class RequestHandler(BaseHTTPRequestHandler):
                         arguments += (None,)
                     arguments += ("uri",)
                 saved = self.server.reader.save_whitelist_rule(*arguments)
+            elif path in {"/api/alert-review", "/api/evidence-review"}:
+                saved = self.server.reader.save_review(
+                    "alert" if path == "/api/alert-review" else "evidence",
+                    payload,
+                )
             elif path == "/api/host-annotation":
                 saved = self.server.reader.save_host_annotation(
                     payload.get("ip"),

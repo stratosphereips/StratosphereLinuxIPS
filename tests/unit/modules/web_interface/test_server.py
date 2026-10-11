@@ -31,6 +31,142 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def test_alert_review_persists_and_requires_resolution_note(tmp_path: Path) -> None:
+    """Resolved alerts remain durable and are excluded from open queries."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE alerts(alert_id TEXT PRIMARY KEY)")
+        connection.execute("INSERT INTO alerts VALUES ('alert-1')")
+    with pytest.raises(ValueError, match="note"):
+        reader.save_review("alert", {
+            "id": "alert-1", "action": "review", "status": "resolved", "note": ""
+        })
+    reader.save_review("alert", {
+        "id": "alert-1", "action": "review", "status": "resolved",
+        "note": "Checked the connection against the router log."
+    })
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        open_clause = reader._review_clause(connection, "alert", "open", "alerts")
+        resolved_clause = reader._review_clause(
+            connection, "alert", "resolved", "alerts"
+        )
+        assert connection.execute(
+            f"SELECT COUNT(*) FROM alerts WHERE {open_clause}"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            f"SELECT COUNT(*) FROM alerts WHERE {resolved_clause}"
+        ).fetchone()[0] == 1
+    reader.save_review("alert", {
+        "id": "alert-1", "action": "review", "status": "active", "note": "Reopened"
+    })
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        assert connection.execute(
+            "SELECT status, note FROM alert_reviews WHERE alert_id = 'alert-1'"
+        ).fetchone() == ("active", "Reopened")
+
+
+@pytest.mark.parametrize(
+    ("review", "expected"),
+    [("open", 1), ("active", 1), ("resolved", 1), ("all", 2)],
+)
+def test_grouped_alerts_filter_review_state(
+    tmp_path: Path, review: str, expected: int
+) -> None:
+    """Host aggregation excludes resolved alerts unless explicitly selected."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "pcap"
+    reader.score_mode = "ratl"
+    reader._ip_context_for_ip = Mock(return_value={})
+    reader._annotate_detection_networks = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY, ip_alerted TEXT, "
+            "alert_time REAL, label TEXT, accumulated_ratl REAL);"
+            "CREATE TABLE evidence(evidence_id TEXT, threat_level TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "INSERT INTO alerts VALUES "
+            "('open','192.0.2.5',10,'malicious',5),"
+            "('closed','192.0.2.5',11,'malicious',6);"
+            "INSERT INTO evidence VALUES ('e1','high'),('e2','critical');"
+            "INSERT INTO alert_evidence VALUES ('open','e1'),('closed','e2');"
+        )
+    reader.save_review("alert", {
+        "id": "closed", "action": "review", "status": "resolved",
+        "note": "Reviewed and closed"
+    })
+    result = reader._grouped_alerts_fast({"range": ["all"], "review": [review]})
+    assert result["items"][0]["alert_count"] == expected
+    assert result["open_total"] == 1
+
+
+@pytest.mark.parametrize(
+    ("depth", "expected_evidence", "expected_flows"),
+    [
+        ("alert", {"shared", "unique"}, {"shared-uid", "unique-uid"}),
+        ("evidence", {"shared"}, {"shared-uid", "unique-uid"}),
+        ("flows", {"shared"}, {"shared-uid"}),
+    ],
+)
+def test_alert_cleanup_preserves_shared_records(
+    tmp_path: Path, depth: str, expected_evidence: set[str],
+    expected_flows: set[str],
+) -> None:
+    """Only unshared evidence and flow rows are removed at each depth."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "web_history.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY);"
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "CREATE TABLE flows(uid TEXT PRIMARY KEY);"
+            "CREATE TABLE altflows(uid TEXT PRIMARY KEY);"
+            "INSERT INTO alerts VALUES ('first'), ('second');"
+            "INSERT INTO evidence VALUES ('shared'), ('unique');"
+            "INSERT INTO alert_evidence VALUES "
+            "('first','shared'), ('first','unique'), ('second','shared');"
+            "INSERT INTO evidence_flows VALUES "
+            "('shared','shared-uid'), ('unique','shared-uid'), "
+            "('unique','unique-uid');"
+            "INSERT INTO flows VALUES ('shared-uid'), ('unique-uid');"
+        )
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.executescript(
+            "CREATE TABLE flow_index(uid TEXT PRIMARY KEY);"
+            "INSERT INTO flow_index VALUES ('shared-uid'), ('unique-uid');"
+        )
+    result = reader.save_review("alert", {
+        "id": "first", "action": "delete", "depth": depth,
+        "note": "Duplicate alert after investigation"
+    })
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        assert set(connection.execute(
+            "SELECT alert_id FROM alerts"
+        ).fetchall()) == {("second",)}
+        assert {row[0] for row in connection.execute(
+            "SELECT evidence_id FROM evidence"
+        )} == expected_evidence
+        assert {row[0] for row in connection.execute(
+            "SELECT uid FROM flows"
+        )} == expected_flows
+        assert connection.execute(
+            "SELECT COUNT(*) FROM review_deletions"
+        ).fetchone()[0] == 1
+    with sqlite3.connect(reader.history_path) as connection:
+        assert {row[0] for row in connection.execute(
+            "SELECT uid FROM flow_index"
+        )} == expected_flows
+    assert result["shared_preserved"] == (0 if depth == "alert" else 1)
+
+
 def _authenticated_request(url: str) -> Request:
     """A request carrying a valid session cookie, for gated pages."""
     return Request(
@@ -2312,6 +2448,43 @@ def test_evidence_threat_minimum_filter(
 
     assert {item["threat_level"] for item in page["items"]} == expected
     assert page["total"] == len(expected)
+
+
+@pytest.mark.parametrize("grouped", [False, True])
+def test_evidence_review_filter_keeps_verdicts_visible(
+    tmp_path: Path, grouped: bool
+) -> None:
+    """Review verdict filtering applies to grouped and individual evidence."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader._annotate_detection_networks = Mock()
+    reader._annotate_whitelisted_evidence = Mock()
+    reader._annotate_p2p_reporters = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, source_module TEXT, "
+            "description TEXT, confidence REAL, data TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "INSERT INTO evidence VALUES "
+            "('reviewed',1,'10.0.0.1','timewindow1','low','ARP_SCAN','arp','scan',1,'{}'),"
+            "('other',2,'10.0.0.1','timewindow1','low','ARP_SCAN','arp','scan',1,'{}');"
+        )
+    reader.save_review("evidence", {
+        "id": "reviewed", "action": "review", "status": "false_positive",
+        "note": "Router discovery"
+    })
+    query = {"range": ["all"], "review": ["false_positive"]}
+    if grouped:
+        query["group"] = ["host_type"]
+    page = reader.evidence(query)
+    assert page["total"] == 1
+    assert page["items"][0]["evidence_count" if grouped else "id"] == (
+        1 if grouped else "reviewed"
+    )
 
 
 def test_host_names_resolves_live_and_historical_identity(

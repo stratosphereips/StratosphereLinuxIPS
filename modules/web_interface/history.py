@@ -899,6 +899,7 @@ class HistoryCollector:
             Number of evidence records observed.
         """
         count = 0
+        deleted = self._deleted_record_ids(connection)
         try:
             evidence_keys = list(
                 self.redis.scan_iter(match="profile_*_timewindow*_evidence")
@@ -921,6 +922,8 @@ class HistoryCollector:
                 if not isinstance(evidence, dict):
                     continue
                 canonical_id = str(evidence.get("id") or evidence_id)
+                if ("evidence", canonical_id) in deleted:
+                    continue
                 profile = evidence.get("profile", {})
                 profile_ip = (
                     str(profile.get("ip", ""))
@@ -973,20 +976,50 @@ class HistoryCollector:
                 if not isinstance(alerts, dict):
                     continue
                 for alert_id, evidence_ids in alerts.items():
+                    if ("alert", str(alert_id)) in deleted:
+                        continue
                     connection.executemany(
                         "INSERT OR IGNORE INTO alert_evidence "
                         "(alert_id, evidence_id) VALUES (?, ?)",
                         [
                             (str(alert_id), evidence_id)
                             for evidence_id in self._list_value(evidence_ids)
+                            if ("evidence", evidence_id) not in deleted
                         ],
                     )
         except redis.RedisError:
             pass
         return count
 
+    @staticmethod
+    def _deleted_record_ids(
+        connection: sqlite3.Connection,
+    ) -> set[tuple[str, str]]:
+        """Read deletion tombstones before importing older detection sources.
+
+        Parameters:
+            connection: Current run flow database.
+
+        Returns:
+            Deleted entity and record ID pairs.
+        """
+        if not connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'review_deletions'"
+        ).fetchone():
+            return set()
+        return {
+            (str(row[0]), str(row[1]))
+            for row in connection.execute(
+                "SELECT entity, record_id FROM review_deletions"
+            ).fetchall()
+        }
+
     def _backfill_alert_record(
-        self, connection: sqlite3.Connection, record: Dict[str, Any]
+        self,
+        connection: sqlite3.Connection,
+        record: Dict[str, Any],
+        deleted: Optional[set[tuple[str, str]]] = None,
     ) -> None:
         """
         Copy one IDMEF event or incident into durable detection tables.
@@ -994,9 +1027,15 @@ class HistoryCollector:
         Parameters:
             connection: Writable flows.sqlite connection.
             record: Parsed alerts.json line.
+            deleted: Tombstones already loaded for this backfill batch.
         """
         record_id = str(record.get("ID", ""))
         if not record_id:
+            return
+        if deleted is None:
+            deleted = self._deleted_record_ids(connection)
+        entity = "alert" if record.get("Status") == "Incident" else "evidence"
+        if (entity, record_id) in deleted:
             return
         note = self._json_value(record.get("Note"), {})
         source = record.get("Source") or [{}]
@@ -1041,6 +1080,7 @@ class HistoryCollector:
                 [
                     (record_id, evidence_id)
                     for evidence_id in self._list_value(record.get("CorrelID"))
+                    if ("evidence", evidence_id) not in deleted
                 ],
             )
             return
@@ -1105,6 +1145,7 @@ class HistoryCollector:
             offset = int(
                 self._metadata_get(history, "alerts_json_offset", "0")
             )
+        deleted = self._deleted_record_ids(connection)
         try:
             if alerts_path.stat().st_size < offset:
                 offset = 0
@@ -1131,7 +1172,9 @@ class HistoryCollector:
                     except ValueError:
                         continue
                     if isinstance(record, dict):
-                        self._backfill_alert_record(connection, record)
+                        self._backfill_alert_record(
+                            connection, record, deleted
+                        )
                         count += 1
         except OSError:
             return 0

@@ -59,6 +59,28 @@ class SQLiteDB(ISQLite):
         else:
             self._ensure_history_schema()
         self._ensure_retention_schema()
+        self._ensure_review_schema()
+
+    def _ensure_review_schema(self) -> None:
+        """Keep analyst decisions in the durable run database."""
+        self.create_table(
+            "alert_reviews",
+            "alert_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
+            "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL",
+        )
+        self.create_table(
+            "evidence_reviews",
+            "evidence_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
+            "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL",
+        )
+        self.execute(
+            "CREATE INDEX IF NOT EXISTS alert_reviews_status_idx "
+            "ON alert_reviews(status, alert_id)"
+        )
+        self.execute(
+            "CREATE INDEX IF NOT EXISTS evidence_reviews_status_idx "
+            "ON evidence_reviews(status, evidence_id)"
+        )
 
     def _enable_incremental_vacuum(self) -> None:
         """Let new run databases return freed pages without full VACUUM."""

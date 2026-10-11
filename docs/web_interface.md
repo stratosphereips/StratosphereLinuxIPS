@@ -15,6 +15,39 @@ The browser tab title shows alert and host counts from the rolling one-hour
 selected tab, search, or date filter. Overview and navigation badges continue
 to show their own totals.
 
+## Reviewing and cleaning up detections
+
+Alerts open as **Active**. Mark one **In review** while investigating, or
+**Resolved** with a required analyst note once checked. The Alerts tab shows
+Active and In review alerts by default; its Review filter can show either
+state, Resolved, or all alerts. Resolved alerts and their evidence remain in
+the current run database after a Slips restart. Reopen a resolved alert by
+setting it Active. The Overview and live alert counts exclude resolved alerts.
+
+Evidence can be marked **Unreviewed**, **In review**, **True positive**,
+**False positive**, **Expected behavior** (correct detection of authorized
+activity), or **Inconclusive** (insufficient data), with an optional note.
+The Evidence Review filter works
+with grouped and individual views. These labels record analyst judgment; they
+do not change Slips scoring, the detector, or the whitelist. Use the
+Whitelist control separately to suppress future matches.
+
+The review panel also offers permanent deletion. For an alert, choose alert
+only, alert plus evidence, or alert plus evidence and linked flows. For one
+evidence record, choose evidence only or evidence and linked flows. A deletion
+reason and browser confirmation are required. Evidence still linked to another
+alert is kept when deleting an alert. A flow still linked to other evidence is
+kept. Deletion removes stored rows from the run's `flows.sqlite`; the small
+`review_deletions` table retains the record ID, reason, time, and removal
+counts. Deleted rows cannot be restored from the web interface. Free SQLite
+pages are reused by later writes; runs using incremental vacuum can also
+return those pages to disk. The analyst decisions are run scoped, so deleting
+the entire output directory also removes them.
+If Slips is already running when the web code is updated, its existing web
+server process must be restarted by the operator before these controls are
+enabled. The browser disables the new actions until the server advertises
+support; refreshing the page alone does not reload Python code.
+
 ## Start it
 
 Enable the interface with -w:
@@ -557,6 +590,13 @@ The Hosts tab opens as a compact inventory sized to the available browser height
 All inventory headings, including the optional TI feeds column, sort the matching hosts before paging. TI feed sorting reads cached feed names only when that column is selected.
 
 Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens the existing rule editor with the selected IP filled in.
+
+The host's Alerts summary card counts open alerts across the full run. If the
+Host range is Live and the host has older alerts but none in the past hour,
+the Alerts panel shows those older alerts with an explicit label. The panel
+offers a button to switch all host graphs and activity to Full run. Other
+selected ranges remain strict; the Alerts panel and its count follow that
+range.
 
 The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. It shows the MAC vendor beside the MAC address when Slips has identified one; vendor names can be searched. Inventory can be filtered by local/public scope and by the host's maximum threat level. The compact threat column shows the highest real score persisted after evidence processing for that exact profile IP over the full run. The score bar marks the configured alert threshold, while hovering shows the current active time-window score from Redis. The optional current-score column can be enabled from **Columns**. Both scores are sortable server-side.
 

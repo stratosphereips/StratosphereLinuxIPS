@@ -350,6 +350,47 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     assert redis_client.scan_iter.call_count == redis_scan_calls
 
 
+def test_detection_backfill_does_not_restore_deleted_records(tmp_path) -> None:
+    """Review tombstones prevent old alerts.json entries from reappearing."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with sqlite3.connect(flows_path) as connection:
+        collector._detection_schema(connection)
+        connection.execute(
+            "CREATE TABLE review_deletions(entity TEXT, record_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO review_deletions VALUES (?, ?)",
+            [("evidence", "evidence-1"), ("alert", "alert-1")],
+        )
+        collector._backfill_alert_record(connection, {
+            "Status": "Event", "ID": "evidence-1"
+        })
+        collector._backfill_alert_record(connection, {
+            "Status": "Incident", "ID": "alert-1"
+        })
+        collector._backfill_alert_record(connection, {
+            "Status": "Incident", "ID": "alert-2",
+            "CreateTime": "2026-10-11T00:00:00+00:00",
+            "StartTime": "2026-10-11T00:00:00+00:00",
+            "Source": [{"IP": "10.0.0.1"}],
+            "CorrelID": ["evidence-1"], "Note": "{}",
+        })
+        assert connection.execute(
+            "SELECT COUNT(*) FROM evidence"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT alert_id FROM alerts"
+        ).fetchall() == [("alert-2",)]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM alert_evidence"
+        ).fetchone()[0] == 0
+
+
 def test_backfill_skips_redis_scan_when_evidence_is_already_durable(
     tmp_path,
 ) -> None:

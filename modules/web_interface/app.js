@@ -56,6 +56,7 @@ const state = {
   drawerGeneration: 0,
   evidenceDetail: { record: null, records: [], generation: 0 },
   runIdentity: null,
+  reviewAvailable: false,
   rangesInitialized: false,
   localSorts: {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
@@ -1580,7 +1581,9 @@ function listPath(name) {
   if (name === "alerts") {
     params.set("group", "host");
     params.set("details", "false");
+    params.set("review", byId("alerts-review").value);
   } else if (name === "evidence") {
+    params.set("review", byId("evidence-review").value);
     const mode = byId("evidence-view").value;
     if (mode !== "individual") {
       params.set("group", mode === "grouped" ? "host_type" : mode);
@@ -1833,6 +1836,7 @@ async function loadAlertHostAlerts(reset = true, quiet = false) {
   params.set("order", workspace.itemOrder);
   params.set("details", "false");
   params.set("summary", "1");
+  params.set("review", byId("alerts-review").value);
   if (state.hideExcluded) params.set("hide_excluded", "1");
   if (!reset && workspace.next) params.set("cursor", workspace.next);
   if (reset && !quiet) {
@@ -1870,7 +1874,7 @@ function renderAlertTimeline() {
     const title = record.summary || record.evidence_type?.replaceAll("_", " ")
       || record.label || "Alert";
     row.append(top, text("span", title, "alerts-alert-row-title"),
-      text("span", `${compact(record.evidence_count)} evidence · ${record.evidence_type || record.label || "Alert"}`, "alerts-alert-row-meta"));
+      text("span", `${compact(record.evidence_count)} evidence · ${record.evidence_type || record.label || "Alert"} · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
     row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
     container.append(row);
   });
@@ -1927,6 +1931,7 @@ function renderAlertDetailPane(record) {
     whitelist.setAttribute("aria-expanded", String(!editor.hidden));
   });
   container.append(editor, investigationHeading("Related evidence", "Select evidence to inspect its triggering flows"));
+  container.append(reviewEditor("alert", record));
   const evidence = document.createElement("div");
   evidence.className = "investigation-list";
   (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item, record.evidence)));
@@ -1943,7 +1948,7 @@ async function selectAlertDetailPane(record) {
   setAlertPaneCount(3);
   renderAlertTimeline();
   byId("alerts-detail").replaceChildren(text("p", "Loading alert evidence…", "empty-state"));
-  const params = new URLSearchParams({ range: "all", limit: "1", search: record.alert_id });
+  const params = new URLSearchParams({ range: "all", review: "all", limit: "1", search: record.alert_id });
   const payload = await api("alertPaneDetail", `/api/alerts?${params}`);
   if (!payload || generation !== workspace.detailGeneration
       || workspace.alert?.alert_id !== record.alert_id) return;
@@ -2012,11 +2017,13 @@ async function loadAlerts() {
   const payload = await api("alerts", listPath("alerts"));
   if (!payload) return;
   const workspace = state.alertsWorkspace;
-  workspace.fullTotal = payload.full_total || 0;
+  workspace.fullTotal = byId("alerts-review").value === "open"
+    ? payload.open_total || 0 : payload.full_total || 0;
   if (!workspace.rangeTouched && !workspace.autoRange
       && byId("alerts-range").value === "live"
       && !byId("alerts-search").value.trim()
-      && payload.total === 0 && payload.full_total > 0) {
+      && byId("alerts-review").value === "open"
+      && payload.total === 0 && payload.open_total > 0) {
     const age = Date.now() / 1000 - numeric(payload.latest_alert_time);
     const fallback = age <= 86400 ? "24h" : age <= 7 * 86400 ? "7d" : "all";
     workspace.autoRange = fallback;
@@ -2030,6 +2037,7 @@ async function loadAlerts() {
     return;
   }
   applyPage("alerts", payload);
+  byId("alerts-badge").textContent = compact(payload.open_total ?? payload.full_total);
   byId("alerts-count").textContent = compact(payload.total);
   renderAlertSeverityFilters();
   renderAlertHostList();
@@ -2146,6 +2154,9 @@ function renderEvidenceTable(payload) {
       const cell = document.createElement("span");
       cell.append(text("code", row.evidence_type || "All types"));
       if (row.module) cell.append(text("small", ` ${row.module}`, "muted"));
+      if (mode === "individual" && row.review_status && row.review_status !== "unreviewed") {
+        cell.append(text("small", ` · ${row.review_status.replaceAll("_", " ")}`, "review-state"));
+      }
       return cell;
     },
     (row) => threat(row.threat_level),
@@ -2302,6 +2313,7 @@ function evidenceGroupQuery() {
   const association = byId("evidence-link").value;
   const search = byId("evidence-search").value.trim();
   if (level) params.set("threat", level);
+  params.set("review", byId("evidence-review").value);
   if (association) params.set("association", association);
   if (search) params.set("search", search);
   if (state.hideExcluded) params.set("hide_excluded", "1");
@@ -2330,7 +2342,7 @@ async function loadEvidenceGroupRecords(reset = true) {
   if (workspace.record) {
     workspace.record = workspace.records.find((item) => item.id === workspace.record.id) || null;
   }
-  if (!document.activeElement?.closest("#evidence-right .whitelist-editor")) {
+  if (!document.activeElement?.closest("#evidence-right .whitelist-editor, #evidence-right .review-editor")) {
     renderEvidenceGroup();
   }
 }
@@ -2404,7 +2416,7 @@ function renderEvidenceGroup() {
     button.classList.toggle("selected", record.id === workspace.record?.id);
     button.append(text("span", evidenceClock(record.timestamp)),
       text("span", p2pReports ? `maliciousness · confidence ${numeric(record.confidence).toFixed(2)}` : record.description || record.evidence_type),
-      text("span", record.twid || "—"),
+      text("span", `${record.twid || "—"}${record.review_status && record.review_status !== "unreviewed" ? ` · ${record.review_status.replaceAll("_", " ")}` : ""}`),
       text("span", `${compact(record.flow_count)} flow${numeric(record.flow_count) === 1 ? "" : "s"}`));
     button.addEventListener("click", () => selectEvidenceRecord(record));
     container.append(button);
@@ -2517,7 +2529,8 @@ function renderEvidenceRecordDetail(record, replace = false) {
   const flowButton = text("button", "Inspect triggering flows", "secondary");
   flowButton.type = "button";
   flowButton.addEventListener("click", () => openEvidence(record).catch(() => {}));
-  panel.append(flowButton, whitelistEditor("evidence-pane", record), rawBlock(record, "evidence"));
+  panel.append(flowButton, reviewEditor("evidence", record),
+    whitelistEditor("evidence-pane", record), rawBlock(record, "evidence"));
   right.append(panel);
 }
 
@@ -2774,6 +2787,136 @@ async function saveWhitelistRule(change) {
   if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
   await loadWhitelists();
   return payload;
+}
+
+/** Save an analyst decision or a confirmed cleanup action.
+ * @param {string} entity Alert or evidence.
+ * @param {object} change Review action, record ID, note, and status or depth.
+ * @returns {Promise<object>} Saved decision or cleanup counts.
+ */
+async function saveReviewChange(entity, change) {
+  if (!state.reviewAvailable) {
+    throw new Error("Restart Slips manually to enable the new review controls.");
+  }
+  const response = await fetch(`/api/${entity}-review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(change),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+  return payload;
+}
+
+/** Refresh the visible investigation after an alert or evidence decision.
+ * @param {string} entity Alert or evidence that changed.
+ * @returns {Promise<void>} Resolves after the current page refreshes.
+ */
+async function refreshAfterReview(entity) {
+  closeDrawer();
+  closeEvidenceDetail(false);
+  if (state.activeTab === "hosts" && state.host) {
+    resetPage("hostAlerts");
+    resetPage("host-evidence");
+    await refreshHostWorkspace();
+    return;
+  }
+  if (state.activeTab === "alerts") {
+    state.alertsWorkspace.alert = null;
+    setAlertPaneCount(state.alertsWorkspace.host ? 2 : 1);
+    resetPage("alerts");
+    await loadAlerts();
+    if (state.alertsWorkspace.host) {
+      await loadAlertHostAlerts(true);
+      if (!state.alertsWorkspace.items.length) closeAlertHostPane();
+    }
+    return;
+  }
+  if (state.activeTab === "evidence") {
+    clearEvidenceSelection();
+    resetPage("evidence");
+    await loadEvidence();
+    return;
+  }
+  await currentLoader()();
+}
+
+/** Build a durable review and cleanup form for one alert or evidence record.
+ * @param {string} entity Alert or evidence.
+ * @param {object} record Current durable record.
+ * @returns {HTMLElement} Form with review states, note, and deletion depths.
+ */
+function reviewEditor(entity, record) {
+  const identifier = entity === "alert" ? record.alert_id : record.id;
+  const panel = document.createElement("section");
+  panel.className = "surface review-editor";
+  panel.append(text("h3", entity === "alert" ? "Review this alert" : "Review this evidence"));
+  const availability = text("p", "Restart Slips manually to enable review actions in the running web server.", "muted review-availability");
+  availability.hidden = state.reviewAvailable;
+  panel.append(availability);
+  const current = record.review_status || (entity === "alert" ? "active" : "unreviewed");
+  panel.append(text("p", `Current: ${current.replaceAll("_", " ")}${record.review_updated_at ? ` · ${formatTime(record.review_updated_at)}` : ""}`, "muted"));
+  const status = document.createElement("select");
+  const states = entity === "alert"
+    ? [["active", "Active"], ["in_review", "In review"], ["resolved", "Resolved"]]
+    : [["unreviewed", "Unreviewed"], ["in_review", "In review"],
+      ["true_positive", "True positive"], ["false_positive", "False positive"],
+      ["expected_behavior", "Expected behavior"], ["inconclusive", "Inconclusive"]];
+  states.forEach(([value, label]) => {
+    const option = new Option(label, value);
+    status.append(option);
+  });
+  status.value = current;
+  const note = document.createElement("textarea");
+  note.rows = 3;
+  note.maxLength = 2000;
+  note.placeholder = "What did you check? Add context for future review.";
+  note.value = record.review_note || "";
+  const decisionLabel = text("label", "Decision");
+  decisionLabel.append(status);
+  const noteLabel = text("label", "Analyst note");
+  noteLabel.append(note);
+  panel.append(decisionLabel, noteLabel);
+  const actions = document.createElement("div");
+  actions.className = "review-actions";
+  const save = text("button", "Save review", "secondary");
+  save.type = "button";
+  save.disabled = !state.reviewAvailable;
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    try {
+      await saveReviewChange(entity, { action: "review", id: identifier,
+        status: status.value, note: note.value });
+      toast("Review saved.");
+      await refreshAfterReview(entity);
+    } catch (error) { toast(error.message); }
+    finally { save.disabled = false; }
+  });
+  const depth = document.createElement("select");
+  const depths = entity === "alert"
+    ? [["alert", "Alert only"], ["evidence", "Alert + unshared evidence"],
+      ["flows", "Alert + unshared evidence + flows"]]
+    : [["evidence", "Evidence only"], ["flows", "Evidence + unshared flows"]];
+  depths.forEach(([value, label]) => depth.append(new Option(label, value)));
+  const remove = text("button", "Delete…", "secondary review-delete");
+  remove.type = "button";
+  remove.disabled = !state.reviewAvailable;
+  remove.addEventListener("click", async () => {
+    if (!note.value.trim()) { toast("Add a deletion reason first."); return; }
+    const label = depth.selectedOptions[0].textContent;
+    if (!window.confirm(`Permanently delete ${label.toLowerCase()}? Shared records will be kept.`)) return;
+    remove.disabled = true;
+    try {
+      const result = await saveReviewChange(entity, { action: "delete", id: identifier,
+        depth: depth.value, note: note.value });
+      toast(`Deleted. ${result.evidence_removed} evidence and ${result.flows_removed} flow rows removed; ${result.shared_preserved} shared evidence kept.`);
+      await refreshAfterReview(entity);
+    } catch (error) { toast(error.message); }
+    finally { remove.disabled = false; }
+  });
+  actions.append(save, depth, remove);
+  panel.append(actions);
+  return panel;
 }
 
 /** Offer IP and port values present in an evidence and its linked flows.
@@ -4572,7 +4715,7 @@ async function openEvidence(record, contextRecords = null) {
     recordCard.append(detailRow("Alerts", links));
   } else recordCard.append(detailRow("Alerts", "None"));
   const whitelistSection = whitelistEditor("evidence-detail", record);
-  side.append(recordCard, whitelistSection);
+  side.append(recordCard, reviewEditor("evidence", record), whitelistSection);
   const json = document.createElement("section");
   json.className = "surface evidence-detail-json";
   json.append(rawBlock(record, "evidence"));
@@ -4632,7 +4775,7 @@ async function openAlert(record) {
   if (record.evidence === undefined) {
     body.append(text("p", "Loading alert evidence…", "muted"));
     const params = new URLSearchParams({
-      range: "all", limit: "1", search: record.alert_id,
+      range: "all", review: "all", limit: "1", search: record.alert_id,
     });
     try {
       const payload = await api("alertDetail", `/api/alerts?${params}`);
@@ -4672,6 +4815,7 @@ async function openAlert(record) {
   evidenceList.className = "investigation-list";
   record.evidence?.forEach((item) => evidenceList.append(evidenceCard(item, record.evidence)));
   body.append(
+    reviewEditor("alert", record),
     evidenceList,
     investigationHeading("Complete alert data", "Original durable alert object and evidence links"),
     rawBlock(record, "alert"),
@@ -4949,7 +5093,7 @@ function renderHostNetworkClues(profiles) {
 function renderHostCards(host) {
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
-    ["Alerts", exactAggregates ? compact(host.alert_count) : "—"],
+    ["Alerts · full run", exactAggregates ? compact(host.alert_count) : "—"],
     ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
     ["Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
     ["Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
@@ -5027,18 +5171,51 @@ async function loadHostAlerts() {
   params.set("limit", "50");
   params.set("details", "false");
   params.set("summary", "1");
+  const liveRange = byId("host-range").value === "live";
+  const newestSavedAlert = Math.max(0, ...(state.host.alerts || [])
+    .filter((alert) => alert.ip_alerted === ip)
+    .map((alert) => numeric(alert.alert_time)));
+  let showingEarlier = liveRange && (page.index > 0
+    || (numeric(state.host.alert_count) > 0 && newestSavedAlert > 0
+      && newestSavedAlert < Date.now() / 1000 - 3600));
+  if (showingEarlier) params.set("range", "all");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  const payload = await api("hostAlerts", `/api/alerts?${params}`);
+  let payload = await api("hostAlerts", `/api/alerts?${params}`);
+  if (payload && !showingEarlier && liveRange && page.index === 0
+    && !numeric(payload.total) && numeric(state.host?.alert_count) > 0) {
+    params.set("range", "all");
+    payload = await api("hostAlerts", `/api/alerts?${params}`);
+    showingEarlier = Boolean(payload?.total);
+  }
   if (!payload || state.host?.ip !== ip) return;
+  showingEarlier = showingEarlier && params.get("range") === "all";
   const alerts = payload.items.filter((item) => item.ip_alerted === ip);
   page.items = alerts;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  byId("host-alerts-tab-count").textContent = compact(payload.total);
-  byId("host-alerts-title").textContent = "Alerts for this host";
-  byId("host-alert-count").textContent = `${alerts.length} shown · ${compact(payload.total)} alerts in this range`;
+  byId("host-alerts-tab-count").textContent = showingEarlier
+    ? `${compact(payload.total)} earlier` : compact(payload.total);
+  byId("host-alerts-title").textContent = showingEarlier
+    ? "Earlier alerts for this host" : "Alerts for this host";
+  byId("host-alert-count").textContent = showingEarlier
+    ? `${alerts.length} shown · ${compact(payload.total)} earlier alerts in the full run`
+    : `${alerts.length} shown · ${compact(payload.total)} alerts in this range`;
   const list = byId("host-alerts");
   list.replaceChildren();
+  if (showingEarlier) {
+    const context = document.createElement("div");
+    context.className = "host-alert-history-context";
+    context.append(text("span", "No alerts in Live. Showing earlier alerts from this run."));
+    const allRange = document.createElement("button");
+    allRange.type = "button";
+    allRange.textContent = "Use Full run for all host data";
+    allRange.addEventListener("click", () => {
+      byId("host-range").value = "all";
+      byId("host-range").dispatchEvent(new Event("change"));
+    });
+    context.append(allRange);
+    list.append(context);
+  }
   alerts.forEach((item) => {
     const button = document.createElement("button");
     button.type = "button";
@@ -5532,13 +5709,31 @@ function schedulePoll() {
 async function pollBackendStatus() {
   if (document.hidden) return;
   try {
-    await api("backendStatus", "/api/identity", false);
+    const identity = await api("backendStatus", "/api/identity", false);
+    if (identity) updateReviewAvailability(identity.review_actions === true);
     await loadLiveTitleCounts();
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
     scheduleBackendStatusPoll();
   }
+}
+
+/** Enable review controls only after the running server advertises support.
+ * @param {boolean} available Whether the server accepts review actions.
+ */
+function updateReviewAvailability(available) {
+  state.reviewAvailable = available;
+  ["alerts-review", "evidence-review"].forEach((id) => {
+    byId(id).disabled = !available;
+  });
+  document.querySelectorAll(".review-editor").forEach((editor) => {
+    editor.querySelectorAll(".review-actions button").forEach((button) => {
+      button.disabled = !available;
+    });
+    const notice = editor.querySelector(".review-availability");
+    if (notice) notice.hidden = available;
+  });
 }
 
 /** Schedule the next lightweight backend heartbeat check. */
@@ -5745,6 +5940,11 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
   "arp-poisoning-evidence-table"].forEach((id) =>
   bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search"], loadAlerts);
+byId("alerts-review").addEventListener("change", () => {
+  closeAlertHostPane();
+  resetPage("alerts");
+  loadAlerts().catch(() => {});
+});
 byId("alerts-host-sort").addEventListener("change", () => {
   const page = state.pages.alerts;
   page.sort = byId("alerts-host-sort").value;
@@ -5779,6 +5979,11 @@ byId("alerts-range").addEventListener("change", () => {
   byId("alerts-range-note").hidden = true;
 });
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
+byId("evidence-review").addEventListener("change", () => {
+  clearEvidenceSelection();
+  resetPage("evidence");
+  loadEvidence().catch(() => {});
+});
 byId("evidence-scored-only").addEventListener("change", () => {
   clearEvidenceSelection();
   resetPage("evidence");
@@ -5863,4 +6068,5 @@ loadOverview().catch(() => {}).finally(() => {
 });
 loadWhitelists().catch(() => {});
 loadLiveTitleCounts().catch(() => {});
-scheduleBackendStatusPoll();
+updateReviewAvailability(false);
+pollBackendStatus().catch(() => {});

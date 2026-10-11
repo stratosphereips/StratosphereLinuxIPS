@@ -454,6 +454,8 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .host-section-heading h3, .host-section-heading p { margin: 0; }
 .host-section-heading p { margin-top: .2rem; color: var(--muted); font-size: .72rem; }
 .host-alert-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: .3rem; margin-top: .35rem; overflow: auto; }
+.host-alert-history-context { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .5rem .65rem; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); }
+.host-alert-history-context button { color: var(--link); background: transparent; border: 0; cursor: pointer; }
 .host-alert-chip { display: grid; width: 100%; grid-template-columns: 140px 80px minmax(0, 1fr) auto; align-items: center; gap: .35rem .6rem; padding: .55rem .65rem; border: 1px solid var(--line); border-left: 3px solid var(--danger); border-radius: 6px; background: #101d26; color: var(--text); text-align: left; cursor: pointer; }
 .host-alert-chip.high { border-left-color: var(--warn); }
 .host-alert-chip.medium { border-left-color: #e9c36f; }
@@ -1084,3 +1086,15 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
   .overview-load-foot { font-size: .8rem; }
   .overview-performance .line-chart { min-height: 57px; height: 57px; }
 }
+
+.review-filter-label { display: inline-flex; align-items: center; gap: .45rem; color: var(--muted); font-size: .84rem; }
+.review-filter-label select { min-width: 9rem; }
+.alerts-host-controls > .review-filter-label { width: 100%; }
+.alerts-host-controls > .review-filter-label select { flex: 1; min-width: 0; }
+.review-editor { display: grid; gap: .5rem; margin: .8rem 0; }
+.review-editor h3, .review-editor p { margin: 0; }
+.review-editor label { color: var(--muted); font-size: .8rem; }
+.review-editor textarea { width: 100%; box-sizing: border-box; resize: vertical; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: .5rem; }
+.review-actions { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+.review-actions select { flex: 1; min-width: 10rem; }
+.review-delete { color: var(--danger); }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261011-evidence-detail">
+  <link rel="stylesheet" href="/style.css?v=20261011-host-alerts-review">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -86,6 +86,7 @@
           <div class="alerts-pane-head"><strong>Hosts with alerts</strong><span id="alerts-count" class="alerts-pane-count"></span></div>
           <div class="alerts-host-controls">
             <input id="alerts-search" type="search" placeholder="Search host, ID, label…" aria-label="Search alert hosts">
+            <label class="review-filter-label">Review <select id="alerts-review" aria-label="Alert review filter"><option value="open" selected>Open (active + in review)</option><option value="active">Active</option><option value="in_review">In review</option><option value="resolved">Resolved</option><option value="all">All alerts</option></select></label>
             <div id="alerts-severity-filters" class="alerts-severity-filters" role="group" aria-label="Filter alert hosts by severity"></div>
             <div class="alerts-time-controls">
               <label>Time <select id="alerts-range" class="range-select"><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="live" selected>Live · 1 hour</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select></label>
@@ -119,6 +120,7 @@
       <div class="evidence-toolbar">
         <h2 id="evidence-title">Evidence</h2>
         <input id="evidence-search" type="search" placeholder="Search description, type, host…" aria-label="Search evidence">
+        <label class="review-filter-label">Review <select id="evidence-review" aria-label="Evidence review filter"><option value="all" selected>All evidence</option><option value="unreviewed">Unreviewed</option><option value="in_review">In review</option><option value="true_positive">True positive</option><option value="false_positive">False positive</option><option value="expected_behavior">Expected behavior</option><option value="inconclusive">Inconclusive</option></select></label>
         <button id="evidence-active-type" class="evidence-active-type" type="button" hidden></button>
         <select id="evidence-threat" aria-label="Evidence threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option><option value="high_or_more">High or more</option><option value="medium_or_more">Medium or more</option><option value="low_or_more">Low or more</option></select>
         <div id="evidence-threat-chips" class="evidence-threat-chips" role="group" aria-label="Filter by threat"></div>
@@ -312,6 +314,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261011-evidence-detail"></script>
+  <script src="/app.js?v=20261011-host-alerts-review"></script>
 </body>
 </html>
