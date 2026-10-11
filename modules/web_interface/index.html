@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261011-configuration">
+  <link rel="stylesheet" href="/style.css?v=20261011-alerts-range">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -87,12 +87,15 @@
           <div class="alerts-host-controls">
             <input id="alerts-search" type="search" placeholder="Search host, ID, label…" aria-label="Search alert hosts">
             <div id="alerts-severity-filters" class="alerts-severity-filters" role="group" aria-label="Filter alert hosts by severity"></div>
-            <details class="alerts-more-filters"><summary>Time and visibility</summary><div class="alerts-more-fields">
-              <label>Range <select id="alerts-range" class="range-select"><option value="live" selected>Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select></label>
+            <div class="alerts-time-controls">
+              <label>Time <select id="alerts-range" class="range-select"><option value="5m">5 minutes</option><option value="15m">15 minutes</option><option value="live" selected>Live · 1 hour</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all">Full run</option><option value="custom">Custom</option></select></label>
+              <label>Visibility <select class="excluded-visibility-select" aria-label="Excluded alerts visibility"><option value="hide" selected>Hide excluded</option><option value="show">Show excluded</option></select></label>
+            </div>
+            <div class="alerts-custom-time">
               <input id="alerts-from" class="custom-time" type="datetime-local" aria-label="From time" hidden>
               <input id="alerts-to" class="custom-time" type="datetime-local" aria-label="To time" hidden>
-              <label>Excluded <select class="excluded-visibility-select" aria-label="Excluded alerts visibility"><option value="hide" selected>Hide</option><option value="show">Show</option></select></label>
-            </div></details>
+            </div>
+            <p id="alerts-range-note" class="alerts-range-note" role="status" hidden></p>
           </div>
           <div id="alerts-host-list" class="alerts-host-list" aria-live="polite"></div>
           <div id="alerts-pager" class="alerts-host-pager"></div>
@@ -294,6 +297,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261011-configuration"></script>
+  <script src="/app.js?v=20261011-alerts-range"></script>
 </body>
 </html>

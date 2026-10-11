@@ -19,7 +19,8 @@ const state = {
   alertsWorkspace: {
     severity: "", host: null, alert: null, items: [], next: null,
     total: 0, listGeneration: 0, detailGeneration: 0,
-    listLoadedAt: 0, listSignature: "",
+    listLoadedAt: 0, listSignature: "", fullTotal: 0,
+    rangeTouched: false, autoRange: "",
   },
   evidenceWorkspace: {
     group: null, record: null, records: [], next: null, total: 0, typeFilter: "",
@@ -453,6 +454,10 @@ function applyRunIdentity(identity) {
     state.metadata = null;
     state.metrics = [];
     state.configuration = null;
+    state.alertsWorkspace.rangeTouched = false;
+    state.alertsWorkspace.autoRange = "";
+    byId("alerts-range").value = "live";
+    byId("alerts-range-note").hidden = true;
     state.rangesInitialized = false;
     state.hostNames.clear();
     state.pendingHostNames.clear();
@@ -618,6 +623,13 @@ function resetPage(name) {
 function rangeQuery(prefix) {
   const range = byId(`${prefix}-range`).value;
   const params = new URLSearchParams({ range });
+  if (prefix === "alerts" && ["5m", "15m"].includes(range)) {
+    const seconds = range === "5m" ? 300 : 900;
+    const now = Date.now() / 1000;
+    params.set("range", "custom");
+    params.set("from", String(now - seconds));
+    params.set("to", String(now));
+  }
   if (range === "custom") {
     const from = byId(`${prefix}-from`).value;
     const to = byId(`${prefix}-to`).value;
@@ -627,8 +639,17 @@ function rangeQuery(prefix) {
   return params;
 }
 
+/** Keep rolling alert windows stable when deciding whether details need reload. */
+function alertRangeSignature() {
+  const range = byId("alerts-range").value;
+  const custom = range === "custom"
+    ? `${byId("alerts-from").value}|${byId("alerts-to").value}` : "";
+  return `${range}|${custom}|${state.hideExcluded}`;
+}
+
 function rangeIsLive(prefix) {
-  return ["live", "1h", "24h", "7d", "all"].includes(byId(`${prefix}-range`).value);
+  return ["5m", "15m", "live", "1h", "24h", "7d", "all"]
+    .includes(byId(`${prefix}-range`).value);
 }
 
 /** Format a chart-axis numeric value without adding an unnecessary unit. */
@@ -1438,10 +1459,14 @@ function initializeRanges(run) {
   if (state.rangesInitialized) return;
   const inputType = String(run.input_type || "").toLowerCase();
   const range = ["interface", "stdin", "cyst"].includes(inputType) ? "live" : "all";
+  const preserveAlerts = state.alertsWorkspace.rangeTouched
+    || Boolean(state.alertsWorkspace.autoRange);
   const activeRange = ["alerts", "evidence", "hosts"].includes(state.activeTab)
     ? byId(`${state.activeTab}-range`) : null;
-  const refreshActiveRange = activeRange && activeRange.value !== range;
+  const refreshActiveRange = activeRange && activeRange.value !== range
+    && !(state.activeTab === "alerts" && preserveAlerts);
   ["alerts", "evidence", "hosts", "host"].forEach((name) => {
+    if (name === "alerts" && preserveAlerts) return;
     byId(`${name}-range`).value = range;
   });
   state.rangesInitialized = true;
@@ -1661,7 +1686,6 @@ function renderAlertSeverityFilters() {
   const container = byId("alerts-severity-filters");
   container.replaceChildren();
   [["", "All", page.total], ...["critical", "high", "medium", "low", "info"]
-    .filter((level) => counts.get(level) || selected === level)
     .map((level) => [level, level[0].toUpperCase() + level.slice(1), counts.get(level) || 0])]
     .forEach(([level, label, count]) => {
       const button = text("button", `${label} ${compact(count)}`, "alerts-filter");
@@ -1691,7 +1715,20 @@ function renderAlertHostList() {
     !level || String(item.threat_level || "info").toLowerCase() === level);
   container.replaceChildren();
   if (!rows.length) {
-    container.append(text("p", "No matching hosts in this page.", "empty-state"));
+    const label = byId("alerts-range").selectedOptions[0]?.textContent || "this range";
+    const searched = byId("alerts-search").value.trim();
+    container.append(text("p", searched || level
+      ? "No alert hosts match these filters."
+      : `No alerts in ${label}.`, "empty-state"));
+    if (state.alertsWorkspace.fullTotal && byId("alerts-range").value !== "all") {
+      const showHistory = text("button", "Show full run alerts", "secondary alerts-show-history");
+      showHistory.type = "button";
+      showHistory.addEventListener("click", () => {
+        byId("alerts-range").value = "all";
+        byId("alerts-range").dispatchEvent(new Event("change"));
+      });
+      container.append(showHistory);
+    }
     return;
   }
   rows.forEach((host) => {
@@ -1788,7 +1825,7 @@ async function loadAlertHostAlerts(reset = true, quiet = false) {
   workspace.next = payload.next_cursor;
   workspace.total = payload.total;
   workspace.listLoadedAt = Date.now();
-  workspace.listSignature = `${rangeQuery("alerts")}&${state.hideExcluded}`;
+  workspace.listSignature = alertRangeSignature();
   renderAlertTimeline();
 }
 
@@ -1953,19 +1990,36 @@ function initAlertPaneResize() {
 async function loadAlerts() {
   const payload = await api("alerts", listPath("alerts"));
   if (!payload) return;
+  const workspace = state.alertsWorkspace;
+  workspace.fullTotal = payload.full_total || 0;
+  if (!workspace.rangeTouched && !workspace.autoRange
+      && byId("alerts-range").value === "live"
+      && !byId("alerts-search").value.trim()
+      && payload.total === 0 && payload.full_total > 0) {
+    const age = Date.now() / 1000 - numeric(payload.latest_alert_time);
+    const fallback = age <= 86400 ? "24h" : age <= 7 * 86400 ? "7d" : "all";
+    workspace.autoRange = fallback;
+    byId("alerts-range").value = fallback;
+    const note = byId("alerts-range-note");
+    note.textContent = `No alerts in Live (last hour). Showing ${byId("alerts-range").selectedOptions[0].textContent} instead.`;
+    note.hidden = false;
+    byId("alerts-host-list").replaceChildren(text("p", "Loading recent alerts…", "empty-state"));
+    resetPage("alerts");
+    await loadAlerts();
+    return;
+  }
   applyPage("alerts", payload);
   byId("alerts-count").textContent = compact(payload.total);
   renderAlertSeverityFilters();
   renderAlertHostList();
   pager("alerts", "alerts-pager", loadAlerts);
-  const workspace = state.alertsWorkspace;
   if (workspace.host) {
     const current = payload.items.find((item) => item.ip_alerted === workspace.host.ip_alerted);
     if (current) {
       workspace.host = current;
       renderAlertSelectedHost();
     }
-    const signature = `${rangeQuery("alerts")}&${state.hideExcluded}`;
+    const signature = alertRangeSignature();
     if (workspace.listSignature !== signature || Date.now() - workspace.listLoadedAt > 15000) {
       loadAlertHostAlerts(true, true).catch(() => {});
     }
@@ -4959,7 +5013,9 @@ function activeRangeIsLive() {
 function schedulePoll() {
   window.clearTimeout(state.timer);
   if (document.hidden || !activeRangeIsLive()) return;
-  const delay = Math.min(5000 * (2 ** state.failures), 60000);
+  const interval = state.activeTab === "alerts" && byId("alerts-range").value === "all"
+    ? 30000 : 5000;
+  const delay = Math.min(interval * (2 ** state.failures), 60000);
   state.timer = window.setTimeout(refreshActive, delay);
 }
 
@@ -5145,6 +5201,11 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
   "arp-poisoning-evidence-table"].forEach((id) =>
   bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search"], loadAlerts);
+byId("alerts-range").addEventListener("change", () => {
+  state.alertsWorkspace.rangeTouched = true;
+  state.alertsWorkspace.autoRange = "";
+  byId("alerts-range-note").hidden = true;
+});
 bindFilters("evidence", ["evidence-search", "evidence-threat", "evidence-link"], loadEvidence);
 byId("evidence-scored-only").addEventListener("change", () => {
   clearEvidenceSelection();

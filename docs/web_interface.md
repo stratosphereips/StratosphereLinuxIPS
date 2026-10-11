@@ -281,7 +281,17 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 Alerts opens with only the **Hosts with alerts** pane. Choose a host to open its individual alert timeline in a second pane, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record in a third pane. Evidence cards open the existing investigation drawer for triggering flows. The two dividers can be dragged or adjusted with the left and right arrow keys. Closing an alert returns to two panes; closing the host returns to the initial pane.
 
-Search, severity chips, range, and excluded-record visibility remain in the host pane. Individual alerts load 50 at a time, with **Load more** for older alerts. The middle pane includes a short description from each alert's newest linked evidence without loading every full evidence record. The selected host and alert stay open while the list refreshes.
+Search, severity chips, time range, and excluded-record visibility stay visible
+in the host pane. Time choices include 5 minutes, 15 minutes, Live (the last
+hour), longer intervals, Full run, and a custom interval. On the first visit,
+if Live has no alert hosts but the run has saved alerts, the tab switches to
+24 hours, 7 days, or Full run based on the newest alert time and says so.
+Older servers without that timestamp switch to Full run. An empty
+range also offers a **Show full run alerts** button. Once the user chooses a
+range, Slips keeps that choice. Individual alerts load 50 at a time, with
+**Load more** for older alerts. The middle pane includes a short description
+from each alert's newest linked evidence without loading every full evidence
+record. The selected host and alert stay open while the list refreshes.
 
 ### Evidence
 

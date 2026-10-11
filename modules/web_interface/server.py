@@ -96,6 +96,8 @@ INTERNAL_PID_NAMES = {
     "web_interface_detection_backfill",
 }
 TIME_RANGES = {
+    "5m": 5 * 60,
+    "15m": 15 * 60,
     "live": 60 * 60,
     "1h": 60 * 60,
     "24h": 24 * 60 * 60,
@@ -2691,6 +2693,7 @@ class RunDataReader:
             "sort": sort_key,
             "order": direction.lower(),
             "group": "host",
+            "latest_alert_time": latest,
         }
 
     def _grouped_alerts(self, query: Dict[str, List[str]]) -> Dict[str, Any]:

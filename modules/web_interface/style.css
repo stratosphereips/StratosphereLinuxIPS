@@ -502,11 +502,13 @@ body.alerts-active main { max-width: none; padding: 0; }
 .alerts-filter[data-level="high"] { border-color: #ed925666; color: #f2a06c; }
 .alerts-filter[data-level="medium"] { border-color: #e4ac4e66; color: #edc164; }
 .alerts-filter[data-level="critical"].active, .alerts-filter[data-level="high"].active, .alerts-filter[data-level="medium"].active { background: #2c3540; }
-.alerts-more-filters { margin-top: .45rem; color: var(--muted); font-size: .72rem; }
-.alerts-more-filters summary { cursor: pointer; }
-.alerts-more-fields { display: flex; flex-wrap: wrap; gap: .5rem; padding: .55rem 0 .1rem; }
-.alerts-more-fields label { display: grid; gap: .25rem; min-width: 125px; flex: 1; }
-.alerts-more-fields select, .alerts-more-fields input { width: 100%; min-width: 0; padding: .4rem; font-size: .75rem; }
+.alerts-time-controls { display: flex; gap: .5rem; margin-top: .55rem; }
+.alerts-time-controls label { display: grid; min-width: 0; flex: 1; gap: .2rem; color: var(--muted); font-size: .69rem; }
+.alerts-time-controls select { width: 100%; min-width: 0; padding: .35rem .4rem; font-size: .72rem; }
+.alerts-custom-time { display: flex; gap: .4rem; }
+.alerts-custom-time:has(> input:not([hidden])) { margin-top: .45rem; }
+.alerts-custom-time input { min-width: 0; width: 50%; padding: .35rem; font-size: .7rem; }
+.alerts-range-note { margin: .45rem 0 0; color: #e9c275; font-size: .72rem; line-height: 1.3; }
 .alerts-host-list, .alerts-list, .alerts-detail { min-height: 0; overflow: auto; scrollbar-color: #41586a #0b141d; }
 .alerts-host-list, .alerts-list { flex: 1; }
 .alerts-selected-host { position: relative; }

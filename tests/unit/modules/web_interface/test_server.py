@@ -14,6 +14,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 import psutil
+from pytest_mock import MockerFixture
 
 from modules.web_interface.history import connect_history, initialize_history
 from modules.web_interface.server import (
@@ -3080,8 +3081,20 @@ def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
     assert result["items"][0]["id"] == "current"
 
 
-def test_live_range_uses_wall_clock_for_interface_runs(mocker) -> None:
-    """Keep stale detections outside the live window during an idle capture."""
+@pytest.mark.parametrize(
+    "range_name, duration",
+    [("5m", 300), ("15m", 900), ("live", 3600)],
+)
+def test_live_range_uses_wall_clock_for_interface_runs(
+    mocker: MockerFixture, range_name: str, duration: int
+) -> None:
+    """Keep stale detections outside a rolling interval during idle capture.
+
+    Parameters:
+        mocker: Pytest patch helper.
+        range_name: Requested rolling range.
+        duration: Expected number of seconds in that range.
+    """
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
     reader.redis = Mock()
@@ -3089,10 +3102,14 @@ def test_live_range_uses_wall_clock_for_interface_runs(mocker) -> None:
     mocker.patch("modules.web_interface.server.time.time", return_value=10_000)
 
     start, end, range_name = reader._time_bounds(
-        {"range": ["live"]}, latest_event=7_000
+        {"range": [range_name]}, latest_event=7_000
     )
 
-    assert (start, end, range_name) == (6_400, 10_000, "live")
+    assert (start, end, range_name) == (
+        10_000 - duration,
+        10_000,
+        range_name,
+    )
 
 
 def test_host_load_reports_directional_flows_and_bytes(tmp_path) -> None:
