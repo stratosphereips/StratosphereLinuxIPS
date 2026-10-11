@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261011-alerts-range">
+  <link rel="stylesheet" href="/style.css?v=20261011-p2p-layout">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -180,24 +180,34 @@
     </section>
 
     <section id="p2p" class="panel" aria-labelledby="p2p-title">
-      <div class="section-heading"><div><p class="eyebrow">COLLABORATIVE INTELLIGENCE</p><h2 id="p2p-title">P2P network <span class="info-pill" title="Message counts (reports and requests sent/received) reset at the start of each timewindow">stast per timewindow</span></h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div><button class="secondary refresh-list" data-target="p2p">Refresh</button></div>
+      <div class="p2p-network-head surface">
+        <div class="p2p-network-title"><h2 id="p2p-title">P2P network <span class="info-pill" title="Message counts (reports and requests sent/received) reset at the start of each timewindow">stats per timewindow</span></h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div>
+        <div id="p2p-identity" class="p2p-identity"></div>
+        <div class="p2p-network-actions"><span id="p2p-updated" class="muted"></span><button class="secondary refresh-list" data-target="p2p">↻ Refresh</button></div>
+      </div>
       <article id="p2p-disabled" class="surface empty-state" hidden><p>P2P not enabled in this run.</p></article>
       <div id="p2p-stats">
-        <div id="p2p-summary" class="summary-grid"></div>
-        <article class="surface"><h3>Local identity</h3><div id="p2p-identity" class="metadata-grid"></div></article>
+        <div id="p2p-summary" class="summary-grid p2p-summary"></div>
+        <div class="p2p-two-column">
+        <article class="surface table-surface p2p-peers-panel"><div class="table-heading"><div><h3>Peers <span id="p2p-peer-count" class="muted"></span></h3><p>Live connectivity and latest persistent trust</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer</th><th>Peer ID</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports</th><th>Last seen</th></tr></thead><tbody></tbody></table></div><div class="p2p-panel-foot">Trust “—” = not yet computed by the trust model. Click a peer to filter messages.</div></article>
         <article class="surface p2p-trust-history">
           <div class="table-heading p2p-chart-heading">
-            <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model; current computed trust is shown in the peers table.</p></div>
+            <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model</p></div>
             <select id="p2p-range" class="range-select" aria-label="Peer trust history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
           </div>
           <div id="p2p-trust-legend" class="p2p-trust-legend"></div>
           <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
+          <p class="p2p-chart-note">Hover for precise values. Offline peers stop at last seen.</p>
         </article>
-        <article class="surface table-surface"><div class="table-heading"><div><h3>Peers</h3><p>Live connectivity plus the latest persistent trust state.</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer ID</th><th>IP</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports received</th><th>Last seen</th></tr></thead><tbody></tbody></table></div></article>
-        <article class="surface table-surface">
-          <div class="table-heading"><div><h3>Reports and message activity</h3><p>Recent P2P messages, including received reports. Select a row to inspect its content.</p></div><div class="table-actions"><label for="p2p-message-filter">Show</label><select id="p2p-message-filter" class="range-select"><option value="all">All messages</option><option value="received-report">Received reports</option><option value="sent-report">Sent reports</option><option value="request">Requests</option><option value="blame">Blame reports</option><option value="connection_update">Connection changes</option></select><span id="p2p-message-count" class="muted"></span></div></div>
+        </div>
+        <div class="p2p-two-column p2p-message-workspace">
+        <article class="surface table-surface p2p-activity-panel">
+          <div class="table-heading p2p-activity-heading"><div class="p2p-activity-title"><h3>Reports and message activity</h3><div id="p2p-activity-chips" class="p2p-filter-chips"><button type="button" data-p2p-filter="all">All</button><button type="button" data-p2p-filter="reports">Reports</button><button type="button" data-p2p-filter="request">Requests</button><button type="button" data-p2p-filter="connection_update">Connection updates</button></div></div><div class="table-actions"><span id="p2p-peer-filter" class="p2p-peer-filter" hidden></span><label for="p2p-message-filter">Show</label><select id="p2p-message-filter" class="range-select"><option value="all">All messages</option><option value="reports">All reports</option><option value="received-report">Received reports</option><option value="sent-report">Sent reports</option><option value="request">Requests</option><option value="blame">Blame reports</option><option value="connection_update">Connection changes</option></select><span id="p2p-message-count" class="muted"></span></div></div>
           <div class="table-wrap"><table id="p2p-activity-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="direction">Direction</th><th data-sort="message_type">Type</th><th data-sort="peer">Peer</th><th data-sort="target">Target</th><th data-sort="score">Score</th><th data-sort="confidence">Confidence</th></tr></thead><tbody></tbody></table></div>
+          <div class="p2p-panel-foot p2p-activity-foot"><span>“*” = broadcast to all peers</span><button id="p2p-load-more" type="button" hidden>Load more</button></div>
         </article>
+        <article id="p2p-message-detail" class="surface p2p-message-detail"><p class="muted">Select a message to inspect its content.</p></article>
+        </div>
       </div>
     </section>
 
@@ -297,6 +307,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261011-alerts-range"></script>
+  <script src="/app.js?v=20261011-p2p-layout"></script>
 </body>
 </html>

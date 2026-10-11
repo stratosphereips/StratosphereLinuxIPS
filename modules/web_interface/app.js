@@ -14,6 +14,9 @@ const state = {
   whitelists: null,
   arpPoisoning: null,
   p2p: null,
+  p2pSelectedPeer: null,
+  p2pSelectedMessage: null,
+  p2pVisibleMessages: 12,
   host: null,
   hostActivity: "alerts",
   alertsWorkspace: {
@@ -752,8 +755,8 @@ function bindChartHover(svg, target, points, series, formatValue, maximum, left,
   target.addEventListener("pointerleave", () => { tooltip.hidden = true; });
 }
 
-/** Render a performance chart with numeric and time axes. */
-function renderLineChart(id, points, series, formatValue = formatChartValue) {
+/** Render a performance chart with numeric and time axes and an optional lower bound. */
+function renderLineChart(id, points, series, formatValue = formatChartValue, minimumValue = 0) {
   const svg = byId(id);
   svg.replaceChildren();
   chartTooltip(svg).hidden = true;
@@ -786,6 +789,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     .filter((item) => hasValue(point, item.key))
     .map((item) => numeric(point[item.key])));
   const maximum = Math.max(...values, 1);
+  const valueSpan = Math.max(maximum - minimumValue, 0.001);
   const minimumTime = numeric(points[0].ts);
   const maximumTime = numeric(points.at(-1).ts);
   const span = Math.max(maximumTime - minimumTime, 1);
@@ -807,7 +811,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     label.setAttribute("y", String(y + 3));
     label.setAttribute("text-anchor", "end");
     label.setAttribute("class", "chart-label");
-    label.textContent = formatValue(maximum * ratio, maximum);
+    label.textContent = formatValue(minimumValue + valueSpan * ratio, maximum);
     svg.append(label);
   });
   [0, 0.5, 1].forEach((ratio) => {
@@ -827,7 +831,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
     const d = seriesPoints.map((point, index) => {
       const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
-      const y = height - bottom - (numeric(point[item.key]) / maximum) * plotHeight;
+      const y = height - bottom - ((numeric(point[item.key]) - minimumValue) / valueSpan) * plotHeight;
       return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
     }).join(" ");
     path.setAttribute("d", d);
@@ -837,7 +841,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue) {
       const point = seriesPoints[0];
       const marker = document.createElementNS("http://www.w3.org/2000/svg", "circle");
       marker.setAttribute("cx", String(left + ((numeric(point.ts) - minimumTime) / span) * plotWidth));
-      marker.setAttribute("cy", String(height - bottom - (numeric(point[item.key]) / maximum) * plotHeight));
+      marker.setAttribute("cy", String(height - bottom - ((numeric(point[item.key]) - minimumValue) / valueSpan) * plotHeight));
       marker.setAttribute("r", "3");
       marker.setAttribute("class", `chart-point ${item.className || ""}`);
       svg.append(marker);
@@ -3119,11 +3123,15 @@ function renderP2PTrustChart(history, peers) {
     className: `peer-trust-line-${index % 8}`,
     label: peerIps.get(peerId) || peerId,
   }));
+  const minimumReliability = rows.length
+    ? Math.max(0, Math.floor((Math.min(...rows.map((row) => Number(row.reliability))) - 0.01) * 10) / 10)
+    : 0;
   renderLineChart(
     "p2p-trust-chart",
     points,
     series,
     (value) => numeric(value).toFixed(2),
+    minimumReliability,
   );
   const legend = byId("p2p-trust-legend");
   legend.replaceChildren();
@@ -3181,55 +3189,230 @@ function p2pMessageRows(payload) {
   return activity;
 }
 
+/** Keep today's P2P table timestamps compact while retaining older dates.
+ * @param {number|string} value Unix timestamp to display.
+ * @returns {string} Local time for today or full date and time for older events.
+ */
+function formatP2PTime(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount < 946684800) return formatTime(value);
+  const date = new Date(amount * 1000);
+  return date.toDateString() === new Date().toDateString()
+    ? date.toLocaleTimeString() : formatTime(value);
+}
+
 /** Apply the selected report/message filter and render the sortable table. */
 function renderP2PMessages() {
   const payload = state.p2p || {};
   const filter = byId("p2p-message-filter").value;
   const rows = p2pMessageRows(payload);
   const visible = rows.filter((row) => {
+    if (state.p2pSelectedPeer && row.peer !== state.p2pSelectedPeer.peer_id
+      && row.peer !== state.p2pSelectedPeer.ip) return false;
     if (filter === "all") return true;
+    if (filter === "reports") return ["report", "blame"].includes(row.message_type);
     if (filter === "received-report") return row.direction === "received"
       && row.message_type === "report";
     if (filter === "sent-report") return row.direction === "sent"
       && row.message_type === "report";
     return row.message_type === filter;
   });
-  byId("p2p-message-count").textContent = `${visible.length} shown · ${rows.length} retained`;
-  renderTable("p2p-activity-table", sortLocalRows("p2p-activity-table", visible), [
-    (row) => formatTime(row.timestamp),
+  const sorted = sortLocalRows("p2p-activity-table", visible);
+  const shown = sorted.slice(0, state.p2pVisibleMessages);
+  byId("p2p-message-count").textContent = `${shown.length} shown · ${visible.length} matching · ${rows.length} retained`;
+  const peerFilter = byId("p2p-peer-filter");
+  peerFilter.hidden = !state.p2pSelectedPeer;
+  peerFilter.replaceChildren();
+  if (state.p2pSelectedPeer) {
+    peerFilter.append(text("span", `Peer: ${state.p2pSelectedPeer.ip || state.p2pSelectedPeer.peer_id}`));
+    const clear = text("button", "×");
+    clear.type = "button";
+    clear.title = "Show messages from all peers";
+    clear.addEventListener("click", () => {
+      state.p2pSelectedPeer = null;
+      state.p2pVisibleMessages = 12;
+      renderP2PPeers();
+      renderP2PMessages();
+    });
+    peerFilter.append(clear);
+  }
+  document.querySelectorAll("[data-p2p-filter]").forEach((button) => {
+    const active = button.dataset.p2pFilter === filter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  const more = byId("p2p-load-more");
+  more.hidden = shown.length >= sorted.length;
+  more.textContent = `Load more (${sorted.length - shown.length} remaining)`;
+  renderTable("p2p-activity-table", shown, [
+    (row) => formatP2PTime(row.timestamp),
     (row) => row.direction,
     (row) => row.message_type,
-    (row) => hostOrText(row.peer),
+    (row) => p2pPeerIdentity(row.peer),
     (row) => hostOrText(row.target),
     (row) => row.score === null || row.score === undefined ? "—" : numeric(row.score).toFixed(3),
     (row) => row.confidence === null || row.confidence === undefined
       ? "—" : numeric(row.confidence).toFixed(3),
   ], openP2PMessage);
+  document.querySelectorAll("#p2p-activity-table tbody tr[data-clickable]").forEach((row, index) => {
+    row.dataset.messageKey = p2pMessageKey(shown[index]);
+    row.classList.toggle("selected", row.dataset.messageKey === state.p2pSelectedMessage);
+  });
+  const selected = rows.find((row) => p2pMessageKey(row) === state.p2pSelectedMessage);
+  renderP2PMessageDetail(selected || null);
 }
 
-/** Open the complete retained content for a P2P message or report. */
-function openP2PMessage(record) {
-  openDrawer("P2P MESSAGE", `${record.message_type} · ${record.direction}`);
-  const body = byId("drawer-body");
+/** Identify a message across refreshes without depending on its array position.
+ * @param {object} record Retained message or stored report.
+ * @returns {string} Stable selection key.
+ */
+function p2pMessageKey(record) {
+  return JSON.stringify([record.timestamp, record.report_time, record.direction,
+    record.message_type, record.peer, record.target]);
+}
+
+/** Return retained content or report fields that survived in the trust database.
+ * @param {object} record Selected message or report.
+ * @returns {object} Content available for display and copying.
+ */
+function p2pMessageContent(record) {
+  return record.message && typeof record.message === "object"
+    ? record.message : record.archived_report
+      ? { key: record.target, evaluation: { score: record.score, confidence: record.confidence } }
+      : record;
+}
+
+/** Show a message sender with its known peer address and host name.
+ * @param {string} peerId Sender peer ID or broadcast marker.
+ * @returns {HTMLElement} Sender label for the activity table.
+ */
+function p2pPeerIdentity(peerId) {
+  const wrapper = document.createElement("span");
+  wrapper.className = "p2p-activity-peer";
+  if (peerId === "*") {
+    wrapper.textContent = "* all peers";
+    return wrapper;
+  }
+  const id = text("code", peerId || "—");
+  id.title = peerId || "";
+  wrapper.append(id);
+  const match = state.p2p?.peers?.find((peer) => peer.peer_id === peerId);
+  if (match?.ip) wrapper.append(hostIdentity(match.ip));
+  return wrapper;
+}
+
+/** Display a selected message beside the activity table.
+ * @param {object|null} record Selected message, if any.
+ */
+function renderP2PMessageDetail(record) {
+  const panel = byId("p2p-message-detail");
+  panel.replaceChildren();
+  if (!record) {
+    panel.append(text("p", "Select a message to inspect its content.", "muted"));
+    return;
+  }
+  const heading = document.createElement("div");
+  heading.className = "p2p-detail-heading";
+  const title = document.createElement("div");
+  title.append(text("h3", `Message · ${formatTime(record.timestamp)}`),
+    text("strong", `${record.message_type} · ${record.direction}`));
+  const copy = text("button", "Copy JSON", "secondary");
+  copy.type = "button";
+  copy.addEventListener("click", () => copyP2PText(JSON.stringify(p2pMessageContent(record), null, 2), "Message JSON"));
+  heading.append(title, copy);
+  panel.append(heading);
+  const peerAddress = state.p2p?.peers?.find((peer) => peer.peer_id === record.peer)?.ip;
   const facts = [
     ["Time", formatTime(record.timestamp)],
     ["Direction", record.direction],
     ["Type", record.message_type],
-    ["Peer", record.peer || "—"],
+    ["Peer", record.peer === "*" ? "* (broadcast to all peers)" :
+      `${record.peer || "—"}${peerAddress ? ` · ${peerAddress}` : ""}`],
     ["Target", record.target || "—"],
     ["Score", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
     ["Confidence", record.confidence === null || record.confidence === undefined
       ? "—" : numeric(record.confidence).toFixed(3)],
   ];
   if (record.report_time) facts.splice(1, 0, ["Peer report time", formatTime(record.report_time)]);
-  body.append(investigationStats(facts));
-  const content = record.message && typeof record.message === "object"
-    ? record.message : record.archived_report
-      ? { key: record.target, evaluation: { score: record.score, confidence: record.confidence } }
-      : record;
-  body.append(text("h3", record.archived_report ? "Stored report fields" : "Message content"));
-  if (record.archived_report) body.append(text("p", "The original message is no longer retained; these report fields remain in the trust database.", "muted"));
-  body.append(text("pre", JSON.stringify(content, null, 2), "p2p-message-content"));
+  const list = document.createElement("dl");
+  list.className = "p2p-message-facts";
+  facts.forEach(([label, value]) => list.append(text("dt", label), text("dd", value)));
+  panel.append(list, text("h4", record.archived_report ? "Stored report fields" : "Payload"));
+  if (record.archived_report) panel.append(text("p", "The original message is no longer retained; these report fields remain in the trust database.", "muted"));
+  panel.append(text("pre", JSON.stringify(p2pMessageContent(record), null, 2), "p2p-message-content"));
+}
+
+/** Select a message for inline inspection.
+ * @param {object} record Selected message.
+ */
+function openP2PMessage(record) {
+  state.p2pSelectedMessage = p2pMessageKey(record);
+  renderP2PMessageDetail(record);
+  document.querySelectorAll("#p2p-activity-table tbody tr[data-clickable]").forEach((row) => {
+    row.classList.toggle("selected", row.dataset.messageKey === state.p2pSelectedMessage);
+  });
+}
+
+/** Copy a P2P identifier or payload to the clipboard.
+ * @param {string} value Text to copy.
+ * @param {string} label User-facing content label.
+ * @returns {Promise<void>} Completes after reporting the copy result.
+ */
+async function copyP2PText(value, label) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+    else {
+      const input = document.createElement("textarea");
+      input.value = value;
+      input.style.position = "fixed";
+      input.style.opacity = "0";
+      document.body.append(input);
+      input.select();
+      const copied = document.execCommand("copy");
+      input.remove();
+      if (!copied) throw new Error("Browser denied clipboard access");
+    }
+    toast(`${label} copied`);
+  } catch {
+    toast(`Could not copy ${label.toLowerCase()}`);
+  }
+}
+
+/** Render peers with address, state, trust and reliability.
+ * Selecting a row filters the message table to that peer.
+ */
+function renderP2PPeers() {
+  const peers = state.p2p?.peers || [];
+  byId("p2p-peer-count").textContent = String(peers.length);
+  renderTable("p2p-peers-table", peers, [
+    (row) => row.ip ? hostIdentity(row.ip) : text("span", "Unknown IP", "muted"),
+    (row) => { const id = text("code", row.peer_id || "—", "p2p-short-id"); id.title = row.peer_id || ""; return id; },
+    (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
+    (row) => row.trust === null || row.trust === undefined ? "—" : numeric(row.trust).toFixed(3),
+    (row) => {
+      const value = document.createElement("div");
+      value.className = "p2p-reliability";
+      value.append(text("code", row.reliability === null || row.reliability === undefined
+        ? "—" : numeric(row.reliability).toFixed(3)));
+      const track = document.createElement("span");
+      track.className = "p2p-reliability-track";
+      const fill = document.createElement("span");
+      fill.style.width = `${Math.max(0, Math.min(100, numeric(row.reliability) * 100))}%`;
+      track.append(fill);
+      value.append(track);
+      return value;
+    },
+    (row) => compact(row.reports_received),
+    (row) => formatP2PTime(row.last_seen),
+  ], (row) => {
+    state.p2pSelectedPeer = state.p2pSelectedPeer?.peer_id === row.peer_id ? null : row;
+    state.p2pVisibleMessages = 12;
+    renderP2PPeers();
+    renderP2PMessages();
+  });
+  document.querySelectorAll("#p2p-peers-table tbody tr[data-clickable]").forEach((row, index) => {
+    row.classList.toggle("selected", peers[index].peer_id === state.p2pSelectedPeer?.peer_id);
+  });
 }
 
 async function loadP2P() {
@@ -3246,30 +3429,37 @@ async function loadP2P() {
     return;
   }
   byId("p2p-status").textContent = counts.connected
-    ? `${counts.connected} peer${counts.connected === 1 ? "" : "s"} connected now.`
+    ? `Collaborative intelligence · ${counts.connected} of ${counts.known || 0} known peers connected`
     : "P2P is running and listening; no peers are connected now.";
+  byId("p2p-updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  const reliability = (payload.peers || []).filter((peer) => peer.reliability !== null
+    && peer.reliability !== undefined).map((peer) => Number(peer.reliability))
+    .filter((value) => Number.isFinite(value));
+  const average = reliability.length
+    ? (reliability.reduce((sum, value) => sum + value, 0) / reliability.length).toFixed(2) : "—";
   setSummaryCards([
-    ["Connected peers", compact(counts.connected)],
-    ["Known peers", compact(counts.known)],
+    ["Connected peers", `${compact(counts.connected)} / ${compact(counts.known)}`],
     ["Reports sent", compact(counts.reports_sent)],
     ["Reports received", compact(counts.reports_received)],
     ["Requests sent / received", `${compact(counts.requests_sent)} / ${compact(counts.requests_received)}`],
+    ["Average reliability", average],
   ], "p2p-summary");
   const identity = byId("p2p-identity");
-  identity.replaceChildren(
-    detailRow("Local peer ID", payload.local_peer_id || "Waiting for Pigeon identity"),
-    detailRow("Listen address", payload.listener || "Waiting for listener announcement"),
-  );
+  identity.replaceChildren();
+  [["Local peer ID", payload.local_peer_id || "Waiting for Pigeon identity"],
+    ["Listen address", payload.listener || "Waiting for listener announcement"]].forEach(([label, value]) => {
+    const line = document.createElement("div");
+    line.className = "p2p-identity-row";
+    const code = text("code", value);
+    code.title = value;
+    const copy = text("button", "Copy", "p2p-copy-link");
+    copy.type = "button";
+    copy.addEventListener("click", () => copyP2PText(value, label));
+    line.append(text("span", label), code, copy);
+    identity.append(line);
+  });
   renderP2PTrustChart(payload.trust_history || [], payload.peers || []);
-  renderTable("p2p-peers-table", payload.peers || [], [
-    (row) => text("code", row.peer_id),
-    (row) => hostIdentity(row.ip),
-    (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
-    (row) => row.trust === null ? "—" : numeric(row.trust).toFixed(3),
-    (row) => row.reliability === null ? "—" : numeric(row.reliability).toFixed(3),
-    (row) => compact(row.reports_received),
-    (row) => formatTime(row.last_seen),
-  ]);
+  renderP2PPeers();
   renderP2PMessages();
 }
 
@@ -5047,6 +5237,7 @@ function switchTab(name) {
   document.body.classList.toggle("hosts-active", name === "hosts");
   document.body.classList.toggle("metadata-active", name === "metadata");
   document.body.classList.toggle("configuration-active", name === "configuration");
+  document.body.classList.toggle("p2p-active", name === "p2p");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
@@ -5120,7 +5311,21 @@ byId("load-module-evidence").addEventListener("click", () =>
   loadOverviewEvidenceCounts().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));
 byId("p2p-range").addEventListener("change", () => loadP2P().catch(() => {}));
-byId("p2p-message-filter").addEventListener("change", renderP2PMessages);
+byId("p2p-message-filter").addEventListener("change", () => {
+  state.p2pVisibleMessages = 12;
+  renderP2PMessages();
+});
+document.querySelectorAll("[data-p2p-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    byId("p2p-message-filter").value = button.dataset.p2pFilter;
+    state.p2pVisibleMessages = 12;
+    renderP2PMessages();
+  });
+});
+byId("p2p-load-more").addEventListener("click", () => {
+  state.p2pVisibleMessages += 20;
+  renderP2PMessages();
+});
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
 byId("module-search").addEventListener("input", () =>
   state.overview && renderModules(state.overview.modules));
