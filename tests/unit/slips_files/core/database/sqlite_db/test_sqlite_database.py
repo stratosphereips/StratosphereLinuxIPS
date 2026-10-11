@@ -325,6 +325,32 @@ def test_retention_prioritizes_latest_evidence_for_shared_flow(
     assert db.get_flow("old-flow")["old-flow"] == "{}"
 
 
+def test_size_pressure_keeps_recent_unlinked_flows(db) -> None:
+    """Do not delete a fresh flow before its detector can link evidence.
+
+    Parameters:
+        db: Isolated SQLite database fixture.
+    """
+    _module_factory = ModuleFactory()
+    db.execute(
+        "INSERT INTO flows (uid, flow, event_time) VALUES (?, ?, ?)",
+        ("recent-connection", "{}", 150),
+    )
+    db.execute(
+        "INSERT INTO flows (uid, flow, event_time) VALUES (?, ?, ?)",
+        ("old-connection", "{}", 110),
+    )
+
+    assert db.maintain_flow_retention(
+        ordinary_cutoff=100,
+        linked_cutoff=0,
+        batch_size=10,
+        max_size_bytes=1,
+        unlinked_size_cutoff=120,
+    ) == ["old-connection"]
+    assert db.get_flow("recent-connection")["recent-connection"] == "{}"
+
+
 def test_retention_backfills_legacy_flow_timestamps(db) -> None:
     """Bound migration work and retain evidence links from older runs."""
     _module_factory = ModuleFactory()

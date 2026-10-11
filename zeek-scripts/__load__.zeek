@@ -9,6 +9,7 @@
 # Add SHA256 hash for files
 @load ./hash_sha256
 @load ./log_gw.zeek
+@load ./airplay-info.zeek
 
 ########################################
 ##! Local site policy. Customize as appropriate.

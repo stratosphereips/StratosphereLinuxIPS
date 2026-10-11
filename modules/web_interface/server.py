@@ -185,6 +185,7 @@ WHITELIST_TYPES = {
     "domains": "Domain",
     "organizations": "Organization",
     "macs": "MAC address",
+    "uris": "Request URI",
 }
 ARP_EVIDENCE_TYPES = (
     "ARP_SCAN",
@@ -535,7 +536,9 @@ class RunDataReader:
         return value
 
     @staticmethod
-    def _whitelist_effect(direction: str, ignored: str) -> str:
+    def _whitelist_effect(
+        direction: str, ignored: str, rule_type: str = "ip"
+    ) -> str:
         """
         Describe one parsed whitelist rule's suppression semantics.
 
@@ -556,6 +559,8 @@ class RunDataReader:
             "flows": "flows",
             "both": "flows, evidence, and alerts",
         }.get(ignored, ignored)
+        if rule_type == "uri":
+            return "Suppresses matching request flows and their detections."
         return f"Suppresses {target} when this value appears on the {side}."
 
     def _runtime_whitelist_rules(self) -> List[Dict[str, Any]]:
@@ -576,7 +581,11 @@ class RunDataReader:
                     direction = str(details.get("from", "both"))
                     ignored = str(details.get("what_to_ignore", "alerts"))
                     evidence_type = str(details.get("evidence_type") or "")
-                    visible_value = str(value).split("|", 1)[0]
+                    visible_value = (
+                        str(value)
+                        if label == "Request URI"
+                        else str(value).split("|", 1)[0]
+                    )
                     rules.append(
                         {
                             "type": label,
@@ -585,7 +594,9 @@ class RunDataReader:
                             "ignore": ignored,
                             "evidence_type": evidence_type,
                             "effect": self._whitelist_effect(
-                                direction, ignored
+                                direction,
+                                ignored,
+                                "uri" if label == "Request URI" else "ip",
                             ),
                             "source": "Parsed runtime rule",
                         }
@@ -619,18 +630,23 @@ class RunDataReader:
                         legacy_path.read_text(encoding="utf-8").splitlines()
                     )
                 managed = {
-                    (parts[1], parts[4] if len(parts) > 4 else "")
+                    (parts[0], parts[1], parts[4] if len(parts) > 4 else "")
                     for line in managed_lines
                     if (parts := line.split(","))
-                    and parts[0] == "ip"
+                    and parts[0] in {"ip", "uri"}
                     and len(parts) >= 4
                 }
             except OSError:
                 managed = set()
             for rule in rules:
                 rule["managed"] = (
-                    rule["type"] == "IP address"
-                    and (rule["value"], rule["evidence_type"]) in managed
+                    rule["type"] in {"IP address", "Request URI"}
+                    and (
+                        "uri" if rule["type"] == "Request URI" else "ip",
+                        rule["value"],
+                        rule["evidence_type"],
+                    )
+                    in managed
                 )
                 if rule["managed"]:
                     rule["source"] = "Added from web"
@@ -657,6 +673,7 @@ class RunDataReader:
                     "domain": "Domain",
                     "organization": "Organization",
                     "mac": "MAC address",
+                    "uri": "Request URI",
                 }.get(type_name.lower(), self._setting_label(type_name))
                 rules.append(
                     {
@@ -665,7 +682,9 @@ class RunDataReader:
                         "direction": direction,
                         "ignore": ignored,
                         "evidence_type": evidence_type,
-                        "effect": self._whitelist_effect(direction, ignored),
+                        "effect": self._whitelist_effect(
+                            direction, ignored, type_name.lower()
+                        ),
                         "source": "Captured local file",
                     }
                 )
@@ -754,6 +773,27 @@ class RunDataReader:
             raise ValueError("Port must be between 1 and 65535")
         return f"{prefix}:{int(port)}"
 
+    @staticmethod
+    def _normalize_whitelist_uri(value: Any) -> str:
+        """Validate a literal request URI for a flow rule.
+
+        Parameters:
+            value: Request URI from the browser.
+
+        Returns:
+            Validated URI.
+        """
+        if (
+            not isinstance(value, str)
+            or not value.startswith("/")
+            or len(value) > 256
+            or any(character in value for character in ("\r", "\n", ","))
+        ):
+            raise ValueError(
+                "Enter a request URI beginning with / (up to 256 characters)"
+            )
+        return value
+
     def save_whitelist_rule(
         self,
         action: Any,
@@ -761,8 +801,9 @@ class RunDataReader:
         direction: Any,
         ignored: Any,
         evidence_type: Any = None,
+        rule_type: Any = "ip",
     ) -> Dict[str, Any]:
-        """Persist a web-managed IP rule and update the current run.
+        """Persist a web-managed IP or request URI rule and update the run.
 
         Parameters:
             action: Add or remove the rule.
@@ -770,6 +811,7 @@ class RunDataReader:
             direction: Source, destination, or both sides.
             ignored: Flows, evidence and alerts, or both.
             evidence_type: Optional evidence type for alert-only rules.
+            rule_type: IP or URI rule.
 
         Returns:
             The saved rule and whether it was added or removed.
@@ -799,7 +841,19 @@ class RunDataReader:
             evidence_type = evidence_type.upper()
         if evidence_type and ignored != "alerts":
             raise ValueError("Evidence type rules must suppress alerts only")
-        normalized = self._normalize_whitelist_ip(value)
+        if rule_type not in {"ip", "uri"}:
+            raise ValueError("Choose an IP or request URI rule")
+        if rule_type == "uri" and (
+            direction != "both" or ignored != "flows" or evidence_type
+        ):
+            raise ValueError(
+                "Request URI rules must suppress flows on both sides"
+            )
+        normalized = (
+            self._normalize_whitelist_uri(value)
+            if rule_type == "uri"
+            else self._normalize_whitelist_ip(value)
+        )
         redis_value = (
             f"{normalized}|{evidence_type}" if evidence_type else normalized
         )
@@ -839,33 +893,39 @@ class RunDataReader:
                     legacy_path.read_text(encoding="utf-8").splitlines()
                 )
             existing = {
-                (parts[1], parts[4] if len(parts) > 4 else ""): line
+                (parts[0], parts[1], parts[4] if len(parts) > 4 else ""): line
                 for line in managed_lines
                 if (parts := line.split(","))
                 and len(parts) >= 4
-                and parts[0] == "ip"
+                and parts[0] in {"ip", "uri"}
             }
             if action == "add":
                 if (
+                    rule_type,
                     normalized,
                     evidence_type,
                 ) in existing or self.redis.hexists(
-                    "whitelist_IPs", redis_value
+                    (
+                        "whitelist_uris"
+                        if rule_type == "uri"
+                        else "whitelist_IPs"
+                    ),
+                    redis_value,
                 ):
                     raise ValueError("This value already has a whitelist rule")
                 suffix = f",{evidence_type}" if evidence_type else ""
                 managed_lines.append(
-                    f"ip,{normalized},{direction},{ignored}{suffix}"
+                    f"{rule_type},{normalized},{direction},{ignored}{suffix}"
                 )
             else:
-                if (normalized, evidence_type) not in existing:
+                if (rule_type, normalized, evidence_type) not in existing:
                     raise ValueError(
                         "Only web-managed rules can be removed here"
                     )
                 managed_lines = [
                     line
                     for line in managed_lines
-                    if line != existing[(normalized, evidence_type)]
+                    if line != existing[(rule_type, normalized, evidence_type)]
                 ]
             lines = (
                 base_lines
@@ -889,7 +949,11 @@ class RunDataReader:
                 temporary_path.unlink(missing_ok=True)
             if action == "add":
                 self.redis.hset(
-                    "whitelist_IPs",
+                    (
+                        "whitelist_uris"
+                        if rule_type == "uri"
+                        else "whitelist_IPs"
+                    ),
                     redis_value,
                     json.dumps(
                         {
@@ -904,13 +968,21 @@ class RunDataReader:
                     ),
                 )
             else:
-                self.redis.hdel("whitelist_IPs", redis_value)
+                self.redis.hdel(
+                    (
+                        "whitelist_uris"
+                        if rule_type == "uri"
+                        else "whitelist_IPs"
+                    ),
+                    redis_value,
+                )
         return {
             "action": action,
             "value": normalized,
             "direction": direction,
             "ignore": ignored,
             "evidence_type": evidence_type,
+            "rule_type": rule_type,
         }
 
     @staticmethod
@@ -1825,7 +1897,8 @@ class RunDataReader:
             ).fetchall()
         ]
         flow_count = connection.execute(
-            "SELECT COUNT(*) AS count FROM evidence_flows WHERE evidence_id = ?",
+            "SELECT COUNT(*) AS count FROM evidence_flows "
+            "WHERE evidence_id = ? AND uid <> ''",
             (evidence_id,),
         ).fetchone()["count"]
         evidence_type = str(row["evidence_type"] or "unknown")
@@ -1930,7 +2003,7 @@ class RunDataReader:
         )
         flow_expression = (
             "(SELECT COUNT(*) FROM evidence_flows ef "
-            "WHERE ef.evidence_id = evidence.evidence_id)"
+            "WHERE ef.evidence_id = evidence.evidence_id AND ef.uid <> '')"
         )
         alert_expression = (
             "(SELECT COUNT(*) FROM alert_evidence ae "
@@ -2153,7 +2226,7 @@ class RunDataReader:
         )
         flow_expression = (
             "(SELECT COUNT(*) FROM evidence_flows ef "
-            "WHERE ef.evidence_id = evidence.evidence_id)"
+            "WHERE ef.evidence_id = evidence.evidence_id AND ef.uid <> '')"
         )
         alert_expression = (
             "(SELECT COUNT(*) FROM alert_evidence ae "
@@ -3055,7 +3128,11 @@ class RunDataReader:
                         (evidence_id,),
                     ).fetchall()
                     if rows:
-                        return [str(row["uid"]).strip() for row in rows]
+                        return [
+                            str(row["uid"]).strip()
+                            for row in rows
+                            if str(row["uid"]).strip()
+                        ]
         except sqlite3.Error:
             pass
         return self._id_list(
@@ -6995,6 +7072,10 @@ class RequestHandler(BaseHTTPRequestHandler):
                 )
                 if payload.get("evidence_type"):
                     arguments += (payload["evidence_type"],)
+                if payload.get("rule_type") == "uri":
+                    if len(arguments) == 4:
+                        arguments += (None,)
+                    arguments += ("uri",)
                 saved = self.server.reader.save_whitelist_rule(*arguments)
             elif path == "/api/host-annotation":
                 saved = self.server.reader.save_host_annotation(

@@ -2786,17 +2786,18 @@ function whitelistSuggestions(record, groups = []) {
    * @param {string} direction - Traffic side.
    * @param {string} label - Browser suggestion label.
    */
-  const add = (value, direction, label) => {
+  const add = (value, direction, label, ruleType = "ip") => {
     if (value === null || value === undefined || value === "" || choices.size >= 200) return;
     const key = String(value);
     const existing = choices.get(key);
     if (existing?.label === "Profile host IP" && direction !== "both") {
-      choices.set(key, { direction, label });
+      choices.set(key, { direction, label, ruleType });
       return;
     }
     choices.set(key, {
       direction: existing && existing.direction !== direction ? "both" : direction,
       label: existing?.label || label,
+      ruleType,
     });
   };
   /** Suggest an IP, its exact port, and the corresponding port-only rule.
@@ -2833,6 +2834,9 @@ function whitelistSuggestions(record, groups = []) {
         flowValue(flow, "sport", "src_port", "id.orig_p"), "src", "Flow source");
       addSide(flowValue(flow, "daddr", "dst_ip", "id.resp_h"),
         flowValue(flow, "dport", "dst_port", "id.resp_p"), "dst", "Flow destination");
+      if (flow.uri && String(flow.uri).startsWith("/")) {
+        add(String(flow.uri), "both", "Request URI", "uri");
+      }
     });
   });
   return choices;
@@ -2852,11 +2856,12 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
     option.value = value;
     option.label = `${choice.label} · ${choice.direction}`;
     option.dataset.direction = choice.direction;
+    option.dataset.ruleType = choice.ruleType;
     list.append(option);
   });
 }
 
-/** Build an IP whitelist editor for the tab or an individual evidence.
+/** Build an IP or request URI whitelist editor for the tab or evidence.
  * @param {string} kind - Unique list prefix for tab or evidence.
  * @param {object|null} record - Individual evidence, if available.
  * @returns {Element} Editor with its own submit handler.
@@ -2865,11 +2870,20 @@ function whitelistEditor(kind, record = null) {
   const section = document.createElement("section");
   section.className = "surface whitelist-editor";
   section.append(
-    text("h3", record ? "Whitelist future matches from this evidence" : "Add an IP or port rule"),
-    text("p", "Choose an IP, IP:port, [IPv6]:port, or *:port. Port-only rules affect that port on any IP. Existing evidence stays in the record.", "muted"),
+    text("h3", record ? "Whitelist future matches from this evidence" : "Add a whitelist rule"),
+    text("p", "Choose an IP, port, or request URI. URI rules suppress matching future flows and their detections regardless of IP or port. Existing evidence stays in the record.", "muted"),
   );
   const form = document.createElement("form");
   form.className = "whitelist-form";
+  const ruleTypeLabel = document.createElement("label");
+  ruleTypeLabel.append(text("span", "Rule type"));
+  const ruleType = document.createElement("select");
+  [["ip", "IP or port"], ["uri", "Request URI"]].forEach(([key, label]) => {
+    const option = text("option", label);
+    option.value = key;
+    ruleType.append(option);
+  });
+  ruleTypeLabel.append(ruleType);
   const valueLabel = document.createElement("label");
   valueLabel.append(text("span", "IP or port"));
   const value = document.createElement("input");
@@ -2892,7 +2906,11 @@ function whitelistEditor(kind, record = null) {
   directionLabel.append(direction);
   value.addEventListener("input", () => {
     const selected = Array.from(list.options).find((option) => option.value === value.value);
-    if (selected) direction.value = selected.dataset.direction;
+    if (selected) {
+      ruleType.value = selected.dataset.ruleType || "ip";
+      ruleType.dispatchEvent(new Event("change"));
+      direction.value = selected.dataset.direction;
+    }
   });
   const ignoreLabel = document.createElement("label");
   ignoreLabel.append(text("span", "Suppress"));
@@ -2925,10 +2943,25 @@ function whitelistEditor(kind, record = null) {
   });
   ignored.disabled = Boolean(evidenceType.value);
   typeLabel.append(evidenceType);
+  ruleType.addEventListener("change", () => {
+    const uri = ruleType.value === "uri";
+    valueLabel.querySelector("span").textContent = uri ? "Request URI" : "IP or port";
+    value.maxLength = uri ? 256 : 128;
+    value.placeholder = uri ? "/info?txtAirPlay&txtRAOP RTSP/1." : "192.168.1.10:443 or *:443";
+    directionLabel.hidden = uri;
+    ignoreLabel.hidden = uri;
+    typeLabel.hidden = uri;
+    if (uri) {
+      direction.value = "both";
+      ignored.value = "flows";
+      evidenceType.value = "";
+      ignored.disabled = false;
+    }
+  });
   const save = text("button", "Add rule", "secondary");
   save.type = "submit";
   const feedback = text("p", "Rules take effect for future traffic and detections while Slips is running.", "muted whitelist-feedback");
-  form.append(valueLabel, list, directionLabel, ignoreLabel, typeLabel, save);
+  form.append(ruleTypeLabel, valueLabel, list, directionLabel, ignoreLabel, typeLabel, save);
   section.append(form, feedback);
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -2936,7 +2969,7 @@ function whitelistEditor(kind, record = null) {
     feedback.textContent = "Saving rule…";
     try {
       const result = await saveWhitelistRule({
-        action: "add", value: value.value, direction: direction.value,
+        action: "add", rule_type: ruleType.value, value: value.value, direction: direction.value,
         ignore: ignored.value, evidence_type: evidenceType.value,
       });
       feedback.textContent = `${result.value} was added. New matching activity will be suppressed within a few seconds.`;
@@ -2963,8 +2996,8 @@ function renderWhitelists() {
   renderTable("whitelists-table", rows, [
     (row) => text("span", row.type, "type-chip"),
     (row) => text("code", row.value),
-    (row) => row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
-    (row) => row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
+    (row) => row.type === "Request URI" ? "Request" : row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
+    (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
     (row) => row.evidence_type || "All",
     (row) => row.effect,
     (row) => row.source,
@@ -2977,7 +3010,8 @@ function renderWhitelists() {
         remove.disabled = true;
         try {
           await saveWhitelistRule({
-            action: "remove", value: row.value, direction: row.direction,
+            action: "remove", rule_type: row.type === "Request URI" ? "uri" : "ip",
+            value: row.value, direction: row.direction,
             ignore: row.ignore, evidence_type: row.evidence_type,
           });
           toast("Whitelist rule removed");
@@ -3637,7 +3671,10 @@ function hostPeakScoreCell(row) {
   const peak = row.peak_alert_score === null || row.peak_alert_score === undefined
     ? null : Number(row.peak_alert_score);
   const threshold = numeric(row.alert_threshold) || 5;
-  const label = text("span", level, `hosts-threat-level threat-${level}`);
+  const noFindings = !numeric(row.evidence_count) && !numeric(row.alert_count)
+    && !numeric(peak);
+  const label = text("span", noFindings ? "none" : level,
+    `hosts-threat-level threat-${noFindings ? "none" : level}`);
   const value = text("strong", peak === null ? "—" : peak.toFixed(2));
   const track = text("span", "", "hosts-score-track");
   const fill = text("span", "", `hosts-score-fill threat-${level}`);
@@ -4377,9 +4414,14 @@ async function openEvidence(record) {
       body.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from current Zeek logs after their SQLite rows were pruned.`, "muted"));
     }
     if (!payload.items.length) {
-      body.append(text("p", numeric(payload.unavailable_flow_count) > 0
-        ? "The evidence still has linked flow IDs, but their raw records are unavailable. They may have expired under retention or were never stored."
-        : "No triggering flow records are available."));
+      const noNoticeUid = record.evidence_type === "PASSWORD_GUESSING"
+        && !numeric(payload.linked_uid_count)
+        && String(record.description || "").includes("Zeek notice.log");
+      body.append(text("p", noNoticeUid
+        ? "Zeek's password-guessing notice summarized multiple connections but supplied no connection IDs. This evidence was stored without a usable flow link; the missing sessions cannot be recovered from this notice."
+        : numeric(payload.unavailable_flow_count) > 0
+          ? "The evidence still has linked flow IDs, but their raw records are unavailable. They may have expired under retention or were never stored."
+          : "No triggering flow records are available."));
     } else if (numeric(payload.unavailable_flow_count) > 0) {
       body.append(text("p", `${compact(payload.unavailable_flow_count)} linked flow record(s) are unavailable; they may have expired under retention.`, "muted"));
     }

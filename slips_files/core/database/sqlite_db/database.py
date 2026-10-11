@@ -630,6 +630,7 @@ class SQLiteDB(ISQLite):
         linked_cutoff: float,
         batch_size: int = 500,
         max_size_bytes: int = 512 * 1024 * 1024,
+        unlinked_size_cutoff: float | None = None,
     ) -> list[str]:
         """Prune bounded flow batches while retaining recent evidence flows.
 
@@ -638,6 +639,8 @@ class SQLiteDB(ISQLite):
             linked_cutoff: Unix time before which linked flows expire.
             batch_size: Maximum rows per table and class per pass.
             max_size_bytes: Logical database size target; zero disables it.
+            unlinked_size_cutoff: Oldest age eligible for unlinked size
+                pruning. Defaults to ordinary_cutoff.
 
         Returns:
             Connection UIDs removed, for the web's compact index cleanup.
@@ -650,6 +653,8 @@ class SQLiteDB(ISQLite):
             )
         if max_size_bytes < 0:
             raise ValueError("max_size_bytes cannot be negative")
+        if unlinked_size_cutoff is None:
+            unlinked_size_cutoff = ordinary_cutoff
         with self.conn_lock:
             with self._acquire_flock():
                 cursor = self.conn.cursor()
@@ -680,7 +685,11 @@ class SQLiteDB(ISQLite):
                                 cursor,
                                 batch_size,
                                 linked_only,
-                                ordinary_cutoff,
+                                (
+                                    ordinary_cutoff
+                                    if linked_only
+                                    else unlinked_size_cutoff
+                                ),
                             )
                             any_removed = any_removed or any(deleted.values())
                             removed.extend(deleted["flows"])
@@ -746,12 +755,8 @@ class SQLiteDB(ISQLite):
         priority_time = (
             self._linked_priority_time("f") if linked_only else "f.event_time"
         )
-        age_filter = f" AND {priority_time} < ?" if linked_only else ""
-        parameters = (
-            (linked_size_cutoff, linked_size_cutoff, batch_size)
-            if linked_only
-            else (batch_size,)
-        )
+        age_filter = f" AND {priority_time} < ?"
+        parameters = (linked_size_cutoff, linked_size_cutoff, batch_size)
         candidates = cursor.execute(
             "SELECT table_name, uid FROM ("
             "SELECT 'flows' AS table_name, f.uid AS uid, "

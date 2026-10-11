@@ -476,10 +476,12 @@ class ConfigParser(object):
         """Read bounded live-flow retention settings.
 
         Returns:
-            Enable flag, ordinary and linked ages, batch size, and cadence.
+            Enable flag, ordinary, linked, and minimum size-pruning ages,
+            batch size, and cadence.
         """
         defaults = {
             "ordinary_hours": 24,
+            "size_min_age_minutes": 60,
             "linked_days": 30,
             "batch_size": 500,
             "interval_seconds": 60,
@@ -493,6 +495,7 @@ class ConfigParser(object):
         }
         limits = {
             "ordinary_hours": (1, 24 * 365),
+            "size_min_age_minutes": (1, 24 * 60),
             "linked_days": (1, 3650),
             "batch_size": (1, 800),
             "interval_seconds": (10, 3600),

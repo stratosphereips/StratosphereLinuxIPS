@@ -36,6 +36,7 @@ class WhitelistParser:
         self.whitelisted_domains = {}
         self.whitelisted_orgs = {}
         self.whitelisted_mac = {}
+        self.whitelisted_uris = {}
         self.org_info_path = "slips_files/organizations_info/"
 
     def get_dict_for_storing_data(self, data_type: str):
@@ -47,6 +48,7 @@ class WhitelistParser:
             "domain": self.whitelisted_domains,
             "org": self.whitelisted_orgs,
             "mac": self.whitelisted_mac,
+            "uri": self.whitelisted_uris,
         }
         return storage[data_type]
 
@@ -121,6 +123,21 @@ class WhitelistParser:
             return
         self.whitelisted_mac[mac] = info
 
+    def update_whitelisted_uris(self, uri: str, info: Dict[str, str]) -> None:
+        """Store a literal request URI for flow suppression.
+
+        Parameters:
+            uri: Request URI as Zeek records it.
+            info: Rule direction and suppression mode.
+        """
+        if (
+            uri.startswith("/")
+            and len(uri) <= 256
+            and not any(char in uri for char in ("\r", "\n", ","))
+            and info.get("what_to_ignore") in {"flows", "both"}
+        ):
+            self.whitelisted_uris[uri] = info
+
     def update_whitelisted_ips(self, ip: str, info: Dict[str, str]) -> None:
         """Store an IP rule, optionally scoped to a port.
 
@@ -167,7 +184,7 @@ class WhitelistParser:
         """
         # line should be:
         # "type","domain/ip/organization/mac","from","what_to_ignore"
-        line: List = line.replace("\n", "").replace(" ", "").split(",")
+        line: List = [part.strip() for part in line.rstrip("\n").split(",")]
         try:
             return {
                 "type": (line[0]).lower(),
@@ -197,6 +214,7 @@ class WhitelistParser:
             "domain": self.update_whitelisted_domains,
             "organization": self.update_whitelisted_orgs,
             "mac": self.update_whitelisted_mac_addresses,
+            "uri": self.update_whitelisted_uris,
         }
 
         entry_type = parsed_line["type"]

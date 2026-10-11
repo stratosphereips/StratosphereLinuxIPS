@@ -311,6 +311,8 @@ def test_flow_retention_policy_bounds_settings(
 
     policy = parser.flow_retention_policy()
 
+    assert policy["size_min_age_minutes"] == 60
+
     assert (
         tuple(
             policy[key]

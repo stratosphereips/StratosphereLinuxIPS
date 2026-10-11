@@ -149,6 +149,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         policy = self.flow_retention_policy
         interval = int(policy["interval_seconds"])
         ordinary_age = int(policy["ordinary_hours"]) * 3600
+        size_min_age = int(policy.get("size_min_age_minutes", 60)) * 60
         linked_age = int(policy["linked_days"]) * 86400
         batch_size = int(policy["batch_size"])
         max_size_bytes = int(policy["max_size_mb"]) * 1024 * 1024
@@ -160,6 +161,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
                     now - linked_age,
                     batch_size=batch_size,
                     max_size_bytes=max_size_bytes,
+                    unlinked_size_cutoff=now - min(ordinary_age, size_min_age),
                 )
                 if removed:
                     self.db.remove_flow_index_uids(removed)

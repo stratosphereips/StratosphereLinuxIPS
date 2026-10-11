@@ -395,8 +395,8 @@ browser.
 
 ### Whitelists
 
-The Whitelists tab shows what the run actually parsed. Local IP, domain,
-organization, and MAC rules come from the run's Redis whitelist hashes, with
+The Whitelists tab shows what the run actually parsed. Local IP, request URI,
+domain, organization, and MAC rules come from the run's Redis whitelist hashes, with
 the captured `metadata/*.conf` file as an offline fallback. Each row explains
 whether the rule applies to a source, destination, or either side and whether
 it suppresses flows, evidence/alerts, or both. The table is searchable and can
@@ -408,7 +408,7 @@ limit, its refresh period, and the number of domains currently present in the
 shared cache. The latter is explicitly current cache state because that cache
 can be refreshed independently of an already completed run.
 
-While Slips is running, use **Add an IP or port rule** in the Whitelists tab,
+While Slips is running, use **Add a whitelist rule** in the Whitelists tab,
 or **Whitelist future matches from this evidence** in an individual evidence
 drawer. The evidence editor suggests source and destination IPs, exact
 IP:port pairs, and `*:port` rules from the evidence and linked flows. A
@@ -420,6 +420,29 @@ Web-added rules appear in the Whitelists table with a **Remove** action.
 Choose an **Evidence type** to limit an IP rule to one detection, for example
 `192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
 only that evidence type; they do not hide its flows or other detections.
+
+Choose **Request URI** to suppress an exact URI independently of IP
+and port. URI rules drop matching future HTTP records before detection. For
+AirPlay discovery, enter `/info?txtAirPlay&txtRAOP RTSP/1.`; Zeek records
+this RTSP request in `http.log` as an HTTP/0.9 URI and tags the related
+`conn.log` record as `airplay-info`. Slips drops that tagged connection only
+when the exact AirPlay URI rule is enabled, preventing connection detectors
+from reporting the same request. The rule is saved as
+`uri,/info?txtAirPlay&txtRAOP RTSP/1.,both,flows` in the configured whitelist
+file. Other traffic to the same host or port remains visible. URI suppression
+requires Slips to launch Zeek with its bundled scripts; imported logs cannot
+gain the connection tag retroactively.
+
+Zeek `notice.log` records may omit a connection UID. Slips assigns such a
+notice a synthetic UID before storing it, so evidence from the notice can
+open the notice record. An aggregate notice about many SSH connections still
+cannot identify those individual sessions unless Zeek supplies their UIDs.
+Raw flow retention protects unlinked flows for at least
+`size_min_age_minutes` (60 minutes by default) under size pressure, then
+prunes them before evidence-linked flows. Linked flows stay protected for
+`ordinary_hours` after their latest evidence. The size target is soft while
+these protected flows remain. Existing evidence with an empty UID cannot be
+relinked to a specific flow from the notice alone.
 
 The web interface writes these rules into the configured local whitelist file,
 between marked comments, so they survive Slips restarts and are visible in the

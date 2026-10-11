@@ -15,6 +15,38 @@ from slips_files.core.structures.evidence import (
 
 
 @pytest.mark.parametrize(
+    "flow_type,uri,service,expected",
+    [
+        ("http", "/info?txtAirPlay&txtRAOP RTSP/1.", "", True),
+        ("conn", "", "http,airplay-info", True),
+        ("conn", "", "http", False),
+        ("http", "/other", "", False),
+    ],
+)
+def test_airplay_uri_rule_matches_request_and_parent_connection(
+    flow_type: str, uri: str, service: str, expected: bool
+) -> None:
+    """Suppress only URI-matched AirPlay discovery across changing hosts.
+
+    Parameters:
+        flow_type: Zeek record class.
+        uri: Parsed request URI if present.
+        service: Parsed conn.log services.
+        expected: Whether the rule should suppress this flow.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    rule = "uri,/info?txtAirPlay&txtRAOP RTSP/1.,both,flows"
+    whitelist.parser.call_handler(whitelist.parser.parse_line(rule))
+    whitelist.db.get_whitelist.return_value = {
+        key: json.dumps(value)
+        for key, value in whitelist.parser.whitelisted_uris.items()
+    }
+    flow = SimpleNamespace(type_=flow_type, uri=uri, appproto=service)
+
+    assert whitelist._flow_matches_whitelisted_uri(flow) is expected
+
+
+@pytest.mark.parametrize(
     "rule_side, evidence_side, evidence_type, expected",
     [
         ("src", Direction.SRC, EvidenceType.ARP_SCAN, True),

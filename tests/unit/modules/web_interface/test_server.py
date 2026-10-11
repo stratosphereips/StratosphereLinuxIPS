@@ -595,6 +595,50 @@ def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
     reader.redis.hdel.assert_called_once_with("whitelist_IPs", "192.0.2.4:443")
 
 
+def test_web_uri_whitelist_persists_and_can_be_removed(tmp_path) -> None:
+    """Keep the AirPlay request text in the configured whitelist file.
+
+    Parameters:
+        tmp_path: Isolated configured whitelist directory.
+    """
+    factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "whitelist.conf"
+    configured.write_text("", encoding="utf-8")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(
+        return_value={"backend_status": {"connected": True}}
+    )
+    uri = "/info?txtAirPlay&txtRAOP RTSP/1."
+
+    saved = reader.save_whitelist_rule("add", uri, "both", "flows", None, "uri")
+
+    assert saved["rule_type"] == "uri"
+    assert f"uri,{uri},both,flows" in configured.read_text(encoding="utf-8")
+    whitelist = factory.create_whitelist_obj()
+    whitelist.parser.local_whitelist_path = str(configured)
+    whitelist.parser.parse()
+    assert whitelist.parser.whitelisted_uris[uri] == {
+        "from": "both",
+        "what_to_ignore": "flows",
+    }
+    reader.redis.hset.assert_called_once()
+    assert reader.redis.hset.call_args.args[0] == "whitelist_uris"
+
+    reader.save_whitelist_rule("remove", uri, "both", "flows", None, "uri")
+    assert uri not in configured.read_text(encoding="utf-8")
+    reader.redis.hdel.assert_called_once_with("whitelist_uris", uri)
+
+
 def test_web_whitelist_can_scope_ip_to_alert_type(tmp_path) -> None:
     """Persist a source IP rule for one detector without hiding flows.
 
@@ -1801,6 +1845,28 @@ def test_score_fields_use_real_slips_detector_value(
     assert result["alert_score"] == expected_score
     assert result["alert_threshold"] == expected_threshold
     assert result["alert_score_mode"] == mode.upper()
+
+
+def test_empty_notice_uid_is_not_reported_as_a_flow(tmp_path) -> None:
+    """Ignore a historical Zeek notice link that contains no UID.
+
+    Parameters:
+        tmp_path: Isolated flow database location.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = None
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO evidence_flows VALUES ('notice-1', '')"
+        )
+
+    assert reader._flow_uids_for_evidence("notice-1") == []
 
 
 def test_flows_for_evidence_falls_back_to_evidence_uids(tmp_path) -> None:

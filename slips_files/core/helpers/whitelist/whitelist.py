@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import time
 import ipaddress
+import json
 from collections import OrderedDict
 from typing import (
     Any,
@@ -35,6 +36,7 @@ from slips_files.core.structures.evidence import (
 
 class Whitelist:
     name = "whitelist"
+    AIRPLAY_INFO_URI = "/info?txtAirPlay&txtRAOP RTSP/1."
 
     def __init__(self, logger: Output, db, bloom_filter_manager: BFManager):
         self.printer = Printer(logger, self.name)
@@ -54,6 +56,8 @@ class Whitelist:
         self._own_source_cache: OrderedDict[str, tuple[bool, float]] = (
             OrderedDict()
         )
+        self._uri_rules: Dict[str, Dict[str, str]] = {}
+        self._uri_rules_refresh_at = 0.0
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -69,6 +73,48 @@ class Whitelist:
         self.db.set_whitelist("domains", self.parser.whitelisted_domains)
         self.db.set_whitelist("organizations", self.parser.whitelisted_orgs)
         self.db.set_whitelist("macs", self.parser.whitelisted_mac)
+        self.db.set_whitelist("uris", self.parser.whitelisted_uris)
+        self._uri_rules_refresh_at = 0.0
+
+    def _flow_matches_whitelisted_uri(self, flow: Any) -> bool:
+        """Match request URI rules against HTTP and tagged parent connections.
+
+        Parameters:
+            flow: Parsed Zeek connection or HTTP record.
+
+        Returns:
+            Whether a flow-suppression URI rule matches this record.
+        """
+        flow_type = str(getattr(flow, "type_", ""))
+        if flow_type not in {"http", "conn"}:
+            return False
+        uri = str(getattr(flow, "uri", "")) if flow_type == "http" else ""
+        services = str(getattr(flow, "appproto", "")).split(",")
+        if not uri and "airplay-info" not in services:
+            return False
+        now = time.monotonic()
+        if now >= self._uri_rules_refresh_at:
+            rules: Dict[str, Dict[str, str]] = {}
+            for value, details in self.db.get_whitelist("uris").items():
+                try:
+                    parsed = json.loads(details)
+                except (TypeError, ValueError):
+                    continue
+                if isinstance(parsed, dict):
+                    rules[str(value)] = parsed
+            self._uri_rules = rules
+            self._uri_rules_refresh_at = now + 2
+        return any(
+            rule.get("what_to_ignore") in {"flows", "both"}
+            and (
+                uri == value
+                or (
+                    "airplay-info" in services
+                    and value == self.AIRPLAY_INFO_URI
+                )
+            )
+            for value, rule in self._uri_rules.items()
+        )
 
     def _check_if_whitelisted_domains_of_flow(self, flow) -> bool:
         dst_domains_to_check: List[str] = (
@@ -143,6 +189,9 @@ class Whitelist:
          of this flow is whitelisted.
         """
         if self._is_slips_own_flow(flow):
+            return True
+
+        if self._flow_matches_whitelisted_uri(flow):
             return True
 
         if self._check_if_whitelisted_domains_of_flow(flow):
