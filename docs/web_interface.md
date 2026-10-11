@@ -314,6 +314,13 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 Alerts opens with only the **Hosts with alerts** pane. Choose a host to open its individual alert timeline in a second pane, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record in a third pane. Evidence cards open the existing investigation drawer for triggering flows. The two dividers can be dragged or adjusted with the left and right arrow keys. Closing an alert returns to two panes; closing the host returns to the initial pane.
 
+The third pane has **Back to alerts** and a close button. Both return to the
+selected host's alert timeline at the same scroll position. If an alert is
+opened from a full-width evidence record, its drawer offers **Back to
+evidence**; the underlying evidence page and its scroll position remain open.
+Following an evidence link from that alert and going back restores the alert
+drawer and then the original evidence record.
+
 Both alert lists have sort controls and a reverse-order button. Host sorting covers latest alert, address, severity, score, alert and evidence counts, and label. The selected host's alerts can be sorted by time, severity, score, label, evidence count, time window, and ID. These choices apply before cursor paging.
 
 Search, severity chips, time range, and excluded-record visibility stay visible

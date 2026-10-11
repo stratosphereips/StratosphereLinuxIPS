@@ -54,7 +54,7 @@ const state = {
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
-  evidenceDetail: { record: null, records: [], generation: 0 },
+  evidenceDetail: { record: null, records: [], generation: 0, history: [] },
   runIdentity: null,
   reviewAvailable: false,
   rangesInitialized: false,
@@ -454,7 +454,7 @@ function applyRunIdentity(identity) {
   if (!identity || !identity.output_dir || !identity.server_pid) return;
   const token = `${identity.output_dir}:${identity.server_pid}`;
   if (state.runIdentity && state.runIdentity !== token) {
-    closeEvidenceDetail(false);
+    closeEvidenceDetail(false, true);
     closeDrawer();
     closeHost();
     Object.keys(state.pages).forEach((name) => resetPage(name));
@@ -1733,6 +1733,7 @@ function renderAlertSeverityFilters() {
 /** Render the grouped host list without opening another overlay. */
 function renderAlertHostList() {
   const container = byId("alerts-host-list");
+  const scrollTop = container.scrollTop;
   const selected = state.alertsWorkspace.host?.ip_alerted;
   const level = state.alertsWorkspace.severity;
   const rows = (state.pages.alerts.items || []).filter((item) =>
@@ -1770,6 +1771,7 @@ function renderAlertHostList() {
     row.addEventListener("click", () => selectAlertHostPane(host));
     container.append(row);
   });
+  container.scrollTop = scrollTop;
 }
 
 /** Show one host in the middle pane and load its individual alerts. */
@@ -1783,6 +1785,7 @@ function selectAlertHostPane(host) {
     workspace.next = null;
     workspace.detailGeneration += 1;
     byId("alerts-detail").replaceChildren();
+    byId("alerts-list").scrollTop = 0;
   }
   setAlertPaneCount(workspace.alert ? 3 : 2);
   renderAlertHostList();
@@ -1858,6 +1861,7 @@ async function loadAlertHostAlerts(reset = true, quiet = false) {
 function renderAlertTimeline() {
   const workspace = state.alertsWorkspace;
   const container = byId("alerts-list");
+  const scrollTop = container.scrollTop;
   container.replaceChildren();
   if (!workspace.items.length) {
     container.append(text("p", "No alerts in this range for this host.", "empty-state"));
@@ -1866,6 +1870,7 @@ function renderAlertTimeline() {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "alerts-alert-row";
+    row.dataset.alertId = record.alert_id;
     row.classList.toggle("selected", record.alert_id === workspace.alert?.alert_id);
     const top = document.createElement("div");
     top.className = "alerts-alert-row-top";
@@ -1878,6 +1883,7 @@ function renderAlertTimeline() {
     row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
     container.append(row);
   });
+  container.scrollTop = scrollTop;
   const more = byId("alerts-list-more");
   more.replaceChildren();
   if (workspace.next) {
@@ -1886,6 +1892,22 @@ function renderAlertTimeline() {
     button.addEventListener("click", () => loadAlertHostAlerts(false).catch(() => {}));
     more.append(button);
   }
+}
+
+/** Return from the selected alert to its host's list without losing position. */
+function closeAlertDetailPane() {
+  const workspace = state.alertsWorkspace;
+  const alertId = workspace.alert?.alert_id;
+  workspace.alert = null;
+  workspace.detailGeneration += 1;
+  setAlertPaneCount(workspace.host ? 2 : 1);
+  byId("alerts-detail").replaceChildren();
+  let selectedRow = null;
+  document.querySelectorAll("#alerts-list .alerts-alert-row").forEach((row) => {
+    if (row.dataset.alertId === alertId) selectedRow = row;
+    row.classList.remove("selected");
+  });
+  selectedRow?.focus({ preventScroll: true });
 }
 
 /** Render an individual alert and its evidence in the right pane. */
@@ -1900,18 +1922,17 @@ function renderAlertDetailPane(record) {
     text("small", `alert · ${formatTime(record.alert_time)} · ${record.label || "unclassified"}`));
   const actions = document.createElement("div");
   actions.className = "alerts-detail-actions";
+  const back = text("button", "← Back to alerts", "secondary");
+  back.type = "button";
+  back.addEventListener("click", closeAlertDetailPane);
   const whitelist = text("button", "Whitelist", "secondary");
   whitelist.type = "button";
   const close = text("button", "×", "secondary");
   close.type = "button";
   close.title = "Close alert details";
   close.setAttribute("aria-label", "Close alert details pane");
-  close.addEventListener("click", () => {
-    state.alertsWorkspace.alert = null;
-    setAlertPaneCount(2);
-    renderAlertTimeline();
-  });
-  actions.append(whitelist, close);
+  close.addEventListener("click", closeAlertDetailPane);
+  actions.append(back, whitelist, close);
   header.append(context, actions);
   const title = record.summary?.split(". ")[0].slice(0, 110)
     || firstEvidence.evidence_type?.replaceAll("_", " ") || "Alert details";
@@ -1946,15 +1967,22 @@ async function selectAlertDetailPane(record) {
   workspace.alert = record;
   const generation = ++workspace.detailGeneration;
   setAlertPaneCount(3);
-  renderAlertTimeline();
-  byId("alerts-detail").replaceChildren(text("p", "Loading alert evidence…", "empty-state"));
+  document.querySelectorAll("#alerts-list .alerts-alert-row").forEach((row) => {
+    row.classList.toggle("selected", row.dataset.alertId === record.alert_id);
+  });
+  const back = text("button", "← Back to alerts", "secondary");
+  back.type = "button";
+  back.addEventListener("click", closeAlertDetailPane);
+  byId("alerts-detail").replaceChildren(back,
+    text("p", "Loading alert evidence…", "empty-state"));
   const params = new URLSearchParams({ range: "all", review: "all", limit: "1", search: record.alert_id });
   const payload = await api("alertPaneDetail", `/api/alerts?${params}`);
   if (!payload || generation !== workspace.detailGeneration
       || workspace.alert?.alert_id !== record.alert_id) return;
   const detailed = payload.items.find((item) => item.alert_id === record.alert_id);
   if (!detailed) {
-    byId("alerts-detail").replaceChildren(text("p", "This alert is no longer available.", "empty-state"));
+    byId("alerts-detail").replaceChildren(back,
+      text("p", "This alert is no longer available.", "empty-state"));
     return;
   }
   workspace.alert = { ...detailed, summary: record.summary };
@@ -2758,7 +2786,7 @@ async function saveReviewChange(entity, change) {
  */
 async function refreshAfterReview(entity) {
   closeDrawer();
-  closeEvidenceDetail(false);
+  closeEvidenceDetail(false, true);
   if (state.activeTab === "hosts" && state.host) {
     resetPage("hostAlerts");
     resetPage("host-evidence");
@@ -3969,13 +3997,17 @@ function renderDnsDetails(dns) {
 }
 /** Cancel requests whose results belong exclusively to drawer content. */
 function cancelDrawerRequests() {
-  ["alertDetail", "alertGroup", "evidenceGroup", "evidenceFlows"].forEach((key) =>
+  ["alertDetail", "alertGroup", "evidenceGroup"].forEach((key) =>
     state.requests.get(key)?.abort());
 }
 
 /** Show whether the current investigation has a previous drawer panel. */
 function updateDrawerBackButton() {
-  byId("drawer-back").hidden = state.drawerHistory.length === 0;
+  const returnToEvidence = byId("drawer").classList.contains("alert-over-evidence")
+    && Boolean(state.evidenceDetail.record);
+  const back = byId("drawer-back");
+  back.hidden = state.drawerHistory.length === 0 && !returnToEvidence;
+  back.textContent = state.drawerHistory.length ? "← Back" : "← Back to evidence";
 }
 
 /** Open a drawer panel and preserve the current panel for Back navigation. */
@@ -4008,7 +4040,10 @@ function openDrawer(kind, title) {
 /** Restore the immediately previous drawer panel and its scroll position. */
 function backDrawer() {
   const previous = state.drawerHistory.pop();
-  if (!previous) return;
+  if (!previous) {
+    if (byId("drawer").classList.contains("alert-over-evidence")) closeDrawer();
+    return;
+  }
   cancelDrawerRequests();
   state.drawerGeneration += 1;
   byId("drawer-kind").textContent = previous.kind;
@@ -4026,8 +4061,10 @@ function closeDrawer() {
   state.drawerGeneration += 1;
   state.drawerHistory = [];
   byId("drawer").classList.remove("open");
+  byId("drawer").classList.remove("alert-over-evidence");
   byId("drawer").setAttribute("aria-hidden", "true");
   byId("drawer-backdrop").classList.remove("open");
+  byId("drawer-backdrop").classList.remove("alert-over-evidence");
   byId("drawer-body").replaceChildren();
   updateDrawerBackButton();
 }
@@ -4502,13 +4539,30 @@ function flowCard(group, position = 1, total = 1) {
 
 /** Return from a full-page evidence investigation to its previous view.
  * @param {boolean} restoreFocus Whether to focus the opening control.
+ * @param {boolean} closeAll Whether to discard nested evidence navigation.
  */
-function closeEvidenceDetail(restoreFocus = true) {
+function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
   if (!state.evidenceDetail.record) return;
   state.requests.get("evidenceFlows")?.abort();
   state.evidenceDetail.generation += 1;
+  const previous = closeAll ? null : state.evidenceDetail.history.pop();
+  if (previous) {
+    state.evidenceDetail.record = previous.record;
+    state.evidenceDetail.records = previous.records;
+    byId("evidence-detail-content").replaceChildren(...previous.nodes);
+    if (byId("drawer").classList.contains("open")) {
+      byId("drawer").classList.add("alert-over-evidence");
+      byId("drawer-backdrop").classList.add("alert-over-evidence");
+    }
+    window.scrollTo(0, previous.scrollY);
+    updateDrawerBackButton();
+    return;
+  }
+  state.evidenceDetail.history = [];
   state.evidenceDetail.record = null;
   state.evidenceDetail.records = [];
+  byId("drawer").classList.remove("alert-over-evidence");
+  byId("drawer-backdrop").classList.remove("alert-over-evidence");
   document.body.classList.remove("evidence-detail-active");
   byId("evidence-detail").hidden = true;
   byId("evidence-detail").classList.remove("active");
@@ -4517,6 +4571,7 @@ function closeEvidenceDetail(restoreFocus = true) {
     state.evidenceWorkspace.record = null;
     highlightEvidenceSelection();
   }
+  updateDrawerBackButton();
   if (restoreFocus) state.evidenceDetail.trigger?.focus?.({ preventScroll: true });
 }
 
@@ -4547,6 +4602,18 @@ function evidenceDetailHeadline(record, groups = []) {
  */
 async function openEvidence(record, contextRecords = null) {
   const detail = state.evidenceDetail;
+  const drawer = byId("drawer");
+  const cameFromDrawer = drawer.classList.contains("open");
+  if (detail.record && drawer.classList.contains("alert-over-evidence")) {
+    detail.history.push({
+      record: detail.record,
+      records: detail.records,
+      nodes: Array.from(byId("evidence-detail-content").childNodes),
+      scrollY: window.scrollY,
+    });
+    drawer.classList.remove("alert-over-evidence");
+    byId("drawer-backdrop").classList.remove("alert-over-evidence");
+  }
   if (!detail.record) detail.trigger = document.activeElement;
   const groupRecords = state.evidenceWorkspace.records;
   const pageRecords = state.pages.evidence.items;
@@ -4579,7 +4646,7 @@ async function openEvidence(record, contextRecords = null) {
   toolbar.className = "evidence-detail-toolbar";
   const breadcrumb = document.createElement("div");
   breadcrumb.className = "evidence-detail-breadcrumb";
-  const back = text("button", "Evidence", "evidence-detail-link");
+  const back = text("button", cameFromDrawer ? "← Back to alert" : "← Back to evidence", "evidence-detail-link");
   back.type = "button";
   back.addEventListener("click", closeEvidenceDetail);
   breadcrumb.append(back, text("span", "›"),
@@ -4674,7 +4741,6 @@ async function openEvidence(record, contextRecords = null) {
       const button = text("button", id, "evidence-detail-link");
       button.type = "button";
       button.addEventListener("click", () => {
-        closeEvidenceDetail();
         openAlert({ alert_id: id }).catch(() => {});
       });
       links.append(button);
@@ -4745,6 +4811,11 @@ async function openEvidence(record, contextRecords = null) {
 
 async function openAlert(record) {
   const generation = openDrawer("ALERT", "Alert details");
+  if (state.evidenceDetail.record) {
+    byId("drawer").classList.add("alert-over-evidence");
+    byId("drawer-backdrop").classList.add("alert-over-evidence");
+    updateDrawerBackButton();
+  }
   const body = byId("drawer-body");
   if (record.evidence === undefined) {
     body.append(text("p", "Loading alert evidence…", "muted"));
@@ -5718,7 +5789,7 @@ function scheduleBackendStatusPoll() {
 }
 
 function switchTab(name) {
-  closeEvidenceDetail(false);
+  closeEvidenceDetail(false, true);
   state.activeTab = name;
   document.body.classList.toggle("overview-active", name === "overview");
   document.body.classList.toggle("alerts-active", name === "alerts");
@@ -5833,11 +5904,22 @@ byId("module-search").addEventListener("input", () =>
 byId("drawer-close").addEventListener("click", closeDrawer);
 byId("drawer-back").addEventListener("click", backDrawer);
 byId("drawer-backdrop").addEventListener("click", closeDrawer);
-/** Close the evidence page with Escape while preserving the previous pane. */
+/** Return to the nearest visible investigation with Escape. */
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape" && state.evidenceDetail.record) {
+  if (event.key !== "Escape") return;
+  const drawer = byId("drawer");
+  if (drawer.classList.contains("open")
+      && drawer.classList.contains("alert-over-evidence")) {
+    event.preventDefault();
+    if (state.drawerHistory.length) backDrawer();
+    else closeDrawer();
+  } else if (state.evidenceDetail.record) {
     event.preventDefault();
     closeEvidenceDetail();
+  } else if (drawer.classList.contains("open")) {
+    event.preventDefault();
+    if (state.drawerHistory.length) backDrawer();
+    else closeDrawer();
   }
 });
 byId("host-back").addEventListener("click", closeHost);
