@@ -3,6 +3,7 @@ import argparse
 from http import HTTPStatus
 from io import BytesIO
 import json
+import re
 import socket
 import sqlite3
 import threading
@@ -35,6 +36,103 @@ def _authenticated_request(url: str) -> Request:
     return Request(
         url, headers={"Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}"}
     )
+
+
+def test_every_static_web_table_header_has_a_sort_key() -> None:
+    """Prevent a new visible table column from silently losing sorting."""
+    _module_factory = ModuleFactory()
+    source = Path("modules/web_interface/index.html").read_text(
+        encoding="utf-8"
+    )
+    tables = re.findall(r"<table\b[^>]*>.*?</table>", source, re.S)
+    assert len(tables) >= 13
+    for table in tables:
+        table_id = re.search(r'id="([^"]+)"', table)
+        for header in re.findall(r"<th\b([^>]*)>", table):
+            assert 'data-sort="' in header, table_id.group(1) if table_id else table
+
+
+def test_logs_sort_all_retained_rows_before_bounding_page(tmp_path: Path) -> None:
+    """A non-time sort includes older logs outside the newest 100."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as history:
+        history.executemany(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            [(float(index), "zzz", "newer", "newer") for index in range(101)]
+            + [(0.0, "aaa", "oldest", "oldest")],
+        )
+
+    result = reader.logs({"sort": ["module"], "order": ["asc"]})
+
+    assert result["total"] == 102
+    assert len(result["items"]) == 100
+    assert result["items"][0]["module"] == "aaa"
+
+
+@pytest.mark.parametrize(
+    ("sort_key", "order", "expected"),
+    [
+        ("bytes", "asc", ["flow-small", "flow-middle"]),
+        ("ports", "asc", ["flow-small", "flow-middle"]),
+        ("duration", "desc", ["flow-large", "flow-middle"]),
+    ],
+)
+def test_host_flows_sort_before_cursor_paging(
+    tmp_path: Path, sort_key: str, order: str, expected: list[str]
+) -> None:
+    """Sort all matching flows, including fields kept in raw records."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "pcap"
+    reader._host_ips = Mock(return_value=["10.0.0.1"])
+    initialize_history(reader.history_path)
+    records = [
+        ("flow-large", 1.0, 30, 3000, 3.0),
+        ("flow-middle", 2.0, 10, 2000, 2.0),
+        ("flow-small", 3.0, 5, 1000, 1.0),
+    ]
+    with connect_history(reader.history_path) as history:
+        history.executemany(
+            "INSERT INTO flow_index(uid, flow_rowid, event_time, src_ip, "
+            "dst_ip, proto, app_proto, bytes, packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [
+                (uid, index, timestamp, "10.0.0.1", "10.0.0.2", "tcp", "", size, 1, "")
+                for index, (uid, timestamp, size, _, _) in enumerate(records, 1)
+            ],
+        )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE flows(uid TEXT, flow TEXT, label TEXT)")
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                (uid, json.dumps({"sport": port, "dport": 443, "dur": duration}), "")
+                for uid, _, _, port, duration in records
+            ],
+        )
+
+    first = reader.flows_for_host(
+        "10.0.0.1",
+        {"range": ["all"], "sort": [sort_key], "order": [order], "limit": ["2"]},
+    )
+
+    assert [item["uid"] for item in first["items"]] == expected
+    assert first["next_cursor"] is not None
+    second = reader.flows_for_host(
+        "10.0.0.1",
+        {
+            "range": ["all"], "sort": [sort_key], "order": [order],
+            "limit": ["2"], "cursor": [first["next_cursor"]],
+        },
+    )
+    assert len(second["items"]) == 1
 
 
 def test_current_network_profile_precedes_newer_run_fallback() -> None:
@@ -240,7 +338,8 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         summary_renderer = app_source.split("function setSummaryCards", 1)[
             1
         ].split("function renderOverview", 1)[0]
-        assert 'data-host-column="score" data-sort="score"' in index_source
+        assert 'data-host-column="score"' in index_source
+        assert 'data-sort="score"' in index_source
         assert (
             'data-sort="peak_score">Threat · Peak score</th>' in index_source
         )
@@ -1673,7 +1772,9 @@ def test_log_rows_open_the_colored_raw_console() -> None:
     assert "record.line || record.message" in app_source
     assert "], openLog);" in app_source
     assert "function appendHighlightedLogText" in app_source
-    assert "<th>Time</th><th>Level</th><th>Module</th>" in index_source
+    assert '<th data-sort="event_time">Time</th>' in index_source
+    assert '<th data-sort="level">Level</th>' in index_source
+    assert '<th data-sort="module">Module</th>' in index_source
     assert ".log-console-titlebar" in style_source
     assert ".log-console-level.critical" in style_source
     assert ".log-token-reference" in style_source
@@ -2537,7 +2638,7 @@ def test_firewall_tab_renders_transition_history() -> None:
     assert 'id="firewall-history-pager"' in index_source
     assert 'id="overview-firewall-impact"' in index_source
     assert 'id="firewall-impact-summary"' in index_source
-    assert "<th>Rule origin</th>" in index_source
+    assert '<th data-sort="origin">Rule origin</th>' in index_source
     assert "row.stopped_packets" in app_source
     assert "row.stopped_flows" in app_source
     assert "row.evidence_while_blocked" in app_source

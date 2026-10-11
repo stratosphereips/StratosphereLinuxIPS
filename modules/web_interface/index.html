@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261011-p2p-layout">
+  <link rel="stylesheet" href="/style.css?v=20261011-sort-all">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -63,7 +63,7 @@
     <section id="logs" class="panel" aria-labelledby="logs-title">
       <div class="section-heading"><div><p class="eyebrow">RUNTIME</p><h2 id="logs-title">Logs</h2></div><button class="secondary refresh-list" data-target="logs">Refresh</button></div>
       <div class="toolbar"><span id="logs-count" class="result-count"></span></div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th>Time</th><th>Level</th><th>Module</th><th>Message</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th data-sort="event_time">Time</th><th data-sort="level">Level</th><th data-sort="module">Module</th><th data-sort="message">Message</th></tr></thead><tbody></tbody></table></div></div>
     </section>
 
     <section id="metadata" class="panel" aria-labelledby="metadata-title">
@@ -97,12 +97,14 @@
             </div>
             <p id="alerts-range-note" class="alerts-range-note" role="status" hidden></p>
           </div>
+          <div class="alerts-sort-controls"><label>Sort hosts <select id="alerts-host-sort" aria-label="Sort alert hosts"><option value="time">Latest alert</option><option value="host">Host</option><option value="threat">Severity</option><option value="score">Score</option><option value="alerts">Alert count</option><option value="evidence">Evidence count</option><option value="label">Label</option></select></label><button id="alerts-host-order" type="button" aria-label="Reverse alert host order">↓</button></div>
           <div id="alerts-host-list" class="alerts-host-list" aria-live="polite"></div>
           <div id="alerts-pager" class="alerts-host-pager"></div>
         </div>
         <div id="alerts-host-divider" class="alerts-pane-divider" role="separator" aria-label="Resize hosts and alerts panes" aria-orientation="vertical" tabindex="0" hidden></div>
         <div id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden>
           <div id="alerts-selected-host" class="alerts-selected-host"></div>
+          <div class="alerts-sort-controls"><label>Sort alerts <select id="alerts-item-sort" aria-label="Sort alerts for selected host"><option value="time">Latest</option><option value="threat">Severity</option><option value="score">Score</option><option value="label">Label</option><option value="evidence">Evidence</option><option value="tw">Time window</option><option value="id">ID</option></select></label><button id="alerts-item-order" type="button" aria-label="Reverse alert order">↓</button></div>
           <div id="alerts-list" class="alerts-list" aria-live="polite"></div>
           <div id="alerts-list-more" class="alerts-list-more"></div>
         </div>
@@ -152,8 +154,8 @@
           <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
         </article>
         <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th>IP</th><th>Status</th><th>Rule origin</th><th>Blocked since</th><th>Unblock at</th><th>Remaining</th><th>Extra TWs</th><th>Est. stopped packets</th><th>Est. stopped flows</th><th>Evidence while blocked</th><th>Total evidence</th><th>Alerts</th></tr></thead><tbody></tbody></table></div></div>
-        <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th>Time</th><th>IP</th><th>Action</th><th>Details</th></tr></thead><tbody></tbody></table></div></article>
+        <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="origin">Rule origin</th><th data-sort="blocked_at">Blocked since</th><th data-sort="unblock_at">Unblock at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="remaining_timewindows">Extra TWs</th><th data-sort="stopped_packets">Est. stopped packets</th><th data-sort="stopped_flows">Est. stopped flows</th><th data-sort="evidence_while_blocked">Evidence while blocked</th><th data-sort="evidence_count">Total evidence</th><th data-sort="alert_count">Alerts</th></tr></thead><tbody></tbody></table></div></div>
+        <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="ip">IP</th><th data-sort="action">Action</th><th data-sort="details">Details</th></tr></thead><tbody></tbody></table></div></article>
         <div id="firewall-history-pager" class="pager"></div>
       </div>
     </section>
@@ -189,7 +191,7 @@
       <div id="p2p-stats">
         <div id="p2p-summary" class="summary-grid p2p-summary"></div>
         <div class="p2p-two-column">
-        <article class="surface table-surface p2p-peers-panel"><div class="table-heading"><div><h3>Peers <span id="p2p-peer-count" class="muted"></span></h3><p>Live connectivity and latest persistent trust</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th>Peer</th><th>Peer ID</th><th>Connectivity</th><th>Trust</th><th>Reliability</th><th>Reports</th><th>Last seen</th></tr></thead><tbody></tbody></table></div><div class="p2p-panel-foot">Trust “—” = not yet computed by the trust model. Click a peer to filter messages.</div></article>
+        <article class="surface table-surface p2p-peers-panel"><div class="table-heading"><div><h3>Peers <span id="p2p-peer-count" class="muted"></span></h3><p>Live connectivity and latest persistent trust</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th data-sort="ip">Peer</th><th data-sort="peer_id">Peer ID</th><th data-sort="connected">Connectivity</th><th data-sort="trust">Trust</th><th data-sort="reliability">Reliability</th><th data-sort="reports_received">Reports</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div><div class="p2p-panel-foot">Trust “—” = not yet computed by the trust model. Click a peer to filter messages.</div></article>
         <article class="surface p2p-trust-history">
           <div class="table-heading p2p-chart-heading">
             <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model</p></div>
@@ -231,7 +233,7 @@
       </div>
       <div id="whitelists-editor"></div>
       <div class="toolbar"><input id="whitelists-search" type="search" placeholder="Search value, type, or effect…"><select id="whitelists-type"><option value="">All rule types</option><option>IP address</option><option>Domain</option><option>Organization</option><option>MAC address</option></select><span id="whitelists-count" class="result-count"></span></div>
-      <div class="surface table-surface"><div class="table-wrap"><table id="whitelists-table"><thead><tr><th>Type</th><th>Value</th><th>Applies on</th><th>Suppresses</th><th>Evidence type</th><th>Meaning</th><th>Runtime source</th><th>Action</th></tr></thead><tbody></tbody></table></div></div>
+      <div class="surface table-surface"><div class="table-wrap"><table id="whitelists-table"><thead><tr><th data-sort="type">Type</th><th data-sort="value">Value</th><th data-sort="direction">Applies on</th><th data-sort="ignore">Suppresses</th><th data-sort="evidence_type">Evidence type</th><th data-sort="effect">Meaning</th><th data-sort="source">Runtime source</th><th data-sort="managed">Action</th></tr></thead><tbody></tbody></table></div></div>
     </section>
 
     <section id="hosts" class="panel" aria-labelledby="hosts-title">
@@ -250,7 +252,7 @@
           <input id="hosts-from" class="custom-time" type="datetime-local" hidden>
           <input id="hosts-to" class="custom-time" type="datetime-local" hidden>
         </div>
-        <div class="hosts-list-table"><table id="hosts-table"><thead><tr><th data-sort="ip">Host</th><th data-sort="mac">MAC · Vendor</th><th data-sort="scope">Scope</th><th data-sort="peak_score">Threat · Peak score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th><th data-host-column="hostname" data-sort="hostname" hidden>Hostname</th><th data-host-column="ti" hidden>TI feeds</th><th data-host-column="score" data-sort="score" hidden>Current score</th></tr></thead><tbody></tbody></table></div>
+        <div class="hosts-list-table"><table id="hosts-table"><thead><tr><th data-sort="ip">Host</th><th data-sort="mac">MAC · Vendor</th><th data-sort="scope">Scope</th><th data-sort="peak_score">Threat · Peak score</th><th data-sort="flows">Flows</th><th data-sort="bytes">Traffic</th><th data-sort="evidence">Evidence</th><th data-sort="alerts">Alerts</th><th data-sort="last_seen">Last seen</th><th data-host-column="hostname" hidden data-sort="hostname">Hostname</th><th data-host-column="ti" hidden data-sort="ti">TI feeds</th><th data-host-column="score" hidden data-sort="score">Current score</th></tr></thead><tbody></tbody></table></div>
         <div class="hosts-list-footer"><span id="hosts-list-status"></span><div><button id="hosts-export" type="button">Export CSV</button><button id="hosts-more" type="button">Load more</button></div></div>
         <div id="hosts-pager" class="pager" hidden></div>
       </div>
@@ -282,8 +284,8 @@
             <article class="surface host-score-panel"><figure class="score-history-figure"><figcaption>Slips score <small><i class="chart-key average"></i>score <i class="chart-key peak"></i>peak <i class="chart-key threshold"></i>alert threshold</small></figcaption><svg id="host-score-chart" class="line-chart" viewBox="0 0 1200 180"></svg></figure><p id="host-score-history-status" class="score-history-status">Loading score history…</p></article>
             <article class="surface host-activity-panel"><div class="host-activity-tabs" role="tablist" aria-label="Host detections and traffic"><button data-host-activity="alerts" class="active" type="button" role="tab" aria-selected="true" aria-controls="host-alerts-panel">Alerts <span id="host-alerts-tab-count"></span></button><button data-host-activity="evidence" type="button" role="tab" aria-selected="false" aria-controls="host-evidence-panel">Evidence <span id="host-evidence-tab-count"></span></button><button data-host-activity="flows" type="button" role="tab" aria-selected="false" aria-controls="host-flows-panel">Flows <span id="host-flows-tab-count"></span></button><input id="host-flow-search" type="search" aria-label="Filter visible flows" placeholder="Filter flows…" hidden><input id="host-evidence-search" type="search" aria-label="Search related evidence" placeholder="Filter evidence…" hidden></div>
               <div id="host-alerts-panel" class="host-activity-content" role="tabpanel"><h3 id="host-alerts-title">Alerts for this host</h3><div id="host-alerts" class="host-alert-list"></div><div class="host-activity-foot"><span id="host-alert-count"></span><div id="host-alerts-pager" class="pager"></div></div></div>
-              <div id="host-evidence-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th>Reporting peers</th><th data-sort="module">Module</th><th>Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th>Description</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-evidence-count"></span><div id="host-evidence-pager" class="pager"></div></div><h3 id="host-evidence-title" hidden>Related evidence</h3></div>
-              <div id="host-flows-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap"><table id="host-flows-table"><thead><tr><th>Time</th><th>Direction</th><th>Peer</th><th>Protocol</th><th>Ports</th><th>State</th><th>Packets</th><th>Bytes</th><th>Duration</th><th>Label</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-flow-count"></span><div id="host-flows-pager" class="pager"></div></div></div>
+              <div id="host-evidence-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="reporters">Reporting peers</th><th data-sort="module">Module</th><th data-sort="handling">Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th data-sort="description">Description</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-evidence-count"></span><div id="host-evidence-pager" class="pager"></div></div><h3 id="host-evidence-title" hidden>Related evidence</h3></div>
+              <div id="host-flows-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap"><table id="host-flows-table"><thead><tr><th data-sort="event_time">Time</th><th data-sort="direction">Direction</th><th data-sort="peer">Peer</th><th data-sort="protocol">Protocol</th><th data-sort="ports">Ports</th><th data-sort="state">State</th><th data-sort="packets">Packets</th><th data-sort="bytes">Bytes</th><th data-sort="duration">Duration</th><th data-sort="label">Label</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-flow-count"></span><div id="host-flows-pager" class="pager"></div></div></div>
             </article>
             <div class="host-mini-charts"><article class="surface"><figure><figcaption>Flows / min</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article><article class="surface"><figure><figcaption>Bytes / min</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article></div>
           </div>
@@ -307,6 +309,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261011-p2p-layout"></script>
+  <script src="/app.js?v=20261011-sort-all"></script>
 </body>
 </html>

@@ -2186,6 +2186,13 @@ class RunDataReader:
                 module_expression = self._evidence_module_expression(
                     connection
                 )
+                reporter_expression = (
+                    "LOWER(CASE WHEN INSTR(description, 'peers: ') > 0 "
+                    "THEN SUBSTR(description, INSTR(description, 'peers: ') + 7) "
+                    "WHEN INSTR(description, 'peer: ') > 0 "
+                    "THEN SUBSTR(description, INSTR(description, 'peer: ') + 6) "
+                    "ELSE '' END)"
+                )
                 latest_row = connection.execute(
                     "SELECT MAX(evidence_time) AS latest FROM evidence"
                 ).fetchone()
@@ -2204,6 +2211,9 @@ class RunDataReader:
                         "threat": threat_expression,
                         "type": "LOWER(COALESCE(evidence_type, ''))",
                         "module": f"LOWER({module_expression})",
+                        "reporters": reporter_expression,
+                        "handling": whitelist_expression,
+                        "description": "LOWER(COALESCE(description, ''))",
                         "confidence": "confidence",
                         "flows": flow_expression,
                         "alert": alert_expression,
@@ -3626,6 +3636,51 @@ class RunDataReader:
             peak_score_sort_expression = (
                 f"COALESCE({peak_score_expression}, 0)"
             )
+            ti_sort_values: Dict[str, str] = {}
+            if (
+                self._query_value(query, "sort") == "ti"
+                and getattr(self, "cache", None) is not None
+            ):
+                candidate_ips = [
+                    str(row["ip"])
+                    for row in connection.execute(
+                        "SELECT ip FROM host_snapshots"
+                    ).fetchall()
+                ]
+                cache_pipe = self.cache.pipeline(transaction=False)
+                for ip in candidate_ips:
+                    cache_pipe.hget("IPsInfo:threatintelligence", ip)
+                try:
+                    cached = cache_pipe.execute()
+                except redis.RedisError:
+                    cached = []
+                for ip, raw in zip(candidate_ips, cached):
+                    record = self._loads(raw, {})
+                    sources = (
+                        record.get("source", [])
+                        if isinstance(record, dict)
+                        else []
+                    )
+                    if not isinstance(sources, (list, tuple)):
+                        sources = [sources]
+                    ti_sort_values[ip] = ", ".join(
+                        sorted(
+                            str(source).lower() for source in sources if source
+                        )
+                    )
+
+            def ti_feed_sort(ip: str) -> str:
+                """Return cached feed names for a host during SQL sorting.
+
+                Parameters:
+                    ip: Host address in the current history database.
+
+                Returns:
+                    Normalized feed names, or an empty string.
+                """
+                return ti_sort_values.get(str(ip), "")
+
+            connection.create_function("ti_feed_sort", 1, ti_feed_sort)
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
                 {
@@ -3634,6 +3689,7 @@ class RunDataReader:
                     "hostname": (
                         "LOWER(COALESCE(json_extract(hs.data, '$.hostname'), ''))"
                     ),
+                    "ti": "ti_feed_sort(hs.ip)",
                     "mac": "LOWER(COALESCE(json_extract(hs.data, '$.mac'), ''))",
                     "threat": threat_expression,
                     "flows": flow_expression,
@@ -4220,6 +4276,34 @@ class RunDataReader:
         limit = max(1, min(requested, MAX_FLOW_LIMIT))
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         ips = self._host_ips(ip)
+        host_ips = set(ips)
+
+        def direction_sort(src: str, dst: str) -> str:
+            """Return the displayed direction for an indexed flow.
+
+            Parameters:
+                src: Source address.
+                dst: Destination address.
+
+            Returns:
+                Direction relative to this host.
+            """
+            if src in host_ips and dst in host_ips:
+                return "internal"
+            return "outbound" if src in host_ips else "inbound"
+
+        def peer_sort(src: str, dst: str) -> str:
+            """Return the displayed peer for an indexed flow.
+
+            Parameters:
+                src: Source address.
+                dst: Destination address.
+
+            Returns:
+                Address at the opposite end of this host's flow.
+            """
+            return dst if src in host_ips else src
+
         predicate, params = self._ip_predicate(ips)
         with connect_history(self.history_path, read_only=True) as history:
             latest_row = history.execute(
@@ -4235,11 +4319,46 @@ class RunDataReader:
             clauses.append("event_time <= ?")
             params.append(end)
         with connect_history(self.history_path, read_only=True) as history:
-            if self._query_value(query, "hide_excluded") == "1":
+            history.create_function("flow_direction_sort", 2, direction_sort)
+            history.create_function("flow_peer_sort", 2, peer_sort)
+            raw_sort_keys = {"ports", "state", "duration"}
+            requested_sort = self._query_value(query, "sort", "event_time")
+            if (
+                self._query_value(query, "hide_excluded") == "1"
+                or requested_sort in raw_sort_keys
+            ):
                 history.execute(
                     "ATTACH DATABASE ? AS run_db",
                     (f"file:{self.sqlite_path}?mode=ro",),
                 )
+            raw_flow = (
+                "(SELECT flow FROM run_db.flows f "
+                "WHERE f.uid = flow_index.uid)"
+            )
+            raw_value = (
+                f"CASE WHEN json_valid({raw_flow}) "
+                f"THEN {raw_flow} ELSE '{{}}' END"
+            )
+            sort_key, sort_expression, sort_direction = self._sort_spec(
+                query,
+                {
+                    "event_time": "event_time",
+                    "direction": "flow_direction_sort(src_ip, dst_ip)",
+                    "peer": "LOWER(flow_peer_sort(src_ip, dst_ip))",
+                    "protocol": "LOWER(COALESCE(proto, '') || '/' || COALESCE(app_proto, ''))",
+                    "ports": (
+                        f"printf('%05d:%05d', CAST(json_extract({raw_value}, '$.sport') AS INTEGER), "
+                        f"CAST(json_extract({raw_value}, '$.dport') AS INTEGER))"
+                    ),
+                    "state": f"LOWER(COALESCE(json_extract({raw_value}, '$.state'), ''))",
+                    "packets": "packets",
+                    "bytes": "bytes",
+                    "duration": f"COALESCE(CAST(json_extract({raw_value}, '$.dur') AS REAL), 0)",
+                    "label": "LOWER(COALESCE(label, ''))",
+                },
+                "event_time",
+            )
+            if self._query_value(query, "hide_excluded") == "1":
                 evidence_columns = {
                     str(column[1])
                     for column in history.execute(
@@ -4260,7 +4379,7 @@ class RunDataReader:
             count_params = list(params)
             if cursor:
                 clauses.append(
-                    "(event_time < ? OR (event_time = ? AND uid < ?))"
+                    self._cursor_clause(sort_expression, "uid", sort_direction)
                 )
                 params.extend([cursor[0], cursor[0], cursor[1]])
             where = " AND ".join(clauses)
@@ -4270,8 +4389,8 @@ class RunDataReader:
                 count_params,
             ).fetchone()["count"]
             index_rows = history.execute(
-                f"SELECT * FROM flow_index WHERE {where} "
-                "ORDER BY event_time DESC, uid DESC LIMIT ?",
+                f"SELECT *, {sort_expression} AS sort_value FROM flow_index WHERE {where} "
+                f"ORDER BY {sort_expression} {sort_direction}, uid {sort_direction} LIMIT ?",
                 (*params, limit + 1),
             ).fetchall()
         has_more = len(index_rows) > limit
@@ -4325,7 +4444,7 @@ class RunDataReader:
             )
         next_cursor = (
             self._encode_cursor(
-                float(items[-1]["event_time"]), str(items[-1]["uid"])
+                index_rows[-1]["sort_value"], str(items[-1]["uid"])
             )
             if has_more and items
             else None
@@ -4810,13 +4929,55 @@ class RunDataReader:
         """
         return {"items": self._run_metadata(), "updated_at": time.time()}
 
-    def logs(self) -> Dict[str, Any]:
-        """Return the latest parsed runtime messages.
+    def logs(
+        self, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
+        """Return sortable parsed runtime messages.
+
+        Parameters:
+            query: Optional sort key and direction.
 
         Returns:
-            Total parsed message count and the newest bounded records.
+            Total parsed message count and one bounded sorted page.
         """
+        query = query or {}
         with connect_history(self.history_path, read_only=True) as history:
+
+            def log_level(message: str, line: str) -> str:
+                """Classify a stored log using the visible level labels.
+
+                Parameters:
+                    message: Parsed summary.
+                    line: Raw source line.
+
+                Returns:
+                    Severity label used by the browser.
+                """
+                content = f"{message or ''} {line or ''}".lower()
+                for level, pattern in (
+                    (
+                        "critical",
+                        r"\b(critical|fatal|panic|traceback|exception)\b",
+                    ),
+                    ("warning", r"\b(warning|warn)\b"),
+                    ("debug", r"\bdebug\b"),
+                    ("info", r"\b(info|notice)\b"),
+                ):
+                    if re.search(pattern, content):
+                        return level
+                return "error"
+
+            history.create_function("log_level", 2, log_level)
+            _, sort_expression, direction = self._sort_spec(
+                query,
+                {
+                    "event_time": "event_time",
+                    "level": "log_level(message, line)",
+                    "module": "LOWER(module)",
+                    "message": "LOWER(message)",
+                },
+                "event_time",
+            )
             total = int(
                 history.execute(
                     "SELECT COUNT(*) AS count FROM error_events"
@@ -4826,7 +4987,7 @@ class RunDataReader:
                 dict(row)
                 for row in history.execute(
                     "SELECT event_time, module, message, line "
-                    "FROM error_events ORDER BY event_time DESC, id DESC "
+                    f"FROM error_events ORDER BY {sort_expression} {direction}, id {direction} "
                     "LIMIT 100"
                 ).fetchall()
             ]
@@ -5968,7 +6129,46 @@ class RunDataReader:
                     )
                 ).lower()
             ]
-        records.sort(key=lambda item: (item["unblock_at"] or 0, item["ip"]))
+        rule_key = self._query_value(query, "sort", "unblock_at")
+        numeric_rule_keys = {
+            "blocked_at",
+            "unblock_at",
+            "remaining_seconds",
+            "remaining_timewindows",
+            "stopped_packets",
+            "stopped_flows",
+            "evidence_while_blocked",
+            "evidence_count",
+            "alert_count",
+        }
+        text_rule_keys = {"ip", "status", "origin"}
+        if rule_key not in numeric_rule_keys | text_rule_keys:
+            rule_key = "unblock_at"
+        rule_descending = self._query_value(query, "order", "asc") == "desc"
+        records.sort(
+            key=lambda item: (
+                (
+                    float(item.get(rule_key) or 0)
+                    if rule_key in numeric_rule_keys
+                    else str(
+                        item["ip"]
+                        if rule_key == "ip"
+                        else (
+                            item["status"]
+                            if rule_key == "status"
+                            else (
+                                f"{item.get('recovery_status') or 'Recovered'} · "
+                                f"{item.get('origin_run') or ''}"
+                                if item["recovered"]
+                                else "Current run"
+                            )
+                        )
+                    ).lower()
+                ),
+                item["ip"],
+            ),
+            reverse=rule_descending,
+        )
         history = all_history
         if search:
             history = [
@@ -5979,6 +6179,24 @@ class RunDataReader:
                     (item["ip"], item["action"], item["details"])
                 ).lower()
             ]
+        history_key = self._query_value(query, "history_sort", "timestamp")
+        if history_key not in {"timestamp", "ip", "action", "details"}:
+            history_key = "timestamp"
+        history_descending = (
+            self._query_value(query, "history_order", "desc") == "desc"
+        )
+        history.sort(
+            key=lambda item: (
+                (
+                    float(item["timestamp"])
+                    if history_key == "timestamp"
+                    else str(item[history_key]).lower()
+                ),
+                item["timestamp"],
+                item["ip"],
+            ),
+            reverse=history_descending,
+        )
         try:
             history_offset = max(
                 0, int(self._query_value(query, "history_offset") or 0)
@@ -6531,7 +6749,7 @@ class RequestHandler(BaseHTTPRequestHandler):
         elif path == "/api/metadata":
             payload = reader.metadata()
         elif path == "/api/logs":
-            payload = reader.logs()
+            payload = reader.logs(query)
         elif path == "/api/metrics":
             payload = reader.metrics(query)
         elif path == "/api/alerts":

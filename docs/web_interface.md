@@ -281,6 +281,8 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 Alerts opens with only the **Hosts with alerts** pane. Choose a host to open its individual alert timeline in a second pane, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record in a third pane. Evidence cards open the existing investigation drawer for triggering flows. The two dividers can be dragged or adjusted with the left and right arrow keys. Closing an alert returns to two panes; closing the host returns to the initial pane.
 
+Both alert lists have sort controls and a reverse-order button. Host sorting covers latest alert, address, severity, score, alert and evidence counts, and label. The selected host's alerts can be sorted by time, severity, score, label, evidence count, time window, and ID. These choices apply before cursor paging.
+
 Search, severity chips, time range, and excluded-record visibility stay visible
 in the host pane. Time choices include 5 minutes, 15 minutes, Live (the last
 hour), longer intervals, Full run, and a custom interval. On the first visit,
@@ -307,13 +309,15 @@ Metadata keeps the run version, branch, and commit beside the monitored device's
 
 ### Logs
 
-The Logs tab shows the newest bounded runtime events parsed from the run's
+The Logs tab shows a bounded page of runtime events parsed from the run's
 `errors.log`. Select any row to open a console-style investigation panel with
 the complete timestamp, module, presentation severity, and raw multiline source
 block. Traceback rows also show the final exception when one is available.
 Colors highlight severity, paths, and IP addresses
 without rewriting the stored log. Keyboard users can open a selected row with
 Enter.
+Click any table heading to sort all retained events by time, displayed level,
+module, or message before the bounded page is selected.
 
 ### Firewall
 
@@ -343,6 +347,7 @@ by enforcement, not firewall rule counters and not proof that every observed
 packet was malicious.
 
 The tab also shows a newest-first block/unblock history for the run. Its authoritative append-only source is `output/<run>/blocking/blocking.log`; Slips records the human timestamp, IP, direction when blocked, successful removal, and failed removal attempts. The unblocker retains zero-window requests until their rules are actually absent, retries partial failures, and restores persisted schedules after a blocker restart.
+Every Firewall table heading sorts the corresponding active blocks or history events before the history page is selected.
 
 ### ARP poisoning
 
@@ -361,6 +366,7 @@ search applies to isolation state, transition history, and ARP evidence.
 ### P2P
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent per-peer reliability chart keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges, with hover values. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.
+Every peers-table heading is sortable, including connectivity, trust, reliability, report count, and last seen time.
 
 The reports and message activity table combines bounded send/receive telemetry with retained reports from the current run. Filter chips show all messages, reports, requests, or connection changes. The Show menu also keeps received reports, sent reports, and blame reports available. Every column is sortable; Load more exposes the remaining retained rows. Selecting a row opens its content beside the table, including Copy JSON. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
 
@@ -379,6 +385,7 @@ Changed, and Secrets filters narrow the section navigator and table. Changed
 compares the captured value with the current `config/slips.yaml` file, so the
 comparison can change after an update even though the captured value does not.
 View YAML opens the captured structure with secret values redacted.
+Each configuration table heading sorts the settings in its selected section. Secret values remain redacted during sorting.
 
 This is the configuration supplied to the run, not the current repository
 file. A setting omitted from the snapshot can still use a built-in default in
@@ -522,6 +529,7 @@ table, so the next selection starts a new investigation.
 ### Hosts
 
 The Hosts tab opens as a compact inventory sized to the available browser height. It shows every host in the first server page, then loads more pages automatically as you scroll until every host matching the selected time range and filters is visible. **Load more** is also available in the footer. The footer shows how many of the matching hosts have loaded. Sorting stays on the server. Threat and scope chips, search, and **Only with alerts** filter the inventory; the alerts-only filter is applied before server paging. **Columns** reveals hostname, TI feeds, and current score when needed. The table combines MAC with vendor and threat with the past peak score, including a marker for the alert threshold. **Export CSV** exports the loaded rows.
+All inventory headings, including the optional TI feeds column, sort the matching hosts before paging. TI feed sorting reads cached feed names only when that column is selected.
 
 Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens the existing rule editor with the selected IP filled in.
 
@@ -543,6 +551,8 @@ The selected host workspace includes:
 - protocol/application distribution and top peers;
 - compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs;
 - newest historical flows with cursor navigation into older traffic.
+
+Every related-evidence and flow-table heading is sortable across the selected host and time range. The flow sort uses indexed fields where available and reads stored protocol details when sorting ports, connection state, or duration. The Whitelists table also sorts by every displayed column, including whether a rule can be removed.
 
 IP labels throughout the web interface use the saved user name first, then a
 learned hostname, DNS or reverse DNS name, and finally the MAC vendor followed

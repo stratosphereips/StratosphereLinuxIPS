@@ -17,6 +17,9 @@ const state = {
   p2pSelectedPeer: null,
   p2pSelectedMessage: null,
   p2pVisibleMessages: 12,
+  logs: null,
+  firewall: null,
+  configurationSort: { key: null, order: "asc" },
   host: null,
   hostActivity: "alerts",
   alertsWorkspace: {
@@ -24,6 +27,7 @@ const state = {
     total: 0, listGeneration: 0, detailGeneration: 0,
     listLoadedAt: 0, listSignature: "", fullTotal: 0,
     rangeTouched: false, autoRange: "",
+    itemSort: "time", itemOrder: "desc",
   },
   evidenceWorkspace: {
     group: null, record: null, records: [], next: null, total: 0, typeFilter: "",
@@ -57,6 +61,12 @@ const state = {
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
     "p2p-activity-table": { key: "timestamp", order: "desc" },
+    "p2p-peers-table": { key: "connected", order: "desc" },
+    "logs-table": { key: "event_time", order: "desc" },
+    "firewall-table": { key: null, order: "asc" },
+    "firewall-history-table": { key: "timestamp", order: "desc" },
+    "whitelists-table": { key: null, order: "asc" },
+    "host-flows-table": { key: "event_time", order: "desc" },
   },
   pages: {
     alerts: { items: [], total: 0, next: null, cursors: [null], index: 0, sort: "time", order: "desc" },
@@ -536,7 +546,7 @@ function renderTable(id, rows, columns, onClick = null) {
 /** Sort one bounded client-side table and update its accessible indicators. */
 function sortLocalRows(id, rows) {
   const sort = state.localSorts[id];
-  if (!sort) return [...rows];
+  if (!sort || !sort.key) return [...rows];
   document.querySelectorAll(`#${id} th[data-sort]`).forEach((header) => {
     const active = header.dataset.sort === sort.key;
     header.classList.toggle("sorted", active);
@@ -1376,7 +1386,9 @@ function openLog(record) {
  * @param {Object} payload Bounded log records and their total count.
  */
 function renderLogs(payload) {
-  const errors = payload.items || [];
+  const errors = sortLocalRows("logs-table", (payload.items || []).map((row) => ({
+    ...row, level: logSeverity(row),
+  })));
   byId("logs-badge").textContent = compact(payload.total);
   byId("logs-count").textContent = `${errors.length} shown · ${compact(payload.total)} total`;
   renderTable("logs-table", errors, [
@@ -1543,8 +1555,11 @@ async function loadMetadata() {
 
 /** Load and render parsed runtime messages in their dedicated tab. */
 async function loadLogs() {
-  const payload = await api("logs", "/api/logs");
+  const sort = state.localSorts["logs-table"];
+  const params = new URLSearchParams({ sort: sort.key, order: sort.order });
+  const payload = await api("logs", `/api/logs?${params}`);
   if (!payload) return;
+  state.logs = payload;
   renderLogs(payload);
 }
 
@@ -1812,8 +1827,8 @@ async function loadAlertHostAlerts(reset = true, quiet = false) {
   const params = rangeQuery("alerts");
   params.set("profile", host);
   params.set("limit", "50");
-  params.set("sort", "time");
-  params.set("order", "desc");
+  params.set("sort", workspace.itemSort);
+  params.set("order", workspace.itemOrder);
   params.set("details", "false");
   params.set("summary", "1");
   if (state.hideExcluded) params.set("hide_excluded", "1");
@@ -2649,6 +2664,18 @@ function renderConfiguration() {
       "popup_alerts", "low_risk_weight", "medium_risk_weight", "high_risk_weight"];
     settings.sort((left, right) => order.indexOf(left.key) - order.indexOf(right.key));
   }
+  if (state.configurationSort.key) {
+    const key = state.configurationSort.key;
+    const direction = state.configurationSort.order === "asc" ? 1 : -1;
+    const valueFor = (item) => key === "label" ? item.label
+      : key === "value" ? configValue(item.value, item.sensitive)
+        : key === "explanation" ? item.explanation
+          : item.changed ? `was ${configValue(item.default, item.sensitive)}`
+            : item.has_default ? "default" : "—";
+    settings.sort((left, right) => String(valueFor(left) ?? "").localeCompare(
+      String(valueFor(right) ?? ""), undefined, { numeric: true, sensitivity: "base" },
+    ) * direction);
+  }
   const panel = document.createElement("article");
   panel.className = "surface config-table-panel";
   const heading = document.createElement("div");
@@ -2661,7 +2688,34 @@ function renderConfiguration() {
   wrap.className = "config-table-wrap";
   const table = document.createElement("table");
   table.className = "config-table";
-  table.innerHTML = "<thead><tr><th>Setting</th><th>Value</th><th>What it does</th><th>Default</th></tr></thead>";
+  const headers = document.createElement("tr");
+  [["Setting", "label"], ["Value", "value"], ["What it does", "explanation"],
+    ["Default", "default"]].forEach(([label, key]) => {
+    const header = text("th", label);
+    header.dataset.sort = key;
+    header.tabIndex = 0;
+    const active = state.configurationSort.key === key;
+    header.classList.toggle("sorted", active);
+    header.dataset.order = active ? state.configurationSort.order : "";
+    header.setAttribute("aria-sort", active
+      ? state.configurationSort.order === "asc" ? "ascending" : "descending" : "none");
+    const changeSort = () => {
+      state.configurationSort.order = active && state.configurationSort.order === "asc" ? "desc" : "asc";
+      state.configurationSort.key = key;
+      renderConfiguration();
+    };
+    header.addEventListener("click", changeSort);
+    header.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        changeSort();
+      }
+    });
+    headers.append(header);
+  });
+  const head = document.createElement("thead");
+  head.append(headers);
+  table.append(head);
   const body = document.createElement("tbody");
   settings.forEach((setting) => {
     const row = document.createElement("tr");
@@ -2903,8 +2957,8 @@ function renderWhitelists() {
   if (!payload) return;
   const query = byId("whitelists-search").value.trim().toLowerCase();
   const type = byId("whitelists-type").value;
-  const rows = (payload.rules || []).filter((rule) =>
-    (!type || rule.type === type) && (!query || JSON.stringify(rule).toLowerCase().includes(query)));
+  const rows = sortLocalRows("whitelists-table", (payload.rules || []).filter((rule) =>
+    (!type || rule.type === type) && (!query || JSON.stringify(rule).toLowerCase().includes(query))));
   byId("whitelists-count").textContent = `${rows.length} shown · ${payload.total} parsed local rules`;
   renderTable("whitelists-table", rows, [
     (row) => text("span", row.type, "type-chip"),
@@ -2983,11 +3037,25 @@ async function loadFirewall() {
   const search = byId("firewall-search").value.trim();
   const params = new URLSearchParams();
   if (search) params.set("search", search);
+  if (state.localSorts["firewall-table"].key) {
+    params.set("sort", state.localSorts["firewall-table"].key);
+    params.set("order", state.localSorts["firewall-table"].order);
+  }
+  params.set("history_sort", state.localSorts["firewall-history-table"].key);
+  params.set("history_order", state.localSorts["firewall-history-table"].order);
   const historyPage = state.pages.firewall;
   const historyCursor = historyPage.cursors[historyPage.index];
   if (historyCursor) params.set("history_offset", historyCursor);
   const payload = await api("firewall", `/api/firewall?${params}`);
   if (!payload) return;
+  state.firewall = payload;
+  renderFirewall(payload);
+}
+
+/** Render sorted active firewall rules and their paged transition history.
+ * @param {object} payload Current firewall API response.
+ */
+function renderFirewall(payload) {
   byId("firewall-badge").textContent = compact(payload.total);
   byId("firewall-disabled").hidden = payload.enabled;
   byId("firewall-stats").hidden = !payload.enabled;
@@ -2999,12 +3067,16 @@ async function loadFirewall() {
     ["Flows stopped (estimated)", compact(impact.flows)],
     ["Evidence while blocked", compact(impact.evidence)],
   ], "firewall-impact-summary");
-  renderTable("firewall-table", payload.items, [
-    (row) => hostIdentity(row.ip),
-    (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
-    (row) => row.recovered
+  const rules = sortLocalRows("firewall-table", payload.items.map((row) => ({
+    ...row,
+    origin: row.recovered
       ? `${row.recovery_status || "Recovered"}${row.origin_run ? ` · ${row.origin_run}` : ""}`
       : "Current run",
+  })));
+  renderTable("firewall-table", rules, [
+    (row) => hostIdentity(row.ip),
+    (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
+    (row) => row.origin,
     (row) => formatTime(row.blocked_at),
     (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
     (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
@@ -3015,7 +3087,7 @@ async function loadFirewall() {
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
   ], (row) => openHost(row.ip));
-  const history = payload.history || [];
+  const history = sortLocalRows("firewall-history-table", payload.history || []);
   historyPage.items = history;
   historyPage.total = payload.history_total || 0;
   historyPage.next = payload.history_next_cursor || null;
@@ -3382,7 +3454,7 @@ async function copyP2PText(value, label) {
  * Selecting a row filters the message table to that peer.
  */
 function renderP2PPeers() {
-  const peers = state.p2p?.peers || [];
+  const peers = sortLocalRows("p2p-peers-table", state.p2p?.peers || []);
   byId("p2p-peer-count").textContent = String(peers.length);
   renderTable("p2p-peers-table", peers, [
     (row) => row.ip ? hostIdentity(row.ip) : text("span", "Unknown IP", "muted"),
@@ -4805,6 +4877,8 @@ async function loadHostFlows() {
   const page = state.pages.hostFlows;
   const params = hostRangeParams();
   params.set("limit", byId("host-flow-limit").value);
+  params.set("sort", state.localSorts["host-flows-table"].key);
+  params.set("order", state.localSorts["host-flows-table"].order);
   if (state.hideExcluded) params.set("hide_excluded", "1");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const path = `/api/hosts/${escapePath(ip)}/flows?${params}`;
@@ -4821,12 +4895,25 @@ async function loadHostFlows() {
     `${exactItems.length} shown · exact profile IP only` +
     (discarded ? ` · ${discarded} stale MAC-alias rows discarded` :
       ` · ${compact(payload.total)} flows match this range`);
-  renderTable("host-flows-table", exactItems, [
+  renderHostFlows();
+}
+
+/** Sort and render the currently loaded host flow page.
+ * Later pages keep their own cursor and can be loaded with the existing pager.
+ */
+function renderHostFlows() {
+  const page = state.pages.hostFlows;
+  const rows = sortLocalRows("host-flows-table", page.items.map((row) => ({
+    ...row,
+    protocol: [row.proto, row.app_proto].filter(Boolean).join(" / "),
+    ports: `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`,
+  })));
+  renderTable("host-flows-table", rows, [
     (row) => formatTime(row.event_time),
     (row) => text("span", row.direction, `status ${row.direction === "inbound" ? "ok" : "warn"}`),
     (row) => hostIdentity(row.peer),
-    (row) => [row.proto, row.app_proto].filter(Boolean).join(" / "),
-    (row) => `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`,
+    (row) => row.protocol,
+    (row) => row.ports,
     (row) => row.state || "—",
     (row) => compact(row.packets),
     (row) => formatBytes(row.bytes),
@@ -5327,6 +5414,18 @@ byId("p2p-load-more").addEventListener("click", () => {
   renderP2PMessages();
 });
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
+bindLocalTableSort("p2p-peers-table", renderP2PPeers);
+bindLocalTableSort("logs-table", () => loadLogs().catch(() => {}));
+bindLocalTableSort("whitelists-table", renderWhitelists);
+bindLocalTableSort("firewall-table", () => loadFirewall().catch(() => {}));
+bindLocalTableSort("firewall-history-table", () => {
+  resetPage("firewall");
+  loadFirewall().catch(() => {});
+});
+bindLocalTableSort("host-flows-table", () => {
+  resetPage("hostFlows");
+  loadHostFlows().catch(() => {});
+});
 byId("module-search").addEventListener("input", () =>
   state.overview && renderModules(state.overview.modules));
 byId("drawer-close").addEventListener("click", closeDrawer);
@@ -5406,6 +5505,34 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
   "arp-poisoning-evidence-table"].forEach((id) =>
   bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search"], loadAlerts);
+byId("alerts-host-sort").addEventListener("change", () => {
+  const page = state.pages.alerts;
+  page.sort = byId("alerts-host-sort").value;
+  page.order = ["host", "label"].includes(page.sort) ? "asc" : "desc";
+  byId("alerts-host-order").textContent = page.order === "asc" ? "↑" : "↓";
+  resetPage("alerts");
+  loadAlerts().catch(() => {});
+});
+byId("alerts-host-order").addEventListener("click", () => {
+  const page = state.pages.alerts;
+  page.order = page.order === "asc" ? "desc" : "asc";
+  byId("alerts-host-order").textContent = page.order === "asc" ? "↑" : "↓";
+  resetPage("alerts");
+  loadAlerts().catch(() => {});
+});
+byId("alerts-item-sort").addEventListener("change", () => {
+  const workspace = state.alertsWorkspace;
+  workspace.itemSort = byId("alerts-item-sort").value;
+  workspace.itemOrder = ["label", "tw", "id"].includes(workspace.itemSort) ? "asc" : "desc";
+  byId("alerts-item-order").textContent = workspace.itemOrder === "asc" ? "↑" : "↓";
+  loadAlertHostAlerts(true).catch(() => {});
+});
+byId("alerts-item-order").addEventListener("click", () => {
+  const workspace = state.alertsWorkspace;
+  workspace.itemOrder = workspace.itemOrder === "asc" ? "desc" : "asc";
+  byId("alerts-item-order").textContent = workspace.itemOrder === "asc" ? "↑" : "↓";
+  loadAlertHostAlerts(true).catch(() => {});
+});
 byId("alerts-range").addEventListener("change", () => {
   state.alertsWorkspace.rangeTouched = true;
   state.alertsWorkspace.autoRange = "";
