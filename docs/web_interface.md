@@ -278,7 +278,7 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ### Overview
 
-Overview puts the run state, most affected alert hosts, system warnings, five key counts, current network, host load, and two Slips performance sparklines on one desktop screen. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact and the memory chart. The sortable Modules table is in Metadata; the **Modules** action in a high-CPU warning opens it there.
+Overview puts the run state, most affected alert hosts, system warnings, five key counts, current network, host load, and three Slips performance charts (CPU, resident memory, and flows per second) on one desktop screen. Each chart shows numeric Y-axis values with its unit, and hovering shows the sampled time and value. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact. The sortable Modules table is in Metadata; the **Modules** action in a high-CPU warning opens it there.
 
 Uptime is elapsed wall-clock time since this Slips run started and freezes at the recorded analysis end time for completed runs. The compact header shows the run name, computer name, monitored interface, network name, address, version, state, and uptime. **Run details** opens Metadata for the full run facts, including branch and commit. Parsed runtime messages remain in **Logs**.
 

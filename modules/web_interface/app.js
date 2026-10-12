@@ -780,10 +780,11 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     ? height * renderedWidth / renderedHeight
     : numeric(svg.viewBox?.baseVal?.width) || 600;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  const left = 42;
+  const overviewChart = Boolean(svg.closest(".overview-performance"));
+  const left = overviewChart ? 145 : 42;
   const right = 10;
-  const top = 12;
-  const bottom = 30;
+  const top = overviewChart ? 28 : 12;
+  const bottom = overviewChart ? 20 : 30;
   const plotWidth = width - left - right;
   const plotHeight = height - top - bottom;
   if (!points.length) {
@@ -823,7 +824,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     label.setAttribute("x", String(left - 6));
     label.setAttribute("y", String(y + 3));
     label.setAttribute("text-anchor", "end");
-    label.setAttribute("class", "chart-label");
+    label.setAttribute("class", "chart-label chart-y-label");
     label.textContent = formatValue(minimumValue + valueSpan * ratio, maximum);
     svg.append(label);
   });
@@ -834,7 +835,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     label.setAttribute("x", String(x));
     label.setAttribute("y", String(height - 8));
     label.setAttribute("text-anchor", ratio === 0 ? "start" : ratio === 1 ? "end" : "middle");
-    label.setAttribute("class", "chart-label");
+    label.setAttribute("class", "chart-label chart-time-label");
     label.textContent = formatChartTime(timestamp, span);
     svg.append(label);
   });

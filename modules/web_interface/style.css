@@ -1041,8 +1041,10 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .overview-performance .chart-grid { display: grid; grid-template-columns: 1fr; gap: .25rem; }
 .overview-performance figure { min-width: 0; }
 .overview-performance figcaption { display: flex; justify-content: space-between; margin: 0; font-size: .7rem; }
-.overview-performance .line-chart { min-height: 49px; height: 49px; border: 0; background: transparent; }
-.overview-performance .chart-grid .grid-line, .overview-performance .chart-grid .chart-label { display: none; }
+.overview-performance .line-chart { min-height: 60px; height: 60px; border: 0; background: transparent; }
+.overview-performance .chart-grid .grid-line { stroke: #263a49; }
+.overview-performance .chart-grid .chart-y-label { fill: #9fb5c6; font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.overview-performance .chart-grid .chart-time-label { display: none; }
 .overview-performance .chart-grid .chart-line { stroke: #3d91ff; stroke-width: 2.4; }
 .overview-performance .chart-grid .chart-line.secondary-line { display: none; }
 .overview-detail-actions { display: flex; justify-content: flex-end; gap: .45rem; margin-top: -.15rem; }
@@ -1083,7 +1085,7 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
   .network-fact > span:last-child { font-size: .9rem; }
   .metric-heading, .metric-heading strong { font-size: .9rem; }
   .overview-load-foot { font-size: .8rem; }
-  .overview-performance .line-chart { min-height: 57px; height: 57px; }
+  .overview-performance .line-chart { min-height: 64px; height: 64px; }
 }
 
 .review-filter-label { display: inline-flex; align-items: center; gap: .45rem; color: var(--muted); font-size: .84rem; }

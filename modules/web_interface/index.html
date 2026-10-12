@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261011-alert-back">
+  <link rel="stylesheet" href="/style.css?v=20261012-overview-memory">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -51,12 +51,11 @@
       <div class="overview-bottom">
         <article class="surface overview-network"><div id="network-states" class="network-states"></div></article>
         <article class="surface overview-load"><h3>Host load</h3><div id="system-load" class="metrics"></div></article>
-        <article class="surface overview-performance"><div class="overview-card-head"><h3>Slips performance</h3><select id="metrics-range" aria-label="Performance history range"><option value="5m">5 min</option><option value="15m" selected>15 min</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="all">Full run</option></select></div><div class="chart-grid"><figure><figcaption>CPU <span id="overview-cpu-peak"></span></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure><figure><figcaption>Flows / s <span id="overview-fps-peak"></span></figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
+        <article class="surface overview-performance"><div class="overview-card-head"><h3>Slips performance</h3><select id="metrics-range" aria-label="Performance history range"><option value="5m">5 min</option><option value="15m" selected>15 min</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="all">Full run</option></select></div><div class="chart-grid"><figure><figcaption>CPU <span id="overview-cpu-peak"></span></figcaption><svg id="cpu-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure><figure><figcaption>Slips memory</figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure><figure><figcaption>Flows / s <span id="overview-fps-peak"></span></figcaption><svg id="fps-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
       </div>
       <div class="overview-detail-actions"><button class="secondary" id="refresh-overview">Refresh</button><button class="secondary" id="toggle-overview-details" aria-expanded="false" aria-controls="overview-details">More run details</button></div>
       <div id="overview-details" hidden>
         <article class="surface"><h3>Estimated attacks stopped by the firewall</h3><div id="overview-firewall-impact" class="summary-grid impact-summary"></div></article>
-        <article class="surface"><h3>Slips memory history</h3><div class="chart-grid"><figure><figcaption>Resident memory · Slips process tree</figcaption><svg id="memory-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></div></article>
       </div>
     </section>
 
@@ -314,6 +313,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261011-alert-back"></script>
+  <script src="/app.js?v=20261012-overview-memory"></script>
 </body>
 </html>
