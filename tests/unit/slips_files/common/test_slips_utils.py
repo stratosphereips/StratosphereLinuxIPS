@@ -3,6 +3,7 @@
 from tests.module_factory import ModuleFactory
 import datetime
 import ipaddress
+import netifaces
 from unittest.mock import patch
 import requests
 import sys
@@ -450,6 +451,128 @@ def test_get_own_ips_exceptions(side_effect):
             "Should fallback to "
             "localhost when external "
             "IP retrieval fails"
+        )
+
+
+def test_get_own_ips_can_skip_public_lookup() -> None:
+    """Keep database imports from opening an untracked network socket."""
+    utils = ModuleFactory().create_utils_obj()
+    with (
+        patch.object(sys, "argv", ["slips.py", "-i", "en0"]),
+        patch(
+            "slips_files.common.slips_utils.netifaces.interfaces",
+            return_value=["en0"],
+        ),
+        patch(
+            "slips_files.common.slips_utils.netifaces.ifaddresses",
+            return_value={2: [{"addr": "192.0.2.10"}]},
+        ),
+        patch.object(utils, "get_public_ip") as public_lookup,
+    ):
+        assert utils.get_own_ips(ret="List", include_public=False) == [
+            "192.0.2.10"
+        ]
+    public_lookup.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "first_response,expected",
+    [({"ip": "198.51.100.10"}, "198.51.100.10"), ({}, None)],
+)
+def test_public_ip_is_queried_only_when_network_changes(
+    first_response: dict[str, str], expected: str | None
+) -> None:
+    """Reuse successful and failed lookup results on the same network.
+
+    Parameters:
+        first_response: First response from the public IP service.
+        expected: Address, or None when the service returned no address.
+    """
+    utils = ModuleFactory().create_utils_obj()
+    responses = [first_response, {"ip": "203.0.113.20"}]
+    with (
+        patch.object(
+            utils,
+            "_public_ip_network_signature",
+            side_effect=[
+                ("network-a",),
+                ("network-a",),
+                ("network-a",),
+                ("network-b",),
+                ("network-b",),
+            ],
+        ),
+        patch("slips_files.common.slips_utils.requests.get") as get,
+    ):
+        get.return_value.status_code = 200
+        get.return_value.json.side_effect = responses
+        assert utils.get_public_ip() == expected
+        assert utils.get_public_ip() == expected
+        assert utils.get_public_ip() == "203.0.113.20"
+        assert get.call_count == 2
+
+
+def test_public_ip_network_signature_tracks_local_route() -> None:
+    """Detect a network change from interface addresses and gateways."""
+    utils = ModuleFactory().create_utils_obj()
+    with (
+        patch(
+            "slips_files.common.slips_utils.netifaces.interfaces",
+            return_value=["en0"],
+        ),
+        patch(
+            "slips_files.common.slips_utils.netifaces.ifaddresses",
+            return_value={
+                netifaces.AF_INET: [
+                    {"addr": "192.0.2.10", "netmask": "255.255.255.0"}
+                ]
+            },
+        ),
+        patch(
+            "slips_files.common.slips_utils.netifaces.gateways",
+            side_effect=[
+                {"default": {netifaces.AF_INET: ("192.0.2.1", "en0")}},
+                {"default": {netifaces.AF_INET: ("192.0.2.2", "en0")}},
+            ],
+        ),
+    ):
+        assert (
+            utils._public_ip_network_signature()
+            != utils._public_ip_network_signature()
+        )
+
+
+def test_public_ip_network_signature_tracks_gateway_mac() -> None:
+    """Detect Wi-Fi changes even when both networks reuse one subnet."""
+    utils = ModuleFactory().create_utils_obj()
+    with (
+        patch(
+            "slips_files.common.slips_utils.netifaces.interfaces",
+            return_value=["en0"],
+        ),
+        patch(
+            "slips_files.common.slips_utils.netifaces.ifaddresses",
+            return_value={
+                netifaces.AF_INET: [
+                    {"addr": "192.168.1.10", "netmask": "255.255.255.0"}
+                ]
+            },
+        ),
+        patch(
+            "slips_files.common.slips_utils.netifaces.gateways",
+            return_value={
+                "default": {netifaces.AF_INET: ("192.168.1.1", "en0")}
+            },
+        ),
+        patch.object(
+            utils,
+            "_gateway_mac_for_network",
+            side_effect=["aa:aa:aa:aa:aa:aa", "bb:bb:bb:bb:bb:bb"],
+        ),
+    ):
+        assert (
+            utils._public_ip_network_signature()
+            != utils._public_ip_network_signature()
         )
 
 
