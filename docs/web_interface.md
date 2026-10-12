@@ -12,8 +12,9 @@ uses bounded batches of addresses already visible in the current view.
 
 The browser tab title shows alert and host counts from the rolling one-hour
 **Live** range. It refreshes while the page is visible, regardless of the
-selected tab, search, or date filter. Overview and navigation badges continue
-to show their own totals.
+selected tab, search, or date filter. The Alerts and Evidence navigation badges
+show the records matching those tabs' selected range and filters after each
+tab loads; Overview keeps its run totals.
 
 ## Reviewing and cleaning up detections
 
@@ -270,7 +271,7 @@ The browser never loads a complete run:
 - Refresh replaces visible rows and chart points; it never appends indefinitely.
 - Charts receive server-side aggregates with no more than 1200 points.
 
-Alerts, Evidence, Hosts, and host traffic support Live, 1 hour, 24 hours, 7 days, Full run, and Custom ranges. Custom and past ranges are frozen during investigation. Changing a filter resets pagination. Badges show full-run durable totals; each table separately reports its filtered total and current page size.
+Alerts, Evidence, Hosts, and host traffic support Live, 1 hour, 24 hours, 7 days, Full run, and Custom ranges. Custom and past ranges are frozen during investigation. Changing a filter resets pagination. The Alerts and Evidence navigation badges count matching individual records, even when the table groups them by host or type. Each table separately reports its filtered group total and current page size.
 
 For interface, standard-input, and CYST runs, named ranges use the computer's current time as their endpoint. This keeps old detections retained by `--keep-history` out of **Live** after they become more than an hour old. For offline files, named ranges use the newest timestamp in that data source as their endpoint; **Live** evidence means the final hour of evidence in the capture, not the final hour on the computer's wall clock.
 
@@ -421,7 +422,7 @@ search applies to isolation state, transition history, and ARP evidence.
 
 ### P2P
 
-The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent per-peer reliability chart keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges, with hover values. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.
+The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent per-peer reliability chart keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges, with hover values. Full history starts at the peer's first recorded detection and samples the whole trust timeline, keeping each peer's first and latest measured reliability; no reliability value is invented before the first measurement. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.
 Every peers-table heading is sortable, including connectivity, trust, reliability, report count, and last seen time.
 
 The reports and message activity table combines bounded send/receive telemetry with retained reports from the current run. Filter chips show all messages, reports, requests, or connection changes. The Show menu also keeps received reports, sent reports, and blame reports available. Every column is sortable; Load more exposes the remaining retained rows. Selecting a row opens its content beside the table, including Copy JSON. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
@@ -503,8 +504,10 @@ relinked to a specific flow from the notice alone.
 The web interface writes these rules into the configured local whitelist file,
 between marked comments, so they survive Slips restarts and are visible in the
 same file as manually entered rules. On the next edit, any rules from an older
-`.web.conf` sidecar are moved into that marked section. Existing evidence and
-alerts are historical records; new matching evidence is excluded from scoring
+`.web.conf` sidecar are moved into that marked section.
+Keep a copy of any personal configured whitelist outside the repository before
+replacing a checkout. Existing evidence and alerts are historical records;
+new matching evidence is excluded from scoring
 and alerts and is hidden by the default **Hide excluded** setting. Saving
 changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web

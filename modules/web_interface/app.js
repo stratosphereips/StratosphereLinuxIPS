@@ -6,6 +6,7 @@ const state = {
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
+  filteredBadgeCounts: { alerts: null, evidence: null },
   metadata: null,
   metrics: [],
   configuration: null,
@@ -467,6 +468,8 @@ function applyRunIdentity(identity) {
     state.overview = null;
     state.overviewEvidence = null;
     state.overviewEvidenceLoading = false;
+    state.filteredBadgeCounts.alerts = null;
+    state.filteredBadgeCounts.evidence = null;
     state.metadata = null;
     state.metrics = [];
     state.configuration = null;
@@ -990,8 +993,8 @@ function renderRunContext(data) {
   addressLine.hidden = !addressLine.childNodes.length;
   refreshHostLabels();
   renderConnectionState(backendConnected);
-  byId("alerts-badge").textContent = compact(data.counts.alerts);
-  byId("evidence-badge").textContent = compact(data.counts.evidence);
+  byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts ?? data.counts.alerts);
+  byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence ?? data.counts.evidence);
   byId("hosts-badge").textContent = compact(data.counts.hosts);
   byId("logs-badge").textContent = compact(data.counts.module_errors);
   byId("firewall-badge").textContent = (data.modules || []).some((module) => module.name === "blocking")
@@ -1614,7 +1617,7 @@ function applyPage(name, payload) {
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  if (payload.full_total !== undefined) {
+  if (payload.full_total !== undefined && !["alerts", "evidence"].includes(name)) {
     byId(`${name}-badge`).textContent = compact(payload.full_total);
   }
   byId(`${name}-count`).textContent = `${payload.page_size} shown · ${compact(payload.total)} match`;
@@ -2069,7 +2072,8 @@ async function loadAlerts() {
     return;
   }
   applyPage("alerts", payload);
-  byId("alerts-badge").textContent = compact(payload.open_total ?? payload.full_total);
+  state.filteredBadgeCounts.alerts = payload.matching_total ?? payload.total;
+  byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts);
   byId("alerts-count").textContent = compact(payload.total);
   renderAlertSeverityFilters();
   renderAlertHostList();
@@ -2519,6 +2523,8 @@ async function loadEvidence() {
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
+  state.filteredBadgeCounts.evidence = payload.matching_total ?? payload.total;
+  byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence);
   const mode = byId("evidence-view").value;
   if (!byId("evidence-threat").value && !state.evidenceWorkspace.typeFilter) {
     const counts = new Map([["", payload.total]]);
@@ -3370,6 +3376,13 @@ function renderP2PTrustChart(history, peers) {
     ts: numeric(row.timestamp),
     [`peer_${peerIndexes.get(String(row.peer_id))}`]: numeric(row.reliability),
   })).sort((left, right) => left.ts - right.ts);
+  if (state.p2p?.trust_range === "all" && points.length) {
+    const firstDetected = Math.min(...peers.map((peer) => numeric(peer.first_seen))
+      .filter((timestamp) => timestamp > 0));
+    if (Number.isFinite(firstDetected) && firstDetected < points[0].ts) {
+      points.unshift({ ts: firstDetected });
+    }
+  }
   const series = peerIds.map((peerId, index) => ({
     key: `peer_${index}`,
     className: `peer-trust-line-${index % 8}`,

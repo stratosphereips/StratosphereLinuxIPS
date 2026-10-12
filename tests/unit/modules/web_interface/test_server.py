@@ -101,6 +101,7 @@ def test_grouped_alerts_filter_review_state(
     })
     result = reader._grouped_alerts_fast({"range": ["all"], "review": [review]})
     assert result["items"][0]["alert_count"] == expected
+    assert result["matching_total"] == expected
     assert result["open_total"] == 1
 
 
@@ -4092,6 +4093,7 @@ def test_evidence_aggregation_groups_host_and_type(tmp_path) -> None:
     )
 
     assert result["total"] == 2
+    assert result["matching_total"] == 3
     assert result["full_total"] == 3
     assert result["items"][0]["evidence_type"] == "SCAN"
     assert result["items"][0]["evidence_count"] == 2
@@ -4689,6 +4691,7 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "connected": True,
             "trust": None,
             "reliability": 0.75,
+            "first_seen": 1649445643.0,
             "last_seen": 1649445643.0,
             "reports_received": 0,
             "connections": [
@@ -5074,6 +5077,62 @@ def test_p2p_trust_history_honors_selected_range(
         "QmOldPeer",
         "QmRecentPeer",
     }
+
+
+def test_p2p_trust_full_history_keeps_first_detection(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep the first and latest trust samples after history grows large.
+
+    Parameters:
+        tmp_path: Isolated trust database directory.
+        monkeypatch: Runs the reader against the isolated directory.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    trust_path = tmp_path / "permanent" / "p2p_trust_runtime" / "trustdb.db"
+    trust_path.parent.mkdir(parents=True)
+    with sqlite3.connect(trust_path) as connection:
+        connection.execute(
+            "CREATE TABLE go_reliability "
+            "(peerid TEXT, reliability REAL, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE peer_ips "
+            "(peerid TEXT, ipaddress TEXT, update_time REAL)"
+        )
+        connection.execute(
+            "CREATE TABLE reports "
+            "(reporter_peerid TEXT, reported_key TEXT, score REAL, "
+            "confidence REAL, update_time REAL)"
+        )
+        connection.execute(
+            "INSERT INTO peer_ips VALUES ('QmPeer', '192.0.2.1', 50)"
+        )
+        connection.executemany(
+            "INSERT INTO go_reliability VALUES (?, ?, ?)",
+            (("QmPeer", 0.9, float(index)) for index in range(100, 2601)),
+        )
+
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"analysis_start": "0"} if key == "analysis" else {}
+    )
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p({"range": ["all"]})
+
+    assert result["trust_history"][0]["timestamp"] == 100
+    assert result["trust_history"][-1]["timestamp"] == 2600
+    assert len(result["trust_history"]) <= 2002
+    assert result["peers"][0]["first_seen"] == 50
 
 
 def test_p2p_api_forwards_selected_history_range() -> None:

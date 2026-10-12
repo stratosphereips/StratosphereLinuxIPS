@@ -916,14 +916,22 @@ class ConnAnalyzer(IAsyncModule):
 
     def check_connection_to_local_ip(self, twid, flow):
         """
-        Alerts when there's a connection from a private IP to
-        another private IP except for expected DNS and DHCP service traffic.
+        Alerts when there's a connection from a private IP to another
+        private IP except for expected discovery, DNS, and DHCP traffic.
         """
 
         if flow.proto.lower() in {"icmp", "icmp6", "icmpv6"}:
             return
 
         if self.is_broadcast_or_multicast_flow(flow):
+            return
+
+        # mDNS can be sent to a unicast address as well as to its multicast
+        # group. Neither form is an individual private-IP connection alert.
+        if str(flow.proto).lower() == "udp" and "5353" in {
+            str(flow.sport),
+            str(flow.dport),
+        }:
             return
 
         def is_dhcp_conn(flow):

@@ -21,6 +21,9 @@ daemon/
 
 # Ignore private AGENTS.md, may contain private paths
 private/AGENTS.md
+# Local analyst configuration and whitelist files
+config/slips-*.yaml
+config/*-whitelist.conf
 *.web.conf
 *.web.conf.lock
 *.conf.lock

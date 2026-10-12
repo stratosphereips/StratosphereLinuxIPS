@@ -2372,6 +2372,12 @@ class RunDataReader:
                 )
             if self._query_value(query, "scored_only") == "1":
                 clauses.append(f"COALESCE({score_expression}, 0) > 0")
+            matching_total = int(
+                connection.execute(
+                    f"SELECT COUNT(*) FROM evidence WHERE {' AND '.join(clauses)}",
+                    params,
+                ).fetchone()[0]
+            )
             grouped_sql = (
                 f"SELECT {group_fields[0]}, "
                 f"{group_id} AS group_id, "
@@ -2485,6 +2491,7 @@ class RunDataReader:
         return {
             "items": items,
             "total": total,
+            "matching_total": matching_total,
             "full_total": full_total,
             "page_size": len(items),
             "next_cursor": next_cursor,
@@ -3046,6 +3053,7 @@ class RunDataReader:
             reverse=direction == "DESC",
         )
         total = len(rows)
+        matching_total = sum(int(row["alert_count"] or 0) for row in rows)
         if cursor:
             rows = [
                 row
@@ -3093,6 +3101,7 @@ class RunDataReader:
         return {
             "items": items,
             "total": total,
+            "matching_total": matching_total,
             "full_total": full_total,
             "open_total": open_total,
             "page_size": len(items),
@@ -3227,12 +3236,14 @@ class RunDataReader:
                 },
                 "time",
             )
-            total = int(
-                connection.execute(
-                    f"SELECT COUNT(*) AS count FROM ({grouped_sql})",
-                    params,
-                ).fetchone()["count"]
-            )
+            totals = connection.execute(
+                "SELECT COUNT(*) AS count, "
+                "COALESCE(SUM(alert_count), 0) AS matching_total "
+                f"FROM ({grouped_sql})",
+                params,
+            ).fetchone()
+            total = int(totals["count"])
+            matching_total = int(totals["matching_total"])
             outer_clauses: List[str] = []
             outer_params: List[Any] = []
             if cursor:
@@ -3285,6 +3296,7 @@ class RunDataReader:
         return {
             "items": items,
             "total": total,
+            "matching_total": matching_total,
             "full_total": full_total,
             "open_total": open_total,
             "page_size": len(items),
@@ -6923,6 +6935,7 @@ class RunDataReader:
         reports_received = 0
         report_counts: Counter[str] = Counter()
         peer_ips: Dict[str, Dict[str, Any]] = {}
+        peer_first_seen: Dict[str, float] = {}
         if trust_path.exists():
             try:
                 with sqlite3.connect(
@@ -6948,9 +6961,20 @@ class RunDataReader:
                         trust_params.append(trust_end)
                     trust_where = " AND ".join(trust_clauses)
                     for row in connection.execute(
-                        "SELECT peerid, reliability, update_time "
-                        f"FROM go_reliability WHERE {trust_where} "
-                        "ORDER BY update_time DESC LIMIT 2000",
+                        "WITH ordered AS ("
+                        "SELECT peerid, reliability, update_time, "
+                        "ROW_NUMBER() OVER (ORDER BY update_time, peerid) AS rn, "
+                        "COUNT(*) OVER () AS total, "
+                        "ROW_NUMBER() OVER (PARTITION BY peerid "
+                        "ORDER BY update_time) AS peer_rn, "
+                        "ROW_NUMBER() OVER (PARTITION BY peerid "
+                        "ORDER BY update_time DESC) AS peer_last_rn "
+                        f"FROM go_reliability WHERE {trust_where}) "
+                        "SELECT peerid, reliability, update_time FROM ordered "
+                        "WHERE rn = 1 OR rn = total OR peer_rn = 1 "
+                        "OR peer_last_rn = 1 "
+                        "OR rn % MAX(1, CAST((total + 1997) / 1998 AS INTEGER)) = 0 "
+                        "ORDER BY update_time",
                         trust_params,
                     ):
                         trust_history.append(
@@ -6989,6 +7013,15 @@ class RunDataReader:
                                 ),
                             },
                         )
+                    peer_first_seen = {
+                        str(row["peerid"]): self._event_timestamp(
+                            row["first_seen"]
+                        )
+                        for row in connection.execute(
+                            "SELECT peerid, MIN(update_time) AS first_seen "
+                            "FROM peer_ips GROUP BY peerid"
+                        )
+                    }
                     for row in connection.execute(
                         "SELECT reporter_peerid, reported_key, score, confidence, "
                         "update_time FROM reports ORDER BY update_time DESC LIMIT 500"
@@ -7053,6 +7086,9 @@ class RunDataReader:
                         float(peer_trust[ip]) if ip in peer_trust else None
                     ),
                     "reliability": reliability_value,
+                    "first_seen": peer_first_seen.get(peer_id)
+                    or self._event_timestamp(info.get("timestamp"))
+                    or float(reliability.get("timestamp") or 0),
                     "last_seen": max(
                         float(peer_seen.get(peer_id, 0)),
                         self._event_timestamp(info.get("timestamp")),
