@@ -24,7 +24,7 @@ const state = {
   host: null,
   hostActivity: "alerts",
   alertsWorkspace: {
-    severity: "", host: null, alert: null, items: [], next: null,
+    severity: "", grouping: "host", host: null, alert: null, items: [], next: null,
     total: 0, listGeneration: 0, detailGeneration: 0,
     listLoadedAt: 0, listSignature: "", fullTotal: 0,
     rangeTouched: false, autoRange: "",
@@ -1583,7 +1583,8 @@ function listPath(name) {
   const search = byId(`${name}-search`).value.trim();
   if (search) params.set("search", search);
   if (name === "alerts") {
-    params.set("group", "host");
+    if (state.alertsWorkspace.grouping === "host") params.set("group", "host");
+    else params.set("summary", "1");
     params.set("details", "false");
     params.set("review", byId("alerts-review").value);
     if (state.alertsWorkspace.severity && state.alertsWorkspace.severity !== "info_or_more") {
@@ -1694,15 +1695,17 @@ function updateAlertViewportHeight() {
 /** Reveal only the panes reached by the current host and alert selection. */
 function setAlertPaneCount(count) {
   const workspace = byId("alerts-workspace");
+  const individual = state.alertsWorkspace.grouping === "individual";
+  workspace.classList.toggle("individual", individual);
   if (Number(workspace.dataset.panes) !== count) {
     workspace.style.setProperty("--alerts-host-width", count === 2 ? "38%" : "26%");
     workspace.style.setProperty("--alerts-list-width", "26%");
   }
   workspace.dataset.panes = String(count);
   byId("alerts-host-divider").hidden = count < 2;
-  byId("alerts-list-pane").hidden = count < 2;
-  byId("alerts-detail-divider").hidden = count < 3;
-  byId("alerts-detail-pane").hidden = count < 3;
+  byId("alerts-list-pane").hidden = individual || count < 2;
+  byId("alerts-detail-divider").hidden = individual || count < 3;
+  byId("alerts-detail-pane").hidden = individual ? count < 2 : count < 3;
 }
 
 /** Render exact and inclusive severity filters for alert hosts. */
@@ -1745,8 +1748,9 @@ function renderAlertHostList() {
   if (!rows.length) {
     const label = byId("alerts-range").selectedOptions[0]?.textContent || "this range";
     const searched = byId("alerts-search").value.trim();
+    const noun = state.alertsWorkspace.grouping === "host" ? "alert hosts" : "alerts";
     container.append(text("p", searched || level
-      ? "No alert hosts match these filters."
+      ? `No ${noun} match these filters.`
       : `No alerts in ${label}.`, "empty-state"));
     if (state.alertsWorkspace.fullTotal && byId("alerts-range").value !== "all") {
       const showHistory = text("button", "Show full run alerts", "secondary alerts-show-history");
@@ -1757,6 +1761,26 @@ function renderAlertHostList() {
       });
       container.append(showHistory);
     }
+    return;
+  }
+  if (state.alertsWorkspace.grouping === "individual") {
+    rows.forEach((record) => {
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "alerts-alert-row";
+      row.dataset.alertId = record.alert_id;
+      row.classList.toggle("selected", record.alert_id === state.alertsWorkspace.alert?.alert_id);
+      const top = document.createElement("div");
+      top.className = "alerts-alert-row-top";
+      top.append(text("span", formatTime(record.alert_time)),
+        text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
+      row.append(top, hostIdentity(record.ip_alerted),
+        text("span", record.summary || record.evidence_type || record.label || "Alert", "alerts-alert-row-title"),
+        text("span", `${compact(record.evidence_count)} evidence · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
+      row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
+      container.append(row);
+    });
+    container.scrollTop = scrollTop;
     return;
   }
   rows.forEach((host) => {
@@ -1906,10 +1930,10 @@ function closeAlertDetailPane() {
   const alertId = workspace.alert?.alert_id;
   workspace.alert = null;
   workspace.detailGeneration += 1;
-  setAlertPaneCount(workspace.host ? 2 : 1);
+  setAlertPaneCount(workspace.grouping === "individual" ? 1 : workspace.host ? 2 : 1);
   byId("alerts-detail").replaceChildren();
   let selectedRow = null;
-  document.querySelectorAll("#alerts-list .alerts-alert-row").forEach((row) => {
+  document.querySelectorAll("#alerts-list .alerts-alert-row, #alerts-host-list .alerts-alert-row").forEach((row) => {
     if (row.dataset.alertId === alertId) selectedRow = row;
     row.classList.remove("selected");
   });
@@ -1972,8 +1996,8 @@ async function selectAlertDetailPane(record) {
   const workspace = state.alertsWorkspace;
   workspace.alert = record;
   const generation = ++workspace.detailGeneration;
-  setAlertPaneCount(3);
-  document.querySelectorAll("#alerts-list .alerts-alert-row").forEach((row) => {
+  setAlertPaneCount(workspace.grouping === "individual" ? 2 : 3);
+  document.querySelectorAll("#alerts-list .alerts-alert-row, #alerts-host-list .alerts-alert-row").forEach((row) => {
     row.classList.toggle("selected", row.dataset.alertId === record.alert_id);
   });
   const back = text("button", "← Back to alerts", "secondary");
@@ -2078,7 +2102,7 @@ async function loadAlerts() {
   renderAlertSeverityFilters();
   renderAlertHostList();
   pager("alerts", "alerts-pager", loadAlerts);
-  if (workspace.host) {
+  if (workspace.host && workspace.grouping === "host") {
     const current = payload.items.find((item) => item.ip_alerted === workspace.host.ip_alerted);
     if (current) {
       workspace.host = current;
@@ -2097,8 +2121,58 @@ function updateEvidenceViewportHeight() {
   byId("evidence").style.setProperty("--evidence-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
+/** Resize the evidence table or records pane while keeping the inspector usable.
+ * @param {string} kind Pane before the dragged divider.
+ * @param {number} desiredWidth Requested pane width in pixels.
+ */
+function resizeEvidencePane(kind, desiredWidth) {
+  const workspace = byId("evidence-workspace");
+  const width = workspace.getBoundingClientRect().width;
+  const hasDetail = workspace.classList.contains("has-detail");
+  const left = workspace.querySelector(".evidence-left").getBoundingClientRect().width;
+  if (kind === "group") {
+    const minimum = hasDetail ? 130 : 240;
+    const remaining = hasDetail ? 130 + 320 + 16 : 240 + 8;
+    workspace.style.setProperty("--evidence-left-width", `${Math.round(Math.max(minimum, Math.min(desiredWidth, width - remaining)))}px`);
+  } else if (hasDetail) {
+    workspace.style.setProperty("--evidence-record-width", `${Math.round(Math.max(130, Math.min(desiredWidth, width - left - 320 - 16)))}px`);
+  }
+}
+
+/** Enable pointer and keyboard resizing for Evidence's three panes. */
+function initEvidencePaneResize() {
+  [["evidence-group-divider", "group", ".evidence-left"],
+    ["evidence-detail-divider", "records", "#evidence-right"]]
+    .forEach(([id, kind, selector]) => {
+      const divider = byId(id);
+      divider.addEventListener("pointerdown", (event) => {
+        if (divider.hidden) return;
+        event.preventDefault();
+        const startX = event.clientX;
+        const startWidth = document.querySelector(selector).getBoundingClientRect().width;
+        divider.setPointerCapture(event.pointerId);
+        const move = (next) => resizeEvidencePane(kind, startWidth + next.clientX - startX);
+        const finish = () => {
+          divider.removeEventListener("pointermove", move);
+          divider.removeEventListener("pointerup", finish);
+          divider.removeEventListener("pointercancel", finish);
+        };
+        divider.addEventListener("pointermove", move);
+        divider.addEventListener("pointerup", finish);
+        divider.addEventListener("pointercancel", finish);
+      });
+      divider.addEventListener("keydown", (event) => {
+        if (divider.hidden || !["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+        event.preventDefault();
+        const current = document.querySelector(selector).getBoundingClientRect().width;
+        resizeEvidencePane(kind, current + (event.key === "ArrowRight" ? 24 : -24));
+      });
+    });
+}
+
 /** Clear a selected group when the filtering context changes. */
 function clearEvidenceSelection() {
+  if (state.evidenceDetail.record && state.evidenceDetail.inPane) closeEvidenceDetail(false, true);
   const workspace = state.evidenceWorkspace;
   workspace.group = null;
   workspace.record = null;
@@ -2322,6 +2396,7 @@ function renderEvidenceEmptyState() {
 function selectEvidenceGroup(group) {
   const workspace = state.evidenceWorkspace;
   if (workspace.group?.id === group.id) return;
+  if (state.evidenceDetail.record && state.evidenceDetail.inPane) closeEvidenceDetail(false, true);
   workspace.group = group;
   workspace.record = null;
   workspace.records = [];
@@ -2857,9 +2932,23 @@ function reviewEditor(entity, record) {
   note.value = record.review_note || "";
   const decisionLabel = text("label", "Decision");
   decisionLabel.append(status);
+  const verdict = document.createElement("select");
+  if (entity === "alert") {
+    [["", "No verdict"], ["true_positive", "True positive"],
+      ["false_positive", "False positive"], ["expected_behavior", "Expected behavior"],
+      ["inconclusive", "Inconclusive"]]
+      .forEach(([value, label]) => verdict.append(new Option(label, value)));
+    verdict.value = record.review_verdict || "";
+  }
   const noteLabel = text("label", "Analyst note");
   noteLabel.append(note);
-  panel.append(decisionLabel, noteLabel);
+  panel.append(decisionLabel);
+  if (entity === "alert") {
+    const verdictLabel = text("label", "Human verdict for linked flows");
+    verdictLabel.append(verdict);
+    panel.append(verdictLabel);
+  }
+  panel.append(noteLabel);
   const actions = document.createElement("div");
   actions.className = "review-actions";
   const save = text("button", "Save review", "secondary");
@@ -2869,7 +2958,8 @@ function reviewEditor(entity, record) {
     save.disabled = true;
     try {
       await saveReviewChange(entity, { action: "review", id: identifier,
-        status: status.value, note: note.value });
+        status: status.value, verdict: entity === "alert" ? verdict.value : "",
+        note: note.value });
       toast("Review saved.");
       await refreshAfterReview(entity);
     } catch (error) { toast(error.message); }
@@ -4585,6 +4675,17 @@ function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
   state.evidenceDetail.history = [];
   state.evidenceDetail.record = null;
   state.evidenceDetail.records = [];
+  if (state.evidenceDetail.inPane) {
+    const workspace = byId("evidence-workspace");
+    workspace.classList.remove("has-detail");
+    workspace.style.setProperty("--evidence-left-width", workspace.dataset.twoPaneLeft || "57%");
+    byId("evidence-detail-divider").hidden = true;
+    document.querySelector("main").append(byId("evidence-detail"));
+    state.evidenceDetail.inPane = false;
+    state.evidenceWorkspace.record = null;
+    highlightEvidenceSelection();
+    renderEvidenceGroup();
+  }
   byId("drawer").classList.remove("alert-over-evidence");
   byId("drawer-backdrop").classList.remove("alert-over-evidence");
   document.body.classList.remove("evidence-detail-active");
@@ -4660,17 +4761,31 @@ async function openEvidence(record, contextRecords = null) {
   const position = context.findIndex((item) => item.id === record.id);
   const page = byId("evidence-detail");
   const content = byId("evidence-detail-content");
+  const inPane = state.activeTab === "evidence" && (detail.inPane || !cameFromDrawer);
+  if (inPane) {
+    const workspace = byId("evidence-workspace");
+    if (!workspace.classList.contains("has-detail")) {
+      workspace.dataset.twoPaneLeft = workspace.style.getPropertyValue("--evidence-left-width") || "57%";
+      workspace.style.setProperty("--evidence-left-width", "5%");
+      workspace.style.setProperty("--evidence-record-width", "5%");
+    }
+    workspace.classList.add("has-detail");
+    byId("evidence-detail-divider").hidden = false;
+    workspace.append(page);
+  }
+  detail.inPane = inPane;
   page.hidden = false;
   page.classList.add("active");
-  document.body.classList.add("evidence-detail-active");
+  document.body.classList.toggle("evidence-detail-active", !inPane);
   content.replaceChildren();
-  window.scrollTo(0, 0);
+  if (inPane) page.scrollTop = 0;
+  else window.scrollTo(0, 0);
 
   const toolbar = document.createElement("div");
   toolbar.className = "evidence-detail-toolbar";
   const breadcrumb = document.createElement("div");
   breadcrumb.className = "evidence-detail-breadcrumb";
-  const back = text("button", cameFromDrawer ? "← Back to alert" : "← Back to evidence", "evidence-detail-link");
+  const back = text("button", cameFromDrawer ? "← Back to alert" : inPane ? "← Close record" : "← Back to evidence", "evidence-detail-link");
   back.type = "button";
   back.addEventListener("click", closeEvidenceDetail);
   breadcrumb.append(back, text("span", "›"),
@@ -6020,6 +6135,30 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
   "arp-poisoning-evidence-table"].forEach((id) =>
   bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search"], loadAlerts);
+byId("alerts-host-sort").querySelectorAll('[data-alert-mode="individual"]')
+  .forEach((option) => { option.disabled = true; });
+byId("alerts-group").addEventListener("change", () => {
+  const workspace = state.alertsWorkspace;
+  workspace.grouping = byId("alerts-group").value;
+  closeAlertHostPane();
+  const sort = byId("alerts-host-sort");
+  sort.querySelectorAll("[data-alert-mode]").forEach((option) => {
+    option.disabled = option.dataset.alertMode !== workspace.grouping;
+  });
+  if (sort.selectedOptions[0].disabled) {
+    sort.value = "time";
+    state.pages.alerts.sort = "time";
+    state.pages.alerts.order = "desc";
+    byId("alerts-host-order").textContent = "↓";
+  }
+  byId("alerts-list-heading").textContent = workspace.grouping === "host" ? "Hosts with alerts" : "Individual alerts";
+  byId("alerts-description").textContent = workspace.grouping === "host"
+    ? "Grouped by host. Select a host, then an alert, its evidence, and triggering flows."
+    : "Individual alerts. Select an alert to inspect its evidence and triggering flows.";
+  byId("alerts-host-sort").previousSibling.textContent = workspace.grouping === "host" ? "Sort hosts " : "Sort alerts ";
+  resetPage("alerts");
+  loadAlerts().catch(() => {});
+});
 byId("alerts-review").addEventListener("change", () => {
   closeAlertHostPane();
   resetPage("alerts");
@@ -6139,6 +6278,7 @@ window.addEventListener("beforeunload", () => {
 
 initDrawerResize();
 initAlertPaneResize();
+initEvidencePaneResize();
 window.addEventListener("resize", updateEvidenceViewportHeight);
 window.addEventListener("resize", updateHostViewportHeight);
 window.addEventListener("resize", updateMetadataViewportHeight);

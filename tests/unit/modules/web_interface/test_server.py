@@ -31,6 +31,88 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def test_reviewed_flow_export_preserves_detector_label(tmp_path: Path) -> None:
+    """Flow export combines linked verdicts without changing detector labels."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE flows(uid TEXT PRIMARY KEY, flow TEXT, label TEXT, "
+            "profileid TEXT, twid TEXT, aid TEXT, event_time REAL, "
+            "retention_class TEXT);"
+            "CREATE TABLE altflows(uid TEXT PRIMARY KEY, flow TEXT, label TEXT, "
+            "profileid TEXT, twid TEXT, event_time REAL, retention_class TEXT);"
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY);"
+            "CREATE TABLE alert_reviews(alert_id TEXT PRIMARY KEY, "
+            "status TEXT NOT NULL, note TEXT NOT NULL, updated_at REAL NOT NULL);"
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "INSERT INTO alerts VALUES ('a-false');"
+            "INSERT INTO evidence VALUES ('e-false'), ('e-true');"
+            "INSERT INTO alert_evidence VALUES ('a-false', 'e-false');"
+            "INSERT INTO evidence_flows VALUES "
+            "('e-false','u-benign'), ('e-true','u-malicious'), "
+            "('e-false','u-conflict'), ('e-true','u-conflict'), "
+            "('e-false','u-alt');"
+            "INSERT INTO flows VALUES "
+            "('u-benign','{}','malicious','p','tw','a',1,'normal'),"
+            "('u-malicious','{}','malicious','p','tw','a',1,'normal'),"
+            "('u-conflict','{}','malicious','p','tw','a',1,'normal'),"
+            "('u-unreviewed','{}','benign','p','tw','a',1,'normal');"
+            "INSERT INTO altflows VALUES "
+            "('u-alt','{}','malicious','p','tw',1,'normal');"
+        )
+    reader.save_review("alert", {
+        "id": "a-false", "action": "review", "status": "resolved",
+        "verdict": "false_positive", "note": "Checked this alert",
+    })
+    reader.save_review("evidence", {
+        "id": "e-true", "action": "review", "status": "true_positive",
+        "note": "Confirmed this evidence",
+    })
+    rows = {row["uid"]: row for row in reader.iter_reviewed_flows()}
+    assert {uid: row["human_review"] for uid, row in rows.items()} == {
+        "u-benign": "benign", "u-malicious": "malicious",
+        "u-conflict": "conflict", "u-unreviewed": "", "u-alt": "benign",
+    }
+    assert rows["u-benign"]["label"] == "malicious"
+    assert rows["u-alt"]["aid"] is None
+
+
+def test_reviewed_flow_download_streams_tsv() -> None:
+    """The authenticated export route sends both detector and analyst columns."""
+    _module_factory = ModuleFactory()
+    reader = Mock()
+    reader.iter_reviewed_flows.return_value = iter([{
+        "uid": "u-1", "flow": "{}", "label": "malicious",
+        "profileid": "p", "twid": "tw", "aid": "a",
+        "event_time": 1, "retention_class": "normal",
+        "human_review": "benign",
+    }])
+    server = SlipsHTTPServer(("127.0.0.1", 0), RequestHandler, reader)
+    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
+    server_thread.start()
+    try:
+        with patch.object(RequestHandler, "_require_password", return_value=False):
+            with urlopen(
+                f"http://127.0.0.1:{server.server_address[1]}"
+                "/api/flows/export", timeout=10
+            ) as response:
+                body = response.read().decode("utf-8")
+                assert response.status == 200
+                assert "attachment" in response.headers["Content-Disposition"]
+        assert "label\tprofileid" in body
+        assert "retention_class\thuman_review" in body
+        assert "u-1\t{}\tmalicious" in body
+        assert body.rstrip().endswith("normal\tbenign")
+    finally:
+        server.shutdown()
+        server.server_close()
+        server_thread.join(timeout=10)
+
+
 def test_alert_review_persists_and_requires_resolution_note(tmp_path: Path) -> None:
     """Resolved alerts remain durable and are excluded from open queries."""
     _module_factory = ModuleFactory()

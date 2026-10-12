@@ -66,8 +66,13 @@ class SQLiteDB(ISQLite):
         self.create_table(
             "alert_reviews",
             "alert_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
-            "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL",
+            "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL, "
+            "verdict TEXT NOT NULL DEFAULT ''",
         )
+        if "verdict" not in self.get_columns("alert_reviews"):
+            self.execute(
+                "ALTER TABLE alert_reviews ADD COLUMN verdict TEXT NOT NULL DEFAULT ''"
+            )
         self.create_table(
             "evidence_reviews",
             "evidence_id TEXT PRIMARY KEY, status TEXT NOT NULL, "

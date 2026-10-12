@@ -82,8 +82,9 @@
       <p id="alerts-description" class="visually-hidden">Grouped by host. Select a host, then an alert, its evidence, and triggering flows.</p>
       <div id="alerts-workspace" class="alerts-workspace" data-panes="1">
         <div class="alerts-pane alerts-host-pane">
-          <div class="alerts-pane-head"><strong>Hosts with alerts</strong><span id="alerts-count" class="alerts-pane-count"></span></div>
+          <div class="alerts-pane-head"><strong id="alerts-list-heading">Hosts with alerts</strong><span id="alerts-count" class="alerts-pane-count"></span></div>
           <div class="alerts-host-controls">
+            <label class="alerts-group-label">View <select id="alerts-group" aria-label="Alert grouping"><option value="host" selected>Group by host</option><option value="individual">Individual alerts</option></select></label>
             <input id="alerts-search" type="search" placeholder="Search host, ID, label…" aria-label="Search alert hosts">
             <label class="review-filter-label">Review <select id="alerts-review" aria-label="Alert review filter"><option value="open" selected>Open (active + in review)</option><option value="active">Active</option><option value="in_review">In review</option><option value="resolved">Resolved</option><option value="all">All alerts</option></select></label>
             <div id="alerts-severity-filters" class="alerts-severity-filters" role="group" aria-label="Filter alert hosts by severity"></div>
@@ -97,7 +98,7 @@
             </div>
             <p id="alerts-range-note" class="alerts-range-note" role="status" hidden></p>
           </div>
-          <div class="alerts-sort-controls"><label>Sort hosts <select id="alerts-host-sort" aria-label="Sort alert hosts"><option value="time">Latest alert</option><option value="host">Host</option><option value="threat">Severity</option><option value="score">Score</option><option value="alerts">Alert count</option><option value="evidence">Evidence count</option><option value="label">Label</option></select></label><button id="alerts-host-order" type="button" aria-label="Reverse alert host order">↓</button></div>
+          <div class="alerts-sort-controls"><label>Sort hosts <select id="alerts-host-sort" aria-label="Sort alert hosts"><option value="time">Latest alert</option><option value="host">Host</option><option value="threat">Severity</option><option value="score">Score</option><option value="alerts" data-alert-mode="host">Alert count</option><option value="evidence">Evidence count</option><option value="label">Label</option><option value="tw" data-alert-mode="individual">Time window</option><option value="id" data-alert-mode="individual">ID</option></select></label><button id="alerts-host-order" type="button" aria-label="Reverse alert host order">↓</button></div>
           <div id="alerts-host-list" class="alerts-host-list" aria-live="polite"></div>
           <div id="alerts-pager" class="alerts-host-pager"></div>
         </div>
@@ -134,6 +135,7 @@
           <input id="evidence-to" class="custom-time" type="datetime-local" aria-label="To time" hidden>
         </div></details>
         <span id="evidence-count" class="result-count"></span>
+        <a id="evidence-export" class="secondary evidence-export" href="/api/flows/export" download="reviewed_flows.tsv" title="Export retained flows with detector label and human review">Export reviewed flows</a>
         <span id="evidence-range-badge" class="status ok">Live</span>
       </div>
       <div id="evidence-workspace" class="evidence-workspace">
@@ -141,7 +143,9 @@
           <div class="evidence-table-scroll"><table id="evidence-table"><thead><tr></tr></thead><tbody></tbody></table></div>
           <div class="evidence-footer"><span id="evidence-summary"></span><div id="evidence-pager" class="pager"></div></div>
         </div>
+        <div id="evidence-group-divider" class="evidence-pane-divider" role="separator" aria-label="Resize evidence table and records" aria-orientation="vertical" tabindex="0"></div>
         <div id="evidence-right" class="evidence-right" aria-live="polite"></div>
+        <div id="evidence-detail-divider" class="evidence-pane-divider" role="separator" aria-label="Resize evidence records and details" aria-orientation="vertical" tabindex="0" hidden></div>
       </div>
     </section>
 

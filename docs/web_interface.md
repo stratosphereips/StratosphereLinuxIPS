@@ -24,6 +24,15 @@ Active and In review alerts by default; its Review filter can show either
 state, Resolved, or all alerts. Resolved alerts and their evidence remain in
 the current run database after a Slips restart. Reopen a resolved alert by
 setting it Active. The Overview and live alert counts exclude resolved alerts.
+The Alerts **View** control switches between grouping by host and a pageable
+list of individual alerts. Search, severity, time, visibility, review, and
+sorting filters apply in both views. Selecting an individual alert opens its
+existing evidence and review details beside the list.
+
+An alert also has a separate optional human verdict: True positive, False
+positive, Expected behavior, or Inconclusive. Its workflow state and verdict
+are saved independently, so an alert may stay In review while its linked flows
+receive an analyst label in an export.
 
 Evidence can be marked **Unreviewed**, **In review**, **True positive**,
 **False positive**, **Expected behavior** (correct detection of authorized
@@ -32,6 +41,10 @@ The Evidence Review filter works
 with grouped and individual views. These labels record analyst judgment; they
 do not change Slips scoring, the detector, or the whitelist. Use the
 Whitelist control separately to suppress future matches.
+The Evidence view has a resizable table, a full-height record list, and a
+third pane for the selected record. The third pane retains triggering flows,
+the complete record, review, whitelist, JSON, and previous/next navigation.
+Closing a record returns to the selected group and scroll position.
 
 The review panel also offers permanent deletion. For an alert, choose alert
 only, alert plus evidence, or alert plus evidence and linked flows. For one
@@ -347,7 +360,7 @@ alert timeline before paging.
 
 ### Evidence
 
-The Evidence tab keeps the group or record table on the left and a group summary and record list on the right. Before selection, the right panel summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens the full-width evidence page directly, with triggering flows, review and whitelist controls, Copy ID, and original JSON. The page keeps the run header and tabs visible; closing it returns to the same group, alert, or host view. Previous and next move through the loaded records.
+The Evidence tab keeps the group or record table on the left and a group summary and full-height record list beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence opened from an alert or host keeps its existing full investigation view.
 
 The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. A field list includes all stored values and can reveal empty fields; the original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
 

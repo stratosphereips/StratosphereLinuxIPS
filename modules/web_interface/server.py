@@ -3,7 +3,9 @@
 
 import argparse
 import base64
+import csv
 import fcntl
+import io
 import ipaddress
 import json
 import math
@@ -19,7 +21,7 @@ from collections import Counter, defaultdict
 from http import HTTPStatus, cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, Iterator, List, Optional, Sequence
 from urllib.parse import parse_qs, unquote, urlparse
 
 import psutil
@@ -1679,6 +1681,84 @@ class RunDataReader:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def iter_reviewed_flows(self) -> Iterator[Dict[str, Any]]:
+        """Stream retained flow rows with a separate analyst label.
+
+        Returns:
+            Flow dictionaries whose human_review is blank, benign, malicious,
+            or conflict when linked decisions disagree.
+        """
+        with self._connect_sqlite() as connection:
+            evidence_reviews = self._table_exists(
+                connection, "evidence_reviews"
+            )
+            alert_reviews = self._table_exists(connection, "alert_reviews")
+            alert_verdicts = alert_reviews and any(
+                row[1] == "verdict"
+                for row in connection.execute(
+                    "PRAGMA table_info(alert_reviews)"
+                )
+            )
+            for table in ("flows", "altflows"):
+                if not self._table_exists(connection, table):
+                    continue
+                last_rowid = 0
+                maximum = connection.execute(
+                    f"SELECT COALESCE(MAX(rowid), 0) FROM {table}"
+                ).fetchone()[0]
+                while last_rowid < maximum:
+                    rows = connection.execute(
+                        f"SELECT rowid, uid, flow, label, profileid, twid, "
+                        f"{'aid' if table == 'flows' else 'NULL AS aid'}, "
+                        "event_time, retention_class "
+                        f"FROM {table} WHERE rowid > ? AND rowid <= ? "
+                        "ORDER BY rowid LIMIT 400",
+                        (last_rowid, maximum),
+                    ).fetchall()
+                    if not rows:
+                        break
+                    last_rowid = rows[-1]["rowid"]
+                    uids = [row["uid"] for row in rows]
+                    placeholders = ",".join("?" for _ in uids)
+                    decisions: Dict[str, set[str]] = defaultdict(set)
+                    if evidence_reviews:
+                        for decision in connection.execute(
+                            "SELECT ef.uid, er.status FROM evidence_flows ef "
+                            "JOIN evidence_reviews er ON er.evidence_id = ef.evidence_id "
+                            f"WHERE ef.uid IN ({placeholders}) AND er.status IN "
+                            "('true_positive', 'false_positive', 'expected_behavior')",
+                            uids,
+                        ):
+                            decisions[decision["uid"]].add(decision["status"])
+                    if alert_verdicts:
+                        for decision in connection.execute(
+                            "SELECT ef.uid, ar.verdict FROM evidence_flows ef "
+                            "JOIN alert_evidence ae ON ae.evidence_id = ef.evidence_id "
+                            "JOIN alert_reviews ar ON ar.alert_id = ae.alert_id "
+                            f"WHERE ef.uid IN ({placeholders}) AND ar.verdict IN "
+                            "('true_positive', 'false_positive', 'expected_behavior')",
+                            uids,
+                        ):
+                            decisions[decision["uid"]].add(decision["verdict"])
+                    for row in rows:
+                        verdicts = decisions[row["uid"]]
+                        positive = "true_positive" in verdicts
+                        negative = bool(
+                            verdicts & {"false_positive", "expected_behavior"}
+                        )
+                        if positive and negative:
+                            human_review = "conflict"
+                        elif positive:
+                            human_review = "malicious"
+                        elif negative:
+                            human_review = "benign"
+                        else:
+                            human_review = ""
+                        item = dict(row)
+                        item.pop("rowid")
+                        item["human_review"] = human_review
+                        yield item
+
     @staticmethod
     def _review_clause(
         connection: sqlite3.Connection, entity: str, status: str, alias: str
@@ -1749,6 +1829,15 @@ class RunDataReader:
         note = note.strip()
         if action == "review":
             status = payload.get("status")
+            verdict = payload.get("verdict", "") if entity == "alert" else ""
+            if entity == "alert" and verdict not in {
+                "",
+                "true_positive",
+                "false_positive",
+                "expected_behavior",
+                "inconclusive",
+            }:
+                raise ValueError("Unknown alert verdict")
             allowed = (
                 {"active", "in_review", "resolved"}
                 if entity == "alert"
@@ -1799,23 +1888,45 @@ class RunDataReader:
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS alert_reviews ("
                 "alert_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
-                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL, "
+                "verdict TEXT NOT NULL DEFAULT '')"
             )
+            if not any(
+                row[1] == "verdict"
+                for row in connection.execute(
+                    "PRAGMA table_info(alert_reviews)"
+                )
+            ):
+                connection.execute(
+                    "ALTER TABLE alert_reviews ADD COLUMN verdict TEXT NOT NULL DEFAULT ''"
+                )
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS evidence_reviews ("
                 "evidence_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
                 "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
             )
             if action == "review":
-                connection.execute(
-                    f"INSERT INTO {entity}_reviews "
-                    f"({key}, status, note, updated_at) VALUES (?, ?, ?, ?) "
-                    f"ON CONFLICT({key}) DO UPDATE SET "
-                    "status = excluded.status, note = excluded.note, "
-                    "updated_at = excluded.updated_at",
-                    (identifier, status, note, time.time()),
-                )
+                if entity == "alert":
+                    connection.execute(
+                        "INSERT INTO alert_reviews "
+                        "(alert_id, status, note, updated_at, verdict) "
+                        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(alert_id) DO UPDATE SET "
+                        "status = excluded.status, note = excluded.note, "
+                        "updated_at = excluded.updated_at, verdict = excluded.verdict",
+                        (identifier, status, note, time.time(), verdict),
+                    )
+                else:
+                    connection.execute(
+                        "INSERT INTO evidence_reviews "
+                        "(evidence_id, status, note, updated_at) VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(evidence_id) DO UPDATE SET "
+                        "status = excluded.status, note = excluded.note, "
+                        "updated_at = excluded.updated_at",
+                        (identifier, status, note, time.time()),
+                    )
                 result = {"id": identifier, "status": status, "note": note}
+                if entity == "alert":
+                    result["verdict"] = verdict
             else:
                 evidence_ids = (
                     [
@@ -3451,8 +3562,7 @@ class RunDataReader:
                 alert["threat_level"] = self._threat_from_rank(threat_rank)
                 if self._table_exists(connection, "alert_reviews"):
                     review = connection.execute(
-                        "SELECT status, note, updated_at FROM alert_reviews "
-                        "WHERE alert_id = ?",
+                        "SELECT * FROM alert_reviews WHERE alert_id = ?",
                         (alert["alert_id"],),
                     ).fetchone()
                     if review:
@@ -3461,6 +3571,11 @@ class RunDataReader:
                                 "review_status": review["status"],
                                 "review_note": review["note"],
                                 "review_updated_at": review["updated_at"],
+                                "review_verdict": (
+                                    review["verdict"]
+                                    if "verdict" in review.keys()
+                                    else ""
+                                ),
                             }
                         )
                 alert.setdefault("review_status", "active")
@@ -7226,6 +7341,49 @@ class RequestHandler(BaseHTTPRequestHandler):
             # Browsers may cancel an in-flight request when refreshing data.
             return
 
+    def _send_reviewed_flow_export(self) -> None:
+        """Stream a tab separated flow download without loading it into memory."""
+        fields = (
+            "uid",
+            "flow",
+            "label",
+            "profileid",
+            "twid",
+            "aid",
+            "event_time",
+            "retention_class",
+            "human_review",
+        )
+        self.send_response(HTTPStatus.OK)
+        self.send_header(
+            "Content-Type", "text/tab-separated-values; charset=utf-8"
+        )
+        self.send_header(
+            "Content-Disposition", 'attachment; filename="reviewed_flows.tsv"'
+        )
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("X-Content-Type-Options", "nosniff")
+        self.send_header("X-Frame-Options", "DENY")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.close_connection = True
+        buffer = io.StringIO()
+        writer = csv.writer(buffer, delimiter="\t")
+        writer.writerow(fields)
+        try:
+            for index, row in enumerate(
+                self.server.reader.iter_reviewed_flows(), 1
+            ):
+                writer.writerow([row.get(field, "") for field in fields])
+                if index % 100 == 0:
+                    self.wfile.write(buffer.getvalue().encode("utf-8"))
+                    buffer.seek(0)
+                    buffer.truncate(0)
+            if buffer.tell():
+                self.wfile.write(buffer.getvalue().encode("utf-8"))
+        except ConnectionError:
+            return
+
     def _send_html(
         self, body_str: str, status: HTTPStatus = HTTPStatus.OK, headers=None
     ) -> None:
@@ -7390,6 +7548,17 @@ class RequestHandler(BaseHTTPRequestHandler):
             return
         if not parsed.path.startswith("/api/"):
             self.send_error(HTTPStatus.NOT_FOUND)
+            return
+        if parsed.path == "/api/flows/export":
+            try:
+                self.server.reader.validate_run_identity()
+            except RunMismatchError as error:
+                self._send_json(
+                    {"error": "Run mismatch", "detail": str(error)},
+                    HTTPStatus.CONFLICT,
+                )
+                return
+            self._send_reviewed_flow_export()
             return
         try:
             payload = self._api_response(parsed.path, parse_qs(parsed.query))
