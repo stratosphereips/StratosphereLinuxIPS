@@ -3,7 +3,10 @@
 **Audience:** thesis reviewers / teammates auditing what this fork changes in SLIPS
 *outside* `modules/federated_network_module/`. Purpose: show that the federated
 experiment does **not** modify SLIPS detection logic, the input module, or any
-other module — the core footprint is registration + config + a dependency only.
+other module's behaviour — the core footprint is registration + config + a
+dependency (**§A**), plus one behaviour-neutral upstream perf backport that is
+being contributed to SLIPS `develop` on its own branch and is not part of the FL
+experiment path (**§B**).
 
 - **Fork branch:** `fl_module_jan_rebased`
 - **Rebase base (upstream SLIPS develop):** `ccd0b1581` (Oct 5 2026)
@@ -14,9 +17,9 @@ other module — the core footprint is registration + config + a dependency only
     ':(exclude)tests/unit/modules/federated_network_module'
   ```
 
-## Complete list of non-module changes (vs base)
+## A. FL-module integration (vs base)
 
-`+60 / −2` across **5 files**. Nothing else in the tree is touched.
+`+60 / −2` across **5 files** — registration + config + dependency only.
 
 | File | Δ | What | Why |
 |---|---|---|---|
@@ -45,14 +48,43 @@ nor any SLIPS detection threshold** (`network_discovery`, `flowalerts`,
 `flowmldetection`, `risk_accumulated_threat_level`, time_window_width global, etc.
 are all left at upstream defaults in this file).
 
+## B. Backported upstream perf fix — public-IP caching (not FL logic)
+
+A **behaviour-neutral** performance fix, backported **verbatim** from upstream
+`sebas_testing` commit `e44723f92` (S. Garcia, *"Avoid repeat public IP lookups
+and exclude Slips-owned P2P traffic"* — **part A only**, the public-IP caching;
+the P2P-traffic-exclusion part B of that commit is **not** taken). Problem: SLIPS
+asked `ipinfo.io` for **its own** public IP on every caller of `get_own_ips()`,
+flooding the network. Fix: `get_public_ip()` caches the result per detected
+network; call sites that only need local IPs pass `include_public=False`. No
+detection threshold or logic changes.
+
+`+279 / −27` across **6 files** (5 source + 1 test). Every touched region is
+byte-identical to `sebas_testing`:
+
+| File | Δ | What |
+|---|---|---|
+| `slips_files/common/slips_utils.py` | +144/−23 | `get_public_ip()` caches by network signature (iface IPs + gateway + gateway MAC, thread-safe `Lock`); `get_own_ips()` gains `include_public=True` param; two private helpers |
+| `modules/arp/filter.py` | +3/−1 | build `our_ips` with `include_public=False` |
+| `modules/conn_analyzer/conn_analyzer.py` | +3/−1 | same |
+| `modules/flow_alerts/dns.py` | +3/−1 | same |
+| `slips_files/core/evidence_handler_worker.py` | +3/−1 | same |
+| `tests/unit/slips_files/common/test_slips_utils.py` | +123 | 4 tests (cache-per-network, signature tracks route / gateway MAC, skip-public) |
+
+**Upstreaming:** this slice is also pushed as a standalone branch off SLIPS
+`develop` with a PR, so it can merge upstream independently of the thesis fork.
+
 ## What is explicitly NOT changed
 Verified by the diff above — the fork does **not** modify:
 - **SLIPS core logic:** `slips.py`, `managers/`, `slips_files/core/` (except the one
-  additive enum member above), `slips_files/common/` incl. `abstracts/ml_module_base.py`
-  and `abstracts/imodule.py`, the config parser.
+  additive enum member in §A and the behaviour-neutral §B caller edit in
+  `evidence_handler_worker.py`), `slips_files/common/` incl. `abstracts/ml_module_base.py`
+  and `abstracts/imodule.py`, the config parser (`slips_utils.py` is touched only by §B).
 - **The input module** (`modules/input_process` / zeek command building / `__load__`).
-- **Any other detection module** (`network_discovery`, `flowalerts`, `flowmldetection`,
-  `p2p_trust`, `threat_intelligence`, …) — zero lines.
+- **Any other detection module's logic** (`network_discovery`, `flowalerts`,
+  `flowmldetection`, `p2p_trust`, `threat_intelligence`, …) — zero detection-logic
+  lines; the only edits are the §B `include_public=False` one-liners in `arp`,
+  `conn_analyzer`, and `flow_alerts`, which change how own-IPs are fetched, not detection.
 - **Submodules** (`SlipsWeb`, `iris`, `p2p4slips`, `fides`, `feel_project`) — no pointer
   changes on the committed branch.
 - **Ground-truth injection:** the fork does **not** patch SLIPS to inject
