@@ -669,6 +669,11 @@ class ModuleLogger:
             f.close()
 
 
+def finetune_epochs_gate(epochs: int, finetune_head: bool) -> int:
+    """Collapse head fine-tune epochs to 0 when fine-tuning is disabled."""
+    return epochs if finetune_head else 0
+
+
 class FederatedNetworkModule(ml_base.MLBaseDetection):
     """
     Federated network ML detector with model sharing and merging.
@@ -839,6 +844,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.merge_finetune_epochs = self._read_module_config_int(
             "merge_finetune_epochs", default=5
         )
+        # Head fine-tuning on/off. When off, collapse to 0 epochs so the
+        # existing no-op path skips both the local and merged head fine-tune
+        # stages, with no separate training branch.
+        self.finetune_head = self._read_module_config_bool(
+            "finetune_head", default=True
+        )
+        self.merge_finetune_epochs = finetune_epochs_gate(
+            self.merge_finetune_epochs, self.finetune_head
+        )
+        self.print(f"finetune_head: {self.finetune_head}", 0, 2)
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )

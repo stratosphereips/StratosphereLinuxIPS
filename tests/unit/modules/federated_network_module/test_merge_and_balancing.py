@@ -6,6 +6,7 @@ on a bare module instance (only the state the helper touches)."""
 from unittest.mock import MagicMock
 
 import numpy as np
+import pytest
 import torch
 
 from modules.federated_network_module import (
@@ -150,3 +151,15 @@ def test_process_features_delegates_to_single_extractor():
     assert via_pf.iloc[0].tolist() == [float(v) for v in direct]
     # empty frame -> empty, correctly-columned
     assert list(m.process_features(pd.DataFrame()).columns) == order
+
+
+# --------------------------------------------------------------------------
+# fine-tuning on/off gate (finetune_head)
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "epochs,finetune_head,expected",
+    [(5, True, 5), (5, False, 0), (0, True, 0), (12, False, 0)],
+)
+def test_finetune_epochs_gate(epochs, finetune_head, expected):
+    """finetune_head False collapses head fine-tune epochs to 0; True keeps them."""
+    assert fnm.finetune_epochs_gate(epochs, finetune_head) == expected
