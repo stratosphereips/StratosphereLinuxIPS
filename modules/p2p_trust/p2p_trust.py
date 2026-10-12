@@ -5,9 +5,11 @@ import ipaddress
 import os
 import shutil
 import signal
+import socket
 import sqlite3
 import subprocess
 import netifaces
+import psutil
 import time
 from pathlib import Path
 from typing import Dict, Optional, Tuple
@@ -97,6 +99,7 @@ class Trust(IModule):
     start_pigeon = True
     active_p2p_connection_ttl = 300
     p2p_connection_heartbeat_interval = 60
+    pigeon_socket_scan_interval = 5
     local_ip_check_interval = 5
     max_bootstrap_peers = 50
     # or make sure the binary is in $PATH
@@ -1027,6 +1030,62 @@ class Trust(IModule):
 
         self.print(f"P2P is listening on {self.host} port {self.port}.")
 
+    def _record_pigeon_connections(self) -> None:
+        """Mark exact live Pigeon sockets so capture skips Slips P2P traffic."""
+        pigeon = getattr(self, "pigeon", None)
+        if pigeon is None or pigeon.poll() is not None:
+            return
+        if not isinstance(getattr(pigeon, "pid", None), int):
+            return
+        now = time.monotonic()
+        if now - getattr(self, "_last_pigeon_socket_scan", 0) < (
+            self.pigeon_socket_scan_interval
+        ):
+            return
+        self._last_pigeon_socket_scan = now
+        try:
+            connections = psutil.Process(pigeon.pid).net_connections(
+                kind="inet"
+            )
+        except (psutil.Error, OSError):
+            return
+        for connection in connections:
+            if not connection.laddr or not connection.raddr:
+                continue
+            protocol = (
+                "tcp"
+                if connection.type == socket.SOCK_STREAM
+                else "udp" if connection.type == socket.SOCK_DGRAM else ""
+            )
+            if not protocol:
+                continue
+            local_ip, local_port = connection.laddr[:2]
+            remote_ip, remote_port = connection.raddr[:2]
+            try:
+                local_ip = str(ipaddress.ip_address(local_ip))
+                remote_ip = str(ipaddress.ip_address(remote_ip))
+            except ValueError:
+                continue
+            if ipaddress.ip_address(remote_ip).is_loopback:
+                continue
+            # Zeek can record either endpoint as the flow origin.
+            self.db.record_slips_own_connection(
+                self.db.main_pid,
+                protocol,
+                local_ip,
+                local_port,
+                remote_ip,
+                remote_port,
+            )
+            self.db.record_slips_own_connection(
+                self.db.main_pid,
+                protocol,
+                remote_ip,
+                remote_port,
+                local_ip,
+                local_port,
+            )
+
     def shutdown_gracefully(self) -> None:
         """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
@@ -1168,6 +1227,7 @@ class Trust(IModule):
                 )
 
         self._refresh_pigeon_address()
+        self._record_pigeon_connections()
 
         if self.pigeon is None:
             self.termination_event.wait(0.05)

@@ -57,7 +57,9 @@ class ConnAnalyzer(IAsyncModule):
         self.conn_without_dns_interface_wait_time = 30
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
-        self.our_ips: List[str] = utils.get_own_ips(ret="List")
+        self.our_ips: List[str] = utils.get_own_ips(
+            ret="List", include_public=False
+        )
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
         # to avoid duplicate evidence

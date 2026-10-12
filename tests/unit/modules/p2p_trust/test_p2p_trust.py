@@ -6,6 +6,7 @@ import ipaddress
 import json
 import os
 import signal
+import socket
 import sqlite3
 import subprocess
 from types import SimpleNamespace
@@ -44,6 +45,33 @@ def create_trust():
     trust.rendezvous = "slips"
     trust._pigeon_supports_flag = Mock(return_value=True)
     return trust
+
+
+def test_pigeon_sockets_are_excluded_by_exact_connection() -> None:
+    """Record both capture directions for an active Pigeon child socket."""
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.db.main_pid = 123
+    trust.pigeon = Mock(pid=456)
+    trust.pigeon.poll.return_value = None
+    connection = SimpleNamespace(
+        type=socket.SOCK_STREAM,
+        laddr=("192.0.2.10", 6668),
+        raddr=("198.51.100.20", 51234),
+    )
+    with (
+        patch("modules.p2p_trust.p2p_trust.psutil.Process") as process,
+        patch("modules.p2p_trust.p2p_trust.time.monotonic", return_value=20),
+    ):
+        process.return_value.net_connections.return_value = [connection]
+        trust._record_pigeon_connections()
+        trust._record_pigeon_connections()
+
+    process.return_value.net_connections.assert_called_once_with(kind="inet")
+    assert trust.db.record_slips_own_connection.call_args_list == [
+        call(123, "tcp", "192.0.2.10", 6668, "198.51.100.20", 51234),
+        call(123, "tcp", "198.51.100.20", 51234, "192.0.2.10", 6668),
+    ]
 
 
 @pytest.mark.parametrize("own_field", ["profile", "attacker"])

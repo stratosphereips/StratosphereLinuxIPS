@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 from math import log10
 from multiprocessing import Process
 from re import findall
-from threading import Thread
+from threading import Lock, Thread
 import netifaces
 from uuid import UUID
 import tldextract
@@ -88,6 +88,9 @@ class Utils(object):
         self.aid = aid_hash.AID()
         self.used_inetrface = None
         self.mac_vendor_indexes: dict[str, dict[str, str]] = {}
+        self._public_ip_cache: tuple[tuple, str | None] | None = None
+        self._public_ip_lock = Lock()
+        self._gateway_mac_cache: dict[tuple[str, str], str] = {}
 
     def generate_uid(self):
         """Generates a UID similar to what Zeek uses."""
@@ -858,24 +861,138 @@ class Utils(object):
             pass
         return None
 
+    def _gateway_mac_for_network(self, gateway: str, interface: str) -> str:
+        """Read the current gateway MAC from the local neighbor cache.
+
+        Parameters:
+            gateway: Default gateway IP address.
+            interface: Interface assigned to the route.
+
+        Returns:
+            Gateway MAC, or an empty string when unavailable.
+        """
+        if sys.platform == "darwin":
+            command = ["ndp" if ":" in gateway else "arp", "-n", gateway]
+        elif sys.platform.startswith("linux"):
+            command = ["ip", "neigh", "show", gateway, "dev", interface]
+        else:
+            return ""
+        key = (gateway, interface)
+        try:
+            output = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=1,
+                check=False,
+            ).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return self._gateway_mac_cache.get(key, "")
+        addresses = findall(
+            r"\b(?:[0-9a-fA-F]{1,2}:){5}[0-9a-fA-F]{1,2}\b", output
+        )
+        if addresses:
+            self._gateway_mac_cache[key] = addresses[0].lower()
+        return self._gateway_mac_cache.get(key, "")
+
+    def _public_ip_network_signature(self) -> tuple:
+        """Identify the current network using interface addresses and routes.
+
+        Returns:
+            Stable local address and default gateway details for comparison.
+        """
+        interfaces = []
+        try:
+            names = netifaces.interfaces()
+            gateways = netifaces.gateways().get("default", {})
+        except (OSError, ValueError):
+            return ()
+        for name in names:
+            try:
+                addrs = netifaces.ifaddresses(name)
+            except (OSError, ValueError):
+                continue
+            ipv4_addresses = []
+            for entry in addrs.get(netifaces.AF_INET, []):
+                try:
+                    address = ipaddress.ip_address(entry["addr"])
+                except (KeyError, TypeError, ValueError):
+                    continue
+                if not address.is_loopback:
+                    ipv4_addresses.append(
+                        (str(address), str(entry.get("netmask") or ""))
+                    )
+            ipv4 = tuple(sorted(ipv4_addresses))
+            # Temporary IPv6 addresses can rotate on an unchanged network.
+            ipv6_addresses = []
+            if not ipv4:
+                for entry in addrs.get(netifaces.AF_INET6, []):
+                    try:
+                        address = ipaddress.ip_address(
+                            str(entry["addr"]).split("%", 1)[0]
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if not address.is_loopback:
+                        ipv6_addresses.append(str(address))
+            ipv6 = tuple(sorted(ipv6_addresses))
+            if ipv4 or ipv6:
+                interfaces.append((name, ipv4, ipv6))
+        routes = tuple(
+            sorted(
+                (
+                    str(family),
+                    str(route[0]),
+                    str(route[1]),
+                    self._gateway_mac_for_network(
+                        str(route[0]), str(route[1])
+                    ),
+                )
+                for family, route in gateways.items()
+                if len(route) >= 2
+            )
+        )
+        return (
+            (tuple(sorted(interfaces)), routes)
+            if interfaces and routes
+            else ()
+        )
+
     def get_public_ip(self) -> str | None:
         """
-        fetch public IP from ipinfo.io
-        returns either an IPv4 or IPv6 address as a string, or None if unavailable
+        Fetch this machine's public IP once per detected network.
+
+        Returns:
+            An IPv4 or IPv6 address, or None when lookup fails.
         """
-        try:
-            response = requests.get("https://ipinfo.io/json", timeout=5)
-            if response.status_code == 200:
-                data = json.loads(response.text)
-                if "ip" in data:
-                    return data["ip"]
-        except (
-            requests.exceptions.ConnectionError,
-            requests.exceptions.ChunkedEncodingError,
-            requests.exceptions.ReadTimeout,
-            json.decoder.JSONDecodeError,
-        ):
-            return None
+        with self._public_ip_lock:
+            signature = self._public_ip_network_signature()
+            if not signature:
+                return None
+            if self._public_ip_cache is not None:
+                cached_signature, cached_ip = self._public_ip_cache
+                if cached_signature == signature:
+                    return cached_ip
+            public_ip = None
+            try:
+                response = requests.get("https://ipinfo.io/json", timeout=5)
+                if response.status_code == 200:
+                    candidate = response.json().get("ip")
+                    if candidate:
+                        public_ip = str(ipaddress.ip_address(candidate))
+            except (
+                requests.exceptions.RequestException,
+                AttributeError,
+                ValueError,
+                TypeError,
+            ):
+                pass
+            # Contacting the service may populate the gateway neighbor cache.
+            self._public_ip_cache = (
+                self._public_ip_network_signature() or signature,
+                public_ip,
+            )
+            return public_ip
 
     def get_own_ips(
         self, ret: str = "Dict", include_public: bool = True

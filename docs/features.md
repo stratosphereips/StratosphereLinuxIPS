@@ -1104,14 +1104,14 @@ The list below contains all connections made by Slips
 useragentstring.com -> For getting user agent info if no info was found in Zeek
 macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
 ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-ipinfo.io/json -> For getting your public IP
+ipinfo.io/json -> For getting your public IP only when the local interface addresses, default route, or gateway MAC change. Slips uses local interface addresses for its own-host checks, so a normal live run does not need to query this service.
 virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs
 cymru.com -> For getting the range of a specific IP to cache the ASN of this range. TXT DNS queries are made to this domain.
 
 
-By default, slips whitelists alerts from or to any of the above domains, witch means that if an alert was detected
-to one of the above alerts, slips does not detect it assuming it's a false positive and the connection was made
-internally by slips.
+During live interface capture, Slips excludes its own Python module connections using the exact source IP, source port, destination IP, destination port, and transport recorded when it opens each socket. It also samples active sockets belonging to its P2P child process, so those connections are excluded in either capture direction. The match lasts for one hour in Redis and is scoped to the current run. This covers IPinfo and other HTTP lookups made by those modules without excluding unrelated applications that happen to contact the same service. The domain rules in the configured local whitelist also suppress alerts about listed service domains, including traffic that cannot be attributed to a Slips socket. They do not exclude those flows from processing.
+
+Per-IP ASN enrichment does not use IPinfo: it checks the local GeoLite database first, then RDAP and ip-api.com if needed. Successful ASN data is reused for 30 days; failed remote lookups are retried after five minutes. IPinfo's datasets are generally updated daily, but the public-IP endpoint reports the current network address, so Slips refreshes it on a detected network change instead of on a data-update timer.
 
 
 You can change this behaviour by copying ```config/whitelist.conf```, updating the copy, and pointing ```whitelists.local_whitelist_path``` in your copied ```slips.yaml``` file to that copied whitelist.
