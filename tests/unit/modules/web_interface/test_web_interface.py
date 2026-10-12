@@ -13,7 +13,7 @@ from tests.module_factory import ModuleFactory
     [
         ("index.html", 'id="drawer-resize"'),
         ("index.html", 'id="drawer-back"'),
-        ("index.html", 'id="alerts-view"'),
+        ("index.html", 'id="alerts-workspace"'),
         ("index.html", 'id="evidence-view"'),
         ("index.html", 'value="grouped" selected'),
         ("index.html", 'id="host-evidence-table"'),
@@ -22,7 +22,7 @@ from tests.module_factory import ModuleFactory
         ("app.js", "function bindView(name, loader)"),
         ("app.js", "function renderDnsDetails(dns)"),
         ("app.js", "function protocolFlowCard(record)"),
-        ("app.js", "Related protocol flows"),
+        ("app.js", "Alternative protocol flow:"),
         ("app.js", "Query type"),
         ("app.js", "View complete ${label} record (JSON)"),
         ("app.js", "async function inspectHost(ip)"),
