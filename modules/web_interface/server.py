@@ -3114,7 +3114,7 @@ class RunDataReader:
         Returns:
             Bounded host aggregate page with raw durable alert total.
         """
-        if not self._query_value(query, "threat"):
+        if self._query_value(query, "threat").lower() in {"", "info_or_more"}:
             return self._grouped_alerts_fast(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
@@ -3191,15 +3191,17 @@ class RunDataReader:
                 clauses.append("ip_alerted = ?")
                 params.append(profile)
             if threat:
+                minimum = threat.removesuffix("_or_more")
                 threat_rank = {
                     "info": 0,
                     "low": 1,
                     "medium": 2,
                     "high": 3,
                     "critical": 4,
-                }.get(threat)
+                }.get(minimum)
                 if threat_rank is not None:
-                    clauses.append(f"{threat_expression} = ?")
+                    operator = ">=" if threat.endswith("_or_more") else "="
+                    clauses.append(f"{threat_expression} {operator} ?")
                     params.append(threat_rank)
             grouped_sql = (
                 "SELECT ip_alerted, ip_alerted AS group_id, "
@@ -3392,15 +3394,17 @@ class RunDataReader:
                 clauses.append("ip_alerted = ?")
                 params.append(profile)
             if threat:
+                minimum = threat.removesuffix("_or_more")
                 threat_rank = {
                     "info": 0,
                     "low": 1,
                     "medium": 2,
                     "high": 3,
                     "critical": 4,
-                }.get(threat)
+                }.get(minimum)
                 if threat_rank is not None:
-                    clauses.append(f"{threat_expression} = ?")
+                    operator = ">=" if threat.endswith("_or_more") else "="
+                    clauses.append(f"{threat_expression} {operator} ?")
                     params.append(threat_rank)
             count_where = " AND ".join(clauses)
             count_params = list(params)
@@ -4036,7 +4040,11 @@ class RunDataReader:
         scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
         alerts_only = self._query_value(query, "alerts_only") == "1"
-        current_threats = self._current_profile_threats() if threat else {}
+        current_threats = (
+            self._current_profile_threats()
+            if threat and threat != "info_or_more"
+            else {}
+        )
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         with connect_history(self.history_path, read_only=True) as connection:
             connection.execute("BEGIN")
@@ -4203,17 +4211,28 @@ class RunDataReader:
                     "EXISTS (SELECT 1 FROM run_db.alerts a "
                     "WHERE a.ip_alerted = hs.ip)"
                 )
-            if threat:
-                snapshot_threat = (
-                    "LOWER(COALESCE(json_extract("
-                    "hs.data, '$.max_threat_level'), 'info')) = ?"
-                )
+            if threat and threat != "info_or_more":
+                levels = {
+                    "info": 0,
+                    "low": 1,
+                    "medium": 2,
+                    "high": 3,
+                    "critical": 4,
+                }
+                minimum = levels.get(threat.removesuffix("_or_more"))
+                operator = ">=" if threat.endswith("_or_more") else "="
+                snapshot_threat = f"{threat_expression} {operator} ?"
                 if current_threats:
                     live_ips = list(current_threats)
                     matching_ips = [
                         ip
                         for ip, level in current_threats.items()
-                        if level == threat
+                        if minimum is not None
+                        and (
+                            levels.get(level, 0) >= minimum
+                            if operator == ">="
+                            else levels.get(level, 0) == minimum
+                        )
                     ]
                     live_placeholders = ",".join("?" for _ in live_ips)
                     if matching_ips:
@@ -4225,16 +4244,16 @@ class RunDataReader:
                             f"(hs.ip NOT IN ({live_placeholders}) AND "
                             f"{snapshot_threat}))"
                         )
-                        params.extend([*matching_ips, *live_ips, threat])
+                        params.extend([*matching_ips, *live_ips, minimum])
                     else:
                         clauses.append(
                             f"(hs.ip NOT IN ({live_placeholders}) AND "
                             f"{snapshot_threat})"
                         )
-                        params.extend([*live_ips, threat])
+                        params.extend([*live_ips, minimum])
                 else:
                     clauses.append(snapshot_threat)
-                    params.append(threat)
+                    params.append(minimum)
             count_where = " AND ".join(clauses)
             count_params = list(params)
             if cursor:

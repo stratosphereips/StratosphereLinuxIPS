@@ -660,7 +660,7 @@ function alertRangeSignature() {
   const range = byId("alerts-range").value;
   const custom = range === "custom"
     ? `${byId("alerts-from").value}|${byId("alerts-to").value}` : "";
-  return `${range}|${custom}|${state.hideExcluded}`;
+  return `${range}|${custom}|${state.hideExcluded}|${state.alertsWorkspace.severity}`;
 }
 
 function rangeIsLive(prefix) {
@@ -1583,6 +1583,9 @@ function listPath(name) {
     params.set("group", "host");
     params.set("details", "false");
     params.set("review", byId("alerts-review").value);
+    if (state.alertsWorkspace.severity && state.alertsWorkspace.severity !== "info_or_more") {
+      params.set("threat", state.alertsWorkspace.severity);
+    }
   } else if (name === "evidence") {
     params.set("review", byId("evidence-review").value);
     const mode = byId("evidence-view").value;
@@ -1699,33 +1702,30 @@ function setAlertPaneCount(count) {
   byId("alerts-detail-pane").hidden = count < 3;
 }
 
-/** Render severity chips from the currently loaded host page. */
+/** Render exact and inclusive severity filters for alert hosts. */
 function renderAlertSeverityFilters() {
   const page = state.pages.alerts;
   const selected = state.alertsWorkspace.severity;
-  const counts = new Map();
-  (page.items || []).forEach((item) => {
-    const level = String(item.threat_level || "info").toLowerCase();
-    counts.set(level, (counts.get(level) || 0) + 1);
-  });
   const container = byId("alerts-severity-filters");
   container.replaceChildren();
-  [["", "All", page.total], ...["critical", "high", "medium", "low", "info"]
-    .map((level) => [level, level[0].toUpperCase() + level.slice(1), counts.get(level) || 0])]
-    .forEach(([level, label, count]) => {
-      const button = text("button", `${label} ${compact(count)}`, "alerts-filter");
+  [["", "All"], ...["critical", "high", "medium", "low", "info"]
+    .map((level) => [level, level[0].toUpperCase() + level.slice(1)]),
+    ...["critical", "high", "medium", "low", "info"]
+      .map((level) => [`${level}_or_more`, `${level[0].toUpperCase() + level.slice(1)}+`])]
+    .forEach(([level, label]) => {
+      const button = text("button", `${label}${selected === level ? ` ${compact(page.total)}` : ""}`, "alerts-filter");
       button.type = "button";
       button.dataset.level = level;
       button.classList.toggle("active", selected === level);
       button.setAttribute("aria-pressed", String(selected === level));
       button.addEventListener("click", () => {
+        if (selected === level) return;
         state.alertsWorkspace.severity = level;
-        if (state.alertsWorkspace.host && level
-            && state.alertsWorkspace.host.threat_level !== level) {
-          closeAlertHostPane();
-        }
+        if (state.alertsWorkspace.host) closeAlertHostPane();
+        resetPage("alerts");
+        byId("alerts-host-list").replaceChildren(text("p", "Loading alert hosts…", "empty-state"));
         renderAlertSeverityFilters();
-        renderAlertHostList();
+        loadAlerts().catch(() => {});
       });
       container.append(button);
     });
@@ -1737,8 +1737,7 @@ function renderAlertHostList() {
   const scrollTop = container.scrollTop;
   const selected = state.alertsWorkspace.host?.ip_alerted;
   const level = state.alertsWorkspace.severity;
-  const rows = (state.pages.alerts.items || []).filter((item) =>
-    !level || String(item.threat_level || "info").toLowerCase() === level);
+  const rows = state.pages.alerts.items || [];
   container.replaceChildren();
   if (!rows.length) {
     const label = byId("alerts-range").selectedOptions[0]?.textContent || "this range";
@@ -1841,6 +1840,9 @@ async function loadAlertHostAlerts(reset = true, quiet = false) {
   params.set("details", "false");
   params.set("summary", "1");
   params.set("review", byId("alerts-review").value);
+  if (workspace.severity && workspace.severity !== "info_or_more") {
+    params.set("threat", workspace.severity);
+  }
   if (state.hideExcluded) params.set("hide_excluded", "1");
   if (!reset && workspace.next) params.set("cursor", workspace.next);
   if (reset && !quiet) {
@@ -2050,6 +2052,7 @@ async function loadAlerts() {
     ? payload.open_total || 0 : payload.full_total || 0;
   if (!workspace.rangeTouched && !workspace.autoRange
       && byId("alerts-range").value === "live"
+      && !workspace.severity
       && !byId("alerts-search").value.trim()
       && byId("alerts-review").value === "open"
       && payload.total === 0 && payload.open_total > 0) {
@@ -2122,7 +2125,8 @@ function renderEvidenceThreatChips() {
   [["", "All"], ...["critical", "high", "medium", "low", "info"]
     .filter((level) => counts.get(level) || selected === level)
     .map((level) => [level, level[0].toUpperCase() + level.slice(1)]),
-    ...[["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"]]]
+    ...[["critical_or_more", "Critical+"], ["high_or_more", "High+"],
+      ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]]
     .forEach(([level, label]) => {
       const button = text("button", level.endsWith("_or_more")
         ? label : `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
@@ -3829,8 +3833,9 @@ function hostPeakScoreCell(row) {
 
 /** Keep threat and scope chips synchronized with the server filters. */
 function renderHostFilterChips(payload) {
+  const ranks = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
   const groups = [
-    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["info", "Info"]], "max_threat_level"],
+    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["info", "Info"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]], "max_threat_level"],
     ["hosts-scope-chips", "hosts-scope", [["", "All scopes"], ["local", "Local"], ["public", "Public"]], "scope"],
   ];
   groups.forEach(([targetId, selectId, options, field]) => {
@@ -3839,8 +3844,13 @@ function renderHostFilterChips(payload) {
     target.replaceChildren();
     options.forEach(([value, label]) => {
       const completePage = payload.items.length === payload.total;
+      const minimum = value.replace("_or_more", "");
       const count = !value || select.value === value ? payload.total
-        : payload.items.filter((row) => String(row[field] || "").toLowerCase() === value).length;
+        : payload.items.filter((row) => {
+          const rowValue = String(row[field] || "info").toLowerCase();
+          return field === "max_threat_level" && value.endsWith("_or_more")
+            ? (ranks[rowValue] ?? 0) >= ranks[minimum] : rowValue === value;
+        }).length;
       const showCount = !value || select.value === value
         || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value);
       const button = text("button", `${label}${showCount ? ` ${compact(count)}` : ""}`, `hosts-filter-chip ${select.value === value ? "active" : ""}`);

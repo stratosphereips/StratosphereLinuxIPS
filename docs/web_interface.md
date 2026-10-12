@@ -335,6 +335,11 @@ range, Slips keeps that choice. Individual alerts load 50 at a time, with
 from each alert's newest linked evidence without loading every full evidence
 record. The selected host and alert stay open while the list refreshes.
 
+Severity chips offer both exact levels and inclusive thresholds such as
+**High+** (high and critical), **Low+** (low through critical), and **Info+**
+(all levels). The filter applies to the host list and the selected host's
+alert timeline before paging.
+
 ### Evidence
 
 The Evidence tab keeps the group or record table on the left and a group summary and record list on the right. Before selection, the right panel summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens the full-width evidence page directly, with triggering flows, review and whitelist controls, Copy ID, and original JSON. The page keeps the run header and tabs visible; closing it returns to the same group, alert, or host view. Previous and next move through the loaded records.
@@ -342,6 +347,11 @@ The Evidence tab keeps the group or record table on the left and a group summary
 The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. A field list includes all stored values and can reveal empty fields; the original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
 
 The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
+
+Evidence and Hosts also offer exact severity levels and inclusive **High+**,
+**Medium+**, **Low+**, **Info+**, and **Critical+** filters. Host thresholds
+use each host's highest threat level; evidence thresholds include qualifying
+records before grouping and pagination.
 
 The range controls initially use **Live** so opening a tab while Overview is still loading cannot accidentally start a full-run query. Once the input source is known, offline captures switch to **Full run** and refresh the active tab. Polling begins after each tab request completes so a slower first response is not canceled and restarted by the refresh timer.
 

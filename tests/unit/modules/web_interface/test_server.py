@@ -2397,10 +2397,12 @@ def test_web_returns_durable_connection_without_dns_and_linked_alert(
 @pytest.mark.parametrize(
     "threat, expected",
     [
+        ("critical_or_more", {"critical"}),
         ("high", {"high"}),
         ("high_or_more", {"high", "critical"}),
         ("medium_or_more", {"medium", "high", "critical"}),
         ("low_or_more", {"low", "medium", "high", "critical"}),
+        ("info_or_more", {"info", "low", "medium", "high", "critical"}),
     ],
 )
 @pytest.mark.parametrize("grouped", [False, True])
@@ -4234,7 +4236,77 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert "evidence" not in compact_result["items"][0]
 
 
-def test_hosts_filter_by_maximum_threat_level(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "threat, expected",
+    [
+        ("critical_or_more", {"critical"}),
+        ("high", {"high"}),
+        ("high_or_more", {"high", "critical"}),
+        ("medium_or_more", {"medium", "high", "critical"}),
+        ("low_or_more", {"low", "medium", "high", "critical"}),
+        ("info_or_more", {"info", "low", "medium", "high", "critical"}),
+    ],
+)
+@pytest.mark.parametrize("grouped", [False, True])
+def test_alert_threat_minimum_filter(
+    tmp_path: Path, threat: str, expected: set[str], grouped: bool
+) -> None:
+    """Filter alert hosts and individual alerts before pagination.
+
+    Parameters:
+        tmp_path: Isolated SQLite storage.
+        threat: Exact level or inclusive threshold.
+        expected: Threat levels that should remain visible.
+        grouped: Whether the query aggregates alerts by host.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.score_mode = "ratl"
+    reader._ip_context_for_ip = Mock(return_value={})
+    reader._annotate_detection_networks = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY, alert_time REAL, "
+            "ip_alerted TEXT, label TEXT, accumulated_ratl REAL);"
+            "CREATE TABLE evidence(evidence_id TEXT, threat_level TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+        )
+        for rank, level in enumerate(("info", "low", "medium", "high", "critical")):
+            connection.execute(
+                "INSERT INTO alerts VALUES (?, ?, ?, ?, ?)",
+                (level, rank + 1, f"10.0.0.{rank + 1}", "malicious", rank),
+            )
+            connection.execute(
+                "INSERT INTO evidence VALUES (?, ?)", (level, level)
+            )
+            connection.execute(
+                "INSERT INTO alert_evidence VALUES (?, ?)", (level, level)
+            )
+
+    query = {"range": ["all"], "threat": [threat], "details": ["false"]}
+    if grouped:
+        query["group"] = ["host"]
+    page = reader.alerts(query)
+
+    assert {item["threat_level"] for item in page["items"]} == expected
+    assert page["total"] == len(expected)
+
+
+@pytest.mark.parametrize(
+    "threat, expected",
+    [
+        ("critical_or_more", {"10.0.0.5"}),
+        ("high", {"10.0.0.4"}),
+        ("high_or_more", {"10.0.0.4", "10.0.0.5"}),
+        ("medium_or_more", {"10.0.0.3", "10.0.0.4", "10.0.0.5"}),
+        ("low_or_more", {"10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5"}),
+        ("info_or_more", {"10.0.0.1", "10.0.0.2", "10.0.0.3", "10.0.0.4", "10.0.0.5"}),
+    ],
+)
+def test_hosts_filter_by_maximum_threat_level(
+    tmp_path: Path, threat: str, expected: set[str]
+) -> None:
     """Test Host Inventory applies the threat filter before pagination."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
@@ -4255,36 +4327,26 @@ def test_hosts_filter_by_maximum_threat_level(tmp_path) -> None:
         connection.executemany(
             "INSERT INTO host_snapshots VALUES (?, ?, ?)",
             [
-                (
-                    "10.0.0.1",
-                    1.0,
-                    json.dumps(
-                        {
-                            "ip": "10.0.0.1",
-                            "scope": "local",
-                            "max_threat_level": "high",
-                        }
-                    ),
-                ),
-                (
-                    "10.0.0.2",
-                    2.0,
-                    json.dumps(
-                        {
-                            "ip": "10.0.0.2",
-                            "scope": "local",
-                            "max_threat_level": "info",
-                        }
-                    ),
-                ),
+                (f"10.0.0.{rank + 1}", rank + 1,
+                 json.dumps({"ip": f"10.0.0.{rank + 1}", "scope": "local",
+                             "max_threat_level": level}))
+                for rank, level in enumerate(("info", "low", "medium", "high", "critical"))
             ],
         )
 
-    result = reader.hosts({"range": ["all"], "threat": ["high"]})
+    result = reader.hosts({"range": ["all"], "threat": [threat]})
 
-    assert result["total"] == 1
-    assert result["full_total"] == 2
-    assert result["items"][0]["ip"] == "10.0.0.1"
+    assert result["total"] == len(expected)
+    assert result["full_total"] == 5
+    assert {item["ip"] for item in result["items"]} == expected
+    if threat == "high_or_more":
+        reader._current_profile_threats = Mock(
+            return_value={"10.0.0.1": "critical", "10.0.0.4": "low"}
+        )
+        live_result = reader.hosts({"range": ["all"], "threat": [threat]})
+        assert {item["ip"] for item in live_result["items"]} == {
+            "10.0.0.1", "10.0.0.5"
+        }
 
 
 def test_hosts_page_batches_identity_and_counts(tmp_path: Path) -> None:

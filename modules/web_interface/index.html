@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261012-overview-memory">
+  <link rel="stylesheet" href="/style.css?v=20261012-severity-plus">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -121,7 +121,7 @@
         <input id="evidence-search" type="search" placeholder="Search description, type, host…" aria-label="Search evidence">
         <label class="review-filter-label">Review <select id="evidence-review" aria-label="Evidence review filter"><option value="all" selected>All evidence</option><option value="unreviewed">Unreviewed</option><option value="in_review">In review</option><option value="true_positive">True positive</option><option value="false_positive">False positive</option><option value="expected_behavior">Expected behavior</option><option value="inconclusive">Inconclusive</option></select></label>
         <button id="evidence-active-type" class="evidence-active-type" type="button" hidden></button>
-        <select id="evidence-threat" aria-label="Evidence threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option><option value="high_or_more">High or more</option><option value="medium_or_more">Medium or more</option><option value="low_or_more">Low or more</option></select>
+        <select id="evidence-threat" aria-label="Evidence threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option><option value="critical_or_more">Critical or more</option><option value="high_or_more">High or more</option><option value="medium_or_more">Medium or more</option><option value="low_or_more">Low or more</option><option value="info_or_more">Info or more</option></select>
         <div id="evidence-threat-chips" class="evidence-threat-chips" role="group" aria-label="Filter by threat"></div>
         <select id="evidence-view" aria-label="Evidence grouping" hidden><option value="grouped" selected>Host + type</option><option value="type">Type</option><option value="host">Host</option><option value="individual">None</option></select>
         <div id="evidence-group-controls" class="evidence-group-controls" role="group" aria-label="Group evidence"></div>
@@ -242,7 +242,7 @@
         <div class="hosts-toolbar">
           <h2 id="hosts-title">Hosts</h2>
           <input id="hosts-search" type="search" placeholder="⌕ Search IP, MAC, vendor, name…" aria-label="Search hosts">
-          <select id="hosts-threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option></select>
+          <select id="hosts-threat" hidden><option value="">All threats</option><option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option><option value="critical_or_more">Critical or more</option><option value="high_or_more">High or more</option><option value="medium_or_more">Medium or more</option><option value="low_or_more">Low or more</option><option value="info_or_more">Info or more</option></select>
           <div id="hosts-threat-chips" class="hosts-filter-group" role="group" aria-label="Threat level"></div>
           <select id="hosts-scope" hidden><option value="">All scopes</option><option value="local">Local</option><option value="public">Public</option><option value="special">Special</option></select>
           <div id="hosts-scope-chips" class="hosts-filter-group" role="group" aria-label="Host scope"></div>
@@ -313,6 +313,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261012-overview-memory"></script>
+  <script src="/app.js?v=20261012-severity-plus"></script>
 </body>
 </html>
