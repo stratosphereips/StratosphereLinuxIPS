@@ -1,7 +1,13 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """Tests for the shared web interface session/login helpers."""
+import json
+import subprocess
+import sys
 import time
+from pathlib import Path
+from typing import Iterator
+from unittest.mock import Mock
 
 import pytest
 
@@ -9,8 +15,21 @@ from slips_files.common import web_auth
 
 
 @pytest.fixture(autouse=True)
-def clear_login_attempts():
-    """Each test gets a clean login-attempts table."""
+def clear_login_attempts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[None]:
+    """Give each test a persistent test password hash and clean attempts.
+
+    Parameters:
+        tmp_path: Isolated directory for the web password record.
+        monkeypatch: Replaces the permanent password path during this test.
+    """
+    auth_path = tmp_path / "web_auth.json"
+    auth_path.write_text(json.dumps({"hash": "ab" * 32}))
+    monkeypatch.setattr(web_auth, "get_web_auth_path", Mock(return_value=str(auth_path)))
+    monkeypatch.setattr(
+        web_auth, "ensure_web_password_matches_redis_password", Mock()
+    )
     web_auth._login_attempts.clear()
     yield
     web_auth._login_attempts.clear()
@@ -33,7 +52,9 @@ def test_validate_token_rejects_malformed_token():
 def test_validate_token_rejects_expired_token(monkeypatch):
     expiry = int(time.time()) - 10
     mac = web_auth.hmac.new(
-        web_auth._SESSION_KEY, str(expiry).encode(), web_auth.sha256
+        web_auth._session_signing_key(),
+        str(expiry).encode(),
+        web_auth.sha256,
     ).hexdigest()
     expired_token = f"{expiry}.{mac}"
 
@@ -45,6 +66,54 @@ def test_validate_token_rejects_tampered_signature():
     expiry_str, _, _ = token.partition(".")
 
     assert not web_auth.validate_token(f"{expiry_str}.deadbeef")
+
+
+def test_session_survives_new_web_server_process(tmp_path: Path) -> None:
+    """Accept a cookie in a fresh Python process using the same auth file.
+
+    Parameters:
+        tmp_path: Isolated persistent password record shared with the child.
+    """
+    token = web_auth.issue_token()
+    auth_path = tmp_path / "web_auth.json"
+    script = (
+        "import sys\n"
+        "from unittest.mock import Mock\n"
+        "from slips_files.common import web_auth\n"
+        "web_auth.get_web_auth_path = Mock(return_value=sys.argv[1])\n"
+        "web_auth.ensure_web_password_matches_redis_password = Mock()\n"
+        "print(web_auth.validate_token(sys.argv[2]))\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script, str(auth_path), token],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "True"
+
+
+def test_changing_web_password_invalidates_session(tmp_path: Path) -> None:
+    """Reject old cookies when the stored password hash changes.
+
+    Parameters:
+        tmp_path: Isolated persistent password record to update.
+    """
+    token = web_auth.issue_token()
+    (tmp_path / "web_auth.json").write_text(
+        json.dumps({"hash": "cd" * 32})
+    )
+
+    assert not web_auth.validate_token(token)
+
+
+def test_session_cookie_lasts_one_year() -> None:
+    """Keep a browser cookie valid across ordinary Slips restarts."""
+    token = web_auth.issue_token()
+    expiry = int(token.partition(".")[0])
+
+    assert expiry - time.time() > 364 * 24 * 60 * 60
 
 
 def test_is_locked_out_false_for_unknown_ip():

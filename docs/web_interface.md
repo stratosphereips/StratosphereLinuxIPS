@@ -77,7 +77,11 @@ The web interface requires a password before it shows any run data. By
 default this is the same password slips generates for Redis (see
 [installation.md](installation.md), section "Redis authentication") -
 retrieve it with `cat permanent/redis_auth.conf`. Submitting it on the
-login page issues a signed session cookie valid for 8 hours.
+login page issues a signed session cookie valid for one year. The browser
+retains it when Slips or the browser closes. Sessions remain valid across
+Slips runs using the same persistent web password record, and changing that
+password invalidates existing sessions. After this upgrade, log in once to
+replace the previous run-scoped cookie.
 
 `require_password: false` disables this password. Only use it for local
 testing/CI - never on a machine reachable beyond localhost, and especially
