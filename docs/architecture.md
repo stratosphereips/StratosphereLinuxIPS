@@ -185,7 +185,7 @@ Slips has 5 threat levels.
 - Slips knows that no more flows are arriving when it reaches the end of the given zeek/suricata/nfdump logs.
 - If some processes are hanging in memory, slips wait by default 1 week before killing them. This can be modified in the config.yaml.
 
-For more techincal details about this check https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html#faq
+For more technical details about this check https://stratospherelinuxips.readthedocs.io/en/develop/FAQ.html#how-does-slips-stop
 
 
 </tbody>
