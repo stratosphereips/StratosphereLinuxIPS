@@ -23,6 +23,8 @@ const state = {
   configurationSort: { key: null, order: "asc" },
   host: null,
   hostActivity: "alerts",
+  hostActivityGroups: { alerts: "", evidence: "", flows: "" },
+  hostActivityThreats: { alerts: "", evidence: "", flows: "" },
   alertsWorkspace: {
     severity: "", grouping: "host", host: null, alert: null, items: [], next: null,
     total: 0, listGeneration: 0, detailGeneration: 0,
@@ -5451,17 +5453,110 @@ function showHostActivity(name) {
     tab.classList.toggle("active", item === name);
     tab.setAttribute("aria-selected", String(item === name));
   });
+  const choices = {
+    alerts: [["type", "Evidence type"], ["threat", "Threat"], ["module", "Module"], ["review", "Review state"]],
+    evidence: [["type", "Type"], ["threat", "Threat"], ["module", "Module"], ["handling", "Score handling"]],
+    flows: [["protocol", "Protocol"], ["direction", "Direction"], ["peer", "Peer"], ["label", "Label"], ["state", "State"], ["threat", "Linked threat"]],
+  };
+  const grouping = byId("host-activity-group");
+  grouping.replaceChildren(new Option("No grouping", ""),
+    ...choices[name].map(([value, label]) => new Option(label, value)));
+  grouping.value = state.hostActivityGroups[name];
+  byId("host-activity-threat").value = state.hostActivityThreats[name];
+  byId("host-activity-threat-label").firstChild.textContent = name === "flows" ? "Linked threat " : "Threat ";
+  byId("host-alert-search").hidden = name !== "alerts";
   byId("host-evidence-search").hidden = name !== "evidence";
   byId("host-flow-search").hidden = name !== "flows";
+  const note = byId("host-activity-group-note");
+  note.hidden = !grouping.value;
+  note.textContent = grouping.value ? "Groups in this page; filters cover the selected range" : "";
   if (!state.host) return Promise.resolve();
   return ({ alerts: loadHostAlerts, evidence: loadHostEvidence, flows: loadHostFlows })[name]().catch(() => {});
+}
+
+/** Return the label used to group one host activity record on the current page.
+ * @param {string} kind Alerts, evidence, or flows.
+ * @param {object} row One activity record.
+ * @returns {string} Visible group label.
+ */
+function hostActivityGroupValue(kind, row) {
+  const group = state.hostActivityGroups[kind];
+  if (group === "threat") return row.threat_level || row.linked_threat_level || "No linked evidence";
+  if (group === "type") {
+    const types = alertEvidenceTypes(row);
+    return kind === "alerts" ? types.length ? types.map((item) => item.type).join(" + ") : "Unknown type"
+      : row.evidence_type || "Unknown type";
+  }
+  if (group === "module") {
+    if (kind === "evidence") return row.module || "Unknown module";
+    const modules = (row.evidence_modules || []).map((item) => item.module);
+    return modules.length ? modules.join(" + ") : "Module unavailable";
+  }
+  if (group === "review") return (row.review_status || "active").replaceAll("_", " ");
+  if (group === "handling") return row.whitelisted ? "Excluded" : "Scored";
+  if (group === "protocol") return [row.proto, row.app_proto].filter(Boolean).join(" / ") || "Unknown protocol";
+  if (group === "direction") return row.direction || "Unknown direction";
+  if (group === "peer") return row.peer || "Unknown peer";
+  if (group === "label") return row.label || "No label";
+  if (group === "state") return row.state || "Unknown state";
+  return "";
+}
+
+/** Keep records with the same visible group adjacent within one loaded page.
+ * @param {string} kind Alerts, evidence, or flows.
+ * @param {object[]} rows Records from the current page.
+ * @returns {object[]} Page records with matching groups adjacent.
+ */
+function groupHostPageRows(kind, rows) {
+  if (!state.hostActivityGroups[kind]) return rows;
+  return rows.map((row, index) => ({ row, index })).sort((left, right) =>
+    hostActivityGroupValue(kind, left.row).localeCompare(hostActivityGroupValue(kind, right.row))
+      || left.index - right.index).map(({ row }) => row);
+}
+
+/** Add accessible group headings to a rendered host activity table.
+ * @param {string} kind Evidence or flows.
+ * @param {string} tableId Host activity table ID.
+ * @param {object[]} rows Rendered records in their displayed order.
+ */
+function addHostTableGroups(kind, tableId, rows) {
+  if (!state.hostActivityGroups[kind]) return;
+  const body = byId(tableId).querySelector("tbody");
+  const rendered = Array.from(body.children);
+  const counts = new Map();
+  rows.forEach((row) => {
+    const label = hostActivityGroupValue(kind, row);
+    counts.set(label, (counts.get(label) || 0) + 1);
+  });
+  let previous = null;
+  rows.forEach((row, index) => {
+    const label = hostActivityGroupValue(kind, row);
+    if (label === previous) return;
+    previous = label;
+    const heading = document.createElement("tr");
+    heading.className = "host-activity-group-row";
+    const cell = document.createElement("th");
+    cell.colSpan = byId(tableId).querySelectorAll("thead th").length;
+    cell.scope = "rowgroup";
+    cell.textContent = `${label} · ${counts.get(label)} on this page`;
+    heading.append(cell);
+    body.insertBefore(heading, rendered[index]);
+  });
 }
 
 /** Filter the currently loaded flow rows without requesting a new server page. */
 function filterVisibleHostFlows() {
   const query = byId("host-flow-search").value.trim().toLowerCase();
-  document.querySelectorAll("#host-flows-table tbody tr").forEach((row) => {
+  document.querySelectorAll("#host-flows-table tbody tr:not(.host-activity-group-row)").forEach((row) => {
     row.hidden = Boolean(query) && !row.textContent.toLowerCase().includes(query);
+  });
+  document.querySelectorAll("#host-flows-table tbody .host-activity-group-row").forEach((row) => {
+    let next = row.nextElementSibling;
+    row.hidden = true;
+    while (next && !next.classList.contains("host-activity-group-row")) {
+      if (!next.hidden) row.hidden = false;
+      next = next.nextElementSibling;
+    }
   });
 }
 
@@ -5475,17 +5570,21 @@ async function loadHostAlerts() {
   params.set("limit", "50");
   params.set("details", "false");
   params.set("summary", "1");
+  params.set("modules", "1");
+  if (state.hostActivityThreats.alerts) params.set("threat", state.hostActivityThreats.alerts);
+  const search = byId("host-alert-search").value.trim();
+  if (search) params.set("search", search);
   const liveRange = byId("host-range").value === "live";
   const newestSavedAlert = Math.max(0, ...(state.host.alerts || [])
     .filter((alert) => alert.ip_alerted === ip)
     .map((alert) => numeric(alert.alert_time)));
-  let showingEarlier = liveRange && (page.index > 0
+  let showingEarlier = liveRange && !search && !state.hostActivityThreats.alerts && (page.index > 0
     || (numeric(state.host.alert_count) > 0 && newestSavedAlert > 0
       && newestSavedAlert < Date.now() / 1000 - 3600));
   if (showingEarlier) params.set("range", "all");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   let payload = await api("hostAlerts", `/api/alerts?${params}`);
-  if (payload && !showingEarlier && liveRange && page.index === 0
+  if (payload && !showingEarlier && liveRange && !search && !state.hostActivityThreats.alerts && page.index === 0
     && !numeric(payload.total) && numeric(state.host?.alert_count) > 0) {
     params.set("range", "all");
     payload = await api("hostAlerts", `/api/alerts?${params}`);
@@ -5520,7 +5619,19 @@ async function loadHostAlerts() {
     context.append(allRange);
     list.append(context);
   }
-  alerts.forEach((item) => {
+  const groupedAlerts = groupHostPageRows("alerts", alerts);
+  const groupCounts = new Map();
+  groupedAlerts.forEach((item) => {
+    const label = hostActivityGroupValue("alerts", item);
+    groupCounts.set(label, (groupCounts.get(label) || 0) + 1);
+  });
+  let previousGroup = null;
+  groupedAlerts.forEach((item) => {
+    if (state.hostActivityGroups.alerts) {
+      const label = hostActivityGroupValue("alerts", item);
+      if (label !== previousGroup) list.append(text("h4", `${label} · ${groupCounts.get(label)} on this page`, "host-activity-group-heading"));
+      previousGroup = label;
+    }
     const button = document.createElement("button");
     button.type = "button";
     button.className = "host-alert-chip";
@@ -5528,10 +5639,12 @@ async function loadHostAlerts() {
     button.append(
       text("time", formatTime(item.alert_time)),
       threat(item.threat_level),
-      text("strong", item.evidence_type?.replaceAll("_", " ") || item.label || "Alert", "host-alert-label"),
+      text("strong", alertComposition(item), "host-alert-label"),
       text("span", `${compact(item.evidence_count)} evidence`, "count-chip"),
     );
-    if (item.summary) button.append(text("small", item.summary, "host-alert-summary"));
+    if (item.summary && alertEvidenceTypes(item).length <= 1) {
+      button.append(text("small", item.summary, "host-alert-summary"));
+    }
     button.addEventListener("click", () => openAlert(item));
     list.append(button);
   });
@@ -5549,6 +5662,7 @@ async function loadHostEvidence() {
   params.set("order", page.order);
   const search = byId("host-evidence-search").value.trim();
   if (search) params.set("search", search);
+  if (state.hostActivityThreats.evidence) params.set("threat", state.hostActivityThreats.evidence);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   params.set("profile", ip);
   params.set("details", "false");
@@ -5564,7 +5678,8 @@ async function loadHostEvidence() {
   byId("host-evidence-count").textContent =
     payload.page_size + " shown · " + compact(payload.total) + " evidence records" +
     (search ? " matching search" : "");
-  renderTable("host-evidence-table", payload.items, [
+  const groupedRows = groupHostPageRows("evidence", payload.items);
+  renderTable("host-evidence-table", groupedRows, [
     (row) => formatTime(row.timestamp),
     (row) => threat(row.threat_level),
     (row) => text("code", row.evidence_type),
@@ -5580,6 +5695,7 @@ async function loadHostEvidence() {
       return description;
     },
   ], openEvidence);
+  addHostTableGroups("evidence", "host-evidence-table", groupedRows);
   applySortIndicators("host-evidence");
   pager("host-evidence", "host-evidence-pager", loadHostEvidence);
 }
@@ -5592,6 +5708,7 @@ async function loadHostFlows() {
   params.set("limit", byId("host-flow-limit").value);
   params.set("sort", state.localSorts["host-flows-table"].key);
   params.set("order", state.localSorts["host-flows-table"].order);
+  if (state.hostActivityThreats.flows) params.set("threat", state.hostActivityThreats.flows);
   if (state.hideExcluded) params.set("hide_excluded", "1");
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const path = `/api/hosts/${escapePath(ip)}/flows?${params}`;
@@ -5616,11 +5733,11 @@ async function loadHostFlows() {
  */
 function renderHostFlows() {
   const page = state.pages.hostFlows;
-  const rows = sortLocalRows("host-flows-table", page.items.map((row) => ({
+  const rows = groupHostPageRows("flows", sortLocalRows("host-flows-table", page.items.map((row) => ({
     ...row,
     protocol: [row.proto, row.app_proto].filter(Boolean).join(" / "),
     ports: `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`,
-  })));
+  }))));
   renderTable("host-flows-table", rows, [
     (row) => formatTime(row.event_time),
     (row) => text("span", row.direction, `status ${row.direction === "inbound" ? "ok" : "warn"}`),
@@ -5632,6 +5749,7 @@ function renderHostFlows() {
     (row) => formatBytes(row.bytes),
     (row) => `${numeric(row.duration).toFixed(3)} s`,
     (row) => row.label || "—",
+    (row) => row.linked_threat_level ? threat(row.linked_threat_level) : "—",
   ], (row) => {
     openDrawer("FLOW", row.uid);
     byId("drawer-body").append(
@@ -5643,6 +5761,7 @@ function renderHostFlows() {
       rawBlock(row.raw, "flow"),
     );
   });
+  addHostTableGroups("flows", "host-flows-table", rows);
   filterVisibleHostFlows();
   pager("hostFlows", "host-flows-pager", loadHostFlows);
 }
@@ -5872,6 +5991,10 @@ async function openHost(ip, summary = null) {
     state.requests.get(key)?.abort();
   });
   state.host = host;
+  state.hostActivityThreats = { alerts: "", evidence: "", flows: "" };
+  ["host-alert-search", "host-evidence-search", "host-flow-search"].forEach((id) => {
+    byId(id).value = "";
+  });
   rememberHostRecord(host);
   refreshHostLabels();
   resetPage("hostAlerts");
@@ -6183,7 +6306,24 @@ document.addEventListener("keydown", (event) => {
 byId("host-back").addEventListener("click", closeHost);
 document.querySelectorAll("[data-host-activity]").forEach((button) =>
   button.addEventListener("click", () => showHostActivity(button.dataset.hostActivity)));
+byId("host-activity-group").addEventListener("change", () => {
+  const kind = state.hostActivity;
+  state.hostActivityGroups[kind] = byId("host-activity-group").value;
+  const note = byId("host-activity-group-note");
+  note.hidden = !state.hostActivityGroups[kind];
+  note.textContent = note.hidden ? "" : "Groups in this page; filters cover the selected range";
+  if (kind === "alerts") loadHostAlerts().catch(() => {});
+  else if (kind === "evidence") loadHostEvidence().catch(() => {});
+  else renderHostFlows();
+});
+byId("host-activity-threat").addEventListener("change", () => {
+  const kind = state.hostActivity;
+  state.hostActivityThreats[kind] = byId("host-activity-threat").value;
+  resetPage({ alerts: "hostAlerts", evidence: "host-evidence", flows: "hostFlows" }[kind]);
+  ({ alerts: loadHostAlerts, evidence: loadHostEvidence, flows: loadHostFlows })[kind]().catch(() => {});
+});
 byId("host-flow-search").addEventListener("input", filterVisibleHostFlows);
+bindFilters("hostAlerts", ["host-alert-search"], loadHostAlerts);
 byId("host-whitelist-action").addEventListener("click", () => {
   const ip = state.host?.ip;
   switchTab("whitelists");

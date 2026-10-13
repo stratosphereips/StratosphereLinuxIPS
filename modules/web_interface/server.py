@@ -2735,14 +2735,24 @@ class RunDataReader:
                     clauses.append(
                         "(LOWER(COALESCE(evidence_id, '')) LIKE ? OR "
                         "LOWER(COALESCE(CAST(evidence_time AS TEXT), '')) LIKE ? OR "
+                        "LOWER(COALESCE(strftime('%d/%m/%Y, %H:%M:%S', "
+                        "evidence_time, 'unixepoch'), '')) LIKE ? OR "
                         "LOWER(COALESCE(profile_ip, '')) LIKE ? OR "
                         "LOWER(COALESCE(timewindow, '')) LIKE ? OR "
                         "LOWER(COALESCE(threat_level, '')) LIKE ? OR "
                         "LOWER(COALESCE(evidence_type, '')) LIKE ? OR "
+                        "LOWER(REPLACE(COALESCE(evidence_type, ''), '_', ' ')) LIKE ? OR "
                         "LOWER(COALESCE(description, '')) LIKE ? OR "
                         "LOWER(COALESCE(CAST(confidence AS TEXT), '')) LIKE ? OR "
+                        "LOWER(printf('%d%%', CAST(ROUND(confidence * 100) AS INTEGER))) LIKE ? OR "
                         "LOWER(COALESCE(data, '')) LIKE ? OR "
                         f"LOWER(COALESCE({module_expression}, '')) LIKE ? OR "
+                        f"LOWER(CASE WHEN {whitelist_expression} > 0 "
+                        "THEN 'excluded' ELSE 'scored' END) LIKE ? OR "
+                        f"CAST({flow_expression} AS TEXT) LIKE ? OR "
+                        f"CAST({alert_expression} AS TEXT) LIKE ? OR "
+                        f"LOWER(CASE WHEN {alert_expression} = 0 "
+                        "THEN 'none' ELSE 'linked' END) LIKE ? OR "
                         "EXISTS (SELECT 1 FROM evidence_flows ef "
                         "WHERE ef.evidence_id = evidence.evidence_id "
                         "AND LOWER(ef.uid) LIKE ?) OR "
@@ -2751,7 +2761,7 @@ class RunDataReader:
                         "AND LOWER(ae.alert_id) LIKE ?))"
                     )
                     term = f"%{search}%"
-                    params.extend([term] * 12)
+                    params.extend([term] * 19)
                 if profiles:
                     placeholders = ",".join("?" for _ in profiles)
                     clauses.append(f"profile_ip IN ({placeholders})")
@@ -3303,10 +3313,16 @@ class RunDataReader:
             if search:
                 clauses.append(
                     "(LOWER(alert_id) LIKE ? OR LOWER(ip_alerted) LIKE ? "
-                    "OR LOWER(label) LIKE ?)"
+                    "OR LOWER(label) LIKE ? OR "
+                    "EXISTS (SELECT 1 FROM alert_evidence ae JOIN evidence e "
+                    "ON e.evidence_id = ae.evidence_id "
+                    "WHERE ae.alert_id = alerts.alert_id AND "
+                    "(LOWER(e.evidence_type) LIKE ? OR "
+                    "LOWER(REPLACE(e.evidence_type, '_', ' ')) LIKE ? OR "
+                    "LOWER(e.description) LIKE ?)))"
                 )
                 term = f"%{search}%"
-                params.extend([term, term, term])
+                params.extend([term] * 6)
             if profile:
                 clauses.append("ip_alerted = ?")
                 params.append(profile)
@@ -3509,10 +3525,16 @@ class RunDataReader:
             if search:
                 clauses.append(
                     "(LOWER(alert_id) LIKE ? OR LOWER(ip_alerted) LIKE ? "
-                    "OR LOWER(label) LIKE ?)"
+                    "OR LOWER(label) LIKE ? OR "
+                    "EXISTS (SELECT 1 FROM alert_evidence ae JOIN evidence e "
+                    "ON e.evidence_id = ae.evidence_id "
+                    "WHERE ae.alert_id = alerts.alert_id AND "
+                    "(LOWER(e.evidence_type) LIKE ? OR "
+                    "LOWER(REPLACE(e.evidence_type, '_', ' ')) LIKE ? OR "
+                    "LOWER(e.description) LIKE ?)))"
                 )
                 term = f"%{search}%"
-                params.extend([term, term, term])
+                params.extend([term] * 6)
             if profile:
                 clauses.append("ip_alerted = ?")
                 params.append(profile)
@@ -3643,6 +3665,40 @@ class RunDataReader:
                     alert["evidence_types"] = types_by_alert[
                         str(alert["alert_id"])
                     ]
+                if self._query_value(query, "modules") == "1":
+                    evidence_columns = {
+                        str(column[1])
+                        for column in connection.execute(
+                            "PRAGMA table_info(evidence)"
+                        )
+                    }
+                    source_column = (
+                        "e.source_module"
+                        if "source_module" in evidence_columns
+                        else "''"
+                    )
+                    modules_by_alert: Dict[str, set[str]] = defaultdict(set)
+                    for module_row in connection.execute(
+                        "SELECT DISTINCT ae.alert_id, e.evidence_type, "
+                        f"{source_column} AS source_module "
+                        "FROM alert_evidence ae JOIN evidence e "
+                        "ON e.evidence_id = ae.evidence_id "
+                        f"WHERE ae.alert_id IN ({placeholders})",
+                        alert_ids,
+                    ):
+                        modules_by_alert[str(module_row["alert_id"])].add(
+                            self._evidence_source_module(
+                                module_row["source_module"],
+                                str(module_row["evidence_type"] or ""),
+                            )
+                        )
+                    for alert in items:
+                        alert["evidence_modules"] = [
+                            {"module": module}
+                            for module in sorted(
+                                modules_by_alert[str(alert["alert_id"])]
+                            )
+                        ]
             self._annotate_detection_networks(
                 items, "ip_alerted", "alert_time"
             )
@@ -4982,14 +5038,34 @@ class RunDataReader:
             history.create_function("flow_peer_sort", 2, peer_sort)
             raw_sort_keys = {"ports", "state", "duration"}
             requested_sort = self._query_value(query, "sort", "event_time")
+            threat = self._query_value(query, "threat").lower()
             if (
                 self._query_value(query, "hide_excluded") == "1"
                 or requested_sort in raw_sort_keys
+                or requested_sort == "threat"
+                or threat
             ):
                 history.execute(
                     "ATTACH DATABASE ? AS run_db",
                     (f"file:{self.sqlite_path}?mode=ro",),
                 )
+            linked_threat_available = False
+            linked_threat_exclusion = ""
+            if requested_sort == "threat" or threat:
+                evidence_columns = {
+                    str(column[1])
+                    for column in history.execute(
+                        "PRAGMA run_db.table_info(evidence)"
+                    )
+                }
+                linked_threat_available = "threat_level" in evidence_columns
+                if (
+                    self._query_value(query, "hide_excluded") == "1"
+                    and "whitelisted" in evidence_columns
+                ):
+                    linked_threat_exclusion = (
+                        " AND COALESCE(e.whitelisted, 0) = 0"
+                    )
             raw_flow = (
                 "(SELECT flow FROM run_db.flows f "
                 "WHERE f.uid = flow_index.uid)"
@@ -4997,6 +5073,18 @@ class RunDataReader:
             raw_value = (
                 f"CASE WHEN json_valid({raw_flow}) "
                 f"THEN {raw_flow} ELSE '{{}}' END"
+            )
+            linked_threat_rank = (
+                (
+                    "(SELECT MAX(CASE LOWER(e.threat_level) "
+                    "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
+                    "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END) "
+                    "FROM run_db.evidence_flows ef JOIN run_db.evidence e "
+                    "ON e.evidence_id = ef.evidence_id "
+                    f"WHERE ef.uid = flow_index.uid{linked_threat_exclusion})"
+                )
+                if linked_threat_available
+                else "NULL"
             )
             sort_key, sort_expression, sort_direction = self._sort_spec(
                 query,
@@ -5014,9 +5102,17 @@ class RunDataReader:
                     "bytes": "bytes",
                     "duration": f"COALESCE(CAST(json_extract({raw_value}, '$.dur') AS REAL), 0)",
                     "label": "LOWER(COALESCE(label, ''))",
+                    "threat": linked_threat_rank,
                 },
                 "event_time",
             )
+            if threat:
+                minimum = threat.removesuffix("_or_more")
+                rank = EVIDENCE_THREAT_RANKS.get(minimum)
+                if rank is not None:
+                    operator = ">=" if threat.endswith("_or_more") else "="
+                    clauses.append(f"{linked_threat_rank} {operator} ?")
+                    params.append(rank)
             if self._query_value(query, "hide_excluded") == "1":
                 evidence_columns = {
                     str(column[1])
@@ -5055,6 +5151,7 @@ class RunDataReader:
         has_more = len(index_rows) > limit
         index_rows = index_rows[:limit]
         raw_by_uid: Dict[str, Dict[str, Any]] = {}
+        threat_by_uid: Dict[str, str] = {}
         if index_rows:
             uids = [str(row["uid"]) for row in index_rows]
             placeholders = ",".join("?" for _ in uids)
@@ -5066,6 +5163,39 @@ class RunDataReader:
             raw_by_uid = {
                 str(row["uid"]): self._loads(row["flow"], {}) for row in rows
             }
+            with self._connect_sqlite() as connection:
+                if self._table_exists(
+                    connection, "evidence_flows"
+                ) and self._table_exists(connection, "evidence"):
+                    evidence_columns = {
+                        str(column[1])
+                        for column in connection.execute(
+                            "PRAGMA table_info(evidence)"
+                        )
+                    }
+                    if "threat_level" in evidence_columns:
+                        exclusion = (
+                            " AND COALESCE(e.whitelisted, 0) = 0"
+                            if self._query_value(query, "hide_excluded") == "1"
+                            and "whitelisted" in evidence_columns
+                            else ""
+                        )
+                        threat_rows = connection.execute(
+                            "SELECT ef.uid, MAX(CASE LOWER(e.threat_level) "
+                            "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
+                            "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END) "
+                            "AS threat_rank FROM evidence_flows ef JOIN evidence e "
+                            "ON e.evidence_id = ef.evidence_id "
+                            f"WHERE ef.uid IN ({placeholders}){exclusion} "
+                            "GROUP BY ef.uid",
+                            uids,
+                        ).fetchall()
+                        threat_by_uid = {
+                            str(item["uid"]): self._threat_from_rank(
+                                item["threat_rank"]
+                            )
+                            for item in threat_rows
+                        }
         host_ips = set(ips)
         items: List[Dict[str, Any]] = []
         for row in index_rows:
@@ -5098,6 +5228,10 @@ class RunDataReader:
                     "packets": int(row["packets"] or 0),
                     "bytes": int(row["bytes"] or 0),
                     "label": str(row["label"] or ""),
+                    "linked_threat_level": threat_by_uid.get(str(row["uid"])),
+                    "threat": EVIDENCE_THREAT_RANKS.get(
+                        threat_by_uid.get(str(row["uid"]), ""), -1
+                    ),
                     "raw": raw,
                 }
             )

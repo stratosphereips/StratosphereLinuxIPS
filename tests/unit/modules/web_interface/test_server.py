@@ -356,6 +356,60 @@ def test_host_flows_sort_before_cursor_paging(
     assert len(second["items"]) == 1
 
 
+def test_host_flows_filter_by_linked_evidence_threat(tmp_path: Path) -> None:
+    """Filter the full host range by linked threat, retaining unlinked flows."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "pcap"
+    reader._host_ips = Mock(return_value=["10.0.0.1"])
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as history:
+        history.executemany(
+            "INSERT INTO flow_index(uid, flow_rowid, event_time, src_ip, "
+            "dst_ip, proto, app_proto, bytes, packets, label) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(uid, index, float(index), "10.0.0.1", "10.0.0.2", "tcp", "", 1, 1, "")
+             for index, uid in enumerate(["high", "info", "unlinked"], 1)],
+        )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE flows(uid TEXT, flow TEXT, label TEXT);"
+            "CREATE TABLE evidence(evidence_id TEXT, threat_level TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "INSERT INTO evidence VALUES ('e-high', 'high'), ('e-info', 'info');"
+            "INSERT INTO evidence_flows VALUES ('e-high', 'high'), "
+            "('e-info', 'info');"
+        )
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, '{}', '')",
+            [(uid,) for uid in ["high", "info", "unlinked"]],
+        )
+
+    all_flows = reader.flows_for_host("10.0.0.1", {"range": ["all"]})
+    high = reader.flows_for_host(
+        "10.0.0.1", {"range": ["all"], "threat": ["high_or_more"]}
+    )
+    linked = reader.flows_for_host(
+        "10.0.0.1", {"range": ["all"], "threat": ["info_or_more"]}
+    )
+    ordered = reader.flows_for_host(
+        "10.0.0.1", {"range": ["all"], "sort": ["threat"], "order": ["desc"]}
+    )
+
+    assert all_flows["total"] == 3
+    assert {item["uid"]: item["linked_threat_level"] for item in all_flows["items"]} == {
+        "high": "high", "info": "info", "unlinked": None
+    }
+    assert [item["uid"] for item in high["items"]] == ["high"]
+    assert {item["uid"] for item in linked["items"]} == {"high", "info"}
+    assert [item["uid"] for item in ordered["items"]] == [
+        "high", "info", "unlinked"
+    ]
+
+
 def test_current_network_profile_precedes_newer_run_fallback() -> None:
     """Restore host annotations when an earlier run missed its router."""
     _module_factory = ModuleFactory()
@@ -3338,6 +3392,41 @@ def test_evidence_cursor_is_stable_when_newer_rows_arrive(tmp_path) -> None:
     ]
 
 
+@pytest.mark.parametrize("search", ["UNKNOWN_PORT", "unknown port", "scored", "100%"])
+def test_host_evidence_search_covers_displayed_columns(
+    tmp_path: Path, search: str
+) -> None:
+    """Match evidence type, its readable name, handling, and confidence.
+
+    Parameters:
+        tmp_path: Isolated durable database path.
+        search: A value shown in the host evidence table.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "INSERT INTO evidence VALUES "
+            "('e1', 1, '10.0.0.1', 'tw', 'info', 'UNKNOWN_PORT', "
+            "'A connection', 1, '{}');"
+        )
+
+    result = reader.evidence(
+        {"range": ["all"], "profile": ["10.0.0.1"], "search": [search]}
+    )
+
+    assert result["total"] == 1
+    assert result["items"][0]["evidence_type"] == "UNKNOWN_PORT"
+
+
 def test_host_flows_exclude_mac_alias_addresses(tmp_path) -> None:
     """Only the selected profile IP may contribute host-workspace flows."""
     _module_factory = ModuleFactory()
@@ -4328,6 +4417,7 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
             "search": ["a1"],
             "details": ["false"],
             "summary": ["1"],
+            "modules": ["1"],
         }
     )
 
@@ -4368,6 +4458,8 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert compact_result["items"][0]["evidence_types"] == [
         {"type": "SCAN", "count": 1}
     ]
+    assert len(compact_result["items"][0]["evidence_modules"]) == 1
+    assert compact_result["items"][0]["evidence_modules"][0]["module"]
     assert "evidence" not in compact_result["items"][0]
     with sqlite3.connect(reader.sqlite_path) as connection:
         connection.execute(
@@ -4384,6 +4476,11 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert mixed_result["items"][0]["evidence_types"] == [
         {"type": "SCAN", "count": 1}, {"type": "UNKNOWN_PORT", "count": 1}
     ]
+    by_type = reader.alerts(
+        {"range": ["all"], "search": ["unknown port"], "details": ["false"],
+         "summary": ["1"]}
+    )
+    assert [item["alert_id"] for item in by_type["items"]] == ["a1"]
 
 
 @pytest.mark.parametrize(
