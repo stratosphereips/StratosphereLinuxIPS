@@ -581,6 +581,9 @@ New evidence-type rules take effect as soon as they reach Redis, even while a
 worker's local IP filter refresh is pending. Existing detections and alerts
 remain in the run history. The Alerts tab stays on the selected time range;
 when Live has no alerts, use **Show full run alerts** to inspect older ones.
+Each Slips run also loads its configured local whitelist into its own Redis
+database at startup, even when another run is updating the shared organization
+files.
 Hiding excluded records filters evidence before
 grouping and pagination; a host/type group still appears when it also contains
 scored evidence. In the Host workspace, historical traffic linked only to
