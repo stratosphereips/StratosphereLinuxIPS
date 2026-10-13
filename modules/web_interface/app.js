@@ -4601,10 +4601,13 @@ function flowFieldList(flow, displayedFields = []) {
       const row = document.createElement("tr");
       row.hidden = hidden;
       if (hidden) row.dataset.empty = "true";
-      items.slice(index, index + 2).forEach(([key, value]) => {
+      const pair = items.slice(index, index + 2);
+      pair.forEach(([key, value]) => {
         const label = text("th", key.replaceAll("_", " "));
         label.scope = "row";
-        row.append(label, text("td", hidden ? "—" : protocolValueText(key, value)));
+        const cell = text("td", hidden ? "—" : protocolValueText(key, value));
+        if (pair.length === 1) cell.colSpan = 3;
+        row.append(label, cell);
       });
       tbody.append(row);
     }
