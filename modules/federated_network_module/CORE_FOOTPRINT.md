@@ -87,10 +87,15 @@ Verified by the diff above — the fork does **not** modify:
   `conn_analyzer`, and `flow_alerts`, which change how own-IPs are fetched, not detection.
 - **Submodules** (`SlipsWeb`, `iris`, `p2p4slips`, `fides`, `feel_project`) — no pointer
   changes on the committed branch.
-- **Ground-truth injection:** the fork does **not** patch SLIPS to inject
-  `ground_truth_label`. GT is eval-only, read by the module from
-  `/opt/network-setup/simulated_attackers.txt` (`_get_simulated_gt`); SLIPS core is
-  untouched for GT.
+- **Ground-truth injection:** no SLIPS **core-layer** file is patched for GT.
+  The module derives GT from `/opt/network-setup/simulated_attackers.txt`
+  (`_get_simulated_gt`) and, **eval-only**, stamps it into each flow's
+  `ground_truth_label` field in `flows.sqlite` (`_write_ground_truth`, via the
+  module's **own** short-lived read-write SQLite connection + `json_set`). This is
+  a no-op in live capture (no attacker list → nothing written), writes only the
+  GT label (never the detection output), and adds **no** method to SLIPS's DB
+  layer — the write lives entirely inside the module. (Before 2026-10-13 the
+  module only read `flows.sqlite`; it now also writes this one eval field.)
 
 ## Dropped pre-rebase patches (history, per MANIFEST §00)
 Before the Oct-5 squash-rebase, the old branch carried several **invasive** core

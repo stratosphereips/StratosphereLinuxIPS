@@ -204,6 +204,24 @@ def test_alerted_uids_only_returns_cited_uids_in_window():
     assert m._alerted_uids(["a", "b"], BASE + WIN, BASE + 2 * WIN) == set()
 
 
+def test_evidence_not_tied_to_an_alert_is_ignored():
+    """The core contract: labeling follows alerts -> alert_evidence ->
+    evidence_flows. A uid cited by evidence that is NOT linked to any alert
+    (bare evidence_flows row) must never be returned -- we use alert-connected
+    evidence only, not every evidence in the window, and never IPs."""
+    db = _make_db()
+    m = _module(db)
+    # 'orphan': an evidence_flows row with NO alert_evidence / alerts link
+    db.execute(
+        "INSERT INTO evidence_flows(evidence_id, uid) VALUES('E-orphan','orphan')"
+    )
+    # 'real': a properly alert-connected uid in the same window, for contrast
+    _insert_alert(db, "A1", ["real"], BASE)
+    db.commit()
+    got = m._alerted_uids(["orphan", "real"], BASE - WIN, BASE + WIN)
+    assert got == {"real"}  # orphan evidence (no alert) excluded
+
+
 # --------------------------------------------------------------------------
 # labeling at window close
 # --------------------------------------------------------------------------
@@ -275,3 +293,101 @@ def test_malicious_trained_flow_is_not_a_flip(monkeypatch):
     h.m._trained_per_window = {1: 1}
     h.close(flows=["u"], alerts=[("A1", ["t"])])
     assert h.m._flip_events == []
+
+
+# --------------------------------------------------------------------------
+# ground-truth writeback into flows.sqlite (eval-only, no IPs leaked to label)
+# --------------------------------------------------------------------------
+def _real_gt(m):
+    """Bind the real _get_simulated_gt onto a bare module (harness stubs it)."""
+    m._get_simulated_gt = fnm.FederatedNetworkModule._get_simulated_gt.__get__(
+        m, fnm.FederatedNetworkModule
+    )
+
+
+def _gt_field(db, table, uid):
+    row = db.execute(
+        f"SELECT flow FROM {table} WHERE uid=?", (uid,)
+    ).fetchone()
+    return json.loads(row[0]).get("ground_truth_label")
+
+
+def test_write_ground_truth_stamps_gt_into_flow_json():
+    """The simulated GT lands in each flow's ground_truth_label field, for
+    conn (flows) and arp (altflows): attacker-IP flows -> malicious, else
+    benign."""
+    db = _make_db()
+    m = _module(db)
+    _real_gt(m)
+    m._simulated_attackers = lambda: ("172.20.1.17",)
+    m._db_rw = lambda: db
+    db.execute(
+        "INSERT INTO flows(uid,flow) VALUES('m',?)",
+        (
+            json.dumps(
+                {
+                    "uid": "m",
+                    "saddr": "172.20.1.17",
+                    "daddr": "10.0.0.2",
+                    "ground_truth_label": "",
+                }
+            ),
+        ),
+    )
+    db.execute(
+        "INSERT INTO flows(uid,flow) VALUES('b',?)",
+        (
+            json.dumps(
+                {
+                    "uid": "b",
+                    "saddr": "10.0.0.9",
+                    "daddr": "10.0.0.2",
+                    "ground_truth_label": "",
+                }
+            ),
+        ),
+    )
+    db.execute(
+        "INSERT INTO altflows(uid,flow,flow_type) VALUES('a',?, 'arp')",
+        (
+            json.dumps(
+                {
+                    "uid": "a",
+                    "saddr": "172.20.1.17",
+                    "daddr": "10.0.0.2",
+                    "ground_truth_label": "",
+                }
+            ),
+        ),
+    )
+    db.commit()
+    flows = [json.loads(r[0]) for r in db.execute("SELECT flow FROM flows")]
+    flows += [
+        json.loads(r[0]) for r in db.execute("SELECT flow FROM altflows")
+    ]
+    m._write_ground_truth(flows)
+    assert _gt_field(db, "flows", "m") == "malicious"
+    assert _gt_field(db, "flows", "b") == "benign"
+    assert _gt_field(db, "altflows", "a") == "malicious"
+
+
+def test_write_ground_truth_is_noop_without_attacker_list():
+    """Live capture (no simulated-attacker list) writes nothing at all."""
+    db = _make_db()
+    m = _module(db)
+    _real_gt(m)
+    m._simulated_attackers = lambda: ()
+    m._db_rw = lambda: db
+    db.execute(
+        "INSERT INTO flows(uid,flow) VALUES('x',?)",
+        (
+            json.dumps(
+                {"uid": "x", "saddr": "172.20.1.17", "ground_truth_label": ""}
+            ),
+        ),
+    )
+    db.commit()
+    m._write_ground_truth(
+        [{"uid": "x", "saddr": "172.20.1.17", "ground_truth_label": ""}]
+    )
+    assert _gt_field(db, "flows", "x") == ""  # unchanged

@@ -905,6 +905,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             1,
         )
         self._db_conn = None  # read-only connection, opened on first close
+        self._db_rw_conn = None  # read-write conn, only to stamp GT (eval)
         self._flow_rowid = 0  # last flows.rowid read
         self._arp_rowid = 0  # last altflows.rowid read (ARP rows)
         self._seen_uids: set = set()  # every uid already placed in a cell
@@ -1496,6 +1497,51 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
         return self._db_conn
 
+    def _db_rw(self):
+        """Read-write connection to flows.sqlite, used ONLY to stamp the
+        simulated ground-truth label back into flows (eval). WAL + a busy
+        timeout so our occasional per-window writes serialise behind SLIPS's
+        own writers instead of erroring."""
+        if self._db_rw_conn is None:
+            path = get_this_db_path_inside_output_dir(
+                self.parent_output_dir, "flows.sqlite"
+            )
+            self._db_rw_conn = sqlite3.connect(
+                f"file:{path}", uri=True, timeout=20, check_same_thread=False
+            )
+            self._db_rw_conn.execute("PRAGMA busy_timeout=20000")
+        return self._db_rw_conn
+
+    def _write_ground_truth(self, flows) -> None:
+        """Stamp the simulated ground-truth label into each flow's
+        ``ground_truth_label`` field in SLIPS's flows.sqlite.
+
+        Eval-only: a no-op unless a simulated-attacker list is present, so live
+        capture (no list) writes nothing. Batched per label over both the conn
+        (``flows``) and alt (``altflows``) tables.
+
+        :param flows: flow dicts fetched this window (need ``uid`` + addrs)
+        """
+        if not self._simulated_attackers():
+            return
+        groups = {MALICIOUS: [], BENIGN: []}
+        for flow in flows:
+            uid = (flow.get("uid") or "").strip()
+            if uid:
+                groups[self._get_simulated_gt(flow)].append(uid)
+        db = self._db_rw()
+        for gt, uids in groups.items():
+            if not uids:
+                continue
+            gt_str = "malicious" if gt == MALICIOUS else "benign"
+            for table in ("flows", "altflows"):
+                db.executemany(
+                    f"UPDATE {table} SET flow = "
+                    "json_set(flow, '$.ground_truth_label', ?) WHERE uid = ?",
+                    [(gt_str, uid) for uid in uids],
+                )
+        db.commit()
+
     def _fetch_new_flows(self):
         """Every conn flow and ARP record SLIPS stored since the last close,
         in insertion order, deduplicated by uid.
@@ -2021,6 +2067,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # 1. flows from the DB, placed by ts
             fetched, n_conn, n_arp = self._fetch_new_flows()
             placed = self._place_flows(window_n, fetched)
+            # stamp simulated ground truth back into flows.sqlite (eval-only)
+            self._write_ground_truth(fetched)
 
             # 2. label all open cells; alerts since the last close for flips
             lookback = (
