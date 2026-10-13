@@ -175,6 +175,13 @@ under `--- New local model (window_N) ---` headers):
 |------|-----------------|
 | `local_test.log` | local-only model (the frozen snapshot from the last full local training; from the first merge on, this stream is driven by the dual-testing second forward pass) |
 | `merged_test.log` | merged model (active once a merge is done) |
+| `local_test_conn.log` / `merged_test_conn.log` | the same two streams counting **conn flows only** (same spans and line format). Every flow (conn + ARP) counts in the files above; ARP records dominate them under a scanning attacker, so score both scopes |
+
+> Span headers: each stream's lines follow a `--- New local model (window_N) ---`
+> header naming the training that produced the model under test; pair the two
+> streams **by that label**, not by position. The local stream writes its
+> header when it is first used in a span, so the first merged span has one in
+> both files.
 
 > Dual testing (2026-09-10): after every full local training the local-only
 > weights are deep-copied; while a merged model is active, EVERY flow is
@@ -308,8 +315,9 @@ Per-epoch training metrics for local model (alert or twclose):
   batch 44 (Mal:26 Ben:18) | loss=0.7852 | acc=0.4091 | TP/FP/TN/FN: 0/0/18/26
 ```
 
-### local_test.log / merged_test.log
+### local_test.log / merged_test.log (+ *_test_conn.log)
 Continuous per-flow testing: the latest model classifies each incoming flow against GT.
+The `_conn` twins count only conn flows, under the same headers.
 Metrics accumulate between training events, reset after each `--- New local model ---` marker.
 ```
 --- New local model (alert_1) ---

@@ -567,8 +567,10 @@ class ModuleLogger:
                 "local_train",
                 "local_head_train",
                 "local_test",
+                "local_test_conn",
                 "merged_train",
                 "merged_test",
+                "merged_test_conn",
                 "comp_inferred_gt",
                 "comp_merged_inferred_gt",
                 "comp_test_inferred",
@@ -830,6 +832,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._local_only_model = None
         self._local_test: dict = self._blank_test_statistics()
         self._local_stream_used: bool = False
+        # Span the current models belong to ("<trigger>_<window>"); the local
+        # stream writes its span header lazily, on first use in the span, so
+        # the first merged span is not headerless in local_test.log.
+        self._span_label: str = ""
+        self._local_span_marked: bool = False
+        # Conn-only twins of both testing streams (*_test_conn.log, same
+        # format and spans): ARP records dominate the all-flows streams.
+        self._conn_active: dict = self._blank_test_statistics()
+        self._conn_local: dict = self._blank_test_statistics()
 
         # Centralized logger
         self.logger = ModuleLogger(self.output_dir, self.enable_logs)
@@ -1738,6 +1749,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             cell["preds"][fid] = preds[i]
             if local is not None:
                 self._store_local_stream(gt_label, local[i])
+            if flow.get("type_") == "conn":
+                self._store_conn_stream("active", gt_label, preds[i])
+                if local is not None:
+                    self._store_conn_stream("local", gt_label, local[i])
 
     def _record_pending_labels(
         self, malicious_flows: list, benign_flows: list
@@ -2181,25 +2196,30 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
                 self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
 
+                span = f"{self._training_trigger}_{window_n}"
                 target = (
                     "merged_test" if self._using_merged_model else "local_test"
                 )
+                self._flush_conn_stream("active")
+                self._conn_active = self._blank_test_statistics()
                 self.logger.log_test_marker(
-                    target,
-                    f"New local model ({self._training_trigger}_{window_n})",
+                    target, f"New local model ({span})"
+                )
+                self.logger.log_test_marker(
+                    f"{target}_conn", f"New local model ({span})"
                 )
 
                 # Dual testing stream closeout: flush the local-only stream's
-                # window tail, mark its new model version, reset its counters
-                # (mirrors the legacy active-stream bookkeeping above).
+                # span tail and reset its counters; the new span's header is
+                # written when the local stream is first used in it.
                 if self._local_stream_used:
                     self._flush_local_stream()
-                    self.logger.log_test_marker(
-                        "local_test",
-                        f"New local model ({self._training_trigger}_{window_n})",
-                    )
+                    self._flush_conn_stream("local")
                     self._local_test = self._blank_test_statistics()
+                    self._conn_local = self._blank_test_statistics()
                     self._local_stream_used = False
+                self._span_label = span
+                self._local_span_marked = False
 
             # 5. the open cells meet the freshly trained model
             for cell in self._flow_ring:
@@ -3101,10 +3121,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "flows_since_snapshot": 0,
         }
 
-    def _store_local_stream(self, gt_label: str, predicted: str) -> None:
-        """Accumulate local-only (pre-merge snapshot) testing counters."""
-        self._local_stream_used = True
-        stats = self._local_test
+    @staticmethod
+    def _tally(stats: dict, gt_label: str, predicted: str) -> None:
+        """Count one tested flow into a stream's cumulative counters."""
         stats["flows_since_snapshot"] += 1
         if gt_label == MALICIOUS:
             stats["gt_mal"] += 1
@@ -3122,6 +3141,37 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             stats["fn"] += 1
         else:
             stats["tn"] += 1
+
+    def _write_stream_line(self, target: str, stats: dict) -> None:
+        """Write a stream's cumulative counters as one test-log line."""
+        total = stats["tp"] + stats["fp"] + stats["tn"] + stats["fn"]
+        acc = (stats["tp"] + stats["tn"]) / total if total else 0.0
+        self.logger._write(
+            target,
+            f"  flows={total} | "
+            f"GT(Mal/Ben): {stats['gt_mal']}/{stats['gt_ben']} | "
+            f"Pred(Mal/Ben): {stats['pred_mal']}/{stats['pred_ben']} | "
+            f"TP/FP/TN/FN: {stats['tp']}/{stats['fp']}/{stats['tn']}/{stats['fn']} | "
+            f"Acc={acc:.4f}",
+        )
+        stats["flows_since_snapshot"] = 0
+
+    def _mark_local_span(self) -> None:
+        """Write the local stream's span header on its first use in a span."""
+        if self._local_span_marked or not self._span_label:
+            return
+        for target in ("local_test", "local_test_conn"):
+            self.logger.log_test_marker(
+                target, f"New local model ({self._span_label})"
+            )
+        self._local_span_marked = True
+
+    def _store_local_stream(self, gt_label: str, predicted: str) -> None:
+        """Accumulate local-only (pre-merge snapshot) testing counters."""
+        self._mark_local_span()
+        self._local_stream_used = True
+        stats = self._local_test
+        self._tally(stats, gt_label, predicted)
         if stats["flows_since_snapshot"] >= self.testing_log_batch_size:
             self._flush_local_stream()
 
@@ -3130,17 +3180,35 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         stats = self._local_test
         if stats["flows_since_snapshot"] <= 0:
             return
-        total = stats["tp"] + stats["fp"] + stats["tn"] + stats["fn"]
-        acc = (stats["tp"] + stats["tn"]) / total if total else 0.0
-        self.logger._write(
-            "local_test",
-            f"  flows={total} | "
-            f"GT(Mal/Ben): {stats['gt_mal']}/{stats['gt_ben']} | "
-            f"Pred(Mal/Ben): {stats['pred_mal']}/{stats['pred_ben']} | "
-            f"TP/FP/TN/FN: {stats['tp']}/{stats['fp']}/{stats['tn']}/{stats['fn']} | "
-            f"Acc={acc:.4f}",
-        )
-        stats["flows_since_snapshot"] = 0
+        self._write_stream_line("local_test", stats)
+
+    def _store_conn_stream(
+        self, which: str, gt_label: str, predicted: str
+    ) -> None:
+        """Accumulate the conn-only twin of a testing stream: "active" = the
+        model in use (merged_test_conn while merged, else local_test_conn),
+        "local" = the frozen local-only model while merged."""
+        if which == "local":
+            self._mark_local_span()
+            stats, target = self._conn_local, "local_test_conn"
+        else:
+            stats = self._conn_active
+            target = (
+                "merged_test_conn"
+                if self._using_merged_model
+                else "local_test_conn"
+            )
+        stats["target"] = target
+        self._tally(stats, gt_label, predicted)
+        if stats["flows_since_snapshot"] >= self.testing_log_batch_size:
+            self._flush_conn_stream(which)
+
+    def _flush_conn_stream(self, which: str) -> None:
+        """Write a conn twin's pending snapshot to the log it was counted for."""
+        stats = self._conn_local if which == "local" else self._conn_active
+        if stats["flows_since_snapshot"] <= 0 or not stats.get("target"):
+            return
+        self._write_stream_line(stats["target"], stats)
 
     def _write_testing_snapshot(self, batch_flows: int) -> None:
         """Write cumulative TP/FP/TN/FN/Acc snapshot (tests against GT)."""
