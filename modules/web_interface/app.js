@@ -2077,24 +2077,6 @@ async function loadAlerts() {
   const workspace = state.alertsWorkspace;
   workspace.fullTotal = byId("alerts-review").value === "open"
     ? payload.open_total || 0 : payload.full_total || 0;
-  if (!workspace.rangeTouched && !workspace.autoRange
-      && byId("alerts-range").value === "live"
-      && !workspace.severity
-      && !byId("alerts-search").value.trim()
-      && byId("alerts-review").value === "open"
-      && payload.total === 0 && payload.open_total > 0) {
-    const age = Date.now() / 1000 - numeric(payload.latest_alert_time);
-    const fallback = age <= 86400 ? "24h" : age <= 7 * 86400 ? "7d" : "all";
-    workspace.autoRange = fallback;
-    byId("alerts-range").value = fallback;
-    const note = byId("alerts-range-note");
-    note.textContent = `No alerts in Live (last hour). Showing ${byId("alerts-range").selectedOptions[0].textContent} instead.`;
-    note.hidden = false;
-    byId("alerts-host-list").replaceChildren(text("p", "Loading recent alerts…", "empty-state"));
-    resetPage("alerts");
-    await loadAlerts();
-    return;
-  }
   applyPage("alerts", payload);
   state.filteredBadgeCounts.alerts = payload.matching_total ?? payload.total;
   byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts);

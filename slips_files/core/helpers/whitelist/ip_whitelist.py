@@ -97,7 +97,11 @@ class IPAnalyzer(IWhitelistAnalyzer):
         for candidate in candidates:
             if candidate not in self.manager.bloom_filters.ips:
                 self.bf_hits += 1
-                continue
+                # A rule added in the web UI reaches Redis before every
+                # evidence worker has refreshed its process-local filter.
+                # Scoped evidence rules must not miss during that interval.
+                if not evidence_type:
+                    continue
 
             ip_info: str | None = self.db.is_whitelisted(candidate, "IPs")
             if not ip_info:

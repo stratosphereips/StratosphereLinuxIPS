@@ -100,6 +100,26 @@ def test_alert_type_scoped_ip_rule(
     )
 
 
+def test_new_scoped_rule_matches_before_bloom_refresh() -> None:
+    """Use the current Redis rule while a worker's filter is still stale."""
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.bloom_filters.ips = {}
+    whitelist.db.is_whitelisted.side_effect = lambda key, _: (
+        json.dumps({"from": "src", "what_to_ignore": "alerts"})
+        if key == "192.0.2.10|ARP_SCAN"
+        else None
+    )
+
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", Direction.SRC, "alerts",
+        evidence_type="ARP_SCAN",
+    )
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", Direction.DST, "alerts",
+        evidence_type="ARP_SCAN",
+    )
+
+
 def test_read_whitelist():
     """
     make sure the content of whitelists is read and stored properly
