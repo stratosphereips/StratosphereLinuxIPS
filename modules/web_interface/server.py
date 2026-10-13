@@ -6101,80 +6101,6 @@ class RunDataReader:
         )
         return {"ip": ip, "network_id": network_id, "name": name, "note": note}
 
-    def _overview_alert_hosts(self) -> Dict[str, Any]:
-        """Return the highest severity alert hosts for the first screen.
-
-        Returns:
-            Host count and up to four hosts ordered by severity and volume.
-        """
-        with self._connect_sqlite() as connection:
-            score = self._detector_score_expression(connection, "alerts")
-            open_clause = self._review_clause(connection, "alert", "open", "a")
-            rows = connection.execute(
-                "SELECT a.ip_alerted, COUNT(*) AS alert_count, "
-                "MAX(CAST(alert_time AS REAL)) AS alert_time, "
-                f"MAX({score}) AS alert_score FROM alerts a "
-                f"WHERE {open_clause} GROUP BY a.ip_alerted"
-            ).fetchall()
-            ranks: Dict[str, int] = {}
-            available_levels = [
-                str(row[0])
-                for row in connection.execute(
-                    "SELECT DISTINCT threat_level FROM evidence "
-                    "WHERE threat_level IS NOT NULL"
-                ).fetchall()
-            ]
-            for level, rank in (
-                ("critical", 4),
-                ("high", 3),
-                ("medium", 2),
-                ("low", 1),
-            ):
-                variants = [
-                    value
-                    for value in available_levels
-                    if value.lower() == level
-                ]
-                if not variants:
-                    continue
-                placeholders = ",".join("?" for _ in variants)
-                matching = connection.execute(
-                    "SELECT DISTINCT a.ip_alerted FROM evidence e "
-                    "JOIN alert_evidence ae ON ae.evidence_id = e.evidence_id "
-                    "JOIN alerts a ON a.alert_id = ae.alert_id "
-                    f"WHERE e.threat_level IN ({placeholders}) "
-                    f"AND {open_clause}",
-                    variants,
-                ).fetchall()
-                for match in matching:
-                    ranks.setdefault(str(match["ip_alerted"]), rank)
-                if len(ranks) >= min(4, len(rows)):
-                    break
-        ranked = sorted(
-            rows,
-            key=lambda row: (
-                ranks.get(str(row["ip_alerted"]), 0),
-                int(row["alert_count"]),
-                float(row["alert_time"] or 0),
-            ),
-            reverse=True,
-        )[:4]
-        return {
-            "total": len(rows),
-            "items": [
-                {
-                    "ip_alerted": row["ip_alerted"],
-                    "alert_count": int(row["alert_count"]),
-                    "alert_time": float(row["alert_time"] or 0),
-                    "alert_score": row["alert_score"],
-                    "threat_level": self._threat_from_rank(
-                        ranks.get(str(row["ip_alerted"]), 0)
-                    ),
-                }
-                for row in ranked
-            ],
-        }
-
     def overview(self) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
         analysis = self.redis.hgetall("analysis")
@@ -6289,12 +6215,6 @@ class RunDataReader:
                 analysis, saved_network_states, host_addresses
             )
         )
-        alert_hosts = {"total": 0, "items": []}
-        if alert_count:
-            try:
-                alert_hosts = self._overview_alert_hosts()
-            except sqlite3.Error:
-                pass
         highest_score = None
         if not alert_count:
             score_field = (
@@ -6336,7 +6256,6 @@ class RunDataReader:
             ),
             "computer_name": socket.gethostname(),
             "network_states": current_network_states,
-            "alert_hosts": alert_hosts,
             "highest_score": highest_score,
             "alert_threshold": getattr(self, "alert_threshold", 5.0),
             "sources": {

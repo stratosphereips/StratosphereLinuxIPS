@@ -6,6 +6,8 @@ const state = {
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
+  overviewAlertGroups: null,
+  overviewAlertQuery: "",
   filteredBadgeCounts: { alerts: null, evidence: null, hosts: null },
   metadata: null,
   metrics: [],
@@ -471,6 +473,8 @@ function applyRunIdentity(identity) {
     state.overview = null;
     state.overviewEvidence = null;
     state.overviewEvidenceLoading = false;
+    state.overviewAlertGroups = null;
+    state.overviewAlertQuery = "";
     state.filteredBadgeCounts.alerts = null;
     state.filteredBadgeCounts.evidence = null;
     state.filteredBadgeCounts.hosts = null;
@@ -1023,15 +1027,16 @@ function renderOverview() {
   renderOverviewStatus(data);
   renderOverviewSystem(data);
   const firewall = data.firewall || {};
+  const selectedAlerts = state.overviewAlertGroups?.matching_total;
   setSummaryCards([
-    ["Alerts", compact(data.counts.alerts)],
+    ["Alerts", selectedAlerts === undefined ? "…" : compact(selectedAlerts)],
     ["Evidence", compact(data.counts.evidence)],
     ["Hosts seen", compact(data.counts.hosts)],
     ["Flows processed", compact(data.counts.processed_flows)],
     ["Firewall blocks", firewall.current ? compact(firewall.current)
       : (data.modules || []).some((module) => module.name === "blocking") ? "0" : "off"],
   ]);
-  byId("summary-cards").classList.toggle("has-alerts", numeric(data.counts.alerts) > 0);
+  byId("summary-cards").classList.toggle("has-alerts", numeric(selectedAlerts) > 0);
   const firewallImpact = data.firewall_impact || {};
   setSummaryCards([
     ["Packets stopped (estimated)", compact(firewallImpact.packets)],
@@ -1070,30 +1075,50 @@ function renderOverview() {
   renderModules(data.modules);
 }
 
-/** Show either the quiet state or the hosts with the highest severity alerts. */
+/** Show alerts grouped by host using the current Alerts pane selection. */
 function renderOverviewStatus(data) {
-  const hasAlerts = numeric(data.counts.alerts) > 0;
+  const summary = state.overviewAlertGroups;
+  const hasAlerts = numeric(summary?.matching_total) > 0;
   const panel = byId("overview-status");
   panel.classList.toggle("has-alerts", hasAlerts);
-  byId("overview-alerts-link").hidden = !hasAlerts;
-  byId("overview-status-description").hidden = hasAlerts;
+  byId("overview-alerts-link").hidden = !numeric(summary?.full_total) && !numeric(data.counts.alerts);
+  byId("overview-status-description").hidden = false;
   const list = byId("overview-alert-hosts");
   list.replaceChildren();
+  if (!summary) {
+    byId("overview-status-title").textContent = "Alerts grouped by host";
+    byId("overview-status-description").textContent = "Loading the Alerts selection…";
+    return;
+  }
+  if (summary.error) {
+    byId("overview-status-title").textContent = "Alerts grouped by host";
+    byId("overview-status-description").textContent = "Could not load the selected alerts. Open Alerts to retry.";
+    return;
+  }
+  const selectedFilters = [
+    byId("alerts-review").selectedOptions[0]?.textContent,
+    byId("alerts-range").selectedOptions[0]?.textContent,
+    state.alertsWorkspace.severity
+      ? state.alertsWorkspace.severity.replace("_or_more", "+") : null,
+    byId("alerts-search").value.trim()
+      ? `Search: ${byId("alerts-search").value.trim()}` : null,
+  ].filter(Boolean).join(" · ");
   if (!hasAlerts) {
-    byId("overview-status-title").textContent = "No alerts in this run";
+    byId("overview-status-title").textContent = numeric(summary.full_total)
+      ? "No alerts match the selected filters" : "No alerts in this run";
     const top = data.highest_score;
     const threshold = numeric(data.alert_threshold) || 5;
     byId("overview-status-description").textContent =
-      `${compact(data.counts.evidence)} evidence records from ${compact(data.counts.hosts)} hosts. `
-      + `No host crossed the alert threshold (${threshold}).`
-      + (top?.ip && top.score !== null ? ` Highest current score: ${numeric(top.score).toFixed(2)} on ${top.ip}.` : "");
+      numeric(summary.full_total) ? selectedFilters
+        : `${compact(data.counts.evidence)} evidence records from ${compact(data.counts.hosts)} hosts. `
+          + `No host crossed the alert threshold (${threshold}).`
+          + (top?.ip && top.score !== null ? ` Highest current score: ${numeric(top.score).toFixed(2)} on ${top.ip}.` : "");
     return;
   }
-  const summary = data.alert_hosts || {};
-  const total = numeric(summary.total);
-  byId("overview-status-title").textContent = total
-    ? `${total} ${total === 1 ? "host is" : "hosts are"} generating alerts`
-    : `${compact(data.counts.alerts)} alerts in this run`;
+  byId("overview-status-title").textContent = "Alerts grouped by host";
+  byId("overview-status-description").textContent =
+    `${compact(summary.matching_total)} alerts across ${compact(summary.total)} `
+    + `${numeric(summary.total) === 1 ? "host" : "hosts"} · ${selectedFilters}`;
   (summary.items || []).slice(0, 4).forEach((host) => {
     const row = document.createElement("button");
     row.type = "button";
@@ -1530,8 +1555,36 @@ async function loadOverview() {
   applyOverviewEvidence(payload);
   state.overview = payload;
   initializeRanges(payload.run);
+  const alertPath = overviewAlertGroupsPath();
+  if (state.overviewAlertQuery !== alertPath) {
+    state.overviewAlertQuery = alertPath;
+    state.overviewAlertGroups = null;
+  }
   renderOverview();
-  await loadMetrics();
+  await Promise.allSettled([loadMetrics(), loadOverviewAlertGroups(alertPath)]);
+}
+
+/** Build a bounded host grouping with the Alerts pane's current filters. */
+function overviewAlertGroupsPath() {
+  const params = new URLSearchParams(listPath("alerts").split("?", 2)[1]);
+  params.set("group", "host");
+  params.set("limit", "4");
+  params.delete("cursor");
+  params.delete("summary");
+  return `/api/alerts?${params}`;
+}
+
+/** Refresh Overview's alert groups without changing the Alerts pane. */
+async function loadOverviewAlertGroups(path) {
+  try {
+    const payload = await api("overviewAlertGroups", path);
+    if (state.overviewAlertQuery !== path) return;
+    state.overviewAlertGroups = payload || { error: true };
+  } catch (_) {
+    if (state.overviewAlertQuery !== path) return;
+    state.overviewAlertGroups = { error: true };
+  }
+  if (state.overview) renderOverview();
 }
 
 /** Load exact retained evidence attribution only after a user asks for it. */
