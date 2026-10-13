@@ -16,7 +16,8 @@ the tab is in the background, and refreshes immediately when the tab becomes
 visible again. Browsers may delay background timers. It does not depend on the
 selected tab, search, or date filter. The Alerts and Evidence navigation
 badges show the records matching those tabs' selected range and filters after
-each tab loads; Overview keeps its run totals.
+each tab loads; the Hosts badge likewise shows the matching host count.
+Overview keeps its run totals.
 
 ## Reviewing and cleaning up detections
 

@@ -6,7 +6,7 @@ const state = {
   overview: null,
   overviewEvidence: null,
   overviewEvidenceLoading: false,
-  filteredBadgeCounts: { alerts: null, evidence: null },
+  filteredBadgeCounts: { alerts: null, evidence: null, hosts: null },
   metadata: null,
   metrics: [],
   configuration: null,
@@ -473,6 +473,7 @@ function applyRunIdentity(identity) {
     state.overviewEvidenceLoading = false;
     state.filteredBadgeCounts.alerts = null;
     state.filteredBadgeCounts.evidence = null;
+    state.filteredBadgeCounts.hosts = null;
     state.metadata = null;
     state.metrics = [];
     state.configuration = null;
@@ -1007,7 +1008,7 @@ function renderRunContext(data) {
   renderConnectionState(backendConnected);
   byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts ?? data.counts.alerts);
   byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence ?? data.counts.evidence);
-  byId("hosts-badge").textContent = compact(data.counts.hosts);
+  byId("hosts-badge").textContent = compact(state.filteredBadgeCounts.hosts ?? data.counts.hosts);
   byId("logs-badge").textContent = compact(data.counts.module_errors);
   byId("firewall-badge").textContent = (data.modules || []).some((module) => module.name === "blocking")
     ? compact(data.firewall?.current) : "off";
@@ -1630,8 +1631,9 @@ function applyPage(name, payload) {
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  if (payload.full_total !== undefined && !["alerts", "evidence"].includes(name)) {
-    byId(`${name}-badge`).textContent = compact(payload.full_total);
+  if (name === "hosts") {
+    state.filteredBadgeCounts.hosts = payload.total;
+    byId("hosts-badge").textContent = compact(payload.total);
   }
   byId(`${name}-count`).textContent = `${payload.page_size} shown · ${compact(payload.total)} match`;
   applySortIndicators(name);
