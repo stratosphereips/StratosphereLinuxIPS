@@ -4365,7 +4365,25 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert compact_result["items"][0]["threat_level"] == "high"
     assert compact_result["items"][0]["evidence_type"] == "SCAN"
     assert compact_result["items"][0]["summary"] == "Scan detected"
+    assert compact_result["items"][0]["evidence_types"] == [
+        {"type": "SCAN", "count": 1}
+    ]
     assert "evidence" not in compact_result["items"][0]
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            ("e2", 2.0, "10.0.0.1", "tw", "low", "UNKNOWN_PORT",
+             "Unknown port", 1.0, "{}"),
+        )
+        connection.execute("INSERT INTO alert_evidence VALUES (?, ?)",
+                           ("a1", "e2"))
+    mixed_result = reader.alerts(
+        {"range": ["all"], "search": ["a1"], "details": ["false"],
+         "summary": ["1"]}
+    )
+    assert mixed_result["items"][0]["evidence_types"] == [
+        {"type": "SCAN", "count": 1}, {"type": "UNKNOWN_PORT", "count": 1}
+    ]
 
 
 @pytest.mark.parametrize(
@@ -5305,7 +5323,7 @@ def test_p2p_trust_chart_uses_compact_range_control() -> None:
 
 
 def test_alerts_default_to_grouped_by_host() -> None:
-    """Open only the host pane before the user selects an alert."""
+    """Show host groups and a resizable empty pane before selection."""
     _module_factory = ModuleFactory()
     html_source = Path("modules/web_interface/index.html").read_text(
         encoding="utf-8"
@@ -5330,7 +5348,10 @@ def test_alerts_default_to_grouped_by_host() -> None:
     assert 'id="alerts-detail-divider"' in html_source
     assert 'params.set("group", "host")' in app_source
     assert "function initAlertPaneResize()" in app_source
-    assert "Grouped by host. Select a host" in html_source
+    assert "Alerts grouped by host. Select a host" in html_source
+    assert 'data-alert-group="individual"' in html_source
+    assert 'id="alerts-empty-pane"' in html_source
+    assert 'id="alerts-evidence-pane"' in html_source
 
 
 def test_header_shows_monitored_interface_addresses() -> None:

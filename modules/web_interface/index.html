@@ -79,12 +79,13 @@
 
     <section id="alerts" class="panel" aria-labelledby="alerts-title">
       <h2 id="alerts-title" class="visually-hidden">Alerts</h2>
-      <p id="alerts-description" class="visually-hidden">Grouped by host. Select a host, then an alert, its evidence, and triggering flows.</p>
+      <p id="alerts-description" class="visually-hidden">Alerts grouped by host. Select a host, then an alert, its evidence, and triggering flows.</p>
       <div id="alerts-workspace" class="alerts-workspace" data-panes="1">
         <div class="alerts-pane alerts-host-pane">
-          <div class="alerts-pane-head"><strong id="alerts-list-heading">Hosts with alerts</strong><span id="alerts-count" class="alerts-pane-count"></span></div>
+          <div class="alerts-pane-head"><strong id="alerts-list-heading">Alerts grouped by host</strong><span id="alerts-count" class="alerts-pane-count"></span></div>
           <div class="alerts-host-controls">
-            <label class="alerts-group-label">View <select id="alerts-group" aria-label="Alert grouping"><option value="host" selected>Group by host</option><option value="individual">Individual alerts</option></select></label>
+            <div class="alerts-group-options" role="group" aria-label="Alert grouping"><button class="active" type="button" data-alert-group="host" aria-pressed="true">Group by host</button><button type="button" data-alert-group="individual" aria-pressed="false">All alerts</button></div>
+            <select id="alerts-group" aria-label="Alert grouping" hidden><option value="host" selected>Group by host</option><option value="individual">Individual alerts</option></select>
             <input id="alerts-search" type="search" placeholder="Search host, ID, label…" aria-label="Search alert hosts">
             <label class="review-filter-label">Review <select id="alerts-review" aria-label="Alert review filter"><option value="open" selected>Open (active + in review)</option><option value="active">Active</option><option value="in_review">In review</option><option value="resolved">Resolved</option><option value="all">All alerts</option></select></label>
             <div id="alerts-severity-filters" class="alerts-severity-filters" role="group" aria-label="Filter alert hosts by severity"></div>
@@ -102,7 +103,8 @@
           <div id="alerts-host-list" class="alerts-host-list" aria-live="polite"></div>
           <div id="alerts-pager" class="alerts-host-pager"></div>
         </div>
-        <div id="alerts-host-divider" class="alerts-pane-divider" role="separator" aria-label="Resize hosts and alerts panes" aria-orientation="vertical" tabindex="0" hidden></div>
+        <div id="alerts-host-divider" class="alerts-pane-divider" role="separator" aria-label="Resize alert groups and details" aria-orientation="vertical" tabindex="0"></div>
+        <div id="alerts-empty-pane" class="alerts-pane alerts-empty-pane"><div class="alerts-empty-state"><strong>Select a host group or show all alerts</strong><p>Choose a host to see its alerts here. Use the divider to adjust the pane widths.</p></div></div>
         <div id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden>
           <div id="alerts-selected-host" class="alerts-selected-host"></div>
           <div class="alerts-sort-controls"><label>Sort alerts <select id="alerts-item-sort" aria-label="Sort alerts for selected host"><option value="time">Latest</option><option value="threat">Severity</option><option value="score">Score</option><option value="label">Label</option><option value="evidence">Evidence</option><option value="tw">Time window</option><option value="id">ID</option></select></label><button id="alerts-item-order" type="button" aria-label="Reverse alert order">↓</button></div>
@@ -113,6 +115,8 @@
         <div id="alerts-detail-pane" class="alerts-pane alerts-detail-pane" hidden>
           <div id="alerts-detail" class="alerts-detail"></div>
         </div>
+        <div id="alerts-evidence-divider" class="alerts-pane-divider" role="separator" aria-label="Resize alert and evidence details" aria-orientation="vertical" tabindex="0" hidden></div>
+        <div id="alerts-evidence-pane" class="alerts-pane alerts-evidence-pane" hidden></div>
       </div>
     </section>
 

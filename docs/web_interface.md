@@ -26,8 +26,8 @@ Active and In review alerts by default; its Review filter can show either
 state, Resolved, or all alerts. Resolved alerts and their evidence remain in
 the current run database after a Slips restart. Reopen a resolved alert by
 setting it Active. The Overview and live alert counts exclude resolved alerts.
-The Alerts **View** control switches between grouping by host and a pageable
-list of individual alerts. Search, severity, time, visibility, review, and
+The Alerts view has visible **Group by host** and **All alerts** choices. The
+second choice shows a pageable list of individual alerts. Search, severity, time, visibility, review, and
 sorting filters apply in both views. Selecting an individual alert opens its
 existing evidence and review details beside the list.
 
@@ -332,7 +332,7 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 ### Alerts
 
-Alerts opens with only the **Hosts with alerts** pane. Choose a host to open its individual alert timeline in a second pane, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record in a third pane. Evidence cards open the existing investigation drawer for triggering flows. The two dividers can be dragged or adjusted with the left and right arrow keys. Closing an alert returns to two panes; closing the host returns to the initial pane.
+Alerts opens with an **Alerts grouped by host** pane and an empty selection pane. The first divider is resizable immediately. Choose a host to open its **Alerts for this host** timeline, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record. Alert rows summarize all linked evidence types and their counts. Selecting an evidence card opens its investigation in a resizable fourth pane beside the alert. **All alerts** shows the individual alert list directly and opens alert and evidence details beside it. Dividers can be dragged or adjusted with the left and right arrow keys. Closing evidence returns to the same alert; closing an alert returns to its list.
 
 The third pane has **Back to alerts** and a close button. Both return to the
 selected host's alert timeline at the same scroll position. If an alert is
@@ -362,9 +362,9 @@ alert timeline before paging.
 
 ### Evidence
 
-The Evidence tab keeps the group or record table on the left and a group summary and full-height record list beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence opened from an alert or host keeps its existing full investigation view.
+The Evidence tab keeps the group or record table on the left and a group summary and full-height record list beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence selected inside Alerts opens in the fourth Alerts pane; evidence opened from a host retains the full investigation view.
 
-The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. A field list includes all stored values and can reveal empty fields; the original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
+The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. Additional stored values appear in a compact table, omitting fields already shown above; empty fields can be revealed and the complete original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
 
 The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
 
@@ -555,7 +555,7 @@ never replaced with scores calculated by the web interface.
 
 ### Alerts and evidence
 
-Alerts come from durable SQLite. The default table shows individual alerts, bounded to 100 rows per page. Each row shows the exact Slips score at threshold crossing and the configured threshold. **Group by host** is an optional display mode that shows alert count, evidence-link count, latest alert time, highest threat, peak threshold-crossing score, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence.
+Alerts come from durable SQLite. The default view groups alerts by host. **All alerts** shows individual alerts, bounded to 100 rows per page. Each row shows the exact Slips score at threshold crossing and the configured threshold. Grouping by host shows alert count, evidence-link count, latest alert time, highest threat, peak threshold-crossing score, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence and the counts of every linked detection type.
 
 Alert and Evidence rows show the saved network name where the detection occurred. For live interface capture, the web interface uses the monitored interface's recorded network state at the detection time, including recent network changes. This identifies local detections between host sightings and IPv6 link-local traffic on the captured interface. For older detections, it matches the host and timestamp against permanent host-profile observations, so an address reused on separate networks is attributed to the right network. Detections without a matching network record are labeled **Unknown network (not recorded)**; grouped records that span known network changes show **Multiple networks**.
 

@@ -3615,6 +3615,34 @@ class RunDataReader:
                     )
                 alert.update(self._ip_context_for_ip(str(alert["ip_alerted"])))
                 items.append(alert)
+            if include_summary and items:
+                alert_ids = [str(item["alert_id"]) for item in items]
+                placeholders = ",".join("?" for _ in alert_ids)
+                types_by_alert: Dict[str, List[Dict[str, Any]]] = defaultdict(
+                    list
+                )
+                for type_row in connection.execute(
+                    "SELECT ae.alert_id, COALESCE(e.evidence_type, '') "
+                    "AS evidence_type, COUNT(*) AS type_count "
+                    "FROM alert_evidence ae JOIN evidence e "
+                    "ON e.evidence_id = ae.evidence_id "
+                    f"WHERE ae.alert_id IN ({placeholders}) "
+                    "GROUP BY ae.alert_id, e.evidence_type "
+                    "ORDER BY type_count DESC, evidence_type",
+                    alert_ids,
+                ):
+                    types_by_alert[str(type_row["alert_id"])].append(
+                        {
+                            "type": str(
+                                type_row["evidence_type"] or "UNKNOWN"
+                            ),
+                            "count": int(type_row["type_count"]),
+                        }
+                    )
+                for alert in items:
+                    alert["evidence_types"] = types_by_alert[
+                        str(alert["alert_id"])
+                    ]
             self._annotate_detection_networks(
                 items, "ip_alerted", "alert_time"
             )

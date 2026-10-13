@@ -56,7 +56,7 @@ const state = {
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
-  evidenceDetail: { record: null, records: [], generation: 0, history: [] },
+  evidenceDetail: { record: null, records: [], generation: 0, history: [], inAlertPane: false },
   runIdentity: null,
   reviewAvailable: false,
   rangesInitialized: false,
@@ -1702,20 +1702,37 @@ function updateAlertViewportHeight() {
   byId("alerts").style.setProperty("--alerts-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
-/** Reveal only the panes reached by the current host and alert selection. */
+/** Reveal the alert panes reached by the current selection. */
 function setAlertPaneCount(count) {
   const workspace = byId("alerts-workspace");
   const individual = state.alertsWorkspace.grouping === "individual";
   workspace.classList.toggle("individual", individual);
-  if (Number(workspace.dataset.panes) !== count) {
-    workspace.style.setProperty("--alerts-host-width", count === 2 ? "38%" : "26%");
-    workspace.style.setProperty("--alerts-list-width", "26%");
-  }
   workspace.dataset.panes = String(count);
-  byId("alerts-host-divider").hidden = count < 2;
+  byId("alerts-host-divider").hidden = false;
+  byId("alerts-empty-pane").hidden = count !== 1;
   byId("alerts-list-pane").hidden = individual || count < 2;
   byId("alerts-detail-divider").hidden = individual || count < 3;
   byId("alerts-detail-pane").hidden = individual ? count < 2 : count < 3;
+  const evidenceVisible = individual ? count >= 3 : count >= 4;
+  byId("alerts-evidence-divider").hidden = !evidenceVisible;
+  byId("alerts-evidence-pane").hidden = !evidenceVisible;
+  if (!individual && count === 4) {
+    const total = workspace.getBoundingClientRect().width;
+    /** Convert a saved pane width to pixels, falling back to its default. */
+    const savedWidth = (name, fallback) => {
+      const value = workspace.style.getPropertyValue(name);
+      return value.endsWith("%") ? total * parseFloat(value) / 100
+        : parseFloat(value) || fallback;
+    };
+    const host = Math.max(210, Math.min(savedWidth("--alerts-host-width", total * .18), total - 914));
+    const list = Math.max(210, Math.min(savedWidth("--alerts-list-width", total * .18), total - host - 704));
+    const detail = Math.max(260, Math.min(savedWidth("--alerts-detail-width", total * .22), total - host - list - 444));
+    workspace.style.setProperty("--alerts-host-width", `${Math.round(host)}px`);
+    workspace.style.setProperty("--alerts-list-width", `${Math.round(list)}px`);
+    workspace.style.setProperty("--alerts-detail-width", `${Math.round(detail)}px`);
+  } else if (workspace.style.getPropertyValue("--alerts-host-width")) {
+    resizeAlertPane("host", document.querySelector(".alerts-host-pane").getBoundingClientRect().width);
+  }
 }
 
 /** Render exact and inclusive severity filters for alert hosts. */
@@ -1747,6 +1764,42 @@ function renderAlertSeverityFilters() {
     });
 }
 
+/** Count the detection types linked to an alert without choosing one as its summary. */
+function alertEvidenceTypes(record) {
+  if (Array.isArray(record.evidence_types)) return record.evidence_types;
+  const counts = new Map();
+  (record.evidence || []).forEach((item) => {
+    const type = item.evidence_type || "UNKNOWN";
+    counts.set(type, (counts.get(type) || 0) + 1);
+  });
+  return [...counts].map(([type, count]) => ({ type, count }))
+    .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type));
+}
+
+/** Give a detector type a readable name in alert summaries. */
+function alertTypeName(type) {
+  const names = {
+    CONNECTION_TO_PRIVATE_IP: "Private IP connection",
+    UNKNOWN_PORT: "Unknown port",
+    VERTICAL_PORT_SCAN: "Vertical port scan",
+    HORIZONTAL_PORT_SCAN: "Horizontal port scan",
+    HTTP_TRAFFIC: "HTTP traffic",
+    ARP_SCAN: "ARP scan",
+    P2P_REPORT: "P2P report",
+  };
+  return names[type] || String(type || "Unknown detection").replaceAll("_", " ").toLowerCase()
+    .replace(/^./, (first) => first.toUpperCase());
+}
+
+/** Summarize every linked detection type in one alert-list row. */
+function alertComposition(record) {
+  const types = alertEvidenceTypes(record);
+  if (!types.length) return record.summary || record.evidence_type || record.label || "Alert";
+  const leading = types.slice(0, 3).map(({ type, count }) =>
+    `${alertTypeName(type)} (${compact(count)})`).join(" · ");
+  return types.length > 3 ? `${leading} · +${types.length - 3} more types` : leading;
+}
+
 /** Render the grouped host list without opening another overlay. */
 function renderAlertHostList() {
   const container = byId("alerts-host-list");
@@ -1758,7 +1811,7 @@ function renderAlertHostList() {
   if (!rows.length) {
     const label = byId("alerts-range").selectedOptions[0]?.textContent || "this range";
     const searched = byId("alerts-search").value.trim();
-    const noun = state.alertsWorkspace.grouping === "host" ? "alert hosts" : "alerts";
+    const noun = state.alertsWorkspace.grouping === "host" ? "host groups" : "alerts";
     container.append(text("p", searched || level
       ? `No ${noun} match these filters.`
       : `No alerts in ${label}.`, "empty-state"));
@@ -1784,8 +1837,10 @@ function renderAlertHostList() {
       top.className = "alerts-alert-row-top";
       top.append(text("span", formatTime(record.alert_time)),
         text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
+      const summary = alertComposition(record);
+      row.title = summary;
       row.append(top, hostIdentity(record.ip_alerted),
-        text("span", record.summary || record.evidence_type || record.label || "Alert", "alerts-alert-row-title"),
+        text("span", summary, "alerts-alert-row-title"),
         text("span", `${compact(record.evidence_count)} evidence · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
       row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
       container.append(row);
@@ -1815,6 +1870,7 @@ function renderAlertHostList() {
 function selectAlertHostPane(host) {
   const workspace = state.alertsWorkspace;
   const changed = workspace.host?.ip_alerted !== host.ip_alerted;
+  if (changed && state.evidenceDetail.inAlertPane) closeEvidenceDetail(false, true);
   workspace.host = host;
   if (changed) {
     workspace.alert = null;
@@ -1824,7 +1880,7 @@ function selectAlertHostPane(host) {
     byId("alerts-detail").replaceChildren();
     byId("alerts-list").scrollTop = 0;
   }
-  setAlertPaneCount(workspace.alert ? 3 : 2);
+  setAlertPaneCount(workspace.alert ? state.evidenceDetail.inAlertPane ? 4 : 3 : 2);
   renderAlertHostList();
   renderAlertSelectedHost();
   if (changed || !workspace.items.length) loadAlertHostAlerts(true).catch(() => {});
@@ -1833,6 +1889,7 @@ function selectAlertHostPane(host) {
 /** Close the selected host and return to the first pane. */
 function closeAlertHostPane() {
   const workspace = state.alertsWorkspace;
+  if (state.evidenceDetail.inAlertPane) closeEvidenceDetail(false, true);
   workspace.host = null;
   workspace.alert = null;
   workspace.items = [];
@@ -1854,7 +1911,8 @@ function renderAlertSelectedHost() {
   close.title = "Close this host";
   close.setAttribute("aria-label", "Close host alerts pane");
   close.addEventListener("click", closeAlertHostPane);
-  container.append(close, text("strong", host.ip_alerted));
+  container.append(close, text("h3", "Alerts for this host", "alerts-selected-title"),
+    text("strong", host.ip_alerted));
   container.append(hostIdentity(host.ip_alerted));
   const meta = document.createElement("div");
   meta.className = "alerts-selected-meta";
@@ -1916,10 +1974,10 @@ function renderAlertTimeline() {
     top.className = "alerts-alert-row-top";
     top.append(text("span", formatTime(record.alert_time)),
       text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
-    const title = record.summary || record.evidence_type?.replaceAll("_", " ")
-      || record.label || "Alert";
+    const title = alertComposition(record);
+    row.title = title;
     row.append(top, text("span", title, "alerts-alert-row-title"),
-      text("span", `${compact(record.evidence_count)} evidence · ${record.evidence_type || record.label || "Alert"} · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
+      text("span", `${compact(record.evidence_count)} evidence · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
     row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
     container.append(row);
   });
@@ -1937,6 +1995,7 @@ function renderAlertTimeline() {
 /** Return from the selected alert to its host's list without losing position. */
 function closeAlertDetailPane() {
   const workspace = state.alertsWorkspace;
+  if (state.evidenceDetail.inAlertPane) closeEvidenceDetail(false, true);
   const alertId = workspace.alert?.alert_id;
   workspace.alert = null;
   workspace.detailGeneration += 1;
@@ -1974,10 +2033,24 @@ function renderAlertDetailPane(record) {
   close.addEventListener("click", closeAlertDetailPane);
   actions.append(back, whitelist, close);
   header.append(context, actions);
-  const title = record.summary?.split(". ")[0].slice(0, 110)
-    || firstEvidence.evidence_type?.replaceAll("_", " ") || "Alert details";
+  const types = alertEvidenceTypes(record);
+  const count = numeric(record.evidence_count || record.evidence?.length);
+  const title = types.length > 1
+    ? `${compact(count)} evidence records across ${types.length} detection types`
+    : types.length === 1
+      ? `${alertTypeName(types[0].type)} · ${compact(count)} evidence record${count === 1 ? "" : "s"}`
+      : "Alert details";
   container.append(header, text("h3", title));
-  if (firstEvidence.description) container.append(text("p", firstEvidence.description, "alerts-detail-summary"));
+  if (types.length) {
+    const composition = document.createElement("div");
+    composition.className = "alerts-type-summary";
+    types.forEach(({ type, count: typeCount }) => composition.append(
+      text("span", `${alertTypeName(type)} · ${compact(typeCount)}`)));
+    container.append(composition);
+  }
+  if (types.length <= 1 && firstEvidence.description) {
+    container.append(text("p", firstEvidence.description, "alerts-detail-summary"));
+  }
   container.append(investigationStats([
     ["Score / threshold", slipsScore(record), "danger"],
     ["Network", networkContext(record)],
@@ -1995,7 +2068,7 @@ function renderAlertDetailPane(record) {
   container.append(reviewEditor("alert", record));
   const evidence = document.createElement("div");
   evidence.className = "investigation-list";
-  (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item, record.evidence)));
+  (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item, record.evidence, true)));
   if (!record.evidence?.length) evidence.append(text("p", "No related evidence is available.", "muted"));
   container.append(evidence, investigationHeading("Identifiers"),
     text("p", record.alert_id, "mono"), rawBlock(record, "alert"));
@@ -2004,9 +2077,14 @@ function renderAlertDetailPane(record) {
 /** Open one alert in the right pane and load its linked evidence. */
 async function selectAlertDetailPane(record) {
   const workspace = state.alertsWorkspace;
+  if (workspace.alert?.alert_id !== record.alert_id && state.evidenceDetail.inAlertPane) {
+    closeEvidenceDetail(false, true);
+  }
   workspace.alert = record;
   const generation = ++workspace.detailGeneration;
-  setAlertPaneCount(workspace.grouping === "individual" ? 2 : 3);
+  setAlertPaneCount(workspace.grouping === "individual"
+    ? state.evidenceDetail.inAlertPane ? 3 : 2
+    : state.evidenceDetail.inAlertPane ? 4 : 3);
   document.querySelectorAll("#alerts-list .alerts-alert-row, #alerts-host-list .alerts-alert-row").forEach((row) => {
     row.classList.toggle("selected", row.dataset.alertId === record.alert_id);
   });
@@ -2025,7 +2103,8 @@ async function selectAlertDetailPane(record) {
       text("p", "This alert is no longer available.", "empty-state"));
     return;
   }
-  workspace.alert = { ...detailed, summary: record.summary };
+  workspace.alert = { ...detailed, summary: record.summary,
+    evidence_types: record.evidence_types };
   renderAlertDetailPane(workspace.alert);
 }
 
@@ -2035,21 +2114,34 @@ function resizeAlertPane(kind, desiredWidth) {
   const total = workspace.getBoundingClientRect().width;
   const host = document.querySelector(".alerts-host-pane").getBoundingClientRect().width;
   const middle = byId("alerts-list-pane").getBoundingClientRect().width;
+  const detail = byId("alerts-detail-pane").getBoundingClientRect().width;
   const panes = Number(workspace.dataset.panes);
+  const individual = workspace.classList.contains("individual");
   if (kind === "host") {
-    const remaining = panes === 3 ? middle + 320 + 16 : 240 + 8;
-    const width = Math.max(240, Math.min(desiredWidth, total - remaining));
+    const remaining = individual
+      ? panes === 3 ? detail + 420 + 16 : 320 + 8
+      : panes === 4 ? middle + detail + 420 + 24
+        : panes === 3 ? middle + 320 + 16 : 240 + 8;
+    const width = Math.max(panes === 4 ? 210 : 240,
+      Math.min(desiredWidth, total - remaining));
     workspace.style.setProperty("--alerts-host-width", `${Math.round(width)}px`);
-  } else if (panes === 3) {
-    const width = Math.max(240, Math.min(desiredWidth, total - host - 320 - 16));
+  } else if (kind === "detail" && !individual && panes >= 3) {
+    const remaining = panes === 4 ? detail + 420 + 24 : 320 + 16;
+    const width = Math.max(panes === 4 ? 210 : 240,
+      Math.min(desiredWidth, total - host - remaining));
     workspace.style.setProperty("--alerts-list-width", `${Math.round(width)}px`);
+  } else if (kind === "evidence" && (panes === 4 || individual && panes === 3)) {
+    const left = individual ? host + 16 : host + middle + 24;
+    const width = Math.max(260, Math.min(desiredWidth, total - left - 420));
+    workspace.style.setProperty("--alerts-detail-width", `${Math.round(width)}px`);
   }
 }
 
 /** Enable pointer and keyboard resizing between visible Alerts panes. */
 function initAlertPaneResize() {
   [["alerts-host-divider", "host", ".alerts-host-pane"],
-    ["alerts-detail-divider", "detail", "#alerts-list-pane"]]
+    ["alerts-detail-divider", "detail", "#alerts-list-pane"],
+    ["alerts-evidence-divider", "evidence", "#alerts-detail-pane"]]
     .forEach(([id, kind, paneSelector]) => {
       const divider = byId(id);
       divider.addEventListener("pointerdown", (event) => {
@@ -4260,9 +4352,10 @@ function alertCard(record) {
 /** Create one accessible card for an individual evidence record.
  * @param {object} record Durable evidence record.
  * @param {object[]|null} contextRecords Records for previous/next navigation.
+ * @param {boolean} inAlertPane Whether selection opens beside its parent alert.
  * @returns {HTMLElement} Evidence card.
  */
-function evidenceCard(record, contextRecords = null) {
+function evidenceCard(record, contextRecords = null, inAlertPane = false) {
   const button = document.createElement("button");
   const level = String(record.threat_level || "info").toLowerCase();
   button.type = "button";
@@ -4283,7 +4376,7 @@ function evidenceCard(record, contextRecords = null) {
     text("span", record.module ? `Module: ${record.module}` : "Module unknown"),
   );
   button.append(metadata);
-  button.addEventListener("click", () => openEvidence(record, contextRecords).catch(() => {}));
+  button.addEventListener("click", () => openEvidence(record, contextRecords, inAlertPane).catch(() => {}));
   return button;
 }
 
@@ -4484,42 +4577,54 @@ function protocolFlowCard(record) {
   return card;
 }
 
-/** Show every stored field of a flow, with empty fields available on demand.
+/** Show nonduplicate stored fields in a compact table, with empty fields on demand.
  * @param {object} flow Parsed Zeek flow fields.
- * @returns {HTMLElement} Key/value list and empty-field toggle.
+ * @param {string[]} displayedFields Fields already shown in the flow summary.
+ * @returns {HTMLElement} Additional field table and empty-field toggle.
  */
-function flowFieldList(flow) {
+function flowFieldList(flow, displayedFields = []) {
   const container = document.createElement("div");
   container.className = "evidence-flow-fields";
-  const rows = document.createElement("div");
-  let emptyCount = 0;
-  Object.entries(flow || {}).forEach(([key, value]) => {
-    const empty = value === "" || value === null || value === undefined
-      || (Array.isArray(value) && value.length === 0);
-    const row = document.createElement("div");
-    row.className = "evidence-flow-field";
-    row.hidden = empty;
-    if (empty) emptyCount += 1;
-    row.append(text("code", key), text("span", empty ? "—" : protocolValueText(key, value)));
-    rows.append(row);
-  });
+  const omitted = new Set(displayedFields);
+  const fields = Object.entries(flow || {}).filter(([key]) => !omitted.has(key));
+  if (!fields.length) return container;
+  const empty = ([, value]) => value === "" || value === null || value === undefined
+    || (Array.isArray(value) && value.length === 0);
+  const populated = fields.filter((item) => !empty(item));
+  const emptyFields = fields.filter(empty);
+  const heading = text("h5", "Additional fields", "evidence-flow-fields-title");
+  const table = document.createElement("table");
+  table.className = "evidence-flow-table";
+  const tbody = document.createElement("tbody");
+  const appendRows = (items, hidden) => {
+    for (let index = 0; index < items.length; index += 2) {
+      const row = document.createElement("tr");
+      row.hidden = hidden;
+      if (hidden) row.dataset.empty = "true";
+      items.slice(index, index + 2).forEach(([key, value]) => {
+        const label = text("th", key.replaceAll("_", " "));
+        label.scope = "row";
+        row.append(label, text("td", hidden ? "—" : protocolValueText(key, value)));
+      });
+      tbody.append(row);
+    }
+  };
+  appendRows(populated, false);
+  appendRows(emptyFields, true);
+  table.append(tbody);
+  container.append(heading, table);
+  const emptyCount = emptyFields.length;
   if (emptyCount) {
     const toggle = text("button", `Show ${emptyCount} empty fields`, "evidence-flow-empty-toggle");
     toggle.type = "button";
     let showing = false;
     toggle.addEventListener("click", () => {
       showing = !showing;
-      rows.querySelectorAll(".evidence-flow-field").forEach((row) => {
-        if (row.dataset.empty === "true") row.hidden = !showing;
-      });
+      tbody.querySelectorAll('[data-empty="true"]').forEach((row) => { row.hidden = !showing; });
       toggle.textContent = `${showing ? "Hide" : "Show"} ${emptyCount} empty fields`;
-    });
-    rows.querySelectorAll(".evidence-flow-field[hidden]").forEach((row) => {
-      row.dataset.empty = "true";
     });
     container.append(toggle);
   }
-  container.append(rows);
   return container;
 }
 
@@ -4611,13 +4716,20 @@ function flowCard(group, position = 1, total = 1) {
   const entries = [];
   if (record) {
     const connection = document.createElement("div");
-    connection.append(metrics, flowFieldList(flow), rawBlock(record, "flow"));
+    const displayed = ["uid", "starttime", "ts", "endtime", "saddr", "src_ip", "id.orig_h",
+      "daddr", "dst_ip", "id.resp_h", "sport", "src_port", "id.orig_p", "dport",
+      "dst_port", "id.resp_p", "proto", "protocol", "appproto", "app_proto", "service",
+      "state", "conn_state", "pkts", "packets", "spkts", "dpkts", "bytes", "sbytes",
+      "dbytes", "dur", "duration", "label", "interface"];
+    connection.append(metrics, flowFieldList(flow, displayed), rawBlock(record, "flow"));
     entries.push(["conn · flow", connection]);
   }
   related.forEach((protocol, index) => {
     const type = protocolType(protocol);
     const panel = document.createElement("div");
-    panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol));
+    const displayed = ["uid", "starttime", "ts", "type", "type_",
+      ...(PROTOCOL_FIELDS[type] || []).flatMap(([, names]) => names)];
+    panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol, displayed));
     entries.push([`${type} · ${index + 1}`, panel]);
   });
   entries.forEach(([label, panel], index) => {
@@ -4678,6 +4790,13 @@ function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
     highlightEvidenceSelection();
     renderEvidenceGroup();
   }
+  if (state.evidenceDetail.inAlertPane) {
+    document.querySelector("main").append(byId("evidence-detail"));
+    state.evidenceDetail.inAlertPane = false;
+    setAlertPaneCount(state.alertsWorkspace.grouping === "individual" ?
+      state.alertsWorkspace.alert ? 2 : 1 :
+      state.alertsWorkspace.alert ? 3 : state.alertsWorkspace.host ? 2 : 1);
+  }
   byId("drawer").classList.remove("alert-over-evidence");
   byId("drawer-backdrop").classList.remove("alert-over-evidence");
   document.body.classList.remove("evidence-detail-active");
@@ -4712,12 +4831,13 @@ function evidenceDetailHeadline(record, groups = []) {
     .split(/\.(?:\s|$)/)[0].slice(0, 180);
 }
 
-/** Open an evidence record in the full-width investigation page.
+/** Open an evidence record in its investigation pane or full-width page.
  * @param {object} record Durable evidence record.
  * @param {object[]|null} contextRecords Ordered records for previous/next navigation.
+ * @param {boolean} inAlertPane Whether to keep the parent alert beside the evidence.
  * @returns {Promise<void>} Completes after the triggering flows load.
  */
-async function openEvidence(record, contextRecords = null) {
+async function openEvidence(record, contextRecords = null, inAlertPane = false) {
   const detail = state.evidenceDetail;
   const drawer = byId("drawer");
   const cameFromDrawer = drawer.classList.contains("open");
@@ -4753,7 +4873,7 @@ async function openEvidence(record, contextRecords = null) {
   const position = context.findIndex((item) => item.id === record.id);
   const page = byId("evidence-detail");
   const content = byId("evidence-detail-content");
-  const inPane = state.activeTab === "evidence" && (detail.inPane || !cameFromDrawer);
+  const inPane = !inAlertPane && state.activeTab === "evidence" && (detail.inPane || !cameFromDrawer);
   if (inPane) {
     const workspace = byId("evidence-workspace");
     if (!workspace.classList.contains("has-detail")) {
@@ -4765,19 +4885,24 @@ async function openEvidence(record, contextRecords = null) {
     byId("evidence-detail-divider").hidden = false;
     workspace.append(page);
   }
+  if (inAlertPane) {
+    setAlertPaneCount(state.alertsWorkspace.grouping === "individual" ? 3 : 4);
+    byId("alerts-evidence-pane").append(page);
+  }
   detail.inPane = inPane;
+  detail.inAlertPane = inAlertPane;
   page.hidden = false;
   page.classList.add("active");
-  document.body.classList.toggle("evidence-detail-active", !inPane);
+  document.body.classList.toggle("evidence-detail-active", !inPane && !inAlertPane);
   content.replaceChildren();
-  if (inPane) page.scrollTop = 0;
+  if (inPane || inAlertPane) page.scrollTop = 0;
   else window.scrollTo(0, 0);
 
   const toolbar = document.createElement("div");
   toolbar.className = "evidence-detail-toolbar";
   const breadcrumb = document.createElement("div");
   breadcrumb.className = "evidence-detail-breadcrumb";
-  const back = text("button", cameFromDrawer ? "← Back to alert" : inPane ? "← Close record" : "← Back to evidence", "evidence-detail-link");
+  const back = text("button", inAlertPane || cameFromDrawer ? "← Back to alert" : inPane ? "← Close record" : "← Back to evidence", "evidence-detail-link");
   back.type = "button";
   back.addEventListener("click", closeEvidenceDetail);
   breadcrumb.append(back, text("span", "›"),
@@ -4791,7 +4916,7 @@ async function openEvidence(record, contextRecords = null) {
       const button = text("button", label, "secondary");
       button.type = "button";
       button.disabled = index < 0 || index >= context.length;
-      button.addEventListener("click", () => openEvidence(context[index], context).catch(() => {}));
+      button.addEventListener("click", () => openEvidence(context[index], context, inAlertPane).catch(() => {}));
       controls.append(button);
     });
   }
@@ -6128,10 +6253,22 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
 bindFilters("alerts", ["alerts-search"], loadAlerts);
 byId("alerts-host-sort").querySelectorAll('[data-alert-mode="individual"]')
   .forEach((option) => { option.disabled = true; });
+document.querySelectorAll("[data-alert-group]").forEach((button) => {
+  button.addEventListener("click", () => {
+    if (byId("alerts-group").value === button.dataset.alertGroup) return;
+    byId("alerts-group").value = button.dataset.alertGroup;
+    byId("alerts-group").dispatchEvent(new Event("change"));
+  });
+});
 byId("alerts-group").addEventListener("change", () => {
   const workspace = state.alertsWorkspace;
   workspace.grouping = byId("alerts-group").value;
   closeAlertHostPane();
+  document.querySelectorAll("[data-alert-group]").forEach((button) => {
+    const selected = button.dataset.alertGroup === workspace.grouping;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
   const sort = byId("alerts-host-sort");
   sort.querySelectorAll("[data-alert-mode]").forEach((option) => {
     option.disabled = option.dataset.alertMode !== workspace.grouping;
@@ -6142,9 +6279,9 @@ byId("alerts-group").addEventListener("change", () => {
     state.pages.alerts.order = "desc";
     byId("alerts-host-order").textContent = "↓";
   }
-  byId("alerts-list-heading").textContent = workspace.grouping === "host" ? "Hosts with alerts" : "Individual alerts";
+  byId("alerts-list-heading").textContent = workspace.grouping === "host" ? "Alerts grouped by host" : "All alerts";
   byId("alerts-description").textContent = workspace.grouping === "host"
-    ? "Grouped by host. Select a host, then an alert, its evidence, and triggering flows."
+    ? "Alerts grouped by host. Select a host, then an alert, its evidence, and triggering flows."
     : "Individual alerts. Select an alert to inspect its evidence and triggering flows.";
   byId("alerts-host-sort").previousSibling.textContent = workspace.grouping === "host" ? "Sort hosts " : "Sort alerts ";
   resetPage("alerts");
