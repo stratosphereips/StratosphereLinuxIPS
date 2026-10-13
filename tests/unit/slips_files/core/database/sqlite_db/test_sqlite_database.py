@@ -44,6 +44,33 @@ def test_sqlite_lockfile_is_world_writable(tmp_path):
     assert oct(os.stat(db.lockfile_path).st_mode & 0o777) == "0o666"
 
 
+def test_review_schema_migrates_existing_alert_reviews(tmp_path):
+    """Opening an existing run adds the alert verdict before Slips starts."""
+    _module_factory = ModuleFactory()
+    database = SQLiteDB(MagicMock(), str(tmp_path), 12345)
+    path = database.get_db_path()
+    assert "verdict" in database.get_columns("alert_reviews")
+    database.close()
+
+    with sqlite3.connect(path) as connection:
+        connection.execute("DROP TABLE alert_reviews")
+        connection.execute(
+            "CREATE TABLE alert_reviews (alert_id TEXT PRIMARY KEY, "
+            "status TEXT NOT NULL, note TEXT NOT NULL, updated_at REAL NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO alert_reviews VALUES ('old-alert', 'resolved', 'checked', 1)"
+        )
+
+    migrated = SQLiteDB(MagicMock(), str(tmp_path), 12345)
+    assert "verdict" in migrated.get_columns("alert_reviews")
+    assert migrated.conn.execute(
+        "SELECT status, note, verdict FROM alert_reviews "
+        "WHERE alert_id = 'old-alert'"
+    ).fetchone() == ("resolved", "checked", "")
+    migrated.close()
+
+
 def test_get_flow_uses_parameterized_query(db):
     flow = Conn(
         starttime="1.0",

@@ -34,6 +34,8 @@ class SQLiteDB(ISQLite):
             "evidence",
             "evidence_flows",
             "alert_evidence",
+            "alert_reviews",
+            "evidence_reviews",
         }
     )
 
