@@ -1,4 +1,4 @@
-"""Merge rules (incl. byzantine block-by-block) and class-balance policy.
+"""Merge rules (incl. mean-with-closest and proximity) and class-balance policy.
 
 Merge functions are pure and tested on bare tensors. Undersampling is tested
 on a bare module instance (only the state the helper touches)."""
@@ -26,7 +26,8 @@ def test_registry_has_all_rules():
         "average",
         "trust_weighted",
         "blending",
-        "byzantine",
+        "mean_with_closest",
+        "proximity",
     }
 
 
@@ -37,34 +38,66 @@ def test_average_is_mean_of_own_and_peers():
     assert torch.allclose(out["w"], _t(2.0, 2.0))  # mean(0,2,4)
 
 
-def test_byzantine_picks_closest_layer_to_mean_per_key():
-    """Block-by-block: each key independently keeps the single candidate layer
-    closest (L2) to that key's mean, so different keys can come from different
-    peers (and a far outlier is rejected)."""
+# --- mean_with_closest (self-referenced; renamed from "byzantine") -----------
+def test_mean_with_closest_averages_own_with_closest_peer_per_key():
+    """Block by block, referenced to OWN: average own with the single peer whose
+    layer is closest (L2) to own; different keys can pick different peers."""
     own = {"w1": _t(0.0, 0.0), "w2": _t(0.0, 0.0)}
     peers = {
-        "a": {"w1": _t(10.0, 10.0), "w2": _t(10.0, 10.0)},
-        "b": {"w1": _t(11.0, 11.0), "w2": _t(0.5, 0.5)},
+        "a": {"w1": _t(1.0, 1.0), "w2": _t(10.0, 10.0)},
+        "b": {"w1": _t(9.0, 9.0), "w2": _t(2.0, 2.0)},
     }
-    out = fnm.merge_byzantine(own, peers, ["w1", "w2"])
-    # w1 mean=[7,7] -> closest is a's [10,10] (own=9.9, a=4.24, b=5.66)
-    assert torch.allclose(out["w1"], _t(10.0, 10.0))
-    # w2 mean=[3.5,3.5] -> closest is b's [0.5,0.5] (own=4.95, a=9.19, b=4.24)
-    assert torch.allclose(out["w2"], _t(0.5, 0.5))
+    out = fnm.merge_mean_with_closest(own, peers, ["w1", "w2"])
+    # w1: closest to own is a[1,1] -> mean(own,a)=[0.5,0.5]
+    assert torch.allclose(out["w1"], _t(0.5, 0.5))
+    # w2: closest to own is b[2,2] -> mean(own,b)=[1,1]
+    assert torch.allclose(out["w2"], _t(1.0, 1.0))
 
 
-def test_byzantine_rejects_a_far_outlier_layer():
-    own = {"w": _t(1.0, 1.0)}
-    peers = {"a": {"w": _t(1.2, 0.8)}, "b": {"w": _t(500.0, 500.0)}}
-    out = fnm.merge_byzantine(own, peers, ["w"])
-    # the huge outlier is never selected (own or a, both near [1,1])
-    assert not torch.allclose(out["w"], _t(500.0, 500.0))
+def test_mean_with_closest_one_peer_is_plain_average():
+    own = {"w": _t(0.0, 0.0)}
+    peers = {"a": {"w": _t(4.0, 4.0)}}
+    out = fnm.merge_mean_with_closest(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(2.0, 2.0))  # 50/50 of own + only peer
 
 
-def test_byzantine_with_no_peers_returns_own():
+def test_mean_with_closest_with_no_peers_returns_own():
     own = {"w": _t(3.0, 3.0)}
-    out = fnm.merge_byzantine(own, {}, ["w"])
+    out = fnm.merge_mean_with_closest(own, {}, ["w"])
     assert torch.allclose(out["w"], _t(3.0, 3.0))
+
+
+# --- proximity (Gaussian kernel on distance-to-own, median-heuristic sigma) --
+def test_proximity_two_candidate_weighted_blend():
+    """2 candidates: pairwise dist=2 -> sigma(median)=2; w_own=exp(0)=1,
+    w_a=exp(-4/8)=0.6065; blend=(1*0 + 0.6065*2)/1.6065 = 0.7551."""
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(2.0)}}
+    out = fnm.merge_proximity(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(0.7551), atol=1e-3)
+
+
+def test_proximity_nearer_peer_weighs_more():
+    """sigma=median{1,3,2}=2; w_own=1, w_a=exp(-1/8)=.8825, w_b=exp(-9/8)=.3247;
+    blend=(.8825*1 + .3247*3)/(1+.8825+.3247)=0.841 -> nearer peer dominates.
+    """
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(1.0)}, "b": {"w": _t(3.0)}}
+    out = fnm.merge_proximity(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(0.8412), atol=1e-3)
+
+
+def test_proximity_identical_candidates_is_plain_average():
+    own = {"w": _t(2.0, 2.0)}
+    peers = {"a": {"w": _t(2.0, 2.0)}}
+    out = fnm.merge_proximity(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(2.0, 2.0))  # sigma~0 -> average
+
+
+def test_proximity_with_no_peers_returns_own():
+    own = {"w": _t(5.0, 5.0)}
+    out = fnm.merge_proximity(own, {}, ["w"])
+    assert torch.allclose(out["w"], _t(5.0, 5.0))
 
 
 def test_trust_weighted_falls_back_to_average_without_trust():

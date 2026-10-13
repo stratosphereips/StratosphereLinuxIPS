@@ -75,6 +75,8 @@ dict`; add your own in the registry in the module file.
 | `average` (default) | plain mean of own + peers, per shared tensor |
 | `trust_weighted` | weighted mean: peer weights scale with their **SLIPS trust** (score × confidence, clipped to [0,1]; unknown-trusted peer = weight 0, own = 1). The module reads the classic p2p trust sqlite read-only and hands the map to the merge function — trust is *visible to merge rules*, scoped per merge. Empty trust map (warm-up) → falls back to plain averaging |
 | `blending` | adopt the **single real model** (own or peer) whose flat shared params are closest to the plain mean — the other models sit out |
+| `mean_with_closest` | per shared layer: average own (50/50) with the single **peer** layer closest to own in L2; no peers → own, one peer → plain average. Not Byzantine-robust (formerly mislabeled `byzantine`) |
+| `proximity` | per shared layer: weighted mean of own + peers with Gaussian-kernel weights `exp(-d²/2σ²)` on each candidate's L2 distance to own (own weight 1); σ = median pairwise candidate distance of that layer; σ≈0 → plain average |
 
 ## Model Sharing Protocol
 

@@ -483,29 +483,75 @@ def merge_blending(
     return {k: candidates[best][k].clone() for k in shared_keys}
 
 
-def merge_byzantine(
+def merge_mean_with_closest(
     own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
 ) -> dict:
-    """Byzantine-robust, block-by-block (layer-wise) selection. For EACH shared
-    layer independently: take all candidate layers (own + every peer), compute
-    that layer's mean, and keep ONLY the single candidate layer closest to the
-    mean in L2. Outlier layers (e.g. a poisoned peer's) are rejected per layer,
-    so different layers may come from different peers. This is the per-layer
-    analogue of `blending` (which selects one whole model)."""
-    candidates = {"own": own_shared}
-    candidates.update(peer_models)
+    """Mean-with-closest, block by block, referenced to OWN. For EACH shared
+    layer independently: pick the single PEER layer closest (L2) to own, then
+    average own with that one peer (50/50). No peers -> own unchanged; one peer
+    -> plain average. NB: this is NOT Byzantine-robust aggregation (no Krum /
+    trimmed mean); it follows the paper's self-referenced closest-peer blend and
+    is named for what it actually does."""
+    if not peer_models:
+        return {key: own_shared[key].clone() for key in shared_keys}
     merged = {}
     for key in shared_keys:
-        mean = torch.stack(
-            [candidates[cand][key] for cand in candidates]
-        ).mean(dim=0)
-        best = min(
-            candidates,
-            key=lambda cand: torch.norm(
-                (candidates[cand][key] - mean).reshape(-1)
+        closest = min(
+            peer_models,
+            key=lambda pid: torch.norm(
+                (peer_models[pid][key] - own_shared[key]).reshape(-1)
             ).item(),
         )
-        merged[key] = candidates[best][key].clone()
+        merged[key] = (own_shared[key] + peer_models[closest][key]) / 2.0
+    return merged
+
+
+def merge_proximity(
+    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
+) -> dict:
+    """Proximity-weighted blend, block by block, referenced to OWN. For EACH
+    shared layer, weight every candidate (own + peers) by a Gaussian kernel of
+    its L2 distance to own, exp(-d^2 / (2*sigma^2)); own keeps the top weight
+    (d=0 -> 1) and peers decay with distance, so all models contribute and none
+    is discarded. Bandwidth sigma is set per layer by the median heuristic (the
+    median of all pairwise candidate distances for that layer), so it adapts to
+    each layer's scale; if that median is ~0 (candidates identical) the weights
+    collapse to a plain average."""
+    candidates = {"own": own_shared}
+    candidates.update(peer_models)
+    cand_ids = list(candidates)
+    merged = {}
+    for key in shared_keys:
+        vecs = {
+            cid: candidates[cid][key].detach().reshape(-1) for cid in cand_ids
+        }
+        pair_d = [
+            torch.norm(vecs[a] - vecs[b]).item()
+            for i, a in enumerate(cand_ids)
+            for b in cand_ids[i + 1 :]
+        ]
+        sigma = float(np.median(pair_d)) if pair_d else 0.0
+        if sigma <= 1e-12:
+            # identical (or single) candidates -> plain average
+            merged[key] = torch.stack(
+                [candidates[cid][key] for cid in cand_ids]
+            ).mean(dim=0)
+            continue
+        weights = {
+            cid: float(
+                np.exp(
+                    -(torch.norm(vecs[cid] - vecs["own"]).item() ** 2)
+                    / (2.0 * sigma * sigma)
+                )
+            )
+            for cid in cand_ids
+        }
+        total = sum(weights.values())
+        acc = None
+        for cid in cand_ids:
+            term = (weights[cid] / total) * candidates[cid][key]
+            acc = term if acc is None else acc + term
+        merged[key] = acc
     return merged
 
 
@@ -546,7 +592,8 @@ MERGE_REGISTRY = {
     "average": merge_average,
     "trust_weighted": merge_trust_weighted,
     "blending": merge_blending,
-    "byzantine": merge_byzantine,
+    "mean_with_closest": merge_mean_with_closest,
+    "proximity": merge_proximity,
     # "my_rule": merge_my_rule,
 }
 

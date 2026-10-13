@@ -59,7 +59,10 @@ The imaging notes below describe the pre-rebase setup.
   are combined (never WHEN): `average` (plain mean of shared weights, default), `trust_weighted`
   (weighted by SLIPS classic p2p trust score×confidence — trust is passed to
   the merge functions per merge; own=1, unknown peer=0, empty map → average),
-  `blending` (adopt the single model closest to the mean) — pure functions in
+  `blending` (adopt the single model closest to the mean); Oct 2026:
+  `mean_with_closest` (per layer, own averaged with the closest peer; was
+  mislabeled `byzantine`) and `proximity` (per layer, Gaussian-kernel weights
+  on distance to own) — pure functions in
   the module, add-and-register to extend. Merges also log
   `merge_rule=<name>` + per-peer `trust=` into merging_data.log.
 - Aracne-side config contract: `summarizer_source`/`summarizer_model` must
