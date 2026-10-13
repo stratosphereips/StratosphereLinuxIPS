@@ -3,6 +3,7 @@
 import sys
 from unittest.mock import patch
 
+import dns.resolver
 import netifaces
 import pytest
 
@@ -84,6 +85,66 @@ def test_dns_servers_use_network_manager_when_resolved_is_missing(
         network_state, "command_output", side_effect=["", "10.0.0.53\n"]
     ):
         assert network_state.dns_servers("wlan0", 2) == ["10.0.0.53"]
+
+
+def test_macos_without_nameservers_keeps_network_state_available(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing macOS resolver must not abort live network-state collection.
+
+    Parameters:
+        monkeypatch: Restores the platform after the test.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(sys, "platform", "darwin")
+    with (
+        patch.object(network_state, "command_output", return_value=""),
+        patch.object(network_state.socket, "if_nametoindex", return_value=4),
+        patch.object(
+            network_state.dns.resolver,
+            "Resolver",
+            side_effect=dns.resolver.NoResolverConfiguration("no nameservers"),
+        ) as resolver,
+        patch.object(
+            network_state.netifaces,
+            "ifaddresses",
+            return_value={
+                netifaces.AF_INET: [
+                    {"addr": "192.0.2.10", "netmask": "255.255.255.0"}
+                ]
+            },
+        ),
+        patch.object(
+            network_state.utils, "get_gateway_for_iface", return_value=""
+        ),
+    ):
+        state = network_state.collect_network_state("en0", 1)
+
+    assert state["connected"] is True
+    assert state["host_ip"] == "192.0.2.10"
+    assert state["dns_servers"] == []
+    resolver.assert_not_called()
+
+
+def test_linux_without_nameservers_returns_empty_dns(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Catch the dnspython exception when Linux has no configured resolver.
+
+    Parameters:
+        monkeypatch: Restores the platform after the test.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(sys, "platform", "linux")
+    with (
+        patch.object(network_state, "command_output", return_value=""),
+        patch.object(
+            network_state.dns.resolver,
+            "Resolver",
+            side_effect=dns.resolver.NoResolverConfiguration("no nameservers"),
+        ),
+    ):
+        assert network_state.dns_servers("eth0", 1) == []
 
 
 @pytest.mark.parametrize(

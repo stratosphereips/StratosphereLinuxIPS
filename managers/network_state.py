@@ -8,6 +8,7 @@ import subprocess
 import sys
 from typing import Any
 
+import dns.exception
 import dns.resolver
 import netifaces
 
@@ -79,6 +80,9 @@ def dns_servers(interface: str, interface_count: int) -> list[str]:
                 )
         if addresses:
             return valid_dns_addresses(addresses)
+        # macOS does not use /etc/resolv.conf for DNS routing. An unscoped
+        # fallback could assign another interface's resolver to this one.
+        return []
     elif sys.platform.startswith("linux"):
         output = command_output(["resolvectl", "dns", interface])
         if ":" in output:
@@ -100,7 +104,7 @@ def dns_servers(interface: str, interface_count: int) -> list[str]:
         return valid_dns_addresses(
             list(dns.resolver.Resolver(configure=True).nameservers)
         )
-    except (OSError, ValueError, dns.resolver.ResolverException):
+    except (OSError, ValueError, dns.exception.DNSException):
         return []
 
 
