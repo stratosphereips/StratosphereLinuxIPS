@@ -52,6 +52,7 @@ const state = {
   runUptimeRunning: false,
   timer: null,
   statusTimer: null,
+  titleTimer: null,
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
@@ -935,6 +936,15 @@ function updatePageTitle(counts) {
 async function loadLiveTitleCounts() {
   const payload = await api("liveTitleCounts", "/api/live-counts", false, true);
   if (payload && !payload.not_found) updatePageTitle(payload);
+}
+
+/** Keep the browser title current even when the dashboard tab is hidden. */
+function startLiveTitlePolling() {
+  window.clearInterval(state.titleTimer);
+  loadLiveTitleCounts().catch(() => {});
+  state.titleTimer = window.setInterval(() => {
+    loadLiveTitleCounts().catch(() => {});
+  }, 5000);
 }
 
 /**
@@ -5877,7 +5887,6 @@ async function pollBackendStatus() {
   try {
     const identity = await api("backendStatus", "/api/identity", false);
     if (identity) updateReviewAvailability(identity.review_actions === true);
-    await loadLiveTitleCounts();
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
@@ -6251,10 +6260,12 @@ document.addEventListener("visibilitychange", () => {
   } else {
     refreshActive();
     pollBackendStatus();
+    loadLiveTitleCounts().catch(() => {});
   }
 });
 window.addEventListener("beforeunload", () => {
   window.clearTimeout(state.statusTimer);
+  window.clearInterval(state.titleTimer);
   state.requests.forEach((controller) => controller.abort());
 });
 
@@ -6269,6 +6280,6 @@ loadOverview().catch(() => {}).finally(() => {
   if (state.activeTab === "overview") schedulePoll();
 });
 loadWhitelists().catch(() => {});
-loadLiveTitleCounts().catch(() => {});
+startLiveTitlePolling();
 updateReviewAvailability(false);
 pollBackendStatus().catch(() => {});

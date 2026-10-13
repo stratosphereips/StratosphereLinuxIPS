@@ -4,8 +4,10 @@ from http import HTTPStatus
 from io import BytesIO
 import json
 import re
+import shutil
 import socket
 import sqlite3
+import subprocess
 import threading
 import time
 from pathlib import Path
@@ -1261,6 +1263,52 @@ def test_live_title_counts_match_alert_and_host_ranges(
         )
 
     assert reader.live_counts() == {"alerts": 1, "hosts": 2}
+
+
+def test_live_title_poll_continues_when_tab_is_hidden() -> None:
+    """The title's timer must fetch counts while the browser tab is hidden."""
+    _module_factory = ModuleFactory()
+    if not shutil.which("node"):
+        pytest.skip("Node.js is required for the browser title timer test")
+    script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('modules/web_interface/app.js', 'utf8');
+const definition = source.match(/function startLiveTitlePolling\(\) \{[\s\S]*?\n\}/);
+assert.ok(definition, 'live title polling function is present');
+let requests = 0;
+let tick;
+const context = {
+  document: { hidden: true },
+  state: { titleTimer: null },
+  window: {
+    clearInterval() {},
+    setInterval(callback, interval) {
+      assert.equal(interval, 5000);
+      tick = callback;
+      return 1;
+    },
+  },
+  loadLiveTitleCounts() {
+    requests += 1;
+    return Promise.resolve();
+  },
+};
+vm.createContext(context);
+vm.runInContext(definition[0], context);
+context.startLiveTitlePolling();
+tick();
+assert.equal(requests, 2, 'title counts still refresh in a hidden tab');
+"""
+    result = subprocess.run(
+        ["node", "-e", script],
+        capture_output=True,
+        check=False,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
 
 
 def test_overview_uses_counter_without_scanning_retained_evidence(
