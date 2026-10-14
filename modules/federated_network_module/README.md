@@ -178,6 +178,26 @@ under `--- New local model (window_N) ---` headers):
 | `local_test.log` | local-only model (the frozen snapshot from the last full local training; from the first merge on, this stream is driven by the dual-testing second forward pass) |
 | `merged_test.log` | merged model (active once a merge is done) |
 | `local_test_conn.log` / `merged_test_conn.log` | the same two streams counting **conn flows only** (same spans and line format). Every flow (conn + ARP) counts in the files above; ARP records dominate them under a scanning attacker, so score both scopes |
+| `sofar_test.jsonl` | **all traffic so far** (not prequential): at every training close, the models of that close scored on every flow read since start, **including the flows they trained on** — optimistic, report it as such. Format below |
+
+> All traffic so far (`sofar_test.jsonl`): every conn flow and ARP record the
+> module reads from flows.sqlite is stored once, when first read (raw
+> features as `float32`, GT, conn flag; flows read before the first fit
+> included; no model snapshots). Right after the local training and the merge
+> of a training close, each model of that close is scored on all of them with
+> the current shared scaler and the same feature extraction as the test
+> streams. One JSON object per (close, model, scope):
+>
+> ```
+> {"window": 3, "model": "local", "scope": "all", "flows": 19, "gt_mal": 5, "gt_ben": 14, "tp": 5, "fp": 2, "tn": 12, "fn": 0}
+> ```
+>
+> `window` = N of that close's `New local model (window_N)` header; `model`:
+> `local` = the local-only model of the close (the one sent to peers),
+> `merged` = the merged model, written only when that close merged; `scope`:
+> `all` = conn + ARP, `conn` = conn flows only; malicious is the positive
+> class. Closes that train nothing write no rows. GT is fixed when a flow is
+> first read (later edits of the simulated-attacker list do not relabel it).
 
 > Span headers: each stream's lines follow a `--- New local model (window_N) ---`
 > header naming the training that produced the model under test; pair the two

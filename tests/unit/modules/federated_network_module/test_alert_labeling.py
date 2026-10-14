@@ -122,6 +122,7 @@ def _module(db, k=0, retention=24):
     m._using_merged_model = False
     m.testing_flows_since_last_log = 0
     m._local_stream_used = False
+    m._sofar_chunks = []
     # isolate labeling from feature extraction / comparison logging
     m._add_flows_to_buffers = MagicMock()
     m._log_window_comparisons = MagicMock()

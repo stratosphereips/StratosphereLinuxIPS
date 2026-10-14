@@ -216,6 +216,7 @@ def _module(root, name, *, k, balancing, merge_rule, model_class, min_samples):
     m._local_span_marked = False
     m._conn_active = m._blank_test_statistics()
     m._conn_local = m._blank_test_statistics()
+    m._sofar_chunks = []
     m.local_training_epochs = 3
     m.merge_finetune_epochs = 2
     m.finetune_head = True
@@ -956,3 +957,129 @@ def test_flow_is_placed_by_its_ts_and_still_meets_its_alert(
     assert (row["label"], row["train_window"]) == (1, 2)
     assert p.flip_snapshot().flips == 0
     assert _db_counter(p, at_close, counter) == 1
+
+
+# --------------------------------------------------------------------------
+# all traffic so far (sofar_test.jsonl)
+# --------------------------------------------------------------------------
+SOFAR_KEYS = ["window", "model", "scope", "flows", "gt_mal", "gt_ben"]
+SOFAR_KEYS += ["tp", "fp", "tn", "fn"]
+
+
+def _sofar(p):
+    """(window, model, scope) -> row of sofar_test.jsonl (each exactly once,
+    keys in the contract's order)."""
+    rows = [json.loads(x) for x in p.lines("sofar_test.jsonl")]
+    assert all(list(r) == SOFAR_KEYS for r in rows)
+    by_key = {(r["window"], r["model"], r["scope"]): r for r in rows}
+    assert len(by_key) == len(rows)
+    return by_key
+
+
+def _stored_flows(p):
+    """Every conn flow and ARP record in the peer's flows.sqlite."""
+    rows = p.w.execute("SELECT flow FROM flows").fetchall()
+    rows += p.w.execute(
+        "SELECT flow FROM altflows WHERE flow_type = 'arp'"
+    ).fetchall()
+    return [json.loads(raw) for (raw,) in rows]
+
+
+def test_sofar_scores_every_flow_read_so_far_at_each_training_close(net):
+    """Each training close scores its local model, and its merged model only
+    when that close merged, on every flow read since start - the warm-up
+    window's flows (read before the first fit) included - per scope: all
+    (conn + ARP) and conn only. A warm-up close writes nothing. The last
+    close's counts equal the test streams' own pipeline (feature
+    extraction, shared scaler, _predict_batch_with) over all stored flows."""
+    p = net.peer(k=1)
+    p.close(flows=_ben(1, 6) + _atk(1, 2), alerts=[("A1", _atk(1, 2))])
+    assert p.lines("sofar_test.jsonl") == []  # ring warm-up: no fit yet
+    p.close(flows=_ben(2, 4) + _scan(2, 3), alerts=[("A2", _scan(2, 3))])
+    p.m.handle_p2p_model(net.payload("slips-a"))  # merges from close 3 on
+    p.close(flows=_ben(3, 4))
+    p.close()  # quiet close: trains window 3 and merges
+    assert p.m.merge_count == 2
+    rows = _sofar(p)
+    assert set(rows) == {(2, "local", "all"), (2, "local", "conn")} | {
+        (w, model, scope)
+        for w in (3, 4)
+        for model in ("local", "merged")
+        for scope in ("all", "conn")
+    }
+    # flows read so far at close w: (all, conn); GT malicious: (all, conn)
+    so_far = {2: ((15, 12), (5, 2)), 3: ((19, 16), (5, 2))}
+    so_far[4] = so_far[3]
+    for (w, _, scope), r in rows.items():
+        i = scope == "conn"
+        n, mal = so_far[w][0][i], so_far[w][1][i]
+        assert (r["flows"], r["gt_mal"], r["gt_ben"]) == (n, mal, n - mal)
+        assert (r["tp"] + r["fn"], r["fp"] + r["tn"]) == (mal, n - mal)
+
+    flows = _stored_flows(p)
+    feats = [p.m._extract_flow_features(f) for f in flows]
+    x = p.m.scaler.transform(np.array(feats, dtype=np.float32))
+    gt = np.array([p.m._get_simulated_gt(f) == MAL for f in flows])
+    conn = np.array([f["type_"] == "conn" for f in flows])
+    models = {"local": p.m._local_only_model, "merged": p.m.model}
+    for name, model in models.items():
+        pred = p.m._predict_batch_with(model, x) == MAL
+        for scope, mask in (("all", np.ones_like(conn)), ("conn", conn)):
+            g, q = gt[mask], pred[mask]
+            r = rows[4, name, scope]
+            assert (r["tp"], r["fp"], r["tn"], r["fn"]) == (
+                int((g & q).sum()),
+                int((~g & q).sum()),
+                int((~g & ~q).sum()),
+                int((g & ~q).sum()),
+            )
+
+
+def test_sofar_writes_no_merged_rows_when_the_merge_found_no_peer(net):
+    """A stored peer model the receiver cannot use (another model_class):
+    the close trains but merges nothing, so it scores its local model only."""
+    p = net.peer(k=0, model_class="random_projection_two_layer")
+    p.m.handle_p2p_model(net.payload("slips-a", "random_projection_mlp"))
+    p.close(flows=_ben(1, 6) + _atk(1, 2), alerts=[("A1", _atk(1, 2))])
+    assert p.m.merge_count == 0
+    assert set(_sofar(p)) == {(1, "local", "all"), (1, "local", "conn")}
+
+
+def test_sofar_evaluation_leaves_training_and_testing_unchanged(net):
+    """The same merging run (conn + ARP, a quiet window) with and without
+    the so-far evaluation: every training, labeling, merging and test-stream
+    artifact is identical, and so are the final models and scaler; only
+    sofar_test.jsonl differs (training_network.log carries wall-clock
+    stamps)."""
+    on = net.peer()
+    off = Peer(net.tmp_path / "control", net.clock, "slips-b")
+    net.peers.append(off)
+    off.m._sofar_ingest = lambda flows: None
+    off.m._sofar_evaluate = lambda window_n, models: None
+    for p in (on, off):
+        p.m.handle_p2p_model(net.payload("slips-a"))
+    for w, flows in enumerate(WINDOWS, start=1):
+        cited = [u for u in flows if u[0] in "ar"]
+        for p in (on, off):
+            p.close(flows=flows, alerts=[(f"A{w}", cited)] if cited else [])
+    assert on.m.merge_count == off.m.merge_count == 4
+    assert len(_sofar(on)) == 4 * 2 * 2  # training closes x models x scopes
+    assert off.lines("sofar_test.jsonl") == []
+    skip = {"sofar_test.jsonl", "training_network.log"}
+    names = sorted(set(os.listdir(on.m.output_dir)) - skip)
+    assert names == sorted(set(os.listdir(off.m.output_dir)) - skip)
+    for name in names:
+        path = os.path.join(on.m.output_dir, name)
+        if os.path.isfile(path):
+            assert on.lines(name) == off.lines(name), name
+    for name in sorted(os.listdir(os.path.join(on.m.output_dir, "weights"))):
+        a, b = (
+            np.load(os.path.join(p.m.output_dir, "weights", name))
+            for p in (on, off)
+        )
+        assert all(np.array_equal(a[key], b[key]) for key in a.files)
+    for attr in ("model", "_local_only_model"):
+        a, b = (getattr(p.m, attr).state_dict() for p in (on, off))
+        assert all(torch.equal(a[key], b[key]) for key in a)
+    np.testing.assert_array_equal(on.m.scaler.mean_, off.m.scaler.mean_)
+    np.testing.assert_array_equal(on.m.scaler.var_, off.m.scaler.var_)

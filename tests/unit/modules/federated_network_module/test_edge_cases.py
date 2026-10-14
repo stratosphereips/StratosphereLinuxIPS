@@ -130,6 +130,7 @@ class Pipe:
         m._local_span_marked = False
         m._conn_active = m._blank_test_statistics()
         m._conn_local = m._blank_test_statistics()
+        m._sofar_chunks = []
         m.scaler = MagicMock(transform=lambda x: x)
         m.predict_batch = lambda x: np.array([BEN] * len(x))
         m._train_batch = self._train
@@ -625,6 +626,7 @@ def _trainable(tmp_path, balancing=""):
     m.local_scaler_path = str(tmp_path / "local_scaler.bin")
     m._local_only_model = None
     m._is_fitted = False
+    m._sofar_chunks = []
     rng = np.random.default_rng(0)
     m.training_buffer_x = list(rng.normal(size=(10, 18)).astype(np.float32))
     m.training_buffer_y = [MAL] * 8 + [BEN] * 2

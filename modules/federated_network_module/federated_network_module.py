@@ -609,6 +609,7 @@ class ModuleLogger:
             filenames = {
                 "trained_labels": "trained_labels.jsonl",
                 "alert_uids": "alert_uids.jsonl",
+                "sofar_test": "sofar_test.jsonl",
             }
             for name in [
                 "local_train",
@@ -628,6 +629,7 @@ class ModuleLogger:
                 "label_flips",
                 "trained_labels",
                 "alert_uids",
+                "sofar_test",
             ]:
                 path = os.path.join(
                     output_dir, filenames.get(name, f"{name}.log")
@@ -891,6 +893,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # format and spans): ARP records dominate the all-flows streams.
         self._conn_active: dict = self._blank_test_statistics()
         self._conn_local: dict = self._blank_test_statistics()
+        # All-traffic-so-far evaluation (sofar_test.jsonl): raw features, GT
+        # and conn flag of every flow read from the DB, stored once at ingest
+        # as one (float32, bool, bool) chunk per close.
+        self._sofar_chunks: list = []
 
         # Centralized logger
         self.logger = ModuleLogger(self.output_dir, self.enable_logs)
@@ -1807,6 +1813,166 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 if local is not None:
                     self._store_conn_stream("local", gt_label, local[i])
 
+    # ------------------------------------------------------------------
+    # All-traffic-so-far evaluation (sofar_test.jsonl)
+    # ------------------------------------------------------------------
+    _SOFAR_BATCH = 8192  # rows per forward pass (bounds activation memory)
+
+    def _sofar_ingest(self, flows: list) -> None:
+        """Store each newly read flow once for the so-far evaluation: its raw
+        feature vector (the extraction training and the test streams use),
+        simulated GT and conn flag. Flows whose extraction fails are
+        skipped, as in the test streams. Errors are logged, never raised.
+
+        :param flows: flows read from the DB at this close (deduplicated)
+        """
+        try:
+            feats, mal, conn = [], [], []
+            for flow in flows:
+                x = self._extract_flow_features(flow)
+                if x is None:
+                    continue
+                feats.append(x)
+                mal.append(self._get_simulated_gt(flow) == MALICIOUS)
+                conn.append(flow.get("type_") == "conn")
+            if feats:
+                self._sofar_chunks.append(
+                    (
+                        np.asarray(feats, dtype=np.float32),
+                        np.asarray(mal, dtype=bool),
+                        np.asarray(conn, dtype=bool),
+                    )
+                )
+        except Exception:
+            self.print(
+                f"Error storing flows for the so-far evaluation: "
+                f"{traceback.format_exc()}",
+                0,
+                1,
+            )
+
+    def _sofar_arrays(self) -> tuple:
+        """Every stored flow, the per-close chunks merged into one.
+
+        :return: (raw features float32 [n, 18], GT malicious bool [n],
+            conn bool [n])
+        """
+        if len(self._sofar_chunks) > 1:
+            self._sofar_chunks[:] = [
+                tuple(
+                    np.concatenate(part) for part in zip(*self._sofar_chunks)
+                )
+            ]
+        if not self._sofar_chunks:
+            return (
+                np.empty((0, SimpleFederatedNet.FIXED_INPUT_DIM), np.float32),
+                np.empty(0, dtype=bool),
+                np.empty(0, dtype=bool),
+            )
+        return self._sofar_chunks[0]
+
+    def _sofar_predict(self, model, x_raw: np.ndarray) -> np.ndarray:
+        """Malicious mask of a model over raw features: scaled with the
+        current shared scaler and decided as the test streams decide
+        (argmax of the softmax), in _SOFAR_BATCH-row slices. The model's
+        train/eval mode is restored afterwards.
+
+        :param model: a protocol model (nn.Module)
+        :param x_raw: raw feature rows (float32)
+        :return: bool array, True where the model predicts malicious
+        """
+        out = np.zeros(len(x_raw), dtype=bool)
+        was_training = model.training
+        model.eval()
+        try:
+            with torch.no_grad():
+                for i in range(0, len(x_raw), self._SOFAR_BATCH):
+                    x = self.scaler.transform(x_raw[i : i + self._SOFAR_BATCH])
+                    logits = model(torch.FloatTensor(x).to(self.device))
+                    idx = torch.argmax(torch.softmax(logits, dim=1), dim=1)
+                    out[i : i + len(x)] = (idx == 1).cpu().numpy()
+        finally:
+            model.train(was_training)
+        return out
+
+    @staticmethod
+    def _sofar_row(
+        window_n: int, name: str, scope: str, gt: np.ndarray, pred: np.ndarray
+    ) -> dict:
+        """One sofar_test.jsonl row (malicious is the positive class).
+
+        :param window_n: training window index of the close
+        :param name: model name ("local" / "merged")
+        :param scope: "all" (conn + ARP) or "conn"
+        :param gt: GT malicious mask of the flows in scope
+        :param pred: predicted malicious mask of the same flows
+        :return: the row, keys in the order the runner parses
+        """
+        gt_mal = int(np.count_nonzero(gt))
+        return {
+            "window": int(window_n),
+            "model": name,
+            "scope": scope,
+            "flows": int(gt.size),
+            "gt_mal": gt_mal,
+            "gt_ben": int(gt.size) - gt_mal,
+            "tp": int(np.count_nonzero(gt & pred)),
+            "fp": int(np.count_nonzero(~gt & pred)),
+            "tn": int(np.count_nonzero(~gt & ~pred)),
+            "fn": int(np.count_nonzero(gt & ~pred)),
+        }
+
+    def _sofar_models(self, local, merged: bool) -> list:
+        """The named models of this training close, in row order. A further
+        model (e.g. a frozen pretrained baseline "model0") is one more pair.
+
+        :param local: this close's local-only snapshot (the model sent to
+            peers), None when it was not taken
+        :param merged: True when this close produced a merged model
+        :return: [(name, model)]
+        """
+        models = []
+        if local is not None:
+            models.append(("local", local))
+        if merged and self.model is not None:
+            models.append(("merged", self.model))
+        return models
+
+    def _sofar_evaluate(self, window_n: int, models: list) -> None:
+        """Score each model of this training close on every flow read so far
+        and append one sofar_test.jsonl row per (model, scope): "all" =
+        conn flows + ARP records, "conn" = conn flows only. The flows
+        include those the models trained on (optimistic by design). Skipped
+        before the first fit; rows are written only when every model was
+        scored; errors are logged, never raised.
+
+        :param window_n: training window index of this close
+        :param models: [(name, model)] from _sofar_models
+        """
+        try:
+            if not models or not (
+                self._is_fitted and self.is_preprocessor_fitted
+            ):
+                return
+            x_raw, gt, conn = self._sofar_arrays()
+            rows = []
+            for name, model in models:
+                pred = self._sofar_predict(model, x_raw)
+                rows.append(self._sofar_row(window_n, name, "all", gt, pred))
+                rows.append(
+                    self._sofar_row(
+                        window_n, name, "conn", gt[conn], pred[conn]
+                    )
+                )
+            for row in rows:
+                self.logger._write("sofar_test", json.dumps(row))
+        except Exception:
+            self.print(
+                f"Error in the so-far evaluation: {traceback.format_exc()}",
+                0,
+                1,
+            )
+
     def _record_pending_labels(
         self, malicious_flows: list, benign_flows: list, arrival_window: int
     ) -> None:
@@ -2144,12 +2310,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         1. read every conn flow and ARP record SLIPS stored since the last
            close from its sqlite; each goes to the open cell whose window
-           contains its ts (flow start);
+           contains its ts (flow start) and, once, to the so-far store;
         2. label every open cell: a flow is malicious when the evidence of
            an alert (within the lookback) cites its uid;
         3. test the still-untested flows of the cell about to finalize with
            the current model (it trains on them next);
-        4. finalize the K-old cell and train on it (deferred training);
+        4. finalize the K-old cell and train on it (deferred training); the
+           models of this training are scored on all flows so far;
         5. test the remaining open cells with the fresh model;
         6. flips: alerts created since the last close vs trained flows.
         """
@@ -2168,6 +2335,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # 1. flows from the DB, placed by ts
             fetched, n_conn, n_arp = self._fetch_new_flows()
+            self._sofar_ingest(fetched)
             placed = self._place_flows(window_n, fetched)
             # stamp simulated ground truth back into flows.sqlite (eval-only)
             self._write_ground_truth(fetched)
@@ -2456,7 +2624,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         ]
 
     def _train_batch(self):
-        """Train on accumulated training buffer: local fc1+head, local head, merge head."""
+        """Train on accumulated training buffer: local fc1+head, local head,
+        merge head; then score this close's models on all flows so far."""
         try:
             self.print("_train_batch: entering", 1, 1)
             if len(self.training_buffer_x) == 0:
@@ -2531,8 +2700,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             # Snapshot the fresh local-only model for the dual testing stream
             # (small model; deep copy keeps it frozen while self.model merges).
+            local_snapshot = None
             try:
                 self._local_only_model = copy.deepcopy(self.model)
+                local_snapshot = self._local_only_model
             except Exception:
                 self.print(
                     "local-only model snapshot failed: "
@@ -2552,16 +2723,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # After own training, try merge if we have pending peer models.
             # Merge averages fc1, then fine-tunes the SAME pre-local head
             # (before the 5-epoch local head tuning) under identical conditions.
+            merged = False
             if len(self.peer_models) >= 1:
                 self.print(
                     "_train_batch: pending peer models, triggering merge", 1, 1
                 )
+                merges_before = self.merge_count
                 self.trigger_merge(head_before_w, head_before_b)
+                merged = self.merge_count > merges_before
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
             self.training_buffer_ids.clear()
             self._buffered_flow_ids.clear()
+
+            # every flow read so far meets this close's models
+            self._sofar_evaluate(
+                counter, self._sofar_models(local_snapshot, merged)
+            )
 
             self.print("_train_batch: exiting", 1, 1)
 
