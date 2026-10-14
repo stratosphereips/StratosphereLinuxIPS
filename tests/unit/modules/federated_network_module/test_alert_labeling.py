@@ -123,6 +123,7 @@ def _module(db, k=0, retention=24):
     m.testing_flows_since_last_log = 0
     m._local_stream_used = False
     m._sofar_chunks = []
+    m.label_source = "alerts"
     # isolate labeling from feature extraction / comparison logging
     m._add_flows_to_buffers = MagicMock()
     m._log_window_comparisons = MagicMock()
@@ -392,3 +393,74 @@ def test_write_ground_truth_is_noop_without_attacker_list():
         [{"uid": "x", "saddr": "172.20.1.17", "ground_truth_label": ""}]
     )
     assert _gt_field(db, "flows", "x") == ""  # unchanged
+
+
+# --------------------------------------------------------------------------
+# label_source: dataset (offline pretraining on labeled captures)
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "gt,expected",
+    [
+        ("Malicious", fnm.MALICIOUS),
+        ("malicious-CC", fnm.MALICIOUS),
+        ("Benign", fnm.BENIGN),
+        ("normal", fnm.BENIGN),
+        ("Background", None),
+        ("", None),
+        (None, None),
+    ],
+)
+def test_dataset_label_maps_capture_labels(gt, expected):
+    assert (
+        fnm.FederatedNetworkModule._dataset_label({"ground_truth_label": gt})
+        == expected
+    )
+
+
+def _labeled_flow_json(uid, ts, gt):
+    return json.dumps(
+        {
+            "uid": uid,
+            "saddr": "10.0.0.1",
+            "daddr": "10.0.0.2",
+            "starttime": ts,
+            "ground_truth_label": gt,
+        }
+    )
+
+
+def test_dataset_mode_trains_capture_labels_and_ignores_alerts(monkeypatch):
+    h = Harness(monkeypatch)
+    h.m.label_source = "dataset"
+    ts = BASE + 100
+    for uid, gt in (
+        ("m1", "Malicious"),
+        ("b1", "Benign"),
+        ("x1", "Background"),
+    ):
+        h.db.execute(
+            "INSERT INTO flows(uid, flow) VALUES(?,?)",
+            (uid, _labeled_flow_json(uid, ts, gt)),
+        )
+    h.db.commit()
+    # an alert citing the benign flow must not change its dataset label
+    h.close(alerts=[("a1", ["b1"])])
+    assert h.label("m1") == 1 and h.label("b1") == 0
+    assert "x1" not in h.m._pending_labeled  # Background never trains
+
+
+def test_dataset_mode_store_model_trains_the_last_window_first(monkeypatch):
+    m = object.__new__(fnm.FederatedNetworkModule)
+    m.print = MagicMock()
+    order = []
+    m.label_source = "dataset"
+    m._close_training_window = lambda: order.append("close")
+    m._write_label_flips = lambda trigger: order.append("flips")
+    m._save_local_model = lambda: order.append("save")
+    m.merge_count = 0
+    m.store_model()
+    assert order == ["close", "flips", "save"]
+    m.label_source = "alerts"
+    order.clear()
+    m.store_model()
+    assert order == ["flips", "save"]  # live runs never train at shutdown

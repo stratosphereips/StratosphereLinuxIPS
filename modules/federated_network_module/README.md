@@ -99,6 +99,20 @@ On init, if `train_from_scratch: false` in config and local artifacts exist:
 
 If `train_from_scratch: true` or artifacts missing, training starts from scratch.
 
+### Offline pretraining on labeled captures (`label_source: dataset`)
+
+`label_source` (default `alerts`) selects where training labels come from.
+Live runs label from alerts (alert -> evidence -> flow uid). With
+`label_source: dataset` the module trains on each flow's own
+`ground_truth_label` from a labeled capture (the `label` column of a labeled
+Zeek log; `Malicious*` -> malicious, `Benign`/`normal` -> benign, anything
+else such as `Background` is not trained), and at shutdown it closes one last
+window so the end of the input trains before the model is stored. Chaining
+several captures: run SLIPS once per capture with the same artifacts dir and
+`train_from_scratch: false` after the first, so each run warm-starts from the
+model and scaler the previous one stored. Used to build the pretrained base
+models (thesis tooling `pretrain_base_models.py`).
+
 ## Artifact Paths
 
 All paths are hardcoded in `init()`. They are NOT configurable via `slips.yaml`.

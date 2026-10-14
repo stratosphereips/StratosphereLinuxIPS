@@ -157,6 +157,7 @@ def _sofar_module(tmp_path, scale=1.0):
     m.device = torch.device("cpu")
     m.is_preprocessor_fitted = True
     m._sofar_chunks = []
+    m.label_source = "alerts"
     m.scaler = MagicMock(transform=lambda x: scale * x)
     m._extract_flow_features = lambda flow: [flow["x"]] + [0.0] * 17
     m._get_simulated_gt = lambda flow: flow["gt"]

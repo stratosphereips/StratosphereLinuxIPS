@@ -1045,6 +1045,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             self.balancing = ""
         self._undersample = self.balancing == "undersample"
+        # Where training labels come from: "alerts" (live runs: alert ->
+        # evidence -> flow uid) or "dataset" (offline pretraining on labeled
+        # captures: each flow's own ground_truth_label).
+        self.label_source = (
+            str(self._read_module_config_str("label_source", "alerts"))
+            .strip()
+            .lower()
+        )
+        if self.label_source not in ("alerts", "dataset"):
+            self.print(
+                f"unknown label_source '{self.label_source}', using alerts",
+                0,
+                1,
+            )
+            self.label_source = "alerts"
         self.print(f"balancing: {self.balancing or '(class_weighting)'}", 0, 2)
 
         # Load existing local model if present and not training from scratch
@@ -1097,6 +1112,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return int(value)
         except (TypeError, ValueError):
             return default
+
+    def _read_module_config_str(self, config_key: str, default: str) -> str:
+        """Read a string value from this module's config section.
+
+        :param config_key: key in the module's yaml section
+        :param default: value when the key is absent
+        :return: the configured value as a string
+        """
+        conf = ConfigParser()
+        value = conf.read_configuration(
+            self.module_config_section, config_key, default
+        )
+        return default if value is None else str(value)
 
     def _read_module_config_bool(self, config_key: str, default: bool) -> bool:
         """Read a boolean value from this module's config section."""
@@ -2383,16 +2411,35 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self._end_window()
                 return
 
-            malicious_flows = [
-                f
-                for fid, f in finalized["flows"].items()
-                if fid in finalized["mal_ids"]
-            ]
-            benign_flows = [
-                f
-                for fid, f in finalized["flows"].items()
-                if fid not in finalized["mal_ids"]
-            ]
+            if self.label_source == "dataset":
+                # offline pretraining: the capture's own labels; flows with
+                # no Malicious/Benign label (e.g. Background) do not train
+                labeled = {
+                    fid: self._dataset_label(f)
+                    for fid, f in finalized["flows"].items()
+                }
+                finalized["mal_ids"] = {
+                    fid for fid, lbl in labeled.items() if lbl == MALICIOUS
+                }
+                malicious_flows = [
+                    finalized["flows"][fid] for fid in finalized["mal_ids"]
+                ]
+                benign_flows = [
+                    finalized["flows"][fid]
+                    for fid, lbl in labeled.items()
+                    if lbl == BENIGN
+                ]
+            else:
+                malicious_flows = [
+                    f
+                    for fid, f in finalized["flows"].items()
+                    if fid in finalized["mal_ids"]
+                ]
+                benign_flows = [
+                    f
+                    for fid, f in finalized["flows"].items()
+                    if fid not in finalized["mal_ids"]
+                ]
             self.print(
                 f"Window {window_n}: {len(malicious_flows)} malicious, "
                 f"{len(benign_flows)} benign flows from {alert_count} alerts",
@@ -3389,9 +3436,27 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
             )
 
+    @staticmethod
+    def _dataset_label(flow: dict) -> Optional[str]:
+        """Training label from a labeled capture (label_source: dataset).
+
+        :param flow: flow dict carrying the capture's ground_truth_label
+        :return: MALICIOUS, BENIGN, or None when the flow has no usable label
+        """
+        label = str(flow.get("ground_truth_label") or "").strip().lower()
+        if label.startswith("malicious"):
+            return MALICIOUS
+        if label in ("benign", "normal"):
+            return BENIGN
+        return None
+
     def store_model(self):
         """Override base class to save both local and merged models."""
         self.print("Storing models on graceful shutdown.", 0, 2)
+        if self.label_source == "dataset":
+            # offline pretraining ends with the input: train on what the
+            # last window collected before the model is stored
+            self._close_training_window()
         self._write_label_flips("shutdown")
         self._save_local_model()
         if self.merge_count > 0:

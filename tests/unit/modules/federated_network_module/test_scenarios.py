@@ -217,6 +217,7 @@ def _module(root, name, *, k, balancing, merge_rule, model_class, min_samples):
     m._conn_active = m._blank_test_statistics()
     m._conn_local = m._blank_test_statistics()
     m._sofar_chunks = []
+    m.label_source = "alerts"
     m.local_training_epochs = 3
     m.merge_finetune_epochs = 2
     m.finetune_head = True
