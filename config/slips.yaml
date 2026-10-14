@@ -696,6 +696,14 @@ federated_network_module:
   # true  -> ignore load paths and train from scratch
   train_from_scratch: false
 
+  # Opt-in pretrained start (default false = per-peer empty init). true ->
+  # every peer starts from <pretrained_dir>/<model_class>/ (model_state.bin,
+  # scaler.bin, meta.json), overriding train_from_scratch, and the frozen
+  # start model is also scored as model0. Missing/mismatched files fail.
+  pretrained: false
+  # Relative to the module directory.
+  pretrained_dir: artifacts/pretrained
+
   # Write training/testing metrics logs to output dir.
   # This affects only logging, not training behavior.
   create_performance_metrics_log_files: true

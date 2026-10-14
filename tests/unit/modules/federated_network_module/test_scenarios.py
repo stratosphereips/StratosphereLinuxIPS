@@ -18,6 +18,7 @@ its cell finalized.
 """
 
 import base64
+import itertools
 import json
 import os
 import pickle
@@ -152,9 +153,21 @@ class FakeRedis:
         self.published.append((channel, data))
 
 
-def _module(root, name, *, k, balancing, merge_rule, model_class, min_samples):
+def _module(
+    root,
+    name,
+    *,
+    k,
+    balancing,
+    merge_rule,
+    model_class,
+    min_samples,
+    pretrained_dir=None,
+):
     """A module instance carrying the state init() sets up, minus redis,
-    yaml and the repo artifacts dir (all redirected into tmp)."""
+    yaml and the repo artifacts dir (all redirected into tmp). With
+    pretrained_dir it starts from that dir's pretrained artifacts, as init()
+    does under `pretrained: true`."""
     m = object.__new__(fnm.FederatedNetworkModule)
     m.printed = []
     m.print = lambda text, *a, **kw: m.printed.append(str(text))
@@ -171,6 +184,7 @@ def _module(root, name, *, k, balancing, merge_rule, model_class, min_samples):
     m.balancing = balancing
     m._undersample = balancing == "undersample"
     m._read_module_config_bool = lambda key, default: default  # yaml
+    m._read_module_config_str = lambda key, default: default  # yaml
     art = root / "artifacts"
     (art / "merged").mkdir(parents=True)
     m.rp_path = str(art / "random_projection.bin")
@@ -235,6 +249,9 @@ def _module(root, name, *, k, balancing, merge_rule, model_class, min_samples):
     m._window_bounds = {}
     m._last_alert_cut = 0.0
     m.training_window_start = BASE
+    if pretrained_dir is not None:
+        m.pretrained, m.pretrained_dir = True, pretrained_dir
+        m._load_pretrained()
     return m
 
 
@@ -261,6 +278,7 @@ class Peer:
         merge_rule="average",
         model_class="random_projection_mlp",
         min_samples=4,
+        pretrained_dir=None,
     ):
         self.name, self.clock, self.n = name, clock, 0
         self.root = tmp_path / name
@@ -278,6 +296,7 @@ class Peer:
             merge_rule=merge_rule,
             model_class=model_class,
             min_samples=min_samples,
+            pretrained_dir=pretrained_dir,
         )
         self.inbox = deque()  # p2p_gopy messages waiting for the module
         self.m.get_msg = lambda channel: (
@@ -1084,3 +1103,178 @@ def test_sofar_evaluation_leaves_training_and_testing_unchanged(net):
         assert all(torch.equal(a[key], b[key]) for key in a)
     np.testing.assert_array_equal(on.m.scaler.mean_, off.m.scaler.mean_)
     np.testing.assert_array_equal(on.m.scaler.var_, off.m.scaler.var_)
+
+
+# --------------------------------------------------------------------------
+# pretrained start: model 0 = the frozen start model with its own scaler
+# --------------------------------------------------------------------------
+def _run_windows(p, net, merge):
+    """WINDOWS through one peer; with merge, a peer model is in hand first."""
+    if merge:
+        p.m.handle_p2p_model(net.payload("slips-a"))
+    for w, flows in enumerate(WINDOWS, start=1):
+        cited = [u for u in flows if u[0] in "ar"]
+        p.close(flows=flows, alerts=[(f"A{w}", cited)] if cited else [])
+
+
+def _same_state(a, b):
+    return a.keys() == b.keys() and all(torch.equal(a[k], b[k]) for k in a)
+
+
+def _headerless_prefix(lines):
+    return list(itertools.takewhile(lambda x: not SPAN_RE.match(x), lines))
+
+
+def test_pretrained_model0_stays_frozen_through_training_and_merges(
+    net, pretrained
+):
+    """The peer starts from the pretrained weights and keeps training and
+    merging from them while the shared scaler keeps partial-fitting; model
+    0 and its own scaler stay exactly the loaded ones."""
+    art = pretrained()
+    p = net.peer(k=1, pretrained_dir=art.dir)
+    assert _same_state(p.m.model.state_dict(), art.state)
+    _run_windows(p, net, merge=True)
+    assert p.m.merge_count == 4
+    assert _same_state(p.m._model0.state_dict(), art.state)
+    assert not any(t.requires_grad for t in p.m._model0.parameters())
+    for attr in ("mean_", "var_", "scale_", "n_samples_seen_"):
+        np.testing.assert_array_equal(
+            getattr(p.m._model0_scaler, attr), getattr(art.scaler, attr)
+        )
+    for live in (p.m.model, p.m._local_only_model):
+        assert live is not p.m._model0
+        assert not torch.equal(
+            live.state_dict()["fc1.weight"], art.state["fc1.weight"]
+        )
+    assert p.m.scaler is not p.m._model0_scaler
+    assert p.m.scaler.n_samples_seen_ > art.scaler.n_samples_seen_
+
+
+SPANS_WITH_MODEL0 = {  # k -> span -> flows tested (None: before training 1)
+    0: {None: 6, "window_1": 8, "window_2": 7, "window_3": 9, "window_5": 5},
+    1: {None: 6, "window_2": 8, "window_3": 7, "window_4": 9, "window_6": 5},
+}
+
+
+@pytest.mark.parametrize("merge", [True, False])
+@pytest.mark.parametrize("k", [0, 1])
+def test_pretrained_model0_stream_pairs_with_the_local_stream(
+    net, pretrained, k, merge
+):
+    """model0_test.log (+ its conn twin) has the local stream's line format
+    and `New local model (window_N)` spans with the same per-span flow
+    counts, so model0/local/merged pair by window label. Its header is
+    written on first use, like the local stream's (identical header lists
+    once merged). Before the first training model 0 is the model under
+    test, so the headerless prefix of both files is identical."""
+    art = pretrained()
+    p = net.peer(k=k, pretrained_dir=art.dir)
+    _run_windows(p, net, merge)
+    assert p.m.merge_count == ((5 - k) if merge else 0)
+    assert p.spans("model0_test.log") == SPANS_WITH_MODEL0[k]
+    for mine, ref in (
+        ("model0_test.log", "local_test.log"),
+        ("model0_test_conn.log", "local_test_conn.log"),
+    ):
+        assert p.spans(mine) == p.spans(ref)
+        lines, ref_lines = p.lines(mine), p.lines(ref)
+        assert all(SPAN_RE.match(x) or FLOWS_RE.match(x) for x in lines)
+        heads = [x for x in lines if SPAN_RE.match(x)]
+        ref_heads = [x for x in ref_lines if SPAN_RE.match(x)]
+        assert len(heads) == len(set(heads)) and set(heads) <= set(ref_heads)
+        if merge:
+            assert heads == ref_heads and len(lines) == len(ref_lines)
+        assert _headerless_prefix(lines) == _headerless_prefix(ref_lines)
+        assert len(_headerless_prefix(lines)) == 6  # window 1, all conn
+
+
+def test_sofar_scores_model0_with_its_own_scaler_at_every_training_close(
+    net, pretrained
+):
+    """Every training close adds model0 rows (after local / merged) scored
+    with model 0's own frozen scaler; over the same flows (a quiet close)
+    its counts do not move."""
+    art = pretrained()
+    p = net.peer(k=1, pretrained_dir=art.dir)
+    p.close(flows=_ben(1, 6) + _atk(1, 2), alerts=[("A1", _atk(1, 2))])
+    assert p.lines("sofar_test.jsonl") == []  # ring warm-up: no training
+    p.close(flows=_ben(2, 4) + _scan(2, 3), alerts=[("A2", _scan(2, 3))])
+    p.m.handle_p2p_model(net.payload("slips-a"))  # merges from close 3 on
+    p.close(flows=_ben(3, 4))
+    p.close()  # quiet close: trains window 3 and merges
+    order = [
+        (r["window"], r["model"], r["scope"])
+        for r in map(json.loads, p.lines("sofar_test.jsonl"))
+    ]
+    closes = {2: ["local"], 3: ["local", "merged"], 4: ["local", "merged"]}
+    assert order == [
+        (w, model, scope)
+        for w, models in closes.items()
+        for model in models + ["model0"]
+        for scope in ("all", "conn")
+    ]
+    rows = _sofar(p)
+    for scope in ("all", "conn"):
+        same = [
+            {
+                k: v
+                for k, v in rows[w, "model0", scope].items()
+                if k != "window"
+            }
+            for w in (3, 4)
+        ]
+        assert same[0] == same[1]
+
+    flows = _stored_flows(p)
+    feats = np.array(
+        [p.m._extract_flow_features(f) for f in flows], dtype=np.float32
+    )
+    gt = np.array([p.m._get_simulated_gt(f) == MAL for f in flows])
+    conn = np.array([f["type_"] == "conn" for f in flows])
+    pred = (
+        p.m._predict_batch_with(p.m._model0, art.scaler.transform(feats))
+        == MAL
+    )
+    for scope, mask in (("all", np.ones_like(conn)), ("conn", conn)):
+        g, q = gt[mask], pred[mask]
+        r = rows[4, "model0", scope]
+        assert (r["tp"], r["fp"], r["tn"], r["fn"]) == (
+            int((g & q).sum()),
+            int((~g & q).sum()),
+            int((~g & ~q).sum()),
+            int((g & ~q).sum()),
+        )
+
+
+def test_no_pretrained_key_starts_empty_and_writes_nothing_of_model0(net):
+    """The empty per-peer start stays the default: with no `pretrained`
+    key the start-model step attempts no loading, and the run writes no
+    model0 file and no model0 row; every output equals that of the harness
+    start (the behaviour before pretrained starts existed)."""
+    on = net.peer()
+    off = Peer(net.tmp_path / "control", net.clock, "slips-b")
+    net.peers.append(off)
+    on.m._load_pretrained = lambda: pytest.fail("pretrained load attempted")
+    on.m._init_start_model()  # yaml stub: no keys at all
+    assert on.m.pretrained is False and on.m.model is None
+    for p in (on, off):
+        _run_windows(p, net, merge=True)
+    assert on.m._model0 is None and on.m.merge_count == 4
+    names = sorted(os.listdir(on.m.output_dir))
+    assert names == sorted(os.listdir(off.m.output_dir))
+    assert not [name for name in names if "model0" in name]
+    assert {model for _, model, _ in _sofar(on)} == {"local", "merged"}
+    for name in names:
+        path = os.path.join(on.m.output_dir, name)
+        if os.path.isfile(path) and name != "training_network.log":
+            assert on.lines(name) == off.lines(name), name
+    for name in sorted(os.listdir(os.path.join(on.m.output_dir, "weights"))):
+        a, b = (
+            np.load(os.path.join(p.m.output_dir, "weights", name))
+            for p in (on, off)
+        )
+        assert all(np.array_equal(a[key], b[key]) for key in a.files)
+    for attr in ("model", "_local_only_model"):
+        a, b = (getattr(p.m, attr).state_dict() for p in (on, off))
+        assert _same_state(a, b)
