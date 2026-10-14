@@ -812,6 +812,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # Buffers: features/labels of the finalized cell trained this window.
         self.training_buffer_x: list = []
         self.training_buffer_y: list = []
+        # flow id of each buffer row (row-aligned), so undersampling knows
+        # which flows it dropped from the batch
+        self.training_buffer_ids: list = []
         self._last_train_X: Optional[np.ndarray] = None
         self._last_train_Y: Optional[np.ndarray] = None
 
@@ -1340,7 +1343,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             with torch.no_grad():
                 for name, param in self.model.named_parameters():
-                    if param.grad is None:
+                    # frozen params keep the zeroed grad of an earlier fit
+                    # (not None): skip them, or weight decay and stale Adam
+                    # momentum would still move them in head-only stages
+                    if param.grad is None or not param.requires_grad:
                         continue
                     state = self._adam_state[name]
                     state["step"] += 1
@@ -1802,12 +1808,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self._store_conn_stream("local", gt_label, local[i])
 
     def _record_pending_labels(
-        self, malicious_flows: list, benign_flows: list
+        self, malicious_flows: list, benign_flows: list, arrival_window: int
     ) -> None:
         """Snapshot finalize-time labels into the pending pool.
 
         Pendings wait until a training batch actually fires; sub-threshold
         batches therefore stay visible to flips instead of vanishing.
+
+        :param arrival_window: window index of the finalized cell the flows
+            arrived in (finalized at close arrival_window + K)
         """
         for lbl, group in ((1, malicious_flows), (0, benign_flows)):
             for flow in group:
@@ -1823,6 +1832,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "saddr": str(flow.get("saddr", "")),
                     "daddr": str(flow.get("daddr", "")),
                     "starttime": str(flow.get("starttime", "")),
+                    "arrival_window": int(arrival_window),
                 }
 
     def _commit_training_labels(self, window_n: int) -> None:
@@ -1830,22 +1840,40 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         Called exactly when a training batch fires, so every flow gets its
         TRUE train window (carried batches may have waited several windows).
-        One JSONL line per flow goes to trained_labels.jsonl for offline
-        cross-checks against the saved alert stream.
+        Only flows in the batch are committed: pendings undersampling dropped
+        (or whose features failed) never train and are discarded. A pending
+        benign flow an alert cited after its finalize becomes a flip here,
+        attributed to this train window. One JSONL line per flow goes to
+        trained_labels.jsonl for offline cross-checks against the saved
+        alert stream.
 
         :param window_n: training window index of the firing batch
         """
         import json as _json
 
-        for fid, rec in self._pending_labeled.items():
-            if fid in self._trained_label_flows:
-                continue
+        committed = {
+            fid: rec
+            for fid, rec in self._pending_labeled.items()
+            if fid in self._buffered_flow_ids
+            and fid not in self._trained_label_flows
+        }
+        for fid, rec in committed.items():
+            flip_window = rec.pop("flip_window", None)
             self._trained_label_flows[fid] = rec
             self._trained_window_of[fid] = window_n
+            if flip_window is not None and fid not in self._flipped_ids:
+                self._flipped_ids.add(fid)
+                self._flip_events.append(
+                    {
+                        "flow_id": fid,
+                        "trained_window": window_n,
+                        "flip_window": flip_window,
+                    }
+                )
         self._trained_per_window[window_n] = self._trained_per_window.get(
             window_n, 0
-        ) + len(self._pending_labeled)
-        for fid, rec in self._pending_labeled.items():
+        ) + len(committed)
+        for fid, rec in committed.items():
             self.logger._write(
                 "trained_labels",
                 _json.dumps(
@@ -1857,6 +1885,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         "starttime": rec["starttime"],
                         "label": rec["label"],
                         "train_window": window_n,
+                        "arrival_window": rec["arrival_window"],
                     }
                 ),
             )
@@ -1867,13 +1896,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         A flip = a flow trained BENIGN whose uid this close's alerts cite,
         i.e. the alert reached the module only after the label was
-        finalized. Each flow flips at most once.
+        finalized. Each flow flips at most once. A flow finalized benign
+        but still waiting in a carried (sub-threshold) batch will train
+        benign against this alert: it is marked here and becomes a flip
+        when its batch trains (_commit_training_labels).
 
         :param fresh_uids: flow uids cited by this close's alerts
-        :return: number of new flips recorded this call
+        :return: number of new flips recorded this call (trained flows)
         """
         if not fresh_uids:
             return 0
+        for rec in self._pending_labeled.values():
+            if (
+                rec["label"] == 0
+                and "flip_window" not in rec
+                and self._flow_matches(rec, fresh_uids)
+            ):
+                rec["flip_window"] = self.training_count_window
         new_flips = 0
         for fid, rec in self._trained_label_flows.items():
             if rec["label"] != 0 or fid in self._flipped_ids:
@@ -1964,6 +2003,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             if x is not None:
                 self.training_buffer_x.append(x)
                 self.training_buffer_y.append(label)
+                self.training_buffer_ids.append(fid)
                 self._buffered_flow_ids.add(fid)
 
     def _log_window_comparisons(
@@ -2231,12 +2271,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
             # 4. deferred training on the finalized cell
-            self._record_pending_labels(malicious_flows, benign_flows)
+            self._record_pending_labels(
+                malicious_flows, benign_flows, finalized["window"]
+            )
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
+                # undersampling picks the batch BEFORE labels commit: the
+                # flows it drops never train and are not recorded as trained
+                if self._undersample:
+                    self._undersample_buffer()
                 # flips/jsonl audit only for flows that actually trained
                 self._commit_training_labels(window_n)
                 self._write_label_flips("finalize")
+                # the span's tail below test_log_batch_size goes to the log
+                # of the model that tested it, before training switches it
+                self.flush_testing_results()
                 self._train_batch()
 
                 self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
@@ -2383,6 +2432,29 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
         return X[keep], y[keep]
 
+    def _undersample_buffer(self) -> None:
+        """Undersample the pooled training buffer in place, before its labels
+        are committed, so the flows the selection drops are never recorded
+        as trained (trained_labels.jsonl, flip registry) and leave the
+        buffer. Same per-window selection _train_batch makes (row indices
+        go through _undersample_majority); the balanced buffer then passes
+        _train_batch's undersampling unchanged.
+        """
+        keep, _ = self._undersample_majority(
+            np.arange(len(self.training_buffer_y)), self.training_buffer_y
+        )
+        if len(keep) == len(self.training_buffer_y):
+            return
+        kept = set(keep.tolist())
+        for i, fid in enumerate(self.training_buffer_ids):
+            if i not in kept:
+                self._buffered_flow_ids.discard(fid)
+        self.training_buffer_x[:] = [self.training_buffer_x[i] for i in keep]
+        self.training_buffer_y[:] = [self.training_buffer_y[i] for i in keep]
+        self.training_buffer_ids[:] = [
+            self.training_buffer_ids[i] for i in keep
+        ]
+
     def _train_batch(self):
         """Train on accumulated training buffer: local fc1+head, local head, merge head."""
         try:
@@ -2488,6 +2560,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.training_buffer_x.clear()
             self.training_buffer_y.clear()
+            self.training_buffer_ids.clear()
             self._buffered_flow_ids.clear()
 
             self.print("_train_batch: exiting", 1, 1)
@@ -2587,40 +2660,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         try:
             self.print("trigger_merge: entering", 1, 1)
-            self.logger.log_timeline(
-                "MERGE_START",
-                f"merge_{self.merge_count + 1} peers={len(self.peer_models)} ("
-                + ",".join(self.peer_models.keys())
-                + ")",
-            )
-            if len(self.peer_models) < 1:
-                self.print(
-                    f"trigger_merge: {len(self.peer_models)} peer models available",
-                    1,
-                    1,
-                )
-                return
-
-            self.print(
-                f"Merging {len(self.peer_models)} peer models + own model",
-                1,
-                1,
-            )
-
-            self.logger.log_train_header(
-                "merged_train",
-                f"merge_{self.merge_count + 1} | {len(self.peer_models)} peers: {','.join(self.peer_models.keys())} + own",
-            )
-
             # Protocol-driven merge: average every shared tensor across own +
             # peers; distances/dumps use the flat concatenation of the shared
             # parameters (key order fixed) — works for ANY model class.
+            # A peer payload is usable only with every shared key at our
+            # shape (another model_class may reuse key names).
             own_shared = self.model.weights_for_sharing() if self.model else {}
             shared_keys = sorted(own_shared)
             usable = {
                 pid: m
                 for pid, m in self.peer_models.items()
-                if all(isinstance(m.get(k), torch.Tensor) for k in shared_keys)
+                if all(
+                    isinstance(m.get(k), torch.Tensor)
+                    and m[k].shape == own_shared[k].shape
+                    for k in shared_keys
+                )
             }
             skipped = [pid for pid in self.peer_models if pid not in usable]
             if skipped:
@@ -2629,6 +2683,34 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     0,
                     1,
                 )
+            if not usable:
+                # nothing to merge with: no merge is recorded, the local
+                # model stays the one under test
+                self.print(
+                    f"trigger_merge: no usable peer model "
+                    f"({len(self.peer_models)} stored), merge skipped",
+                    0,
+                    1,
+                )
+                return
+
+            self.logger.log_timeline(
+                "MERGE_START",
+                f"merge_{self.merge_count + 1} peers={len(usable)} ("
+                + ",".join(usable.keys())
+                + ")",
+            )
+
+            self.print(
+                f"Merging {len(usable)} peer models + own model",
+                1,
+                1,
+            )
+
+            self.logger.log_train_header(
+                "merged_train",
+                f"merge_{self.merge_count + 1} | {len(usable)} peers: {','.join(usable.keys())} + own",
+            )
 
             def _flat_all(ws):
                 return torch.cat(
@@ -2761,6 +2843,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
         Freeze fc1, train head ONLY on the provided batch with configured epochs.
+
+        X is the ALREADY-SCALED batch the local head fine-tuned on
+        (_last_train_X): it is neither fed to the scaler (fit on raw
+        training features only) nor scaled a second time.
         """
         try:
             if len(X) == 0:
@@ -2768,9 +2854,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "Alignment buffer empty, skipping head alignment", 1, 1
                 )
                 return
-
-            self.update_preprocessor(pd.DataFrame(X))
-            X_scaled = self.scaler.transform(X)
 
             # Get epochs from instance variable (set in init)
             epochs = self.merge_finetune_epochs
@@ -2784,7 +2867,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # For head alignment, we need to train with frozen fc1
             # Override by temporarily setting a flag
             self._freeze_fc1_for_training = True
-            self.fit_incremental_model(X_scaled, y, train_target="merged")
+            self.fit_incremental_model(X, y, train_target="merged")
             self._freeze_fc1_for_training = False
 
             self.print(

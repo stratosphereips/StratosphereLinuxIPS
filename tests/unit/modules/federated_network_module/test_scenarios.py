@@ -195,6 +195,7 @@ def _module(root, name, *, k, balancing, merge_rule, model_class, min_samples):
     m.testing_flows_since_last_log = 0
     m.testing_log_batch_size = 1  # as in config/slips.yaml
     m.training_buffer_x, m.training_buffer_y = [], []
+    m.training_buffer_ids = []
     m._last_train_X = m._last_train_Y = None
     m._buffered_flow_ids = set()
     m.peer_models = {}
@@ -539,13 +540,6 @@ def test_alert_that_precedes_its_flow_labels_it_malicious_end_to_end(net):
     ] == [(1, ["a3_0"], 0), (2, [], 0), (3, [], 1), (4, [], 0)]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: a carried (sub-threshold) flow cited after its finalize but "
-    "before its batch trains trains benign and is never counted as a flip "
-    "(_detect_label_flips scans only _trained_label_flows and runs before "
-    "_commit_training_labels in the same close)",
-)
 def test_carried_flow_cited_before_its_batch_trains_is_a_flip(net):
     """min_training_samples carry-over: window 1 (5 flows < 8) finalizes
     benign but does not train; the alert citing its attack flows lands at
@@ -563,6 +557,31 @@ def test_carried_flow_cited_before_its_batch_trains_is_a_flip(net):
     snap = p.flip_snapshot()
     assert snap.flips == 2
     assert snap.per_window == {2: (9, 2), 3: (8, 0)}
+
+
+def test_trained_labels_name_the_window_each_flow_arrived_in(net):
+    """Every trained_labels.jsonl row carries arrival_window, the window of
+    the cell the flow was placed in (by its ts, so a flow SLIPS stores a
+    window late keeps its own window), next to the unchanged fields. The
+    cell finalizes at close arrival_window + K; a sub-threshold cell is
+    carried and trains later, so train_window - K is not its arrival."""
+    p = net.peer(k=1, min_samples=8)
+    p.close(flows=_ben(1, 5))
+    p.close(flows=_ben(2, 5) + [("b1_late", BASE + 50)])  # 6 < 8: carried
+    p.close(flows=_ben(3, 9))  # windows 1 + 2 train here
+    p.close(flows=_ben(4, 1))  # window 3 trains here
+    rows = p.trained_by_uid()
+    assert {
+        uid: (r["arrival_window"], r["train_window"])
+        for uid, r in rows.items()
+    } == {
+        **{uid: (1, 3) for uid in _ben(1, 5) + ["b1_late"]},
+        **{uid: (2, 3) for uid in _ben(2, 5)},
+        **{uid: (3, 4) for uid in _ben(3, 9)},
+    }
+    fields = {"flow_id", "uid", "saddr", "daddr", "starttime", "label"}
+    fields |= {"train_window", "arrival_window"}
+    assert all(set(r) == fields for r in rows.values())
 
 
 def test_trained_labels_alert_uids_and_label_flips_agree(net):
@@ -726,13 +745,6 @@ def test_undersample_trains_all_malicious_window_and_balances_mixed_one(net):
     assert p.spans("local_test.log") == {"window_1": 6}
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: _commit_training_labels runs before _train_batch "
-    "undersamples, so majority flows dropped from the batch are still "
-    "written to trained_labels.jsonl and the flip registry (trained counts "
-    "inflated; a later alert on a never-trained flow counts as a flip)",
-)
 def test_undersampled_out_flows_are_not_recorded_as_trained(net):
     """balancing=undersample trains 2 mal / 2 ben out of 2 mal / 8 ben;
     only those 4 flows may be recorded as trained. A late alert citing all
@@ -845,13 +857,6 @@ def test_peers_exchange_local_models_and_merge_the_latest_one(net):
             )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: fit_incremental_model's manual Adam skips only params with "
-    "grad None; frozen (requires_grad=False) federated layers keep the zeroed "
-    "grad tensor of the previous full fit, so weight decay and stale Adam "
-    "momentum still move them in head-only fine-tuning",
-)
 @pytest.mark.parametrize("stage", ["local_head", "merged"])
 def test_head_only_finetune_leaves_federated_layers_untouched(net, stage):
     """Head-only fine-tuning must not change the federated layers: after
@@ -883,12 +888,6 @@ def test_head_only_finetune_leaves_federated_layers_untouched(net, stage):
         assert torch.equal(before, after)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: trigger_merge hands the already-scaled batch (_last_train_X) "
-    "to _align_head_on_buffer, which partial_fits the scaler on it and scales "
-    "it again: every merge corrupts the feature scaler both streams test with",
-)
 def test_merge_leaves_the_feature_scaler_of_the_run_untouched(net):
     """The merge only swaps federated weights and re-tunes the head; the
     merged model must be stored with the very scaler the local model was
@@ -906,12 +905,6 @@ def test_merge_leaves_the_feature_scaler_of_the_run_untouched(net):
     np.testing.assert_allclose(merged.var_, local.var_)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: trigger_merge guards on len(self.peer_models), not on the "
-    "usable peers: with every stored payload unusable (missing shared keys) "
-    "it 'merges' 0 peers, bumps merge_count and moves testing to merged_test",
-)
 def test_merge_without_a_usable_peer_keeps_testing_the_local_model(net):
     """A peer running another model_class sends no fc2_* tensors; the
     receiver (two-layer net) has nobody to merge with, so no merge may be

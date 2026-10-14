@@ -110,8 +110,10 @@ class Pipe:
         m._pending_labeled = {}
         m.training_buffer_x = []
         m.training_buffer_y = []
+        m.training_buffer_ids = []
         m._buffered_flow_ids = set()
         m.min_training_samples = min_samples
+        m._undersample = False
         m._training_trigger = ""
         # testing streams
         m._is_fitted = fitted
@@ -140,6 +142,7 @@ class Pipe:
         )
         m.training_buffer_x.clear()
         m.training_buffer_y.clear()
+        m.training_buffer_ids.clear()
         m._buffered_flow_ids.clear()
 
     def add(self, uid, ts=..., saddr="10.0.0.1", arp=False):
@@ -257,12 +260,6 @@ def test_alert_by_finalize_labels_after_finalize_flips(
     ]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: a finalized benign flow waiting in _pending_labeled "
-    "(sub-threshold batch) is invisible to _detect_label_flips, so an alert "
-    "citing it before the batch trains never becomes a flip",
-)
 def test_flip_of_a_carried_over_flow_cited_before_its_batch_trains(
     monkeypatch, tmp_path
 ):
@@ -357,12 +354,6 @@ def test_each_flow_is_tested_once_before_the_window_that_trains_it(
     assert pos["c"] > trains[0][0]  # tested by the model trained at close 2
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: a training close resets the all-flows test counters "
-    "without flushing the residual below test_log_batch_size (the conn "
-    "twin flushes it), so those tested flows vanish from local_test.log",
-)
 def test_training_close_keeps_the_residual_of_the_all_flows_stream(
     monkeypatch, tmp_path
 ):
@@ -488,15 +479,7 @@ def test_model_sent_over_p2p_arrives_bit_exact_at_the_receiver(
     "bad",
     [
         "missing_key",
-        pytest.param(
-            "other_model_class",
-            marks=pytest.mark.xfail(
-                strict=True,
-                reason="BUG: a peer whose shared keys match but shapes differ "
-                "(other model_class) makes the whole merge raise and abort "
-                "instead of being skipped",
-            ),
-        ),
+        "other_model_class",
     ],
 )
 def test_incompatible_peer_is_skipped_and_the_rest_still_merge(tmp_path, bad):
@@ -645,6 +628,7 @@ def _trainable(tmp_path, balancing=""):
     rng = np.random.default_rng(0)
     m.training_buffer_x = list(rng.normal(size=(10, 18)).astype(np.float32))
     m.training_buffer_y = [MAL] * 8 + [BEN] * 2
+    m.training_buffer_ids = [f"u{i}" for i in range(10)]
     m._buffered_flow_ids = {f"u{i}" for i in range(10)}
     return m
 
@@ -695,13 +679,6 @@ def test_undersample_preset_trains_and_logs_the_balanced_batch(tmp_path):
     assert m.db.publish.call_args.args[0] == "p2p_pygo"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="BUG: trigger_merge passes the already-scaled _last_train_X to "
-    "_align_head_on_buffer, which partial_fits the shared scaler on it and "
-    "scales it again (merged head trains on double-scaled data; every merge "
-    "adds a second copy of the batch to the scaler both streams test with)",
-)
 def test_merged_head_finetunes_on_the_same_batch_as_the_local_head(tmp_path):
     """Local and merged heads must differ only in fc1's origin (trigger_merge
     docstring): the merge fine-tune sees exactly the scaled batch the local

@@ -61,3 +61,36 @@ whether memory pressure actually existed.
 onto develop. The module's own artifacts are resolved from `__file__`;
 SLIPS is started from `/opt/StratosphereLinuxIPS`, so the base class's
 relative store/load paths resolve correctly without a core change.
+
+## Merge scaling, frozen layers, label bookkeeping, test-stream tail (Oct 14 tests)
+
+**Severity**: High (local-vs-merged comparison, trained/flip counts)
+
+**Root cause / fix** (each pinned by a test in
+`tests/unit/modules/federated_network_module/`):
+1. `trigger_merge` passed the already-scaled `_last_train_X` to
+   `_align_head_on_buffer`, which `partial_fit` the shared scaler on it and
+   scaled it again. Now the merged head fine-tunes on exactly the batch the
+   local head used; the scaler is fit on raw training features only.
+2. The manual Adam skipped only `grad is None`; frozen federated layers keep
+   a zeroed grad, so weight decay + stale momentum moved them in head-only
+   stages. Frozen params are now skipped (no step, no decay, no Adam state).
+3. Undersampling ran inside `_train_batch`, after the labels were committed:
+   dropped flows were recorded as trained (jsonl, flip registry and
+   denominators). The pooled buffer is now undersampled (same per-window
+   selection) before the commit, and only buffered flows commit
+   (`training_buffer_ids` is row-aligned with the buffer).
+4. A flow finalized benign but carried in a sub-threshold batch and cited
+   after its finalize was never a flip. It is marked while pending and
+   counts as a flip when its batch trains.
+5. A training close reset the all-flows test counters without flushing the
+   tail below `test_log_batch_size`; it is now flushed before training.
+6. A peer payload with matching keys but other shapes aborted the whole
+   merge; it is now skipped and the rest merges.
+7. With no usable peer payload `trigger_merge` still recorded a merge
+   (merge_count, merged stream/artifacts); it now returns first.
+
+Also: `trained_labels.jsonl` rows carry `arrival_window` (window of the cell
+the flow arrived in; it finalizes at close `arrival_window + K`).
+
+**Date fixed**: 2026-10-14
