@@ -4,7 +4,7 @@ repos:
     hooks:
         - id: detect-secrets
           args: ['--baseline', '.secrets.baseline']
-          exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$|^modules/federated_network_module/artifacts/pretrained/.*/meta\.json$'
+          exclude: '.*dataset/.*|^config/local_ti_files/own_malicious_JA3.csv$|.*test.*|.*\.md$'
 
 
 -     repo: https://github.com/pre-commit/pre-commit-hooks

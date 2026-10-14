@@ -99,122 +99,12 @@ On init, if `train_from_scratch: false` in config and local artifacts exist:
 
 If `train_from_scratch: true` or artifacts missing, training starts from scratch.
 
-The default start is this **empty** model (per-peer seeded trainable layers,
-shared frozen projection). A missing, `false` or unparseable `pretrained` key
-keeps it, attempts no loading and writes no model-0 output.
-
-### Pretrained start (`pretrained: true`, opt-in) and model 0
-
-With `pretrained: true` every peer starts from the same offline-built base
-model of its `model_class` (see `label_source: dataset` below), overriding
-both the per-peer empty init and the `latest_local` warm start (whatever
-`train_from_scratch` says). At init the module:
-
-1. builds the model (`create_empty_model()`), loads
-   `<pretrained_dir>/<model_class>/model_state.bin` (strict, full
-   `state_dict` incl. the head) and `scaler.bin` (restricted unpickler; must
-   be a `StandardScaler` fitted on the 18 features) as the **shared scaler**;
-2. verifies `meta.json`: `model_class` must match, and for random-projection
-   classes `random_projection_sha256` must equal the sha256 of this peer's
-   `artifacts/random_projection.bin`, as found at startup or as the model
-   build re-saves it (torch re-serializes the same tensor with
-   version-dependent bytes), and the projection tensors in the state must
-   equal this peer's;
-3. on **any** missing file or mismatch raises `PretrainedLoadError` with the
-   reason (also printed): a silently empty model would invalidate the
-   experiment, so the module does not start.
-
-Peers then keep training and merging from the pretrained weights, and the
-shared scaler keeps `partial_fit`-ing on live traffic (the base class's
-`read_model()` in `pre_main` is skipped, so it cannot replace the scaler).
-
-**Model 0** = "the model we started with": frozen deep copies of the loaded
-model **and of its scaler**, taken before any training. It never trains,
-merges or `partial_fit`s, and it is always scored with its own frozen
-scaler, never the shared one. It is evaluated
-
-- online, on every flow the local/merged streams test, into
-  `model0_test.log` / `model0_test_conn.log` (format below), and
-- on all traffic so far: `model: "model0"` rows in `sofar_test.jsonl` at
-  every training close.
-
-### Offline pretraining on labeled captures (`label_source: dataset`)
-
-`label_source` (default `alerts`) selects where training labels come from.
-Live runs label from alerts (alert -> evidence -> flow uid). With
-`label_source: dataset` the module trains on each flow's own
-`ground_truth_label` from a labeled capture (the `label` column of a labeled
-Zeek log; `Malicious*` -> malicious, `Benign`/`normal` -> benign, anything
-else such as `Background` is not trained), and at shutdown it closes one last
-window so the end of the input trains before the model is stored. Chaining
-several captures: run SLIPS once per capture with the same artifacts dir and
-`train_from_scratch: false` after the first, so each run warm-starts from the
-model and scaler the previous one stored. Used to build the pretrained base
-models (thesis tooling `pretrain_base_models.py`).
-
 ## Artifact Paths
 
-All paths are hardcoded in `init()` (relative to the module file), except
-`pretrained_dir`.
+All paths are hardcoded in `init()`. They are NOT configurable via `slips.yaml`.
 
 ### Base Artifacts (Shared Across All Peers)
 - `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to the default model only)
-
-### Pretrained base models (`pretrained: true`)
-One directory per model class under `pretrained_dir` (default
-`artifacts/pretrained`, relative to the module directory), committed for
-`random_projection_mlp`, `random_projection_two_layer` and `simple_mlp`:
-```
-artifacts/pretrained/<model_class>/
-├── model_state.bin   # torch.save(model.state_dict()), full model incl. head
-├── scaler.bin        # pickled fitted sklearn StandardScaler (18 features)
-└── meta.json         # {"model_class": ..., "random_projection_sha256": ...}
-```
-`random_projection_sha256` is the sha256 of the `random_projection.bin` the
-model was trained with (checked for the random-projection classes only).
-`meta.json` also records how the model was built: image commit, settings,
-and per capture its sha256, training rounds and trained samples.
-
-#### How the base models are trained
-Thesis tooling `pretrain_base_models.py` (experiment runner,
-`thesis_experiments/`), one chain per model class:
-
-1. **Data**: the labeled Stratosphere captures 008, 010 and 011
-   (`security-datasets-for-testing/<id>-*/data/conn.log.labeled`, staged
-   as `conn.log`). Their traffic is unlike the lab's on purpose; the base
-   model is only a jumpstart.
-2. **One SLIPS per capture**, each in a throwaway container from the
-   federation image: `--network none`, its own redis inside the container,
-   p2p off, every module but this one disabled.
-3. **Module settings**: `label_source: dataset`, `time_window_width: 20`,
-   `label_finalize_delay_windows: 0`, `min_training_samples: 30`,
-   `training_batch_size: 50`, `balancing: weighting`, `finetune_head: true`,
-   the live peers' `seed`; `model_class` per chain.
-4. **Consecutive training**: all runs of a chain mount the same artifacts
-   dir (seeded with the image's `random_projection.bin`). The first run has
-   `train_from_scratch: true`, the next ones `false`, so each warm-starts from
-   the `latest_local_state.bin` + `latest_local_scaler.bin` the previous run
-   stored. The scaler keeps `partial_fit`-ing across captures.
-5. **Export**: the chain's final `latest_local_state.bin` / `_scaler.bin`
-   become `model_state.bin` / `scaler.bin`, plus `meta.json`.
-
-```
-python3 -u pretrain_base_models.py [--classes a,b] [--datasets 008,010,011]
-```
-Outputs land in `~/fl_pretrain/` (per class and capture: config, SLIPS output;
-`export/<model_class>/`). Copy `export/*` here and rebuild the image.
-
-Checks before shipping: every class trains on all labeled flows
-(5,603 + 5,310 + 8,722 = 19,635; `Background` is skipped), so the scaler's
-`n_samples_seen_` must be 19,635. `score_base_models.py` scores the models on
-a lab run's flows.sqlite (all flows and conn only).
-
-Known limitation of the current models: on lab traffic they are poor on conn
-flows (conn MCC about -0.3; all-flows MCC +0.38 mostly from calling ARP
-malicious). Zeek's `orig_bytes`/`resp_bytes` are sequence-number based and
-huge on RST scan flows, and the derived `throughput` and `avg_pkt_size`
-amplify them into saturated z-scores. Any feature change requires retraining
-these models.
 
 ### Local Model (Own Training Only)
 - `artifacts/latest_local_state.bin` - full model `state_dict` (class-driven: any registry model)
@@ -288,7 +178,6 @@ under `--- New local model (window_N) ---` headers):
 | `local_test.log` | local-only model (the frozen snapshot from the last full local training; from the first merge on, this stream is driven by the dual-testing second forward pass) |
 | `merged_test.log` | merged model (active once a merge is done) |
 | `local_test_conn.log` / `merged_test_conn.log` | the same two streams counting **conn flows only** (same spans and line format). Every flow (conn + ARP) counts in the files above; ARP records dominate them under a scanning attacker, so score both scopes |
-| `model0_test.log` / `model0_test_conn.log` | **pretrained start only** (absent otherwise): model 0, the frozen start model scored with its own frozen scaler, on every flow the streams above test. Line format, `New local model (window_N)` spans and counter/flush handling are the local stream's (header on first use in a span; counters reset at each training close), so pair the three streams by window label. Lines before the first header are flows tested before the first training (by the pretrained model, so they equal local_test.log's headerless lines) |
 | `sofar_test.jsonl` | **all traffic so far** (not prequential): at every training close, the models of that close scored on every flow read since start, **including the flows they trained on** — optimistic, report it as such. Format below |
 
 > All traffic so far (`sofar_test.jsonl`): every conn flow and ARP record the
@@ -305,10 +194,7 @@ under `--- New local model (window_N) ---` headers):
 >
 > `window` = N of that close's `New local model (window_N)` header; `model`:
 > `local` = the local-only model of the close (the one sent to peers),
-> `merged` = the merged model, written only when that close merged,
-> `model0` = the frozen start model scored with its own frozen scaler,
-> written at every training close of a pretrained start only (rows per
-> close in that order); `scope`:
+> `merged` = the merged model, written only when that close merged; `scope`:
 > `all` = conn + ARP, `conn` = conn flows only; malicious is the positive
 > class. Closes that train nothing write no rows. GT is fixed when a flow is
 > first read (later edits of the simulated-attacker list do not relabel it).
@@ -353,8 +239,6 @@ Only these keys are actually read by the module:
 federated_network_module:
   mode: train
   train_from_scratch: false
-  pretrained: false                      # opt-in pretrained start + model 0
-  pretrained_dir: artifacts/pretrained   # relative to the module directory
   create_performance_metrics_log_files: true
   local_training_epochs: 15
   merge_finetune_epochs: 5

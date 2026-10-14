@@ -10,6 +10,7 @@ merging, the P2P wire format, and the merge-rule contract.
 """
 
 import json
+import pickle
 import re
 import sqlite3
 from collections import deque
@@ -24,6 +25,7 @@ from sklearn.preprocessing import StandardScaler
 from modules.federated_network_module import (
     federated_network_module as fnm,
 )
+from slips_files.common.abstracts import ml_module_base as ml_base
 
 MAL, BEN = fnm.MALICIOUS, fnm.BENIGN
 WIN = 300  # window_size_seconds
@@ -131,7 +133,6 @@ class Pipe:
         m._conn_active = m._blank_test_statistics()
         m._conn_local = m._blank_test_statistics()
         m._sofar_chunks = []
-        m.label_source = "alerts"
         m.scaler = MagicMock(transform=lambda x: x)
         m.predict_batch = lambda x: np.array([BEN] * len(x))
         m._train_batch = self._train
@@ -628,13 +629,39 @@ def _trainable(tmp_path, balancing=""):
     m._local_only_model = None
     m._is_fitted = False
     m._sofar_chunks = []
-    m.label_source = "alerts"
     rng = np.random.default_rng(0)
     m.training_buffer_x = list(rng.normal(size=(10, 18)).astype(np.float32))
     m.training_buffer_y = [MAL] * 8 + [BEN] * 2
     m.training_buffer_ids = [f"u{i}" for i in range(10)]
     m._buffered_flow_ids = {f"u{i}" for i in range(10)}
     return m
+
+
+def test_warm_start_keeps_its_scaler_through_the_base_read_model(
+    tmp_path, monkeypatch
+):
+    """train_from_scratch: false reloads latest_local_* in init(); the base
+    class read_model (pre_main) must not swap that scaler for an empty one.
+    With nothing reloaded the base class still runs."""
+    src = _trainable(tmp_path)
+    src.model = src.create_empty_model()
+    src.scaler.partial_fit(np.ones((5, 18)))
+    torch.save(src.model.state_dict(), src.local_state_path)
+    with open(src.local_scaler_path, "wb") as fh:
+        pickle.dump(src.scaler, fh)
+    base = MagicMock()
+    monkeypatch.setattr(ml_base.MLBaseDetection, "read_model", base)
+
+    m = _trainable(tmp_path)
+    m._warm_started = False
+    m._load_local_model()
+    assert m._warm_started
+    m.read_model()
+    base.assert_not_called()
+    assert m.scaler.n_samples_seen_ == 5 and m.preprocessor is m.scaler
+    m._warm_started = False
+    m.read_model()
+    base.assert_called_once()
 
 
 @pytest.mark.parametrize(

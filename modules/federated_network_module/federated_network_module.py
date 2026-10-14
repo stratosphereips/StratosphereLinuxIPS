@@ -36,12 +36,9 @@ Artifact Paths:
 - Base (shared): artifacts/random_projection.bin, artifacts/scaler.bin
 - Local: artifacts/latest_local_fc1.bin, latest_local_head.bin, latest_local_scaler.bin
 - Merged: artifacts/merged_N_fc1.bin, merged_N_head.bin (N = merge count)
-- Pretrained start (pretrained: true): artifacts/pretrained/<model_class>/
-  model_state.bin, scaler.bin, meta.json; a frozen copy is scored as model 0
 """
 
 import collections
-import hashlib
 import ipaddress
 import json
 import os
@@ -61,7 +58,6 @@ import torch.nn as nn
 from sklearn.preprocessing import StandardScaler
 
 import slips_files.common.abstracts.ml_module_base as ml_base
-from slips_files.common.ml_safe_unpickler import safe_pickle_load
 from slips_files.common.output_paths import get_this_db_path_inside_output_dir
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.structures.evidence import EvidenceType
@@ -607,7 +603,6 @@ class ModuleLogger:
 
     def __init__(self, output_dir: str, enable: bool):
         self.enable = enable
-        self.output_dir = output_dir
         self._files = {}
         if enable:
             os.makedirs(output_dir, exist_ok=True)
@@ -640,21 +635,6 @@ class ModuleLogger:
                     output_dir, filenames.get(name, f"{name}.log")
                 )
                 self._files[name] = open(path, "w")
-
-    def open_extra(self, names: tuple) -> None:
-        """Create (truncate) logs only some runs write, e.g. model 0's
-        streams (model0_test.log, model0_test_conn.log) of a pretrained
-        start; runs that never open them have no such files.
-
-        :param names: stream names, each written to <name>.log
-        """
-        if not self.enable:
-            return
-        for name in names:
-            if name not in self._files:
-                self._files[name] = open(
-                    os.path.join(self.output_dir, f"{name}.log"), "w"
-                )
 
     def _write(self, name: str, msg: str) -> None:
         if self.enable:
@@ -745,23 +725,6 @@ def finetune_epochs_gate(epochs: int, finetune_head: bool) -> int:
     return epochs if finetune_head else 0
 
 
-class PretrainedLoadError(RuntimeError):
-    """A pretrained start cannot proceed (missing or mismatched artifact)."""
-
-
-def file_sha256(path: str) -> str:
-    """Hex sha256 of a file's bytes.
-
-    :param path: file to hash
-    :return: the hex digest
-    """
-    digest = hashlib.sha256()
-    with open(path, "rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            digest.update(block)
-    return digest.hexdigest()
-
-
 class FederatedNetworkModule(ml_base.MLBaseDetection):
     """
     Federated network ML detector with model sharing and merging.
@@ -788,13 +751,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         "Flow detected as malicious by federated_network_module. "
         "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
     )
-
-    # Model 0 (pretrained: true only): the frozen pretrained model and its
-    # own frozen scaler, set by _load_pretrained; None keeps model 0 off.
-    pretrained: bool = False
-    _model0 = None
-    _model0_scaler = None
-    PRETRAINED_FILES = ("model_state.bin", "scaler.bin", "meta.json")
 
     def init(self):
         """Initialize module, model, preprocessor, and buffers."""
@@ -937,8 +893,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # format and spans): ARP records dominate the all-flows streams.
         self._conn_active: dict = self._blank_test_statistics()
         self._conn_local: dict = self._blank_test_statistics()
-        # Model 0 (pretrained start) and its model0_test*.log stream state
-        # are set by _load_pretrained; _model0 stays None otherwise.
         # All-traffic-so-far evaluation (sofar_test.jsonl): raw features, GT
         # and conn flag of every flow read from the DB, stored once at ingest
         # as one (float32, bool, bool) chunk per close.
@@ -1091,207 +1045,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             self.balancing = ""
         self._undersample = self.balancing == "undersample"
-        # Where training labels come from: "alerts" (live runs: alert ->
-        # evidence -> flow uid) or "dataset" (offline pretraining on labeled
-        # captures: each flow's own ground_truth_label).
-        self.label_source = (
-            str(self._read_module_config_str("label_source", "alerts"))
-            .strip()
-            .lower()
-        )
-        if self.label_source not in ("alerts", "dataset"):
-            self.print(
-                f"unknown label_source '{self.label_source}', using alerts",
-                0,
-                1,
-            )
-            self.label_source = "alerts"
         self.print(f"balancing: {self.balancing or '(class_weighting)'}", 0, 2)
 
-        self._init_start_model()
-
-    def _init_start_model(self) -> None:
-        """Pick the starting model. Default (`pretrained` false, missing or
-        unparseable): the per-peer empty init, warm-started from the latest
-        local artifacts unless `train_from_scratch`. Opt-in `pretrained:
-        true`: every peer begins from the same offline-built model + scaler
-        of its model_class (frozen copy = model 0), overriding both."""
-        self.pretrained = self._read_module_config_bool(
-            "pretrained", default=False
-        )
-        self.pretrained_dir = self._resolve_pretrained_dir(
-            self._read_module_config_str("pretrained_dir", "")
-        )
+        # Load existing local model if present and not training from scratch
         train_from_scratch = self._read_module_config_bool(
             "train_from_scratch", default=False
         )
         self._warm_started = False
-        if self.pretrained:
-            self._load_pretrained()
-        elif not train_from_scratch:
+        if not train_from_scratch:
             self._load_local_model()
 
-    @staticmethod
-    def _resolve_pretrained_dir(configured: str) -> str:
-        """Directory holding <model_class>/ pretrained artifacts.
-
-        :param configured: yaml `pretrained_dir`; empty = artifacts/pretrained;
-            a relative path is taken relative to this module's directory
-        :return: absolute directory path
-        """
-        path = (configured or "").strip() or os.path.join(
-            "artifacts", "pretrained"
-        )
-        if os.path.isabs(path):
-            return path
-        return os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
-
-    def _pretrained_error(self, source: str, reason: str) -> Exception:
-        """Report a failed pretrained start and build the error to raise.
-
-        :param source: the <pretrained_dir>/<model_class> directory
-        :param reason: what is missing or mismatched
-        :return: the PretrainedLoadError to raise
-        """
-        msg = (
-            f"pretrained start failed for model_class "
-            f"'{self.model_class_name}' from {source}: {reason}"
-        )
-        self.print(msg, 0, 1)
-        return PretrainedLoadError(msg)
-
-    def _load_pretrained(self) -> None:
-        """Start from the pretrained base model of this model_class.
-
-        Builds the model (create_empty_model), loads the full state_dict and
-        the fitted scaler (which becomes the shared, still partial-fitted
-        scaler) and verifies meta.json against this peer: model_class, and
-        for random-projection classes the sha256 of rp_path (accepted as
-        found at startup or as the build re-saved it) plus equal frozen
-        projections. Installs frozen copies of both as model 0.
-
-        :raises PretrainedLoadError: on any missing file or mismatch (a
-            silently empty model would invalidate the experiment)
-        """
-        source = os.path.join(self.pretrained_dir, self.model_class_name)
-        missing = [
-            name
-            for name in self.PRETRAINED_FILES
-            if not os.path.isfile(os.path.join(source, name))
-        ]
-        if missing:
-            raise self._pretrained_error(source, f"missing {missing}")
-        try:
-            with open(os.path.join(source, "meta.json")) as f:
-                meta = json.load(f)
-        except (OSError, ValueError) as e:
-            raise self._pretrained_error(
-                source, f"unreadable meta.json: {e}"
-            ) from e
-        if not isinstance(meta, dict):
-            raise self._pretrained_error(source, "meta.json is not an object")
-        if meta.get("model_class") != self.model_class_name:
-            raise self._pretrained_error(
-                source,
-                f"meta.json model_class '{meta.get('model_class')}' does "
-                f"not match '{self.model_class_name}'",
-            )
-
-        rp_sha_found = (
-            file_sha256(self.rp_path)
-            if self.rp_path and os.path.isfile(self.rp_path)
-            else None
-        )
-        model = self.create_empty_model().to(self.device)
-        frozen = {
-            key: value.clone()
-            for key, value in model.state_dict().items()
-            if "random_projection" in key
-        }
-        if hasattr(model, "random_projection"):
-            rp_shas = {rp_sha_found}
-            if self.rp_path and os.path.isfile(self.rp_path):
-                rp_shas.add(file_sha256(self.rp_path))
-            want = meta.get("random_projection_sha256")
-            if not want or want not in rp_shas:
-                raise self._pretrained_error(
-                    source,
-                    f"meta.json random_projection_sha256 {want!r} does not "
-                    f"match this peer's {self.rp_path} "
-                    f"({sorted(s for s in rp_shas if s)})",
-                )
-        try:
-            state = torch.load(
-                os.path.join(source, "model_state.bin"),
-                map_location=self.device,
-                weights_only=True,
-            )
-            model.load_state_dict(state)
-        except Exception as e:
-            raise self._pretrained_error(
-                source, f"model_state.bin does not load: {e}"
-            ) from e
-        loaded = model.state_dict()
-        if any(not torch.equal(loaded[k], v) for k, v in frozen.items()):
-            raise self._pretrained_error(
-                source,
-                "the frozen random projection in model_state.bin differs "
-                "from this peer's",
-            )
-        try:
-            with open(os.path.join(source, "scaler.bin"), "rb") as f:
-                scaler = safe_pickle_load(f)
-        except Exception as e:
-            raise self._pretrained_error(
-                source, f"unreadable scaler.bin: {e}"
-            ) from e
-        if not isinstance(scaler, StandardScaler) or (
-            getattr(scaler, "n_features_in_", None)
-            != SimpleFederatedNet.FIXED_INPUT_DIM
-        ):
-            raise self._pretrained_error(
-                source,
-                "scaler.bin is not a StandardScaler fitted on "
-                f"{SimpleFederatedNet.FIXED_INPUT_DIM} features",
-            )
-
-        self.model = model
-        self.scaler = scaler
-        self.is_preprocessor_fitted = True
-        self._is_fitted = True
-        self._install_model0(model, scaler)
-        self.print(
-            f"pretrained start: {self.model_class_name} from {source} "
-            f"(scaler n_samples_seen={getattr(scaler, 'n_samples_seen_', '?')})",
-            0,
-            2,
-        )
-
-    def _install_model0(self, model, scaler) -> None:
-        """Keep frozen deep copies of the start model and its scaler as
-        model 0 (never trained, merged or partial-fitted) and open its
-        model0_test*.log streams.
-
-        :param model: the loaded start model (protocol nn.Module)
-        :param scaler: the fitted scaler the start model was trained with
-        """
-        self._model0 = copy.deepcopy(model).eval()
-        for param in self._model0.parameters():
-            param.requires_grad_(False)
-        self._model0_scaler = copy.deepcopy(scaler)
-        self._model0_test = self._blank_test_statistics()
-        self._conn_model0 = self._blank_test_statistics()
-        self._model0_stream_used = False
-        self._model0_span_marked = False
-        self.logger.open_extra(("model0_test", "model0_test_conn"))
-
     def read_model(self):
-        """Base-class artifact loading (pre_main), kept as is unless init()
-        already loaded a model + scaler (pretrained start, or the warm start
-        from latest_local_*): the base would replace that scaler with an
-        empty one, so consecutive offline runs re-fitted the scaler on each
-        capture."""
-        if not self.pretrained and not getattr(self, "_warm_started", False):
+        """Base-class artifact loading (pre_main), skipped when init()
+        already warm-started from latest_local_*: the base would replace the
+        reloaded scaler with an empty one."""
+        if not getattr(self, "_warm_started", False):
             return super().read_model()
         self.clf = self.model
         self.preprocessor = self.scaler
@@ -1339,19 +1107,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return int(value)
         except (TypeError, ValueError):
             return default
-
-    def _read_module_config_str(self, config_key: str, default: str) -> str:
-        """Read a string value from this module's config section.
-
-        :param config_key: key in the module's yaml section
-        :param default: value when the key is absent
-        :return: the configured value as a string
-        """
-        conf = ConfigParser()
-        value = conf.read_configuration(
-            self.module_config_section, config_key, default
-        )
-        return default if value is None else str(value)
 
     def _read_module_config_bool(self, config_key: str, default: bool) -> bool:
         """Read a boolean value from this module's config section."""
@@ -2025,9 +1780,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _test_cell(self, cell: dict) -> None:
         """Classify the cell's not-yet-tested flows with the current model
-        (and the frozen local model while merged, and model 0 with its own
-        scaler when pretrained); store test results and keep each
-        prediction until the cell is finalized."""
+        (and the frozen local model while merged); store test results and
+        keep each prediction until the cell is finalized."""
         if not self._is_fitted:
             return
         todo = [
@@ -2059,43 +1813,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Error testing window flows: {traceback.format_exc()}", 0, 1
             )
             return
-        model0 = self._predict_model0(feats)
         for i, (fid, flow) in enumerate(kept):
             gt_label = self._get_simulated_gt(flow) or BENIGN
             self.store_testing_results(gt_label, preds[i])
             cell["preds"][fid] = preds[i]
             if local is not None:
                 self._store_local_stream(gt_label, local[i])
-            if model0 is not None:
-                self._store_model0_stream(
-                    gt_label, model0[i], flow.get("type_") == "conn"
-                )
             if flow.get("type_") == "conn":
                 self._store_conn_stream("active", gt_label, preds[i])
                 if local is not None:
                     self._store_conn_stream("local", gt_label, local[i])
-
-    def _predict_model0(self, feats: list) -> Optional[np.ndarray]:
-        """Model 0's labels for raw feature rows, scaled with model 0's own
-        frozen scaler. Errors are logged and leave the other streams alone.
-
-        :param feats: raw feature rows of the flows under test
-        :return: labels, or None without model 0 or on error
-        """
-        if self._model0 is None:
-            return None
-        try:
-            x = self._model0_scaler.transform(
-                np.array(feats, dtype=np.float32)
-            )
-            return self._predict_batch_with(self._model0, x)
-        except Exception:
-            self.print(
-                f"Error testing flows with model 0: {traceback.format_exc()}",
-                0,
-                1,
-            )
-            return None
 
     # ------------------------------------------------------------------
     # All-traffic-so-far evaluation (sofar_test.jsonl)
@@ -2157,26 +1884,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _sofar_predict(self, model, x_raw: np.ndarray) -> np.ndarray:
         """Malicious mask of a model over raw features: scaled with the
-        current shared scaler (or the model's own, when it carries one) and
-        decided as the test streams decide (argmax of the softmax), in
-        _SOFAR_BATCH-row slices. The model's train/eval mode is restored
-        afterwards.
+        current shared scaler and decided as the test streams decide
+        (argmax of the softmax), in _SOFAR_BATCH-row slices. The model's
+        train/eval mode is restored afterwards.
 
-        :param model: a protocol model (nn.Module), or a (model, scaler)
-            pair for a model scored with its own scaler (model 0)
+        :param model: a protocol model (nn.Module)
         :param x_raw: raw feature rows (float32)
         :return: bool array, True where the model predicts malicious
         """
-        model, scaler = (
-            model if isinstance(model, tuple) else (model, self.scaler)
-        )
         out = np.zeros(len(x_raw), dtype=bool)
         was_training = model.training
         model.eval()
         try:
             with torch.no_grad():
                 for i in range(0, len(x_raw), self._SOFAR_BATCH):
-                    x = scaler.transform(x_raw[i : i + self._SOFAR_BATCH])
+                    x = self.scaler.transform(x_raw[i : i + self._SOFAR_BATCH])
                     logits = model(torch.FloatTensor(x).to(self.device))
                     idx = torch.argmax(torch.softmax(logits, dim=1), dim=1)
                     out[i : i + len(x)] = (idx == 1).cpu().numpy()
@@ -2191,7 +1913,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """One sofar_test.jsonl row (malicious is the positive class).
 
         :param window_n: training window index of the close
-        :param name: model name ("local" / "merged" / "model0")
+        :param name: model name ("local" / "merged")
         :param scope: "all" (conn + ARP) or "conn"
         :param gt: GT malicious mask of the flows in scope
         :param pred: predicted malicious mask of the same flows
@@ -2212,21 +1934,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         }
 
     def _sofar_models(self, local, merged: bool) -> list:
-        """The named models of this training close, in row order; model 0
-        (pretrained start) is scored at every close with its own scaler.
+        """The named models of this training close, in row order. A further
+        model (e.g. a frozen pretrained baseline "model0") is one more pair.
 
         :param local: this close's local-only snapshot (the model sent to
             peers), None when it was not taken
         :param merged: True when this close produced a merged model
-        :return: [(name, model)], model 0 as (name, (model, scaler))
+        :return: [(name, model)]
         """
         models = []
         if local is not None:
             models.append(("local", local))
         if merged and self.model is not None:
             models.append(("merged", self.model))
-        if self._model0 is not None:
-            models.append(("model0", (self._model0, self._model0_scaler)))
         return models
 
     def _sofar_evaluate(self, window_n: int, models: list) -> None:
@@ -2674,35 +2394,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self._end_window()
                 return
 
-            if self.label_source == "dataset":
-                # offline pretraining: the capture's own labels; flows with
-                # no Malicious/Benign label (e.g. Background) do not train
-                labeled = {
-                    fid: self._dataset_label(f)
-                    for fid, f in finalized["flows"].items()
-                }
-                finalized["mal_ids"] = {
-                    fid for fid, lbl in labeled.items() if lbl == MALICIOUS
-                }
-                malicious_flows = [
-                    finalized["flows"][fid] for fid in finalized["mal_ids"]
-                ]
-                benign_flows = [
-                    finalized["flows"][fid]
-                    for fid, lbl in labeled.items()
-                    if lbl == BENIGN
-                ]
-            else:
-                malicious_flows = [
-                    f
-                    for fid, f in finalized["flows"].items()
-                    if fid in finalized["mal_ids"]
-                ]
-                benign_flows = [
-                    f
-                    for fid, f in finalized["flows"].items()
-                    if fid not in finalized["mal_ids"]
-                ]
+            malicious_flows = [
+                f
+                for fid, f in finalized["flows"].items()
+                if fid in finalized["mal_ids"]
+            ]
+            benign_flows = [
+                f
+                for fid, f in finalized["flows"].items()
+                if fid not in finalized["mal_ids"]
+            ]
             self.print(
                 f"Window {window_n}: {len(malicious_flows)} malicious, "
                 f"{len(benign_flows)} benign flows from {alert_count} alerts",
@@ -2794,7 +2495,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     self._local_stream_used = False
                 self._span_label = span
                 self._local_span_marked = False
-                self._close_model0_span()
 
             # 5. the open cells meet the freshly trained model
             for cell in self._flow_ring:
@@ -3700,27 +3400,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 1,
             )
 
-    @staticmethod
-    def _dataset_label(flow: dict) -> Optional[str]:
-        """Training label from a labeled capture (label_source: dataset).
-
-        :param flow: flow dict carrying the capture's ground_truth_label
-        :return: MALICIOUS, BENIGN, or None when the flow has no usable label
-        """
-        label = str(flow.get("ground_truth_label") or "").strip().lower()
-        if label.startswith("malicious"):
-            return MALICIOUS
-        if label in ("benign", "normal"):
-            return BENIGN
-        return None
-
     def store_model(self):
         """Override base class to save both local and merged models."""
         self.print("Storing models on graceful shutdown.", 0, 2)
-        if self.label_source == "dataset":
-            # offline pretraining ends with the input: train on what the
-            # last window collected before the model is stored
-            self._close_training_window()
         self._write_label_flips("shutdown")
         self._save_local_model()
         if self.merge_count > 0:
@@ -3819,59 +3501,6 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if stats["flows_since_snapshot"] <= 0:
             return
         self._write_stream_line("local_test", stats)
-
-    def _mark_model0_span(self) -> None:
-        """Write the model-0 stream's span header on its first use in a span
-        (as _mark_local_span), into model0_test and its conn twin."""
-        if self._model0_span_marked or not self._span_label:
-            return
-        for target in ("model0_test", "model0_test_conn"):
-            self.logger.log_test_marker(
-                target, f"New local model ({self._span_label})"
-            )
-        self._model0_span_marked = True
-
-    def _store_model0_stream(
-        self, gt_label: str, predicted: str, is_conn: bool
-    ) -> None:
-        """Accumulate model 0's testing counters (all flows, and conn flows
-        in the conn twin), flushed like the local stream.
-
-        :param gt_label: simulated ground truth of the flow
-        :param predicted: model 0's label for the flow
-        :param is_conn: the flow is a conn flow (also counts in the twin)
-        """
-        self._mark_model0_span()
-        self._model0_stream_used = True
-        streams = [(self._model0_test, "model0_test")]
-        if is_conn:
-            streams.append((self._conn_model0, "model0_test_conn"))
-        for stats, target in streams:
-            self._tally(stats, gt_label, predicted)
-            if stats["flows_since_snapshot"] >= self.testing_log_batch_size:
-                self._write_stream_line(target, stats)
-
-    def _flush_model0_stream(self) -> None:
-        """Write model 0's pending snapshots (all flows + conn twin)."""
-        for stats, target in (
-            (self._model0_test, "model0_test"),
-            (self._conn_model0, "model0_test_conn"),
-        ):
-            if stats["flows_since_snapshot"] > 0:
-                self._write_stream_line(target, stats)
-
-    def _close_model0_span(self) -> None:
-        """Training-close closeout of the model-0 stream, as the local
-        stream's: flush the span's tail and reset the counters; the next
-        span's header is written on first use."""
-        if self._model0 is None:
-            return
-        if self._model0_stream_used:
-            self._flush_model0_stream()
-            self._model0_test = self._blank_test_statistics()
-            self._conn_model0 = self._blank_test_statistics()
-            self._model0_stream_used = False
-        self._model0_span_marked = False
 
     def _store_conn_stream(
         self, which: str, gt_label: str, predicted: str
