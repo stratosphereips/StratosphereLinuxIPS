@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261012-severity-plus">
+  <link rel="stylesheet" href="/style.css?v=20261014-daylight-theme">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -20,9 +20,12 @@
         <p id="run-addresses" class="run-addresses muted" hidden></p>
       </div>
     </div>
-    <div class="run-state">
-      <div class="run-state-pill"><span id="state-dot" class="state-dot"></span><strong id="run-state">Connecting</strong></div>
-      <div class="run-state-meta"><small id="run-uptime">Uptime —</small><small id="updated-at">Not updated</small></div>
+    <div class="topbar-actions">
+      <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch to light theme"><span class="theme-icon" aria-hidden="true">☀</span><span class="theme-label">Light</span></button>
+      <div class="run-state">
+        <div class="run-state-pill"><span id="state-dot" class="state-dot"></span><strong id="run-state">Connecting</strong></div>
+        <div class="run-state-meta"><small id="run-uptime">Uptime —</small><small id="updated-at">Not updated</small></div>
+      </div>
     </div>
   </header>
 
@@ -322,6 +325,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261013-overview-alert-groups"></script>
+  <script src="/app.js?v=20261014-daylight-theme"></script>
 </body>
 </html>

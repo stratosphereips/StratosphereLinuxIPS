@@ -89,6 +89,36 @@ const state = {
 };
 
 const byId = (id) => document.getElementById(id);
+/**
+ * Apply the selected interface theme and optionally remember it in this browser.
+ * @param {string} theme The requested theme, light or dark.
+ * @param {boolean} persist Whether to save the choice for later visits.
+ */
+function setTheme(theme, persist = false) {
+  const selected = theme === "light" ? "light" : "dark";
+  document.documentElement.dataset.theme = selected;
+  const toggle = byId("theme-toggle");
+  toggle.querySelector(".theme-icon").textContent = selected === "light" ? "☾" : "☀";
+  toggle.querySelector(".theme-label").textContent = selected === "light" ? "Dark" : "Light";
+  toggle.setAttribute("aria-label", `Switch to ${selected === "light" ? "dark" : "light"} theme`);
+  if (persist) {
+    try {
+      window.localStorage.setItem("slips-theme", selected);
+    } catch (_) {
+      // The switch still works if browser storage is unavailable.
+    }
+  }
+}
+let storedTheme = "dark";
+try {
+  storedTheme = window.localStorage.getItem("slips-theme");
+} catch (_) {
+  // Private browsing may disable storage; the default remains dark.
+}
+setTheme(storedTheme);
+byId("theme-toggle").addEventListener("click", () => {
+  setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light", true);
+});
 const numeric = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const compact = (value) => new Intl.NumberFormat(undefined, {
   notation: "compact", maximumFractionDigits: 1,

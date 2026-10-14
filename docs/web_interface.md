@@ -19,6 +19,11 @@ badges show the records matching those tabs' selected range and filters after
 each tab loads; the Hosts badge likewise shows the matching host count.
 Overview keeps its run totals.
 
+Use the **Light** or **Dark** button in the page header to switch between the
+daylight and dark themes. The choice is saved in this browser and restored when
+the page is reopened, including after a Slips restart. Dark remains the default
+until a theme is selected.
+
 ## Reviewing and cleaning up detections
 
 Alerts open as **Active**. Mark one **In review** while investigating, or
