@@ -4446,6 +4446,24 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     assert reader.alerts(
         {"range": ["all"], "review": ["all"], "alert_id": ["a"]}
     )["total"] == 0
+    detail_id = "f0ddef53-5ed7-4337-ad92-920ddaf26af7"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "INSERT INTO alerts VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (detail_id, 4.0, "10.0.0.1", "tw", "", "", "malicious"),
+        )
+        connection.execute(
+            "INSERT INTO alert_evidence VALUES (?, ?)", (detail_id, "e1")
+        )
+    old_browser_detail = reader.alerts(
+        {"range": ["all"], "review": ["all"], "limit": ["1"],
+         "search": [detail_id]}
+    )
+    assert old_browser_detail["total"] == 1
+    assert old_browser_detail["items"][0]["alert_id"] == detail_id
+    assert [item["id"] for item in old_browser_detail["items"][0][
+        "evidence"
+    ]] == ["e1"]
 
 
 @pytest.mark.parametrize(

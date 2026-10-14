@@ -3441,6 +3441,20 @@ class RunDataReader:
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
         alert_id = self._query_value(query, "alert_id")
+        if (
+            not alert_id
+            and self._query_value(query, "range") == "all"
+            and self._query_value(query, "review") == "all"
+            and self._query_value(query, "limit") == "1"
+            and self._query_value(query, "details").lower() != "false"
+            and re.fullmatch(
+                r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-"
+                r"[0-9a-f]{4}-[0-9a-f]{12}",
+                search,
+            )
+        ):
+            alert_id = search
+            search = ""
         threat = self._query_value(query, "threat").lower()
         profile = self._query_value(query, "profile")
         include_details = (

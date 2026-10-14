@@ -2150,7 +2150,7 @@ async function selectAlertDetailPane(record) {
   back.addEventListener("click", closeAlertDetailPane);
   byId("alerts-detail").replaceChildren(back,
     text("p", "Loading alert evidence…", "empty-state"));
-  const params = new URLSearchParams({ range: "all", review: "all", limit: "1", alert_id: record.alert_id });
+  const params = new URLSearchParams({ range: "all", review: "all", limit: "1", search: record.alert_id });
   const payload = await api("alertPaneDetail", `/api/alerts?${params}`);
   if (!payload || generation !== workspace.detailGeneration
       || workspace.alert?.alert_id !== record.alert_id) return;
@@ -5136,7 +5136,7 @@ async function openAlert(record) {
   if (record.evidence === undefined) {
     body.append(text("p", "Loading alert evidence…", "muted"));
     const params = new URLSearchParams({
-      range: "all", review: "all", limit: "1", alert_id: record.alert_id,
+      range: "all", review: "all", limit: "1", search: record.alert_id,
     });
     try {
       const payload = await api("alertDetail", `/api/alerts?${params}`);
