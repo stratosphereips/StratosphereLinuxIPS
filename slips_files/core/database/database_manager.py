@@ -922,9 +922,10 @@ class DBManager:
 
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
-        evidence_set = self.rdb.set_evidence(evidence)
+        evidence_set = self.rdb.set_evidence(evidence, notify=False)
         if evidence_set:
             self.sqlite.add_evidence(evidence)
+            self.rdb.publish_evidence_added(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
             self.update_threat_level(

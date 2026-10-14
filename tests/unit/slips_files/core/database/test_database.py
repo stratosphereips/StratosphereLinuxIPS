@@ -240,6 +240,7 @@ def test_set_evidence_records_the_producing_module() -> None:
     db.rdb.belongs_to_run = Mock(return_value=True)
     db._get_evidence_interface = Mock(return_value="eth0")
     db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
     db.sqlite = Mock()
     db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
     db.update_threat_level = Mock()
@@ -254,8 +255,55 @@ def test_set_evidence_records_the_producing_module() -> None:
 
     assert db.set_evidence(evidence) is True
     assert evidence.source_module == "conn_analyzer"
-    db.rdb.set_evidence.assert_called_once_with(evidence)
+    db.rdb.set_evidence.assert_called_once_with(evidence, notify=False)
     db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.rdb.publish_evidence_added.assert_called_once_with(evidence)
+
+
+def test_set_evidence_publishes_after_sqlite_commit() -> None:
+    """A fast whitelist consumer must always find the durable evidence row."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
+    db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="en0")
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=EvidenceType.ARP_SCAN,
+        source_module="arp",
+        uid=["arp-flow"],
+        attacker=Mock(profile="profile_192.168.1.185"),
+        threat_level="low",
+        confidence=0.8,
+    )
+    persisted = False
+
+    def persist(_evidence: object) -> None:
+        """Record when the SQLite insert has completed.
+
+        Parameters:
+            _evidence: Evidence being written.
+        """
+        nonlocal persisted
+        persisted = True
+
+    def consume(_evidence: object) -> None:
+        """Simulate a subscriber processing the event immediately.
+
+        Parameters:
+            _evidence: Evidence being consumed.
+        """
+        assert persisted, "evidence was published before its SQLite row"
+
+    db.sqlite.add_evidence.side_effect = persist
+    db.rdb.publish_evidence_added.side_effect = consume
+
+    assert db.set_evidence(evidence) is True
+    db.rdb.set_evidence.assert_called_once_with(evidence, notify=False)
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.rdb.publish_evidence_added.assert_called_once_with(evidence)
 
 
 @pytest.mark.parametrize(

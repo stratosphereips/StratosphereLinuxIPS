@@ -587,6 +587,13 @@ when Live has no alerts, use **Show full run alerts** to inspect older ones.
 Each Slips run also loads its configured local whitelist into its own Redis
 database at startup, even when another run is updating the shared organization
 files.
+Slips commits each new evidence row to `flows.sqlite` before notifying Evidence
+Handler. This ordering lets the handler persist its whitelist decision even
+when it processes the notification immediately. Older runs affected by the
+previous publish-before-insert race may contain a small number of incorrectly
+unexcluded records beside correctly excluded records for the same rule; those
+stored decisions require repair separately and are not changed by upgrading
+the code alone.
 Hiding excluded records filters evidence before
 grouping and pagination; a host/type group still appears when it also contains
 scored evidence. In the Host workspace, historical traffic linked only to
