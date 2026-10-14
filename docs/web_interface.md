@@ -335,6 +335,10 @@ Flow totals use exact profiler counter deltas rather than assuming every sample 
 
 Alerts opens with an **Alerts grouped by host** pane and an empty selection pane. The first divider is resizable immediately. Choose a host to open its **Alerts for this host** timeline, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record. Alert rows summarize all linked evidence types and their counts. Selecting an evidence card opens its investigation in a resizable fourth pane beside the alert. **All alerts** shows the individual alert list directly and opens alert and evidence details beside it. Dividers can be dragged or adjusted with the left and right arrow keys. Closing evidence returns to the same alert; closing an alert returns to its list.
 
+Opening an alert fetches its full record by exact alert ID through the indexed
+alert lookup. The general search remains available for finding alerts by host,
+type, or description, but is not used to load one alert's linked evidence.
+
 The third pane has **Back to alerts** and a close button. Both return to the
 selected host's alert timeline at the same scroll position. If an alert is
 opened from a full-width evidence record, its drawer offers **Back to

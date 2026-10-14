@@ -3440,6 +3440,7 @@ class RunDataReader:
             return self._grouped_alerts(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
+        alert_id = self._query_value(query, "alert_id")
         threat = self._query_value(query, "threat").lower()
         profile = self._query_value(query, "profile")
         include_details = (
@@ -3501,6 +3502,9 @@ class RunDataReader:
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
+            if alert_id:
+                clauses.append("alert_id = ?")
+                params.append(alert_id)
             review_status = self._query_value(query, "review", "open")
             if review_status not in {
                 "open",

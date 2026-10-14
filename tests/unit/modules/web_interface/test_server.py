@@ -4308,6 +4308,8 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     """Test repeated alerts become one aggregate per affected host."""
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
     reader.sqlite_path = tmp_path / "flows.sqlite"
     with sqlite3.connect(reader.sqlite_path) as connection:
         connection.row_factory = sqlite3.Row
@@ -4433,6 +4435,17 @@ def test_alert_aggregation_groups_each_host(tmp_path) -> None:
          "summary": ["1"]}
     )
     assert [item["alert_id"] for item in by_type["items"]] == ["a1"]
+    exact_detail = reader.alerts(
+        {"range": ["all"], "review": ["all"], "alert_id": ["a1"],
+         "limit": ["1"]}
+    )
+    assert exact_detail["total"] == 1
+    assert [item["id"] for item in exact_detail["items"][0]["evidence"]] == [
+        "e2", "e1"
+    ]
+    assert reader.alerts(
+        {"range": ["all"], "review": ["all"], "alert_id": ["a"]}
+    )["total"] == 0
 
 
 @pytest.mark.parametrize(
