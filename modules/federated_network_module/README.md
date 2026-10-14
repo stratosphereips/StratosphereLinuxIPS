@@ -160,9 +160,10 @@ All paths are hardcoded in `init()` (relative to the module file), except
 ### Base Artifacts (Shared Across All Peers)
 - `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to the default model only)
 
-### Pretrained base models (`pretrained: true`; not committed)
+### Pretrained base models (`pretrained: true`)
 One directory per model class under `pretrained_dir` (default
-`artifacts/pretrained`, relative to the module directory):
+`artifacts/pretrained`, relative to the module directory), committed for
+`random_projection_mlp`, `random_projection_two_layer` and `simple_mlp`:
 ```
 artifacts/pretrained/<model_class>/
 ├── model_state.bin   # torch.save(model.state_dict()), full model incl. head
@@ -171,6 +172,49 @@ artifacts/pretrained/<model_class>/
 ```
 `random_projection_sha256` is the sha256 of the `random_projection.bin` the
 model was trained with (checked for the random-projection classes only).
+`meta.json` also records how the model was built: image commit, settings,
+and per capture its sha256, training rounds and trained samples.
+
+#### How the base models are trained
+Thesis tooling `pretrain_base_models.py` (experiment runner,
+`thesis_experiments/`), one chain per model class:
+
+1. **Data**: the labeled Stratosphere captures 008, 010 and 011
+   (`security-datasets-for-testing/<id>-*/data/conn.log.labeled`, staged
+   as `conn.log`). Their traffic is unlike the lab's on purpose; the base
+   model is only a jumpstart.
+2. **One SLIPS per capture**, each in a throwaway container from the
+   federation image: `--network none`, its own redis inside the container,
+   p2p off, every module but this one disabled.
+3. **Module settings**: `label_source: dataset`, `time_window_width: 20`,
+   `label_finalize_delay_windows: 0`, `min_training_samples: 30`,
+   `training_batch_size: 50`, `balancing: weighting`, `finetune_head: true`,
+   the live peers' `seed`; `model_class` per chain.
+4. **Consecutive training**: all runs of a chain mount the same artifacts
+   dir (seeded with the image's `random_projection.bin`). The first run has
+   `train_from_scratch: true`, the next ones `false`, so each warm-starts from
+   the `latest_local_state.bin` + `latest_local_scaler.bin` the previous run
+   stored. The scaler keeps `partial_fit`-ing across captures.
+5. **Export**: the chain's final `latest_local_state.bin` / `_scaler.bin`
+   become `model_state.bin` / `scaler.bin`, plus `meta.json`.
+
+```
+python3 -u pretrain_base_models.py [--classes a,b] [--datasets 008,010,011]
+```
+Outputs land in `~/fl_pretrain/` (per class and capture: config, SLIPS output;
+`export/<model_class>/`). Copy `export/*` here and rebuild the image.
+
+Checks before shipping: every class trains on all labeled flows
+(5,603 + 5,310 + 8,722 = 19,635; `Background` is skipped), so the scaler's
+`n_samples_seen_` must be 19,635. `score_base_models.py` scores the models on
+a lab run's flows.sqlite (all flows and conn only).
+
+Known limitation of the current models: on lab traffic they are poor on conn
+flows (conn MCC about -0.3; all-flows MCC +0.38 mostly from calling ARP
+malicious). Zeek's `orig_bytes`/`resp_bytes` are sequence-number based and
+huge on RST scan flows, and the derived `throughput` and `avg_pkt_size`
+amplify them into saturated z-scores. Any feature change requires retraining
+these models.
 
 ### Local Model (Own Training Only)
 - `artifacts/latest_local_state.bin` - full model `state_dict` (class-driven: any registry model)

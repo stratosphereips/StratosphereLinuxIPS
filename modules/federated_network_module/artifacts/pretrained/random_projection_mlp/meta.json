@@ -1,0 +1,55 @@
+{
+  "model_class": "random_projection_mlp",
+  "slips_image_commit": "f929e1e7e276756bc99883f901b5e1314915f775",
+  "random_projection_sha256": "15d18c9f0a3ec88f1758cb42a10a109744605111934602f567947f6023aab086",
+  "seed": 1111,
+  "fl_pretrain_settings": {
+    "mode": "train",
+    "label_source": "dataset",
+    "time_window_width": 20,
+    "label_finalize_delay_windows": 0,
+    "min_training_samples": 30,
+    "training_batch_size": 50,
+    "balancing": "weighting",
+    "finetune_head": true,
+    "merge_rule": "average",
+    "create_performance_metrics_log_files": true
+  },
+  "datasets": [
+    {
+      "dataset": "008",
+      "source": "/opt/Datasets/security-datasets-for-testing/008-zeek-mixed/data/conn.log.labeled",
+      "source_sha256": "d8ebdbd675c1659b4b283fcd26ad0dad8a2043ed6ca37f9806c11d99f24ba40f",
+      "slips_rc": 0,
+      "seconds": 116,
+      "trainings": 5,
+      "trained_mal": 4201,
+      "trained_ben": 1402
+    },
+    {
+      "dataset": "010",
+      "source": "/opt/Datasets/security-datasets-for-testing/010-zeek-mixed/data/conn.log.labeled",
+      "source_sha256": "bb3695adceea9984948c9c784828a816f3d0e8d165f713503ec8e3facc1c4585",
+      "slips_rc": 0,
+      "seconds": 156,
+      "trainings": 5,
+      "trained_mal": 3373,
+      "trained_ben": 1937
+    },
+    {
+      "dataset": "011",
+      "source": "/opt/Datasets/security-datasets-for-testing/011-zeek-mixed/data/conn.log.labeled",
+      "source_sha256": "77e50a7fd5f71568354b3c903d7823e51b570c51b408c62a108a9cd78cbeeb87",
+      "slips_rc": 0,
+      "seconds": 95,
+      "trainings": 7,
+      "trained_mal": 3951,
+      "trained_ben": 4771
+    }
+  ],
+  "files": {
+    "model_state.bin": "74718cb04607bf1817dface73b4cb588592c2d4165d37f8c7d5454f5cac34e10",
+    "scaler.bin": "ccd345892c01f4bc1a53473bec1c174d0a839f20ba528d72813b42646a65123d"
+  },
+  "created": "2026-10-14 13:45:08 CEST"
+}
