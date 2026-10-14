@@ -8,6 +8,7 @@ from unittest.mock import (
 from pathlib import Path
 from typing import Any
 from types import SimpleNamespace
+from uuid import uuid4
 import sys
 
 import redis
@@ -672,15 +673,21 @@ def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
     with patch.object(DBManager, "get_used_redis_port", return_value=6390):
         db = ModuleFactory().create_db_manager_obj(6390, flush_db=True)
 
-    db.store_tranco_whitelisted_domains(
-        ["example.com", "google.com", "github.com"],
-        limit=2,
-    )
+    key = f"{db.rdb.constants.TRANCO_WHITELISTED_DOMAINS}:test:{uuid4().hex}"
+    with patch.object(db.rdb.constants, "TRANCO_WHITELISTED_DOMAINS", key):
+        try:
+            db.store_tranco_whitelisted_domains(
+                ["example.com", "google.com", "github.com"],
+                limit=2,
+            )
+            db.rdb.rcache.expire(key, 60)
 
-    assert db.get_tranco_top_domains() == ["example.com", "google.com"]
-    assert db.get_tranco_top_domains(limit=1) == ["example.com"]
-    assert db.is_whitelisted_tranco_domain("google.com") is True
-    assert db.is_whitelisted_tranco_domain("github.com") is False
+            assert db.get_tranco_top_domains() == ["example.com", "google.com"]
+            assert db.get_tranco_top_domains(limit=1) == ["example.com"]
+            assert db.is_whitelisted_tranco_domain("google.com") is True
+            assert db.is_whitelisted_tranco_domain("github.com") is False
+        finally:
+            db.rdb.rcache.delete(key)
 
 
 def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
@@ -688,11 +695,15 @@ def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
     with patch.object(DBManager, "get_used_redis_port", return_value=6391):
         db = ModuleFactory().create_db_manager_obj(6391, flush_db=True)
 
-    key = db.rdb.constants.TRANCO_WHITELISTED_DOMAINS
-    db.rdb.rcache.set(key, "legacy-cache-value")
+    key = f"{db.rdb.constants.TRANCO_WHITELISTED_DOMAINS}:test:{uuid4().hex}"
+    with patch.object(db.rdb.constants, "TRANCO_WHITELISTED_DOMAINS", key):
+        try:
+            db.rdb.rcache.set(key, "legacy-cache-value", ex=60)
 
-    assert db.is_whitelisted_tranco_domain("example.com") is False
-    assert db.rdb.rcache.type(key) in ("none", b"none")
+            assert db.is_whitelisted_tranco_domain("example.com") is False
+            assert db.rdb.rcache.type(key) in ("none", b"none")
+        finally:
+            db.rdb.rcache.delete(key)
 
 
 def test_setup_config_file_uses_isolated_path_and_preserves_save(tmp_path, monkeypatch):

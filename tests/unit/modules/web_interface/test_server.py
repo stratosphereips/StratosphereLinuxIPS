@@ -450,21 +450,20 @@ def test_idle_connection_does_not_block_page_requests() -> None:
     idle_connection = socket.create_connection(("127.0.0.1", port), timeout=5)
 
     try:
-        with urlopen(
-            _authenticated_request(f"http://127.0.0.1:{port}/"), timeout=10
-        ) as response:
-            assert response.status == 200
-            page = response.read()
-            assert b"Slips" in page
-            assert b'class="brand-logo"' in page
-            assert b'src="/slips-logo.png?v=4"' in page
-            assert b'<p class="brand-name">SLIPS</p>' in page
-        with urlopen(
-            f"http://127.0.0.1:{port}/slips-logo.png?v=4", timeout=10
-        ) as response:
-            assert response.status == 200
-            assert response.headers["Content-Type"] == "image/png"
-            assert response.read().startswith(b"\x89PNG\r\n\x1a\n")
+        with patch.object(RequestHandler, "_require_password", return_value=False):
+            with urlopen(f"http://127.0.0.1:{port}/", timeout=10) as response:
+                assert response.status == 200
+                page = response.read()
+                assert b"Slips" in page
+                assert b'class="brand-logo"' in page
+                assert b'src="/slips-logo.png?v=4"' in page
+                assert b'<p class="brand-name">SLIPS</p>' in page
+            with urlopen(
+                f"http://127.0.0.1:{port}/slips-logo.png?v=4", timeout=10
+            ) as response:
+                assert response.status == 200
+                assert response.headers["Content-Type"] == "image/png"
+                assert response.read().startswith(b"\x89PNG\r\n\x1a\n")
     finally:
         idle_connection.close()
         server.shutdown()
