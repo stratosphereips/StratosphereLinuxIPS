@@ -335,7 +335,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir
+        integration_port_factory, output_dir, require_auth=True
     )
     db_name = f"{output_dir.name}_fides_p2p_db.sqlite"
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
@@ -441,7 +441,7 @@ def test_trust_recommendation_response(
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir
+        integration_port_factory, output_dir, require_auth=True
     )
     db_name = f"{output_dir.name}_fides_test_database.sqlite"
     print(f"db_name: {db_name}")
