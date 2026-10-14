@@ -24,6 +24,28 @@ daylight and dark themes. The choice is saved in this browser and restored when
 the page is reopened, including after a Slips restart. Dark remains the default
 until a theme is selected.
 
+For live interface capture, the header offers **Current network only** on every
+tab. It limits alert and evidence lists, their grouped views, the Overview
+counts, and Host alert and evidence counts to detections recorded since the
+current continuous network connection began. The choice is saved in this
+browser. Turning it off restores the selected time range across the full run.
+When the monitored interface disconnects, the scoped lists are empty until a
+network is connected. If the router MAC is unavailable, Slips uses the most
+recent network-settings change as the conservative boundary. The switch is
+hidden for file analyses and until the running web server advertises support.
+
+**Device view** combines local IPv4 and IPv6 profiles that have the same
+recorded unicast MAC address. It affects the Hosts inventory, grouped Alerts,
+grouped Evidence, and the selected device's alert, evidence, and traffic
+pages. Each device row lists its addresses. Public profiles and ambiguous MACs
+shared by more than 16 profiles remain separate. Slips still scores each IP
+profile independently; the device list shows the highest member score.
+
+The browser also remembers pane filters, search terms, review filters, time
+ranges, grouping, table sort and direction, optional host columns, and resized
+pane widths after Slips restarts. These view choices stay in browser storage.
+Restart a running Slips server after updating its Python code.
+
 ## Reviewing and cleaning up detections
 
 Alerts open as **Active**. Mark one **In review** while investigating, or
@@ -690,7 +712,7 @@ by “device” when no name is available. The IP stays visible beside the label
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
-Traffic, scores, alerts, and evidence match only the selected Slips profile IP. MAC metadata never expands a workspace into other addresses because an observed Ethernet address can belong to a router or next hop shared by unrelated remote IPv4 and IPv6 traffic. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
+In the default Host view, traffic, scores, alerts, and evidence match only the selected Slips profile IP. In Device view, local addresses with the same verified MAC are combined for traffic, alerts, and evidence. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
 Native horizontal and vertical port-scan evidence links at most 20 contributing
 non-established connection UIDs. The interface identifies this limit when a

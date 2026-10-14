@@ -25,6 +25,7 @@ const state = {
   configurationSort: { key: null, order: "asc" },
   host: null,
   hostActivity: "alerts",
+  hostActivityPreferred: false,
   hostActivityGroups: { alerts: "", evidence: "", flows: "" },
   hostActivityThreats: { alerts: "", evidence: "", flows: "" },
   alertsWorkspace: {
@@ -63,6 +64,11 @@ const state = {
   evidenceDetail: { record: null, records: [], generation: 0, history: [], inAlertPane: false },
   runIdentity: null,
   reviewAvailable: false,
+  networkOnly: false,
+  deviceView: false,
+  deviceViewSupported: false,
+  networkFilterSupported: false,
+  currentNetworkStart: null,
   rangesInitialized: false,
   localSorts: {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
@@ -89,6 +95,151 @@ const state = {
 };
 
 const byId = (id) => document.getElementById(id);
+const VIEW_PREFERENCES_KEY = "slips-view-preferences-v1";
+const VIEW_CONTROL_IDS = [
+  "metrics-range", "module-search", "alerts-group", "alerts-search", "alerts-review",
+  "alerts-range", "alerts-from", "alerts-to", "alerts-host-sort", "alerts-item-sort",
+  "evidence-search", "evidence-review", "evidence-threat", "evidence-view",
+  "evidence-scored-only", "evidence-link", "evidence-range", "evidence-from",
+  "evidence-to", "hosts-search", "hosts-threat", "hosts-scope",
+  "hosts-alerts-only", "hosts-range", "hosts-from", "hosts-to",
+  "host-range", "host-from", "host-to", "host-alert-search",
+  "host-evidence-search", "host-flow-search", "host-flow-limit",
+  "p2p-range", "p2p-message-filter", "configuration-search",
+  "whitelists-search", "whitelists-type", "firewall-search", "arp-poisoning-search",
+  "device-view",
+];
+
+/** Save browser-only filters, sorts, visible columns, and pane widths. */
+function saveViewPreferences() {
+  const controls = {};
+  VIEW_CONTROL_IDS.forEach((id) => {
+    const element = byId(id);
+    if (element) controls[id] = element.type === "checkbox" ? element.checked : element.value;
+  });
+  const columns = {};
+  document.querySelectorAll(".hosts-columns input[data-host-column]").forEach((input) => {
+    columns[input.dataset.hostColumn] = input.checked;
+  });
+  const paneWidths = {};
+  [["alerts-workspace", ["--alerts-host-width", "--alerts-list-width", "--alerts-detail-width"]],
+    ["evidence-workspace", ["--evidence-left-width", "--evidence-record-width"]]]
+    .forEach(([id, names]) => {
+      const element = byId(id);
+      paneWidths[id] = Object.fromEntries(names.map((name) => [name, element.style.getPropertyValue(name)]));
+    });
+  const preferences = {
+    controls, columns, paneWidths,
+    hideExcluded: state.hideExcluded,
+    alertSeverity: state.alertsWorkspace.severity,
+    alertItemSort: state.alertsWorkspace.itemSort,
+    alertItemOrder: state.alertsWorkspace.itemOrder,
+    evidenceType: state.evidenceWorkspace.typeFilter,
+    hostActivity: state.hostActivity,
+    hostActivityPreferred: state.hostActivityPreferred,
+    hostActivityGroups: state.hostActivityGroups,
+    hostActivityThreats: state.hostActivityThreats,
+    p2pSelectedPeer: state.p2pSelectedPeer,
+    configurationSection: state.configurationSection,
+    configurationFilter: state.configurationFilter,
+    configurationSort: state.configurationSort,
+    pageSorts: Object.fromEntries(Object.entries(state.pages)
+      .filter(([, page]) => page.sort).map(([name, page]) => [name, { sort: page.sort, order: page.order }])),
+    localSorts: state.localSorts,
+  };
+  try {
+    window.localStorage.setItem(VIEW_PREFERENCES_KEY, JSON.stringify(preferences));
+  } catch (_) {
+    // Filtering still works when browser storage is unavailable.
+  }
+}
+
+/** Restore browser-only view choices before the first API requests. */
+function restoreViewPreferences() {
+  let saved;
+  try {
+    saved = JSON.parse(window.localStorage.getItem(VIEW_PREFERENCES_KEY) || "null");
+  } catch (_) {
+    return;
+  }
+  if (!saved || typeof saved !== "object") return;
+  Object.entries(saved.controls || {}).forEach(([id, value]) => {
+    if (!VIEW_CONTROL_IDS.includes(id)) return;
+    const element = byId(id);
+    if (!element) return;
+    if (element.type === "checkbox") element.checked = value === true;
+    else if (element.tagName !== "SELECT" || [...element.options].some((option) => option.value === value)) {
+      element.value = String(value);
+    }
+  });
+  document.querySelectorAll(".hosts-columns input[data-host-column]").forEach((input) => {
+    if (typeof saved.columns?.[input.dataset.hostColumn] === "boolean") {
+      input.checked = saved.columns[input.dataset.hostColumn];
+    }
+  });
+  Object.entries(saved.paneWidths || {}).forEach(([id, widths]) => {
+    if (!["alerts-workspace", "evidence-workspace"].includes(id) || !byId(id)) return;
+    Object.entries(widths || {}).forEach(([name, width]) => {
+      if (/^--(?:alerts|evidence)-[a-z-]+-width$/.test(name) && /^\d+(?:\.\d+)?(?:px|%)$/.test(width)) {
+        byId(id).style.setProperty(name, width);
+      }
+    });
+  });
+  state.hideExcluded = saved.hideExcluded !== false;
+  state.deviceView = byId("device-view").checked;
+  state.alertsWorkspace.severity = String(saved.alertSeverity || "");
+  state.alertsWorkspace.grouping = byId("alerts-group").value;
+  state.alertsWorkspace.itemSort = String(saved.alertItemSort || "time");
+  state.alertsWorkspace.itemOrder = saved.alertItemOrder === "asc" ? "asc" : "desc";
+  state.evidenceWorkspace.typeFilter = String(saved.evidenceType || "");
+  state.hostActivityGroups = { ...state.hostActivityGroups, ...saved.hostActivityGroups };
+  state.hostActivityThreats = { ...state.hostActivityThreats, ...saved.hostActivityThreats };
+  if (["alerts", "evidence", "flows"].includes(saved.hostActivity)) state.hostActivity = saved.hostActivity;
+  state.hostActivityPreferred = saved.hostActivityPreferred === true;
+  state.configurationSection = String(saved.configurationSection || "detection");
+  state.configurationFilter = String(saved.configurationFilter || "all");
+  if (typeof saved.p2pSelectedPeer === "string") state.p2pSelectedPeer = saved.p2pSelectedPeer;
+  if (saved.configurationSort && typeof saved.configurationSort.key === "string") {
+    state.configurationSort = {
+      key: saved.configurationSort.key,
+      order: saved.configurationSort.order === "desc" ? "desc" : "asc",
+    };
+  }
+  Object.entries(saved.pageSorts || {}).forEach(([name, sort]) => {
+    if (state.pages[name] && sort && typeof sort.sort === "string") {
+      state.pages[name].sort = sort.sort;
+      state.pages[name].order = sort.order === "asc" ? "asc" : "desc";
+    }
+  });
+  Object.entries(saved.localSorts || {}).forEach(([name, sort]) => {
+    if (state.localSorts[name] && sort && typeof sort.key === "string") {
+      state.localSorts[name] = { key: sort.key, order: sort.order === "asc" ? "asc" : "desc" };
+    }
+  });
+  if (saved.controls?.["alerts-range"] || saved.controls?.["evidence-range"] || saved.controls?.["hosts-range"]) {
+    state.rangesInitialized = true;
+    state.alertsWorkspace.rangeTouched = true;
+  }
+  byId("alerts-host-order").textContent = state.pages.alerts.order === "asc" ? "↑" : "↓";
+  byId("alerts-item-order").textContent = state.alertsWorkspace.itemOrder === "asc" ? "↑" : "↓";
+  document.querySelectorAll("[data-alert-group]").forEach((button) => {
+    const active = button.dataset.alertGroup === state.alertsWorkspace.grouping;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  document.querySelectorAll("[data-config-filter]").forEach((button) => {
+    const active = button.dataset.configFilter === state.configurationFilter;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  ["alerts", "evidence", "hosts", "host"].forEach((name) => {
+    const custom = byId(`${name}-range`)?.value === "custom";
+    if (byId(`${name}-from`)) byId(`${name}-from`).hidden = !custom;
+    if (byId(`${name}-to`)) byId(`${name}-to`).hidden = !custom;
+  });
+}
+
+restoreViewPreferences();
 /**
  * Apply the selected interface theme and optionally remember it in this browser.
  * @param {string} theme The requested theme, light or dark.
@@ -116,6 +267,12 @@ try {
   // Private browsing may disable storage; the default remains dark.
 }
 setTheme(storedTheme);
+try {
+  state.networkOnly = window.localStorage.getItem("slips-network-only") === "1";
+} catch (_) {
+  state.networkOnly = false;
+}
+byId("network-filter").checked = state.networkOnly;
 byId("theme-toggle").addEventListener("click", () => {
   setTheme(document.documentElement.dataset.theme === "light" ? "dark" : "light", true);
 });
@@ -313,6 +470,17 @@ function hostIdentity(ip) {
         loadHostNames();
       }, 0);
     }
+  }
+  return element;
+}
+
+/** Show the representative host and the addresses merged into a device. */
+function deviceIdentity(row, field = "ip") {
+  const element = document.createElement("span");
+  element.className = "device-identity";
+  element.append(hostIdentity(row[field]));
+  if (state.deviceView && Array.isArray(row.device_ips) && row.device_ips.length > 1) {
+    element.append(text("small", `${row.device_ips.length} addresses · ${row.device_ips.join(" · ")}`, "device-addresses"));
   }
   return element;
 }
@@ -680,6 +848,8 @@ function resetPage(name) {
 function rangeQuery(prefix) {
   const range = byId(`${prefix}-range`).value;
   const params = new URLSearchParams({ range });
+  if (state.networkOnly && state.networkFilterSupported) params.set("network", "current");
+  if (state.deviceView && state.deviceViewSupported) params.set("device", "1");
   if (prefix === "alerts" && ["5m", "15m"].includes(range)) {
     const seconds = range === "5m" ? 300 : 900;
     const now = Date.now() / 1000;
@@ -701,7 +871,7 @@ function alertRangeSignature() {
   const range = byId("alerts-range").value;
   const custom = range === "custom"
     ? `${byId("alerts-from").value}|${byId("alerts-to").value}` : "";
-  return `${range}|${custom}|${state.hideExcluded}|${state.alertsWorkspace.severity}`;
+  return `${range}|${custom}|${state.hideExcluded}|${state.alertsWorkspace.severity}|${state.networkOnly && state.networkFilterSupported}|${state.deviceView && state.deviceViewSupported}`;
 }
 
 function rangeIsLive(prefix) {
@@ -966,12 +1136,15 @@ function setSummaryCards(items, target = "summary-cards") {
  * @param {Object} counts Live alert and host totals.
  */
 function updatePageTitle(counts) {
-  document.title = `Slips ${compact(counts.alerts)} alerts · ${compact(counts.hosts)} hosts`;
+  document.title = `Slips ${compact(counts.alerts)} alerts · ${compact(counts.hosts)} ${state.deviceView && state.deviceViewSupported ? "devices" : "hosts"}`;
 }
 
 /** Refresh live title totals independently of the selected tab and filters. */
 async function loadLiveTitleCounts() {
-  const payload = await api("liveTitleCounts", "/api/live-counts", false, true);
+  const params = new URLSearchParams();
+  if (state.networkOnly && state.networkFilterSupported) params.set("network", "current");
+  if (state.deviceView && state.deviceViewSupported) params.set("device", "1");
+  const payload = await api("liveTitleCounts", `/api/live-counts${params.size ? `?${params}` : ""}`, false, true);
   if (payload && !payload.not_found) updatePageTitle(payload);
 }
 
@@ -1126,6 +1299,7 @@ function renderOverviewStatus(data) {
     return;
   }
   const selectedFilters = [
+    state.networkOnly && state.networkFilterSupported ? "Current network" : null,
     byId("alerts-review").selectedOptions[0]?.textContent,
     byId("alerts-range").selectedOptions[0]?.textContent,
     state.alertsWorkspace.severity
@@ -1580,7 +1754,8 @@ function applyOverviewEvidence(payload) {
 
 /** Load the operational overview and its bounded history charts. */
 async function loadOverview() {
-  const payload = await api("overview", "/api/overview");
+  const scope = state.networkOnly && state.networkFilterSupported ? "?network=current" : "";
+  const payload = await api("overview", `/api/overview${scope}`);
   if (!payload) return;
   applyOverviewEvidence(payload);
   state.overview = payload;
@@ -1623,8 +1798,9 @@ async function loadOverviewEvidenceCounts() {
   state.overviewEvidenceLoading = true;
   renderOverview();
   try {
+    const scope = state.networkOnly && state.networkFilterSupported ? "?network=current" : "";
     const payload = await api(
-      "overviewEvidence", "/api/overview/evidence-counts",
+      "overviewEvidence", `/api/overview/evidence-counts${scope}`,
     );
     if (!payload) return;
     state.overviewEvidence = payload;
@@ -1644,7 +1820,7 @@ async function loadMetadata() {
   }
   const [metadata, overview] = await Promise.all([
     state.metadata || api("metadata", "/api/metadata"),
-    api("metadataOverview", "/api/overview"),
+    api("metadataOverview", `/api/overview${state.networkOnly && state.networkFilterSupported ? "?network=current" : ""}`),
   ]);
   if (!metadata) return;
   state.metadata = metadata;
@@ -1811,9 +1987,9 @@ function setAlertPaneCount(count) {
       return value.endsWith("%") ? total * parseFloat(value) / 100
         : parseFloat(value) || fallback;
     };
-    const host = Math.max(210, Math.min(savedWidth("--alerts-host-width", total * .18), total - 914));
-    const list = Math.max(210, Math.min(savedWidth("--alerts-list-width", total * .18), total - host - 704));
-    const detail = Math.max(260, Math.min(savedWidth("--alerts-detail-width", total * .22), total - host - list - 444));
+    const host = Math.max(44, Math.min(savedWidth("--alerts-host-width", total * .18), total - 540));
+    const list = Math.max(44, Math.min(savedWidth("--alerts-list-width", total * .18), total - host - 488));
+    const detail = Math.max(44, Math.min(savedWidth("--alerts-detail-width", total * .22), total - host - list - 444));
     workspace.style.setProperty("--alerts-host-width", `${Math.round(host)}px`);
     workspace.style.setProperty("--alerts-list-width", `${Math.round(list)}px`);
     workspace.style.setProperty("--alerts-detail-width", `${Math.round(detail)}px`);
@@ -1926,7 +2102,7 @@ function renderAlertHostList() {
         text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
       const summary = alertComposition(record);
       row.title = summary;
-      row.append(top, hostIdentity(record.ip_alerted),
+      row.append(top, deviceIdentity(record, "ip_alerted"),
         text("span", summary, "alerts-alert-row-title"),
         text("span", `${compact(record.evidence_count)} evidence · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
       row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
@@ -1939,9 +2115,10 @@ function renderAlertHostList() {
     const row = document.createElement("button");
     row.type = "button";
     row.className = "alerts-host-row";
-    row.classList.toggle("selected", host.ip_alerted === selected);
+    row.classList.toggle("selected", (host.device_id || host.ip_alerted)
+      === (state.alertsWorkspace.host?.device_id || selected));
     row.append(
-      hostIdentity(host.ip_alerted),
+      deviceIdentity(host, "ip_alerted"),
       text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2),
         `alerts-host-score threat-${host.threat_level || "info"}`),
       text("span", `${compact(host.alert_count)} · ${formatAge(host.alert_time)}`, "alerts-host-meta"),
@@ -1956,7 +2133,8 @@ function renderAlertHostList() {
 /** Show one host in the middle pane and load its individual alerts. */
 function selectAlertHostPane(host) {
   const workspace = state.alertsWorkspace;
-  const changed = workspace.host?.ip_alerted !== host.ip_alerted;
+  const changed = (workspace.host?.device_id || workspace.host?.ip_alerted)
+    !== (host.device_id || host.ip_alerted);
   if (changed && state.evidenceDetail.inAlertPane) closeEvidenceDetail(false, true);
   workspace.host = host;
   if (changed) {
@@ -1998,9 +2176,9 @@ function renderAlertSelectedHost() {
   close.title = "Close this host";
   close.setAttribute("aria-label", "Close host alerts pane");
   close.addEventListener("click", closeAlertHostPane);
-  container.append(close, text("h3", "Alerts for this host", "alerts-selected-title"),
+  container.append(close, text("h3", host.device_id ? "Alerts for this device" : "Alerts for this host", "alerts-selected-title"),
     text("strong", host.ip_alerted));
-  container.append(hostIdentity(host.ip_alerted));
+  container.append(deviceIdentity(host, "ip_alerted"));
   const meta = document.createElement("div");
   meta.className = "alerts-selected-meta";
   meta.append(threat(host.threat_level), text("span", `${compact(host.alert_count)} alerts`),
@@ -2015,7 +2193,8 @@ async function loadAlertHostAlerts(reset = true, quiet = false) {
   if (!host) return;
   const generation = ++workspace.listGeneration;
   const params = rangeQuery("alerts");
-  params.set("profile", host);
+  if (state.deviceView && workspace.host?.device_id) params.set("device_id", workspace.host.device_id);
+  else params.set("profile", host);
   params.set("limit", "50");
   params.set("sort", workspace.itemSort);
   params.set("order", workspace.itemOrder);
@@ -2196,7 +2375,7 @@ async function selectAlertDetailPane(record) {
 }
 
 /** Resize the pane immediately before a draggable Alerts divider. */
-function resizeAlertPane(kind, desiredWidth) {
+function resizeAlertPane(kind, desiredWidth, initialWidths = null) {
   const workspace = byId("alerts-workspace");
   const total = workspace.getBoundingClientRect().width;
   const host = document.querySelector(".alerts-host-pane").getBoundingClientRect().width;
@@ -2218,9 +2397,27 @@ function resizeAlertPane(kind, desiredWidth) {
       Math.min(desiredWidth, total - host - remaining));
     workspace.style.setProperty("--alerts-list-width", `${Math.round(width)}px`);
   } else if (kind === "evidence" && (panes === 4 || individual && panes === 3)) {
-    const left = individual ? host + 16 : host + middle + 24;
-    const width = Math.max(260, Math.min(desiredWidth, total - left - 420));
-    workspace.style.setProperty("--alerts-detail-width", `${Math.round(width)}px`);
+    const initial = initialWidths || { host, middle, detail };
+    const widths = individual
+      ? [initial.host, initial.detail]
+      : [initial.host, initial.middle, initial.detail];
+    const beforeEvidence = widths.reduce((sum, width) => sum + width, 0);
+    const target = Math.max(widths.length * 44,
+      Math.min(beforeEvidence - initial.detail + desiredWidth,
+        total - 420 - (widths.length + 1) * 8));
+    let reduction = beforeEvidence - target;
+    if (reduction > 0) {
+      for (let index = widths.length - 1; index >= 0; index -= 1) {
+        const amount = Math.min(Math.max(widths[index] - 44, 0), reduction);
+        widths[index] -= amount;
+        reduction -= amount;
+      }
+    } else {
+      widths[widths.length - 1] -= reduction;
+    }
+    workspace.style.setProperty("--alerts-host-width", `${Math.round(widths[0])}px`);
+    if (!individual) workspace.style.setProperty("--alerts-list-width", `${Math.round(widths[1])}px`);
+    workspace.style.setProperty("--alerts-detail-width", `${Math.round(widths.at(-1))}px`);
   }
 }
 
@@ -2236,9 +2433,14 @@ function initAlertPaneResize() {
         event.preventDefault();
         const startX = event.clientX;
         const startWidth = document.querySelector(paneSelector).getBoundingClientRect().width;
+        const initialWidths = kind === "evidence" ? {
+          host: document.querySelector(".alerts-host-pane").getBoundingClientRect().width,
+          middle: byId("alerts-list-pane").getBoundingClientRect().width,
+          detail: byId("alerts-detail-pane").getBoundingClientRect().width,
+        } : null;
         divider.setPointerCapture(event.pointerId);
         document.body.classList.add("alerts-resizing");
-        const move = (next) => resizeAlertPane(kind, startWidth + next.clientX - startX);
+        const move = (next) => resizeAlertPane(kind, startWidth + next.clientX - startX, initialWidths);
         const finish = () => {
           divider.removeEventListener("pointermove", move);
           divider.removeEventListener("pointerup", finish);
@@ -2274,7 +2476,8 @@ async function loadAlerts() {
   renderAlertHostList();
   pager("alerts", "alerts-pager", loadAlerts);
   if (workspace.host && workspace.grouping === "host") {
-    const current = payload.items.find((item) => item.ip_alerted === workspace.host.ip_alerted);
+    const current = payload.items.find((item) =>
+      (item.device_id || item.ip_alerted) === (workspace.host.device_id || workspace.host.ip_alerted));
     if (current) {
       workspace.host = current;
       renderAlertSelectedHost();
@@ -2399,7 +2602,9 @@ function renderEvidenceGroupControls() {
   const mode = byId("evidence-view").value;
   const container = byId("evidence-group-controls");
   container.replaceChildren();
-  [["grouped", "Host + type"], ["type", "Type"], ["host", "Host"], ["individual", "None"]]
+  [["grouped", state.deviceView ? "Device + type" : "Host + type"],
+    ["type", "Type"], ["host", state.deviceView ? "Device" : "Host"],
+    ["individual", "None"]]
     .forEach(([value, label]) => {
       const button = text("button", label, "evidence-group-button");
       button.type = "button";
@@ -2431,7 +2636,7 @@ function renderEvidenceTable(payload) {
   ], loadEvidence);
   renderTable("evidence-table", payload.items, [
     (row) => evidenceClock(row.timestamp),
-    (row) => row.profile_ip ? hostIdentity(row.profile_ip) : "All hosts",
+    (row) => row.profile_ip ? deviceIdentity(row, "profile_ip") : "All hosts",
     (row) => {
       const cell = document.createElement("span");
       cell.append(text("code", row.evidence_type || "All types"));
@@ -2585,7 +2790,8 @@ function selectEvidenceGroup(group) {
 function evidenceGroupQuery() {
   const workspace = state.evidenceWorkspace;
   const params = rangeQuery("evidence");
-  if (workspace.group?.profile_ip) params.set("profile", workspace.group.profile_ip);
+  if (state.deviceView && workspace.group?.device_id) params.set("device_id", workspace.group.device_id);
+  else if (workspace.group?.profile_ip) params.set("profile", workspace.group.profile_ip);
   if (workspace.group?.evidence_type || workspace.typeFilter) {
     params.set("type", workspace.group?.evidence_type || workspace.typeFilter);
   }
@@ -2676,7 +2882,7 @@ function renderEvidenceGroup() {
   if (p2pReports) summary.append(text("p", `Reputation reports received from Slips P2P peers. A report identifies its sender and subject; it does not by itself describe an attack or prove a local connection to that peer.${numeric(group.alert_score) === 0 ? " These reports have not increased the local score." : ""}`));
   else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
   summary.append(investigationStats([
-    ["Host", group.profile_ip ? hostIdentity(group.profile_ip) : "All hosts"],
+    [state.deviceView ? "Device" : "Host", group.profile_ip ? deviceIdentity(group, "profile_ip") : "All hosts"],
     ["Threat", threat(group.threat_level)],
     ["Local score", slipsScore(group)],
     ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
@@ -3120,20 +3326,43 @@ function reviewEditor(entity, record) {
     panel.append(verdictLabel);
   }
   panel.append(noteLabel);
+  const feedback = text("p", "", "review-feedback");
+  feedback.setAttribute("role", "alert");
+  feedback.hidden = true;
+  panel.append(feedback);
+  status.addEventListener("change", () => {
+    const required = entity === "alert" && status.value === "resolved";
+    note.required = required;
+    noteLabel.firstChild.textContent = required ? "Analyst note (required to resolve)" : "Analyst note";
+    feedback.hidden = true;
+  });
+  status.dispatchEvent(new Event("change"));
   const actions = document.createElement("div");
   actions.className = "review-actions";
   const save = text("button", "Save review", "secondary");
   save.type = "button";
   save.disabled = !state.reviewAvailable;
   save.addEventListener("click", async () => {
+    if (entity === "alert" && status.value === "resolved" && !note.value.trim()) {
+      feedback.textContent = "Add an analyst note before resolving this alert.";
+      feedback.hidden = false;
+      note.focus();
+      return;
+    }
     save.disabled = true;
     try {
       await saveReviewChange(entity, { action: "review", id: identifier,
         status: status.value, verdict: entity === "alert" ? verdict.value : "",
         note: note.value });
-      toast("Review saved.");
+      feedback.hidden = true;
+      toast(status.value === "resolved"
+        ? "Review saved. The alert is now in Resolved; use the Review filter to see it."
+        : "Review saved.");
       await refreshAfterReview(entity);
-    } catch (error) { toast(error.message); }
+    } catch (error) {
+      feedback.textContent = error.message;
+      feedback.hidden = false;
+    }
     finally { save.disabled = false; }
   });
   const depth = document.createElement("select");
@@ -3521,7 +3750,7 @@ function renderFirewall(payload) {
       : "Current run",
   })));
   renderTable("firewall-table", rules, [
-    (row) => hostIdentity(row.ip),
+    (row) => deviceIdentity(row),
     (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
     (row) => row.origin,
     (row) => formatTime(row.blocked_at),
@@ -4071,8 +4300,9 @@ function renderHostsPage() {
     });
   });
   const shown = page.items.length;
-  byId("hosts-count").textContent = `${compact(page.total)} hosts · sorted by ${page.sort.replaceAll("_", " ")}`;
-  byId("hosts-list-status").textContent = `${shown} of ${compact(page.total)} hosts loaded${page.next ? " · scroll for more" : ""} · threshold line at ${numeric(page.items[0]?.alert_threshold).toFixed(1)} · current score on hover`;
+  const unit = state.deviceView ? "devices" : "hosts";
+  byId("hosts-count").textContent = `${compact(page.total)} ${unit} · sorted by ${page.sort.replaceAll("_", " ")}`;
+  byId("hosts-list-status").textContent = `${shown} of ${compact(page.total)} ${unit} loaded${page.next ? " · scroll for more" : ""} · threshold line at ${numeric(page.items[0]?.alert_threshold).toFixed(1)} · current score on hover`;
   byId("hosts-more").hidden = !page.next;
   applySortIndicators("hosts");
 }
@@ -4742,6 +4972,7 @@ function flowCard(group, position = 1, total = 1) {
   heading.className = "flow-card-head";
   const uid = group.uid || record?.uid || flow.uid || "Unknown UID";
   heading.append(text("strong", `Triggering flow · ${position} of ${total}`));
+  if (related.length) heading.append(text("span", `${related.length} related protocol ${related.length === 1 ? "flow" : "flows"}`, "flow-related-count"));
   const flowActions = document.createElement("div");
   flowActions.className = "evidence-flow-actions";
   flowActions.append(text("code", `UID ${uid}`));
@@ -4820,15 +5051,16 @@ function flowCard(group, position = 1, total = 1) {
     const displayed = ["uid", "starttime", "ts", "type", "type_",
       ...(PROTOCOL_FIELDS[type] || []).flatMap(([, names]) => names)];
     panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol, displayed));
-    entries.push([`${type} · ${index + 1}`, panel]);
+    entries.push([`Related ${type.toUpperCase()} · ${index + 1}`, panel]);
   });
+  const initialIndex = record && related.length ? 1 : 0;
   entries.forEach(([label, panel], index) => {
-    const tab = text("button", label, index === 0 ? "active" : "");
+    const tab = text("button", label, index === initialIndex ? "active" : "");
     tab.type = "button";
     tab.setAttribute("role", "tab");
-    tab.setAttribute("aria-selected", String(index === 0));
+    tab.setAttribute("aria-selected", String(index === initialIndex));
     panel.setAttribute("role", "tabpanel");
-    panel.hidden = index !== 0;
+    panel.hidden = index !== initialIndex;
     tab.addEventListener("click", () => {
       tabs.querySelectorAll("[role=tab]").forEach((button) => {
         button.classList.toggle("active", button === tab);
@@ -5484,8 +5716,8 @@ function renderHostNetworkClues(profiles) {
 function renderHostCards(host) {
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
-    ["Alerts · full run", exactAggregates ? compact(host.alert_count) : "—"],
-    ["Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
+    [state.networkOnly && state.networkFilterSupported ? "Alerts · current network" : "Alerts · full run", exactAggregates ? compact(host.alert_count) : "—"],
+    [state.networkOnly && state.networkFilterSupported ? "Evidence · current network" : "Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
     ["Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
     ["Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
     ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
@@ -5651,7 +5883,8 @@ async function loadHostAlerts() {
   const ip = state.host.ip;
   const page = state.pages.hostAlerts;
   const params = hostRangeParams();
-  params.set("profile", ip);
+  if (state.deviceView && state.host.device_id) params.set("device_id", state.host.device_id);
+  else params.set("profile", ip);
   params.set("limit", "50");
   params.set("details", "false");
   params.set("summary", "1");
@@ -5661,7 +5894,7 @@ async function loadHostAlerts() {
   if (search) params.set("search", search);
   const liveRange = byId("host-range").value === "live";
   const newestSavedAlert = Math.max(0, ...(state.host.alerts || [])
-    .filter((alert) => alert.ip_alerted === ip)
+    .filter((alert) => !state.deviceView || state.host.all_ips.includes(alert.ip_alerted))
     .map((alert) => numeric(alert.alert_time)));
   let showingEarlier = liveRange && !search && !state.hostActivityThreats.alerts && (page.index > 0
     || (numeric(state.host.alert_count) > 0 && newestSavedAlert > 0
@@ -5677,7 +5910,8 @@ async function loadHostAlerts() {
   }
   if (!payload || state.host?.ip !== ip) return;
   showingEarlier = showingEarlier && params.get("range") === "all";
-  const alerts = payload.items.filter((item) => item.ip_alerted === ip);
+  const alerts = payload.items.filter((item) =>
+    !state.deviceView ? item.ip_alerted === ip : state.host.all_ips.includes(item.ip_alerted));
   page.items = alerts;
   page.total = payload.total;
   page.next = payload.next_cursor;
@@ -5749,7 +5983,8 @@ async function loadHostEvidence() {
   if (search) params.set("search", search);
   if (state.hostActivityThreats.evidence) params.set("threat", state.hostActivityThreats.evidence);
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
-  params.set("profile", ip);
+  if (state.deviceView && state.host.device_id) params.set("device_id", state.host.device_id);
+  else params.set("profile", ip);
   params.set("details", "false");
   if (state.hideExcluded) params.set("hide_excluded", "1");
   const path = "/api/evidence?" + params;
@@ -5861,7 +6096,7 @@ async function loadHostSummary() {
   const includesAliases = Array.isArray(payload.host_ips)
     && payload.host_ips.some((address) => address !== state.host.ip);
   const status = byId("host-traffic-status");
-  if (includesAliases) {
+  if (includesAliases && !state.deviceView) {
     status.textContent = "Traffic aggregates withheld because the running backend grouped unrelated addresses through a shared next-hop MAC. Historical rows below are filtered to the exact profile IP.";
     renderLineChart("host-flow-chart", [], [{ key: "inbound_flows" }]);
     renderLineChart("host-byte-chart", [], [{ key: "inbound_bytes" }]);
@@ -5869,7 +6104,9 @@ async function loadHostSummary() {
     renderBars("host-peers", []);
     return;
   }
-  status.textContent = "Traffic and peers match the exact profile IP only.";
+  status.textContent = state.deviceView && includesAliases
+    ? `Traffic and peers combine ${payload.host_ips.length} MAC-matched local addresses.`
+    : "Traffic and peers match the exact profile IP only.";
   renderLineChart("host-flow-chart", payload.timeline, [
     { key: "inbound_flows" }, { key: "outbound_flows", className: "secondary-line" },
   ]);
@@ -6037,7 +6274,10 @@ async function showUnprofiledHost(ip) {
 }
 
 async function openHost(ip, summary = null) {
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}`, true, true);
+  const detailParams = new URLSearchParams();
+  if (state.networkOnly && state.networkFilterSupported) detailParams.set("network", "current");
+  if (state.deviceView) detailParams.set("device", "1");
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
   if (!detail) return;
   if (detail.not_found) {
     await showUnprofiledHost(ip);
@@ -6069,17 +6309,13 @@ async function openHost(ip, summary = null) {
   const staleAliases = Array.isArray(detail.all_ips)
     ? detail.all_ips.filter((address) => address !== ip)
     : [];
-  host.exact_aggregates = staleAliases.length === 0;
-  host.ignored_aliases = staleAliases;
-  host.all_ips = [ip];
+  host.exact_aggregates = state.deviceView || staleAliases.length === 0;
+  host.ignored_aliases = state.deviceView ? [] : staleAliases;
+  host.all_ips = state.deviceView ? detail.all_ips : [ip];
   ["hostAlerts", "hostEvidence", "hostFlows", "hostSummary"].forEach((key) => {
     state.requests.get(key)?.abort();
   });
   state.host = host;
-  state.hostActivityThreats = { alerts: "", evidence: "", flows: "" };
-  ["host-alert-search", "host-evidence-search", "host-flow-search"].forEach((id) => {
-    byId(id).value = "";
-  });
   rememberHostRecord(host);
   refreshHostLabels();
   resetPage("hostAlerts");
@@ -6095,22 +6331,24 @@ async function openHost(ip, summary = null) {
   byId("host-detail-view").hidden = false;
   byId("host-detail-view").classList.remove("unprofiled");
   byId("host-unprofiled").hidden = true;
-  byId("host-title").replaceChildren(hostIdentity(host.ip));
+  byId("host-title").replaceChildren(deviceIdentity(host));
   byId("host-subtitle").textContent =
     `${host.scope || "unknown scope"} · ${host.permanent_profiles?.[0]?.network_label || "network not recorded"} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"} · ${host.live ? "current" : "last-known metadata"}`;
   renderHostCards(host);
-  const hasExactAlerts = host.alerts?.some((alert) => alert.ip_alerted === ip);
+  const hasExactAlerts = host.alerts?.some((alert) => host.all_ips.includes(alert.ip_alerted));
   const initialActivity = hasExactAlerts || (host.exact_aggregates !== false && host.alert_count)
     ? "alerts" : host.evidence_count ? "evidence" : "flows";
   await Promise.all([
-    showHostActivity(initialActivity), loadHostSummary(), loadHostScoreHistory(),
+    showHostActivity(state.hostActivityPreferred ? state.hostActivity : initialActivity),
+    loadHostSummary(), loadHostScoreHistory(),
   ]);
 }
 
 async function refreshHostWorkspace() {
   if (!state.host) return;
   const ip = state.host.ip;
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}`);
+  const scope = state.networkOnly && state.networkFilterSupported ? "?network=current" : "";
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}${scope}`);
   if (!detail || !state.host || state.host.ip !== ip) return;
   const staleAliases = Array.isArray(detail.all_ips)
     ? detail.all_ips.filter((address) => address !== ip)
@@ -6222,13 +6460,100 @@ async function pollBackendStatus() {
   if (document.hidden) return;
   try {
     const identity = await api("backendStatus", "/api/identity", false);
-    if (identity) updateReviewAvailability(identity.review_actions === true);
+    if (identity) {
+      updateReviewAvailability(identity.review_actions === true);
+      updateNetworkFilterAvailability(identity);
+      updateDeviceViewAvailability(identity);
+    }
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
     scheduleBackendStatusPoll();
   }
 }
+
+/** Enable device grouping only when the running backend supports it. */
+function updateDeviceViewAvailability(identity) {
+  const supported = identity.device_view_supported === true;
+  const changed = supported !== state.deviceViewSupported;
+  state.deviceViewSupported = supported;
+  state.deviceView = supported && byId("device-view").checked;
+  byId("device-view-label").hidden = !supported;
+  byId("device-view").disabled = !supported;
+  if (changed) {
+    byId("alerts-list-heading").textContent = state.alertsWorkspace.grouping === "host"
+      ? `Alerts grouped by ${state.deviceView ? "device" : "host"}` : "All alerts";
+    renderEvidenceGroupControls();
+  }
+  if (changed && state.overview) refreshNetworkScopedViews();
+}
+
+/** Apply backend support and refresh scoped panes when the network changes.
+ * @param {Object} identity Current web server identity and network scope.
+ */
+function updateNetworkFilterAvailability(identity) {
+  const supported = identity.network_filter_supported === true
+    && identity.input_type === "interface";
+  const start = Number.isFinite(Number(identity.current_network_start))
+    && identity.current_network_start !== null
+    ? Number(identity.current_network_start) : null;
+  const changed = supported !== state.networkFilterSupported
+    || start !== state.currentNetworkStart;
+  state.networkFilterSupported = supported;
+  state.currentNetworkStart = start;
+  const label = byId("network-filter-label");
+  label.hidden = !supported;
+  byId("network-filter").disabled = !supported || start === null;
+  label.title = start === null
+    ? "Waiting for a monitored network connection"
+    : "Show alerts and evidence from the current continuous network connection only";
+  if (changed && state.networkOnly && supported && state.overview) {
+    refreshNetworkScopedViews();
+  }
+}
+
+/** Reload all detection views after changing the network scope. */
+function refreshNetworkScopedViews() {
+  ["alerts", "evidence", "hosts", "hostAlerts", "host-evidence"].forEach(resetPage);
+  state.filteredBadgeCounts = { alerts: null, evidence: null, hosts: null };
+  ["alerts-badge", "evidence-badge", "hosts-badge"].forEach((id) => {
+    byId(id).textContent = "—";
+  });
+  closeAlertHostPane();
+  closeEvidenceDetail(false, true);
+  state.evidenceWorkspace.group = null;
+  state.evidenceWorkspace.record = null;
+  state.evidenceWorkspace.records = [];
+  state.evidenceWorkspace.generation += 1;
+  renderEvidenceEmptyState();
+  state.overviewAlertQuery = "";
+  state.overviewAlertGroups = null;
+  state.overviewEvidence = null;
+  loadLiveTitleCounts().catch(() => {});
+  if (state.activeTab !== "hosts") loadHosts().catch(() => {});
+  if (state.activeTab === "overview") loadOverview().catch(() => {});
+  else {
+    refreshActive().catch(() => {});
+    loadOverview().catch(() => {});
+  }
+}
+
+byId("network-filter").addEventListener("change", (event) => {
+  state.networkOnly = event.currentTarget.checked;
+  try {
+    window.localStorage.setItem("slips-network-only", state.networkOnly ? "1" : "0");
+  } catch (_) {
+    // The filter still works when browser storage is unavailable.
+  }
+  refreshNetworkScopedViews();
+});
+byId("device-view").addEventListener("change", (event) => {
+  state.deviceView = event.currentTarget.checked;
+  renderEvidenceGroupControls();
+  byId("alerts-list-heading").textContent = state.alertsWorkspace.grouping === "host"
+    ? `Alerts grouped by ${state.deviceView ? "device" : "host"}` : "All alerts";
+  refreshNetworkScopedViews();
+});
 
 /** Enable review controls only after the running server advertises support.
  * @param {boolean} available Whether the server accepts review actions.
@@ -6320,6 +6645,37 @@ function bindRange(prefix, pageName, loader) {
     input.addEventListener("change", update));
 }
 
+let viewPreferencesTimer = null;
+/** Debounce browser-only view settings after any filter or layout interaction. */
+function scheduleViewPreferencesSave() {
+  window.clearTimeout(viewPreferencesTimer);
+  viewPreferencesTimer = window.setTimeout(saveViewPreferences, 200);
+}
+
+document.addEventListener("input", (event) => {
+  if (VIEW_CONTROL_IDS.includes(event.target.id)) scheduleViewPreferencesSave();
+});
+document.addEventListener("change", (event) => {
+  if (VIEW_CONTROL_IDS.includes(event.target.id)
+      || event.target.closest?.(".hosts-columns, .excluded-visibility-select")) {
+    scheduleViewPreferencesSave();
+  }
+});
+document.addEventListener("click", (event) => {
+  if (event.target.closest?.("[data-alert-group], [data-config-filter], [data-p2p-filter], "
+      + "#alerts-severity-filters, #evidence-threat-chips, #evidence-group-controls, "
+      + "#hosts-threat-chips, #hosts-scope-chips, #alerts-host-order, #alerts-item-order, "
+      + "th[data-sort], [data-host-activity], #configuration-navigation, #p2p-peers-table")) {
+    scheduleViewPreferencesSave();
+  }
+});
+document.addEventListener("keyup", (event) => {
+  if (event.target.matches?.("th[data-sort], [role=separator]")) scheduleViewPreferencesSave();
+});
+document.addEventListener("pointerup", (event) => {
+  if (event.target.matches?.("[role=separator]")) scheduleViewPreferencesSave();
+});
+
 document.querySelectorAll(".tab").forEach((tab) =>
   tab.addEventListener("click", () => switchTab(tab.dataset.tab)));
 document.querySelectorAll(".refresh-list").forEach((button) =>
@@ -6390,7 +6746,10 @@ document.addEventListener("keydown", (event) => {
 });
 byId("host-back").addEventListener("click", closeHost);
 document.querySelectorAll("[data-host-activity]").forEach((button) =>
-  button.addEventListener("click", () => showHostActivity(button.dataset.hostActivity)));
+  button.addEventListener("click", () => {
+    state.hostActivityPreferred = true;
+    showHostActivity(button.dataset.hostActivity);
+  }));
 byId("host-activity-group").addEventListener("change", () => {
   const kind = state.hostActivity;
   state.hostActivityGroups[kind] = byId("host-activity-group").value;
@@ -6479,8 +6838,12 @@ byId("arp-poisoning-search").addEventListener("input", renderArpPoisoning);
   "arp-poisoning-evidence-table"].forEach((id) =>
   bindLocalTableSort(id, renderArpPoisoning));
 bindFilters("alerts", ["alerts-search"], loadAlerts);
-byId("alerts-host-sort").querySelectorAll('[data-alert-mode="individual"]')
-  .forEach((option) => { option.disabled = true; });
+byId("alerts-host-sort").querySelectorAll("[data-alert-mode]")
+  .forEach((option) => {
+    option.disabled = option.dataset.alertMode !== state.alertsWorkspace.grouping;
+  });
+byId("alerts-list-heading").textContent = state.alertsWorkspace.grouping === "host"
+  ? `Alerts grouped by ${state.deviceView ? "device" : "host"}` : "All alerts";
 document.querySelectorAll("[data-alert-group]").forEach((button) => {
   button.addEventListener("click", () => {
     if (byId("alerts-group").value === button.dataset.alertGroup) return;
@@ -6507,7 +6870,8 @@ byId("alerts-group").addEventListener("change", () => {
     state.pages.alerts.order = "desc";
     byId("alerts-host-order").textContent = "↓";
   }
-  byId("alerts-list-heading").textContent = workspace.grouping === "host" ? "Alerts grouped by host" : "All alerts";
+  byId("alerts-list-heading").textContent = workspace.grouping === "host"
+    ? `Alerts grouped by ${state.deviceView ? "device" : "host"}` : "All alerts";
   byId("alerts-description").textContent = workspace.grouping === "host"
     ? "Alerts grouped by host. Select a host, then an alert, its evidence, and triggering flows."
     : "Individual alerts. Select an alert to inspect its evidence and triggering flows.";
@@ -6629,6 +6993,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 window.addEventListener("beforeunload", () => {
+  saveViewPreferences();
   window.clearTimeout(state.statusTimer);
   window.clearInterval(state.titleTimer);
   state.requests.forEach((controller) => controller.abort());
@@ -6641,10 +7006,11 @@ window.addEventListener("resize", updateEvidenceViewportHeight);
 window.addEventListener("resize", updateHostViewportHeight);
 window.addEventListener("resize", updateMetadataViewportHeight);
 window.setInterval(renderHeaderUptime, 1000);
-loadOverview().catch(() => {}).finally(() => {
-  if (state.activeTab === "overview") schedulePoll();
-});
 loadWhitelists().catch(() => {});
 startLiveTitlePolling();
 updateReviewAvailability(false);
-pollBackendStatus().catch(() => {});
+pollBackendStatus().catch(() => {}).finally(() => {
+  loadOverview().catch(() => {}).finally(() => {
+    if (state.activeTab === "overview") schedulePoll();
+  });
+});

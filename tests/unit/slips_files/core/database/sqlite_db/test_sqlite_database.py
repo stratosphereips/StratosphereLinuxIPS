@@ -472,6 +472,10 @@ def test_retention_schema_migrates_existing_run_without_vacuum(
         migrated.get_columns("altflows")
     )
     assert migrated.conn.execute("PRAGMA auto_vacuum").fetchone()[0] == 0
+    assert migrated.conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+        "AND name = 'evidence_group_cover_idx'"
+    ).fetchone() == (1,)
     migrated.close()
 
 

@@ -413,7 +413,9 @@ address, such as a link-local address.
 
 ## High entropy DNS TXT answers
 
-Slips check every DNS answer with TXT record for high entropy
+Slips checks DNS TXT answers for high entropy. Reverse DNS `.arpa` TXT
+answers use a higher Shannon entropy threshold of 5.8 because ordinary
+device and service metadata often contains long encoded values.
 strings.
 Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
 and alerted by slips.

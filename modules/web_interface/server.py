@@ -2089,16 +2089,84 @@ class RunDataReader:
             "analysis_end": analysis.get("analysis_end", ""),
         }
 
+    def _current_network_start(self) -> Optional[float]:
+        """Find the start of the current continuous monitored connection.
+
+        Returns:
+            Earliest retained timestamp on the current network, if connected.
+        """
+        analysis = self.redis.hgetall("analysis")
+        if analysis.get("input_type") != "interface" or analysis.get(
+            "analysis_end"
+        ):
+            return None
+        interface = (
+            str(analysis.get("interface") or "").split(",", 1)[0].strip()
+        )
+        state = self._loads(self.redis.hget("network_states", interface), {})
+        if not isinstance(state, dict) or not state.get("connected"):
+            return None
+        try:
+            start = float(state["changed_at"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if not math.isfinite(start):
+            return None
+        gateway_mac = str(state.get("gateway_mac") or "").lower()
+        if gateway_mac:
+            for previous in reversed(state.get("history", [])):
+                if not isinstance(previous, dict) or not previous.get(
+                    "connected"
+                ):
+                    break
+                if (
+                    str(previous.get("gateway_mac") or "").lower()
+                    != gateway_mac
+                ):
+                    break
+                try:
+                    previous_start = float(previous["changed_at"])
+                except (KeyError, TypeError, ValueError):
+                    break
+                if not math.isfinite(previous_start):
+                    break
+                start = previous_start
+        return start
+
+    def _scoped_start(
+        self, query: Dict[str, List[str]], start: Optional[float]
+    ) -> Optional[float]:
+        """Limit a requested time range to the current connection.
+
+        Parameters:
+            query: Request filters, including the optional network scope.
+            start: Lower bound from the selected time range.
+
+        Returns:
+            Effective lower bound, or infinity when no network is connected.
+        """
+        if self._query_value(query, "network") != "current":
+            return start
+        network_start = self._current_network_start()
+        if network_start is None:
+            return float("inf")
+        return max(start or 0.0, network_start)
+
     def identity(self) -> Dict[str, Any]:
         """Return a signed identity response for stale-server detection."""
         return {
             "service": "slips-web-interface",
             "pid": os.getpid(),
             "review_actions": True,
+            "network_filter_supported": True,
+            "device_view_supported": True,
+            "current_network_start": self._current_network_start(),
             **self.validate_run_identity(),
         }
 
-    def live_counts(self) -> Dict[str, int]:
+    def live_counts(
+        self, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, int]:
         """Count alerts and hosts in the lists' rolling live range.
 
         Returns:
@@ -2106,6 +2174,8 @@ class RunDataReader:
             the live Alerts and Hosts filters.
         """
         live_query = {"range": ["live"]}
+        if self._query_value(query or {}, "network") == "current":
+            live_query["network"] = ["current"]
         with self._connect_sqlite() as connection:
             latest_alert = connection.execute(
                 "SELECT MAX(CAST(alert_time AS REAL)) FROM alerts"
@@ -2113,6 +2183,7 @@ class RunDataReader:
             alert_start, alert_end, _ = self._time_bounds(
                 live_query, latest_alert
             )
+            alert_start = self._scoped_start(live_query, alert_start)
             alerts = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM alerts "
@@ -2134,17 +2205,26 @@ class RunDataReader:
             host_start, host_end, _ = self._time_bounds(
                 live_query, latest_host
             )
-            hosts = int(
-                history.execute(
-                    "SELECT COUNT(*) FROM host_snapshots hs WHERE "
-                    "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
-                    "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
-                    "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-                    "WHERE fi.dst_ip = hs.ip), -1e300)), -1e300), "
-                    "hs.observed_at) BETWEEN ? AND ?",
-                    (host_start, host_end),
-                ).fetchone()[0]
-            )
+            device_view = self._query_value(query or {}, "device") == "1"
+            host_rows = history.execute(
+                "SELECT hs.ip FROM host_snapshots hs WHERE "
+                "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
+                "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
+                "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
+                "WHERE fi.dst_ip = hs.ip), -1e300)), -1e300), "
+                "hs.observed_at) BETWEEN ? AND ?",
+                (host_start, host_end),
+            ).fetchall()
+            if device_view:
+                device_keys = self._device_key_map()
+                hosts = len(
+                    {
+                        device_keys.get(str(row["ip"]), str(row["ip"]))
+                        for row in host_rows
+                    }
+                )
+            else:
+                hosts = len(host_rows)
         return {"alerts": alerts, "hosts": hosts}
 
     def response_metadata(self) -> Dict[str, Any]:
@@ -2357,18 +2437,23 @@ class RunDataReader:
         """
         limit = self._limit(query)
         group_mode = self._query_value(query, "group", "host_type")
+        device_view = self._query_value(query, "device") == "1"
+        host_group = "device_key(profile_ip)" if device_view else "profile_ip"
         if group_mode == "type":
             group_fields = ("'' AS profile_ip, evidence_type", "evidence_type")
             group_id = "evidence_type"
         elif group_mode == "host":
-            group_fields = ("profile_ip, '' AS evidence_type", "profile_ip")
-            group_id = "profile_ip"
+            group_fields = (
+                "MIN(profile_ip) AS profile_ip, '' AS evidence_type",
+                host_group,
+            )
+            group_id = host_group
         else:
             group_fields = (
-                "profile_ip, evidence_type",
-                "profile_ip, evidence_type",
+                "MIN(profile_ip) AS profile_ip, evidence_type",
+                f"{host_group}, evidence_type",
             )
-            group_id = "profile_ip || char(31) || evidence_type"
+            group_id = f"{host_group} || char(31) || evidence_type"
         search = self._query_value(query, "search").lower()
         threat = self._query_value(query, "threat").lower()
         association = self._query_value(query, "association")
@@ -2394,6 +2479,7 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
+            self._register_device_key(connection, device_view)
             score_expression = self._detector_score_expression(
                 connection, "evidence"
             )
@@ -2417,6 +2503,7 @@ class RunDataReader:
             ).fetchone()
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
+            start = self._scoped_start(query, start)
             full_total = int(
                 connection.execute(
                     "SELECT COUNT(*) AS count FROM evidence"
@@ -2455,7 +2542,11 @@ class RunDataReader:
                 )
                 params.extend([term, term, term])
             if profile:
-                clauses.append("profile_ip = ?")
+                clauses.append(
+                    "device_key(profile_ip) = ?"
+                    if device_view
+                    else "profile_ip = ?"
+                )
                 params.append(profile)
             if evidence_type:
                 clauses.append("evidence_type = ?")
@@ -2489,9 +2580,31 @@ class RunDataReader:
                     params,
                 ).fetchone()[0]
             )
+            device_ips_expression = (
+                "GROUP_CONCAT(DISTINCT profile_ip)"
+                if device_view and group_mode != "type"
+                else "''"
+            )
+            cover_index_available = bool(
+                connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                    "AND name = 'evidence_group_cover_idx'"
+                ).fetchone()
+            )
+            group_source = (
+                "evidence INDEXED BY evidence_group_cover_idx"
+                if compact_groups
+                and range_name == "all"
+                and not search
+                and not association
+                and review_status == "all"
+                and cover_index_available
+                else "evidence"
+            )
             grouped_sql = (
                 f"SELECT {group_fields[0]}, "
                 f"{group_id} AS group_id, "
+                f"{device_ips_expression} AS device_ips, "
                 "MAX(evidence_time) AS timestamp, "
                 "MIN(evidence_time) AS first_timestamp, "
                 f"MAX({threat_expression}) AS threat_rank, "
@@ -2500,9 +2613,9 @@ class RunDataReader:
                 f"SUM({whitelist_expression}) AS persisted_whitelisted_count, "
                 f"{('0' if compact_groups else f'SUM({flow_expression})')} "
                 "AS flow_count, "
-                f"SUM({alert_expression}) AS alert_count, "
+                f"{('0' if compact_groups else f'SUM({alert_expression})')} AS alert_count, "
                 f"MAX({score_expression}) AS alert_score "
-                f"FROM evidence WHERE {' AND '.join(clauses)} "
+                f"FROM {group_source} WHERE {' AND '.join(clauses)} "
                 f"GROUP BY {group_fields[1]}"
             )
             sort_key, sort_expression, direction = self._sort_spec(
@@ -2556,6 +2669,18 @@ class RunDataReader:
                 f"group_id {direction} LIMIT ?",
                 (*params, *outer_params, limit + 1),
             ).fetchall()
+            alert_counts: Dict[str, int] = {}
+            if compact_groups and rows and association != "unlinked":
+                alert_counts = {
+                    str(row["group_id"]): int(row["alert_count"])
+                    for row in connection.execute(
+                        f"SELECT {group_id} AS group_id, COUNT(*) AS alert_count "
+                        "FROM alert_evidence ae JOIN evidence "
+                        "ON evidence.evidence_id = ae.evidence_id "
+                        f"WHERE {' AND '.join(clauses)} GROUP BY {group_id}",
+                        params,
+                    )
+                }
         if total is None:
             total = int(rows[0]["total_groups"] or 0) if rows else 0
         has_more = len(rows) > limit
@@ -2566,6 +2691,11 @@ class RunDataReader:
             item.pop("sort_value", None)
             item.pop("total_groups", None)
             item["id"] = str(item.pop("group_id"))
+            if device_view and group_mode != "type":
+                item["device_id"] = item["id"].split("\x1f", 1)[0]
+                item["device_ips"] = str(item.get("device_ips") or "").split(
+                    ","
+                )
             item["threat_level"] = self._threat_from_rank(
                 item.pop("threat_rank")
             )
@@ -2579,7 +2709,11 @@ class RunDataReader:
             item["flow_count"] = (
                 None if compact_groups else int(item["flow_count"] or 0)
             )
-            item["alert_count"] = int(item["alert_count"] or 0)
+            item["alert_count"] = (
+                alert_counts.get(item["id"], 0)
+                if compact_groups
+                else int(item["alert_count"] or 0)
+            )
             item.update(
                 self._score_fields(
                     item["alert_score"],
@@ -2621,6 +2755,7 @@ class RunDataReader:
         threat = self._query_value(query, "threat").lower()
         association = self._query_value(query, "association")
         profiles = [str(value) for value in query.get("profile", []) if value]
+        device_id = self._query_value(query, "device_id")
         evidence_type = self._query_value(query, "type")
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         threat_expression = (
@@ -2641,6 +2776,7 @@ class RunDataReader:
         try:
             with self._connect_sqlite() as connection:
                 connection.execute("BEGIN")
+                self._register_device_key(connection, bool(device_id))
                 if not self._table_exists(connection, "evidence"):
                     raise sqlite3.OperationalError("no durable evidence")
                 score_expression = self._detector_score_expression(
@@ -2680,6 +2816,7 @@ class RunDataReader:
                 )
                 latest = float(latest_row["latest"] or 0)
                 start, end, range_name = self._time_bounds(query, latest)
+                start = self._scoped_start(query, start)
                 sort_key, sort_expression, direction = self._sort_spec(
                     query,
                     {
@@ -2766,6 +2903,9 @@ class RunDataReader:
                     placeholders = ",".join("?" for _ in profiles)
                     clauses.append(f"profile_ip IN ({placeholders})")
                     params.extend(profiles)
+                if device_id:
+                    clauses.append("device_key(profile_ip) = ?")
+                    params.append(device_id)
                 if evidence_type:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
@@ -2912,6 +3052,8 @@ class RunDataReader:
             sort_values = [float(item.get("timestamp") or 0) for item in items]
             has_more = len(records) > limit
         self._annotate_detection_networks(items, "profile_ip", "timestamp")
+        if self._query_value(query, "device") == "1":
+            self._annotate_devices(items, "profile_ip")
         self._annotate_whitelisted_evidence(items)
         self._annotate_p2p_reporters(items)
         next_cursor = (
@@ -3027,6 +3169,7 @@ class RunDataReader:
                 or 0
             )
             start, end, range_name = self._time_bounds(query, latest)
+            start = self._scoped_start(query, start)
             full_total = int(
                 connection.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
             )
@@ -3244,7 +3387,11 @@ class RunDataReader:
         Returns:
             Bounded host aggregate page with raw durable alert total.
         """
-        if self._query_value(query, "threat").lower() in {"", "info_or_more"}:
+        device_view = self._query_value(query, "device") == "1"
+        if not device_view and self._query_value(query, "threat").lower() in {
+            "",
+            "info_or_more",
+        }:
             return self._grouped_alerts_fast(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
@@ -3265,6 +3412,7 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
+            self._register_device_key(connection, device_view)
             score_expression = self._detector_score_expression(
                 connection, "alerts"
             )
@@ -3273,6 +3421,7 @@ class RunDataReader:
             ).fetchone()
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
+            start = self._scoped_start(query, start)
             full_total = int(
                 connection.execute(
                     "SELECT COUNT(*) AS count FROM alerts"
@@ -3324,7 +3473,11 @@ class RunDataReader:
                 term = f"%{search}%"
                 params.extend([term] * 6)
             if profile:
-                clauses.append("ip_alerted = ?")
+                clauses.append(
+                    "device_key(ip_alerted) = ?"
+                    if device_view
+                    else "ip_alerted = ?"
+                )
                 params.append(profile)
             if threat:
                 minimum = threat.removesuffix("_or_more")
@@ -3339,8 +3492,12 @@ class RunDataReader:
                     operator = ">=" if threat.endswith("_or_more") else "="
                     clauses.append(f"{threat_expression} {operator} ?")
                     params.append(threat_rank)
+            host_group = (
+                "device_key(ip_alerted)" if device_view else "ip_alerted"
+            )
             grouped_sql = (
-                "SELECT ip_alerted, ip_alerted AS group_id, "
+                f"SELECT MIN(ip_alerted) AS ip_alerted, {host_group} AS group_id, "
+                "GROUP_CONCAT(DISTINCT ip_alerted) AS device_ips, "
                 "MAX(CAST(alert_time AS REAL)) AS alert_time, "
                 "MIN(CAST(alert_time AS REAL)) AS first_alert_time, "
                 f"MAX({threat_expression}) AS threat_rank, "
@@ -3348,7 +3505,7 @@ class RunDataReader:
                 f"SUM({evidence_expression}) AS evidence_count, "
                 f"MAX({score_expression}) AS alert_score, "
                 "GROUP_CONCAT(DISTINCT COALESCE(label, '')) AS labels "
-                f"FROM alerts WHERE {' AND '.join(clauses)} GROUP BY ip_alerted"
+                f"FROM alerts WHERE {' AND '.join(clauses)} GROUP BY {host_group}"
             )
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
@@ -3395,6 +3552,11 @@ class RunDataReader:
             item = dict(row)
             item.pop("sort_value", None)
             item["id"] = str(item.pop("group_id"))
+            if device_view:
+                item["device_id"] = item["id"]
+                item["device_ips"] = str(item.get("device_ips") or "").split(
+                    ","
+                )
             item["threat_level"] = self._threat_from_rank(
                 item.pop("threat_rank")
             )
@@ -3457,6 +3619,7 @@ class RunDataReader:
             search = ""
         threat = self._query_value(query, "threat").lower()
         profile = self._query_value(query, "profile")
+        device_id = self._query_value(query, "device_id")
         include_details = (
             self._query_value(query, "details").lower() != "false"
         )
@@ -3476,6 +3639,7 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
+            self._register_device_key(connection, bool(device_id))
             score_expression = self._detector_score_expression(
                 connection, "alerts"
             )
@@ -3498,6 +3662,7 @@ class RunDataReader:
             )
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
+            start = self._scoped_start(query, start)
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
                 {
@@ -3556,6 +3721,9 @@ class RunDataReader:
             if profile:
                 clauses.append("ip_alerted = ?")
                 params.append(profile)
+            if device_id:
+                clauses.append("device_key(ip_alerted) = ?")
+                params.append(device_id)
             if threat:
                 minimum = threat.removesuffix("_or_more")
                 threat_rank = {
@@ -3720,6 +3888,8 @@ class RunDataReader:
             self._annotate_detection_networks(
                 items, "ip_alerted", "alert_time"
             )
+            if self._query_value(query, "device") == "1":
+                self._annotate_devices(items, "ip_alerted")
         next_cursor = (
             self._encode_cursor(
                 sort_values[-1],
@@ -4078,20 +4248,119 @@ class RunDataReader:
             ).lower()
         return result
 
-    def _host_ips(self, ip: str) -> List[str]:
-        """Return only the selected Slips profile IP.
+    def _host_ips(
+        self, ip: str, query: Optional[Dict[str, List[str]]] = None
+    ) -> List[str]:
+        """Return this profile or the local MAC-matched device profiles.
 
         Parameters:
             ip: Profile IP selected in the host workspace.
+            query: Optional request that enables verified device grouping.
 
         Returns:
-            A single-item list suitable for parameterized SQL predicates.
+            IPs suitable for parameterized SQL predicates.
         """
+        if self._query_value(query or {}, "device") == "1":
+            keys = self._device_key_map()
+            key = keys.get(ip)
+            if key:
+                return [
+                    ip,
+                    *sorted(
+                        address
+                        for address, device in keys.items()
+                        if device == key and address != ip
+                    ),
+                ]
         return [ip]
 
-    def _host_load(self, ip: str) -> Dict[str, Any]:
-        """Read compact all-time traffic totals for the exact profile IP."""
-        ips = self._host_ips(ip)
+    def _device_key_map(self) -> Dict[str, str]:
+        """Map local IPv4 and IPv6 profiles to a conservative MAC identity.
+
+        Returns:
+            Profile IPs mapped to a device key; ambiguous MACs stay separate.
+        """
+        try:
+            with connect_history(
+                self.history_path, read_only=True
+            ) as connection:
+                rows = connection.execute(
+                    "SELECT ip, json_extract(data, '$.mac') AS mac, "
+                    "json_extract(data, '$.scope') AS scope FROM host_snapshots"
+                ).fetchall()
+        except (OSError, sqlite3.Error):
+            return {}
+        candidates: Dict[str, List[str]] = defaultdict(list)
+        for row in rows:
+            ip = str(row["ip"] or "")
+            mac = str(row["mac"] or "").lower().replace("-", ":")
+            if not re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", mac):
+                continue
+            if mac in {"00:00:00:00:00:00", "ff:ff:ff:ff:ff:ff"}:
+                continue
+            try:
+                address = ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            if not (address.is_private or address.is_link_local):
+                continue
+            if address.is_multicast or address.is_unspecified:
+                continue
+            if str(row["scope"] or "local") != "local":
+                continue
+            candidates[mac].append(ip)
+        return {
+            ip: f"mac:{mac}"
+            for mac, ips in candidates.items()
+            if 1 < len(ips) <= 16
+            for ip in ips
+        }
+
+    def _register_device_key(
+        self, connection: sqlite3.Connection, enabled: bool
+    ) -> Dict[str, str]:
+        """Expose verified MAC grouping to one SQLite request.
+
+        Parameters:
+            connection: SQLite connection used for the request.
+            enabled: Whether this request uses device grouping.
+
+        Returns:
+            Profile IPs mapped to their device keys.
+        """
+        keys = self._device_key_map() if enabled else {}
+        connection.create_function(
+            "device_key",
+            1,
+            lambda ip: keys.get(str(ip), str(ip)),
+            deterministic=True,
+        )
+        return keys
+
+    def _annotate_devices(
+        self, items: List[Dict[str, Any]], ip_field: str
+    ) -> None:
+        """Attach a page record's device key and member addresses.
+
+        Parameters:
+            items: One bounded alert or evidence page.
+            ip_field: Field holding the original profile IP.
+        """
+        keys = self._device_key_map()
+        members: Dict[str, List[str]] = defaultdict(list)
+        for ip, key in keys.items():
+            members[key].append(ip)
+        for item in items:
+            ip = str(item.get(ip_field) or "")
+            key = keys.get(ip, ip)
+            item["device_id"] = key
+            item["device_ips"] = sorted(members.get(key, [ip]))
+
+    def _host_load(
+        self, ip: str, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
+        """Read compact all-time traffic totals for the selected identity."""
+        ips = self._host_ips(ip, query)
         predicate, params = self._ip_predicate(ips)
         placeholders = ",".join("?" for _ in ips)
         src_in = f"src_ip IN ({placeholders})"
@@ -4174,11 +4443,14 @@ class RunDataReader:
             ).fetchall()
         return {str(row["ip"]): dict(row) for row in rows}
 
-    def _host_page_counts(self, ips: List[str]) -> Dict[str, Dict[str, int]]:
+    def _host_page_counts(
+        self, ips: List[str], network_start: Optional[float] = None
+    ) -> Dict[str, Dict[str, int]]:
         """Count evidence and alerts for a page with two indexed queries.
 
         Parameters:
             ips: IPs in the requested Hosts page.
+            network_start: Optional earliest event in the current connection.
 
         Returns:
             Evidence and alert counts keyed by IP.
@@ -4193,11 +4465,26 @@ class RunDataReader:
                     ("evidence", "profile_ip", "evidence"),
                     ("alerts", "ip_alerted", "alerts"),
                 ):
+                    time_column = (
+                        "evidence_time"
+                        if table == "evidence"
+                        else "CAST(alert_time AS REAL)"
+                    )
+                    scope = (
+                        f" AND {time_column} >= ?"
+                        if network_start is not None
+                        else ""
+                    )
                     rows = connection.execute(
                         f"SELECT {column} AS ip, COUNT(*) AS count "
-                        f"FROM {table} WHERE {column} IN ({placeholders}) "
+                        f"FROM {table} WHERE {column} IN ({placeholders})"
+                        f"{scope} "
                         f"GROUP BY {column}",
-                        ips,
+                        (
+                            (*ips, network_start)
+                            if network_start is not None
+                            else ips
+                        ),
                     ).fetchall()
                     for row in rows:
                         counts[str(row["ip"])][field] = int(row["count"])
@@ -4264,11 +4551,27 @@ class RunDataReader:
 
     def hosts(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return one filtered, cursor-bounded historical host page."""
+        if self._query_value(query, "device") == "1":
+            return self._devices(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
         scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
         alerts_only = self._query_value(query, "alerts_only") == "1"
+        network_start = self._scoped_start(query, None)
+        network_start_sql = (
+            str(min(network_start, 1e300)) if network_start is not None else ""
+        )
+        alert_network_clause = (
+            f" AND CAST(a.alert_time AS REAL) >= {network_start_sql}"
+            if network_start is not None
+            else ""
+        )
+        evidence_network_clause = (
+            f" AND e.evidence_time >= {network_start_sql}"
+            if network_start is not None
+            else ""
+        )
         current_threats = (
             self._current_profile_threats()
             if threat and threat != "info_or_more"
@@ -4309,7 +4612,11 @@ class RunDataReader:
                 "(SELECT COALESCE(SUM(bytes), 0) FROM flow_index fi "
                 "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
             )
-            evidence_expression = "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip)"
+            evidence_expression = (
+                "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip"
+                + evidence_network_clause
+                + ")"
+            )
             has_alert_reviews = bool(
                 connection.execute(
                     "SELECT 1 FROM run_db.sqlite_master WHERE type = 'table' "
@@ -4318,6 +4625,7 @@ class RunDataReader:
             )
             alert_expression = (
                 "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip "
+                + alert_network_clause
                 + (
                     "AND NOT EXISTS (SELECT 1 FROM run_db.alert_reviews ar "
                     "WHERE ar.alert_id = a.alert_id AND ar.status = 'resolved')"
@@ -4348,7 +4656,7 @@ class RunDataReader:
             )
             peak_score_expression = (
                 f"(SELECT MAX(e.{score_field}) FROM run_db.evidence e "
-                "WHERE e.profile_ip = hs.ip)"
+                "WHERE e.profile_ip = hs.ip" + evidence_network_clause + ")"
                 if score_field in evidence_columns
                 else "NULL"
             )
@@ -4438,7 +4746,7 @@ class RunDataReader:
             if alerts_only:
                 clauses.append(
                     "EXISTS (SELECT 1 FROM run_db.alerts a "
-                    "WHERE a.ip_alerted = hs.ip)"
+                    "WHERE a.ip_alerted = hs.ip" + alert_network_clause + ")"
                 )
             if threat and threat != "info_or_more":
                 levels = {
@@ -4509,7 +4817,7 @@ class RunDataReader:
         fast_page = getattr(self, "cache", None) is not None
         if fast_page:
             loads = self._host_page_loads(page_ips)
-            counts = self._host_page_counts(page_ips)
+            counts = self._host_page_counts(page_ips, network_start)
             identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
         annotations = HostProfileStore.annotations_for_ips(
@@ -4587,8 +4895,13 @@ class RunDataReader:
             else:
                 host["load"] = self._host_load(ip)
                 host.update(self._ip_context_for_ip(ip, host.get("dns")))
-                host["evidence_count"] = self._profile_evidence_count(ip)
-                host["alert_count"] = self._profile_alert_count(ip)
+                if network_start is None:
+                    host["evidence_count"] = self._profile_evidence_count(ip)
+                    host["alert_count"] = self._profile_alert_count(ip)
+                else:
+                    scoped_counts = self._host_page_counts([ip], network_start)
+                    host["evidence_count"] = scoped_counts[ip]["evidence"]
+                    host["alert_count"] = scoped_counts[ip]["alerts"]
             annotation = annotations.get(ip, {})
             host["user_name"] = annotation.get("name", "")
             host["user_note"] = annotation.get("note", "")
@@ -4611,6 +4924,298 @@ class RunDataReader:
             "range": range_name,
             "sort": sort_key,
             "order": direction.lower(),
+        }
+
+    def _devices(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
+        """Group local host profiles by verified MAC before filtering and paging.
+
+        Parameters:
+            query: Hosts filters, time range, sort, and cursor.
+
+        Returns:
+            A bounded page of device aggregates and their member addresses.
+        """
+        keys = self._device_key_map()
+        with connect_history(self.history_path, read_only=True) as connection:
+            snapshots = connection.execute(
+                "SELECT ip, observed_at, data FROM host_snapshots"
+            ).fetchall()
+        ips = [str(row["ip"]) for row in snapshots]
+        loads: Dict[str, Dict[str, Any]] = {}
+        counts: Dict[str, Dict[str, int]] = {}
+        network_start = self._scoped_start(query, None)
+        for offset in range(0, len(ips), 300):
+            batch = ips[offset : offset + 300]
+            loads.update(self._host_page_loads(batch))
+            counts.update(self._host_page_counts(batch, network_start))
+        peak: Dict[str, float] = {}
+        try:
+            with self._connect_sqlite() as connection:
+                score_field = (
+                    "accumulated_ratl"
+                    if getattr(self, "score_mode", "ratl") == "ratl"
+                    else "accumulated_threat_level"
+                )
+                evidence_columns = {
+                    str(column[1])
+                    for column in connection.execute(
+                        "PRAGMA table_info(evidence)"
+                    ).fetchall()
+                }
+                if score_field in evidence_columns:
+                    for offset in range(0, len(ips), 300):
+                        batch = ips[offset : offset + 300]
+                        marks = ",".join("?" for _ in batch)
+                        scope = (
+                            " AND evidence_time >= ?"
+                            if network_start is not None
+                            else ""
+                        )
+                        args = (*batch, network_start) if scope else batch
+                        for row in connection.execute(
+                            f"SELECT profile_ip, MAX({score_field}) AS score "
+                            f"FROM evidence WHERE profile_ip IN ({marks}){scope} "
+                            "GROUP BY profile_ip",
+                            args,
+                        ):
+                            peak[str(row["profile_ip"])] = float(
+                                row["score"] or 0
+                            )
+        except (AttributeError, sqlite3.Error):
+            pass
+        groups: Dict[str, Dict[str, Any]] = {}
+        for snapshot in snapshots:
+            ip = str(snapshot["ip"])
+            data = self._loads(snapshot["data"], {})
+            if not isinstance(data, dict):
+                data = {}
+            key = keys.get(ip, ip)
+            group = groups.setdefault(
+                key,
+                {
+                    "id": key,
+                    "members": [],
+                    "last_seen": 0.0,
+                    "flows": 0,
+                    "bytes": 0,
+                    "evidence": 0,
+                    "alerts": 0,
+                    "peak_score": 0.0,
+                    "threat_rank": 0,
+                },
+            )
+            load = loads.get(ip, {})
+            count = counts.get(ip, {})
+            group["members"].append((ip, data, float(snapshot["observed_at"])))
+            group["last_seen"] = max(
+                group["last_seen"],
+                float(load.get("last_seen") or 0),
+                float(snapshot["observed_at"]),
+            )
+            for field, source in (
+                ("flows", load),
+                ("bytes", load),
+                ("evidence", count),
+                ("alerts", count),
+            ):
+                group[field] += int(source.get(field) or 0)
+            group["peak_score"] = max(group["peak_score"], peak.get(ip, 0))
+            group["threat_rank"] = max(
+                group["threat_rank"],
+                EVIDENCE_THREAT_RANKS.get(
+                    str(data.get("max_threat_level") or "info").lower(), 0
+                ),
+            )
+        with connect_history(self.history_path, read_only=True) as connection:
+            for group in groups.values():
+                addresses = [member[0] for member in group["members"]]
+                if len(addresses) < 2:
+                    continue
+                marks = ",".join("?" for _ in addresses)
+                internal = connection.execute(
+                    "SELECT COUNT(*) AS flows, COALESCE(SUM(bytes), 0) AS bytes "
+                    f"FROM flow_index WHERE src_ip IN ({marks}) "
+                    f"AND dst_ip IN ({marks}) AND src_ip != dst_ip",
+                    (*addresses, *addresses),
+                ).fetchone()
+                group["flows"] -= int(internal["flows"] or 0)
+                group["bytes"] -= int(internal["bytes"] or 0)
+        latest = max(
+            (group["last_seen"] for group in groups.values()), default=0
+        )
+        start, end, range_name = self._time_bounds(query, latest)
+        search = self._query_value(query, "search").lower()
+        scope = self._query_value(query, "scope")
+        threat = self._query_value(query, "threat").lower()
+        alerts_only = self._query_value(query, "alerts_only") == "1"
+        filtered: List[Dict[str, Any]] = []
+        for group in groups.values():
+            members = group["members"]
+            if start is not None and group["last_seen"] < start:
+                continue
+            if end is not None and group["last_seen"] > end:
+                continue
+            if search and not any(
+                search in (ip + " " + json.dumps(data)).lower()
+                for ip, data, _ in members
+            ):
+                continue
+            if scope and not any(
+                data.get("scope") == scope for _, data, _ in members
+            ):
+                continue
+            if alerts_only and not group["alerts"]:
+                continue
+            if threat and threat != "info_or_more":
+                threshold = EVIDENCE_THREAT_RANKS.get(
+                    threat.removesuffix("_or_more")
+                )
+                if threshold is None or (
+                    group["threat_rank"] < threshold
+                    if threat.endswith("_or_more")
+                    else group["threat_rank"] != threshold
+                ):
+                    continue
+            filtered.append(group)
+        sort_key, _, direction = self._sort_spec(
+            query,
+            {
+                key: key
+                for key in (
+                    "ip",
+                    "scope",
+                    "hostname",
+                    "ti",
+                    "mac",
+                    "threat",
+                    "flows",
+                    "bytes",
+                    "evidence",
+                    "alerts",
+                    "score",
+                    "peak_score",
+                    "last_seen",
+                )
+            },
+            "last_seen",
+        )
+
+        def sort_value(group: Dict[str, Any]) -> Any:
+            """Return a stable value for the chosen device table column.
+
+            Parameters:
+                group: One merged device.
+
+            Returns:
+                Comparable text or numeric value.
+            """
+            representative = max(group["members"], key=lambda item: item[2])
+            data = representative[1]
+            values = {
+                "ip": representative[0],
+                "scope": data.get("scope", ""),
+                "hostname": data.get("hostname", ""),
+                "ti": "",
+                "mac": data.get("mac", ""),
+                "threat": group["threat_rank"],
+                "flows": group["flows"],
+                "bytes": group["bytes"],
+                "evidence": group["evidence"],
+                "alerts": group["alerts"],
+                "score": group["peak_score"],
+                "peak_score": group["peak_score"],
+                "last_seen": group["last_seen"],
+            }
+            value = values[sort_key]
+            return (
+                str(value or "").lower()
+                if sort_key in {"ip", "scope", "hostname", "ti", "mac"}
+                else float(value or 0)
+            )
+
+        filtered.sort(
+            key=lambda group: (sort_value(group), group["id"]),
+            reverse=direction == "DESC",
+        )
+        total = len(filtered)
+        cursor = self._decode_cursor(self._query_value(query, "cursor"))
+        if cursor:
+            filtered = [
+                group
+                for group in filtered
+                if (
+                    (sort_value(group), group["id"]) > (cursor[0], cursor[1])
+                    if direction == "ASC"
+                    else (sort_value(group), group["id"])
+                    < (cursor[0], cursor[1])
+                )
+            ]
+        limit = self._limit(query)
+        page = filtered[:limit]
+        page_ips = [ip for group in page for ip, _, _ in group["members"]]
+        annotations = HostProfileStore.annotations_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            page_ips,
+        )
+        identities = (
+            self._host_page_identity(page_ips)
+            if getattr(self, "cache", None)
+            else {}
+        )
+        items: List[Dict[str, Any]] = []
+        for group in page:
+            members = sorted(
+                group["members"], key=lambda item: item[2], reverse=True
+            )
+            ip, snapshot, observed = members[0]
+            host = dict(snapshot)
+            host.update(
+                {
+                    "ip": ip,
+                    "device_id": group["id"],
+                    "device_ips": [member[0] for member in members],
+                    "observed_at": observed,
+                    "peak_alert_score": group["peak_score"],
+                    "alert_count": group["alerts"],
+                    "evidence_count": group["evidence"],
+                    "max_threat_level": self._threat_from_rank(
+                        group["threat_rank"]
+                    ),
+                    "load": {
+                        "flows": group["flows"],
+                        "bytes": group["bytes"],
+                        "last_seen": group["last_seen"],
+                    },
+                    "user_name": annotations.get(ip, {}).get("name", ""),
+                    "user_note": annotations.get(ip, {}).get("note", ""),
+                    "dns_name": identities.get(ip, {}).get("dns_name", ""),
+                    "dns_name_source": identities.get(ip, {}).get(
+                        "dns_name_source", ""
+                    ),
+                    "ti_feeds": identities.get(ip, {}).get("ti_feeds", []),
+                }
+            )
+            items.append(host)
+        self._attach_current_host_scores(items)
+        next_cursor = (
+            self._encode_cursor(sort_value(page[-1]), page[-1]["id"])
+            if len(filtered) > limit and page
+            else None
+        )
+        return {
+            "items": items,
+            "total": total,
+            "full_total": len(groups),
+            "page_size": len(items),
+            "next_cursor": next_cursor,
+            "range": range_name,
+            "sort": sort_key,
+            "order": direction.lower(),
+            "view": "device",
         }
 
     def _profile_evidence_count(self, ip: str) -> int:
@@ -4916,15 +5521,21 @@ class RunDataReader:
             key=lambda profile: profile.get("network_id") not in current_ids,
         )
 
-    def host(self, ip: str) -> Dict[str, Any]:
+    def host(
+        self, ip: str, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
+        network_start = self._scoped_start(query or {}, None)
         host = self._live_host(ip)
         if not host.get("observed_at") and not host.get("live"):
             raise KeyError(ip)
         self._attach_current_host_scores([host])
-        host_ips = self._host_ips(ip)
+        host_ips = self._host_ips(ip, query)
         host["all_ips"] = host_ips
-        host["load"] = self._host_load(ip)
+        if self._query_value(query or {}, "device") == "1":
+            host["device_id"] = self._device_key_map().get(ip, ip)
+            host["device_ips"] = host_ips
+        host["load"] = self._host_load(ip, query)
         host["ti"] = self._ti_for_ip(ip)
         host["permanent_profiles"] = HostProfileStore.read(
             getattr(
@@ -4946,14 +5557,15 @@ class RunDataReader:
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
         alert_total = 0
         for address in host_ips:
-            alert_page = self.alerts(
-                {
-                    "range": ["all"],
-                    "profile": [address],
-                    "limit": ["100"],
-                    "details": ["false"],
-                }
-            )
+            alert_query = {
+                "range": ["all"],
+                "profile": [address],
+                "limit": ["100"],
+                "details": ["false"],
+            }
+            if network_start is not None:
+                alert_query["network"] = ["current"]
+            alert_page = self.alerts(alert_query)
             alert_total += int(alert_page["total"])
             alerts_by_id.update(
                 {str(item["alert_id"]): item for item in alert_page["items"]}
@@ -4968,7 +5580,16 @@ class RunDataReader:
         )[:MAX_PAGE_SIZE]
         host["alert_count"] = alert_total
         host["evidence"] = []
-        host["evidence_count"] = self._profile_evidence_count(ip)
+        host["evidence_count"] = (
+            self._profile_evidence_count(ip)
+            if network_start is None and len(host_ips) == 1
+            else sum(
+                item["evidence"]
+                for item in self._host_page_counts(
+                    host_ips, network_start
+                ).values()
+            )
+        )
         return host
 
     def evidence_for_host(
@@ -4985,7 +5606,7 @@ class RunDataReader:
             One evidence page with durable totals and pagination metadata.
         """
         host_query = dict(query)
-        host_query["profile"] = self._host_ips(ip)
+        host_query["profile"] = self._host_ips(ip, query)
         host_query.pop("group", None)
         return self.evidence(host_query)
 
@@ -5008,7 +5629,7 @@ class RunDataReader:
             requested = 100
         limit = max(1, min(requested, MAX_FLOW_LIMIT))
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
-        ips = self._host_ips(ip)
+        ips = self._host_ips(ip, query)
         host_ips = set(ips)
 
         def direction_sort(src: str, dst: str) -> str:
@@ -5278,7 +5899,7 @@ class RunDataReader:
         except ValueError:
             max_points = 300
         max_points = max(10, min(max_points, MAX_CHART_POINTS))
-        ips = self._host_ips(ip)
+        ips = self._host_ips(ip, query)
         predicate, params = self._ip_predicate(ips)
         with connect_history(self.history_path, read_only=True) as connection:
             latest_row = connection.execute(
@@ -5648,13 +6269,16 @@ class RunDataReader:
         return modules[:MAX_PAGE_SIZE]
 
     def _durable_evidence_counts(
-        self, connection: sqlite3.Connection
+        self,
+        connection: sqlite3.Connection,
+        network_start: Optional[float] = None,
     ) -> Counter[str]:
         """
         Count evidence by producing module from durable history.
 
         Parameters:
             connection: Short-lived read-only flows database connection.
+            network_start: Optional earliest event in the current connection.
 
         Returns:
             Evidence counts keyed by module name.
@@ -5665,9 +6289,11 @@ class RunDataReader:
             "evidence_module", 1, self._module_for_evidence
         )
         module_expression = self._evidence_module_expression(connection)
+        scope = "WHERE evidence_time >= ?" if network_start is not None else ""
         rows = connection.execute(
             f"SELECT {module_expression} AS module, COUNT(*) AS count "
-            f"FROM evidence GROUP BY {module_expression}"
+            f"FROM evidence {scope} GROUP BY {module_expression}",
+            (network_start,) if network_start is not None else (),
         ).fetchall()
         counts: Counter[str] = Counter()
         for row in rows:
@@ -6119,8 +6745,20 @@ class RunDataReader:
         )
         return {"ip": ip, "network_id": network_id, "name": name, "note": note}
 
-    def overview(self) -> Dict[str, Any]:
+    def overview(
+        self, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
+        scoped_start = self._scoped_start(query or {}, None)
+        alert_scope = (
+            " AND CAST(alert_time AS REAL) >= ?"
+            if scoped_start is not None
+            else ""
+        )
+        evidence_scope = (
+            " WHERE evidence_time >= ?" if scoped_start is not None else ""
+        )
+        scope_params = (scoped_start,) if scoped_start is not None else ()
         analysis = self.redis.hgetall("analysis")
         run_metadata = self._run_metadata()
         complete = bool(analysis.get("analysis_end"))
@@ -6133,12 +6771,16 @@ class RunDataReader:
                         + self._review_clause(
                             connection, "alert", "open", "alerts"
                         )
+                        + alert_scope,
+                        scope_params,
                     ).fetchone()["count"]
                 )
                 durable_evidence = (
                     int(
                         connection.execute(
                             "SELECT COUNT(*) AS count FROM evidence"
+                            + evidence_scope,
+                            scope_params,
                         ).fetchone()["count"]
                     )
                     if self._table_exists(connection, "evidence")
@@ -6153,7 +6795,11 @@ class RunDataReader:
             )
         except (TypeError, ValueError, redis.RedisError):
             redis_evidence_count = 0
-        evidence_count = durable_evidence or redis_evidence_count
+        evidence_count = (
+            durable_evidence
+            if scoped_start is not None
+            else durable_evidence or redis_evidence_count
+        )
         with connect_history(self.history_path, read_only=True) as history:
             error_rows = history.execute(
                 "SELECT module, COUNT(*) AS count FROM error_events GROUP BY module"
@@ -6319,13 +6965,16 @@ class RunDataReader:
             "updated_at": now,
         }
 
-    def overview_evidence_counts(self) -> Dict[str, Any]:
+    def overview_evidence_counts(
+        self, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
         """Load exact evidence totals omitted from the fast Overview response.
 
         Returns:
             Exact overall and per-module evidence counts from durable storage,
             or from the retained Redis compatibility data when necessary.
         """
+        network_start = self._scoped_start(query or {}, None)
         durable_evidence = 0
         evidence_counts: Counter[str] = Counter()
         try:
@@ -6334,24 +6983,37 @@ class RunDataReader:
                     durable_evidence = int(
                         connection.execute(
                             "SELECT COUNT(*) AS count FROM evidence"
+                            + (
+                                " WHERE evidence_time >= ?"
+                                if network_start is not None
+                                else ""
+                            ),
+                            (
+                                (network_start,)
+                                if network_start is not None
+                                else ()
+                            ),
                         ).fetchone()["count"]
                     )
                     if durable_evidence:
                         evidence_counts = self._durable_evidence_counts(
-                            connection
+                            connection, network_start
                         )
         except sqlite3.Error:
             durable_evidence = 0
         if durable_evidence:
             evidence_count = durable_evidence
             source = "sqlite"
-        else:
+        elif network_start is None:
             redis_evidence = self._redis_evidence()
             evidence_count = len(redis_evidence)
             evidence_counts = Counter(
                 str(item.get("module", "unknown")) for item in redis_evidence
             )
             source = "redis"
+        else:
+            evidence_count = 0
+            source = "sqlite"
         return {
             "evidence": evidence_count,
             "modules": dict(evidence_counts),
@@ -7544,11 +8206,11 @@ class RequestHandler(BaseHTTPRequestHandler):
         if path == "/api/identity":
             payload = reader.identity()
         elif path == "/api/live-counts":
-            payload = reader.live_counts()
+            payload = reader.live_counts(query)
         elif path == "/api/overview":
-            payload = reader.overview()
+            payload = reader.overview(query)
         elif path == "/api/overview/evidence-counts":
-            payload = reader.overview_evidence_counts()
+            payload = reader.overview_evidence_counts(query)
         elif path == "/api/metadata":
             payload = reader.metadata()
         elif path == "/api/logs":
@@ -7594,7 +8256,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.flows_for_host(ip, query)
         elif path.startswith("/api/hosts/"):
             ip = unquote(path[len("/api/hosts/") :])
-            payload = reader.host(ip)
+            payload = reader.host(ip, query)
         else:
             raise KeyError(path)
         if isinstance(payload, dict):

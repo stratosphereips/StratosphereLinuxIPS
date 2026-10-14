@@ -459,7 +459,10 @@ class DNS(IFlowalertsAnalyzer):
                 continue
 
             entropy = self.estimate_shannon_entropy(answer)
-            if entropy >= self.shannon_entropy_threshold:
+            threshold = self.shannon_entropy_threshold
+            if (flow.query or "").rstrip(".").lower().endswith(".arpa"):
+                threshold = max(threshold, 5.8)
+            if entropy >= threshold:
                 self.set_evidence.suspicious_dns_answer(
                     twid,
                     flow,

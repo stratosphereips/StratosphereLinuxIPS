@@ -449,6 +449,35 @@ def test_check_high_entropy_dns_answers_with_call():
 
 
 @pytest.mark.parametrize(
+    ("entropy", "expected_calls"),
+    [(5.56, 0), (5.79, 0), (5.8, 1), (6.1, 1)],
+)
+def test_arpa_txt_answers_need_higher_entropy(
+    entropy: float, expected_calls: int
+) -> None:
+    """Avoid high entropy evidence for ordinary reverse DNS TXT metadata.
+
+    Parameters:
+        entropy: Measured Shannon entropy for a TXT answer.
+        expected_calls: Number of evidence reports expected.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.shannon_entropy_threshold = 4.0
+    dns.estimate_shannon_entropy = Mock(return_value=entropy)
+    dns.set_evidence.suspicious_dns_answer = Mock()
+    flow = DNS(
+        starttime="1726568479.5997488", uid="arpa-txt", saddr="1.1.1.1",
+        daddr="192.168.1.5", query="8.e.f.ip6.arpa", qclass_name="",
+        qtype_name="TXT", rcode_name="", dport="53", sport="5353",
+        proto="udp", answers=["TXT deviceid=483409358cca14c37ab1"], TTLs="",
+    )
+
+    dns.check_high_entropy_dns_answers("timewindow1", flow)
+
+    assert dns.set_evidence.suspicious_dns_answer.call_count == expected_calls
+
+
+@pytest.mark.parametrize(
     "query",
     [
         "encoded._slips._udp.local",

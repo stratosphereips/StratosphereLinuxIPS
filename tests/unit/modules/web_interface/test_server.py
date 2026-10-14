@@ -636,7 +636,8 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         )
         assert "if (!payload || state.host?.ip !== ip) return;" in app_source
         assert (
-            "host.exact_aggregates = staleAliases.length === 0" in app_source
+            "host.exact_aggregates = state.deviceView || staleAliases.length === 0"
+            in app_source
         )
         assert "(row) => slipsScore(row)" in section
         assert "openHost(row.ip, row)" in section
@@ -1242,7 +1243,7 @@ def test_overview_prioritizes_operational_data() -> None:
     assert 'id="metadata-device"' in metadata
     assert 'id="modules-table"' in metadata
     assert 'id="modules-table"' not in overview
-    assert 'api("metadataOverview", "/api/overview")' in app_source
+    assert 'api("metadataOverview", `/api/overview${state.networkOnly' in app_source
     assert "Data sources" not in overview
     assert "Run metadata" not in overview
     assert "Recent log events" not in overview
@@ -1255,12 +1256,10 @@ def test_overview_prioritizes_operational_data() -> None:
     assert '["Firewall blocks", firewall.current' in app_source
     assert 'sort: "cpu_percent", order: "desc"' in app_source
     assert 'id="load-module-evidence" disabled' in index_source
-    assert '"/api/overview/evidence-counts"' in app_source
+    assert '`/api/overview/evidence-counts${scope}`' in app_source
     assert "async function loadOverviewEvidenceCounts" in app_source
     assert "document.title = `Slips ${compact" in app_source
-    assert (
-        'api("liveTitleCounts", "/api/live-counts", false, true)' in app_source
-    )
+    assert 'api("liveTitleCounts", `/api/live-counts${params.size' in app_source
     assert 'path == "/api/live-counts"' in server_source
     assert "updatePageTitle({ alerts: data.counts.alerts" not in app_source
     assert "updatePageTitle({ [name]: payload.full_total" not in app_source
@@ -3593,6 +3592,187 @@ def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
     assert result["total"] == 1
     assert result["full_total"] == 2
     assert result["items"][0]["id"] == "current"
+
+
+@pytest.mark.parametrize(
+    ("network_state", "expected"),
+    [
+        ({"connected": True, "changed_at": 200, "gateway_mac": "AA",
+          "history": [
+              {"connected": True, "changed_at": 100, "gateway_mac": "BB"},
+              {"connected": True, "changed_at": 150, "gateway_mac": "AA"},
+          ]}, 150.0),
+        ({"connected": True, "changed_at": 200, "gateway_mac": "",
+          "history": [
+              {"connected": True, "changed_at": 150, "gateway_mac": ""},
+          ]}, 200.0),
+        ({"connected": False, "changed_at": 200, "gateway_mac": "AA"}, None),
+    ],
+)
+def test_current_network_scope_stops_at_prior_connection(
+    network_state: dict, expected: float | None
+) -> None:
+    """A repeated IP on an older network must not enter the current scope.
+
+    Parameters:
+        network_state: Current snapshot and retained network history.
+        expected: Earliest accepted detection timestamp.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface", "interface": "en0"
+    }
+    reader.redis.hget.return_value = json.dumps(network_state)
+
+    assert reader._current_network_start() == expected
+    assert reader._scoped_start({"network": ["current"]}, 180) == (
+        max(expected, 180) if expected is not None else float("inf")
+    )
+
+
+def test_current_network_scope_filters_durable_detection_pages(
+    tmp_path: Path,
+) -> None:
+    """Grouped alerts and evidence exclude older detections from the same IP.
+
+    Parameters:
+        tmp_path: Isolated run database directory.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface", "interface": "en0"
+    }
+    reader.redis.hget.side_effect = lambda key, field: (
+        json.dumps({"connected": True, "changed_at": 20,
+                    "gateway_mac": "aa"})
+        if key == "network_states" else "interface"
+    )
+    reader.score_mode = "ratl"
+    reader._ip_context_for_ip = Mock(return_value={})
+    reader._annotate_detection_networks = Mock()
+    reader._annotate_whitelisted_evidence = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY, ip_alerted TEXT, "
+            "alert_time REAL, label TEXT, accumulated_ratl REAL);"
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "INSERT INTO alerts VALUES "
+            "('old','192.0.2.5',10,'malicious',5),"
+            "('current','192.0.2.5',30,'malicious',6);"
+            "INSERT INTO evidence VALUES "
+            "('old',10,'192.0.2.5','tw','low','SCAN','old',0.8,'{}'),"
+            "('current',30,'192.0.2.5','tw','low','SCAN','current',0.8,'{}');"
+            "INSERT INTO alert_evidence VALUES ('old','old'),('current','current');"
+        )
+
+    query = {"range": ["all"], "network": ["current"]}
+    grouped = reader.alerts({**query, "group": ["host"]})
+    individual = reader.alerts({**query, "details": ["false"]})
+    evidence = reader.evidence(query)
+    grouped_evidence = reader.evidence({**query, "group": ["host_type"]})
+    all_alerts = reader.alerts({"range": ["all"], "group": ["host"]})
+    scoped_host_counts = reader._host_page_counts(["192.0.2.5"], 20)
+
+    assert grouped["matching_total"] == 1
+    assert grouped["items"][0]["alert_count"] == 1
+    assert individual["total"] == 1
+    assert individual["items"][0]["alert_id"] == "current"
+    assert evidence["total"] == 1
+    assert evidence["items"][0]["id"] == "current"
+    assert grouped_evidence["matching_total"] == 1
+    assert all_alerts["matching_total"] == 2
+    assert scoped_host_counts["192.0.2.5"] == {"alerts": 1, "evidence": 1}
+
+
+def test_device_view_combines_local_addresses_before_paging(
+    tmp_path: Path,
+) -> None:
+    """MAC-matched local IPv4/IPv6 share lists, while public IPs stay separate.
+
+    Parameters:
+        tmp_path: Isolated history and detection databases.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.score_mode = "ratl"
+    reader.cache = None
+    reader.redis = Mock()
+    reader._attach_current_host_scores = Mock()
+    reader._ip_context_for_ip = Mock(return_value={})
+    reader._annotate_detection_networks = Mock()
+    reader._annotate_whitelisted_evidence = Mock()
+    initialize_history(reader.history_path)
+    mac = "aa:bb:cc:dd:ee:ff"
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [(ip, time_seen, json.dumps({
+                "ip": ip, "mac": mac, "scope": scope,
+                "max_threat_level": "high",
+            })) for ip, time_seen, scope in (
+                ("10.0.0.1", 10, "local"),
+                ("fe80::1", 11, "local"),
+                ("8.8.8.8", 12, "public"),
+            )],
+        )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY, ip_alerted TEXT, "
+            "alert_time REAL, label TEXT, accumulated_ratl REAL);"
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT, accumulated_ratl REAL);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "INSERT INTO alerts VALUES "
+            "('v4','10.0.0.1',10,'malicious',5),"
+            "('v6','fe80::1',11,'malicious',6);"
+            "INSERT INTO evidence VALUES "
+            "('v4',10,'10.0.0.1','tw','high','SCAN','scan',0.8,'{}',5),"
+            "('v6',11,'fe80::1','tw','high','SCAN','scan',0.8,'{}',6);"
+            "INSERT INTO alert_evidence VALUES ('v4','v4'),('v6','v6');"
+        )
+
+    device_id = f"mac:{mac}"
+    query = {"range": ["all"], "device": ["1"]}
+    inventory = reader.hosts(query)
+    alert_groups = reader.alerts({**query, "group": ["host"]})
+    evidence_groups = reader.evidence({**query, "group": ["host_type"]})
+    device_alerts = reader.alerts({**query, "device_id": [device_id],
+                                   "details": ["false"]})
+    device_evidence = reader.evidence({**query, "device_id": [device_id]})
+    first_page = reader.hosts({**query, "limit": ["1"],
+                               "sort": ["ip"], "order": ["asc"]})
+    second_page = reader.hosts({**query, "limit": ["1"],
+                                "sort": ["ip"], "order": ["asc"],
+                                "cursor": [first_page["next_cursor"]]})
+
+    assert reader._host_ips("10.0.0.1", query) == ["10.0.0.1", "fe80::1"]
+    assert reader._host_ips("8.8.8.8", query) == ["8.8.8.8"]
+    assert inventory["total"] == 2
+    grouped = next(item for item in inventory["items"] if item["device_id"] == device_id)
+    assert set(grouped["device_ips"]) == {"10.0.0.1", "fe80::1"}
+    assert alert_groups["total"] == 1
+    assert alert_groups["items"][0]["alert_count"] == 2
+    assert evidence_groups["total"] == 1
+    assert evidence_groups["items"][0]["evidence_count"] == 2
+    assert device_alerts["total"] == 2
+    assert device_evidence["total"] == 2
+    assert first_page["next_cursor"]
+    assert first_page["items"][0]["device_id"] != second_page["items"][0]["device_id"]
 
 
 @pytest.mark.parametrize(
