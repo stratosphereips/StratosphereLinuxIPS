@@ -1935,7 +1935,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _sofar_models(self, local, merged: bool) -> list:
         """The named models of this training close, in row order. A further
-        model (e.g. a frozen pretrained baseline "model0") is one more pair.
+        model is one more (name, model) pair.
 
         :param local: this close's local-only snapshot (the model sent to
             peers), None when it was not taken
