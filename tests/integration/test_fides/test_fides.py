@@ -15,6 +15,7 @@ import redis
 from modules.fides.messaging.network_bridge import NetworkBridge
 from modules.fides.model.peer import PeerInfo
 from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
+from slips_files.core.database.redis_db.redis_auth import redis_auth_kwargs
 from tests.common_test_utils import (
     allocate_started_redis_port,
     create_output_dir,
@@ -112,7 +113,9 @@ def message_send(port):
     message.update({"version": NetworkBridge.version})
     message = json.dumps(message)
 
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    redis_client = redis.StrictRedis(
+        host="localhost", port=port, db=0, **redis_auth_kwargs()
+    )
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
 
@@ -124,7 +127,9 @@ def message_receive(port):
     import json
 
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    redis_client = redis.StrictRedis(
+        host="localhost", port=port, db=0, **redis_auth_kwargs()
+    )
 
     # define a callback function to handle received messages
     def message_handler(message):
