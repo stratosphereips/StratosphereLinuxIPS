@@ -6,6 +6,8 @@ from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 
+RELIABILITY_WEIGHT = 0.7
+
 
 class BaseModel:
     """
@@ -24,7 +26,7 @@ class BaseModel:
         self.trustdb = trustdb
         self.main_slips_db = main_slips_db
         self.printer = Printer(logger, self.name)
-        self.reliability_weight = 0.7
+        self.reliability_weight = RELIABILITY_WEIGHT
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)

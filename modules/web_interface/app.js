@@ -69,6 +69,7 @@ const state = {
   deviceViewSupported: false,
   networkFilterSupported: false,
   currentNetworkStart: null,
+  headerNetwork: null,
   rangesInitialized: false,
   localSorts: {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
@@ -576,7 +577,28 @@ const whitelistHandling = (record) => {
 function reportingPeers(record) {
   if (record.evidence_type !== "MALICIOUS_IP_FROM_P2P_NETWORK") return "—";
   const peers = record.reporting_peers || [];
-  return peers.length ? text("code", peers.join(", ")) : "Unavailable";
+  if (!peers.length) return "Unavailable";
+  const label = text("code", peers.map(shortPeerId).join(", "));
+  label.title = peers.join(", ");
+  return label;
+}
+/** Keep peer IDs distinguishable while fitting them in tables and plots.
+ * @param {string} value Full peer ID.
+ * @returns {string} A short peer ID retaining both ends of the hash.
+ */
+function shortPeerId(value) {
+  const id = String(value || "");
+  if (/\s/.test(id)) return id;
+  return id.length > 20 ? `${id.slice(0, 8)}…${id.slice(-6)}` : id || "—";
+}
+
+/** Shorten the peer hash inside a displayed P2P multiaddress.
+ * @param {string} value Multiaddress or other identity text.
+ * @returns {string} Text with the full hash kept available through title/copy.
+ */
+function shortP2PAddress(value) {
+  return String(value || "").replace(/(\/p2p\/)([^\s/]+)/g,
+    (_match, prefix, peerId) => `${prefix}${shortPeerId(peerId)}`);
 }
 const escapePath = (value) => encodeURIComponent(String(value));
 
@@ -690,6 +712,7 @@ function applyRunIdentity(identity) {
     state.networkNameEditorOpen.clear();
     state.ownAddresses.clear();
     state.computerName = "";
+    state.headerNetwork = null;
     toast("A new Slips run is now active. Investigation state was cleared.");
   }
   state.runIdentity = token;
@@ -1157,6 +1180,35 @@ function startLiveTitlePolling() {
   }, 5000);
 }
 
+/** Update the network name in the shared header from the latest heartbeat.
+ * @param {Object} data Current overview payload for run metadata.
+ */
+function renderHeaderNetwork(data) {
+  const run = data.run;
+  const metadata = data.run_metadata || {};
+  const overviewNetwork = (data.network_states || []).find((network) =>
+    network.connected && network.interface === run.interface)
+    || (data.network_states || []).find((network) => network.connected);
+  const liveNetwork = state.headerNetwork?.interface === run.interface
+    ? state.headerNetwork : null;
+  const network = liveNetwork || overviewNetwork;
+  const primaryIp = liveNetwork && !liveNetwork.connected ? ""
+    : network?.host_ip || data.host_addresses?.ipv4?.[0]
+      || data.host_addresses?.ipv6?.[0];
+  const detailsLink = text("button", "run details", "overview-link");
+  detailsLink.type = "button";
+  detailsLink.addEventListener("click", () => switchTab("metadata"));
+  byId("run-meta").replaceChildren(
+    text("span", [
+      run.interface || metadata.File || run.input_type || "input",
+      network?.connected ? network.name || "" : "",
+      primaryIp || "",
+      metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
+    ].filter(Boolean).join(" · ")),
+    text("span", " · "), detailsLink,
+  );
+}
+
 /**
  * Render run identity shared by every top-level tab.
  *
@@ -1172,23 +1224,7 @@ function renderRunContext(data) {
   renderHeaderUptime();
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
-  const metadata = data.run_metadata || {};
-  const connectedNetwork = (data.network_states || []).find((network) =>
-    network.connected && network.interface === run.interface)
-    || (data.network_states || []).find((network) => network.connected);
-  const primaryIp = data.host_addresses?.ipv4?.[0] || data.host_addresses?.ipv6?.[0];
-  const detailsLink = text("button", "run details", "overview-link");
-  detailsLink.type = "button";
-  detailsLink.addEventListener("click", () => switchTab("metadata"));
-  byId("run-meta").replaceChildren(
-    text("span", [
-      run.interface || metadata.File || run.input_type || "input",
-      connectedNetwork?.name || "",
-      primaryIp || "",
-      metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
-    ].filter(Boolean).join(" · ")),
-    text("span", " · "), detailsLink,
-  );
+  renderHeaderNetwork(data);
   const addresses = data.host_addresses || {};
   const computerAddresses = data.computer_addresses || {};
   state.computerName = data.computer_name || "";
@@ -1467,6 +1503,9 @@ function renderNetworkStates(networkStates) {
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
         network.name = payload.name;
+        if (state.headerNetwork?.network_id === network.network_id) {
+          state.headerNetwork.name = payload.name;
+        }
         state.networkNameDrafts.delete(network.network_id);
         state.networkNameEditorOpen.delete(network.network_id);
         document.activeElement?.blur();
@@ -2921,7 +2960,9 @@ function renderEvidenceGroup() {
       details.className = "evidence-peer-group";
       details.dataset.peer = peer;
       details.open = openPeers.get(peer) ?? true;
-      details.append(text("summary", `${peer} · ${compact(records.length)} report${records.length === 1 ? "" : "s"}`));
+      const label = text("summary", `${peer.replace(/[A-Za-z0-9]{25,}/g, shortPeerId)} · ${compact(records.length)} report${records.length === 1 ? "" : "s"}`);
+      label.title = peer;
+      details.append(label);
       records.forEach((record) => appendRecord(details, record));
       list.append(details);
     });
@@ -3876,7 +3917,7 @@ function renderP2PTrustChart(history, peers) {
   const series = peerIds.map((peerId, index) => ({
     key: `peer_${index}`,
     className: `peer-trust-line-${index % 8}`,
-    label: peerIps.get(peerId) || peerId,
+    label: `${peerIps.get(peerId) || "Unknown IP"} · ${shortPeerId(peerId)}`,
   }));
   const minimumReliability = rows.length
     ? Math.max(0, Math.floor((Math.min(...rows.map((row) => Number(row.reliability))) - 0.01) * 10) / 10)
@@ -3895,8 +3936,9 @@ function renderP2PTrustChart(history, peers) {
     item.className = "p2p-trust-legend-item";
     const marker = document.createElement("i");
     marker.className = `peer-trust-key peer-trust-line-${index % 8}`;
-    item.append(marker, peerIps.get(peerId)
-      ? hostIdentity(peerIps.get(peerId)) : text("code", peerId));
+    if (peerIps.get(peerId)) item.append(marker, hostIdentity(peerIps.get(peerId)),
+      text("code", shortPeerId(peerId)));
+    else item.append(marker, text("code", shortPeerId(peerId)));
     item.title = peerId;
     legend.append(item);
   });
@@ -3979,7 +4021,7 @@ function renderP2PMessages() {
   peerFilter.hidden = !state.p2pSelectedPeer;
   peerFilter.replaceChildren();
   if (state.p2pSelectedPeer) {
-    peerFilter.append(text("span", `Peer: ${state.p2pSelectedPeer.ip || state.p2pSelectedPeer.peer_id}`));
+    peerFilter.append(text("span", `Peer: ${state.p2pSelectedPeer.ip || "Unknown IP"} · ${shortPeerId(state.p2pSelectedPeer.peer_id)}`));
     const clear = text("button", "×");
     clear.type = "button";
     clear.title = "Show messages from all peers";
@@ -4048,7 +4090,7 @@ function p2pPeerIdentity(peerId) {
     wrapper.textContent = "* all peers";
     return wrapper;
   }
-  const id = text("code", peerId || "—");
+  const id = text("code", shortPeerId(peerId));
   id.title = peerId || "";
   wrapper.append(id);
   const match = state.p2p?.peers?.find((peer) => peer.peer_id === peerId);
@@ -4082,7 +4124,7 @@ function renderP2PMessageDetail(record) {
     ["Direction", record.direction],
     ["Type", record.message_type],
     ["Peer", record.peer === "*" ? "* (broadcast to all peers)" :
-      `${record.peer || "—"}${peerAddress ? ` · ${peerAddress}` : ""}`],
+      `${shortPeerId(record.peer)}${peerAddress ? ` · ${peerAddress}` : ""}`],
     ["Target", record.target || "—"],
     ["Score", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
     ["Confidence", record.confidence === null || record.confidence === undefined
@@ -4141,9 +4183,14 @@ function renderP2PPeers() {
   byId("p2p-peer-count").textContent = String(peers.length);
   renderTable("p2p-peers-table", peers, [
     (row) => row.ip ? hostIdentity(row.ip) : text("span", "Unknown IP", "muted"),
-    (row) => { const id = text("code", row.peer_id || "—", "p2p-short-id"); id.title = row.peer_id || ""; return id; },
+    (row) => { const id = text("code", shortPeerId(row.peer_id), "p2p-short-id"); id.title = row.peer_id || ""; return id; },
     (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
-    (row) => row.trust === null || row.trust === undefined ? "—" : numeric(row.trust).toFixed(3),
+    (row) => {
+      if (row.trust === null || row.trust === undefined) return "—";
+      const value = text("code", numeric(row.trust).toFixed(3));
+      value.title = "Slips peer trust calculated from reliability and local reputation";
+      return value;
+    },
     (row) => {
       const value = document.createElement("div");
       value.className = "p2p-reliability";
@@ -4205,7 +4252,7 @@ async function loadP2P() {
     ["Listen address", payload.listener || "Waiting for listener announcement"]].forEach(([label, value]) => {
     const line = document.createElement("div");
     line.className = "p2p-identity-row";
-    const code = text("code", value);
+    const code = text("code", label === "Local peer ID" ? shortPeerId(value) : shortP2PAddress(value));
     code.title = value;
     const copy = text("button", "Copy", "p2p-copy-link");
     copy.type = "button";
@@ -6464,6 +6511,8 @@ async function pollBackendStatus() {
       updateReviewAvailability(identity.review_actions === true);
       updateNetworkFilterAvailability(identity);
       updateDeviceViewAvailability(identity);
+      state.headerNetwork = identity.current_network || null;
+      if (state.overview) renderHeaderNetwork(state.overview);
     }
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.

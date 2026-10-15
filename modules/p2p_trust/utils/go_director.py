@@ -727,8 +727,16 @@ class GoDirector:
 
         if "ip" in data and data["ip"]:
             ip_address = str(data["ip"])
-            if not validate_ip_address(ip_address):
-                self.print(f"IP address {ip_address} is invalid", 2, 0)
+            if (
+                not validate_ip_address(ip_address)
+                or ipaddress.ip_address(ip_address).is_loopback
+            ):
+                self.print(
+                    f"Peer-reported IP address {ip_address} is not a "
+                    "usable remote endpoint",
+                    2,
+                    0,
+                )
                 ip_address = ""
             else:
                 self.trustdb.insert_go_ip_pairing(

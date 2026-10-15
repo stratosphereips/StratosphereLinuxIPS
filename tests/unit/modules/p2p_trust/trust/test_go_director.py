@@ -32,6 +32,23 @@ def test_peer_messages_stay_in_logs_unless_they_are_errors(
         director.printer.print.assert_called_once_with("peer report", 1, debug)
 
 
+def test_peer_update_does_not_replace_remote_ip_with_loopback() -> None:
+    """Keep a known peer endpoint when Pigeon reports its own loopback."""
+    director = ModuleFactory().create_go_director_obj()
+    director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.168.1.249"}
+    )
+    director.db.get_connected_peers.return_value = []
+
+    director.process_go_update(
+        {"peerid": "QmPeer", "ip": "127.0.0.1", "reliability": 0.8}
+    )
+
+    director.trustdb.insert_go_ip_pairing.assert_not_called()
+    stored = json.loads(director.db.store_peer_trust_data.call_args.args[1])
+    assert stored["ip"] == "192.168.1.249"
+
+
 @pytest.mark.parametrize(
     "data_dict, expected_method, expected_args",
     [

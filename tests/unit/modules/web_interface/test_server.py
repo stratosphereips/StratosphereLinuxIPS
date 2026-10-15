@@ -5189,6 +5189,98 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
     ]
 
 
+@pytest.mark.parametrize(
+    "cached_trust,expected_trust", [(None, 0.28), ("0.61", 0.61)]
+)
+def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    cached_trust: str | None,
+    expected_trust: float,
+) -> None:
+    """Ignore a loopback peer update and retain the authenticated endpoint.
+
+    Parameters:
+        tmp_path: Isolated trust database directory.
+        monkeypatch: Changes to that isolated directory.
+        cached_trust: Optional current model cache entry.
+        expected_trust: Displayed trust using cache or persisted inputs.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    output_dir = tmp_path / "output" / "run"
+    output_dir.mkdir(parents=True)
+    trust_path = tmp_path / "permanent" / "p2p_trust_runtime" / "trustdb.db"
+    trust_path.parent.mkdir(parents=True)
+    with sqlite3.connect(trust_path) as connection:
+        connection.executescript(
+            "CREATE TABLE go_reliability (peerid TEXT, reliability REAL, update_time REAL);"
+            "CREATE TABLE peer_ips (peerid TEXT, ipaddress TEXT, update_time REAL);"
+            "CREATE TABLE peer_addresses (peerid TEXT, ipaddress TEXT, update_time REAL);"
+            "CREATE TABLE slips_reputation (ipaddress TEXT, score REAL, confidence REAL);"
+            "CREATE TABLE reports (reporter_peerid TEXT, reported_key TEXT, "
+            "score REAL, confidence REAL, update_time REAL);"
+            "INSERT INTO go_reliability VALUES ('QmLostPeer', 0.8, 300);"
+            "INSERT INTO peer_ips VALUES ('QmLostPeer', '127.0.0.1', 300);"
+            "INSERT INTO peer_addresses VALUES ('QmLostPeer', '192.168.1.249', 200);"
+            "INSERT INTO slips_reputation VALUES ('192.168.1.249', 0, 0.05);"
+        )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = output_dir
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": "0"},
+        "peer_info": {
+            "QmLostPeer": json.dumps(
+                {"ip": "127.0.0.1", "timestamp": 300, "reliability": 0.8}
+            )
+        },
+        "peer_trust": (
+            {"192.168.1.249": cached_trust} if cached_trust else {}
+        ),
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    peer = reader.p2p()["peers"][0]
+
+    assert peer["ip"] == "192.168.1.249"
+    assert peer["trust"] == pytest.approx(expected_trust)
+
+
+def test_identity_returns_current_named_network_in_any_tab() -> None:
+    """Supply the lightweight header heartbeat with the current name."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {
+        "input_type": "interface",
+        "interface": "en0",
+    }
+    reader.redis.hget.return_value = json.dumps(
+        {"interface": "en0", "connected": True, "host_ip": "192.0.2.4"}
+    )
+    reader._named_network_states = Mock(
+        return_value=[
+            {
+                "name": "Office",
+                "network_id": "router-1",
+                "host_ip": "192.0.2.4",
+            }
+        ]
+    )
+
+    assert reader._current_header_network() == {
+        "interface": "en0",
+        "connected": True,
+        "name": "Office",
+        "network_id": "router-1",
+        "host_ip": "192.0.2.4",
+    }
+
+
 def test_p2p_marks_recently_active_message_sender_online(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

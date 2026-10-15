@@ -32,6 +32,7 @@ from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.structures.evidence import EvidenceType
 from modules.supported_module_names import Modules
+from modules.p2p_trust.trust.base_model import RELIABILITY_WEIGHT
 from slips_files.core.helpers.whitelist.whitelist_parser import (
     backup_local_whitelist,
     ensure_local_whitelist,
@@ -2167,7 +2168,39 @@ class RunDataReader:
             "network_filter_supported": True,
             "device_view_supported": True,
             "current_network_start": self._current_network_start(),
+            "current_network": self._current_header_network(),
             **self.validate_run_identity(),
+        }
+
+    def _current_header_network(self) -> Dict[str, Any]:
+        """Return the named live network for the shared page header.
+
+        Returns:
+            Current monitored interface, connection, name, and address.
+        """
+        analysis = self.redis.hgetall("analysis")
+        if analysis.get("input_type") != "interface" or analysis.get(
+            "analysis_end"
+        ):
+            return {}
+        interface = str(analysis.get("interface") or "").split(",", 1)[0]
+        if not interface:
+            return {}
+        state = self._loads(self.redis.hget("network_states", interface), {})
+        if not isinstance(state, dict):
+            return {}
+        if not state.get("connected"):
+            return {"interface": interface, "connected": False}
+        try:
+            network = self._named_network_states([state])[0]
+        except sqlite3.Error:
+            network = state
+        return {
+            "interface": interface,
+            "connected": True,
+            "name": network.get("name") or "",
+            "network_id": network.get("network_id") or "",
+            "host_ip": network.get("host_ip") or "",
         }
 
     def live_counts(
@@ -7764,6 +7797,26 @@ class RunDataReader:
                 active_peers.add(peer_id)
         return active_peers
 
+    @staticmethod
+    def _usable_peer_ip(value: Any) -> bool:
+        """Accept a peer endpoint only when it is a usable remote address.
+
+        Parameters:
+            value: Candidate address from Pigeon or a verified connection.
+
+        Returns:
+            Whether the address can identify a remote peer.
+        """
+        try:
+            address = ipaddress.ip_address(str(value))
+        except ValueError:
+            return False
+        return not (
+            address.is_loopback
+            or address.is_unspecified
+            or address.is_multicast
+        )
+
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -7817,6 +7870,7 @@ class RunDataReader:
         reports_received = 0
         report_counts: Counter[str] = Counter()
         peer_ips: Dict[str, Dict[str, Any]] = {}
+        peer_addresses: Dict[str, Dict[str, Any]] = {}
         peer_first_seen: Dict[str, float] = {}
         if trust_path.exists():
             try:
@@ -7886,6 +7940,8 @@ class RunDataReader:
                         "SELECT peerid, ipaddress, update_time FROM peer_ips "
                         "ORDER BY update_time DESC LIMIT 1000"
                     ):
+                        if not self._usable_peer_ip(row["ipaddress"]):
+                            continue
                         peer_ips.setdefault(
                             str(row["peerid"]),
                             {
@@ -7895,6 +7951,26 @@ class RunDataReader:
                                 ),
                             },
                         )
+                    if connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                        "AND name = 'peer_addresses'"
+                    ).fetchone():
+                        for row in connection.execute(
+                            "SELECT peerid, ipaddress, update_time "
+                            "FROM peer_addresses ORDER BY update_time DESC "
+                            "LIMIT 1000"
+                        ):
+                            if not self._usable_peer_ip(row["ipaddress"]):
+                                continue
+                            peer_addresses.setdefault(
+                                str(row["peerid"]),
+                                {
+                                    "ip": str(row["ipaddress"]),
+                                    "timestamp": self._event_timestamp(
+                                        row["update_time"]
+                                    ),
+                                },
+                            )
                     peer_first_seen = {
                         str(row["peerid"]): self._event_timestamp(
                             row["first_seen"]
@@ -7938,20 +8014,63 @@ class RunDataReader:
         peer_ids = (
             set(peer_info)
             | set(peer_ips)
+            | set(peer_addresses)
             | set(latest_reliability)
             | set(report_counts)
             | connected
         )
+        peer_ip_values: Dict[str, str] = {}
+        for peer_id in peer_ids:
+            info = peer_info.get(peer_id, {})
+            candidates = []
+            for source, timestamp in (
+                (
+                    info.get("ip") or info.get("ipaddress"),
+                    self._event_timestamp(info.get("timestamp")),
+                ),
+                (
+                    peer_ips.get(peer_id, {}).get("ip"),
+                    float(peer_ips.get(peer_id, {}).get("timestamp") or 0),
+                ),
+                (
+                    peer_addresses.get(peer_id, {}).get("ip"),
+                    float(
+                        peer_addresses.get(peer_id, {}).get("timestamp") or 0
+                    ),
+                ),
+            ):
+                if self._usable_peer_ip(source):
+                    candidates.append((timestamp, str(source)))
+            for connection in live_connections:
+                if str(connection.get("peer_id")) == peer_id:
+                    remote_ip = connection.get("remote_ip")
+                    if self._usable_peer_ip(remote_ip):
+                        candidates.append((time.time(), str(remote_ip)))
+            peer_ip_values[peer_id] = max(candidates)[1] if candidates else ""
+        reputations: Dict[str, tuple[float, float]] = {}
+        peer_ip_set = {ip for ip in peer_ip_values.values() if ip}
+        if peer_ip_set and trust_path.exists():
+            try:
+                with sqlite3.connect(
+                    f"file:{trust_path}?mode=ro", uri=True, timeout=5
+                ) as connection:
+                    placeholders = ",".join("?" for _ in peer_ip_set)
+                    reputations = {
+                        str(row[0]): (float(row[1]), float(row[2]))
+                        for row in connection.execute(
+                            "SELECT ipaddress, score, confidence "
+                            "FROM slips_reputation WHERE ipaddress IN "
+                            f"({placeholders})",
+                            tuple(peer_ip_set),
+                        )
+                    }
+            except sqlite3.Error:
+                pass
         peers = []
         for peer_id in peer_ids:
             info = peer_info.get(peer_id, {})
             pairing = peer_ips.get(peer_id, {})
-            ip = str(
-                info.get("ip")
-                or info.get("ipaddress")
-                or pairing.get("ip")
-                or ""
-            )
+            ip = peer_ip_values[peer_id]
             reliability = latest_reliability.get(peer_id, {})
             reliability_value = reliability.get("reliability")
             if reliability_value is None:
@@ -7959,14 +8078,27 @@ class RunDataReader:
                     reliability_value = float(info["reliability"])
                 except (KeyError, TypeError, ValueError):
                     reliability_value = None
+            trust_value = None
+            if ip in peer_trust:
+                try:
+                    trust_value = float(peer_trust[ip])
+                except (TypeError, ValueError):
+                    pass
+            if (
+                trust_value is None
+                and reliability_value is not None
+                and ip in reputations
+            ):
+                score, confidence = reputations[ip]
+                trust_value = (
+                    reliability_value * RELIABILITY_WEIGHT + score * confidence
+                ) / 2
             peers.append(
                 {
                     "peer_id": peer_id,
                     "ip": ip,
                     "connected": peer_id in connected,
-                    "trust": (
-                        float(peer_trust[ip]) if ip in peer_trust else None
-                    ),
+                    "trust": trust_value,
                     "reliability": reliability_value,
                     "first_seen": peer_first_seen.get(peer_id)
                     or self._event_timestamp(info.get("timestamp"))
