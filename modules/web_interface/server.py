@@ -2464,6 +2464,54 @@ class RunDataReader:
         except (TypeError, ValueError):
             return "info"
 
+    @staticmethod
+    def _type_alert_counts_from_stream(
+        connection: sqlite3.Connection,
+        page_ids: set[str],
+        hide_excluded: bool,
+        end: Optional[float],
+    ) -> Dict[str, int]:
+        """Count full-run alert links by merging two ordered covering indexes.
+
+        Parameters:
+            connection: Current flows database connection.
+            page_ids: Evidence types visible on the requested page.
+            hide_excluded: Whether excluded evidence is filtered out.
+            end: Upper bound of the selected run clock.
+
+        Returns:
+            Alert-link counts for the requested evidence types.
+        """
+        evidence_rows = connection.execute(
+            "SELECT evidence_id, evidence_type, evidence_time, whitelisted "
+            "FROM evidence INDEXED BY evidence_alert_group_idx "
+            "ORDER BY evidence_id"
+        )
+        linked_rows = iter(
+            connection.execute(
+                "SELECT evidence_id, COUNT(*) AS link_count "
+                "FROM alert_evidence INDEXED BY alert_evidence_evidence_idx "
+                "GROUP BY evidence_id"
+            )
+        )
+        linked = next(linked_rows, None)
+        counts: Counter[str] = Counter()
+        for evidence in evidence_rows:
+            evidence_id = str(evidence["evidence_id"])
+            while linked and str(linked["evidence_id"]) < evidence_id:
+                linked = next(linked_rows, None)
+            if not linked or str(linked["evidence_id"]) != evidence_id:
+                continue
+            evidence_type = str(evidence["evidence_type"] or "")
+            if evidence_type not in page_ids:
+                continue
+            if hide_excluded and evidence["whitelisted"] not in (None, 0, "0"):
+                continue
+            if end is not None and float(evidence["evidence_time"] or 0) > end:
+                continue
+            counts[evidence_type] += int(linked["link_count"])
+        return dict(counts)
+
     def _grouped_evidence(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """
         Return evidence aggregated by host, type, or their combination.
@@ -2498,10 +2546,9 @@ class RunDataReader:
         association = self._query_value(query, "association")
         profile = self._query_value(query, "profile")
         evidence_type = self._query_value(query, "type")
-        compact_groups = (
-            self._query_value(query, "compact") == "1"
-            and self._query_value(query, "sort") != "flows"
-        )
+        compact_groups = self._query_value(
+            query, "compact"
+        ) == "1" and self._query_value(query, "sort") not in {"flows", "alert"}
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         threat_expression = (
             "CASE LOWER(threat_level) WHEN 'critical' THEN 4 "
@@ -2613,9 +2660,26 @@ class RunDataReader:
                 )
             if self._query_value(query, "scored_only") == "1":
                 clauses.append(f"COALESCE({score_expression}, 0) > 0")
+            type_cover_index_available = bool(
+                group_mode == "type"
+                and connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                    "AND name = 'evidence_type_group_cover_idx'"
+                ).fetchone()
+            )
+            matching_source = (
+                "evidence INDEXED BY evidence_type_group_cover_idx"
+                if type_cover_index_available
+                and range_name == "all"
+                and not search
+                and not association
+                and review_status == "all"
+                else "evidence"
+            )
             matching_total = int(
                 connection.execute(
-                    f"SELECT COUNT(*) FROM evidence WHERE {' AND '.join(clauses)}",
+                    f"SELECT COUNT(*) FROM {matching_source} "
+                    f"WHERE {' AND '.join(clauses)}",
                     params,
                 ).fetchone()[0]
             )
@@ -2630,15 +2694,21 @@ class RunDataReader:
                     "AND name = 'evidence_group_cover_idx'"
                 ).fetchone()
             )
-            group_source = (
-                "evidence INDEXED BY evidence_group_cover_idx"
-                if compact_groups
+            compact_full_run = bool(
+                compact_groups
                 and range_name == "all"
                 and not search
                 and not association
                 and review_status == "all"
-                and cover_index_available
-                else "evidence"
+            )
+            group_source = (
+                "evidence INDEXED BY evidence_type_group_cover_idx"
+                if compact_full_run and type_cover_index_available
+                else (
+                    "evidence INDEXED BY evidence_group_cover_idx"
+                    if compact_full_run and cover_index_available
+                    else "evidence"
+                )
             )
             grouped_sql = (
                 f"SELECT {group_fields[0]}, "
@@ -2710,16 +2780,69 @@ class RunDataReader:
             ).fetchall()
             alert_counts: Dict[str, int] = {}
             if compact_groups and rows and association != "unlinked":
-                alert_counts = {
-                    str(row["group_id"]): int(row["alert_count"])
-                    for row in connection.execute(
-                        f"SELECT {group_id} AS group_id, COUNT(*) AS alert_count "
-                        "FROM alert_evidence ae JOIN evidence "
-                        "ON evidence.evidence_id = ae.evidence_id "
-                        f"WHERE {' AND '.join(clauses)} GROUP BY {group_id}",
-                        params,
+                page_ids = [str(row["group_id"]) for row in rows[:limit]]
+                page_marks = ",".join("?" for _ in page_ids)
+                time_index = bool(
+                    start is not None
+                    and connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                        "AND name = 'evidence_time_idx'"
+                    ).fetchone()
+                )
+                alert_cover_index = bool(
+                    start is None
+                    and group_mode == "type"
+                    and connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                        "AND name = 'evidence_alert_group_idx'"
+                    ).fetchone()
+                )
+                stream_counts = bool(
+                    alert_cover_index
+                    and not search
+                    and not threat
+                    and not association
+                    and review_status == "all"
+                    and not profile
+                    and self._query_value(query, "scored_only") != "1"
+                    and connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                        "AND name = 'alert_evidence_evidence_idx'"
+                    ).fetchone()
+                )
+                if stream_counts:
+                    alert_counts = self._type_alert_counts_from_stream(
+                        connection,
+                        set(page_ids),
+                        self._query_value(query, "hide_excluded") == "1",
+                        end,
                     )
-                }
+                else:
+                    if alert_cover_index:
+                        alert_source = (
+                            "alert_evidence ae CROSS JOIN evidence "
+                            "INDEXED BY evidence_alert_group_idx"
+                        )
+                    else:
+                        index_hint = (
+                            " INDEXED BY evidence_time_idx"
+                            if time_index
+                            else ""
+                        )
+                        alert_source = f"evidence{index_hint} CROSS JOIN alert_evidence ae"
+                    alert_counts = {
+                        str(row["group_id"]): int(row["alert_count"])
+                        for row in connection.execute(
+                            f"SELECT {group_id} AS group_id, "
+                            "COUNT(*) AS alert_count "
+                            f"FROM {alert_source} "
+                            f"WHERE {' AND '.join(clauses)} "
+                            "AND ae.evidence_id = evidence.evidence_id "
+                            f"AND {group_id} IN ({page_marks}) "
+                            f"GROUP BY {group_id}",
+                            (*params, *page_ids),
+                        )
+                    }
         if total is None:
             total = int(rows[0]["total_groups"] or 0) if rows else 0
         has_more = len(rows) > limit

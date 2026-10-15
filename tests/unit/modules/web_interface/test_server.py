@@ -4555,6 +4555,103 @@ def test_evidence_aggregation_groups_host_and_type(tmp_path) -> None:
     assert len(next_page["items"]) == 1
 
 
+@pytest.mark.parametrize(
+    "range_name,index_kind,expected_scan_alerts",
+    [
+        ("custom", "none", 1),
+        ("custom", "time", 1),
+        ("all", "alert_cover", 2),
+    ],
+)
+def test_type_grouping_counts_alerts_only_for_visible_groups(
+    tmp_path: Path,
+    range_name: str,
+    index_kind: str,
+    expected_scan_alerts: int,
+) -> None:
+    """Keep type groups and alert counts correct across range and index plans.
+
+    Parameters:
+        tmp_path: Isolated flows database directory.
+        range_name: Selected evidence time range.
+        index_kind: Available index used by the alert-count query.
+        expected_scan_alerts: Alerts linked to visible scan evidence.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = ""
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT, whitelisted INTEGER DEFAULT 0)"
+        )
+        connection.execute(
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, 'tw', 'low', ?, '', 1, '{}', 0)",
+            [
+                ("old", 10, "10.0.0.1", "SCAN"),
+                ("scan", 140, "10.0.0.2", "SCAN"),
+                ("dns", 150, "10.0.0.3", "DNS"),
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO alert_evidence VALUES (?, ?)",
+            [("a-old", "old"), ("a-scan", "scan"), ("a-dns", "dns")],
+        )
+        if index_kind == "time":
+            connection.execute(
+                "CREATE INDEX evidence_time_idx ON evidence(evidence_time)"
+            )
+        elif index_kind == "alert_cover":
+            connection.execute(
+                "CREATE INDEX evidence_alert_group_idx ON evidence("
+                "evidence_id, evidence_type, profile_ip, evidence_time, "
+                "whitelisted)"
+            )
+            connection.execute(
+                "CREATE INDEX alert_evidence_evidence_idx "
+                "ON alert_evidence(evidence_id)"
+            )
+    query = {
+        "range": [range_name],
+        "from": ["100"],
+        "to": ["200"],
+        "group": ["type"],
+        "compact": ["1"],
+        "sort": ["type"],
+        "order": ["asc"],
+        "limit": ["1"],
+    }
+
+    first = reader.evidence(query)
+    second = reader.evidence(
+        {**query, "cursor": [first["next_cursor"]]}
+    )
+
+    assert first["total"] == second["total"] == 2
+    assert first["items"][0]["evidence_type"] == "DNS"
+    assert first["items"][0]["alert_count"] == 1
+    assert second["items"][0]["evidence_type"] == "SCAN"
+    assert second["items"][0]["alert_count"] == expected_scan_alerts
+    if range_name == "all":
+        sorted_by_alerts = reader.evidence(
+            {**query, "sort": ["alert"], "order": ["desc"], "limit": ["2"]}
+        )
+        assert [item["evidence_type"] for item in sorted_by_alerts["items"]] == [
+            "SCAN",
+            "DNS",
+        ]
+
+
 def test_alert_aggregation_groups_each_host(tmp_path) -> None:
     """Test repeated alerts become one aggregate per affected host."""
     _module_factory = ModuleFactory()

@@ -201,6 +201,10 @@ class SQLiteDB(ISQLite):
             "ON evidence(profile_ip, evidence_type, evidence_time, "
             "threat_level, source_module, whitelisted, "
             "accumulated_ratl, accumulated_threat_level)",
+            "CREATE INDEX IF NOT EXISTS evidence_type_group_cover_idx "
+            "ON evidence(evidence_type, evidence_time, threat_level, "
+            "source_module, whitelisted, accumulated_ratl, "
+            "accumulated_threat_level, profile_ip)",
             "CREATE INDEX IF NOT EXISTS evidence_profile_ratl_idx "
             "ON evidence(profile_ip, accumulated_ratl DESC)",
             "CREATE INDEX IF NOT EXISTS evidence_profile_threat_score_idx "
@@ -209,6 +213,9 @@ class SQLiteDB(ISQLite):
             "ON evidence(profile_ip, timewindow, whitelisted)",
             "CREATE INDEX IF NOT EXISTS evidence_type_idx "
             "ON evidence(evidence_type, evidence_time DESC)",
+            "CREATE INDEX IF NOT EXISTS evidence_alert_group_idx "
+            "ON evidence(evidence_id, evidence_type, profile_ip, "
+            "evidence_time, whitelisted)",
             "CREATE INDEX IF NOT EXISTS evidence_threat_idx "
             "ON evidence(threat_level, evidence_time DESC)",
             "CREATE INDEX IF NOT EXISTS evidence_flows_uid_idx "
