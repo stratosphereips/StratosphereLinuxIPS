@@ -25,6 +25,12 @@ from slips_files.core.database.redis_db.redis_auth import (
 )
 import modules.p2p_trust.trust.base_model as reputation_model
 import modules.p2p_trust.utils.utils as p2p_utils
+from modules.p2p_trust.trust.report_validation import (
+    ReportValidator,
+    observation_record,
+)
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+from modules.supported_module_names import Modules
 from modules.p2p_trust.utils.go_director import GoDirector
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
@@ -222,8 +228,16 @@ class Trust(IModule):
 
     def _configure(self):
         self.trust_db = self.db.trust_db
+        self.report_validation = ReportValidator(
+            Path(self.db.get_p2p_trust_dir()) / "report_validation.sqlite"
+        )
+        self.trust_db.execute("DELETE FROM opinion_cache")
         self.reputation_model = reputation_model.BaseModel(
-            self.logger, self.trust_db, self.db
+            self.logger,
+            self.trust_db,
+            self.db,
+            self.report_validation,
+            self._network_identity,
         )
 
         self.go_director = GoDirector(
@@ -241,7 +255,78 @@ class Trust(IModule):
             is_slips_started_by_an_update=getattr(
                 self.args, "is_slips_started_by_an_update", False
             ),
+            report_validation=self.report_validation,
+            network_identity=self._network_identity,
         )
+
+    def _network_identity(self) -> str:
+        """Identify the current network without reusing private IPs across networks.
+
+        Returns:
+            Gateway identity, or a run-scoped fallback.
+        """
+        interface = getattr(self.args, "interface", "")
+        state = self.db.get_network_state(interface)
+        return HostProfileStore.network_id_for_state(
+            state if isinstance(state, dict) else {},
+            f"{self.parent_output_dir}:{self.db.main_pid}",
+        )
+
+    def _review_observation(self, raw: dict) -> dict:
+        """Resolve saved feedback without assigning old evidence to today's network.
+
+        Parameters:
+            raw: Durable evidence object.
+
+        Returns:
+            Validation snapshot with saved or historically resolved network.
+        """
+        record = observation_record(
+            raw, f"run:{self.parent_output_dir}:{self.db.main_pid}"
+        )
+        if (
+            record
+            and not raw.get("detection_provenance")
+            and not raw.get("peer_report")
+        ):
+            path = (
+                self.report_validation.path.parent.parent
+                / "host_profiles"
+                / "hosts.sqlite"
+            )
+            network = HostProfileStore.network_for_observation(
+                path, record["target"], record["observed_at"]
+            ).get("network_id")
+            if network and "," not in network:
+                record["network_id"] = network
+                record["target_key"] = f"{network}|{record['target']}"
+        return record
+
+    def _drain_review_feedback(self) -> None:
+        """Apply durable web verdicts and invalidate stale network opinions."""
+        validator = getattr(self, "report_validation", None)
+        now = time.monotonic()
+        if (
+            not isinstance(validator, ReportValidator)
+            or now - getattr(self, "last_feedback_check", 0) < 5
+        ):
+            return
+        self.last_feedback_check = now
+        try:
+            validator.drain_reviews(self.db.sqlite.get_db_path())
+            validator.import_reviews(
+                self.db.sqlite.get_db_path(), self._review_observation
+            )
+            revision = validator.feedback_revision()
+            network = self._network_identity()
+            if (revision, network) != getattr(
+                self, "last_feedback_context", None
+            ):
+                self.trust_db.execute("DELETE FROM opinion_cache")
+                self.last_feedback_context = (revision, network)
+            validator.prune()
+        except (sqlite3.Error, OSError) as error:
+            self.print(f"P2P feedback will be retried: {error}", 0, 1)
 
     def _should_rebuild_pigeon_binary(self) -> bool:
         """
@@ -356,7 +441,10 @@ class Trust(IModule):
         if evidence.attacker.value in own_ips:
             return False
 
-        if evidence.evidence_type == EvidenceType.P2P_REPORT:
+        if evidence.evidence_type in {
+            EvidenceType.P2P_REPORT,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+        }:
             # we shouldn't re-share evidence reported by other peers
             return False
 
@@ -390,6 +478,18 @@ class Trust(IModule):
         except json.decoder.JSONDecodeError:
             return
         evidence: Evidence = dict_to_evidence(evidence)
+        validator = getattr(self, "report_validation", None)
+        provenance = []
+        if isinstance(validator, ReportValidator):
+            record = observation_record(
+                utils.to_dict(evidence), self._network_identity()
+            )
+            if record and not record.get("peer_id"):
+                validator.observe_local(record)
+                if record["provenance"].get("module") in {
+                    item.value for item in Modules
+                }:
+                    provenance = [record["provenance"]]
 
         if not self.should_share(evidence):
             return
@@ -401,7 +501,17 @@ class Trust(IModule):
         cache = getattr(self, "last_sent_evidence_reports", None)
         if cache is None:
             cache = self.last_sent_evidence_reports = {}
-        key = (evidence.attacker.value, evidence.threat_level.value)
+        key = (
+            evidence.attacker.value,
+            evidence.threat_level.value,
+            evidence.evidence_type.name,
+            provenance[0]["rule_version"] if provenance else "legacy",
+            (
+                record["network_id"]
+                if isinstance(validator, ReportValidator) and record
+                else ""
+            ),
+        )
         if now - cache.get(key, -self.report_min_interval) < (
             self.report_min_interval
         ):
@@ -410,14 +520,24 @@ class Trust(IModule):
         cache[key] = now
         if len(cache) > self.report_cache_limit:
             cache.pop(next(iter(cache)))
-        p2p_utils.send_evaluation_to_go(
+        confidence = evidence.confidence
+        if provenance:
+            confidence *= validator.detector_weight(
+                provenance[0]["evidence_type"],
+                provenance[0]["rule_version"],
+                record["network_id"] + "|",
+            )
+        arguments = [
             evidence.attacker.value,
             evidence.threat_level.value,
-            evidence.confidence,
+            confidence,
             "*",
             self.pygo_channel,
             self.db,
-        )
+        ]
+        if provenance:
+            arguments.append(provenance)
+        p2p_utils.send_evaluation_to_go(*arguments)
 
     def new_alert_callback(self, msg: Dict[str, str]) -> None:
         """Broadcast one locally detected malicious host as a blame.
@@ -443,13 +563,29 @@ class Trust(IModule):
         score, confidence = p2p_utils.get_ip_info_from_slips(ip, self.db)
         if score is None or confidence is None or score <= 0:
             return
-        p2p_utils.send_blame_to_go(
+        provenance = []
+        validator = getattr(self, "report_validation", None)
+        if isinstance(validator, ReportValidator):
+            rows = self.db.alert_evidence_records(str(alert.get("id", "")))
+            for raw in rows:
+                record = observation_record(raw, self._network_identity())
+                if record and not record.get("peer_id"):
+                    validator.observe_local(record)
+            score, confidence, provenance = validator.local_report(
+                f"{self._network_identity()}|{ip}"
+            )
+            if score is None or confidence is None:
+                return
+        arguments = [
             ip,
             min(1.0, max(0.0, score)),
             min(1.0, max(0.0, confidence)),
             self.pygo_channel,
             self.db,
-        )
+        ]
+        if provenance:
+            arguments.append(provenance)
+        p2p_utils.send_blame_to_go(*arguments)
 
     def gopy_callback(self, msg: Dict):
         """
@@ -765,6 +901,7 @@ class Trust(IModule):
             "-host": "0.0.0.0",
             "-rendezvous": self.rendezvous,
             "-key-file": self.pigeon_key_file,
+            "-peerstore-file": "pigeon.peerstore.json",
             "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
             "-redis-auth-conf": get_redis_auth_conf_path(),
             "-redis-channel-pygo": self.pygo_channel_raw,
@@ -941,13 +1078,56 @@ class Trust(IModule):
         local_opinion = (
             0 if local_score is None else local_score * local_confidence
         )
+        validator = getattr(self, "report_validation", None)
+        if isinstance(validator, ReportValidator):
+            local_score, local_confidence, provenance = validator.local_report(
+                f"{self._network_identity()}|{key}"
+            )
+            local_opinion = (
+                0 if local_score is None else local_score * local_confidence
+            )
+            details = getattr(self.reputation_model, "last_corroboration", {})
+            if (
+                isinstance(details, dict)
+                and details.get("target")
+                == f"{self._network_identity()}|{key}"
+                and provenance
+            ):
+                family = provenance[0].get("family")
+                units = details.get("families", {})
+                if family in units and not units[family].get("validated"):
+                    independent = [
+                        unit for name, unit in units.items() if name != family
+                    ]
+                    network_opinion = (
+                        (
+                            sum(unit["score"] for unit in independent)
+                            * sum(unit["confidence"] for unit in independent)
+                            / len(independent) ** 2
+                        )
+                        if independent
+                        else 0
+                    )
 
         prediction = (
             self.ips_weight * local_opinion
             + (1 - self.ips_weight) * network_opinion
         )
 
-        if prediction < self.blame_threshold:
+        corroboration = getattr(
+            self.reputation_model, "last_corroboration", {}
+        )
+        peer_support = (
+            float(corroboration.get("support", 0))
+            if (
+                isinstance(corroboration, dict)
+                and isinstance(validator, ReportValidator)
+                and corroboration.get("target")
+                == f"{self._network_identity()}|{key}"
+            )
+            else 0
+        )
+        if prediction < self.blame_threshold and peer_support < 0.85:
             self.print(
                 f"Blame report about {key} from {reporter} doesn't meet "
                 f"the blame_threshold ({prediction} < "
@@ -960,7 +1140,7 @@ class Trust(IModule):
 
         self.print(
             f"Blame report about {key} confirmed by the network "
-            f"(prediction={prediction}). Forwarding {key} to the blocking "
+            f"(prediction={prediction}, independent blame support={peer_support}). Forwarding {key} to the blocking "
             f"module.",
             0,
             2,
@@ -1143,8 +1323,33 @@ class Trust(IModule):
 
         self.pigeon = None
 
+    def _local_network_identity(self) -> tuple[tuple[str, str, str], ...]:
+        """Read the monitored interfaces' subnet and gateway identities.
+
+        Returns:
+            Stable network identities, excluding host-address and DNS changes.
+        """
+        interface = getattr(self.args, "interface", None)
+        interfaces = [interface] if isinstance(interface, str) else []
+        access_point = getattr(self.args, "access_point", None)
+        if not interfaces and isinstance(access_point, str):
+            interfaces = access_point.split(",")
+        identities = []
+        for interface in interfaces:
+            state = self.db.get_network_state(interface.strip())
+            if not isinstance(state, dict) or not state.get("connected"):
+                continue
+            identities.append(
+                (
+                    interface.strip(),
+                    state.get("local_network", ""),
+                    state.get("gateway_mac", ""),
+                )
+            )
+        return tuple(sorted(identities))
+
     def _refresh_pigeon_address(self) -> None:
-        """Restart Pigeon when the monitored interface gets a new IPv4.
+        """Restart Pigeon when the monitored address or network changes.
 
         Wi-Fi and Ethernet interfaces can change addresses while Slips is
         running. Pigeon binds to its startup address and advertises that
@@ -1166,16 +1371,23 @@ class Trust(IModule):
         except (OSError, ValueError):
             return
 
+        network_identity = self._local_network_identity()
+        previous_network = getattr(
+            self, "_pigeon_network_identity", network_identity
+        )
+        network_changed = network_identity != previous_network
+        self._pigeon_network_identity = network_identity
         if (
             current_ip == self.host
+            and not network_changed
             and getattr(self, "pigeon", None) is not None
         ):
             return
 
-        if current_ip != self.host:
+        if current_ip != self.host or network_changed:
             self.print(
-                f"Monitored interface address changed from {self.host} to "
-                f"{current_ip}; restarting Pigeon to reconnect to local peers."
+                f"Monitored network changed (IP {self.host} -> "
+                f"{current_ip}); restarting Pigeon to reconnect to local peers."
             )
             self._stop_pigeon()
             self.db.clear_authenticated_p2p_connections()
@@ -1196,6 +1408,7 @@ class Trust(IModule):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self._pigeon_network_identity = self._local_network_identity()
         self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         self._start_pigeon()
@@ -1219,6 +1432,7 @@ class Trust(IModule):
         return self.termination_event.is_set()
 
     def main(self):
+        self._drain_review_feedback()
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
             now = time.time()

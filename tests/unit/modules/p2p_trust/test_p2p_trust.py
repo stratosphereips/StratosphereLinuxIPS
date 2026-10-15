@@ -957,6 +957,46 @@ def test_pigeon_restarts_when_monitored_interface_address_changes() -> None:
     trust._start_pigeon.assert_called_once_with()
 
 
+def test_pigeon_restarts_when_gateway_changes_with_same_ip() -> None:
+    """Reconnect when two networks assign the same host IP and subnet."""
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.args.interface = "en0"
+    trust.host = "192.168.1.163"
+    trust.get_local_IP = Mock(return_value=trust.host)
+    trust.pigeon = Mock()
+    trust.last_local_ip_check = 0
+    trust._pigeon_network_identity = (
+        ("en0", "192.168.1.0/24", "00:11:22:33:44:55"),
+    )
+    trust.db.get_network_state.return_value = {
+        "connected": True,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "00:aa:bb:cc:dd:ee",
+    }
+    trust._stop_pigeon = Mock()
+    trust._start_pigeon = Mock()
+
+    with patch("modules.p2p_trust.p2p_trust.time.monotonic", return_value=10):
+        trust._refresh_pigeon_address()
+
+    trust._stop_pigeon.assert_called_once()
+    trust._start_pigeon.assert_called_once()
+    trust.db.store_connected_peers.assert_called_once_with([])
+
+
+def test_informational_redis_metadata_is_not_a_benign_peer_assessment() -> None:
+    """Exclude informational metadata in integrations without a trust DB."""
+    _module_factory = ModuleFactory()
+    db = Mock()
+    db.trust_db = None
+    db.get_ip_info.side_effect = lambda _ip, key: {
+        "threat_level": "info", "score": 0, "confidence": 1,
+    }.get(key)
+
+    assert get_ip_info_from_slips("192.0.2.10", db) == (None, None)
+
+
 def test_run_stops_pigeon_after_unexpected_module_exit() -> None:
     """Stop the Go child even when the common module runner exits on error."""
     module_factory = ModuleFactory()

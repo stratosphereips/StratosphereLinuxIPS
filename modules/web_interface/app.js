@@ -3367,6 +3367,7 @@ function reviewEditor(entity, record) {
     panel.append(verdictLabel);
   }
   panel.append(noteLabel);
+  panel.append(text("p", "TP, FP and expected-behavior verdicts inform P2P report accuracy. In review, resolved without a verdict, and inconclusive do not confirm a detection. Conflicting verdicts suspend learning. For an alert with several evidence types, review each evidence before confirming its detector.", "muted"));
   const feedback = text("p", "", "review-feedback");
   feedback.setAttribute("role", "alert");
   feedback.hidden = true;
@@ -3392,13 +3393,15 @@ function reviewEditor(entity, record) {
     }
     save.disabled = true;
     try {
-      await saveReviewChange(entity, { action: "review", id: identifier,
+      const result = await saveReviewChange(entity, { action: "review", id: identifier,
         status: status.value, verdict: entity === "alert" ? verdict.value : "",
         note: note.value });
       feedback.hidden = true;
-      toast(status.value === "resolved"
+      toast(result.p2p_feedback_note || (result.p2p_feedback === "pending"
+        ? "Review saved. P2P feedback is queued for retry."
+        : status.value === "resolved"
         ? "Review saved. The alert is now in Resolved; use the Review filter to see it."
-        : "Review saved.");
+        : "Review saved."));
       await refreshAfterReview(entity);
     } catch (error) {
       feedback.textContent = error.message;
@@ -4126,7 +4129,7 @@ function renderP2PMessageDetail(record) {
     ["Peer", record.peer === "*" ? "* (broadcast to all peers)" :
       `${shortPeerId(record.peer)}${peerAddress ? ` · ${peerAddress}` : ""}`],
     ["Target", record.target || "—"],
-    ["Score", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
+    ["Maliciousness score (1 = fully malicious)", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
     ["Confidence", record.confidence === null || record.confidence === undefined
       ? "—" : numeric(record.confidence).toFixed(3)],
   ];
@@ -4205,6 +4208,13 @@ function renderP2PPeers() {
       return value;
     },
     (row) => compact(row.reports_received),
+    (row) => {
+      const items = row.report_accuracy || [];
+      if (!items.length) return text("span", "Not validated", "muted");
+      const value = text("span", `TP ${row.confirmed_reports || 0} · FP ${row.false_reports || 0}`);
+      value.title = items.map((item) => `${item.evidence_type} · ${item.rule_version.slice(0, 8)}: ${item.confirmed} TP, ${item.false_positive} FP, trust adjustment ${item.adjustment.toFixed(3)}`).join("\n");
+      return value;
+    },
     (row) => formatP2PTime(row.last_seen),
   ], (row) => {
     state.p2pSelectedPeer = state.p2pSelectedPeer?.peer_id === row.peer_id ? null : row;

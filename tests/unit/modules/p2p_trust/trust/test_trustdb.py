@@ -3,6 +3,7 @@
 import sqlite3
 import time
 import pytest
+from pathlib import Path
 from contextlib import nullcontext
 from unittest.mock import (
     patch,
@@ -253,6 +254,34 @@ def test_insert_slips_score(
         "slips_reputation.update_time"
     )
     assert actual_sql == expected_sql
+
+
+def test_info_score_migration_preserves_history_without_benign_assessment(
+    tmp_path: Path,
+) -> None:
+    """Invalidate legacy informational assessments across database restarts.
+
+    Parameters:
+        tmp_path: Temporary database directory.
+    """
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.conn = sqlite3.connect(tmp_path / "info-migration.db")
+    trust_db.create_tables()
+    trust_db.insert_slips_score("192.0.2.10", 0, 1, 1)
+    trust_db.insert_slips_score("192.0.2.11", 0.8, 0.9, 1)
+    trust_db.execute("PRAGMA user_version = 1")
+
+    trust_db.create_tables()
+
+    assert trust_db.get_reporter_reputation("192.0.2.10") == (None, None)
+    assert trust_db.get_reporter_reputation("192.0.2.11") == (0.8, 0.9)
+    row = trust_db.select(
+        "slips_reputation", columns="score, confidence, source",
+        condition="ipaddress = ?", params=("192.0.2.10",),
+    )
+    assert row == [(0, 1, "informational")]
+    trust_db.insert_slips_score("192.0.2.10", 0.8, 0.9, 2)
+    assert trust_db.get_reporter_reputation("192.0.2.10") == (0.8, 0.9)
 
 
 def test_reputation_history_migration_keeps_latest_value(tmp_path):

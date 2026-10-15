@@ -385,6 +385,26 @@ def test_local_reputation_uses_slips_current_score() -> None:
     )
 
 
+@pytest.mark.parametrize("previous_score", [0, 0.8])
+def test_informational_observation_preserves_peer_assessment(
+    previous_score: float,
+) -> None:
+    """Informational observations cannot assert benignness or alter trust.
+
+    Parameters:
+        previous_score: Redis's historical score before the observation.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.trust_db = Mock()
+    db.rdb.update_threat_level = Mock()
+    db.rdb.get_ip_info = Mock(return_value=previous_score)
+
+    db.update_threat_level("profile_192.0.2.10", "info", 1)
+
+    db.rdb.update_threat_level.assert_called_once()
+    db.trust_db.insert_slips_score.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "redis_output, caller_output, expected",
     [

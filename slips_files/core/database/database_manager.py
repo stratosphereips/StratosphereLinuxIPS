@@ -8,6 +8,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import (
+    Any,
     Dict,
     Iterable,
     List,
@@ -925,6 +926,32 @@ class DBManager:
 
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
+        if self.trust_db and evidence.evidence_type not in {
+            EvidenceType.P2P_REPORT,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+        }:
+            from modules.p2p_trust.trust.report_validation import (
+                provenance_for_evidence,
+            )
+            from slips_files.core.database.sqlite_db.host_profiles import (
+                HostProfileStore,
+            )
+
+            metadata = provenance_for_evidence(
+                utils.to_dict(evidence), utils.get_slips_version()
+            )
+            if metadata:
+                state = (
+                    self.rdb.get_network_state(interface) if interface else {}
+                )
+                metadata["network_id"] = HostProfileStore.network_id_for_state(
+                    state if isinstance(state, dict) else {},
+                    f"{self.output_dir}:{self.main_pid}",
+                )
+                metadata["observed_at"] = utils.convert_ts_format(
+                    evidence.timestamp, "unixtimestamp"
+                )
+                evidence.detection_provenance = metadata
         evidence_set = self.rdb.set_evidence(evidence, notify=False)
         if evidence_set:
             self.sqlite.add_evidence(evidence)
@@ -979,6 +1006,9 @@ class DBManager:
     def get_evidence_number(self, *args, **kwargs):
         return self.rdb.get_evidence_number(*args, **kwargs)
 
+    def alert_evidence_records(self, *args: Any, **kwargs: Any) -> list[dict]:
+        return self.sqlite.alert_evidence_records(*args, **kwargs)
+
     def mark_evidence_as_processed(self, *args, **kwargs):
         return self.rdb.mark_evidence_as_processed(*args, **kwargs)
 
@@ -1020,7 +1050,7 @@ class DBManager:
         result = self.rdb.update_threat_level(
             profileid, threat_level, confidence
         )
-        if self.trust_db:
+        if self.trust_db and threat_level != "info":
             ip = profileid.split("_")[-1]
             stored_score = self.rdb.get_ip_info(ip, "score")
             try:

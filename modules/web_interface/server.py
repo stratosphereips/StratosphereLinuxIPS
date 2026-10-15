@@ -36,6 +36,11 @@ from modules.p2p_trust.trust.base_model import (
     RELIABILITY_WEIGHT,
     local_maliciousness_to_thesis_score,
 )
+from modules.p2p_trust.trust.report_validation import (
+    ReportValidator,
+    observation_record,
+    queue_review_event,
+)
 from slips_files.core.helpers.whitelist.whitelist_parser import (
     backup_local_whitelist,
     ensure_local_whitelist,
@@ -1806,6 +1811,82 @@ class RunDataReader:
             f"WHERE review.{key} = {alias}.{key}), '{default}') = '{status}'"
         )
 
+    def _report_validation_path(self) -> Path:
+        """Locate shared P2P feedback using this run's configured permanent path.
+
+        Returns:
+            Persistent validation database, or isolated storage for test readers.
+        """
+        if not hasattr(self, "output_dir"):
+            return self.sqlite_path.parent / "report_validation.sqlite"
+        config, _ = self._run_config()
+        directory = config.get("parameters", {}).get(
+            "permanent_dir", "permanent"
+        )
+        return (
+            Path(directory) / "p2p_trust_runtime" / "report_validation.sqlite"
+        )
+
+    def _review_feedback_records(
+        self,
+        connection: sqlite3.Connection,
+        entity: str,
+        identifier: str,
+    ) -> List[Dict[str, Any]]:
+        """Snapshot reviewed evidence before deletion or later flow retention.
+
+        Parameters:
+            connection: Review write transaction.
+            entity: Alert or evidence.
+            identifier: Reviewed record ID.
+
+        Returns:
+            Local or typed peer observations suitable for validation.
+        """
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(evidence)")
+        }
+        if "data" not in columns:
+            return []
+        condition = (
+            "evidence_id = ?"
+            if entity == "evidence"
+            else "evidence_id IN (SELECT evidence_id FROM alert_evidence WHERE alert_id = ?)"
+        )
+        records = []
+        for row in connection.execute(
+            f"SELECT evidence_id, data FROM evidence WHERE {condition}",
+            (identifier,),
+        ):
+            raw = self._loads(row["data"], {})
+            if not isinstance(raw, dict):
+                continue
+            raw.setdefault("id", row["evidence_id"])
+            observed = observation_record(
+                raw, f"run:{getattr(self, 'output_dir', self.sqlite_path)}"
+            )
+            if observed:
+                if (
+                    not raw.get("detection_provenance")
+                    and not raw.get("peer_report")
+                    and hasattr(self, "output_dir")
+                ):
+                    temporary = {
+                        "profile_ip": observed["target"],
+                        "evidence_time": observed["observed_at"],
+                    }
+                    self._annotate_detection_networks(
+                        [temporary], "profile_ip", "evidence_time"
+                    )
+                    network = temporary.get("network_id")
+                    if network:
+                        observed["network_id"] = network
+                        observed["target_key"] = (
+                            f"{network}|{observed['target']}"
+                        )
+                records.append(observed)
+        return records
+
     def save_review(
         self, entity: str, payload: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -1895,6 +1976,10 @@ class RunDataReader:
                 f"SELECT 1 FROM {table} WHERE {key} = ?", (identifier,)
             ).fetchone():
                 raise ValueError("Record no longer exists")
+            feedback_records = self._review_feedback_records(
+                connection, entity, identifier
+            )
+            deleted_evidence_ids = []
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS alert_reviews ("
                 "alert_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
@@ -1997,6 +2082,7 @@ class RunDataReader:
                             (evidence_id,),
                         )
                         removed_evidence += 1
+                        deleted_evidence_ids.append(evidence_id)
                         if depth == "flows":
                             for uid in uids:
                                 if connection.execute(
@@ -2043,7 +2129,40 @@ class RunDataReader:
                     "flows_removed": removed_flows,
                     "shared_preserved": protected,
                 }
+            feedback_verdict = (
+                (verdict if entity == "alert" else status)
+                if action == "review"
+                else ""
+            )
+            if entity == "alert" and feedback_verdict == "true_positive":
+                types = {
+                    record["evidence_type"] for record in feedback_records
+                }
+                if len(types) > 1:
+                    feedback_verdict = "inconclusive"
+            queue_review_event(
+                connection,
+                f"{entity}:{identifier}",
+                feedback_verdict,
+                feedback_records if action == "review" else [],
+                deleted_evidence_ids,
+            )
             connection.commit()
+            if feedback_records:
+                try:
+                    validator = ReportValidator(self._report_validation_path())
+                    validator.drain_reviews(self.sqlite_path)
+                    result["p2p_feedback"] = "applied"
+                    if (
+                        feedback_verdict == "inconclusive"
+                        and entity == "alert"
+                        and verdict == "true_positive"
+                    ):
+                        result["p2p_feedback_note"] = (
+                            "Review saved. This alert contains several evidence types; review individual evidence to confirm each detector for P2P learning."
+                        )
+                except (sqlite3.Error, OSError):
+                    result["p2p_feedback"] = "pending"
             if action == "delete" and depth == "flows":
                 connection.execute("PRAGMA incremental_vacuum(1000)")
             return result
@@ -7993,7 +8112,8 @@ class RunDataReader:
                 and last_activity >= recent_activity_cutoff
             ):
                 connected.add(peer_id)
-        trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
+        validation_path = self._report_validation_path()
+        trust_path = validation_path.with_name("trustdb.db")
         trust_range = "all"
         trust_history: List[Dict[str, Any]] = []
         latest_reliability: Dict[str, Dict[str, Any]] = {}
@@ -8226,6 +8346,29 @@ class RunDataReader:
                     }
             except sqlite3.Error:
                 pass
+        validator = None
+        if validation_path.exists():
+            try:
+                validator = ReportValidator(validation_path)
+            except (sqlite3.Error, OSError):
+                pass
+        current_interface = str(analysis.get("interface") or "").split(",", 1)[
+            0
+        ]
+        current_state = (
+            self._loads(
+                self.redis.hget("network_states", current_interface), {}
+            )
+            if current_interface
+            else {}
+        )
+        validation_network = (
+            HostProfileStore.network_id_for_state(
+                current_state, self._network_run_name()
+            )
+            if isinstance(current_state, dict) and current_state
+            else ""
+        )
         peers = []
         for peer_id in peer_ids:
             info = peer_info.get(peer_id, {})
@@ -8241,16 +8384,43 @@ class RunDataReader:
             trust_value = None
             if reliability_value is not None and ip:
                 score, confidence = reputations.get(ip, (0.5, 0.0))
+                if validator is not None and validation_network:
+                    try:
+                        reviewed_score, reviewed_confidence, _ = (
+                            validator.local_report(
+                                f"{validation_network}|{ip}", max_age=None
+                            )
+                        )
+                        score, confidence = (
+                            (reviewed_score, reviewed_confidence)
+                            if reviewed_score is not None
+                            else (0.5, 0.0)
+                        )
+                    except sqlite3.Error:
+                        pass
                 trust_value = (
                     reliability_value * RELIABILITY_WEIGHT
                     + local_maliciousness_to_thesis_score(score) * confidence
                 ) / 2
+            accuracy = []
+            if validator is not None:
+                try:
+                    accuracy = validator.peer_feedback(peer_id)
+                except sqlite3.Error:
+                    pass
             peers.append(
                 {
                     "peer_id": peer_id,
                     "ip": ip,
                     "connected": peer_id in connected,
                     "trust": trust_value,
+                    "report_accuracy": accuracy,
+                    "confirmed_reports": sum(
+                        item["confirmed"] for item in accuracy
+                    ),
+                    "false_reports": sum(
+                        item["false_positive"] for item in accuracy
+                    ),
                     "reliability": reliability_value,
                     "first_seen": peer_first_seen.get(peer_id)
                     or self._event_timestamp(info.get("timestamp"))

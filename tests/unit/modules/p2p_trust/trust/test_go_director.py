@@ -49,6 +49,34 @@ def test_peer_update_does_not_replace_remote_ip_with_loopback() -> None:
     assert stored["ip"] == "192.168.1.249"
 
 
+@pytest.mark.parametrize("observed", [False, True])
+def test_reliability_update_distinguishes_zero_from_unobserved(
+    observed: bool,
+) -> None:
+    """Preserve prior reliability until Pigeon has measured an interaction.
+
+    Parameters:
+        observed: Whether zero is a measured failure or an initial default.
+    """
+    director = ModuleFactory().create_go_director_obj()
+    director.db.get_peer_trust_data.return_value = json.dumps(
+        {"ip": "192.168.1.170", "reliability": 0.9}
+    )
+    director.db.get_connected_peers.return_value = []
+
+    director.process_go_update({
+        "peerid": "peer-1", "ip": "192.168.1.170", "connected": False,
+        "reliability": 0, "reliability_observed": observed,
+    })
+
+    stored = json.loads(director.db.store_peer_trust_data.call_args.args[1])
+    assert stored["reliability"] == (0 if observed else 0.9)
+    if observed:
+        director.trustdb.insert_go_reliability.assert_called_once()
+    else:
+        director.trustdb.insert_go_reliability.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "data_dict, expected_method, expected_args",
     [

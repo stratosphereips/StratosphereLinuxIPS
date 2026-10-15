@@ -1,10 +1,16 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from typing_extensions import List
+from typing import Callable
+import time
 
 from slips_files.common.printer import Printer
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
+from modules.p2p_trust.trust.report_validation import (
+    MATCH_WINDOW,
+    ReportValidator,
+)
 
 RELIABILITY_WEIGHT = 0.7
 
@@ -34,11 +40,21 @@ class BaseModel:
 
     name = "p2p_base_model"
 
-    def __init__(self, logger: Output, trustdb, main_slips_db: DBManager):
+    def __init__(
+        self,
+        logger: Output,
+        trustdb,
+        main_slips_db: DBManager,
+        report_validation: ReportValidator | None = None,
+        network_identity: Callable[[], str] | None = None,
+    ):
         self.trustdb = trustdb
         self.main_slips_db = main_slips_db
         self.printer = Printer(logger, self.name)
         self.reliability_weight = RELIABILITY_WEIGHT
+        self.report_validation = report_validation
+        self.network_identity = network_identity
+        self.last_corroboration = {"target": "", "support": 0, "peers": []}
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -57,6 +73,14 @@ class BaseModel:
         :param after_id: Restrict reports to replies received for this lookup
         :return: average peer reputation, final score and final confidence
         """
+
+        if getattr(self, "report_validation", None) is not None:
+            opinion = self._validated_opinion(ipaddr, after_id)
+            if opinion[0] is not None:
+                self.trustdb.update_cached_network_opinion(
+                    "ip", ipaddr, *opinion, 0
+                )
+            return opinion
 
         # get report on that ip that is at most max_age old
         # if no such report is found:
@@ -78,6 +102,134 @@ class BaseModel:
             "ip", ipaddr, combined_score, combined_confidence, 0
         )
         return combined_score, combined_confidence
+
+    def _validated_opinion(
+        self, ipaddr: str, after_id: int | None
+    ) -> tuple[float | None, float | None]:
+        """Group shared detector dependencies and apply reviewed report accuracy.
+
+        Parameters:
+            ipaddr: Reported host.
+            after_id: Fresh-reply boundary for the current lookup.
+
+        Returns:
+            Network score and confidence; corroboration is retained separately.
+        """
+        target = f"{self.network_identity()}|{ipaddr}"
+        reports = self.report_validation.reports_for_target(target)
+        families = {}
+        reviewed_families = set()
+        contributions = []
+        weights = {}
+        for report in reports:
+            if (
+                after_id is not None
+                and report.get("raw_report_id", 0) <= after_id
+            ):
+                continue
+            peer = report["peer_id"]
+            _seen, reporter_ip = self.trustdb.get_ip_of_peer(peer)
+            reliability = self.trustdb.get_reporter_reliability(peer)
+            if not reporter_ip or reporter_ip == ipaddr or reliability is None:
+                continue
+            local_score, local_confidence, _ = (
+                self.report_validation.local_report(
+                    f"{self.network_identity()}|{reporter_ip}", max_age=None
+                )
+            )
+            if local_score is None or local_confidence is None:
+                local_score, local_confidence = 0.5, 0.0
+            trust = self.compute_peer_trust(
+                reliability, local_score, local_confidence
+            )
+            detector = report["detector"]
+            kind, version = detector["evidence_type"], detector["rule_version"]
+            feedback = self.report_validation.report_adjustment(
+                peer, kind, version
+            )
+            bonus = feedback["adjustment"]
+            if local_score >= 0.8 and local_confidence >= 0.8:
+                bonus = min(0, bonus)
+            trust = max(-0.5, min(0.85, trust + bonus))
+            cohort = (kind, version, report["network_id"])
+            if cohort not in weights:
+                weights[cohort] = self.report_validation.detector_weight(
+                    kind, version, report["network_id"] + "|"
+                )
+            confidence = report["confidence"] * weights[cohort]
+            verdict = self.report_validation.report_verdict(report)
+            if verdict == "true_positive":
+                reviewed_families.add(detector["family"])
+            if verdict in {
+                "false_positive",
+                "conflict",
+            }:
+                confidence = 0
+            family = detector["family"]
+            # One reporter contributes once within a shared dependency family.
+            previous = families.setdefault(family, {}).get(peer)
+            opinion = (report["score"], confidence, trust)
+            if previous is None or confidence > previous[1]:
+                families[family][peer] = opinion
+            if (
+                kind != "legacy"
+                and report.get("blame_at", 0) >= time.time() - MATCH_WINDOW
+            ):
+                contributions.append(
+                    (
+                        max(0, trust) * confidence * report["score"],
+                        peer,
+                        family,
+                    )
+                )
+            self.main_slips_db.set_peer_trust(
+                reporter_ip,
+                self.compute_peer_trust(
+                    reliability, local_score, local_confidence
+                ),
+            )
+        # Correlated reports stay one unit; independent units also need distinct IDs.
+        chosen_peers, chosen_families = set(), set()
+        support = 0.0
+        for value, peer, family in sorted(contributions, reverse=True):
+            if (
+                peer not in chosen_peers
+                and family not in chosen_families
+                and family != "unknown"
+            ):
+                support += value
+                chosen_peers.add(peer)
+                chosen_families.add(family)
+        self.last_corroboration = {
+            "target": target,
+            "support": support,
+            "peers": sorted(chosen_peers),
+        }
+        units = []
+        family_opinions = {}
+        for family, family_reports in families.items():
+            values = list(family_reports.values())
+            total = sum((trust + 1) / 2 for _, _, trust in values)
+            score = (
+                sum(score * (trust + 1) / 2 for score, _, trust in values)
+                / total
+            )
+            confidence = sum(
+                max(0, trust * confidence) for _, confidence, trust in values
+            ) / len(values)
+            units.append((score, confidence))
+            family_opinions[family] = {
+                "score": score,
+                "confidence": confidence,
+                "validated": family in reviewed_families,
+            }
+        self.last_corroboration["families"] = family_opinions
+        if not units:
+            return None, None
+        return (
+            sum(score for score, _ in units) / len(units),
+            sum(confidence for _, confidence in units) / len(units),
+        )
 
     def compute_peer_trust(
         self, reliability: float, score: float, confidence: float

@@ -154,10 +154,15 @@ class TrustDB(ISQLite):
                         if (
                             version
                             and isinstance(version[0], int)
-                            and version[0] < 1
+                            and version[0] < 2
                         ):
+                            cursor.execute(
+                                "UPDATE slips_reputation SET "
+                                "source = 'informational' "
+                                "WHERE source = 'local' AND score = 0"
+                            )
                             cursor.execute("DELETE FROM opinion_cache")
-                            cursor.execute("PRAGMA user_version = 1")
+                            cursor.execute("PRAGMA user_version = 2")
                     self.conn.commit()
                 except Exception:
                     self.conn.rollback()

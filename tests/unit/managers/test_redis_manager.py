@@ -1,6 +1,5 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import shutil
 from unittest.mock import ANY, patch, mock_open, Mock, call
 import os
 from pathlib import Path
@@ -537,17 +536,17 @@ def test_remove_server_from_log(
     redis_port, file_content, expected_output, mock_db
 ):
     redis_manager = ModuleFactory().create_redis_manager_obj()
-    shutil.move = Mock()
 
-    with patch(
-        "builtins.open", mock_open(read_data=file_content)
-    ) as mock_file:
+    with (
+        patch("builtins.open", mock_open(read_data=file_content)) as mock_file,
+        patch("shutil.move") as mock_move,
+    ):
         redis_manager.remove_server_from_log(redis_port)
 
         mock_file().write.assert_has_calls(
             [call(line + "\n") for line in expected_output.strip().split("\n")]
         )
-        shutil.move.assert_called_once_with(
+        mock_move.assert_called_once_with(
             "tmp_running_slips_log.txt", redis_manager.running_logfile
         )
 

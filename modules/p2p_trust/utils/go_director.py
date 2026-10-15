@@ -5,7 +5,7 @@ import binascii
 import ipaddress
 import math
 import json
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 import time
 
 
@@ -19,6 +19,11 @@ from modules.p2p_trust.utils.utils import (
     send_evaluation_to_go,
 )
 from modules.p2p_trust.trust.trustdb import TrustDB
+from modules.p2p_trust.trust.report_validation import (
+    ReportValidator,
+    observation_record,
+    validate_provenance,
+)
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -57,6 +62,8 @@ class GoDirector:
         pygo_channel: str = "p2p_pygo",
         p2p_reports_logfile: str = "p2p_reports.log",
         is_slips_started_by_an_update: bool = False,
+        report_validation: ReportValidator | None = None,
+        network_identity: Callable[[], str] | None = None,
     ):
         self.printer = Printer(logger, self.name)
 
@@ -66,6 +73,8 @@ class GoDirector:
                 "Override_p2p set but not provided appropriate functions"
             )
         self.trustdb = trustdb
+        self.report_validation = report_validation
+        self.network_identity = network_identity
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
@@ -441,10 +450,25 @@ class GoDirector:
             self.print(f"Not reporting this peer's own IP {key}", 1, 0)
             return
         score, confidence = get_ip_info_from_slips(key, self.db)
-        if score is not None:
-            send_evaluation_to_go(
-                key, score, confidence, reporter, self.pygo_channel, self.db
+        provenance = []
+        if self.report_validation is not None:
+            score, confidence, provenance = (
+                self.report_validation.local_report(
+                    f"{self.network_identity()}|{key}"
+                )
             )
+        if score is not None:
+            arguments = [
+                key,
+                score,
+                confidence,
+                reporter,
+                self.pygo_channel,
+                self.db,
+            ]
+            if provenance:
+                arguments.append(provenance)
+            send_evaluation_to_go(*arguments)
             self.print(
                 f"[Slips -> The Network] Slips responded with info score={score} "
                 f"confidence={confidence} about IP: {key} to {reporter}.",
@@ -528,9 +552,12 @@ class GoDirector:
             self.report_func(reporter, report_time, data)
             return
 
-        self.evaluation_processors[evaluation_type](
-            reporter, report_time, key_type, key, evaluation
-        )
+        arguments = [reporter, report_time, key_type, key, evaluation]
+        if isinstance(evaluation, dict) and evaluation.get("provenance"):
+            arguments.append(data.get("message_type", "report"))
+        processed = self.evaluation_processors[evaluation_type](*arguments)
+        if processed is False:
+            return
         if evaluation is not None:
             msg = (
                 f"[The Network -> Slips] Peer report about {key} "
@@ -550,6 +577,11 @@ class GoDirector:
             # opinion, whether to forward this to the blocking
             # pipeline.
             self.blame_evaluator(reporter, report_time, data)
+        if self.report_validation is not None:
+            # Reconcile after deciding, so a report cannot earn its own weight.
+            self.report_validation.reconcile_target(
+                f"{self.network_identity()}|{key}"
+            )
 
     def process_evaluation_score_confidence(
         self,
@@ -558,6 +590,7 @@ class GoDirector:
         key_type: str,
         key: str,
         evaluation: dict,
+        message_type: str = "report",
     ):
         """
         Handle reported score and confidence from another peer
@@ -570,19 +603,20 @@ class GoDirector:
         supported now)
         :param key: The key itself, aka the ip
         :param evaluation: Dictionary containing score and confidence values
-        :return: None, data is saved to the database
+        :param message_type: Report or blame, retained with detector metadata.
+        :return: Whether the report was valid and stored.
         """
 
         if evaluation is None:
             self.print(
                 f"Peer {reporter} has no data to share about {key}", 2, 0
             )
-            return
+            return False
 
         if not isinstance(evaluation, dict):
             self.print("Evaluation is not a dictionary", 0, 2)
             # TODO: lower reputation
-            return
+            return False
 
         # check that fields are present and with correct type
         try:
@@ -591,23 +625,28 @@ class GoDirector:
         except KeyError:
             self.print("Score or confidence are missing", 0, 2)
             # TODO: lower reputation
-            return
-        except ValueError:
+            return False
+        except (TypeError, ValueError):
             self.print("Score or confidence have wrong data type", 0, 2)
             # TODO: lower reputation
-            return
+            return False
 
         # Reports use the existing 0..1 maliciousness wire scale. The signed
         # thesis scale is used only for local peer trust calculations.
         if not math.isfinite(score) or score < 0 or score > 1:
             self.print("Score value is out of bounds", 0, 2)
             # TODO: lower reputation
-            return
+            return False
 
         if not math.isfinite(confidence) or confidence < 0 or confidence > 1:
             self.print("Confidence value is out of bounds", 0, 2)
             # TODO: lower reputation
-            return
+            return False
+        try:
+            provenance = validate_provenance(evaluation.get("provenance"))
+        except (ValueError, TypeError) as error:
+            self.print(str(error), 0, 2)
+            return False
         self.trustdb.insert_new_go_report(
             reporter, key_type, key, score, confidence, report_time
         )
@@ -623,14 +662,18 @@ class GoDirector:
         if key_type == "ip":
             profileid_of_attacker = f"profile_{key}"
             self.db.add_profile(profileid_of_attacker, report_time)
-            self.set_evidence_p2p_report(
+            arguments = [
                 key,
                 reporter,
                 score,
                 confidence,
                 report_time,
                 profileid_of_attacker,
-            )
+            ]
+            if provenance:
+                arguments.extend([provenance, message_type])
+            self.set_evidence_p2p_report(*arguments)
+        return True
 
     def set_evidence_p2p_report(
         self,
@@ -640,6 +683,8 @@ class GoDirector:
         confidence: float,
         timestamp: float,
         profileid_of_attacker: str,
+        provenance: list[dict] | None = None,
+        message_type: str = "report",
     ) -> None:
         """Record a peer's opinion about an IP without implying an attack.
 
@@ -650,6 +695,8 @@ class GoDirector:
             confidence: Reported confidence in that score.
             timestamp: Time at which the report was received.
             profileid_of_attacker: Profile for the reported IP.
+            provenance: Optional validated detection sources.
+            message_type: Report or blame.
         """
         threat_level = utils.threat_level_to_string(score)
 
@@ -687,9 +734,25 @@ class GoDirector:
             timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
             uid=[""],
             timestamp=timestamp,
+            peer_report={
+                "peer_id": reporter,
+                "score": score,
+                "confidence": confidence,
+                "provenance": provenance or [],
+                "message_type": message_type,
+                "network_id": (
+                    self.network_identity() if self.network_identity else ""
+                ),
+            },
         )
 
         self.db.set_evidence(evidence)
+        if self.report_validation is not None:
+            record = observation_record(
+                utils.to_dict(evidence), self.network_identity()
+            )
+            record["raw_report_id"] = self.trustdb.get_latest_report_id()
+            self.report_validation.observe_report(record, reconcile=False)
 
     def process_go_update(self, data: dict) -> None:
         """
@@ -718,10 +781,11 @@ class GoDirector:
             timestamp = None
 
         try:
-            reliability = float(data["reliability"])
-            self.trustdb.insert_go_reliability(
-                peerid, reliability, timestamp=timestamp
-            )
+            if data.get("reliability_observed", True):
+                reliability = float(data["reliability"])
+                self.trustdb.insert_go_reliability(
+                    peerid, reliability, timestamp=timestamp
+                )
         except KeyError:
             self.print("Reliability missing", 2, 0)
         except (TypeError, ValueError):
