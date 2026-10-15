@@ -468,10 +468,26 @@ To test if your rpi is correctly configured you can do
 
 	grep -qw memory /sys/fs/cgroup/cgroup.controllers && echo "PASS: memory cgroups enabled" || echo "FAIL: memory cgroups disabled"
 
-If your rpi is not correctly configured, you can correctly configured it with
+If your Pi is not correctly configured, inspect `/proc/cmdline` first. If it
+contains `cgroup_disable=memory`, remove that option from
+`/boot/firmware/cmdline.txt` with administrator privileges. Add
+`cgroup_enable=memory` to that same single line, then reboot and repeat the
+check above. Adding `cgroup_enable=memory` while leaving
+`cgroup_disable=memory` in place does not enable the controller.
+
+For a Pi without `cgroup_disable=memory`, enable the controller with
 
 	sudo sed -i.bak '/cgroup_enable=memory/! s/[[:space:]]*$/ cgroup_enable=memory/' /boot/firmware/cmdline.txt
 	reboot
+
+The controller is also required for a native systemd service's `MemoryMax`
+setting. Without it, `MemoryMax` cannot protect the Pi, even if the unit
+accepts the setting. A native service can use `CPUQuota` immediately. The
+live native Slips services on this network use a 200% CPU quota and a separate
+guard that stops Slips for five minutes if its process group reaches 8 GiB
+of resident memory while memory cgroups remain disabled. Their persistent
+`MemoryMax=8G` setting will become enforceable after the memory controller
+is enabled and the Pis are rebooted.
 
 ## Running Slips' Docker in the Pi
 
