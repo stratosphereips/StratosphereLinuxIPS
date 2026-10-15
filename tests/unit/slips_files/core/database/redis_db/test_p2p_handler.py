@@ -2,12 +2,37 @@
 
 import json
 import time
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
 
 from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 from tests.module_factory import ModuleFactory
+
+
+def test_received_report_counts_by_peer_and_timewindow() -> None:
+    """Keep received report telemetry after raw reports are compacted."""
+    _module_factory = ModuleFactory()
+    handler = P2PHandler.__new__(P2PHandler)
+    handler.r = MagicMock()
+    handler.constants = Constants
+    handler.default_ttl = 7200
+    handler.get_current_timewindow = Mock(return_value=2)
+
+    handler.record_p2p_message(
+        "received",
+        {"message_type": "report", "peer": "QmPeer", "target": "192.0.2.44"},
+    )
+
+    pipe = handler.r.pipeline.return_value.__enter__.return_value
+    assert pipe.hincrby.call_args_list == [
+        call("p2p_message_counts_2", "received:report", 1),
+        call("p2p_reports_by_peer_2", "QmPeer", 1),
+    ]
+    pipe.hexpire.assert_any_call(
+        "p2p_reports_by_peer_2", 7200, "QmPeer", nx=True
+    )
 
 
 class FakePipeline:

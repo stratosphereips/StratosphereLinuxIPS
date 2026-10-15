@@ -418,6 +418,12 @@ class P2PHandler:
             pipe.hincrby(key, field, 1)
             # safety net in case the timewindow-end cleanup is ever missed
             pipe.hexpire(key, self.default_ttl, field, nx=True)
+            if direction == "received" and message_type in ("report", "blame"):
+                peer_id = str(message.get("peer") or "")
+                if peer_id:
+                    peer_key = self._p2p_reports_by_peer_key()
+                    pipe.hincrby(peer_key, peer_id, 1)
+                    pipe.hexpire(peer_key, self.default_ttl, peer_id, nx=True)
             pipe.execute()
         self.r.lpush(self.constants.P2P_MESSAGE_HISTORY, json.dumps(record))
         self.r.ltrim(self.constants.P2P_MESSAGE_HISTORY, 0, 999)
@@ -426,6 +432,15 @@ class P2PHandler:
         """Per-timewindow key so old counters don't accumulate forever."""
         timewindow = self.get_current_timewindow() or 1
         return f"{self.constants.P2P_MESSAGE_COUNTS}_{timewindow}"
+
+    def _p2p_reports_by_peer_key(self) -> str:
+        """Return the bounded peer-report counter for this timewindow.
+
+        Returns:
+            Redis hash key for received reports grouped by peer ID.
+        """
+        timewindow = self.get_current_timewindow() or 1
+        return f"{self.constants.P2P_REPORTS_BY_PEER}_{timewindow}"
 
     def get_p2p_message_telemetry(self) -> dict:
         """Return P2P message counters and newest bounded activity.
@@ -441,5 +456,6 @@ class P2PHandler:
                 continue
         return {
             "counts": self.r.hgetall(self._p2p_message_counts_key()),
+            "reports_by_peer": self.r.hgetall(self._p2p_reports_by_peer_key()),
             "activity": records,
         }

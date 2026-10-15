@@ -12,7 +12,7 @@ import netifaces
 import psutil
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 import json
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
@@ -102,6 +102,8 @@ class Trust(IModule):
     pigeon_socket_scan_interval = 5
     local_ip_check_interval = 5
     max_bootstrap_peers = 50
+    report_min_interval = 300
+    report_cache_limit = 4096
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
     pigeon_binary = pigeon_binary_dir / "p2p4slips"
@@ -153,6 +155,7 @@ class Trust(IModule):
         self.last_report_compaction_time = 0
         self.report_compaction_interval = 5
         self.report_compaction_batch_size = 1000
+        self.last_sent_evidence_reports: dict[tuple[str, float], float] = {}
         self.last_p2p_connection_heartbeat_time = 0
 
     def subscribe_to_channels(self):
@@ -162,10 +165,12 @@ class Trust(IModule):
         self.c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
         self.c3 = self.db.subscribe(self.gopy_channel)
+        self.c_alert = self.db.subscribe("new_alert")
         self.channels = {
             "report_to_peers": self.c1,
             self.p2p_data_request_channel: self.c2,
             self.gopy_channel: self.c3,
+            "new_alert": self.c_alert,
         }
 
     def _init_log_files(self):
@@ -347,10 +352,7 @@ class Trust(IModule):
         peers
         """
         own_ips = utils.get_own_ips(ret="List", include_public=False)
-        if (
-            evidence.profile.ip in own_ips
-            or evidence.attacker.value in own_ips
-        ):
+        if evidence.attacker.value in own_ips:
             return False
 
         if evidence.evidence_type == EvidenceType.P2P_REPORT:
@@ -369,7 +371,7 @@ class Trust(IModule):
             return False
 
         threat_level: ThreatLevel = self.extract_threat_level(evidence)
-        if not threat_level:
+        if not threat_level or threat_level.value <= 0:
             return False
 
         return True
@@ -391,48 +393,63 @@ class Trust(IModule):
         if not self.should_share(evidence):
             return
 
-        # todo what we're currently sharing is the threat level(int)
-        #  of the evidence caused by this ip
-
-        # todo when we generate a new evidence,
-        #  we give it a score and a tl, but we don't update the
-        #  IP_Info and give this ip a score in th db!
-
-        # TODO: discuss - only share score if confidence is high enough?
-        # compare slips data with data in go
-        data_already_reported = True
-        try:
-            cached_opinion: Tuple = self.trust_db.get_cached_network_opinion(
-                "ip", evidence.attacker.value
-            )
-            # get the cached network opinion about this ip
-            (
-                cached_score,
-                cached_confidence,
-                network_score,
-                timestamp,
-            ) = cached_opinion
-            # if we don't have info about this ip from the p2p network,
-            # report it to the p2p network
-            if not cached_score:
-                data_already_reported = False
-        except KeyError:
-            data_already_reported = False
-        except IndexError:
-            # data saved in local db have wrong structure,
-            # this is an invalid state
+        # A cached peer opinion says nothing about whether this local
+        # detection was shared. Bound repeats without suppressing updates
+        # indefinitely or allowing the cache to grow for the whole run.
+        now = time.monotonic()
+        cache = getattr(self, "last_sent_evidence_reports", None)
+        if cache is None:
+            cache = self.last_sent_evidence_reports = {}
+        key = (evidence.attacker.value, evidence.threat_level.value)
+        if now - cache.get(key, -self.report_min_interval) < (
+            self.report_min_interval
+        ):
             return
+        cache.pop(key, None)
+        cache[key] = now
+        if len(cache) > self.report_cache_limit:
+            cache.pop(next(iter(cache)))
+        p2p_utils.send_evaluation_to_go(
+            evidence.attacker.value,
+            evidence.threat_level.value,
+            evidence.confidence,
+            "*",
+            self.pygo_channel,
+            self.db,
+        )
 
-        if not data_already_reported:
-            # send the peer report to other peers
-            p2p_utils.send_evaluation_to_go(
-                evidence.attacker.value,
-                evidence.threat_level.value,
-                evidence.confidence,
-                "*",
-                self.pygo_channel,
-                self.db,
+    def new_alert_callback(self, msg: Dict[str, str]) -> None:
+        """Broadcast one locally detected malicious host as a blame.
+
+        Parameters:
+            msg: The serialized ``new_alert`` Redis message.
+        """
+        try:
+            alert = json.loads(msg["data"])
+            ip = str(alert["profile"]["ip"])
+            last_evidence_type = alert["last_evidence"]["evidence_type"]
+            confidence = max(
+                float(alert["confidence"]),
+                float(alert["last_evidence"].get("confidence") or 0),
             )
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return
+        if last_evidence_type in (
+            EvidenceType.P2P_REPORT.name,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK.name,
+        ):
+            return
+        if not p2p_utils.is_unicast_ip(ip) or ip in utils.get_own_ips(
+            ret="List", include_public=False
+        ):
+            return
+        p2p_utils.send_blame_to_go(
+            ip,
+            ThreatLevel.CRITICAL.value,
+            min(1.0, max(0.0, confidence)),
+            self.pygo_channel,
+            self.db,
+        )
 
     def gopy_callback(self, msg: Dict):
         """
@@ -1211,6 +1228,9 @@ class Trust(IModule):
 
         if msg := self.get_msg("report_to_peers"):
             self.new_evidence_callback(msg)
+
+        if msg := self.get_msg("new_alert"):
+            self.new_alert_callback(msg)
 
         if msg := self.get_msg(self.p2p_data_request_channel):
             self.data_request_callback(msg)

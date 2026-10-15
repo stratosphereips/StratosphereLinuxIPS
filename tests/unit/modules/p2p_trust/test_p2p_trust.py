@@ -20,6 +20,7 @@ from modules.p2p_trust.utils.utils import (
     is_unicast_ip,
 )
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.core.structures.evidence import EvidenceType, ThreatLevel
 from tests.module_factory import ModuleFactory
 
 
@@ -74,12 +75,17 @@ def test_pigeon_sockets_are_excluded_by_exact_connection() -> None:
     ]
 
 
-@pytest.mark.parametrize("own_field", ["profile", "attacker"])
-def test_should_share_rejects_own_ip(own_field: str) -> None:
-    """Keep local interface addresses out of outgoing P2P reports.
+@pytest.mark.parametrize(
+    "own_field,expected", [("profile", True), ("attacker", False)]
+)
+def test_should_share_rejects_own_target(
+    own_field: str, expected: bool
+) -> None:
+    """Reject self reports but allow remote attackers on a local profile.
 
     Parameters:
         own_field: Evidence field carrying the local address.
+        expected: Whether the remote attacker should be shared.
     """
     _module_factory = ModuleFactory()
     trust = create_trust()
@@ -88,13 +94,102 @@ def test_should_share_rejects_own_ip(own_field: str) -> None:
     evidence.attacker.value = (
         "192.168.1.170" if own_field == "attacker" else "8.8.8.8"
     )
+    evidence.attacker.ioc_type = "IP"
+    evidence.evidence_type = EvidenceType.ARP_SCAN
+    trust.extract_confidence = Mock(return_value=0.8)
+    trust.extract_threat_level = Mock(return_value=ThreatLevel.LOW)
     with patch(
         "modules.p2p_trust.p2p_trust.utils.get_own_ips",
         return_value=["192.168.1.170"],
     ) as own_ips:
-        assert trust.should_share(evidence) is False
+        assert trust.should_share(evidence) is expected
 
     own_ips.assert_called_once_with(ret="List", include_public=False)
+
+
+def test_local_evidence_report_ignores_cached_peer_opinion() -> None:
+    """Share local evidence even when peers already rated the same IP."""
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.pygo_channel = "p2p_pygo"
+    trust.trust_db = Mock()
+    trust.trust_db.get_cached_network_opinion.return_value = (
+        0.8,
+        0.9,
+        0.7,
+        123,
+    )
+    evidence = Mock()
+    evidence.attacker.value = "192.0.2.44"
+    evidence.threat_level.value = 0.8
+    evidence.confidence = 0.9
+    with (
+        patch(
+            "modules.p2p_trust.p2p_trust.dict_to_evidence",
+            return_value=evidence,
+        ),
+        patch.object(trust, "should_share", return_value=True),
+        patch(
+            "modules.p2p_trust.p2p_trust.p2p_utils.send_evaluation_to_go"
+        ) as send_report,
+        patch(
+            "modules.p2p_trust.p2p_trust.time.monotonic",
+            side_effect=[100, 101, 401],
+        ),
+    ):
+        for _ in range(3):
+            trust.new_evidence_callback({"data": "{}"})
+
+    assert send_report.call_count == 2
+    send_report.assert_called_with(
+        "192.0.2.44", 0.8, 0.9, "*", "p2p_pygo", trust.db
+    )
+    trust.trust_db.get_cached_network_opinion.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "ip,evidence_type,expected",
+    [
+        ("192.0.2.44", "ARP_SCAN", True),
+        ("192.168.1.170", "ARP_SCAN", False),
+        ("192.0.2.44", "P2P_REPORT", False),
+        ("224.0.0.251", "ARP_SCAN", False),
+    ],
+)
+def test_alert_broadcasts_only_local_unicast_blame(
+    ip: str, evidence_type: str, expected: bool
+) -> None:
+    """Avoid self reports, multicast reports, and peer feedback loops.
+
+    Parameters:
+        ip: Alerted profile address.
+        evidence_type: Finding that crossed the threshold.
+        expected: Whether one blame should be broadcast.
+    """
+    _module_factory = ModuleFactory()
+    trust = create_trust()
+    trust.pygo_channel = "p2p_pygo"
+    payload = {
+        "profile": {"ip": ip},
+        "last_evidence": {"evidence_type": evidence_type},
+        "confidence": 0.7,
+    }
+    with (
+        patch(
+            "modules.p2p_trust.p2p_trust.utils.get_own_ips",
+            return_value=["192.168.1.170"],
+        ),
+        patch(
+            "modules.p2p_trust.p2p_trust.p2p_utils.send_blame_to_go"
+        ) as send_blame,
+    ):
+        trust.new_alert_callback({"data": json.dumps(payload)})
+
+    assert send_blame.called is expected
+    if expected:
+        send_blame.assert_called_once_with(
+            ip, 1, 0.7, "p2p_pygo", trust.db
+        )
 
 
 @pytest.mark.parametrize(
@@ -671,7 +766,9 @@ def test_main_continues_after_one_malformed_gopy_message() -> None:
         side_effect=[
             None,
             None,
+            None,
             {"data": "malformed"},
+            None,
             None,
             None,
             {"data": json.dumps(valid_data)},

@@ -149,6 +149,16 @@ Slips interacts with other slips peers for the following purposes:
 
 If slips finds that an IP is malicious given enough evidence, it blocks it and tells other peers that this IP is malicious and they need to block it. this is called sending a blame report.
 
+When a locally generated alert crosses the detection threshold, Slips sends a
+blame for the alerted IP. It never blames one of its own addresses or repeats
+an alert derived from a peer report. Positive local evidence is shared as a
+reputation report even when another peer's opinion is cached; repeated reports
+for the same IP and severity are limited to one every five minutes.
+
+The P2P dashboard counts received report and blame messages from the selected
+time window's message telemetry. The trust database compacts raw reports after
+30 seconds, so its remaining raw rows are not a reliable message counter.
+
 ### Receiving Blames
 
 When slips receives a blame report from the network,
@@ -251,12 +261,12 @@ Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past d
 
 When the local web interface is enabled, its **P2P** tab shows live peer
 connectivity, local identity, bounded message activity, reports received in the
-current run, and persistent peer trust and reliability evolution.
+current time window, and persistent peer trust and reliability evolution.
 
 
 ## Limitations
 
-For now, slips only supports requests and blames about IPs.
+For now, Slips only supports requests, reports, and blames about IPs.
 
 Domains, URLs, or hashes are not supported, but can easily be added in the future.
 

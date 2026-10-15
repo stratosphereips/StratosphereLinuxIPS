@@ -119,6 +119,7 @@ class Constants:
     P2P_TRUST_SET = "peers_strust"
     P2P_PEER_INFO_HASH = "peer_info"
     P2P_MESSAGE_COUNTS = "p2p_message_counts"
+    P2P_REPORTS_BY_PEER = "p2p_reports_by_peer"
     P2P_MESSAGE_HISTORY = "p2p_message_history"
     P2P_CONNECTIONS = "p2p:connections"
     P2P_CONNECTIONS_LAST_SEEN = "p2p:connections:last_seen"

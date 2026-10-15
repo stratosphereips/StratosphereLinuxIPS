@@ -7967,6 +7967,12 @@ class RunDataReader:
                 f"p2p_message_counts_{current_tw}"
             ).items()
         }
+        peer_message_counts = {
+            str(peer_id): int(value)
+            for peer_id, value in self.redis.hgetall(
+                f"p2p_reports_by_peer_{current_tw}"
+            ).items()
+        }
         activity = [
             self._loads(raw, {})
             for raw in self.redis.lrange("p2p_message_history", 0, 999)
@@ -8134,6 +8140,34 @@ class RunDataReader:
                         reports_received += count
             except sqlite3.Error:
                 pass
+        if counts:
+            reports_received = counts.get("received:report", 0) + counts.get(
+                "received:blame", 0
+            )
+            if not peer_message_counts and reports_received:
+                # Existing runs already have message telemetry, while their
+                # per-peer hash appears only after the writer is upgraded.
+                remaining = reports_received
+                for item in activity:
+                    if remaining <= 0:
+                        break
+                    if (
+                        not isinstance(item, dict)
+                        or item.get("direction") != "received"
+                        or item.get("message_type")
+                        not in (
+                            "report",
+                            "blame",
+                        )
+                    ):
+                        continue
+                    peer_id = str(item.get("peer") or "")
+                    if peer_id:
+                        peer_message_counts[peer_id] = (
+                            peer_message_counts.get(peer_id, 0) + 1
+                        )
+                        remaining -= 1
+            report_counts = Counter(peer_message_counts)
         peer_ids = (
             set(peer_info)
             | set(peer_ips)

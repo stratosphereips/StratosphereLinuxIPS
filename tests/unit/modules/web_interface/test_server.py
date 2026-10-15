@@ -5593,6 +5593,39 @@ def test_p2p_report_counter_is_not_limited_to_latest_500(
     assert peer_counts == {"QmRemotePeer": 501, "QmOldPeer": 0}
 
 
+def test_p2p_received_reports_survive_raw_report_compaction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Show current-window message counts after raw trust rows are removed.
+
+    Parameters:
+        tmp_path: Isolated run and trust-database location.
+        monkeypatch: Changes the process working directory for the test.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path / "output" / "run"
+    reader.output_dir.mkdir(parents=True)
+    reader.redis = Mock()
+    reader.redis.get.return_value = "2"
+    reader.redis.hget.return_value = None
+    reader.redis.hgetall.side_effect = lambda key: {
+        "p2p_message_counts_2": {
+            "received:report": "7",
+            "received:blame": "2",
+        },
+        "p2p_reports_by_peer_2": {"QmRemotePeer": "9"},
+    }.get(key, {})
+    reader.redis.zrange.return_value = []
+    reader.redis.lrange.return_value = []
+
+    result = reader.p2p()
+
+    assert result["counts"]["reports_received"] == 9
+    assert result["peers"][0]["reports_received"] == 9
+
+
 def test_host_workspace_live_range_uses_run_wide_flow_clock(tmp_path) -> None:
     """Exclude an inactive host from Live using the newest run-wide flow."""
     _module_factory = ModuleFactory()
