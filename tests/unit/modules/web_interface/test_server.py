@@ -852,6 +852,9 @@ def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
     assert saved["value"] == "192.0.2.4:443"
     managed = configured
     assert "ip,192.0.2.4:443,dst,alerts" in managed.read_text(encoding="utf-8")
+    assert (tmp_path / "whitelist.conf.bak").read_text(encoding="utf-8") == (
+        managed.read_text(encoding="utf-8")
+    )
     assert "ip,192.0.2.1,both,alerts" in configured.read_text(
         encoding="utf-8"
     )
@@ -868,6 +871,75 @@ def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
     reader.save_whitelist_rule("remove", "192.0.2.4:443", "dst", "alerts")
     assert "192.0.2.4:443" not in managed.read_text(encoding="utf-8")
     reader.redis.hdel.assert_called_once_with("whitelist_IPs", "192.0.2.4:443")
+
+
+def test_web_whitelist_refuses_missing_configured_file(tmp_path: Path) -> None:
+    """Never replace a vanished personal file with a partial web rule file.
+
+    Parameters:
+        tmp_path: Isolated configured whitelist directory.
+    """
+    _module_factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "personal-whitelist.conf"
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(
+        return_value={"backend_status": {"connected": True}}
+    )
+
+    with pytest.raises(FileNotFoundError, match="will not start"):
+        reader.save_whitelist_rule(
+            "add", "192.0.2.4", "src", "alerts", "ARP_SCAN"
+        )
+    assert not configured.exists()
+    reader.redis.hset.assert_not_called()
+
+
+def test_web_whitelist_restores_backup_before_adding_rule(
+    tmp_path: Path,
+) -> None:
+    """Preserve manual entries when adding a rule after the file vanishes.
+
+    Parameters:
+        tmp_path: Isolated configured whitelist directory.
+    """
+    _module_factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "personal-whitelist.conf"
+    backup = tmp_path / "personal-whitelist.conf.bak"
+    backup.write_text("domain,example.com,both,alerts\n", encoding="utf-8")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n",
+        encoding="utf-8",
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(
+        return_value={"backend_status": {"connected": True}}
+    )
+
+    reader.save_whitelist_rule(
+        "add", "192.0.2.4", "src", "alerts", "ARP_SCAN"
+    )
+
+    content = configured.read_text(encoding="utf-8")
+    assert "domain,example.com,both,alerts" in content
+    assert "ip,192.0.2.4,src,alerts,ARP_SCAN" in content
+    assert backup.read_text(encoding="utf-8") == content
+    reader.redis.hset.assert_called_once()
 
 
 def test_web_uri_whitelist_persists_and_can_be_removed(tmp_path) -> None:

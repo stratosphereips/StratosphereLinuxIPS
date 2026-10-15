@@ -36,6 +36,9 @@ from slips_files.common.style import (
 from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
+from slips_files.core.helpers.whitelist.whitelist_parser import (
+    ensure_local_whitelist,
+)
 from slips_files.core.helpers.checker import Checker
 
 logging.basicConfig(level=logging.WARNING)
@@ -74,6 +77,8 @@ class Main:
             self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
             if not self.args.stopdaemon:
+                if self.conf.enable_local_whitelist():
+                    ensure_local_whitelist(self.conf.local_whitelist_path())
                 self.input_type: InputType
                 (
                     self.input_type,
@@ -722,6 +727,23 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                if self.conf.enable_local_whitelist():
+                    whitelist_path = self.conf.local_whitelist_path()
+                    if not os.path.isfile(whitelist_path):
+                        try:
+                            ensure_local_whitelist(whitelist_path)
+                            self.print(
+                                "Restored missing local whitelist from its "
+                                f"recovery copy: {whitelist_path}",
+                                1,
+                                0,
+                            )
+                        except (OSError, ValueError) as error:
+                            self.print(
+                                f"Local whitelist is missing: {error}",
+                                1,
+                                1,
+                            )
                 self.proc_man.print_disabled_modules()
 
                 self.print_gw_info()

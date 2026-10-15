@@ -1,7 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import ipaddress
+import fcntl
 import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import TextIO, List, Dict, Optional
 import validators
@@ -22,6 +25,104 @@ def web_whitelist_path(local_path: str) -> Path:
     """
     path = Path(local_path)
     return path.with_name(path.name + ".web.conf")
+
+
+def whitelist_backup_path(local_path: str) -> Path:
+    """Return the private recovery copy beside a configured whitelist.
+
+    Parameters:
+        local_path: Configured whitelist filename.
+
+    Returns:
+        Path of its recovery copy.
+    """
+    path = Path(local_path)
+    return path.with_name(path.name + ".bak")
+
+
+def backup_local_whitelist(path: Path) -> None:
+    """Atomically preserve the complete configured whitelist.
+
+    Parameters:
+        path: Existing configured whitelist file.
+    """
+    backup = whitelist_backup_path(str(path))
+    with tempfile.NamedTemporaryFile(dir=path.parent, delete=False) as handle:
+        temporary = Path(handle.name)
+    try:
+        shutil.copy2(path, temporary)
+        os.replace(temporary, backup)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def web_managed_lines(path: Path) -> set[str]:
+    """Read non-comment web rules from a whitelist without parsing its IoCs.
+
+    Parameters:
+        path: Whitelist or recovery copy to inspect.
+
+    Returns:
+        Set of web-managed rule lines.
+    """
+    lines = path.read_text(encoding="utf-8").splitlines()
+    start = "; Begin rules added from the Slips web interface"
+    end = "; End rules added from the Slips web interface"
+    if start not in lines or end not in lines:
+        return set()
+    first = lines.index(start) + 1
+    last = lines.index(end, first)
+    return {
+        line.strip()
+        for line in lines[first:last]
+        if line.strip() and not line.lstrip().startswith((";", "#"))
+    }
+
+
+def ensure_local_whitelist(local_path: str) -> Path:
+    """Restore a missing whitelist or fail before running without its rules.
+
+    Parameters:
+        local_path: Path configured for the local whitelist.
+
+    Returns:
+        Existing or restored whitelist path.
+    """
+    path = Path(local_path)
+    backup = whitelist_backup_path(local_path)
+    lock_path = path.with_name(path.name + ".lock")
+    with lock_path.open("a", encoding="utf-8") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        if not path.exists():
+            if not backup.is_file():
+                raise FileNotFoundError(
+                    f"Configured local whitelist {path} is missing and "
+                    f"there is no recovery copy at {backup}. "
+                    "Slips will not start without its whitelist."
+                )
+            with tempfile.NamedTemporaryFile(
+                dir=path.parent, delete=False
+            ) as handle:
+                temporary = Path(handle.name)
+            try:
+                shutil.copy2(backup, temporary)
+                os.replace(temporary, path)
+            finally:
+                temporary.unlink(missing_ok=True)
+        if not path.is_file():
+            raise ValueError(
+                f"Configured local whitelist {path} is not a file"
+            )
+        if backup.is_file() and (
+            web_managed_lines(backup) - web_managed_lines(path)
+        ):
+            raise ValueError(
+                f"Configured local whitelist {path} has lost web-managed "
+                f"rules preserved in {backup}. Restore those rules before "
+                "starting Slips; the backup has not been overwritten."
+            )
+        backup_local_whitelist(path)
+    return path
 
 
 class WhitelistParser:
@@ -57,18 +158,13 @@ class WhitelistParser:
         self.local_whitelist_path = conf.local_whitelist_path()
 
     def open_whitelist_for_reading(self) -> Optional[TextIO]:
-        """Open the configured local whitelist if it exists.
+        """Open the configured local whitelist, recovering it if necessary.
 
         Returns:
-            The open whitelist, or None when the file is missing.
+            The open whitelist.
         """
-        try:
-            return open(self.local_whitelist_path)
-        except FileNotFoundError:
-            self.manager.printer.print(
-                f"Can't find {self.local_whitelist_path}. "
-                f"Local whitelist disabled."
-            )
+        path = ensure_local_whitelist(self.local_whitelist_path)
+        return path.open(encoding="utf-8")
 
     def remove_entry_from_cache_db(
         self, entry_to_remove: Dict[str, str]

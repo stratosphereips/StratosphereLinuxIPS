@@ -24,6 +24,7 @@ private/AGENTS.md
 # Local analyst configuration and whitelist files
 config/slips-*.yaml
 config/*-whitelist.conf
+config/*.conf.bak
 *.web.conf
 *.web.conf.lock
 *.conf.lock

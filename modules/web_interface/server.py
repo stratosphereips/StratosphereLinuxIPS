@@ -33,6 +33,8 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.structures.evidence import EvidenceType
 from modules.supported_module_names import Modules
 from slips_files.core.helpers.whitelist.whitelist_parser import (
+    backup_local_whitelist,
+    ensure_local_whitelist,
     web_whitelist_path,
 )
 
@@ -873,14 +875,17 @@ class RunDataReader:
         path = Path(source)
         if not path.parent.is_dir():
             raise ValueError("The configured whitelist directory is missing")
+        ensure_local_whitelist(source)
         lock_path = path.with_name(path.name + ".lock")
         with lock_path.open("a", encoding="utf-8") as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
-            lines = (
-                path.read_text(encoding="utf-8").splitlines()
-                if path.exists()
-                else []
-            )
+            if not path.is_file():
+                raise FileNotFoundError(
+                    f"Configured whitelist {path} is missing. "
+                    "Restore it before changing web rules."
+                )
+            lines = path.read_text(encoding="utf-8").splitlines()
+            backup_local_whitelist(path)
             if WEB_RULES_START in lines and WEB_RULES_END in lines:
                 start = lines.index(WEB_RULES_START)
                 end = lines.index(WEB_RULES_END, start)
@@ -946,6 +951,7 @@ class RunDataReader:
                 if path.exists():
                     os.chmod(temporary_path, path.stat().st_mode & 0o777)
                 os.replace(temporary_path, path)
+                backup_local_whitelist(path)
                 legacy_path.unlink(missing_ok=True)
             finally:
                 temporary_path.unlink(missing_ok=True)

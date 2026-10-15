@@ -46,6 +46,13 @@ ranges, grouping, table sort and direction, optional host columns, and resized
 pane widths after Slips restarts. These view choices stay in browser storage.
 Restart a running Slips server after updating its Python code.
 
+The input watcher observes only Zeek log files. It does not watch or remove
+files in `config/`. A whitelist saved by the web interface is written to the
+configured local whitelist file; its private recovery copy is kept beside it.
+If the configured file is missing, Slips restores the copy before parsing and
+fails startup when neither file exists. The recovery copy is local and ignored
+by Git, just like a personal whitelist.
+
 ## Reviewing and cleaning up detections
 
 Alerts open as **Active**. Mark one **In review** while investigating, or
@@ -552,8 +559,16 @@ The web interface writes these rules into the configured local whitelist file,
 between marked comments, so they survive Slips restarts and are visible in the
 same file as manually entered rules. On the next edit, any rules from an older
 `.web.conf` sidecar are moved into that marked section.
-Keep a copy of any personal configured whitelist outside the repository before
-replacing a checkout. Existing evidence and alerts are historical records;
+Slips also keeps a private `.bak` copy beside the configured file. If the
+configured file disappears, startup or the running process restores that copy
+before loading or saving rules.
+If neither file exists, startup stops instead of silently running without the
+local whitelist. Startup also stops if the file has lost web-managed rules
+that are still in the backup, without overwriting either copy. Web edits
+recover from the same copy and never create a new
+partial whitelist in place of a missing configured file. Keep an additional
+copy of any personal whitelist outside the repository before replacing a
+checkout. Existing evidence and alerts are historical records;
 new matching evidence is excluded from scoring
 and alerts and is hidden by the default **Hide excluded** setting. Saving
 changes requires enabled local whitelisting and an active

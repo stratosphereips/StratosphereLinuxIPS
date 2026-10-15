@@ -130,29 +130,59 @@ def test_read_whitelist():
     assert whitelist.parser.parse()
 
 
-@pytest.mark.parametrize("has_web_rules", [False, True])
-def test_missing_local_whitelist_does_not_crash(
-    tmp_path: Path, has_web_rules: bool
+@pytest.mark.parametrize("has_backup", [False, True])
+def test_missing_local_whitelist_restores_or_stops(
+    tmp_path: Path, has_backup: bool
 ) -> None:
-    """Continue startup when only the configured whitelist is missing.
+    """Recover a vanished personal whitelist or refuse unsafe startup.
 
     Parameters:
         tmp_path: Directory containing the test whitelist paths.
-        has_web_rules: Whether web-managed rules are still available.
+        has_backup: Whether a private recovery copy is available.
     """
     whitelist = ModuleFactory().create_whitelist_obj()
-    del whitelist.print  # The test factory otherwise hides the startup bug.
     path = tmp_path / "missing-whitelist.conf"
     whitelist.parser.local_whitelist_path = str(path)
-    if has_web_rules:
-        Path(f"{path}.web.conf").write_text(
+    if has_backup:
+        Path(f"{path}.bak").write_text(
             "ip,192.0.2.10,src,alerts,ARP_SCAN\n", encoding="utf-8"
         )
+        assert whitelist.parser.parse()
+        assert path.read_text(encoding="utf-8") == (
+            "ip,192.0.2.10,src,alerts,ARP_SCAN\n"
+        )
+        assert "192.0.2.10|ARP_SCAN" in whitelist.parser.whitelisted_ips
+    else:
+        with pytest.raises(FileNotFoundError, match="will not start"):
+            whitelist.parser.parse()
 
-    assert whitelist.parser.parse() is has_web_rules
-    assert (
-        "192.0.2.10|ARP_SCAN" in whitelist.parser.whitelisted_ips
-    ) is has_web_rules
+
+def test_startup_preserves_backup_when_web_rules_disappear(
+    tmp_path: Path,
+) -> None:
+    """Stop before replacing a backup containing vanished web rules.
+
+    Parameters:
+        tmp_path: Isolated configured whitelist directory.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    path = tmp_path / "personal-whitelist.conf"
+    backup = tmp_path / "personal-whitelist.conf.bak"
+    original = (
+        "; Begin rules added from the Slips web interface\n"
+        "ip,192.0.2.10,src,alerts,ARP_SCAN\n"
+        "; End rules added from the Slips web interface\n"
+    )
+    path.write_text("domain,example.com,both,alerts\n", encoding="utf-8")
+    backup.write_text(original, encoding="utf-8")
+    whitelist.parser.local_whitelist_path = str(path)
+
+    with pytest.raises(ValueError, match="lost web-managed rules"):
+        whitelist.parser.parse()
+    assert backup.read_text(encoding="utf-8") == original
+    assert path.read_text(encoding="utf-8") == (
+        "domain,example.com,both,alerts\n"
+    )
 
 
 @pytest.mark.parametrize(
