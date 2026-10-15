@@ -33,6 +33,222 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize(
+    "threat, expected",
+    [("low_or_more", {"10.0.0.3"}), ("info_or_more", {"10.0.0.2", "10.0.0.3"}),
+     ("info", {"10.0.0.2"}), ("high", {"10.0.0.3"}),
+     ("", {"10.0.0.1", "10.0.0.2", "10.0.0.3"})],
+)
+def test_host_threat_filters_use_scoped_findings(
+    tmp_path: Path, device: bool, threat: str, expected: set[str],
+) -> None:
+    """Old high threat metadata cannot turn a host without current findings into Low+."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
+    reader._attach_current_host_scores = Mock()
+    reader._current_profile_threats = Mock(return_value={"10.0.0.1": "critical"})
+    reader._scoped_start = Mock(return_value=100.0)
+    reader._host_load = Mock(return_value={})
+    reader._ip_context_for_ip = Mock(return_value={})
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE evidence(profile_ip TEXT, evidence_time REAL, threat_level TEXT);"
+            "CREATE TABLE alerts(ip_alerted TEXT, alert_time REAL);"
+            "INSERT INTO evidence VALUES ('10.0.0.1', 10, 'critical'),"
+            "('10.0.0.2', 110, 'info'), ('10.0.0.3', 110, 'high');"
+        )
+    with connect_history(reader.history_path) as connection:
+        connection.executemany("INSERT INTO host_snapshots VALUES (?, 120, ?)", [
+            (ip, json.dumps({"ip": ip, "scope": "local", "max_threat_level": "critical"}))
+            for ip in ("10.0.0.1", "10.0.0.2", "10.0.0.3")
+        ])
+    page = reader.hosts({"range": ["all"], "network": ["current"],
+                         "threat": [threat], "device": ["1" if device else "0"]})
+    assert {row["ip"] for row in page["items"]} == expected
+    for row in page["items"]:
+        assert row["has_findings"] == (row["ip"] != "10.0.0.1")
+        assert row["max_threat_level"] == {"10.0.0.1": "", "10.0.0.2": "info", "10.0.0.3": "high"}[row["ip"]]
+
+
+def test_evidence_flow_pages_preserve_all_uids_and_protocols(tmp_path: Path) -> None:
+    """An evidence with over 1,000 flows stays bounded and can be fully traversed."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE flows(uid TEXT PRIMARY KEY, flow TEXT);"
+            "CREATE TABLE altflows(uid TEXT PRIMARY KEY, flow TEXT, flow_type TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT, PRIMARY KEY(evidence_id,uid));"
+        )
+        for index in range(1051):
+            uid = f"flow-{index:04}"
+            connection.execute("INSERT INTO evidence_flows VALUES ('e', ?)", (uid,))
+            if index % 3:
+                connection.execute("INSERT INTO flows VALUES (?, '{}')", (uid,))
+            if index % 3 != 1:
+                connection.execute("INSERT INTO altflows VALUES (?, ?, 'dns')",
+                                   (uid, json.dumps({"query": uid + ".example"})))
+    query: dict[str, list[str]] = {}
+    seen = []
+    while True:
+        page = reader.flows_for_evidence("e", query)
+        assert page["linked_uid_count"] == 1051
+        assert page["page_size"] <= 20
+        seen.extend(item["uid"] for item in page["items"])
+        for item in page["items"]:
+            if item["protocol_flows"]:
+                assert item["protocol_flows"][0]["flow"]["query"] == item["uid"] + ".example"
+        if not page["next_cursor"]:
+            break
+        query["cursor"] = [page["next_cursor"]]
+    assert seen == [f"flow-{index:04}" for index in range(1051)]
+    reader.redis.hget.assert_not_called()
+
+
+def test_durable_evidence_without_flow_ids_does_not_scan_redis(tmp_path: Path) -> None:
+    """A retained record with no UIDs returns immediately instead of scanning all evidence."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader._redis_evidence = Mock(side_effect=AssertionError("full Redis scan"))
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY, data TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "INSERT INTO evidence VALUES ('notice', '{\"uid\":[]}');"
+            "INSERT INTO evidence_flows VALUES ('notice', ''), ('notice', ' ');"
+        )
+    assert reader.flows_for_evidence("notice")["linked_uid_count"] == 0
+    reader.redis.hget.assert_not_called()
+
+
+def test_live_host_preserves_saved_identity(tmp_path: Path) -> None:
+    """A Redis profile containing counters must not clear its last-known identity."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"threat_level": "info"}
+    reader.redis.hget.return_value = None
+    reader._snapshot = Mock(return_value={"mac": "02:00:00:00:00:01", "mac_vendor": "Vendor", "hostname": "laptop"})
+    host = reader._live_host("192.168.1.163")
+    assert (host["mac"], host["mac_vendor"], host["hostname"]) == ("02:00:00:00:00:01", "Vendor", "laptop")
+
+
+@pytest.mark.parametrize("device", [False, True])
+def test_host_review_saved_then_filtered_and_searched(tmp_path: Path, device: bool) -> None:
+    """Host marks, labels and notes survive a fresh reader and filter before pagination."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01"}
+    store = HostProfileStore(reader.host_profiles_path, "run", lambda _: state, ["en0"])
+    for ip in ("192.168.1.20", "192.168.1.21"):
+        store.observe_flow(SimpleNamespace(interface="en0", starttime="100", type_="dhcp", saddr=ip,
+            daddr="192.168.1.1", smac="02:00:00:00:00:20", host_name="laptop"))
+    saved = reader.save_host_annotation("192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "Laptop", "Investigate tomorrow",
+                                        "to_analyze", [" lab ", "dns", "lab"])
+    assert saved["labels"] == ["lab", "dns"]
+    # An older client editing only name/note does not discard the review mark.
+    reader.save_host_annotation("192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "Laptop", "Investigate tomorrow")
+    fresh = RunDataReader.__new__(RunDataReader)
+    fresh.host_profiles_path = reader.host_profiles_path
+    fresh.sqlite_path = tmp_path / "flows.sqlite"
+    fresh.history_path = tmp_path / "history.sqlite"
+    fresh.redis = Mock()
+    fresh.redis.hgetall.return_value = {}
+    fresh._attach_current_host_scores = Mock()
+    fresh._host_load = Mock(return_value={})
+    fresh._profile_evidence_count = Mock(return_value=0)
+    fresh._profile_alert_count = Mock(return_value=0)
+    fresh._ip_context_for_ip = Mock(return_value={})
+    initialize_history(fresh.history_path)
+    with sqlite3.connect(fresh.sqlite_path) as connection:
+        connection.executescript("CREATE TABLE evidence(profile_ip TEXT); CREATE TABLE alerts(ip_alerted TEXT);")
+    with connect_history(fresh.history_path) as connection:
+        connection.executemany("INSERT INTO host_snapshots VALUES (?, 100, ?)", [
+            (ip, json.dumps({"ip": ip, "scope": "local", "mac": "02:00:00:00:00:20"}))
+            for ip in ("192.168.1.20", "192.168.1.21")])
+    for search in ("dns", "Investigate tomorrow", "Laptop"):
+        page = fresh.hosts({"range": ["all"], "search": [search], "review": ["to_analyze"],
+                            "device": ["1" if device else "0"], "sort": ["review"], "limit": ["1"]})
+        assert page["total"] == (1 if device else 2)
+        assert page["items"][0]["user_status"] == "to_analyze"
+        assert page["items"][0]["user_labels"] == ["lab", "dns"]
+        assert page["items"][0]["user_note"] == "Investigate tomorrow"
+
+
+def test_host_detail_reads_own_mac_from_monitored_interface(tmp_path: Path) -> None:
+    """Current local identity is available even when Redis and saved facts lack a MAC."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"input_type": "interface", "interface": "en0"}
+    reader._live_host = Mock(return_value={"ip": "192.168.1.163", "live": True})
+    reader._attach_current_host_scores = Mock()
+    reader._host_ips = Mock(return_value=["192.168.1.163"])
+    reader._host_load = Mock(return_value={})
+    reader._ti_for_ip = Mock(return_value={})
+    reader.alerts = Mock(return_value={"items": [], "total": 0})
+    reader._profile_evidence_count = Mock(return_value=0)
+    with patch("modules.web_interface.server.psutil.net_if_addrs", return_value={"en0": [
+        SimpleNamespace(family=socket.AF_INET, address="192.168.1.163"),
+        SimpleNamespace(family=psutil.AF_LINK, address="02:00:00:00:00:20"),
+    ]}):
+        host = reader.host("192.168.1.163")
+    assert host["mac"] == "02:00:00:00:00:20"
+    assert host["mac_source"] == "Monitored interface en0"
+
+
+def test_observed_legacy_host_can_be_marked_without_prior_permanent_profile(tmp_path: Path) -> None:
+    """An inventory host with no old identity store still has a persistent review editor."""
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.output_dir = Path("fixture-run")
+    reader.redis = Mock()
+    reader._live_host = Mock(return_value={"observed_at": 100, "ip": "192.168.1.20"})
+    fallback = reader._host_annotation_profile("192.168.1.20")
+    assert fallback["network_id"] == "run:fixture-run"
+    reader.save_host_annotation("192.168.1.20", fallback["network_id"], "Printer", "Check tomorrow",
+                                "to_analyze", ["office"])
+    assert HostProfileStore.read(reader.host_profiles_path, "192.168.1.20")[0]["user_note"] == "Check tomorrow"
+    assert HostProfileStore.triage_for_ips(reader.host_profiles_path, ["192.168.1.20"])["192.168.1.20"] == {
+        "status": "to_analyze", "labels": ["office"]}
+    reader._live_host.return_value = {"ip": "192.168.1.21"}
+    with pytest.raises(ValueError, match="unavailable"):
+        reader.save_host_annotation("192.168.1.21", fallback["network_id"], "Invented", "", "", [])
+
+
+@pytest.mark.parametrize("helper_name", ["create_set_evidence_helper", "create_conn_analyzer_set_evidence_helper"])
+def test_different_localnet_evidence_profiles_the_connection_source(helper_name: str) -> None:
+    """An outgoing connection to Docker's gateway belongs to the initiating host."""
+    factory = ModuleFactory()
+    helper = getattr(factory, helper_name)()
+    helper.db.get_local_network.return_value = "192.168.1.0/24"
+    flow = SimpleNamespace(saddr="192.168.1.163", daddr="172.17.0.1", sport=54321,
+                           dport=6668, proto="tcp", uid="docker-flow", starttime=100, interface="en0")
+    helper.different_localnet_usage("timewindow1", flow, "dstip")
+    evidence = helper.db.set_evidence.call_args.args[0]
+    assert evidence.profile.ip == flow.saddr
+    assert evidence.interface == flow.interface
+    assert evidence.proto == flow.proto
+    assert evidence.attacker.value == flow.saddr
+    assert evidence.attacker.direction.name == "SRC"
+    assert evidence.victim.value == flow.daddr
+    assert evidence.victim.direction.name == "DST"
+
+
 def test_reviewed_flow_export_preserves_detector_label(tmp_path: Path) -> None:
     """Flow export combines linked verdicts without changing detector labels."""
     _module_factory = ModuleFactory()
@@ -1919,8 +2135,13 @@ def test_network_name_post_routes_historical_profile() -> None:
     reader.save_network_name.assert_not_called()
 
 
-def test_host_annotation_post_saves_name_and_note() -> None:
-    """Route the Host editor's name and note to permanent storage."""
+@pytest.mark.parametrize("triage", [{}, {"status": "to_analyze", "labels": ["lab"]}])
+def test_host_annotation_post_saves_name_and_note(triage: dict) -> None:
+    """Route the Host editor's fields to permanent storage.
+
+    Parameters:
+        triage: Optional workflow fields from the current editor.
+    """
     _module_factory = ModuleFactory()
     body = json.dumps(
         {
@@ -1928,6 +2149,7 @@ def test_host_annotation_post_saves_name_and_note() -> None:
             "network_id": "gateway:aa:bb:cc:dd:ee:01",
             "name": "My iPad",
             "note": "Kitchen tablet",
+            **triage,
         }
     ).encode()
     reader = Mock()
@@ -1956,6 +2178,7 @@ def test_host_annotation_post_saves_name_and_note() -> None:
         "gateway:aa:bb:cc:dd:ee:01",
         "My iPad",
         "Kitchen tablet",
+        **triage,
     )
     handler._send_json.assert_called_once_with(
         reader.save_host_annotation.return_value

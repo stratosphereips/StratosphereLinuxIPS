@@ -195,8 +195,8 @@ def test_multiple_ssh_versions(
             "0",
             "arp",
             "dstip",
-            Direction.DST,
             Direction.SRC,
+            Direction.DST,
             ThreatLevel.HIGH,
             "A connection to a private IP (192.168.1.1) on port 0/arp "
             "outside of the used "
@@ -208,8 +208,8 @@ def test_multiple_ssh_versions(
             "443",
             "tcp",
             "dstip",
-            Direction.DST,
             Direction.SRC,
+            Direction.DST,
             ThreatLevel.HIGH,
             "A connection to a private IP (192.168.1.2) on port 443/tcp"
             " outside of the used local network 192.168.0.0/16."

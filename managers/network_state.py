@@ -192,6 +192,17 @@ def collect_network_state(
     gateway_ip = utils.get_gateway_for_iface(interface) or ""
     return {
         "interface": interface,
+        "mac": next(
+            (
+                str(entry.get("addr", "")).lower()
+                for entry in iface_addrs.get(netifaces.AF_LINK, [])
+                if re.fullmatch(
+                    r"(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}",
+                    str(entry.get("addr", "")),
+                )
+            ),
+            "",
+        ),
         "connected": bool(preferred),
         "addresses": addresses,
         "host_ip": preferred.get("ip", ""),

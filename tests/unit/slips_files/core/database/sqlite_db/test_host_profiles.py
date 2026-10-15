@@ -4,12 +4,75 @@ import sqlite3
 from pathlib import Path
 from types import SimpleNamespace
 from datetime import datetime, timezone
+from unittest.mock import patch
 
 import pytest
 
 from slips_files.core.database.sqlite_db import host_profiles
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+
+
+def test_triage_persists_by_verified_mac_and_isolates_reused_ips(tmp_path: Path) -> None:
+    """Review marks follow a known MAC but never an unrelated device reusing its IP."""
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01"}
+    store = HostProfileStore(path, "first", lambda _: state, ["en0"])
+    store.observe_flow(SimpleNamespace(interface="en0", starttime="100", type_="dhcp",
+        saddr="192.168.1.20", daddr="192.168.1.1", host_name="laptop", smac="02:00:00:00:00:20"))
+    HostProfileStore.set_host_annotation(path, "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "Laptop", "Check DNS")
+    HostProfileStore.set_host_triage(path, "192.168.1.20", "gateway:aa:bb:cc:dd:ee:01", "to_analyze", ["lab", "dns"])
+    restarted = HostProfileStore(path, "second", lambda _: state, ["en0"])
+    restarted.observe_flow(SimpleNamespace(interface="en0", starttime="200", type_="dhcp",
+        saddr="192.168.1.21", daddr="192.168.1.1", host_name="laptop", smac="02:00:00:00:00:20"))
+    assert HostProfileStore.triage_for_ips(path, ["192.168.1.21"])["192.168.1.21"] == {
+        "status": "to_analyze", "labels": ["lab", "dns"]}
+    assert HostProfileStore.annotations_for_ips(path, ["192.168.1.21"])["192.168.1.21"]["note"] == "Check DNS"
+    state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:02"}
+    other = HostProfileStore(path, "third", lambda _: state, ["en0"])
+    other.observe_flow(SimpleNamespace(interface="en0", starttime="300", type_="dhcp",
+        saddr="192.168.1.20", daddr="192.168.1.1", host_name="unrelated", smac="02:00:00:00:00:30"))
+    profiles = HostProfileStore.triage_for_profiles(path, ["192.168.1.20"])
+    assert profiles[("gateway:aa:bb:cc:dd:ee:02", "192.168.1.20")] == {"status": "", "labels": []}
+    assert HostProfileStore.triage_for_ips(path, ["192.168.1.20"])["192.168.1.20"] == {"status": "", "labels": []}
+    assert profiles[("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20")]["status"] == "to_analyze"
+    HostProfileStore.set_host_triage(path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:01", "", [])
+    assert HostProfileStore.triage_for_ips(path, ["192.168.1.20", "192.168.1.21"])["192.168.1.21"] == {"status": "", "labels": []}
+
+
+def test_own_interface_mac_is_saved_without_gateway_mac_confusion(tmp_path: Path) -> None:
+    """Learn this machine's L2 address for its IPv4 and IPv6 profiles."""
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01",
+             "host_ip": "192.168.1.163", "mac": "02:00:00:00:00:20",
+             "addresses": [{"ip": "192.168.1.163"}, {"ip": "fe80::20"}]}
+    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    for ip in ("192.168.1.163", "fe80::20", "8.8.8.8"):
+        store.observe_flow(SimpleNamespace(interface="en0", starttime="100", type_="conn", saddr=ip, daddr="1.1.1.1"))
+    for ip in ("192.168.1.163", "fe80::20"):
+        macs = [fact["value"] for fact in HostProfileStore.read(path, ip)[0]["facts"] if fact["kind"] == "mac"]
+        assert macs == [state["mac"]]
+    assert not any(fact["kind"] == "mac" for fact in HostProfileStore.read(path, "8.8.8.8")[0]["facts"])
+
+
+def test_review_write_failure_rolls_back_name_and_note(tmp_path: Path) -> None:
+    """A failed mark write cannot leave a partially saved host review.
+
+    Parameters:
+        tmp_path: Isolated permanent database location.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    store = HostProfileStore(path, "run", lambda _: {}, [])
+    store.observe_hostname("dns.google", "profile_8.8.8.8")
+    HostProfileStore.set_host_annotation(path, "8.8.8.8", "public", "DNS", "Original note")
+    with patch.object(HostProfileStore, "set_host_triage", side_effect=sqlite3.OperationalError("write failed")):
+        with pytest.raises(sqlite3.OperationalError):
+            HostProfileStore.set_host_annotation(path, "8.8.8.8", "public", "Changed", "Changed note", "reviewed", ["dns"])
+    annotation = HostProfileStore.annotations_for_ips(path, ["8.8.8.8"])["8.8.8.8"]
+    assert annotation == {"name": "DNS", "note": "Original note"}
 
 
 def test_profiles_persist_across_runs_and_separate_private_networks(

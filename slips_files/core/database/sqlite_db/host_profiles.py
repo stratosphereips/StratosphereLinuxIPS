@@ -2,6 +2,7 @@
 """Keep durable, network-scoped identity clues for observed hosts."""
 
 import ipaddress
+import json
 import os
 import re
 import sqlite3
@@ -285,7 +286,13 @@ class HostProfileStore:
 
     @staticmethod
     def set_host_annotation(
-        path: Path, ip: str, network_id: str, name: str, note: str
+        path: Path,
+        ip: str,
+        network_id: str,
+        name: str,
+        note: str,
+        status: str | None = None,
+        labels: list[str] | None = None,
     ) -> None:
         """Persist a user name and note for a host and its known device MAC.
 
@@ -295,6 +302,8 @@ class HostProfileStore:
             network_id: Network identity already associated with this host.
             name: User name, or empty to clear it.
             note: User note, or empty to clear it.
+            status: Optional review mark saved in the same transaction.
+            labels: Optional custom labels saved with the mark.
         """
         normalized = str(ipaddress.ip_address(ip))
         with sqlite3.connect(path, timeout=5) as connection:
@@ -360,6 +369,138 @@ class HostProfileStore:
                     "note=excluded.note, updated_at=excluded.updated_at",
                     (mdns_name, name, note, time.time()),
                 )
+
+            if status is not None:
+                HostProfileStore.set_host_triage(
+                    path,
+                    normalized,
+                    network_id,
+                    status,
+                    labels or [],
+                    connection,
+                )
+
+    @staticmethod
+    def set_host_triage(
+        path: Path,
+        ip: str,
+        network_id: str,
+        status: str,
+        labels: list[str],
+        connection: sqlite3.Connection | None = None,
+    ) -> None:
+        """Persist review marks for a verified device or an exact host profile.
+
+        Parameters:
+            path: Permanent host database.
+            ip: Selected host address.
+            network_id: Network to which the host belongs.
+            status: Review workflow mark, or empty to clear it.
+            labels: User-defined labels for the host.
+            connection: Optional caller transaction shared with name and note.
+        """
+        context = (
+            nullcontext(connection)
+            if connection is not None
+            else sqlite3.connect(path, timeout=5)
+        )
+        with context as connection:
+            mac_row = connection.execute(
+                "SELECT value FROM facts WHERE network_id=? AND ip=? "
+                "AND kind='mac' ORDER BY last_seen DESC LIMIT 1",
+                (network_id, ip),
+            ).fetchone()
+            mac = HostProfileStore._usable_mac(mac_row[0] if mac_row else "")
+            subject = (
+                f"mac:{mac}"
+                if mac and network_id.startswith("gateway:")
+                else f"host:{network_id}:{ip}"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_triage (subject TEXT PRIMARY KEY, "
+                "status TEXT NOT NULL, labels TEXT NOT NULL, updated_at REAL NOT NULL)"
+            )
+            connection.execute(
+                "INSERT INTO host_triage VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(subject) DO UPDATE SET status=excluded.status, "
+                "labels=excluded.labels, updated_at=excluded.updated_at",
+                (subject, status, json.dumps(labels), time.time()),
+            )
+
+    @staticmethod
+    def triage_for_profiles(
+        path: Path, ips: Iterable[str]
+    ) -> dict[tuple[str, str], dict[str, Any]]:
+        """Read review marks without creating or migrating the permanent store.
+
+        Parameters:
+            path: Permanent host database.
+            ips: Addresses to resolve, including device member addresses.
+
+        Returns:
+            Effective status and labels indexed by network and address.
+        """
+        keys = list(dict.fromkeys(ips))
+        if not keys or not path.exists():
+            return {}
+        result: dict[tuple[str, str], dict[str, Any]] = {}
+        with sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=5
+        ) as connection:
+            try:
+                marks = {
+                    row[0]: {"status": row[1], "labels": json.loads(row[2])}
+                    for row in connection.execute(
+                        "SELECT subject, status, labels FROM host_triage"
+                    )
+                }
+            except sqlite3.OperationalError:
+                return {}
+            for offset in range(0, len(keys), 300):
+                batch = keys[offset : offset + 300]
+                placeholders = ",".join("?" for _ in batch)
+                rows = connection.execute(
+                    "SELECT h.network_id, h.ip, (SELECT value FROM facts f "
+                    "WHERE f.network_id=h.network_id AND f.ip=h.ip AND f.kind='mac' "
+                    "ORDER BY f.last_seen DESC LIMIT 1) AS mac FROM hosts h "
+                    f"WHERE h.ip IN ({placeholders}) ORDER BY h.last_seen DESC",
+                    batch,
+                )
+                for network_id, ip, value in rows:
+                    mac = HostProfileStore._usable_mac(value)
+                    subject = (
+                        f"mac:{mac}"
+                        if mac and network_id.startswith("gateway:")
+                        else ""
+                    )
+                    mark = marks.get(
+                        subject, marks.get(f"host:{network_id}:{ip}")
+                    )
+                    result[(network_id, ip)] = mark or {
+                        "status": "",
+                        "labels": [],
+                    }
+        return result
+
+    @staticmethod
+    def triage_for_ips(
+        path: Path, ips: Iterable[str]
+    ) -> dict[str, dict[str, Any]]:
+        """Read the most recent review mark for each displayed host.
+
+        Parameters:
+            path: Permanent host database.
+            ips: Addresses in the inventory.
+
+        Returns:
+            Review status and labels indexed by address.
+        """
+        result: dict[str, dict[str, Any]] = {}
+        for (_, ip), mark in HostProfileStore.triage_for_profiles(
+            path, ips
+        ).items():
+            result.setdefault(ip, mark)
+        return result
 
     @staticmethod
     def _stable_mdns_name(value: str | None) -> str:
@@ -650,6 +791,16 @@ class HostProfileStore:
             return
         normalized, network_id, network_label = identity
         key = (network_id, normalized)
+        state = self._network_state(interface)
+        own_ips = {item.get("ip") for item in state.get("addresses", [])}
+        if state.get("host_ip"):
+            own_ips.add(state["host_ip"])
+        if (
+            normalized in own_ips
+            and time.monotonic() - self._recent_sightings.get(key, 0) >= 60
+            and (mac := self._usable_mac(state.get("mac")))
+        ):
+            facts = [*facts, ("mac", mac)]
         filtered = [
             (kind, value.strip()[:MAX_VALUE_LENGTH])
             for kind, value in facts

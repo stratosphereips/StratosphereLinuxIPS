@@ -126,6 +126,23 @@ def test_macos_without_nameservers_keeps_network_state_available(
     resolver.assert_not_called()
 
 
+def test_interface_mac_comes_from_link_address() -> None:
+    """Network state distinguishes the monitored MAC from its gateway's MAC."""
+    _module_factory = ModuleFactory()
+    with (
+        patch.object(network_state.netifaces, "ifaddresses", return_value={
+            netifaces.AF_INET: [{"addr": "192.168.1.163", "netmask": "255.255.255.0"}],
+            netifaces.AF_LINK: [{"addr": "02:00:00:00:00:20"}],
+        }),
+        patch.object(network_state.utils, "get_gateway_for_iface", return_value="192.168.1.1"),
+        patch.object(network_state, "gateway_mac", return_value="aa:bb:cc:dd:ee:01"),
+        patch.object(network_state, "dns_servers", return_value=[]),
+    ):
+        state = network_state.collect_network_state("en0", 1)
+    assert state["mac"] == "02:00:00:00:00:20"
+    assert state["gateway_mac"] == "aa:bb:cc:dd:ee:01"
+
+
 def test_linux_without_nameservers_returns_empty_dns(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

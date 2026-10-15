@@ -4287,28 +4287,86 @@ class RunDataReader:
                     continue
         return len(recovered)
 
-    def flows_for_evidence(self, evidence_id: str) -> Dict[str, Any]:
-        """Return triggering network flows grouped with protocol activity."""
-        uids = self._flow_uids_for_evidence(evidence_id)
-        if not uids:
-            for item in self._redis_evidence():
-                if item["id"] == evidence_id:
-                    uids = self._id_list(item.get("uid", []))
-                    break
-        if not uids:
+    def flows_for_evidence(
+        self, evidence_id: str, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
+        """Return a bounded page of triggering flows and related protocols.
+
+        Parameters:
+            evidence_id: Durable evidence identifier.
+            query: Optional page limit and last UID cursor.
+
+        Returns:
+            Linked flow groups, counts, and the next UID cursor.
+        """
+        query = query or {}
+        try:
+            limit = max(
+                1, min(int(self._query_value(query, "limit") or 20), 100)
+            )
+        except ValueError:
+            limit = 20
+        after = self._query_value(query, "cursor")[:256]
+        total_uids = 0
+        durable_found = False
+        uids = []
+        with self._connect_sqlite() as connection:
+            if self._table_exists(connection, "evidence_flows"):
+                total_uids = int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM evidence_flows WHERE evidence_id=? AND TRIM(uid) <> ''",
+                        (evidence_id,),
+                    ).fetchone()[0]
+                )
+                uids = [
+                    str(row[0])
+                    for row in connection.execute(
+                        "SELECT uid FROM evidence_flows WHERE evidence_id=? "
+                        "AND uid > ? AND TRIM(uid) <> '' ORDER BY uid LIMIT ?",
+                        (evidence_id, after, limit + 1),
+                    )
+                ]
+            if not total_uids and self._table_exists(connection, "evidence"):
+                row = connection.execute(
+                    "SELECT data FROM evidence WHERE evidence_id=?",
+                    (evidence_id,),
+                ).fetchone()
+                if row:
+                    durable_found = True
+                    uids = self._id_list(
+                        self._loads(row[0], {}).get("uid", [])
+                    )
+        if not total_uids:
+            if not uids and not durable_found:
+                uids = self._flow_uids_for_evidence(evidence_id)
+            if not uids and not durable_found:
+                for item in self._redis_evidence():
+                    if item["id"] == evidence_id:
+                        uids = self._id_list(item.get("uid", []))
+                        break
+            uids = sorted(
+                {str(uid).strip() for uid in uids if str(uid).strip()}
+            )
+            total_uids = len(uids)
+            uids = [uid for uid in uids if uid > after][: limit + 1]
+        has_more = len(uids) > limit
+        page_uids = uids[:limit]
+        next_cursor = page_uids[-1] if has_more else None
+        bounded_uids = list(
+            dict.fromkeys(uid.strip() for uid in page_uids if uid.strip())
+        )
+        if not bounded_uids:
             return {
                 "items": [],
                 "total": 0,
-                "linked_uid_count": 0,
+                "linked_uid_count": total_uids,
                 "unavailable_flow_count": 0,
                 "network_flow_total": 0,
                 "protocol_flow_total": 0,
                 "recovered_flow_count": 0,
                 "page_size": 0,
+                "next_cursor": None,
             }
-        bounded_uids = list(
-            dict.fromkeys(str(uid).strip() for uid in uids if str(uid).strip())
-        )[:MAX_FLOW_LIMIT]
         placeholders = ",".join("?" for _ in bounded_uids)
         grouped: Dict[str, Dict[str, Any]] = {
             uid: {"uid": uid, "network_flow": None, "protocol_flows": []}
@@ -4358,12 +4416,13 @@ class RunDataReader:
         return {
             "items": items,
             "total": len(items),
-            "linked_uid_count": len(bounded_uids),
+            "linked_uid_count": total_uids,
             "unavailable_flow_count": len(bounded_uids) - len(items),
             "network_flow_total": network_flow_total,
             "protocol_flow_total": protocol_flow_total,
             "recovered_flow_count": recovered_flow_count,
             "page_size": len(items),
+            "next_cursor": next_cursor,
         }
 
     def _snapshot(self, ip: str) -> Dict[str, Any]:
@@ -4391,9 +4450,11 @@ class RunDataReader:
             {
                 "ip": ip,
                 "scope": self._scope(ip),
-                "hostname": fields.get("host_name", ""),
-                "mac": fields.get("MAC", ""),
-                "mac_vendor": fields.get("MAC_vendor", ""),
+                "hostname": fields.get("host_name")
+                or result.get("hostname", ""),
+                "mac": fields.get("MAC") or result.get("mac", ""),
+                "mac_vendor": fields.get("MAC_vendor")
+                or result.get("mac_vendor", ""),
                 "threat_level": fields.get("threat_level", "info"),
                 "max_threat_level": fields.get("max_threat_level", "info"),
                 "dns": self._loads(self.redis.hget("DNSresolution", ip), {}),
@@ -4926,9 +4987,55 @@ class RunDataReader:
                 "hs.observed_at)"
             )
             threat_expression = (
-                "CASE LOWER(COALESCE(json_extract(hs.data, '$.max_threat_level'), "
+                "COALESCE((SELECT MAX(CASE LOWER(e.threat_level) "
+                "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 "
+                "WHEN 'low' THEN 1 WHEN 'info' THEN 0 ELSE -1 END) "
+                "FROM run_db.evidence e WHERE e.profile_ip=hs.ip"
+                + evidence_network_clause
+                + "), -1)"
+                if "threat_level" in evidence_columns
+                else "CASE LOWER(COALESCE(json_extract(hs.data, '$.max_threat_level'), "
                 "'info')) WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
                 "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 ELSE 0 END"
+            )
+            if "threat_level" in evidence_columns:
+                current_threats = {}
+            profile_path = getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            )
+            candidate_ips = [
+                str(row[0])
+                for row in connection.execute("SELECT ip FROM host_snapshots")
+            ]
+            triage = HostProfileStore.triage_for_ips(
+                profile_path, candidate_ips
+            )
+            saved_annotations = (
+                HostProfileStore.annotations_for_ips(
+                    profile_path, candidate_ips
+                )
+                if search
+                else {}
+            )
+            connection.create_function(
+                "host_status",
+                1,
+                lambda ip: triage.get(ip, {}).get("status", ""),
+            )
+            connection.create_function(
+                "host_labels",
+                1,
+                lambda ip: ", ".join(triage.get(ip, {}).get("labels", [])),
+            )
+            connection.create_function(
+                "host_annotation_search",
+                1,
+                lambda ip: json.dumps(
+                    [triage.get(ip, {}), saved_annotations.get(ip, {})],
+                    ensure_ascii=False,
+                ).lower(),
             )
             score_field = (
                 "accumulated_ratl"
@@ -4996,6 +5103,8 @@ class RunDataReader:
                 query,
                 {
                     "ip": "LOWER(hs.ip)",
+                    "review": "host_status(hs.ip)",
+                    "labels": "LOWER(host_labels(hs.ip))",
                     "scope": "LOWER(COALESCE(json_extract(hs.data, '$.scope'), ''))",
                     "hostname": (
                         "LOWER(COALESCE(json_extract(hs.data, '$.hostname'), ''))"
@@ -5022,8 +5131,14 @@ class RunDataReader:
                 clauses.append(f"{last_seen_expression} <= ?")
                 params.append(end)
             if search:
-                clauses.append("LOWER(hs.data) LIKE ?")
-                params.append(f"%{search}%")
+                clauses.append(
+                    "(LOWER(hs.data) LIKE ? OR host_annotation_search(hs.ip) LIKE ?)"
+                )
+                params.extend([f"%{search}%", f"%{search}%"])
+            review = self._query_value(query, "review")
+            if review:
+                clauses.append("host_status(hs.ip) = ?")
+                params.append("" if review == "unmarked" else review)
             if scope:
                 clauses.append("json_extract(hs.data, '$.scope') = ?")
                 params.append(scope)
@@ -5032,7 +5147,7 @@ class RunDataReader:
                     "EXISTS (SELECT 1 FROM run_db.alerts a "
                     "WHERE a.ip_alerted = hs.ip" + alert_network_clause + ")"
                 )
-            if threat and threat != "info_or_more":
+            if threat:
                 levels = {
                     "info": 0,
                     "low": 1,
@@ -5090,6 +5205,7 @@ class RunDataReader:
             rows = connection.execute(
                 f"SELECT hs.ip, hs.observed_at, hs.data, "
                 f"{peak_score_expression} AS peak_alert_score, "
+                f"{threat_expression} AS displayed_threat_rank, "
                 f"{sort_expression} AS sort_value FROM host_snapshots hs "
                 f"WHERE {where} ORDER BY {sort_expression} {direction}, "
                 f"hs.ip {direction} LIMIT ?",
@@ -5123,9 +5239,11 @@ class RunDataReader:
                     host.update(
                         {
                             "scope": self._scope(ip),
-                            "hostname": fields.get("host_name", ""),
-                            "mac": fields.get("MAC", ""),
-                            "mac_vendor": fields.get("MAC_vendor", ""),
+                            "hostname": fields.get("host_name")
+                            or host.get("hostname", ""),
+                            "mac": fields.get("MAC") or host.get("mac", ""),
+                            "mac_vendor": fields.get("MAC_vendor")
+                            or host.get("mac_vendor", ""),
                             "threat_level": fields.get("threat_level", "info"),
                             "max_threat_level": fields.get(
                                 "max_threat_level", "info"
@@ -5136,6 +5254,15 @@ class RunDataReader:
             else:
                 host = self._live_host(ip)
             host["observed_at"] = float(row["observed_at"])
+            if "threat_level" in evidence_columns:
+                host["has_findings"] = row["displayed_threat_rank"] >= 0
+                host["max_threat_level"] = (
+                    self._threat_from_rank(row["displayed_threat_rank"])
+                    if host["has_findings"]
+                    else ""
+                )
+            host["user_status"] = triage.get(ip, {}).get("status", "")
+            host["user_labels"] = triage.get(ip, {}).get("labels", [])
             host["peak_alert_score"] = (
                 float(row["peak_alert_score"])
                 if row["peak_alert_score"] is not None
@@ -5233,6 +5360,17 @@ class RunDataReader:
             loads.update(self._host_page_loads(batch))
             counts.update(self._host_page_counts(batch, network_start))
         peak: Dict[str, float] = {}
+        scoped_threats: Dict[str, int] = {}
+        has_threat_column = False
+        profile_path = getattr(
+            self,
+            "host_profiles_path",
+            Path("permanent/host_profiles/hosts.sqlite"),
+        )
+        triage = HostProfileStore.triage_for_ips(profile_path, ips)
+        saved_annotations = HostProfileStore.annotations_for_ips(
+            profile_path, ips
+        )
         try:
             with self._connect_sqlite() as connection:
                 score_field = (
@@ -5246,6 +5384,24 @@ class RunDataReader:
                         "PRAGMA table_info(evidence)"
                     ).fetchall()
                 }
+                has_threat_column = "threat_level" in evidence_columns
+                if has_threat_column:
+                    scope = (
+                        " WHERE evidence_time >= ?"
+                        if network_start is not None
+                        else ""
+                    )
+                    args = (network_start,) if scope else ()
+                    for row in connection.execute(
+                        "SELECT profile_ip, MAX(CASE LOWER(threat_level) "
+                        "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 "
+                        "WHEN 'low' THEN 1 WHEN 'info' THEN 0 ELSE -1 END) AS rank "
+                        f"FROM evidence{scope} GROUP BY profile_ip",
+                        args,
+                    ):
+                        scoped_threats[str(row["profile_ip"])] = int(
+                            row["rank"]
+                        )
                 if score_field in evidence_columns:
                     for offset in range(0, len(ips), 300):
                         batch = ips[offset : offset + 300]
@@ -5285,7 +5441,9 @@ class RunDataReader:
                     "evidence": 0,
                     "alerts": 0,
                     "peak_score": 0.0,
-                    "threat_rank": 0,
+                    "threat_rank": -1,
+                    "user_status": "",
+                    "user_labels": [],
                 },
             )
             load = loads.get(ip, {})
@@ -5306,10 +5464,21 @@ class RunDataReader:
             group["peak_score"] = max(group["peak_score"], peak.get(ip, 0))
             group["threat_rank"] = max(
                 group["threat_rank"],
-                EVIDENCE_THREAT_RANKS.get(
-                    str(data.get("max_threat_level") or "info").lower(), 0
+                (
+                    scoped_threats.get(ip, -1)
+                    if has_threat_column
+                    else EVIDENCE_THREAT_RANKS.get(
+                        str(data.get("max_threat_level") or "info").lower(), 0
+                    )
                 ),
             )
+            if ip in triage:
+                group["user_status"] = triage[ip].get("status", "")
+                group["user_labels"] = list(
+                    dict.fromkeys(
+                        [*group["user_labels"], *triage[ip].get("labels", [])]
+                    )
+                )
         with connect_history(self.history_path, read_only=True) as connection:
             for group in groups.values():
                 addresses = [member[0] for member in group["members"]]
@@ -5340,7 +5509,19 @@ class RunDataReader:
             if end is not None and group["last_seen"] > end:
                 continue
             if search and not any(
-                search in (ip + " " + json.dumps(data)).lower()
+                search
+                in (
+                    ip
+                    + " "
+                    + json.dumps(
+                        [
+                            data,
+                            triage.get(ip, {}),
+                            saved_annotations.get(ip, {}),
+                        ],
+                        ensure_ascii=False,
+                    )
+                ).lower()
                 for ip, data, _ in members
             ):
                 continue
@@ -5350,7 +5531,12 @@ class RunDataReader:
                 continue
             if alerts_only and not group["alerts"]:
                 continue
-            if threat and threat != "info_or_more":
+            review = self._query_value(query, "review")
+            if review and group["user_status"] != (
+                "" if review == "unmarked" else review
+            ):
+                continue
+            if threat:
                 threshold = EVIDENCE_THREAT_RANKS.get(
                     threat.removesuffix("_or_more")
                 )
@@ -5379,6 +5565,8 @@ class RunDataReader:
                     "score",
                     "peak_score",
                     "last_seen",
+                    "review",
+                    "labels",
                 )
             },
             "last_seen",
@@ -5397,6 +5585,8 @@ class RunDataReader:
             data = representative[1]
             values = {
                 "ip": representative[0],
+                "review": group["user_status"],
+                "labels": ", ".join(group["user_labels"]),
                 "scope": data.get("scope", ""),
                 "hostname": data.get("hostname", ""),
                 "ti": "",
@@ -5413,7 +5603,8 @@ class RunDataReader:
             value = values[sort_key]
             return (
                 str(value or "").lower()
-                if sort_key in {"ip", "scope", "hostname", "ti", "mac"}
+                if sort_key
+                in {"ip", "scope", "hostname", "ti", "mac", "review", "labels"}
                 else float(value or 0)
             )
 
@@ -5466,9 +5657,14 @@ class RunDataReader:
                     "peak_alert_score": group["peak_score"],
                     "alert_count": group["alerts"],
                     "evidence_count": group["evidence"],
-                    "max_threat_level": self._threat_from_rank(
-                        group["threat_rank"]
+                    "max_threat_level": (
+                        self._threat_from_rank(group["threat_rank"])
+                        if group["threat_rank"] >= 0
+                        else ""
                     ),
+                    "has_findings": group["threat_rank"] >= 0,
+                    "user_status": group["user_status"],
+                    "user_labels": group["user_labels"],
                     "load": {
                         "flows": group["flows"],
                         "bytes": group["bytes"],
@@ -5805,6 +6001,46 @@ class RunDataReader:
             key=lambda profile: profile.get("network_id") not in current_ids,
         )
 
+    def _host_annotation_profile(
+        self, ip: str, host: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """Offer an isolated annotation target for an observed legacy host.
+
+        Parameters:
+            ip: Address already present in the run inventory.
+            host: Optional identity already read for the host workspace.
+
+        Returns:
+            A profile with an explicitly unidentified network, or an empty map.
+        """
+        if host is None:
+            try:
+                host = self._live_host(ip)
+            except (AttributeError, OSError, sqlite3.Error):
+                return {}
+        if not host.get("observed_at") and not host.get("live"):
+            return {}
+        run_name = (
+            self._network_run_name() if getattr(self, "redis", None) else ""
+        )
+        run_name = run_name or str(getattr(self, "output_dir", ""))
+        public = ipaddress.ip_address(ip).is_global
+        if not public and not run_name:
+            return {}
+        return {
+            "ip": ip,
+            "network_id": "public" if public else f"run:{run_name}",
+            "network_label": (
+                "Public internet" if public else "Unidentified network"
+            ),
+            "network_name": "",
+            "user_name": "",
+            "user_note": "",
+            "first_seen": float(host.get("observed_at") or time.time()),
+            "last_seen": float(host.get("observed_at") or time.time()),
+            "facts": [],
+        }
+
     def host(
         self, ip: str, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -5832,12 +6068,79 @@ class RunDataReader:
         host["permanent_profiles"] = self._current_network_profile_first(
             ip, host["permanent_profiles"]
         )
+        host["annotation_profile"] = (
+            {}
+            if host["permanent_profiles"]
+            else self._host_annotation_profile(ip, host)
+        )
         if host["permanent_profiles"]:
             host["user_name"] = host["permanent_profiles"][0]["user_name"]
             host["user_note"] = host["permanent_profiles"][0]["user_note"]
         else:
             host["user_name"] = ""
             host["user_note"] = ""
+        for field, kind in (
+            ("mac", "mac"),
+            ("mac_vendor", "mac_vendor"),
+            ("hostname", "hostname"),
+        ):
+            if not host.get(field):
+                host[field] = next(
+                    (
+                        fact["value"]
+                        for profile in host["permanent_profiles"]
+                        for fact in profile.get("facts", [])
+                        if fact["kind"] == kind
+                    ),
+                    "",
+                )
+        analysis = (
+            self.redis.hgetall("analysis")
+            if getattr(self, "redis", None)
+            else {}
+        )
+        if (
+            isinstance(analysis, dict)
+            and analysis.get("input_type") == "interface"
+            and not analysis.get("analysis_end")
+        ):
+            for interface in str(analysis.get("interface") or "").split(","):
+                interface = interface.strip()
+                if not interface:
+                    continue
+                addresses = psutil.net_if_addrs().get(interface, [])
+                own_ips = {
+                    entry.address.split("%", 1)[0]
+                    for entry in addresses
+                    if entry.family in (socket.AF_INET, socket.AF_INET6)
+                }
+                if ip in own_ips:
+                    mac = next(
+                        (
+                            HostProfileStore._usable_mac(entry.address)
+                            for entry in addresses
+                            if entry.family == psutil.AF_LINK
+                        ),
+                        "",
+                    )
+                    if mac:
+                        host["mac"] = mac
+                        host["mac_source"] = f"Monitored interface {interface}"
+        triage = HostProfileStore.triage_for_profiles(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            host_ips,
+        )
+        for profile in host["permanent_profiles"]:
+            mark = triage.get((profile["network_id"], ip), {})
+            profile["user_status"] = mark.get("status", "")
+            profile["user_labels"] = mark.get("labels", [])
+        current_profile = next(iter(host["permanent_profiles"]), {})
+        host["user_status"] = current_profile.get("user_status", "")
+        host["user_labels"] = current_profile.get("user_labels", [])
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
         alert_total = 0
         for address in host_ips:
@@ -6984,8 +7287,14 @@ class RunDataReader:
         return {"network_id": network_id, "name": name}
 
     def save_host_annotation(
-        self, ip: str, network_id: str, name: str, note: str
-    ) -> Dict[str, str]:
+        self,
+        ip: str,
+        network_id: str,
+        name: str,
+        note: str,
+        status: Optional[str] = None,
+        labels: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         """Save a user name and note for an exact permanent host profile.
 
         Parameters:
@@ -6993,6 +7302,8 @@ class RunDataReader:
             network_id: Network identity shown in the Host tab.
             name: User-provided host name, or empty to clear it.
             note: User-provided note, or empty to clear it.
+            status: Optional review workflow mark.
+            labels: Optional user-defined labels.
 
         Returns:
             The saved host annotation.
@@ -7020,14 +7331,58 @@ class RunDataReader:
             ip = str(ipaddress.ip_address(ip))
         except ValueError as error:
             raise ValueError("Select a valid host IP") from error
+        if status is not None or labels is not None:
+            if status not in {"", "to_analyze", "in_review", "reviewed"}:
+                raise ValueError("Choose a valid host review mark")
+            if (
+                not isinstance(labels, list)
+                or len(labels) > 10
+                or any(
+                    not isinstance(label, str)
+                    or not label.strip()
+                    or len(label) > 40
+                    or any(
+                        ord(char) < 32 or ord(char) == 127 for char in label
+                    )
+                    for label in labels
+                )
+            ):
+                raise ValueError(
+                    "Use at most 10 labels of 40 printable characters"
+                )
+            labels = list(dict.fromkeys(label.strip() for label in labels))
         if not HostProfileStore.has_network_profile(
             self.host_profiles_path, ip, network_id
         ):
-            raise ValueError("The selected host profile is unavailable")
+            fallback = self._host_annotation_profile(ip)
+            if not fallback or fallback["network_id"] != network_id:
+                raise ValueError("The selected host profile is unavailable")
+            run_name = network_id.removeprefix("run:")
+            store = HostProfileStore(
+                self.host_profiles_path, run_name, lambda _: {}, []
+            )
+            store._save(ip, "", fallback["last_seen"], [])
         HostProfileStore.set_host_annotation(
-            self.host_profiles_path, ip, network_id, name, note
+            self.host_profiles_path,
+            ip,
+            network_id,
+            name,
+            note,
+            **(
+                {"status": status, "labels": labels}
+                if status is not None
+                else {}
+            ),
         )
-        return {"ip": ip, "network_id": network_id, "name": name, "note": note}
+        result = {
+            "ip": ip,
+            "network_id": network_id,
+            "name": name,
+            "note": note,
+        }
+        if status is not None:
+            result.update({"status": status, "labels": labels})
+        return result
 
     def overview(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -8697,7 +9052,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.whitelists()
         elif path.startswith("/api/evidence/") and path.endswith("/flows"):
             evidence_id = unquote(path[len("/api/evidence/") : -len("/flows")])
-            payload = reader.flows_for_evidence(evidence_id)
+            payload = (
+                reader.flows_for_evidence(evidence_id, query)
+                if query
+                else reader.flows_for_evidence(evidence_id)
+            )
         elif path.startswith("/api/hosts/") and path.endswith(
             "/score-history"
         ):
@@ -8950,6 +9309,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                     payload.get("network_id"),
                     payload.get("name"),
                     payload.get("note"),
+                    **(
+                        {
+                            "status": payload.get("status"),
+                            "labels": payload.get("labels"),
+                        }
+                        if "status" in payload or "labels" in payload
+                        else {}
+                    ),
                 )
             elif "ip" in payload:
                 saved = self.server.reader.save_profile_network_name(

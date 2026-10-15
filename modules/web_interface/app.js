@@ -102,7 +102,7 @@ const VIEW_CONTROL_IDS = [
   "alerts-range", "alerts-from", "alerts-to", "alerts-host-sort", "alerts-item-sort",
   "evidence-search", "evidence-review", "evidence-threat", "evidence-view",
   "evidence-scored-only", "evidence-link", "evidence-range", "evidence-from",
-  "evidence-to", "hosts-search", "hosts-threat", "hosts-scope",
+  "evidence-to", "hosts-search", "hosts-threat", "hosts-scope", "hosts-review",
   "hosts-alerts-only", "hosts-range", "hosts-from", "hosts-to",
   "host-range", "host-from", "host-to", "host-alert-search",
   "host-evidence-search", "host-flow-search", "host-flow-limit",
@@ -1920,6 +1920,7 @@ function listPath(name) {
     if (scope) params.set("scope", scope);
     if (level) params.set("threat", level);
     if (byId("hosts-alerts-only").checked) params.set("alerts_only", "1");
+    if (byId("hosts-review").value) params.set("review", byId("hosts-review").value);
   }
   return `/api/${name}?${params}`;
 }
@@ -3551,11 +3552,11 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
  * @param {object|null} record - Individual evidence, if available.
  * @returns {Element} Editor with its own submit handler.
  */
-function whitelistEditor(kind, record = null) {
+function whitelistEditor(kind, record = null, host = null) {
   const section = document.createElement("section");
   section.className = "surface whitelist-editor";
   section.append(
-    text("h3", record ? "Whitelist future matches from this evidence" : "Add a whitelist rule"),
+    text("h3", host ? "Whitelist this host" : record ? "Whitelist future matches from this evidence" : "Add a whitelist rule"),
     text("p", "Choose an IP, port, or request URI. URI rules suppress matching future flows and their detections regardless of IP or port. Existing evidence stays in the record.", "muted"),
   );
   const form = document.createElement("form");
@@ -3590,6 +3591,10 @@ function whitelistEditor(kind, record = null) {
     direction.append(option);
   });
   directionLabel.append(direction);
+  if (host) {
+    value.value = host.ip;
+    direction.value = "both";
+  }
   value.addEventListener("input", () => {
     const selected = Array.from(list.options).find((option) => option.value === value.value);
     if (selected) {
@@ -3631,6 +3636,8 @@ function whitelistEditor(kind, record = null) {
   typeLabel.append(evidenceType);
   ruleType.addEventListener("change", () => {
     const uri = ruleType.value === "uri";
+    allAddresses.disabled = uri;
+    if (uri) allAddresses.checked = false;
     valueLabel.querySelector("span").textContent = uri ? "Request URI" : "IP or port";
     value.maxLength = uri ? 256 : 128;
     value.placeholder = uri ? "/info?txtAirPlay&txtRAOP RTSP/1." : "192.168.1.10:443 or *:443";
@@ -3647,6 +3654,19 @@ function whitelistEditor(kind, record = null) {
   const save = text("button", "Add rule", "secondary");
   save.type = "submit";
   const feedback = text("p", "Rules take effect for future traffic and detections while Slips is running.", "muted whitelist-feedback");
+  const deviceAddresses = state.deviceView && host ? (host.device_ips || host.all_ips || [host.ip]) : [];
+  const allAddresses = document.createElement("input");
+  allAddresses.type = "checkbox";
+  allAddresses.addEventListener("change", () => {
+    value.disabled = allAddresses.checked;
+    ruleType.disabled = allAddresses.checked;
+  });
+  if (deviceAddresses.length > 1) {
+    const deviceLabel = text("label", "");
+    deviceLabel.append(allAddresses, text("span", `Apply to all ${deviceAddresses.length} known device addresses`));
+    form.append(deviceLabel);
+    section.append(text("p", "This saves a separate rule for each listed address. New addresses require their own rule.", "muted"));
+  }
   form.append(ruleTypeLabel, valueLabel, list, directionLabel, ignoreLabel, typeLabel, save);
   section.append(form, feedback);
   form.addEventListener("submit", async (event) => {
@@ -3654,11 +3674,18 @@ function whitelistEditor(kind, record = null) {
     save.disabled = true;
     feedback.textContent = "Saving rule…";
     try {
-      const result = await saveWhitelistRule({
-        action: "add", rule_type: ruleType.value, value: value.value, direction: direction.value,
-        ignore: ignored.value, evidence_type: evidenceType.value,
-      });
-      feedback.textContent = `${result.value} was added. New matching activity will be suppressed within a few seconds.`;
+      const values = allAddresses.checked ? deviceAddresses : [value.value];
+      const saved = [];
+      for (const address of values) {
+        const result = await saveWhitelistRule({
+          action: "add", rule_type: allAddresses.checked ? "ip" : ruleType.value,
+          value: address, direction: direction.value,
+          ignore: ignored.value, evidence_type: evidenceType.value,
+        });
+        saved.push(result.value);
+        feedback.textContent = `${saved.join(", ")} saved to the configured whitelist file.`;
+      }
+      feedback.textContent += " New matching activity will be suppressed within a few seconds.";
       value.value = "";
       toast("Whitelist rule added");
     } catch (error) {
@@ -4349,6 +4376,8 @@ function renderHostsPage() {
     (row) => row.hostname || "—",
     (row) => tiFeeds(row),
     (row) => slipsScore(row),
+    (row) => HOST_REVIEW_LABELS[row.user_status] || "Unmarked",
+    (row) => (row.user_labels || []).join(", ") || "—",
   ], (row) => openHost(row.ip, row));
   document.querySelectorAll("#hosts-table tbody tr").forEach((row) => {
     ["hostname", "ti", "score"].forEach((key, index) => {
@@ -4378,10 +4407,10 @@ function hostPeakScoreCell(row) {
   const peak = row.peak_alert_score === null || row.peak_alert_score === undefined
     ? null : Number(row.peak_alert_score);
   const threshold = numeric(row.alert_threshold) || 5;
-  const noFindings = !numeric(row.evidence_count) && !numeric(row.alert_count)
-    && !numeric(peak);
-  const label = text("span", noFindings ? "none" : level,
-    `hosts-threat-level threat-${noFindings ? "none" : level}`);
+  const noFindings = row.has_findings === false || (row.has_findings === undefined
+    && !numeric(row.evidence_count) && !numeric(row.alert_count) && !numeric(peak));
+  const label = text("span", noFindings ? "No evidence" : level,
+    `hosts-threat-level${noFindings ? " muted" : ` threat-${level}`}`);
   const value = text("strong", peak === null ? "—" : peak.toFixed(2));
   const track = text("span", "", "hosts-score-track");
   const fill = text("span", "", `hosts-score-fill threat-${level}`);
@@ -4408,6 +4437,7 @@ function renderHostFilterChips(payload) {
       const minimum = value.replace("_or_more", "");
       const count = !value || select.value === value ? payload.total
         : payload.items.filter((row) => {
+          if (field === "max_threat_level" && row.has_findings === false) return false;
           const rowValue = String(row[field] || "info").toLowerCase();
           return field === "max_threat_level" && value.endsWith("_or_more")
             ? (ranks[rowValue] ?? 0) >= ranks[minimum] : rowValue === value;
@@ -4694,8 +4724,12 @@ function rawBlock(record, label) {
   const details = document.createElement("details");
   details.className = "json-details";
   const summary = text("summary", `View complete ${label} record (JSON)`);
-  const pre = text("pre", JSON.stringify(displayData(record), null, 2));
-  details.append(summary, pre);
+  details.append(summary);
+  details.addEventListener("toggle", () => {
+    if (details.open && !details.querySelector("pre")) {
+      details.append(text("pre", JSON.stringify(displayData(record), null, 2)));
+    }
+  });
   return details;
 }
 
@@ -5093,37 +5127,51 @@ function flowCard(group, position = 1, total = 1) {
   panels.className = "evidence-flow-panels";
   const entries = [];
   if (record) {
-    const connection = document.createElement("div");
-    const displayed = ["uid", "starttime", "ts", "endtime", "saddr", "src_ip", "id.orig_h",
-      "daddr", "dst_ip", "id.resp_h", "sport", "src_port", "id.orig_p", "dport",
-      "dst_port", "id.resp_p", "proto", "protocol", "appproto", "app_proto", "service",
-      "state", "conn_state", "pkts", "packets", "spkts", "dpkts", "bytes", "sbytes",
-      "dbytes", "dur", "duration", "label", "interface"];
-    connection.append(metrics, flowFieldList(flow, displayed), rawBlock(record, "flow"));
-    entries.push(["conn · flow", connection]);
+    entries.push(["conn · flow", () => {
+      const connection = document.createElement("div");
+      const displayed = ["uid", "starttime", "ts", "endtime", "saddr", "src_ip", "id.orig_h",
+        "daddr", "dst_ip", "id.resp_h", "sport", "src_port", "id.orig_p", "dport",
+        "dst_port", "id.resp_p", "proto", "protocol", "appproto", "app_proto", "service",
+        "state", "conn_state", "pkts", "packets", "spkts", "dpkts", "bytes", "sbytes",
+        "dbytes", "dur", "duration", "label", "interface"];
+      connection.append(metrics, flowFieldList(flow, displayed), rawBlock(record, "flow"));
+      return connection;
+    }]);
   }
   related.forEach((protocol, index) => {
     const type = protocolType(protocol);
-    const panel = document.createElement("div");
-    const displayed = ["uid", "starttime", "ts", "type", "type_",
-      ...(PROTOCOL_FIELDS[type] || []).flatMap(([, names]) => names)];
-    panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol, displayed));
-    entries.push([`Related ${type.toUpperCase()} · ${index + 1}`, panel]);
+    entries.push([`Related ${type.toUpperCase()} · ${index + 1}`, () => {
+      const panel = document.createElement("div");
+      const displayed = ["uid", "starttime", "ts", "type", "type_",
+        ...(PROTOCOL_FIELDS[type] || []).flatMap(([, names]) => names)];
+      panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol, displayed));
+      return panel;
+    }]);
   });
   const initialIndex = record && related.length ? 1 : 0;
-  entries.forEach(([label, panel], index) => {
+  entries.forEach(([label, build], index) => {
+    const panel = document.createElement("div");
+    let rendered = false;
+    const show = () => {
+      if (!rendered) {
+        panel.append(build());
+        rendered = true;
+      }
+    };
     const tab = text("button", label, index === initialIndex ? "active" : "");
     tab.type = "button";
     tab.setAttribute("role", "tab");
     tab.setAttribute("aria-selected", String(index === initialIndex));
     panel.setAttribute("role", "tabpanel");
     panel.hidden = index !== initialIndex;
+    if (!panel.hidden) show();
     tab.addEventListener("click", () => {
+      show();
       tabs.querySelectorAll("[role=tab]").forEach((button) => {
         button.classList.toggle("active", button === tab);
         button.setAttribute("aria-selected", String(button === tab));
       });
-      panels.querySelectorAll("[role=tabpanel]").forEach((item) => {
+      panels.querySelectorAll(":scope > [role=tabpanel]").forEach((item) => {
         item.hidden = item !== panel;
       });
     });
@@ -5418,30 +5466,68 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     const count = numeric(record.flow_count);
     flowList.before(text("p", `ARP scan rule: at least 5 requests to 5 distinct destination IPs within 30 seconds. ${count < 5 ? `This legacy evidence retains only ${count} linked ARP records because its ARP records had no unique UIDs; it was not detected from one packet.` : `This evidence retains ${count} linked ARP records.`}`, count < 5 ? "flow-missing" : "muted"));
   }
-  try {
-    const payload = await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows`);
-    if (!payload || generation !== detail.generation) return;
-    updateWhitelistSuggestions(whitelistSection, record, payload.items);
-    headline.textContent = evidenceDetailHeadline(record, payload.items);
-    flowList.replaceChildren();
-    if (numeric(payload.recovered_flow_count) > 0) flowList.append(text("p", `${compact(payload.recovered_flow_count)} linked flow(s) recovered from Zeek logs after their SQLite rows were pruned.`, "muted"));
-    if (!payload.items.length) {
-      const noNoticeUid = record.evidence_type === "PASSWORD_GUESSING"
-        && !numeric(payload.linked_uid_count)
-        && String(record.description || "").includes("Zeek notice.log");
-      flowList.append(text("p", noNoticeUid
-        ? "Zeek's password-guessing notice summarized multiple connections but supplied no connection IDs. This evidence was stored without a usable flow link; the missing sessions cannot be recovered from this notice."
-        : numeric(payload.unavailable_flow_count) > 0
-          ? "The evidence still has linked flow IDs, but their raw records are unavailable. They may have expired under retention or were never stored."
-          : "No triggering flow records are available.", "flow-missing"));
-    } else if (numeric(payload.unavailable_flow_count) > 0) {
-      flowList.append(text("p", `${compact(payload.unavailable_flow_count)} linked flow record(s) are unavailable; they may have expired under retention.`, "flow-missing"));
+  const flowStatus = text("p", "", "muted evidence-flow-status");
+  const flowItems = document.createElement("div");
+  const moreFlows = text("button", "Load more triggering flows", "secondary");
+  moreFlows.type = "button";
+  moreFlows.hidden = true;
+  let cursor = "";
+  let loaded = 0;
+  let unavailable = 0;
+  let recovered = 0;
+  let pendingFlows = [];
+  let pageMetadata = {};
+  const suggestions = [];
+  const loadFlowPage = async () => {
+    moreFlows.disabled = true;
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (cursor) params.set("cursor", cursor);
+      const payload = pendingFlows.length
+        ? { ...pageMetadata, items: pendingFlows.splice(0, 20), recovered_flow_count: 0, unavailable_flow_count: 0 }
+        : await api("evidenceFlows", `/api/evidence/${escapePath(record.id)}/flows?${params}`);
+      if (!payload || generation !== detail.generation) return;
+      if (payload.items.length > 20) {
+        pendingFlows = payload.items.slice(20);
+        payload.items = payload.items.slice(0, 20);
+      }
+      pageMetadata = { ...payload, items: [] };
+      if (!loaded && !cursor) flowList.replaceChildren(flowStatus, flowItems, moreFlows);
+      const batch = document.createDocumentFragment();
+      payload.items.forEach((flow, index) => batch.append(
+        flowCard(flow, loaded + index + 1, payload.linked_uid_count),
+      ));
+      flowItems.append(batch);
+      loaded += payload.items.length;
+      unavailable += numeric(payload.unavailable_flow_count);
+      recovered += numeric(payload.recovered_flow_count);
+      suggestions.push(...payload.items.slice(0, Math.max(0, 20 - suggestions.length)));
+      updateWhitelistSuggestions(whitelistSection, record, suggestions);
+      headline.textContent = evidenceDetailHeadline(record, suggestions);
+      cursor = payload.next_cursor || "";
+      moreFlows.hidden = !cursor && !pendingFlows.length;
+      moreFlows.textContent = "Load more triggering flows";
+      flowStatus.textContent = `${compact(loaded)} of ${compact(payload.linked_uid_count)} linked flows loaded`
+        + (unavailable ? ` · ${compact(unavailable)} unavailable in loaded pages` : "")
+        + (recovered ? ` · ${compact(recovered)} recovered from Zeek logs` : "");
+      if (!payload.linked_uid_count) {
+        flowStatus.textContent = record.evidence_type === "PASSWORD_GUESSING"
+          && String(record.description || "").includes("Zeek notice.log")
+          ? "Zeek's password-guessing notice supplied no connection IDs. Its sessions cannot be recovered from this notice."
+          : "No triggering flow records are available.";
+      }
+    } catch (_) {
+      if (generation !== detail.generation) return;
+      if (!loaded) flowList.replaceChildren(flowStatus, flowItems, moreFlows);
+      flowStatus.textContent = "Triggering flows could not be loaded. Retry loading this page.";
+      moreFlows.hidden = false;
+      moreFlows.textContent = "Retry loading flows";
+    } finally {
+      moreFlows.disabled = false;
     }
-    payload.items.forEach((flow, index) => flowList.append(flowCard(flow, index + 1, payload.items.length)));
-  } catch (_) {
-    if (generation !== detail.generation) return;
-    flowList.replaceChildren(text("p", "Triggering flows could not be loaded.", "flow-missing"));
-  }
+  };
+  moreFlows.addEventListener("click", loadFlowPage);
+  await loadFlowPage();
 }
 
 async function openAlert(record) {
@@ -5560,19 +5646,35 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
     noteInput.rows = 3;
     noteInput.placeholder = "How you recognize this host";
     noteInput.value = state.hostAnnotationDrafts.get(annotationKey)?.note ?? profile.user_note ?? "";
+    const statusLabel = text("label", "Review mark");
+    const statusInput = document.createElement("select");
+    statusInput.setAttribute("aria-label", "Review mark");
+    statusInput.append(new Option("Unmarked", ""), ...Object.entries(HOST_REVIEW_LABELS)
+      .map(([value, label]) => new Option(label, value)));
+    statusInput.value = state.hostAnnotationDrafts.get(annotationKey)?.status ?? profile.user_status ?? "";
+    statusLabel.append(statusInput);
+    const labelsLabel = text("label", "Labels (comma separated)");
+    const labelsInput = document.createElement("input");
+    labelsInput.type = "text";
+    labelsInput.maxLength = 410;
+    labelsInput.placeholder = "e.g. investigate, printer, lab";
+    labelsInput.value = state.hostAnnotationDrafts.get(annotationKey)?.labels ?? (profile.user_labels || []).join(", ");
+    labelsLabel.append(labelsInput);
     const rememberDraft = () => state.hostAnnotationDrafts.set(annotationKey, {
-      name: nameInput.value, note: noteInput.value,
+      name: nameInput.value, note: noteInput.value, status: statusInput.value, labels: labelsInput.value,
     });
+    statusInput.addEventListener("change", rememberDraft);
+    labelsInput.addEventListener("input", rememberDraft);
     nameInput.addEventListener("input", rememberDraft);
     noteInput.addEventListener("input", rememberDraft);
     nameLabel.append(nameInput);
     noteLabel.append(noteInput);
-    const annotationSave = text("button", "Save identification", "secondary");
+    const annotationSave = text("button", "Save host review", "secondary");
     annotationSave.type = "submit";
     const annotationFeedback = text("small", "", "network-name-feedback");
-    annotation.append(nameLabel, noteLabel, annotationSave, annotationFeedback);
+    annotation.append(statusLabel, labelsLabel, nameLabel, noteLabel, annotationSave, annotationFeedback);
     const annotationEdit = text("button", profile.user_name || profile.user_note
-      ? "Edit name and note" : "Name this host", "secondary profile-network-name-action");
+      ? "Edit host review and identity" : "Mark or name this host", "secondary profile-network-name-action");
     annotationEdit.type = "button";
     annotationEdit.addEventListener("click", () => {
       annotation.hidden = !annotation.hidden;
@@ -5593,12 +5695,16 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
           body: JSON.stringify({
             ip: profile.ip, network_id: profile.network_id,
             name: nameInput.value, note: noteInput.value,
+            status: statusInput.value,
+            labels: labelsInput.value.split(",").map((label) => label.trim()).filter(Boolean),
           }),
         });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
         profile.user_name = payload.name;
         profile.user_note = payload.note;
+        profile.user_status = payload.status;
+        profile.user_labels = payload.labels;
         state.hostAnnotationDrafts.delete(annotationKey);
         state.hostAnnotationEditorOpen.delete(annotationKey);
         if (!state.host || state.host.ip !== profile.ip) return;
@@ -5608,10 +5714,14 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
         if (currentProfile) {
           currentProfile.user_name = payload.name;
           currentProfile.user_note = payload.note;
+          currentProfile.user_status = payload.status;
+          currentProfile.user_labels = payload.labels;
         }
-        if (state.host?.permanent_profiles?.[0]?.network_id === profile.network_id) {
+        if ((state.host?.permanent_profiles?.[0]?.network_id || state.host.annotation_profile?.network_id) === profile.network_id) {
           state.host.user_name = payload.name;
           state.host.user_note = payload.note;
+          state.host.user_status = payload.status;
+          state.host.user_labels = payload.labels;
           state.hostNames.delete(profile.ip);
           rememberHostRecord(state.host);
           if (!payload.name) {
@@ -5624,7 +5734,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
         annotationFeedback.textContent = "";
         document.activeElement?.blur();
         renderHostCards(state.host);
-        toast(payload.name || payload.note ? "Host identification saved." : "Host identification removed.");
+        toast("Host review and identity saved.");
       } catch (error) {
         annotationFeedback.textContent = error.message;
         annotationSave.disabled = false;
@@ -5770,6 +5880,8 @@ function renderHostNetworkClues(profiles) {
   if (profiles.length > 4) networks.append(text("small", `+ ${profiles.length - 4} more networks`, "muted"));
 }
 
+const HOST_REVIEW_LABELS = { to_analyze: "To analyze", in_review: "Under review", reviewed: "Reviewed" };
+
 function renderHostCards(host) {
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
@@ -5799,18 +5911,21 @@ function renderHostCards(host) {
     displayedName.id = "host-displayed-name";
     identity.replaceChildren(
       detailRow("Name", host.user_name || displayedName),
+      detailRow("Review", HOST_REVIEW_LABELS[host.user_status] || "Unmarked"),
+      detailRow("Labels", (host.user_labels || []).join(", ") || "—"),
       detailRow("Note", host.user_note || "—"),
-      ...(host.permanent_profiles?.length
+      ...(host.permanent_profiles?.length || host.annotation_profile?.network_id
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
-      detailRow("MAC", host.mac || "Unknown"),
+      detailRow("MAC", host.mac ? text("code", host.mac) : "Unknown"),
       detailRow("Vendor", host.mac_vendor || "Unknown"),
       detailRow("DNS", host.dns?.domains?.[0] || "No A/AAAA record"),
     );
     identity.dataset.profileIp = host.ip;
     refreshHostLabels();
   }
-  renderPermanentProfiles(host.permanent_profiles || [], byId("host-annotation-entry"));
+  renderPermanentProfiles(host.permanent_profiles?.length ? host.permanent_profiles
+    : host.annotation_profile?.network_id ? [host.annotation_profile] : [], byId("host-annotation-entry"));
   renderHostNetworkClues(host.permanent_profiles || []);
   byId("host-dns-details").replaceChildren(renderDnsDetails(host.dns));
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
@@ -6404,8 +6519,10 @@ async function openHost(ip, summary = null) {
 async function refreshHostWorkspace() {
   if (!state.host) return;
   const ip = state.host.ip;
-  const scope = state.networkOnly && state.networkFilterSupported ? "?network=current" : "";
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}${scope}`);
+  const params = new URLSearchParams();
+  if (state.networkOnly && state.networkFilterSupported) params.set("network", "current");
+  if (state.deviceView) params.set("device", "1");
+  const detail = await api("host", `/api/hosts/${escapePath(ip)}${params.size ? `?${params}` : ""}`);
   if (!detail || !state.host || state.host.ip !== ip) return;
   const staleAliases = Array.isArray(detail.all_ips)
     ? detail.all_ips.filter((address) => address !== ip)
@@ -6416,9 +6533,9 @@ async function refreshHostWorkspace() {
     permanent_profiles: detail.permanent_profiles?.length
       ? detail.permanent_profiles
       : state.host.permanent_profiles || [],
-    all_ips: [ip],
-    exact_aggregates: staleAliases.length === 0,
-    ignored_aliases: staleAliases,
+    all_ips: state.deviceView ? detail.all_ips : [ip],
+    exact_aggregates: state.deviceView || staleAliases.length === 0,
+    ignored_aliases: state.deviceView ? [] : staleAliases,
   };
   state.host = host;
   rememberHostRecord(host);
@@ -6828,14 +6945,9 @@ byId("host-activity-threat").addEventListener("change", () => {
 byId("host-flow-search").addEventListener("input", filterVisibleHostFlows);
 bindFilters("hostAlerts", ["host-alert-search"], loadHostAlerts);
 byId("host-whitelist-action").addEventListener("click", () => {
-  const ip = state.host?.ip;
-  switchTab("whitelists");
-  const input = byId("whitelists-editor").querySelector(".whitelist-form input");
-  if (input && ip) {
-    input.value = ip;
-    input.focus();
-    input.scrollIntoView({ block: "center" });
-  }
+  if (!state.host) return;
+  openDrawer("HOST WHITELIST", state.host.user_name || state.host.ip);
+  byId("drawer-body").append(whitelistEditor("host", null, state.host));
 });
 byId("hosts-alerts-only").addEventListener("change", () => {
   resetPage("hosts");
@@ -6851,7 +6963,7 @@ byId("hosts-more").addEventListener("click", () => loadMoreHosts().catch(() => {
 document.querySelector(".hosts-list-table").addEventListener("scroll", maybeLoadMoreHosts);
 byId("hosts-export").addEventListener("click", () => {
   const rows = state.pages.hosts.items;
-  const fields = ["ip", "user_name", "hostname", "mac", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
+  const fields = ["ip", "user_name", "user_status", "user_labels", "user_note", "hostname", "mac", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
   const escapeCsv = (value) => {
     const plain = String(value ?? "");
     const safe = /^[=+\-@\t\r]/.test(plain) ? `'${plain}` : plain;
@@ -6995,7 +7107,7 @@ byId("evidence-active-type").addEventListener("click", () => {
 });
 byId("evidence-search").addEventListener("input", clearEvidenceSelection);
 byId("evidence-link").addEventListener("change", clearEvidenceSelection);
-bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat"], loadHosts);
+bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat", "hosts-review"], loadHosts);
 byId("configuration-search").addEventListener("input", renderConfiguration);
 document.querySelectorAll("[data-config-filter]").forEach((button) => {
   button.addEventListener("click", () => {

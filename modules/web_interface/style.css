@@ -535,7 +535,7 @@ body.configuration-active main { max-width: none; padding: .75rem 1rem 2rem; }
 .host-annotation-form { display: grid; gap: .65rem; max-width: 38rem; margin: .5rem 0 1rem; }
 .host-annotation-form[hidden] { display: none; }
 .host-annotation-form label { display: grid; gap: .25rem; color: var(--muted); font-size: .76rem; }
-.host-annotation-form input, .host-annotation-form textarea { width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; }
+.host-annotation-form input, .host-annotation-form textarea, .host-annotation-form select { width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: var(--bg); color: var(--text); font: inherit; }
 .host-annotation-form button { justify-self: start; }
 .host-user-name { margin: .45rem 0; font-weight: 700; }
 .host-user-note { margin: .45rem 0; white-space: pre-wrap; overflow-wrap: anywhere; }
