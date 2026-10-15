@@ -115,6 +115,9 @@ on. Nodes advertise the Evaluation type with the type attribute in each message.
 
 At the time of writing this, the only supported type is `score_confidence` and there are two values shared - score and
 confidence.
+On the wire, `score` is maliciousness from 0 (benign) to 1 (malicious),
+and `confidence` is from 0 to 1. The signed -1 to +1 scale in the thesis is
+used locally to assess a reporter, not for these message values.
 
 The nodes always report the key type - currently, only IP addresses are supported, nodes should drop any unknown key
 types. A valid report can look like this:

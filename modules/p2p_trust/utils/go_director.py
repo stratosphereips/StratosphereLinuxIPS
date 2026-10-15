@@ -3,6 +3,7 @@
 import base64
 import binascii
 import ipaddress
+import math
 import json
 from typing import Any, Dict
 import time
@@ -596,13 +597,14 @@ class GoDirector:
             # TODO: lower reputation
             return
 
-        # validate value ranges (must be from <0, 1>)
-        if score < -1 or score > 1:
+        # Reports use the existing 0..1 maliciousness wire scale. The signed
+        # thesis scale is used only for local peer trust calculations.
+        if not math.isfinite(score) or score < 0 or score > 1:
             self.print("Score value is out of bounds", 0, 2)
             # TODO: lower reputation
             return
 
-        if confidence < 0 or confidence > 1:
+        if not math.isfinite(confidence) or confidence < 0 or confidence > 1:
             self.print("Confidence value is out of bounds", 0, 2)
             # TODO: lower reputation
             return

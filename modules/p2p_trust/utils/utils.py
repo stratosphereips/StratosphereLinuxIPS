@@ -115,15 +115,23 @@ def get_ip_info_from_slips(
     ip_address: str, db
 ) -> Tuple[Optional[float], Optional[float]]:
     """
-    Get score and confidence on IP from Slips.
+    Get Slips's first-hand score and confidence for a peer assessment.
 
     :param ip_address: The IP address to check
-    :return: Tuple with score and confidence. If data is not there, (None, None) is returned instead.
+    :return: Tuple with score and confidence. If no local assessment exists,
+        return (None, None).
     """
 
-    # poll new info from redis
-    # convert it to float
-    # the higher the score, the more malicious this ip
+    # The trust database keeps first-hand observations separately. Redis IP
+    # metadata may also contain a reputation learned from the network.
+    trust_db = getattr(db, "trust_db", None)
+    if trust_db is not None:
+        reputation = trust_db.get_reporter_reputation(ip_address)
+        if isinstance(reputation, tuple) and len(reputation) == 2:
+            return reputation
+
+    # Fall back for integrations that do not initialize local P2P storage.
+    # Higher scores mean greater maliciousness.
     try:
         if threat_level := db.get_ip_info(ip_address, "threat_level"):
             slips_score: float = threat_levels[threat_level]

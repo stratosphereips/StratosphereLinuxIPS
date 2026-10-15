@@ -663,6 +663,30 @@ def test_process_message_request_override_p2p():
             {"score": "invalid", "confidence": 0.8},
             "Score or confidence have wrong data type",
         ),
+        (
+            "test_reporter",
+            1649445643,
+            "ip",
+            "192.168.1.1",
+            {"score": -0.2, "confidence": 0.8},
+            "Score value is out of bounds",
+        ),
+        (
+            "test_reporter",
+            1649445643,
+            "ip",
+            "192.168.1.1",
+            {"score": float("nan"), "confidence": 0.8},
+            "Score value is out of bounds",
+        ),
+        (
+            "test_reporter",
+            1649445643,
+            "ip",
+            "192.168.1.1",
+            {"score": 0.8, "confidence": float("inf")},
+            "Confidence value is out of bounds",
+        ),
     ],
 )
 def test_process_evaluation_score_confidence_invalid(

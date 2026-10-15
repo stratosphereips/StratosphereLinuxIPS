@@ -41,7 +41,8 @@ class TrustDB(ISQLite):
                 "ipaddress TEXT NOT NULL, "
                 "score REAL NOT NULL, "
                 "confidence REAL NOT NULL, "
-                "update_time REAL NOT NULL"
+                "update_time REAL NOT NULL, "
+                "source TEXT NOT NULL DEFAULT 'legacy'"
             ),
             "go_reliability": (
                 "id INTEGER PRIMARY KEY NOT NULL, "
@@ -100,6 +101,8 @@ class TrustDB(ISQLite):
         for table, schema in table_schema.items():
             self.create_table(table, schema)
 
+        self._migrate_score_model()
+
         self._ensure_unique_peer_addresses()
         self._compact_slips_reputation_history()
 
@@ -128,6 +131,39 @@ class TrustDB(ISQLite):
             "INSERT OR IGNORE INTO report_compaction_state "
             "(id, last_report_id, database_vacuumed) VALUES (1, 0, 0)"
         )
+
+    def _migrate_score_model(self) -> None:
+        """Isolate old ambiguous scores and invalidate old opinions atomically."""
+        with self.conn_lock:
+            with self._acquire_flock():
+                cursor = self.conn.cursor()
+                try:
+                    cursor.execute("BEGIN IMMEDIATE")
+                    rows = cursor.execute(
+                        "PRAGMA table_info(slips_reputation)"
+                    ).fetchall()
+                    if isinstance(rows, (list, tuple)) and rows:
+                        if "source" not in {row[1] for row in rows}:
+                            cursor.execute(
+                                "ALTER TABLE slips_reputation ADD COLUMN "
+                                "source TEXT NOT NULL DEFAULT 'legacy'"
+                            )
+                        version = cursor.execute(
+                            "PRAGMA user_version"
+                        ).fetchone()
+                        if (
+                            version
+                            and isinstance(version[0], int)
+                            and version[0] < 1
+                        ):
+                            cursor.execute("DELETE FROM opinion_cache")
+                            cursor.execute("PRAGMA user_version = 1")
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+                finally:
+                    cursor.close()
 
     def _ensure_unique_peer_addresses(self) -> None:
         """Keep the newest legacy address per peer and enable address upserts."""
@@ -256,12 +292,13 @@ class TrustDB(ISQLite):
 
         query = """
             INSERT INTO slips_reputation
-            (ipaddress, score, confidence, update_time)
-            VALUES (?, ?, ?, ?)
+            (ipaddress, score, confidence, update_time, source)
+            VALUES (?, ?, ?, ?, 'local')
             ON CONFLICT(ipaddress) DO UPDATE SET
                 score = excluded.score,
                 confidence = excluded.confidence,
-                update_time = excluded.update_time
+                update_time = excluded.update_time,
+                source = excluded.source
             WHERE excluded.update_time >= slips_reputation.update_time
         """
         self.execute(query, (ip, score, confidence, timestamp))
@@ -684,6 +721,7 @@ class TrustDB(ISQLite):
             columns="reliability",
             condition="peerid = ?",
             params=(reporter_peerid,),
+            order_by="update_time DESC, id DESC",
             limit=1,
         )
 
@@ -699,7 +737,7 @@ class TrustDB(ISQLite):
         res = self.select(
             table_name="slips_reputation",
             columns="score, confidence",
-            condition="ipaddress = ?",
+            condition="ipaddress = ? AND source = 'local'",
             params=(reporter_ipaddress,),
             order_by="update_time DESC",
             limit=1,
@@ -786,7 +824,9 @@ class TrustDB(ISQLite):
                 reporter_ip
             )
             if reporter_score is None or reporter_confidence is None:
-                continue
+                # No first-hand observation: reliability still contributes to
+                # trust, while the unknown local score contributes nothing.
+                reporter_score, reporter_confidence = 0.5, 0.0
             reporters_scores.append(
                 (
                     report_score_sum,

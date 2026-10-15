@@ -9,6 +9,18 @@ from slips_files.core.output import Output
 RELIABILITY_WEIGHT = 0.7
 
 
+def local_maliciousness_to_thesis_score(maliciousness: float) -> float:
+    """Express a local Slips threat score using the thesis's peer scale.
+
+    Parameters:
+        maliciousness: Slips score, from 0 (no detected threat) to 1.
+
+    Returns:
+        Peer-behavior score, from 1 (benign) to -1 (malicious).
+    """
+    return 1 - 2 * maliciousness
+
+
 class BaseModel:
     """
     This class implements a set of methods that get data from the database
@@ -81,8 +93,10 @@ class BaseModel:
         :return: The trust we should put in the report given by this peer
         """
 
+        local_score = local_maliciousness_to_thesis_score(score)
         return (
-            (reliability * self.reliability_weight) + (score * confidence)
+            (reliability * self.reliability_weight)
+            + (local_score * confidence)
         ) / 2
 
     def normalize_peer_reputations(self, peers: list) -> (float, float, list):

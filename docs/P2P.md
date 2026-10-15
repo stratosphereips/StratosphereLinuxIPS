@@ -94,6 +94,33 @@ peer message also marks its authenticated sender active for 15 minutes. A
 disconnect removes the connection immediately; the active list is cleared
 when the P2P module starts and stops.
 
+## Scores, trust, and blames
+
+Slips and Pigeon exchange a maliciousness score from 0 (benign) to 1
+(malicious), with confidence from 0 to 1. The thesis uses a signed local
+peer-behavior score instead: +1 means benign and -1 means malicious. Before
+computing peer trust, Slips converts its local maliciousness score `m` to
+`1 - 2m`. With Pigeon's reliability `r`, local confidence `c`, and the thesis
+reliability weight of 0.7, peer trust is
+`(0.7r + (1 - 2m)c) / 2`. A higher local maliciousness score therefore
+reduces trust. The wire format and stored peer reports remain on the existing
+0-to-1 maliciousness scale.
+
+Only locally produced detections update the local score used to evaluate a
+reporter. A peer's report is retained as evidence, but cannot raise its own
+reporter's local score or be sent back as a first-hand assessment. After an
+upgrade, earlier local-score rows are treated as unknown because they may
+contain peer-derived findings; new local detections replace those rows.
+Cached network opinions and Redis peer-trust values are invalidated so the
+corrected model can recalculate them from retained reports and reliability.
+
+A report shares an assessment. A blame is the same assessment plus a request
+to consider blocking. Slips stores it as a report, then compares the weighted
+network opinion with its own local opinion. The current policy forwards a
+block request when their equally weighted sum reaches 0.5. A blame alone does
+not bypass that check, although one sufficiently strong report can reach the
+threshold. Local blames send the current local score and confidence.
+
 At startup, the P2P trust database migrates older peer address records to
 keep the newest endpoint for each peer. This lets existing installations use
 authenticated endpoint updates without resetting their trust history. If
@@ -195,12 +222,14 @@ reputation lookups at startup. This keeps opinion checks from scanning the
 entire database as its report history grows. On an existing large database,
 the indexes are built once during startup; subsequent starts reuse them.
 
-The trust database stores only the latest Slips reputation score and
-confidence for each IP. Older snapshots were not used for opinion lookups;
+The trust database stores only the latest Slips local reputation score and
+confidence for each IP. The score reflects the highest local threat level
+in the current run. Older snapshots were not used for opinion lookups;
 they only made `trustdb.db` grow continuously. On startup, existing databases
 are migrated by retaining the row with the newest timestamp for each IP, then
-the database is vacuumed and its WAL is checkpointed. This preserves the
-current reputation values while discarding unused reputation history. Do not
+the database is vacuumed and its WAL is checkpointed. Older scores are kept
+as legacy data but excluded from new trust decisions because they may contain
+peer-derived findings. Do not
 delete `permanent/p2p_trust_runtime/trustdb.db` to reclaim space: Slips performs
 the migration without resetting peer reports or reputation.
 
@@ -229,10 +258,10 @@ Incoming `P2P_REPORT` evidence records preserve the reported IP, peer, severity,
 and confidence for inspection, but do not increase the host's accumulated threat
 score or trigger an alert by themselves. When Slips observes a flow involving an
 IP judged malicious by the peer network, it records one
-`MALICIOUS_IP_FROM_P2P_NETWORK` finding for that flow. That observed finding
-contributes to the reported IP's score. This avoids scoring the same peer
-opinion once on receipt and again on observation, or twice when both endpoints
-of the flow are the reported IP.
+`MALICIOUS_IP_FROM_P2P_NETWORK` finding for that flow. Both categories stay
+visible as evidence but do not change Slips's own score for the reported IP.
+This keeps the network's opinion separate from the local score used to judge
+reporters and to answer other peers.
 
 A received report identifies the sending peer and the IP it rated, with a
 maliciousness score and confidence. It does not identify an attack victim or

@@ -5265,7 +5265,7 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "peer_id": "QmRemotePeer",
             "ip": "192.0.2.10",
             "connected": True,
-            "trust": None,
+            "trust": (0.75 * 0.7) / 2,
             "reliability": 0.75,
             "first_seen": 1649445643.0,
             "last_seen": 1649445643.0,
@@ -5287,7 +5287,7 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
 
 
 @pytest.mark.parametrize(
-    "cached_trust,expected_trust", [(None, 0.28), ("0.61", 0.61)]
+    "cached_trust,expected_trust", [(None, 0.305), ("0.61", 0.305)]
 )
 def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     tmp_path: Path,
@@ -5301,7 +5301,7 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
         tmp_path: Isolated trust database directory.
         monkeypatch: Changes to that isolated directory.
         cached_trust: Optional current model cache entry.
-        expected_trust: Displayed trust using cache or persisted inputs.
+        expected_trust: Trust recomputed from reliable local inputs.
     """
     _module_factory = ModuleFactory()
     monkeypatch.chdir(tmp_path)
@@ -5314,13 +5314,13 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
             "CREATE TABLE go_reliability (peerid TEXT, reliability REAL, update_time REAL);"
             "CREATE TABLE peer_ips (peerid TEXT, ipaddress TEXT, update_time REAL);"
             "CREATE TABLE peer_addresses (peerid TEXT, ipaddress TEXT, update_time REAL);"
-            "CREATE TABLE slips_reputation (ipaddress TEXT, score REAL, confidence REAL);"
+            "CREATE TABLE slips_reputation (ipaddress TEXT, score REAL, confidence REAL, source TEXT);"
             "CREATE TABLE reports (reporter_peerid TEXT, reported_key TEXT, "
             "score REAL, confidence REAL, update_time REAL);"
             "INSERT INTO go_reliability VALUES ('QmLostPeer', 0.8, 300);"
             "INSERT INTO peer_ips VALUES ('QmLostPeer', '127.0.0.1', 300);"
             "INSERT INTO peer_addresses VALUES ('QmLostPeer', '192.168.1.249', 200);"
-            "INSERT INTO slips_reputation VALUES ('192.168.1.249', 0, 0.05);"
+            "INSERT INTO slips_reputation VALUES ('192.168.1.249', 0, 0.05, 'local');"
         )
     reader = RunDataReader.__new__(RunDataReader)
     reader.output_dir = output_dir

@@ -32,7 +32,10 @@ from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.structures.evidence import EvidenceType
 from modules.supported_module_names import Modules
-from modules.p2p_trust.trust.base_model import RELIABILITY_WEIGHT
+from modules.p2p_trust.trust.base_model import (
+    RELIABILITY_WEIGHT,
+    local_maliciousness_to_thesis_score,
+)
 from slips_files.core.helpers.whitelist.whitelist_parser import (
     backup_local_whitelist,
     ensure_local_whitelist,
@@ -7956,7 +7959,6 @@ class RunDataReader:
             for peer_id, raw in self.redis.hgetall("peer_info").items()
         }
         connected.update(self._legacy_connected_p2p_peers(peer_info))
-        peer_trust = self.redis.hgetall("peer_trust")
         peer_seen = dict(
             self.redis.zrange("peers_strust", 0, -1, withscores=True)
         )
@@ -8216,7 +8218,8 @@ class RunDataReader:
                         str(row[0]): (float(row[1]), float(row[2]))
                         for row in connection.execute(
                             "SELECT ipaddress, score, confidence "
-                            "FROM slips_reputation WHERE ipaddress IN "
+                            "FROM slips_reputation WHERE source = 'local' "
+                            "AND ipaddress IN "
                             f"({placeholders})",
                             tuple(peer_ip_set),
                         )
@@ -8236,19 +8239,11 @@ class RunDataReader:
                 except (KeyError, TypeError, ValueError):
                     reliability_value = None
             trust_value = None
-            if ip in peer_trust:
-                try:
-                    trust_value = float(peer_trust[ip])
-                except (TypeError, ValueError):
-                    pass
-            if (
-                trust_value is None
-                and reliability_value is not None
-                and ip in reputations
-            ):
-                score, confidence = reputations[ip]
+            if reliability_value is not None and ip:
+                score, confidence = reputations.get(ip, (0.5, 0.0))
                 trust_value = (
-                    reliability_value * RELIABILITY_WEIGHT + score * confidence
+                    reliability_value * RELIABILITY_WEIGHT
+                    + local_maliciousness_to_thesis_score(score) * confidence
                 ) / 2
             peers.append(
                 {

@@ -308,6 +308,84 @@ def test_set_evidence_publishes_after_sqlite_commit() -> None:
 
 
 @pytest.mark.parametrize(
+    "evidence_type",
+    [EvidenceType.P2P_REPORT, EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK],
+)
+def test_peer_evidence_does_not_change_local_reputation(
+    evidence_type: EvidenceType,
+) -> None:
+    """A peer's finding cannot become Slips's own score for trust decisions.
+
+    Parameters:
+        evidence_type: Peer-derived evidence category.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
+    db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="en0")
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=evidence_type,
+        source_module="p2p_trust",
+        uid=[],
+        attacker=Mock(profile="profile_192.0.2.10"),
+        threat_level="critical",
+        confidence=1.0,
+    )
+
+    assert db.set_evidence(evidence) is True
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.update_threat_level.assert_not_called()
+
+
+@pytest.mark.parametrize("has_peer_evidence", [False, True])
+def test_alert_promotes_only_local_evidence_to_local_reputation(
+    has_peer_evidence: bool,
+) -> None:
+    """Mixed or peer-only alerts retain the actual first-hand local score.
+
+    Parameters:
+        has_peer_evidence: Whether the alert includes a peer-derived finding.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.sqlite = Mock()
+    db.rdb.set_alert = Mock()
+    db.rdb.get_flows_causing_evidence = Mock(return_value=[])
+    db.set_flow_label = Mock()
+    db.update_threat_level = Mock()
+    alert = Mock(profile="profile_192.0.2.10")
+    evidence_type = (
+        EvidenceType.P2P_REPORT if has_peer_evidence else EvidenceType.ARP_SCAN
+    )
+
+    db.set_alert(alert, {"evidence-1": Mock(evidence_type=evidence_type)})
+
+    if has_peer_evidence:
+        db.update_threat_level.assert_not_called()
+    else:
+        db.update_threat_level.assert_called_once_with(
+            "profile_192.0.2.10", "critical", 1
+        )
+
+
+def test_local_reputation_uses_slips_current_score() -> None:
+    """Share the same accumulated local threat value held by Slips."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.trust_db = Mock()
+    db.rdb.update_threat_level = Mock(return_value=None)
+    db.rdb.get_ip_info = Mock(return_value=0.8)
+
+    db.update_threat_level("profile_192.0.2.10", "low", 0.6)
+
+    db.trust_db.insert_slips_score.assert_called_once_with(
+        "192.0.2.10", 0.8, 0.6
+    )
+
+
+@pytest.mark.parametrize(
     "redis_output, caller_output, expected",
     [
         ("output/run/", "output/run", True),

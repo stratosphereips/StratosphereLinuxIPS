@@ -245,9 +245,11 @@ def test_insert_slips_score(
     actual_sql = normalize_sql(actual_call[0][0])
     expected_sql = normalize_sql(
         "INSERT INTO slips_reputation (ipaddress, score, confidence, "
-        "update_time) VALUES (?, ?, ?, ?) ON CONFLICT(ipaddress) DO "
+        "update_time, source) VALUES (?, ?, ?, ?, 'local') "
+        "ON CONFLICT(ipaddress) DO "
         "UPDATE SET score = excluded.score, confidence = excluded.confidence, "
-        "update_time = excluded.update_time WHERE excluded.update_time >= "
+        "update_time = excluded.update_time, source = excluded.source "
+        "WHERE excluded.update_time >= "
         "slips_reputation.update_time"
     )
     assert actual_sql == expected_sql
@@ -295,9 +297,84 @@ def test_reputation_history_migration_keeps_latest_value(tmp_path):
     ) == [(0.8, 0.9, 3)]
     assert trust_db.get_count("slips_reputation") == 2
     trust_db.insert_slips_score("203.0.113.1", 0.1, 0.2, 2)
-    assert trust_db.get_reporter_reputation("203.0.113.1") == (0.8, 0.9)
+    assert trust_db.get_reporter_reputation("203.0.113.1") == (None, None)
     trust_db.insert_slips_score("203.0.113.1", 0.7, 0.8, 5)
     assert trust_db.get_reporter_reputation("203.0.113.1") == (0.7, 0.8)
+
+
+def test_score_migration_preserves_reports_and_rebuilds_opinions(tmp_path) -> None:
+    """Retain reports but never reuse old ambiguous local scores or opinions.
+
+    Parameters:
+        tmp_path: Isolated SQLite location.
+    """
+    module_factory = ModuleFactory()
+    db_path = tmp_path / "trust.db"
+    with sqlite3.connect(db_path) as connection:
+        connection.execute(
+            "CREATE TABLE slips_reputation (id INTEGER PRIMARY KEY, "
+            "ipaddress TEXT NOT NULL, score REAL NOT NULL, "
+            "confidence REAL NOT NULL, update_time REAL NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO slips_reputation "
+            "(ipaddress, score, confidence, update_time) "
+            "VALUES ('192.0.2.10', 1, 1, 1)"
+        )
+        connection.execute(
+            "CREATE TABLE opinion_cache (key_type TEXT NOT NULL, "
+            "reported_key TEXT NOT NULL PRIMARY KEY, score REAL NOT NULL, "
+            "confidence REAL NOT NULL, network_score REAL NOT NULL, "
+            "update_time DATE NOT NULL)"
+        )
+        connection.execute(
+            "INSERT INTO opinion_cache VALUES ('ip', '192.0.2.11', "
+            "1, 1, 0, 1)"
+        )
+
+    with patch(
+        "slips_files.common.abstracts.isqlite.ISQLite._init_flock",
+        autospec=True,
+        side_effect=lambda instance, *_: setattr(
+            instance,
+            "sqlite_flock",
+            Mock(acquire=Mock(return_value=nullcontext())),
+        ),
+    ):
+        trust_db = TrustDB(module_factory.logger, str(db_path), 1)
+
+    assert trust_db.get_reporter_reputation("192.0.2.10") == (None, None)
+    assert trust_db.get_cached_network_opinion("ip", "192.0.2.11") == (
+        None,
+        None,
+        None,
+        None,
+    )
+    trust_db.insert_slips_score("192.0.2.10", 0.2, 0.8, 2)
+    assert trust_db.get_reporter_reputation("192.0.2.10") == (0.2, 0.8)
+
+
+def test_reporter_reliability_uses_latest_sample(tmp_path) -> None:
+    """Use the newest Pigeon reliability observation for peer trust.
+
+    Parameters:
+        tmp_path: Isolated SQLite location.
+    """
+    module_factory = ModuleFactory()
+    with patch(
+        "slips_files.common.abstracts.isqlite.ISQLite._init_flock",
+        autospec=True,
+        side_effect=lambda instance, *_: setattr(
+            instance,
+            "sqlite_flock",
+            Mock(acquire=Mock(return_value=nullcontext())),
+        ),
+    ):
+        trust_db = TrustDB(module_factory.logger, str(tmp_path / "trust.db"), 1)
+    trust_db.insert_go_reliability("peer-1", 0.2, 1)
+    trust_db.insert_go_reliability("peer-1", 0.8, 2)
+
+    assert trust_db.get_reporter_reliability("peer-1") == 0.8
 
 
 @pytest.mark.parametrize(
@@ -423,7 +500,7 @@ def test_create_tables():
     expected_calls = [
         (
             "slips_reputation",
-            "id INTEGER PRIMARY KEY NOT NULL, ipaddress TEXT NOT NULL, score REAL NOT NULL, confidence REAL NOT NULL, update_time REAL NOT NULL",
+            "id INTEGER PRIMARY KEY NOT NULL, ipaddress TEXT NOT NULL, score REAL NOT NULL, confidence REAL NOT NULL, update_time REAL NOT NULL, source TEXT NOT NULL DEFAULT 'legacy'",
         ),
         (
             "go_reliability",
@@ -797,3 +874,21 @@ def test_get_opinion_on_ip(ipaddress, reports, expected_result):
 
     result = trust_db.get_opinion_on_ip(ipaddress)
     assert result == expected_result
+
+
+def test_unobserved_reporter_uses_reliability_without_local_confidence() -> None:
+    """Unknown local reputation contributes no signed score to peer trust."""
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.select = MagicMock(return_value=[])
+    trust_db.get_reports_for_ip = MagicMock(
+        return_value=[("peer-1", 1, 0.8, 0.9, "192.0.2.11")]
+    )
+    trust_db.get_reporter_ip = MagicMock(return_value="192.0.2.10")
+    trust_db.get_reporter_reliability = MagicMock(return_value=0.7)
+    trust_db.get_reporter_reputation = MagicMock(
+        return_value=(None, None)
+    )
+
+    assert trust_db.get_opinion_on_ip("192.0.2.11") == [
+        (0.8, 0.9, 0.7, 0.5, 0.0, "192.0.2.10", 1)
+    ]

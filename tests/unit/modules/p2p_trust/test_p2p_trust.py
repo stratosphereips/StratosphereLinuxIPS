@@ -182,14 +182,38 @@ def test_alert_broadcasts_only_local_unicast_blame(
         patch(
             "modules.p2p_trust.p2p_trust.p2p_utils.send_blame_to_go"
         ) as send_blame,
+        patch(
+            "modules.p2p_trust.p2p_trust.p2p_utils.get_ip_info_from_slips",
+            return_value=(0.8, 0.6),
+        ),
     ):
         trust.new_alert_callback({"data": json.dumps(payload)})
 
     assert send_blame.called is expected
     if expected:
         send_blame.assert_called_once_with(
-            ip, 1, 0.7, "p2p_pygo", trust.db
+            ip, 0.8, 0.6, "p2p_pygo", trust.db
         )
+
+
+@pytest.mark.parametrize(
+    "local_reputation", [(0.2, 0.7), (None, None)]
+)
+def test_peer_reply_uses_only_first_hand_reputation(
+    local_reputation: tuple[float | None, float | None],
+) -> None:
+    """A received peer finding in Redis cannot be echoed as Slips's view.
+
+    Parameters:
+        local_reputation: The first-hand score or an unknown assessment.
+    """
+    _module_factory = ModuleFactory()
+    db = Mock()
+    db.trust_db.get_reporter_reputation.return_value = local_reputation
+    db.get_ip_info.return_value = "critical"
+
+    assert get_ip_info_from_slips("192.0.2.44", db) == local_reputation
+    db.get_ip_info.assert_not_called()
 
 
 @pytest.mark.parametrize(

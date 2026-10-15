@@ -403,6 +403,10 @@ class P2PHandler:
             return float(trust)
         return None
 
+    def clear_peer_trust(self) -> None:
+        """Discard trust values calculated by a previous model or run."""
+        self.r.delete(self.constants.PEER_TRUST)
+
     def record_p2p_message(self, direction: str, message: dict) -> None:
         """Record one bounded P2P send or receive event for observability.
 

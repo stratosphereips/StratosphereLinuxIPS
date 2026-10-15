@@ -11,6 +11,18 @@ from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 from tests.module_factory import ModuleFactory
 
 
+def test_clear_peer_trust_drops_stale_model_values() -> None:
+    """Restarting P2P must not reuse trust from the reversed score model."""
+    _module_factory = ModuleFactory()
+    handler = P2PHandler.__new__(P2PHandler)
+    handler.r = Mock()
+    handler.constants = Constants
+
+    handler.clear_peer_trust()
+
+    handler.r.delete.assert_called_once_with(Constants.PEER_TRUST)
+
+
 def test_received_report_counts_by_peer_and_timewindow() -> None:
     """Keep received report telemetry after raw reports are compacted."""
     _module_factory = ModuleFactory()

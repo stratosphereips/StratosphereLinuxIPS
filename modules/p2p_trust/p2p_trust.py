@@ -113,6 +113,7 @@ class Trust(IModule):
 
     def init(self, *args, **kwargs):
         self.read_configuration()
+        self.db.clear_peer_trust()
         # pigeon generate keys and stores them in the following dir, if this
         # is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new
@@ -428,10 +429,6 @@ class Trust(IModule):
             alert = json.loads(msg["data"])
             ip = str(alert["profile"]["ip"])
             last_evidence_type = alert["last_evidence"]["evidence_type"]
-            confidence = max(
-                float(alert["confidence"]),
-                float(alert["last_evidence"].get("confidence") or 0),
-            )
         except (KeyError, TypeError, ValueError, json.JSONDecodeError):
             return
         if last_evidence_type in (
@@ -443,9 +440,12 @@ class Trust(IModule):
             ret="List", include_public=False
         ):
             return
+        score, confidence = p2p_utils.get_ip_info_from_slips(ip, self.db)
+        if score is None or confidence is None or score <= 0:
+            return
         p2p_utils.send_blame_to_go(
             ip,
-            ThreatLevel.CRITICAL.value,
+            min(1.0, max(0.0, score)),
             min(1.0, max(0.0, confidence)),
             self.pygo_channel,
             self.db,

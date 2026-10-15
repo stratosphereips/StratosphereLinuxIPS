@@ -607,6 +607,9 @@ class DBManager:
     def get_peer_trust(self, *args, **kwargs):
         return self.rdb.get_peer_trust(*args, **kwargs)
 
+    def clear_peer_trust(self, *args, **kwargs):
+        return self.rdb.clear_peer_trust(*args, **kwargs)
+
     def get_dns_resolution(self, *args, **kwargs):
         return self.rdb.get_dns_resolution(*args, **kwargs)
 
@@ -928,11 +931,15 @@ class DBManager:
             self.rdb.publish_evidence_added(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
-            self.update_threat_level(
-                str(evidence.attacker.profile),
-                str(evidence.threat_level),
-                evidence.confidence,
-            )
+            if evidence.evidence_type not in {
+                EvidenceType.P2P_REPORT,
+                EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            }:
+                self.update_threat_level(
+                    str(evidence.attacker.profile),
+                    str(evidence.threat_level),
+                    evidence.confidence,
+                )
         return evidence_set
 
     def set_alert(
@@ -948,7 +955,15 @@ class DBManager:
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
-        self.update_threat_level(str(alert.profile), "critical", 1)
+        if all(
+            evidence.evidence_type
+            not in {
+                EvidenceType.P2P_REPORT,
+                EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            }
+            for evidence in evidence_causing_the_alert.values()
+        ):
+            self.update_threat_level(str(alert.profile), "critical", 1)
 
         for evidence_id in evidence_causing_the_alert.keys():
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
@@ -1002,15 +1017,20 @@ class DBManager:
     ):
         """updates the threat level and confidence of an ip in redis and
         trust db for other peers to use it"""
+        result = self.rdb.update_threat_level(
+            profileid, threat_level, confidence
+        )
         if self.trust_db:
             ip = profileid.split("_")[-1]
-            float_threat_level = utils.threat_levels[threat_level]
+            stored_score = self.rdb.get_ip_info(ip, "score")
+            try:
+                float_threat_level = float(stored_score)
+            except (TypeError, ValueError):
+                float_threat_level = utils.threat_levels[threat_level]
             self.trust_db.insert_slips_score(
                 ip, float_threat_level, confidence
             )
-        return self.rdb.update_threat_level(
-            profileid, threat_level, confidence
-        )
+        return result
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
