@@ -725,6 +725,7 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
     ghost = {"ip": "192.168.12.1", "scope": "local", "load": {"flows": 3}}
     requests: list[str] = []
     errors: list[str] = []
+    pending_pages: list[tuple[Any, dict]] = []
 
     def route_request(route: Any) -> None:
         """Supply two fresh host pages and shipped application assets.
@@ -737,8 +738,7 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
             requests.append(route.request.url)
             query = parse_qs(url.query)
             items = rows[100:] if "cursor" in query else rows[:100]
-            route.fulfill(
-                json={
+            payload = {
                     "items": items,
                     "total": 101,
                     "page_size": len(items),
@@ -747,7 +747,10 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
                     "order": "desc",
                     "range": "live",
                 }
-            )
+            if "cursor" in query:
+                pending_pages.append((route, payload))
+            else:
+                route.fulfill(json=payload)
         elif url.path == "/api/host-names":
             route.fulfill(
                 json={
@@ -790,14 +793,22 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
         page.goto("http://slips.test/")
         page.wait_for_function("typeof loadHosts === 'function'")
         page.evaluate(
-            """async data => {
+            """data => {
             state.activeTab='hosts'; state.networkOnly=true; state.networkFilterSupported=true;
             state.pages.hosts.items=[...data.rows.slice(0,100), data.ghost];
             document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === 'hosts'));
-            await loadHosts();
+            window.hostRefresh=loadHosts();
         }""",
             {"rows": rows, "ghost": ghost},
         )
+        page.wait_for_function("state.pages.hosts.items.length === 100 && state.requests.has('hostsRefreshMore')")
+        assert page.locator("#hosts-table tbody tr").count() == 100
+        assert "192.168.12.1" not in page.locator("#hosts-table").inner_text()
+        page.wait_for_timeout(50)
+        assert len(pending_pages) == 1
+        pending_route, pending_payload = pending_pages.pop()
+        pending_route.fulfill(json=pending_payload)
+        page.evaluate("window.hostRefresh")
         assert len(requests) == 2
         assert all(
             parse_qs(urlparse(url).query)["network"] == ["current"]

@@ -4712,7 +4712,7 @@ class RunDataReader:
         return [ip]
 
     def _device_key_map(self) -> Dict[str, str]:
-        """Map local IPv4 and IPv6 profiles to a conservative MAC identity.
+        """Map local profiles and OS-verified own addresses to a MAC identity.
 
         Returns:
             Profile IPs mapped to a device key; ambiguous MACs stay separate.
@@ -4746,12 +4746,43 @@ class RunDataReader:
             if str(row["scope"] or "local") != "local":
                 continue
             candidates[mac].append(ip)
-        return {
+        keys = {
             ip: f"mac:{mac}"
             for mac, ips in candidates.items()
             if 1 < len(ips) <= 16
             for ip in ips
         }
+        try:
+            analysis = self.redis.hgetall("analysis")
+            if analysis.get("input_type") != "interface" or analysis.get(
+                "analysis_end"
+            ):
+                return keys
+            known_ips = {str(row["ip"]) for row in rows}
+            interfaces = psutil.net_if_addrs()
+            for name in str(analysis.get("interface") or "").split(","):
+                addresses = interfaces.get(name.strip(), [])
+                mac = next(
+                    (
+                        HostProfileStore._usable_mac(entry.address)
+                        for entry in addresses
+                        if entry.family == psutil.AF_LINK
+                    ),
+                    "",
+                )
+                if not mac:
+                    continue
+                for entry in addresses:
+                    if entry.family not in (socket.AF_INET, socket.AF_INET6):
+                        continue
+                    ip = str(
+                        ipaddress.ip_address(entry.address.split("%", 1)[0])
+                    )
+                    if ip in known_ips:
+                        keys[ip] = f"mac:{mac}"
+        except (AttributeError, OSError, ValueError, redis.RedisError):
+            pass
+        return keys
 
     def _register_device_key(
         self, connection: sqlite3.Connection, enabled: bool
@@ -5050,6 +5081,13 @@ class RunDataReader:
                         and "whitelisted" in columns
                     ):
                         scope += " AND COALESCE(whitelisted, 0)=0"
+                    evidence_hint = (
+                        self._host_evidence_index_hint(
+                            connection, start is not None
+                        )
+                        if table == "evidence"
+                        else ""
+                    )
                     reviews = (
                         " AND NOT EXISTS (SELECT 1 FROM alert_reviews ar "
                         "WHERE ar.alert_id=alerts.alert_id AND ar.status='resolved')"
@@ -5059,7 +5097,8 @@ class RunDataReader:
                     )
                     rows = connection.execute(
                         f"SELECT {column} AS ip, COUNT(*) AS count "
-                        f"FROM {table} WHERE {column} IN ({placeholders})"
+                        f"FROM {table}{evidence_hint} "
+                        f"WHERE {column} IN ({placeholders})"
                         f"{scope}{reviews} "
                         f"GROUP BY {column}",
                         arguments,
@@ -5069,6 +5108,31 @@ class RunDataReader:
         except sqlite3.Error:
             pass
         return counts
+
+    @staticmethod
+    def _host_evidence_index_hint(
+        connection: sqlite3.Connection,
+        bounded: bool = False,
+    ) -> str:
+        """Choose existing time or covering indexes for host finding aggregates.
+
+        Parameters:
+            connection: Read-only run database connection.
+            bounded: Whether the request has an earliest evidence timestamp.
+
+        Returns:
+            An index hint, or an empty string for older database schemas.
+        """
+        indexes = {
+            str(row[1])
+            for row in connection.execute("PRAGMA index_list(evidence)")
+        }
+        preferred = (
+            "evidence_profile_time_idx"
+            if bounded
+            else "evidence_group_cover_idx"
+        )
+        return f" INDEXED BY {preferred}" if preferred in indexes else ""
 
     def _host_finding_stats(
         self,
@@ -5110,6 +5174,9 @@ class RunDataReader:
                     {"range": ["all"], **query}, latest
                 )
                 start = self._scoped_start(query, start)
+                evidence_hint = self._host_evidence_index_hint(
+                    connection, start is not None
+                )
                 scope = ""
                 values = []
                 if "evidence_time" in columns:
@@ -5141,7 +5208,7 @@ class RunDataReader:
                     marks = ",".join("?" for _ in batch)
                     for row in connection.execute(
                         f"SELECT profile_ip, COUNT(*) AS count, MAX({score}) AS peak, MAX({threat}) AS rank "
-                        f"FROM evidence WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
+                        f"FROM evidence{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
                         (*batch, *values),
                     ):
                         result[str(row[0])] = {
@@ -5219,6 +5286,7 @@ class RunDataReader:
         scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
         alerts_only = self._query_value(query, "alerts_only") == "1"
+        hide_excluded = self._query_value(query, "hide_excluded") == "1"
         network_start = self._scoped_start(query, None)
         annotation_networks = self._annotation_networks(query)
         network_start_sql = (
@@ -5257,33 +5325,24 @@ class RunDataReader:
             }
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            evidence_network_clause = ""
             alert_network_clause = ""
             if "evidence_time" in evidence_columns:
-                for table, time_column in (
-                    ("evidence e", "e.evidence_time"),
-                    ("alerts a", "CAST(a.alert_time AS REAL)"),
-                ):
-                    finding_latest = connection.execute(
-                        f"SELECT MAX({time_column}) FROM run_db.{table}"
-                    ).fetchone()[0]
-                    finding_start, finding_end, _ = self._time_bounds(
-                        query, finding_latest
+                finding_latest = connection.execute(
+                    "SELECT MAX(CAST(alert_time AS REAL)) FROM run_db.alerts"
+                ).fetchone()[0]
+                finding_start, finding_end, _ = self._time_bounds(
+                    query, finding_latest
+                )
+                finding_start = self._scoped_start(query, finding_start)
+                if finding_start is not None:
+                    lower = min(finding_start, 1e300)
+                    alert_network_clause += (
+                        f" AND CAST(a.alert_time AS REAL) >= {lower}"
                     )
-                    finding_start = self._scoped_start(query, finding_start)
-                    clause = ""
-                    if finding_start is not None:
-                        lower = min(finding_start, 1e300)
-                        clause += f" AND {time_column} >= {lower}"
-                    if finding_end is not None:
-                        clause += f" AND {time_column} <= {finding_end}"
-                    if table == "evidence e":
-                        evidence_network_clause = clause
-                    else:
-                        alert_network_clause = clause
-            hide_excluded = self._query_value(query, "hide_excluded") == "1"
-            if hide_excluded and "whitelisted" in evidence_columns:
-                evidence_network_clause += " AND COALESCE(e.whitelisted,0)=0"
+                if finding_end is not None:
+                    alert_network_clause += (
+                        f" AND CAST(a.alert_time AS REAL) <= {finding_end}"
+                    )
             flow_network_clause = (
                 f" AND fi.event_time >= {network_start_sql}"
                 if network_start is not None
@@ -5301,11 +5360,31 @@ class RunDataReader:
                 + flow_network_clause
                 + ")"
             )
-            evidence_expression = (
-                "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip"
-                + evidence_network_clause
-                + ")"
+            candidate_ips = [
+                str(row[0])
+                for row in connection.execute("SELECT ip FROM host_snapshots")
+            ]
+            findings = self._host_finding_stats(
+                candidate_ips,
+                {
+                    "range": [self._query_value(query, "range", "live")],
+                    **query,
+                },
             )
+            connection.create_function(
+                "host_evidence_count",
+                1,
+                lambda ip: findings[ip]["evidence"],
+            )
+            connection.create_function(
+                "host_evidence_peak", 1, lambda ip: findings[ip]["peak"]
+            )
+            connection.create_function(
+                "host_evidence_threat",
+                1,
+                lambda ip: findings[ip]["threat_rank"],
+            )
+            evidence_expression = "host_evidence_count(hs.ip)"
             has_alert_reviews = bool(
                 connection.execute(
                     "SELECT 1 FROM run_db.sqlite_master WHERE type = 'table' "
@@ -5327,12 +5406,7 @@ class RunDataReader:
                 connection, network_start is not None
             )
             threat_expression = (
-                "COALESCE((SELECT MAX(CASE LOWER(e.threat_level) "
-                "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 "
-                "WHEN 'low' THEN 1 WHEN 'info' THEN 0 ELSE -1 END) "
-                "FROM run_db.evidence e WHERE e.profile_ip=hs.ip"
-                + evidence_network_clause
-                + "), -1)"
+                "host_evidence_threat(hs.ip)"
                 if "threat_level" in evidence_columns
                 else "CASE LOWER(COALESCE(json_extract(hs.data, '$.max_threat_level'), "
                 "'info')) WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
@@ -5345,10 +5419,6 @@ class RunDataReader:
                 "host_profiles_path",
                 Path("permanent/host_profiles/hosts.sqlite"),
             )
-            candidate_ips = [
-                str(row[0])
-                for row in connection.execute("SELECT ip FROM host_snapshots")
-            ]
             triage = HostProfileStore.triage_for_ips(
                 profile_path, candidate_ips
             )
@@ -5386,8 +5456,7 @@ class RunDataReader:
                 f"COALESCE(json_extract(hs.data, '$.{score_field}'), 0)"
             )
             peak_score_expression = (
-                f"(SELECT MAX(e.{score_field}) FROM run_db.evidence e "
-                "WHERE e.profile_ip = hs.ip" + evidence_network_clause + ")"
+                "host_evidence_peak(hs.ip)"
                 if score_field in evidence_columns
                 else "NULL"
             )

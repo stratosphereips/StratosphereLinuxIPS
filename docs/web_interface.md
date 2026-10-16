@@ -727,6 +727,11 @@ table, so the next selection starts a new investigation.
 
 The Hosts tab opens as a compact inventory sized to the available browser height. It shows every host in the first server page, then loads more pages automatically as you scroll until every host matching the selected time range and filters is visible. **Load more** is also available in the footer. The footer shows how many of the matching hosts have loaded. Sorting stays on the server. Threat and scope chips, search, and **Only with alerts** filter the inventory; the alerts-only filter is applied before server paging. **Columns** reveals hostname, TI feeds, and current score when needed. The table combines MAC with vendor and threat with the past peak score, including a marker for the alert threshold. **Export CSV** exports the loaded rows.
 All inventory headings, including the optional TI feeds column, sort the matching hosts before paging. TI feed sorting reads cached feed names only when that column is selected.
+The first refreshed page is displayed immediately; revalidating additional
+previously loaded pages does not delay it. Finding counts, peak scores, and
+threats are aggregated together before sorting. Full-history aggregates use
+the existing covering evidence index; bounded ranges use the profile/time
+index. These reads add no indexes or work to packet processing.
 
 With **Current network only**, inventory membership and Last seen use actual
 flow, detection, or discovery observations. Refreshing cached metadata or
@@ -736,6 +741,13 @@ still establish activity through retained flows and detections. Refreshing the
 inventory replaces every loaded page, so an old row beyond the first page does
 not survive a filter or network change. Device view includes only addresses
 observed during the selected connection.
+For a live interface capture, the operating system verifies which current
+IPv4 and IPv6 addresses belong to the monitored interface's MAC. Those
+addresses form one Device even after roaming or address rotation leaves more
+than 16 historical addresses for its MAC. This includes the interface's own
+global IPv6 addresses. A shared next-hop MAC alone does not merge remote hosts.
+This verification is confined to web requests and is not used to reassign
+historical names or group an ended capture with the computer's current IPs.
 
 The current network identifies where Slips captured the traffic. An endpoint
 outside the local subnet can still appear when traffic involving it was

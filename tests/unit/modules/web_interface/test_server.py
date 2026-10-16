@@ -4638,6 +4638,157 @@ def test_current_network_scope_filters_durable_detection_pages(
     assert scoped_host_counts["192.0.2.5"] == {"alerts": 1, "evidence": 1}
 
 
+@pytest.mark.parametrize("active", [True, False])
+def test_device_grouping_verifies_own_interface_after_many_addresses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, active: bool,
+) -> None:
+    """Group verified own addresses despite roaming history, excluding next hops.
+
+    Parameters:
+        tmp_path: Isolated retained host and evidence data.
+        monkeypatch: Provide one monitored interface and a fixed capture clock.
+        active: Whether the interface capture is still running.
+    """
+    _module_factory = ModuleFactory()
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    reader.cache = None
+    mac = "50:ed:3c:39:bc:d9"
+    own = ["192.168.1.247", "fe80::4d6:6ff0:6f58:42b7", "2001:4860:1::247"]
+    old = [f"10.1.0.{index}" for index in range(1, 22)]
+    with connect_history(reader.history_path) as connection:
+        connection.execute("DELETE FROM host_snapshots")
+        connection.executemany("INSERT INTO host_snapshots VALUES (?,?,?)", [
+            (ip, now, json.dumps({"ip":ip,"mac":mac,
+                "scope":"public" if ip in {own[-1],"8.8.8.8"} else "local"}))
+            for ip in [*own,*old,"8.8.8.8","192.168.1.1"]])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("DELETE FROM evidence")
+        connection.execute("DELETE FROM alerts")
+        connection.executemany("INSERT INTO evidence(evidence_id,profile_ip,evidence_time,evidence_type,threat_level) "
+            "VALUES (?,?,?,'UNKNOWN_PORT','high')", [(ip,ip,now-10) for ip in own])
+        connection.executemany("INSERT INTO alerts VALUES (?,?,?,'malicious',5)",
+            [(ip,ip,now-10) for ip in own])
+        connection.executemany("INSERT INTO alert_evidence VALUES (?,?)", [(ip,ip) for ip in own])
+    previous_hgetall = reader.redis.hgetall.side_effect
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"input_type":"interface","interface":"en0", **({} if active else {"analysis_end":"1"})}
+        if key == "analysis" else previous_hgetall(key))
+    addresses = [SimpleNamespace(family=psutil.AF_LINK,address=mac),
+        *[SimpleNamespace(family=socket.AF_INET if ":" not in ip else socket.AF_INET6,
+                         address=ip+"%en0" if ip.startswith("fe80:") else ip) for ip in own]]
+    monkeypatch.setattr("modules.web_interface.server.psutil.net_if_addrs",
+        lambda: {"en0":addresses,"en1":[SimpleNamespace(family=socket.AF_INET,address="192.168.1.1")]})
+    keys = reader._device_key_map()
+    if not active:
+        assert not any(ip in keys for ip in own)
+        return
+    assert {keys[ip] for ip in own} == {f"mac:{mac}"}
+    assert not any(ip in keys for ip in [*old,"8.8.8.8","192.168.1.1"])
+    query = {"device":["1"],"range":["all"],"network":["current"]}
+    inventory = reader.hosts(query)
+    own_groups = [item for item in inventory["items"] if set(item["device_ips"]) & set(own)]
+    assert len(own_groups) == 1
+    assert set(own_groups[0]["device_ips"]) == set(own)
+    assert own_groups[0]["evidence_count"] == 3
+    evidence = reader.evidence({**query,"group":["host"]})
+    assert evidence["total"] == 1
+    assert evidence["items"][0]["evidence_count"] == 3
+    alerts = reader.alerts({**query,"group":["host"]})
+    assert alerts["total"] == 1
+    assert alerts["items"][0]["alert_count"] == 3
+    assert set(reader._host_ips(own[0],query)) == set(own)
+
+
+@pytest.mark.parametrize("indexed", [True, False])
+@pytest.mark.parametrize("bounded", [True, False])
+def test_host_finding_queries_choose_indexes_without_changing_filters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, indexed: bool, bounded: bool,
+) -> None:
+    """Use covering history or time indexes while keeping exact scoped findings.
+
+    Parameters:
+        tmp_path: Isolated retained evidence.
+        monkeypatch: Fix the active capture clock.
+        indexed: Include current indexes or use a legacy database.
+        bounded: Select one hour instead of all retained history.
+    """
+    _module_factory = ModuleFactory()
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    ip = "192.168.1.20"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("DELETE FROM evidence")
+        connection.execute("ALTER TABLE evidence ADD COLUMN accumulated_threat_level REAL")
+        if indexed:
+            connection.executescript("CREATE INDEX evidence_profile_time_idx ON evidence(profile_ip,evidence_time);"
+                "CREATE INDEX evidence_group_cover_idx ON evidence(profile_ip,evidence_type,evidence_time,"
+                "threat_level,source_module,whitelisted,accumulated_ratl,accumulated_threat_level);")
+        connection.executemany("INSERT INTO evidence(evidence_id,profile_ip,evidence_time,threat_level,accumulated_ratl,whitelisted) "
+            "VALUES (?,?,?,?,?,?)", [(f"{index}-{kind}",ip,ts,level,score,excluded)
+                for index in range(600) for kind,ts,level,score,excluded in (
+                    ("old",now-7200,"medium",0.49,0),("recent",now-30,"low",0.1,0),
+                    ("excluded",now-30,"critical",99,1))])
+    statements: list[str] = []
+    original = reader._connect_sqlite
+
+    def traced_connection() -> sqlite3.Connection:
+        """Record read queries used by host counts and score statistics.
+
+        Returns:
+            A read-only connection with query tracing enabled.
+        """
+        connection = original()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    reader._connect_sqlite = traced_connection
+    query = {"range":["live" if bounded else "all"],"hide_excluded":["1"]}
+    stats = reader._host_finding_stats([ip],query)[ip]
+    count = reader._host_page_counts([ip],query=query)[ip]
+    assert stats == {"evidence":600 if bounded else 1200,"peak":0.1 if bounded else 0.49,
+                     "threat_rank":1 if bounded else 2}
+    assert count == {"evidence":stats["evidence"],"alerts":0}
+    aggregates = [sql for sql in statements if "FROM evidence" in sql and "GROUP BY profile_ip" in sql]
+    assert len(aggregates) == 2
+    with original() as connection:
+        for sql in aggregates:
+            if indexed:
+                expected = "evidence_profile_time_idx" if bounded else "evidence_group_cover_idx"
+                assert f"INDEXED BY {expected}" in sql
+                plan = " ".join(str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN "+sql))
+                assert expected in plan
+                if not bounded:
+                    assert "COVERING INDEX" in plan
+            else:
+                assert "INDEXED BY" not in sql
+
+
+def test_hosts_batch_findings_once_before_sorting_and_paging(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sort the full inventory from one finding aggregate instead of per-row reads.
+
+    Parameters:
+        tmp_path: Isolated retained hosts and evidence.
+        monkeypatch: Fix the active capture clock.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    reader._host_finding_stats = Mock(wraps=reader._host_finding_stats)
+    query = {"range":["all"],"sort":["peak_score"],"limit":["1"]}
+    first = reader.hosts(query)
+    assert first["items"][0]["peak_alert_score"] == 1
+    assert reader._host_finding_stats.call_count == 1
+    assert len(reader._host_finding_stats.call_args.args[0]) == 8
+    assert first["next_cursor"]
+    reader.hosts({**query,"cursor":[first["next_cursor"]]})
+    assert reader._host_finding_stats.call_count == 2
+
+
 def test_device_view_combines_local_addresses_before_paging(
     tmp_path: Path,
 ) -> None:

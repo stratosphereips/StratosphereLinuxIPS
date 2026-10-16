@@ -4428,6 +4428,20 @@ async function loadHosts() {
     const rows = [...payload.items];
     const known = new Set(rows.map((row) => row.device_id || row.ip));
     let next = payload.next_cursor;
+    /** Publish the first fresh page before waiting for previously loaded pages. */
+    const publish = () => {
+      payload.items = [...rows];
+      payload.page_size = rows.length;
+      payload.next_cursor = next;
+      rows.forEach(rememberHostRecord);
+      refreshHostLabels();
+      applyPage("hosts", payload);
+      renderHostFilterChips(payload);
+      renderHostsPage();
+      document.querySelector(".hosts-list-table").scrollTop = scroll;
+    };
+    publish();
+    let extended = false;
     while (rows.length < wanted && next) {
       const params = new URLSearchParams(path.split("?", 2)[1]);
       params.set("cursor", next);
@@ -4437,18 +4451,11 @@ async function loadHosts() {
         const key = row.device_id || row.ip;
         if (!known.has(key)) { known.add(key); rows.push(row); }
       });
+      extended = true;
       if (following.next_cursor === next) break;
       next = following.next_cursor;
     }
-    payload.items = rows;
-    payload.page_size = rows.length;
-    payload.next_cursor = next;
-    rows.forEach(rememberHostRecord);
-    refreshHostLabels();
-    applyPage("hosts", payload);
-    renderHostFilterChips(payload);
-    renderHostsPage();
-    document.querySelector(".hosts-list-table").scrollTop = scroll;
+    if (extended) publish();
   } finally {
     if (page.refreshGeneration === generation) page.refreshing = false;
   }
