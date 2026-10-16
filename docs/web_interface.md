@@ -746,15 +746,24 @@ Selecting a host opens a three-column workspace. The left column holds identity 
 
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
-The host's Alerts summary card counts open alerts across the full run, or the
-current connection when **Current network only** is enabled. If the
-Host range is Live and the host has older alerts in that network scope but none in the past hour,
-the Alerts panel shows those older alerts with an explicit label. The panel
-offers a button to switch all host graphs and activity to Full run. Other
-selected ranges remain strict; the Alerts panel and its count follow that
-range.
+Opening a host or device from the inventory copies its selected time range,
+including custom start and end times, into the detail workspace. The Alerts
+and Evidence summary cards, peak score, highest evidence threat, score plot,
+and activity tables use that range and the current-network selection.
+**Hide excluded** also excludes whitelisted evidence from the peak, threat,
+and evidence count. Select **Full run** to inspect earlier findings. The
+header separates the current active time-window score from the peak in the
+selected range.
 
-The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible when their observations match the selected scope. It shows the MAC vendor beside the MAC address when Slips has identified one; vendor names can be searched. Inventory can be filtered by local/public scope and by the highest evidence threat in its selected network scope. The displayed threat and the threat filter use the same evidence records. **No evidence** is a status for hosts without findings in that scope, not an additional Slips threat level; these hosts appear under All but do not match Info+, Low+, or any other threat filter. Informational evidence is Info, not a benign verdict. The compact threat column shows the highest real score persisted after evidence processing for that exact profile IP in the selected network scope. The score bar marks the configured alert threshold, while hovering shows the current active time-window score from Redis. The optional current-score column can be enabled from **Columns**. Both scores are sortable server-side.
+Saved activity search, threat filters, grouping, and sorting remain available
+when opening another host. An explicit notice shows active search and threat
+filters, the matching count, and the number of records in the selected range.
+**Clear activity filters** clears that activity tab's search and threat filter
+while retaining grouping and sorting. A medium-threat evidence record can
+exist without an alert: an alert requires the accumulated Slips score to
+reach its configured threshold.
+
+The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible when their observations match the selected scope. It shows the MAC vendor beside the MAC address when Slips has identified one; vendor names can be searched. Inventory can be filtered by local/public scope and by the highest evidence threat in its selected time range and network scope. The displayed threat and the threat filter use the same evidence records. **No evidence** is a status for hosts without findings in that scope, not an additional Slips threat level; these hosts appear under All but do not match Info+, Low+, or any other threat filter. Informational evidence is Info, not a benign verdict. The compact threat column shows the highest real score persisted after evidence processing for that exact profile IP in the selected scope. The score bar marks the configured alert threshold, while hovering shows the current active time-window score from Redis. The optional current-score column can be enabled from **Columns**. Both scores are sortable server-side.
 
 An IP mentioned in Evidence can be a destination without its own Slips
 profile. Selecting such an IP shows an explanation in the Host workspace;

@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 from typing import Any
 from types import SimpleNamespace
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 from unittest.mock import Mock
 
 import pytest
@@ -14,6 +14,119 @@ from modules.web_interface.server import RunDataReader
 from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+from tests.unit.modules.web_interface.test_server import _network_scope_reader
+from modules.web_interface.history import connect_history
+
+
+def test_host_findings_range_and_saved_filters_in_chrome(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Opening a device preserves the inventory scope and explains hidden evidence.
+
+    Parameters:
+        tmp_path: Isolated retained evidence and history databases.
+        monkeypatch: Fix the active capture clock.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    reader._attach_current_host_scores = Mock(side_effect=lambda items: [
+        item.update({"alert_score": 0, "alert_threshold": 5, "alert_score_mode": "ratl"}) for item in items
+    ])
+    ip = "192.168.1.249"
+    with connect_history(reader.history_path) as connection:
+        connection.execute("INSERT INTO host_snapshots VALUES (?, ?, ?)", (ip, now,
+            json.dumps({"ip": ip, "scope": "local", "mac": "d8:3a:dd:bb:1d:6c"})))
+        connection.execute("INSERT INTO flow_index(uid, flow_rowid, event_time, src_ip, dst_ip, bytes, packets) "
+            "VALUES ('recent-host',1,?,?, '8.8.8.8',1,1)", (now-10, ip))
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,threat_level,"
+            "evidence_type,source_module,description,accumulated_ratl) VALUES ('medium',?,?,'medium',"
+            "'DEVICE_CHANGING_IP','flow_alerts','Device changed its IP',0.49)", (now-7200, ip))
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Run the real read APIs against isolated data and serve shipped assets.
+
+        Parameters:
+            route: Browser request intercepted before accessing the network.
+        """
+        url = urlparse(route.request.url)
+        query = parse_qs(url.query)
+        if url.path == "/api/hosts":
+            route.fulfill(json=reader.hosts(query))
+        elif url.path.startswith("/api/hosts/"):
+            address, *resource = unquote(url.path).removeprefix("/api/hosts/").split("/")
+            method = {"traffic-summary": reader.traffic_summary, "score-history": reader.score_history}.get(
+                resource[0] if resource else "", reader.host)
+            route.fulfill(json=method(address, query))
+        elif url.path == "/api/evidence":
+            route.fulfill(json=reader.evidence(query))
+        elif url.path == "/api/alerts":
+            route.fulfill(json=reader.alerts(query))
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        elif url.path == "/api/whitelists":
+            route.fulfill(json={"rules": [], "counts": {}, "evidence_types": []})
+        elif url.path.startswith("/api/"):
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+        elif url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        else:
+            route.fulfill(status=404, body="")
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width": 1800, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script(f"Date.now = () => {int(now * 1000)};")
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof loadHosts === 'function'")
+        page.evaluate("""async ip => {
+            state.activeTab='hosts'; state.deviceView=true; state.deviceViewSupported=true;
+            state.networkOnly=false; state.hideExcluded=true;
+            state.hostActivity='evidence'; state.hostActivityPreferred=true;
+            state.hostActivityThreats.evidence='high_or_more'; state.hostActivityGroups.evidence='module';
+            state.pages['host-evidence'].sort='type'; state.pages['host-evidence'].order='asc';
+            byId('host-evidence-search').value='DEVICE_CHANGING_IP';
+            byId('hosts-search').value=ip; byId('hosts-range').value='all'; byId('host-range').value='live';
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='hosts'));
+            await loadHosts();
+        }""", ip)
+        row = page.locator("#hosts-table tbody tr").filter(has_text=ip)
+        assert "0.49" in row.inner_text()
+        assert "medium" in row.inner_text()
+        row.click()
+        page.wait_for_function("state.host?.ip === '192.168.1.249' && state.pages['host-evidence'].total === 0")
+        assert page.locator("#host-range").input_value() == "all"
+        assert page.evaluate("state.host.evidence_count") == 1
+        assert "Peak 0.49" in page.locator("#host-score-pill").inner_text()
+        notice = page.locator("#host-activity-filter-notice")
+        assert "0 matching evidence · 1 in this range" in notice.inner_text()
+        assert "High+" in notice.inner_text()
+        notice.get_by_role("button", name="Clear activity filters", exact=True).click()
+        page.wait_for_function("state.pages['host-evidence'].total === 1")
+        assert "DEVICE_CHANGING_IP" in page.locator("#host-evidence-table tbody").inner_text()
+        assert page.locator("#host-activity-group").input_value() == "module"
+        assert page.evaluate("state.pages['host-evidence'].sort") == "type"
+        assert page.locator("#host-evidence-search").input_value() == ""
+        page.locator("#host-range").select_option("live")
+        page.wait_for_function("state.host.evidence_count === 0 && state.pages['host-evidence'].total === 0")
+        assert page.evaluate("state.host.peak_alert_score") is None
+        page.locator("#host-range").select_option("all")
+        page.wait_for_function("state.host.evidence_count === 1 && state.pages['host-evidence'].total === 1")
+        page.locator('[data-host-activity="alerts"]').click()
+        page.wait_for_function("document.querySelector('#host-alert-count').textContent.includes('0 alerts')")
+        assert page.evaluate("state.host.alert_count") == 0
+        assert errors == []
+        browser.close()
 
 
 def test_current_network_host_refresh_and_history_in_chrome() -> None:

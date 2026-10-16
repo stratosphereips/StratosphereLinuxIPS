@@ -619,13 +619,13 @@ const slipsScore = (record) => {
 function pastPeakSlipsScore(record) {
   if (record.peak_alert_score === null || record.peak_alert_score === undefined) {
     const unavailable = text("span", "No samples", "slips-score unavailable");
-    unavailable.title = "No persisted Slips score sample exists for this host yet.";
+    unavailable.title = "No persisted Slips score sample exists in the selected scope.";
     return unavailable;
   }
   return slipsScore({
     ...record,
     alert_score: record.peak_alert_score,
-    alert_score_basis: "highest persisted score in the full run",
+    alert_score_basis: "highest persisted score in the selected time and network scope",
   });
 }
 const whitelistHandling = (record) => {
@@ -1955,7 +1955,7 @@ function listPath(name) {
   params.set("limit", "100");
   params.set("sort", page.sort);
   params.set("order", page.order);
-  if (state.hideExcluded && ["alerts", "evidence"].includes(name)) {
+  if (state.hideExcluded && ["alerts", "evidence", "hosts"].includes(name)) {
     params.set("hide_excluded", "1");
   }
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
@@ -5681,6 +5681,7 @@ async function openAlert(record) {
 
 function hostRangeParams() {
   const params = rangeQuery("host");
+  if (state.hideExcluded) params.set("hide_excluded", "1");
   return params;
 }
 
@@ -6015,9 +6016,11 @@ function renderHostCards(host) {
   const scopedProfiles = hostVisibleProfiles(host);
   const networkScoped = state.networkOnly && state.networkFilterSupported;
   const exactAggregates = host.exact_aggregates !== false;
+  const findingsRange = byId("host-range").selectedOptions[0]?.textContent || "selected range";
+  const findingsScope = `${findingsRange}${networkScoped ? " · current network" : ""}`;
   setSummaryCards([
-    [state.networkOnly && state.networkFilterSupported ? "Alerts · current network" : "Alerts · full run", exactAggregates ? compact(host.alert_count) : "—"],
-    [state.networkOnly && state.networkFilterSupported ? "Evidence · current network" : "Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
+    [`Alerts · ${findingsScope}`, exactAggregates ? compact(host.alert_count) : "—"],
+    [`Evidence · ${findingsScope}`, exactAggregates ? compact(host.evidence_count) : "—"],
     [networkScoped ? "Flows in / out · current network" : "Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
     [networkScoped ? "Traffic in / out · current network" : "Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
     [networkScoped ? "Packets · current network" : "Packets", exactAggregates ? compact(host.load?.packets) : "—"],
@@ -6032,7 +6035,8 @@ function renderHostCards(host) {
   byId("host-alerts-tab-count").textContent = "";
   byId("host-evidence-tab-count").textContent = "";
   const scorePill = byId("host-score-pill");
-  scorePill.replaceChildren(text("span", "Score "), slipsScore(host));
+  scorePill.replaceChildren(text("span", "Current "), slipsScore(host),
+    text("span", " · Peak "), pastPeakSlipsScore(host));
   const identity = byId("host-identity");
   const editingCurrentHost = identity.dataset.profileIp === host.ip
     && identity.contains(document.activeElement)
@@ -6081,6 +6085,7 @@ function renderHostCards(host) {
 /** Show the selected host's alerts, evidence, or flows and load that page. */
 function showHostActivity(name) {
   state.hostActivity = name;
+  byId("host-activity-filter-notice").hidden = true;
   ["alerts", "evidence", "flows"].forEach((item) => {
     byId(`host-${item}-panel`).hidden = item !== name;
     const tab = document.querySelector(`[data-host-activity="${item}"]`);
@@ -6106,6 +6111,34 @@ function showHostActivity(name) {
   note.textContent = grouping.value ? "Groups in this page; filters cover the selected range" : "";
   if (!state.host) return Promise.resolve();
   return ({ alerts: loadHostAlerts, evidence: loadHostEvidence, flows: loadHostFlows })[name]().catch(() => {});
+}
+
+/** Explain saved activity filters without silently discarding user choices.
+ * @param {string} kind Alerts or evidence activity pane.
+ * @param {number} total Matching records returned by the server.
+ */
+function renderHostActivityFilterNotice(kind, total) {
+  if (state.hostActivity !== kind) return;
+  const notice = byId("host-activity-filter-notice");
+  const search = byId(`host-${kind === "alerts" ? "alert" : "evidence"}-search`);
+  const filters = [];
+  if (state.hostActivityThreats[kind]) filters.push(`Threat: ${byId("host-activity-threat").selectedOptions[0]?.textContent}`);
+  if (search.value.trim()) filters.push(`Search: ${search.value.trim()}`);
+  notice.hidden = filters.length === 0;
+  notice.replaceChildren();
+  if (notice.hidden) return;
+  const available = kind === "alerts" ? state.host?.alert_count : state.host?.evidence_count;
+  notice.append(text("span", `${compact(total)} matching ${kind} · ${compact(available)} in this range. ${filters.join(" · ")}`));
+  const clear = text("button", "Clear activity filters", "secondary");
+  clear.type = "button";
+  clear.addEventListener("click", () => {
+    search.value = "";
+    state.hostActivityThreats[kind] = "";
+    resetPage(kind === "alerts" ? "hostAlerts" : "host-evidence");
+    scheduleViewPreferencesSave();
+    showHostActivity(kind);
+  });
+  notice.append(clear);
 }
 
 /** Return the label used to group one host activity record on the current page.
@@ -6240,6 +6273,7 @@ async function loadHostAlerts() {
     ? `${alerts.length} shown · ${compact(payload.total)} earlier alerts in the full run`
     : `${alerts.length} shown · ${compact(payload.total)} alerts in this range`;
   const list = byId("host-alerts");
+  renderHostActivityFilterNotice("alerts", payload.total);
   list.replaceChildren();
   if (showingEarlier) {
     const context = document.createElement("div");
@@ -6311,6 +6345,7 @@ async function loadHostEvidence() {
   page.total = payload.total;
   page.next = payload.next_cursor;
   byId("host-evidence-tab-count").textContent = compact(payload.total);
+  renderHostActivityFilterNotice("evidence", payload.total);
   byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
   byId("host-evidence-count").textContent =
     payload.page_size + " shown · " + compact(payload.total) + " evidence records" +
@@ -6591,7 +6626,15 @@ async function showUnprofiledHost(ip) {
 }
 
 async function openHost(ip, summary = null) {
-  const detailParams = new URLSearchParams();
+  if (summary) {
+    ["range", "from", "to"].forEach((name) => {
+      byId(`host-${name}`).value = byId(`hosts-${name}`).value;
+    });
+    const custom = byId("host-range").value === "custom";
+    byId("host-from").hidden = byId("host-to").hidden = !custom;
+    scheduleViewPreferencesSave();
+  }
+  const detailParams = hostRangeParams();
   if (state.networkOnly && state.networkFilterSupported) detailParams.set("network", "current");
   if (state.deviceView) detailParams.set("device", "1");
   const detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
@@ -6662,7 +6705,7 @@ async function openHost(ip, summary = null) {
 async function refreshHostWorkspace() {
   if (!state.host) return;
   const ip = state.host.ip;
-  const params = new URLSearchParams();
+  const params = hostRangeParams();
   if (state.networkOnly && state.networkFilterSupported) params.set("network", "current");
   if (state.deviceView) params.set("device", "1");
   const detail = await api("host", `/api/hosts/${escapePath(ip)}${params.size ? `?${params}` : ""}`);
@@ -7137,8 +7180,7 @@ document.querySelectorAll(".excluded-visibility-select").forEach((select) => {
     });
     ["alerts", "evidence", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
     if (state.activeTab === "hosts" && state.host) {
-      ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
-        flows: loadHostFlows })[state.hostActivity]().catch(() => {});
+      refreshHostWorkspace().catch(() => {});
     } else if (state.activeTab === "alerts" || state.activeTab === "evidence") {
       currentLoader()().catch(() => {});
     } else if (state.activeTab === "arp-poisoning") {
@@ -7286,11 +7328,7 @@ bindRange("hosts", "hosts", loadHosts);
 bindRange("host", "hostFlows", async () => {
   resetPage("hostAlerts");
   resetPage("host-evidence");
-  await Promise.all([
-    ({ alerts: loadHostAlerts, evidence: loadHostEvidence,
-      flows: loadHostFlows })[state.hostActivity](),
-    loadHostSummary(), loadHostScoreHistory(),
-  ]);
+  await refreshHostWorkspace();
 });
 bindTableSort("modules", async () => {
   if (state.overview) renderModules(state.overview.modules);

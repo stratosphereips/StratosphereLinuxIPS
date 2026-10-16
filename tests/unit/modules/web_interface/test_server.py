@@ -35,6 +35,104 @@ from tests.module_factory import ModuleFactory
 
 
 @pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize(
+    "range_name,network,hide_excluded,recent,expected_peak,expected_threat,expected_count",
+    [
+        ("live", False, True, False, None, "", 0),
+        ("live", False, True, True, 0.1, "low", 1),
+        ("all", False, True, False, 0.49, "medium", 1),
+        ("all", True, True, False, None, "", 0),
+        ("24h", False, False, False, 8.0, "critical", 2),
+    ],
+)
+def test_host_inventory_findings_match_opened_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool,
+    range_name: str, network: bool, hide_excluded: bool, recent: bool,
+    expected_peak: float | None, expected_threat: str, expected_count: int,
+) -> None:
+    """A displayed peak and threat must have evidence in the same selected scope.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fix the active capture clock.
+        device: Whether the inventory and details combine MAC-matched IPs.
+        range_name: Selected inventory time range.
+        network: Restrict findings to the current connection.
+        hide_excluded: Omit whitelist-excluded findings.
+        recent: Include a recent low-severity finding.
+        expected_peak: Highest visible score, or no scored evidence.
+        expected_threat: Highest visible severity, or no evidence.
+        expected_count: Number of matching evidence records.
+    """
+    _module_factory = ModuleFactory()
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    ip = "192.168.1.249"
+    alias = "fe80::249"
+    with connect_history(reader.history_path) as connection:
+        for address in (ip, alias):
+            connection.execute("INSERT INTO host_snapshots VALUES (?, ?, ?)", (address, now,
+                json.dumps({"ip": address, "scope": "local", "mac": "d8:3a:dd:bb:1d:6c"})))
+            connection.execute("INSERT INTO flow_index(uid, flow_rowid, event_time, src_ip, dst_ip, bytes, packets) "
+                "VALUES (?,1,?,?, '8.8.8.8',1,1)", (address, now-10, address))
+    rows = [("old-medium", now-7200, ip, "medium", .49, 0),
+            ("excluded-critical", now-20, ip, "critical", 8.0, 1)]
+    if recent:
+        rows.append(("recent-low", now-60, alias if device else ip, "low", .1, 0))
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executemany("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,threat_level,accumulated_ratl,whitelisted) "
+            "VALUES (?,?,?,?,?,?)", rows)
+    query = {"range": [range_name], "hide_excluded": ["1" if hide_excluded else "0"],
+             **({"network": ["current"]} if network else {}), **({"device": ["1"]} if device else {})}
+    inventory = reader.hosts(query)
+    row = next(item for item in inventory["items"] if ip in item.get("device_ips", [item["ip"]]))
+    assert row["peak_alert_score"] == expected_peak
+    assert row["max_threat_level"] == expected_threat
+    assert row["evidence_count"] == expected_count
+    detail = reader.host(ip, query)
+    evidence = reader.evidence_for_host(ip, query)
+    assert detail["evidence_count"] == evidence["total"] == expected_count
+    assert detail["alert_count"] == 0
+    assert detail["peak_alert_score"] == expected_peak
+    assert detail["max_threat_level"] == expected_threat
+    if expected_count:
+        assert max(item["alert_score"] for item in evidence["items"]) == expected_peak
+
+
+@pytest.mark.parametrize("device", [False, True])
+def test_host_inventory_uses_activity_clock_for_offline_findings(
+    tmp_path: Path, device: bool,
+) -> None:
+    """Offline inventory findings use the same capture clock as their activity API.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        device: Whether MAC-matched addresses are combined.
+    """
+    _module_factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    previous_hget = reader.redis.hget.side_effect
+    reader.redis.hget.side_effect = lambda key, field: (
+        "pcap" if (key, field) == ("analysis", "input_type") else previous_hget(key, field)
+    )
+    ip = "192.168.1.20"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("DELETE FROM evidence")
+        connection.execute("DELETE FROM alerts")
+        connection.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,threat_level,accumulated_ratl) "
+            "VALUES ('offline',1999992800,?,'medium',0.49)", (ip,))
+        connection.execute("INSERT INTO alerts VALUES ('offline-alert',?,1999992800,'malicious',5)", (ip,))
+    query = {"range": ["live"], "hide_excluded": ["1"], "device": ["1" if device else "0"]}
+    row = next(item for item in reader.hosts(query)["items"] if ip in item.get("device_ips", [item["ip"]]))
+    detail = reader.host(ip, query)
+    assert row["evidence_count"] == detail["evidence_count"] == reader.evidence_for_host(ip, query)["total"] == 1
+    assert row["alert_count"] == detail["alert_count"] == 1
+    assert row["peak_alert_score"] == detail["peak_alert_score"] == 0.49
+    assert row["max_threat_level"] == detail["max_threat_level"] == "medium"
+
+
+@pytest.mark.parametrize("device", [False, True])
 @pytest.mark.parametrize("mac,kind", [("A2:D7:7B:FA:6A:55", "locally_administered"),
     ("d8:58:d7:0:67:11", "universally_administered")])
 def test_mac_classification_in_inventory_and_details(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool, mac: str, kind: str) -> None:
@@ -668,7 +766,9 @@ def test_host_detail_reads_own_mac_from_monitored_interface(tmp_path: Path) -> N
     reader._host_load = Mock(return_value={})
     reader._ti_for_ip = Mock(return_value={})
     reader.alerts = Mock(return_value={"items": [], "total": 0})
-    reader._profile_evidence_count = Mock(return_value=0)
+    reader._host_finding_stats = Mock(return_value={
+        "192.168.1.163": {"evidence": 0, "peak": None, "threat_rank": -1},
+    })
     with patch("modules.web_interface.server.psutil.net_if_addrs", return_value={"en0": [
         SimpleNamespace(family=socket.AF_INET, address="192.168.1.163"),
         SimpleNamespace(family=psutil.AF_LINK, address="02:00:00:00:00:20"),
@@ -2679,7 +2779,9 @@ def test_host_workspace_includes_permanent_identity_clues(
     reader._host_load = Mock(return_value={})
     reader._ti_for_ip = Mock(return_value={})
     reader.alerts = Mock(return_value={"total": 0, "items": []})
-    reader._profile_evidence_count = Mock(return_value=0)
+    reader._host_finding_stats = Mock(return_value={
+        "8.8.8.8": {"evidence": 0, "peak": None, "threat_rank": -1},
+    })
 
     host = reader.host("8.8.8.8")
 

@@ -801,6 +801,8 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-activity-controls input { width: min(280px, 100%); min-width: 130px; margin-left: auto; padding: .28rem .45rem; font-size: .69rem; }
 .host-activity-controls input[hidden], .host-activity-controls span[hidden] { display: none; }
 .host-activity-controls > span { font-size: .64rem; }
+.host-activity-filter-notice { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; padding: .5rem; color: var(--muted); font-size: .72rem; border-bottom: 1px solid var(--line); }
+.host-activity-filter-notice[hidden] { display: none; }
 .host-activity-group-heading { margin: .4rem 0 .15rem; padding: .3rem .45rem; border-left: 3px solid var(--accent); background: #142633; color: var(--text); font-size: .71rem; }
 .host-activity-group-row th { border-left: 3px solid var(--accent); background: #142633; color: var(--text); font-weight: 700; text-align: left; }
 .host-activity-content { display: flex; min-height: 0; flex: 1; flex-direction: column; }

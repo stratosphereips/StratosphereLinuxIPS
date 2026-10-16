@@ -4919,13 +4919,17 @@ class RunDataReader:
         return {str(row["ip"]): dict(row) for row in rows}
 
     def _host_page_counts(
-        self, ips: List[str], network_start: Optional[float] = None
+        self,
+        ips: List[str],
+        network_start: Optional[float] = None,
+        query: Optional[Dict[str, List[str]]] = None,
     ) -> Dict[str, Dict[str, int]]:
-        """Count evidence and alerts for a page with two indexed queries.
+        """Count scoped evidence and alerts with batched indexed queries.
 
         Parameters:
             ips: IPs in the requested Hosts page.
             network_start: Optional earliest event in the current connection.
+            query: Optional activity time, network and exclusion selections.
 
         Returns:
             Evidence and alert counts keyed by IP.
@@ -4945,11 +4949,43 @@ class RunDataReader:
                         if table == "evidence"
                         else "CAST(alert_time AS REAL)"
                     )
+                    start, end = network_start, None
+                    columns = {
+                        str(row[1])
+                        for row in connection.execute(
+                            f"PRAGMA table_info({table})"
+                        )
+                    }
+                    if (
+                        query is not None
+                        and (
+                            "evidence_time"
+                            if table == "evidence"
+                            else "alert_time"
+                        )
+                        in columns
+                    ):
+                        latest = connection.execute(
+                            f"SELECT MAX({time_column}) FROM {table}"
+                        ).fetchone()[0]
+                        start, end, _ = self._time_bounds(query, latest)
+                        start = self._scoped_start(query, start)
                     scope = (
-                        f" AND {time_column} >= ?"
-                        if network_start is not None
-                        else ""
+                        f" AND {time_column} >= ?" if start is not None else ""
                     )
+                    arguments = [*ips]
+                    if start is not None:
+                        arguments.append(start)
+                    if end is not None:
+                        scope += f" AND {time_column} <= ?"
+                        arguments.append(end)
+                    if (
+                        table == "evidence"
+                        and self._query_value(query or {}, "hide_excluded")
+                        == "1"
+                        and "whitelisted" in columns
+                    ):
+                        scope += " AND COALESCE(whitelisted, 0)=0"
                     reviews = (
                         " AND NOT EXISTS (SELECT 1 FROM alert_reviews ar "
                         "WHERE ar.alert_id=alerts.alert_id AND ar.status='resolved')"
@@ -4962,17 +4998,96 @@ class RunDataReader:
                         f"FROM {table} WHERE {column} IN ({placeholders})"
                         f"{scope}{reviews} "
                         f"GROUP BY {column}",
-                        (
-                            (*ips, network_start)
-                            if network_start is not None
-                            else ips
-                        ),
+                        arguments,
                     ).fetchall()
                     for row in rows:
                         counts[str(row["ip"])][field] = int(row["count"])
         except sqlite3.Error:
             pass
         return counts
+
+    def _host_finding_stats(
+        self,
+        ips: List[str],
+        query: Dict[str, List[str]],
+    ) -> Dict[str, Dict[str, Any]]:
+        """Summarize visible evidence using the detail table's range and scope.
+
+        Parameters:
+            ips: Host or MAC-matched device addresses.
+            query: Time, network and exclusion selections.
+
+        Returns:
+            Evidence count, peak score and maximum threat rank for each IP.
+        """
+        result = {
+            ip: {"evidence": 0, "peak": None, "threat_rank": -1} for ip in ips
+        }
+        if not ips:
+            return result
+        try:
+            with self._connect_sqlite() as connection:
+                columns = {
+                    str(row[1])
+                    for row in connection.execute(
+                        "PRAGMA table_info(evidence)"
+                    )
+                }
+                if "profile_ip" not in columns:
+                    return result
+                latest = (
+                    connection.execute(
+                        "SELECT MAX(evidence_time) FROM evidence"
+                    ).fetchone()[0]
+                    if "evidence_time" in columns
+                    else 0
+                )
+                start, end, _ = self._time_bounds(
+                    {"range": ["all"], **query}, latest
+                )
+                start = self._scoped_start(query, start)
+                scope = ""
+                values = []
+                if "evidence_time" in columns:
+                    if start is not None:
+                        scope += " AND evidence_time >= ?"
+                        values.append(start)
+                    if end is not None:
+                        scope += " AND evidence_time <= ?"
+                        values.append(end)
+                if (
+                    self._query_value(query, "hide_excluded") == "1"
+                    and "whitelisted" in columns
+                ):
+                    scope += " AND COALESCE(whitelisted,0)=0"
+                score = (
+                    "accumulated_ratl"
+                    if getattr(self, "score_mode", "ratl") == "ratl"
+                    else "accumulated_threat_level"
+                )
+                score = score if score in columns else "NULL"
+                threat = (
+                    "CASE LOWER(threat_level) WHEN 'critical' THEN 4 WHEN 'high' THEN 3 "
+                    "WHEN 'medium' THEN 2 WHEN 'low' THEN 1 WHEN 'info' THEN 0 ELSE -1 END"
+                    if "threat_level" in columns
+                    else "-1"
+                )
+                for offset in range(0, len(ips), 300):
+                    batch = ips[offset : offset + 300]
+                    marks = ",".join("?" for _ in batch)
+                    for row in connection.execute(
+                        f"SELECT profile_ip, COUNT(*) AS count, MAX({score}) AS peak, MAX({threat}) AS rank "
+                        f"FROM evidence WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
+                        (*batch, *values),
+                    ):
+                        result[str(row[0])] = {
+                            "evidence": int(row[1]),
+                            "peak": row[2],
+                            "threat_rank": int(row[3]),
+                        }
+        except (OSError, sqlite3.Error):
+            pass
+        return result
 
     def _host_page_identity(self, ips: List[str]) -> Dict[str, Dict[str, Any]]:
         """Fetch live names, DNS, and threat context with two pipelines.
@@ -5045,16 +5160,6 @@ class RunDataReader:
         network_start_sql = (
             str(min(network_start, 1e300)) if network_start is not None else ""
         )
-        alert_network_clause = (
-            f" AND CAST(a.alert_time AS REAL) >= {network_start_sql}"
-            if network_start is not None
-            else ""
-        )
-        evidence_network_clause = (
-            f" AND e.evidence_time >= {network_start_sql}"
-            if network_start is not None
-            else ""
-        )
         current_threats = (
             self._current_profile_threats()
             if threat and threat != "info_or_more"
@@ -5088,6 +5193,33 @@ class RunDataReader:
             }
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
+            evidence_network_clause = ""
+            alert_network_clause = ""
+            if "evidence_time" in evidence_columns:
+                for table, time_column in (
+                    ("evidence e", "e.evidence_time"),
+                    ("alerts a", "CAST(a.alert_time AS REAL)"),
+                ):
+                    finding_latest = connection.execute(
+                        f"SELECT MAX({time_column}) FROM run_db.{table}"
+                    ).fetchone()[0]
+                    finding_start, finding_end, _ = self._time_bounds(
+                        query, finding_latest
+                    )
+                    finding_start = self._scoped_start(query, finding_start)
+                    clause = ""
+                    if finding_start is not None:
+                        lower = min(finding_start, 1e300)
+                        clause += f" AND {time_column} >= {lower}"
+                    if finding_end is not None:
+                        clause += f" AND {time_column} <= {finding_end}"
+                    if table == "evidence e":
+                        evidence_network_clause = clause
+                    else:
+                        alert_network_clause = clause
+            hide_excluded = self._query_value(query, "hide_excluded") == "1"
+            if hide_excluded and "whitelisted" in evidence_columns:
+                evidence_network_clause += " AND COALESCE(e.whitelisted,0)=0"
             flow_network_clause = (
                 f" AND fi.event_time >= {network_start_sql}"
                 if network_start is not None
@@ -5367,7 +5499,7 @@ class RunDataReader:
                 if network_start is not None
                 else self._host_page_loads(page_ips)
             )
-            counts = self._host_page_counts(page_ips, network_start)
+            counts = self._host_page_counts(page_ips, query=query)
             identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
         annotations = HostProfileStore.annotations_for_ips(
@@ -5462,11 +5594,15 @@ class RunDataReader:
                     else self._host_load(ip)
                 )
                 host.update(self._ip_context_for_ip(ip, host.get("dns")))
-                if network_start is None:
+                if (
+                    range_name == "all"
+                    and network_start is None
+                    and not hide_excluded
+                ):
                     host["evidence_count"] = self._profile_evidence_count(ip)
                     host["alert_count"] = self._profile_alert_count(ip)
                 else:
-                    scoped_counts = self._host_page_counts([ip], network_start)
+                    scoped_counts = self._host_page_counts([ip], query=query)
                     host["evidence_count"] = scoped_counts[ip]["evidence"]
                     host["alert_count"] = scoped_counts[ip]["alerts"]
             annotation = annotations.get(ip, {})
@@ -5539,9 +5675,8 @@ class RunDataReader:
                 if network_start is not None
                 else self._host_page_loads(batch)
             )
-            counts.update(self._host_page_counts(batch, network_start))
-        peak: Dict[str, float] = {}
-        scoped_threats: Dict[str, int] = {}
+            counts.update(self._host_page_counts(batch, query=query))
+        finding_stats = self._host_finding_stats(ips, query)
         has_threat_column = False
         profile_path = getattr(
             self,
@@ -5554,11 +5689,6 @@ class RunDataReader:
         )
         try:
             with self._connect_sqlite() as connection:
-                score_field = (
-                    "accumulated_ratl"
-                    if getattr(self, "score_mode", "ratl") == "ratl"
-                    else "accumulated_threat_level"
-                )
                 evidence_columns = {
                     str(column[1])
                     for column in connection.execute(
@@ -5566,42 +5696,6 @@ class RunDataReader:
                     ).fetchall()
                 }
                 has_threat_column = "threat_level" in evidence_columns
-                if has_threat_column:
-                    scope = (
-                        " WHERE evidence_time >= ?"
-                        if network_start is not None
-                        else ""
-                    )
-                    args = (network_start,) if scope else ()
-                    for row in connection.execute(
-                        "SELECT profile_ip, MAX(CASE LOWER(threat_level) "
-                        "WHEN 'critical' THEN 4 WHEN 'high' THEN 3 WHEN 'medium' THEN 2 "
-                        "WHEN 'low' THEN 1 WHEN 'info' THEN 0 ELSE -1 END) AS rank "
-                        f"FROM evidence{scope} GROUP BY profile_ip",
-                        args,
-                    ):
-                        scoped_threats[str(row["profile_ip"])] = int(
-                            row["rank"]
-                        )
-                if score_field in evidence_columns:
-                    for offset in range(0, len(ips), 300):
-                        batch = ips[offset : offset + 300]
-                        marks = ",".join("?" for _ in batch)
-                        scope = (
-                            " AND evidence_time >= ?"
-                            if network_start is not None
-                            else ""
-                        )
-                        args = (*batch, network_start) if scope else batch
-                        for row in connection.execute(
-                            f"SELECT profile_ip, MAX({score_field}) AS score "
-                            f"FROM evidence WHERE profile_ip IN ({marks}){scope} "
-                            "GROUP BY profile_ip",
-                            args,
-                        ):
-                            peak[str(row["profile_ip"])] = float(
-                                row["score"] or 0
-                            )
         except (AttributeError, sqlite3.Error):
             pass
         groups: Dict[str, Dict[str, Any]] = {}
@@ -5621,7 +5715,7 @@ class RunDataReader:
                     "bytes": 0,
                     "evidence": 0,
                     "alerts": 0,
-                    "peak_score": 0.0,
+                    "peak_score": None,
                     "threat_rank": -1,
                     "user_status": "",
                     "user_labels": [],
@@ -5629,6 +5723,7 @@ class RunDataReader:
             )
             load = loads.get(ip, {})
             count = counts.get(ip, {})
+            findings = finding_stats[ip]
             group["members"].append((ip, data, float(snapshot["observed_at"])))
             group["last_seen"] = max(
                 group["last_seen"],
@@ -5642,11 +5737,14 @@ class RunDataReader:
                 ("alerts", count),
             ):
                 group[field] += int(source.get(field) or 0)
-            group["peak_score"] = max(group["peak_score"], peak.get(ip, 0))
+            if findings["peak"] is not None:
+                group["peak_score"] = max(
+                    group["peak_score"] or 0, findings["peak"]
+                )
             group["threat_rank"] = max(
                 group["threat_rank"],
                 (
-                    scoped_threats.get(ip, -1)
+                    findings["threat_rank"]
                     if has_threat_column
                     else EVIDENCE_THREAT_RANKS.get(
                         str(data.get("max_threat_level") or "info").lower(), 0
@@ -6372,11 +6470,14 @@ class RunDataReader:
         alert_total = 0
         for address in host_ips:
             alert_query = {
-                "range": ["all"],
+                "range": [self._query_value(query or {}, "range", "all")],
                 "profile": [address],
                 "limit": ["100"],
                 "details": ["false"],
             }
+            for key in ("from", "to"):
+                if key in (query or {}):
+                    alert_query[key] = query[key]
             if network_start is not None:
                 alert_query["network"] = ["current"]
             alert_page = self.alerts(alert_query)
@@ -6394,15 +6495,24 @@ class RunDataReader:
         )[:MAX_PAGE_SIZE]
         host["alert_count"] = alert_total
         host["evidence"] = []
-        host["evidence_count"] = (
-            self._profile_evidence_count(ip)
-            if network_start is None and len(host_ips) == 1
-            else sum(
-                item["evidence"]
-                for item in self._host_page_counts(
-                    host_ips, network_start
-                ).values()
-            )
+        finding_query = {"range": ["all"], **(query or {})}
+        findings = list(
+            self._host_finding_stats(host_ips, finding_query).values()
+        )
+        host["evidence_count"] = sum(item["evidence"] for item in findings)
+        scores = [
+            item["peak"] for item in findings if item["peak"] is not None
+        ]
+        host["peak_alert_score"] = max(scores, default=None)
+        threat_rank = max(
+            (item["threat_rank"] for item in findings), default=-1
+        )
+        host["has_findings"] = threat_rank >= 0
+        host["max_threat_level"] = (
+            self._threat_from_rank(threat_rank) if threat_rank >= 0 else ""
+        )
+        host["findings_range"] = self._query_value(
+            finding_query, "range", "all"
         )
         host["mac_address_type"] = classify_mac(host.get("mac"))
         return host
@@ -6827,6 +6937,11 @@ class RunDataReader:
             start = self._scoped_start(query, start)
             clauses = [f"profile_ip IN ({placeholders})"]
             params: List[Any] = list(ips)
+            if (
+                self._query_value(query, "hide_excluded") == "1"
+                and "whitelisted" in columns
+            ):
+                clauses.append("COALESCE(whitelisted,0)=0")
             if start is not None:
                 clauses.append("evidence_time >= ?")
                 params.append(start)
