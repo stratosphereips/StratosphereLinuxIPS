@@ -20,6 +20,134 @@ from modules.web_interface.history import connect_history
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
+    """Keep device addresses, identity and controls visible as aliases change.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    addresses = ["fe80::4c79:8745:56b3:21b5", "192.168.1.176",
+        "fd9f:2ebd:5f8:0:47d:ecd3:3d81:ac52",
+        *[f"2001:db8:1234:abcd:1111:2222:3333:{index}" for index in range(1, 9)]]
+    host = {"ip": addresses[0], "device_ips": addresses, "all_ips": addresses,
+        "hostname": "android_aehweocc.local", "scope": "local",
+        "mac": "b8:7b:d4:97:ce:be", "mac_vendor": "Example device manufacturer",
+        "alert_score": 0, "alert_threshold": 5, "peak_alert_score": 3.36,
+        "alert_count": 0, "evidence_count": 0, "permanent_profiles": [],
+        "capture_network": {"name": "Home-Wifi6"}, "seen_on_current_network": True}
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve host refreshes and assets without accessing a running capture.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path.startswith("/api/hosts/"):
+            if path.endswith("/flows"):
+                route.fulfill(json={"items": [], "total": 0, "next_cursor": None})
+            elif path.endswith("/traffic-summary"):
+                route.fulfill(json={"timeline": [], "protocols": [], "peers": []})
+            elif path.endswith("/score-history"):
+                route.fulfill(json={"timeline": []})
+            else:
+                route.fulfill(json=host)
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width": 1334, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof renderHostCards === 'function'")
+        page.evaluate("""data => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(data.theme); state.activeTab='hosts'; state.deviceView=true;
+            state.networkOnly=true; state.networkFilterSupported=true;
+            state.host=data.host; state.hostActivity='flows';
+            document.body.classList.add('hosts-active');
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='hosts'));
+            byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+            rememberHostRecord(data.host); renderHostCards(data.host); updateHostViewportHeight();
+            clearError();
+        }""", {"theme": theme, "host": host})
+        heading = page.locator(".host-heading-copy")
+        address_list = heading.locator(".device-addresses")
+        assert address_list.text_content() == f"{len(addresses)} addresses · " + " · ".join(addresses)
+        assert "android_aehweocc.local" in heading.inner_text()
+        assert "Home-Wifi6" in heading.inner_text()
+        assert "Example device manufacturer" in heading.inner_text()
+        assert "b8:7b:d4:97:ce:be" in heading.inner_text()
+        assert heading.locator(".mac-badge").text_content() == "U"
+        assert "Current 0 / 5 · Peak 3.36 / 5" == page.locator("#host-score-pill").inner_text()
+        for width in (900, 1334, 1920):
+            page.set_viewport_size({"width": width, "height": 1100})
+            geometry = page.evaluate("""addresses => {
+                const header=byId('host-title').closest('.host-workspace-head');
+                const box=header.getBoundingClientRect();
+                const list=header.querySelector('.device-addresses');
+                const style=getComputedStyle(list);
+                const fits=rect => rect.left>=box.left-1 && rect.right<=box.right+1
+                    && rect.top>=box.top-1 && rect.bottom<=box.bottom+1 && rect.right<=innerWidth;
+                return {unclipped:style.whiteSpace==='normal' && style.overflow==='visible'
+                        && list.scrollWidth<=list.clientWidth+1,
+                    addresses:addresses.every(ip => {
+                        const range=document.createRange(); const start=list.textContent.indexOf(ip);
+                        range.setStart(list.firstChild,start); range.setEnd(list.firstChild,start+ip.length);
+                        return [...range.getClientRects()].every(fits);
+                    }),
+                    identity:[...header.querySelectorAll('.host-label,.host-name,#host-subtitle,#host-score-pill')]
+                        .every(node => fits(node.getBoundingClientRect())),
+                    controls:[...header.querySelectorAll('button,select,input')]
+                        .filter(node => !node.hidden).every(node => fits(node.getBoundingClientRect()))};
+            }""", addresses)
+            assert all(geometry.values()), (width, geometry)
+            assert address_list.bounding_box()["width"] > 400
+        page.set_viewport_size({"width": 1334, "height": 1100})
+        page.screenshot(path=f"output/host-device-addresses-{theme}.png")
+        rotated = addresses[:-1] + ["2001:db8:1234:abcd:aaaa:bbbb:cccc:dddd"]
+        host.update(device_ips=rotated, all_ips=rotated)
+        page.evaluate("refreshHostWorkspace()")
+        assert address_list.text_content() == f"{len(rotated)} addresses · " + " · ".join(rotated)
+        assert addresses[-1] not in address_list.text_content()
+        page.evaluate("""() => {
+            byId('host-range').value='custom'; byId('host-from').hidden=false; byId('host-to').hidden=false;
+        }""")
+        page.set_viewport_size({"width": 900, "height": 1100})
+        assert page.locator(".host-workspace-head").evaluate("""header => {
+            const box=header.getBoundingClientRect();
+            return [...header.querySelectorAll('button,select,input')].filter(node => !node.hidden)
+                .every(node => {const rect=node.getBoundingClientRect();
+                    return rect.right<=innerWidth && rect.bottom<=box.bottom;});
+        }""")
+        page.evaluate("""() => {
+            const compact=deviceIdentity(state.host); byId('hosts-list-view').append(compact);
+            const style=getComputedStyle(compact.querySelector('.device-addresses'));
+            window.compactAddressStyle={whiteSpace:style.whiteSpace,textOverflow:style.textOverflow};
+            compact.remove(); state.deviceView=false; renderHostCards(state.host);
+        }""")
+        assert page.evaluate("window.compactAddressStyle") == {"whiteSpace": "nowrap", "textOverflow": "ellipsis"}
+        assert heading.locator(".device-addresses").count() == 0
+        assert addresses[0] in heading.inner_text()
+        assert "android_aehweocc.local" in heading.inner_text()
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: str) -> None:
     """Inspect host flows with readable cards, related records, JSON and resizing.
 

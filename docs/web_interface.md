@@ -757,7 +757,10 @@ and activity tables use that range and the current-network selection.
 **Hide excluded** also excludes whitelisted evidence from the peak, threat,
 and evidence count. Select **Full run** to inspect earlier findings. The
 header separates the current active time-window score from the peak in the
-selected range.
+selected range. In Device view, the host header shows every associated IPv4
+and IPv6 address in full. It uses the available width and wraps addresses,
+identity details, and controls onto additional lines when needed. The address
+list updates when the host refreshes, including newly learned IPv6 addresses.
 
 Saved activity search, threat filters, grouping, and sorting remain available
 when opening another host. An explicit notice shows active search and threat

@@ -6062,6 +6062,7 @@ function renderHostScope(host) {
 const HOST_REVIEW_LABELS = { to_analyze: "To analyze", in_review: "Under review", reviewed: "Reviewed" };
 
 function renderHostCards(host) {
+  byId("host-title").replaceChildren(deviceIdentity(host));
   renderHostScope(host);
   const scopedProfiles = hostVisibleProfiles(host);
   const networkScoped = state.networkOnly && state.networkFilterSupported;
@@ -6798,7 +6799,6 @@ async function openHost(ip, summary = null) {
   byId("host-detail-view").hidden = false;
   byId("host-detail-view").classList.remove("unprofiled");
   byId("host-unprofiled").hidden = true;
-  byId("host-title").replaceChildren(deviceIdentity(host));
   renderHostCards(host);
   const hasExactAlerts = host.alerts?.some((alert) => host.all_ips.includes(alert.ip_alerted));
   const initialActivity = hasExactAlerts || (host.exact_aggregates !== false && host.alert_count)

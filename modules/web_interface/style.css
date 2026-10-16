@@ -758,17 +758,19 @@ body.hosts-active main { max-width: none; padding: 0; }
 .hosts-list-footer { display: flex; min-height: 30px; align-items: center; justify-content: space-between; margin: 0 .65rem; padding: .25rem .55rem; border: 1px solid #1c2a35; border-top: 0; border-radius: 0 0 5px 5px; color: var(--muted); font-size: .68rem; }
 .hosts-list-footer button { padding: .15rem .3rem; border: 0; background: transparent; color: var(--blue); font-size: .7rem; cursor: pointer; }
 .hosts-list-footer button[hidden] { display: none; }
-.host-workspace-head { display: flex; min-height: 61px; align-items: center; gap: .7rem; padding: .45rem .65rem; border-bottom: 1px solid var(--line); }
+.host-workspace-head { display: flex; min-height: 61px; flex: none; flex-wrap: wrap; align-items: center; gap: .7rem; padding: .45rem .65rem; border-bottom: 1px solid var(--line); }
 .host-workspace-head .text-button { flex: none; margin: 0; padding: .4rem .5rem; font-size: .72rem; }
-.host-heading-copy { min-width: 0; }
+.host-heading-copy { min-width: 0; flex: 1 1 30rem; overflow-wrap: anywhere; }
 .host-heading-copy h2 { margin: 0; font-size: 1.05rem; }
+.host-heading-copy .device-identity { display: flex; }
+.host-heading-copy .device-addresses { max-width: none; overflow: visible; white-space: normal; text-overflow: clip; line-height: 1.5; font-weight: 500; }
 .host-heading-copy h2 .host-label { display: flex; gap: .4rem; align-items: baseline; }
 .host-heading-copy h2 .host-label code { font-size: 1rem; }
 .host-heading-copy h2 .host-name { color: var(--muted); font-size: .8rem; }
-.host-heading-copy p { overflow: hidden; margin: .1rem 0 0; color: var(--muted); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
+.host-heading-copy p { margin: .1rem 0 0; color: var(--muted); font-size: .7rem; }
 #host-score-pill { flex: none; padding: .33rem .55rem; border: 1px solid #633039; border-radius: 5px; color: #ee9fa8; font-size: .72rem; }
 #host-score-pill .slips-score { min-width: 0; }
-.host-workspace-head .toolbar { margin-left: auto; flex-wrap: nowrap; }
+.host-workspace-head .toolbar { max-width: 100%; margin-left: auto; flex-wrap: wrap; }
 .host-workspace-head .toolbar button, .host-workspace-head .toolbar select { min-width: 0; padding: .38rem .48rem; font-size: .71rem; }
 #host-detail-view > #host-summary { grid-template-columns: repeat(6, minmax(0, 1fr)); gap: .4rem; margin: .45rem .65rem; }
 #host-detail-view > #host-summary .summary-card { min-height: 55px; padding: .5rem .65rem; }
