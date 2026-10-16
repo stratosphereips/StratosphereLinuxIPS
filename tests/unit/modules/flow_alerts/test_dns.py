@@ -5,6 +5,7 @@
 from dataclasses import asdict
 
 from slips_files.core.flows.zeek import DNS
+from slips_files.core.input_profilers.zeek import ZeekJSON
 from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 
@@ -23,6 +24,53 @@ uid = "CAeDWs37BipkfP21u8"
 timestamp = 1635765895.037696
 daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
+
+
+@pytest.mark.parametrize("bindings", [None, [], ["storm.local|192.168.1.112"]])
+async def test_parsed_dns_reconstructs_in_analyzer_and_timeout_queue(bindings: list[str] | None) -> None:
+    """Exercise DNS parsing, serialized module delivery and timer reconstruction.
+
+    Parameters:
+        bindings: Optional Zeek mDNS ownership metadata, including old logs.
+    """
+    module_factory = ModuleFactory()
+    dns = module_factory.create_dns_analyzer_obj()
+    data = {"ts": 100, "uid": "dns-roundtrip", "id.orig_h": "192.168.1.1",
+            "id.resp_h": "224.0.0.251", "id.orig_p": 5353, "id.resp_p": 5353,
+            "proto": "udp", "query": "storm.local", "qclass_name": "C_INTERNET",
+            "qtype_name": "A", "rcode_name": "NOERROR", "answers": ["192.168.1.112"], "TTLs": [120]}
+    if bindings is not None:
+        data["slips_mdns_bindings"] = bindings
+    flow, error = ZeekJSON(module_factory.logger).process_line({"type": "dns.log", "interface": "en0", "data": data})
+    assert not error
+    dns.flowalerts.create_task = Mock()
+    detectors = ["check_high_entropy_dns_answers", "check_invalid_dns_answers", "detect_dga",
+                 "check_different_localnet_usage", "detect_young_domains", "check_dns_arpa_scan"]
+    for name in detectors:
+        setattr(dns, name, Mock())
+    await dns.analyze({"channel": "new_dns", "data": json.dumps({"profileid": "profile_192.168.1.1",
+        "twid": "timewindow1", "flow": asdict(flow)})})
+    queued = dns.get_dns_flow_from_queue()
+    assert isinstance(queued, DNS)
+    assert asdict(queued) == asdict(flow)
+    assert queued.mdns_bindings == (bindings or [])
+    dns.check_high_entropy_dns_answers.assert_called_once_with("timewindow1", queued)
+    assert dns.flowalerts.create_task.call_args.args[-1] == queued
+
+
+def test_dns_timeout_logs_error_and_processes_the_next_message() -> None:
+    """A malformed message must not kill the timeout thread or hide its cause."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    reference = Mock()
+    dns.flowalerts.should_stop = Mock(side_effect=[False, False, True])
+    dns.get_dns_flow_from_queue = Mock(side_effect=[ValueError("Malformed DNS message"), reference])
+    dns.check_pending_flows_timeout = Mock(return_value=[])
+    dns.flowalerts.print_traceback = Mock()
+
+    dns.check_dns_without_connection_timeout()
+
+    dns.flowalerts.print_traceback.assert_called_once_with()
+    dns.check_pending_flows_timeout.assert_called_once_with(reference)
 
 
 @pytest.mark.parametrize(

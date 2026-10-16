@@ -112,6 +112,11 @@ class DNS(BaseFlow):
         self.answers = (
             [self.answers] if isinstance(self.answers, str) else self.answers
         )
+        self.mdns_bindings = (
+            [self.mdns_bindings]
+            if isinstance(self.mdns_bindings, str) and self.mdns_bindings
+            else self.mdns_bindings or []
+        )
 
 
 @dataclass(kw_only=True)

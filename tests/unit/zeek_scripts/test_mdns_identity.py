@@ -5,6 +5,7 @@ import shutil
 import sqlite3
 import subprocess
 import tempfile
+from dataclasses import asdict
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -12,6 +13,7 @@ import pytest
 
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.input_profilers.zeek import ZeekJSON
+from slips_files.common.flow_classifier import FlowClassifier
 from tests.module_factory import ModuleFactory
 
 
@@ -162,6 +164,7 @@ def test_mdns_names_follow_address_record_owners(
                 {"type": "dns.log", "interface": "en0", "data": row}
             )
             assert not error
+            flow = FlowClassifier().convert_to_flow_obj(json.loads(json.dumps(asdict(flow))))
             store.observe_flow(flow)
         # A new network must establish ownership before inheriting the old name.
         network = {

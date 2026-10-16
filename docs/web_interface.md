@@ -409,6 +409,12 @@ alert timeline before paging.
 
 The Evidence tab keeps the group or record table on the left and a group summary and full-height record list beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence selected inside Alerts opens in the fourth Alerts pane; evidence opened from a host retains the full investigation view.
 
+With a record open, the default widths are approximately **25% groups, 25%
+records, and 50% details**. Both dividers support dragging and arrow keys.
+The browser remembers these widths separately from the two-pane view, across
+record changes and page reloads. Old automatically saved 5%/5% widths are
+discarded. The inspector stacks its internal columns when space is limited.
+
 **Type** grouping combines matching evidence across hosts. Its alert-link count
 uses the selected time range and filters, and only the visible groups are
 counted for each page. Recent ranges use the evidence time index so a large
@@ -418,6 +424,11 @@ type-ordered evidence index and counts alert links from two ordered indexes.
 The evidence inspector initially loads **20 triggering flow UIDs**. **Load more triggering flows** loads the next page, including related protocol records; evidence with more than 1,000 UIDs remains fully accessible. The count distinguishes loaded, unavailable, and recovered flows. Connection and protocol tab contents are built when selected, and complete JSON is formatted only when expanded. Closing or switching records cancels the previous flow request. A durable record without flow IDs returns immediately instead of scanning Redis history. The browser also renders older unpaged API responses in batches of 20 until the server is restarted. This applies in the Evidence, Alerts, and Hosts workspaces, including Device + type groups.
 
 The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. Additional stored values appear in a compact table, omitting fields already shown above; empty fields can be revealed and the complete original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
+
+ARP protocol cards put **Destination IP** first in a highlighted field, followed
+by **Source IP**, operation, and hardware addresses. Both IPs open the host
+workspace. They remain visible when only the ARP protocol record was retained;
+they are not repeated in the additional-fields table.
 
 The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
 
@@ -585,7 +596,9 @@ Slips also keeps a private `.bak` copy beside the configured file. If the
 configured file disappears, startup or the running process restores that copy
 before loading or saving rules.
 If neither file exists, startup stops instead of silently running without the
-local whitelist. Startup also stops if the file has lost web-managed rules
+local whitelist. Ordinary `#` comments, including comma-separated explanatory
+text, are ignored safely; commented valid rules retain their existing removal
+semantics. Startup also stops if the file has lost web-managed rules
 that are still in the backup, without overwriting either copy. Web edits
 recover from the same copy and never create a new
 partial whitelist in place of a missing configured file. Keep an additional
@@ -751,7 +764,7 @@ profile for an address Slips ignored.
 
 The selected host workspace includes:
 
-- **Review**, **Labels**, **Name**, and **Note** in the Identity card. **Mark or name this host** / **Edit host review and identity** opens the editor for the current permanent profile. Review marks are Unmarked, To analyze, Under review, and Reviewed; up to ten custom labels and an analyst note can be saved. The inventory has sortable Review and Labels columns, a review-mark filter, and search across labels, saved names and notes before paging. These fields are included in its CSV export. Review marks, labels, name and note are saved together in one transaction. Review marks and labels persist across restarts in the permanent host database and follow a verified device MAC; a reused private IP on another network does not inherit another device's mark. Marking a host does not relabel its flows or whitelist its traffic. Editors for older network profiles remain in **Networks and names**. A saved custom name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Names follow a known device MAC across network and IP changes. When a device changes its private MAC or its MAC is unavailable, a device mDNS hostname such as `cherry.local` can carry the saved name and note to its new address only when address-record owners establish that hostname for both the originally named profile and the new address. A DNS question and flat answer list do not establish that relationship. Service discovery names and random UUID names are not used as device identities. Clearing both fields clears the linked device name. Hosts without a usable MAC or device hostname retain names only on their exact network profile;
+- **Review**, **Labels**, **Name**, and **Note** in the Identity card. **Mark or name this host** / **Edit host review and identity** opens the editor for the current permanent profile. Review marks are Unmarked, To analyze, Under review, and Reviewed; up to ten custom labels and an analyst note can be saved. The inventory has sortable Review and Labels columns, a review-mark filter, and search across labels, saved names and notes before paging. These fields are included in its CSV export. Review marks, labels, name and note are saved together in one transaction. Review marks and labels persist across restarts in the permanent host database and follow a verified device MAC; a reused private IP on another network does not inherit another device's mark. Marking a host does not relabel its flows or whitelist its traffic. Editors for older network profiles remain in **Networks and names**. A saved custom name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. When a MAC is known, names and notes are assigned to that MAC across its observed IPv4, IPv6, and network changes. The editor displays the MAC. Reusing the original IP with a different MAC does not transfer the name; a matching mDNS hostname cannot override a different known MAC. When both MACs are unknown, a device mDNS hostname such as `cherry.local` can carry the saved name and note only when address-record owners establish that hostname for both addresses. A DNS question and flat answer list do not establish that relationship. Service discovery names and random UUID names are not used as device identities. Clearing both fields clears the linked device name. Hosts without a usable MAC or device hostname retain names only on their exact network profile;
 - the displayed name beside the IP and in the Name row. This may be a saved user name, or a name learned from DNS or another source. A user name always takes priority;
 - MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence. Empty Redis fields do not replace saved identity clues. For this computer during a live interface capture, the detail pane reads its MAC from the operating system's monitored interface, and new permanent observations save that MAC for the computer's IPv4 and IPv6 addresses; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
@@ -765,6 +778,16 @@ Every related-evidence and flow-table heading is sortable across the selected ho
 IP labels throughout the web interface use the saved user name first, then a
 learned hostname, DNS or reverse DNS name, and finally the MAC vendor followed
 by “device” when no name is available. The IP stays visible beside the label.
+
+The background host-profile module learns MAC ownership from DHCP, explicit
+ARP sender/target hardware fields, and Ethernet endpoints on the captured
+local link. A zero ARP target hardware address or broadcast Ethernet address
+does not identify the target device. Routed endpoints do not inherit the
+gateway's MAC. The monitored computer's operating-system MAC takes precedence
+over conflicting capture metadata. Repeated identical MAC observations are
+written at most once per minute per network/IP; changes are recorded immediately.
+The in-process MAC cache is capped at 4,096 entries. These writes stay in the
+background module, outside the main analysis loop.
 
 New live captures load `zeek-scripts/mdns-identity.zeek`, which retains each
 mDNS A/AAAA record's owner and address in `slips_mdns_bindings`. Slips uses

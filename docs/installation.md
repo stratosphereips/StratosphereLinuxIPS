@@ -88,6 +88,13 @@ The native process implementation uses macOS's default `spawn` method.
 Do not force `fork` or disable Apple's fork-safety checks. Modules, database
 connections, and background threads are initialized in their child processes.
 
+On shutdown, the process manager reaps every owned child that is still alive,
+even if it already reported completion or its Redis PID entry was lost. It
+uses the process handles directly so a Redis outage cannot skip cleanup and
+leave an older module consuming traffic after a restart. A malformed DNS
+message is logged by Flow Alerts; the DNS timeout thread continues with the
+next message instead of failing in its error handler.
+
 Foreground file and stdin analysis, growing Zeek logs, and a local two-peer
 Iris exchange are covered by the [native macOS investigation](macos.md).
 Live interfaces need permission to capture through macOS BPF devices. Live

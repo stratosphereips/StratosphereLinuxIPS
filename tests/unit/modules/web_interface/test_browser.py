@@ -361,15 +361,44 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         page.route("**/*", route_request)
         page.goto("http://slips.test/")
         page.wait_for_function("typeof openEvidence === 'function'")
+        page.evaluate("""() => {
+            localStorage.setItem(VIEW_PREFERENCES_KEY, JSON.stringify({paneWidths: {
+                'evidence-workspace': {'--evidence-left-width':'5%', '--evidence-record-width':'5%'}
+            }}));
+            restoreViewPreferences();
+        }""")
+        assert page.evaluate("byId('evidence-workspace').style.getPropertyValue('--evidence-left-width')") == ""
         elapsed = page.evaluate("""async record => {
             state.activeTab = 'evidence'; state.deviceView = true;
             document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === 'evidence'));
             state.evidenceWorkspace.group = { id: 'mac:02:00:00:00:00:20', device_ips: ['192.168.1.20', 'fe80::20'] };
             state.evidenceWorkspace.records = [record];
+            renderEvidenceGroup();
             const start = performance.now(); await openEvidence(record);
             return performance.now() - start;
         }""", record)
         assert elapsed < 3000
+        workspace = page.locator("#evidence-workspace")
+        group_pane = workspace.locator(".evidence-left")
+        records_pane = page.locator("#evidence-right")
+        workspace_width = workspace.bounding_box()["width"]
+        assert .24 < group_pane.bounding_box()["width"] / workspace_width < .26
+        assert .24 < records_pane.bounding_box()["width"] / workspace_width < .26
+        assert page.locator("#evidence-detail").bounding_box()["width"] > .47 * workspace_width
+        assert page.locator(".evidence-detail-columns").evaluate("element => getComputedStyle(element).gridTemplateColumns.split(' ').length") == 1
+        assert page.locator(".evidence-detail-banner").evaluate("element => getComputedStyle(element).flexDirection") == "column"
+        page.set_viewport_size({"width": 2400, "height": 1000})
+        assert page.locator(".evidence-detail-columns").evaluate("element => getComputedStyle(element).gridTemplateColumns.split(' ').length") == 2
+        page.set_viewport_size({"width": 1600, "height": 1000})
+        assert records_pane.locator(".evidence-record-list").bounding_box()["height"] > 300
+        for divider_id in ("#evidence-group-divider", "#evidence-detail-divider"):
+            divider = page.locator(divider_id).bounding_box()
+            page.mouse.move(divider["x"] + divider["width"] / 2, divider["y"] + 50)
+            page.mouse.down()
+            page.mouse.move(divider["x"] + divider["width"] / 2 + 50, divider["y"] + 50, steps=5)
+            page.mouse.up()
+        resized_widths = [group_pane.bounding_box()["width"], records_pane.bounding_box()["width"]]
+        assert all(width > .27 * workspace_width for width in resized_widths)
         assert requests == [{"limit": ["20"]}]
         assert page.locator(".evidence-detail-flow-list .flow-group").count() == 20
         assert page.locator(".evidence-detail-flow-list .protocol-card").count() == 20
@@ -393,6 +422,33 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert page.locator("#evidence-detail-content .flow-group").count() == 0
         page.evaluate("record => openEvidence(record)", record)
         assert page.locator(".evidence-detail-flow-list .flow-group").count() == 20
+        assert [group_pane.bounding_box()["width"], records_pane.bounding_box()["width"]] == resized_widths
+        page.evaluate("saveViewPreferences()")
+        page.reload()
+        page.wait_for_function("typeof openEvidence === 'function'")
+        page.evaluate("""record => {
+            state.activeTab='evidence';
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='evidence'));
+            state.evidenceWorkspace.records=[record];
+            return openEvidence(record);
+        }""", record)
+        assert [group_pane.bounding_box()["width"], records_pane.bounding_box()["width"]] == resized_widths
+        page.evaluate("""() => {
+            const container = byId('evidence-detail-content');
+            container.replaceChildren(flowCard({uid:'arp-test', network_flow:null, protocol_flows:[{
+                flow_type:'arp', flow:{uid:'arp-test', saddr:'192.168.1.20', daddr:'192.168.1.212',
+                    operation:'request', src_hw:'02:00:00:00:00:20', dst_hw:'00:00:00:00:00:00',
+                    smac:'02:00:00:00:00:20', dmac:'ff:ff:ff:ff:ff:ff', interface:'en0'}
+            }]}));
+        }""")
+        arp = page.locator(".protocol-arp")
+        destination = arp.locator(".protocol-field").first
+        assert destination.locator(":scope > small").inner_text() == "DESTINATION IP"
+        assert "important" in destination.get_attribute("class")
+        assert "192.168.1.212" in destination.inner_text()
+        assert destination.locator("button").count() == 1
+        assert "192.168.1.20" in arp.locator(".protocol-field").nth(1).inner_text()
+        assert "DADDR" not in page.locator(".evidence-flow-fields").inner_text()
         assert errors == []
         page.evaluate("""host => {
             closeEvidenceDetail(); state.activeTab = 'hosts'; state.host = host;
@@ -404,12 +460,21 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         form = page.locator("#host-annotation-entry .host-annotation-form")
         form.get_by_label("Review mark", exact=True).select_option("to_analyze")
         form.get_by_label("Labels (comma separated)", exact=True).fill("dns, lab")
+        form.get_by_label("Custom name", exact=True).fill("My laptop")
+        assert "Name and note follow MAC 02:00:00:00:00:20" in form.inner_text()
         form.get_by_label("Note", exact=True).fill("Inspect tomorrow")
         form.get_by_role("button", name="Save host review", exact=True).click()
         page.wait_for_function("state.host.user_status === 'to_analyze'")
         reopened = reader.host("192.168.1.20")
         assert reopened["user_labels"] == ["dns", "lab"]
         assert reopened["user_note"] == "Inspect tomorrow"
+        assert reopened["user_name"] == "My laptop"
+        restarted = HostProfileStore(reader.host_profiles_path, "new-run", lambda _: {
+            "gateway_mac": "aa:bb:cc:dd:ee:01", "local_network": "192.168.1.0/24",
+        }, ["en0"])
+        restarted.observe_flow(SimpleNamespace(type_="conn", interface="en0", starttime=200,
+            saddr="fe80::20", daddr="ff02::fb", smac="02:00:00:00:00:20"))
+        assert HostProfileStore.read(reader.host_profiles_path, "fe80::20")[0]["user_name"] == "My laptop"
         page.evaluate("host => {state.host=host; renderHostCards(host)}", reopened)
         assert "To analyze" in page.locator("#host-identity").inner_text()
         assert "dns, lab" in page.locator("#host-identity").inner_text()

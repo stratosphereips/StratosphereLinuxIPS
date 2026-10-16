@@ -41,6 +41,7 @@ class HostProfileStore:
         self.interfaces = interfaces
         self._network_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._recent_sightings: dict[tuple[str, str], float] = {}
+        self._recent_macs: dict[tuple[str, str], tuple[str, float]] = {}
         self._active_connection: sqlite3.Connection | None = None
         path.parent.mkdir(parents=True, exist_ok=True)
         if os.geteuid() == 0:
@@ -88,6 +89,11 @@ class HostProfileStore:
                 "CREATE TABLE IF NOT EXISTS device_annotations ("
                 "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
                 "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_annotation_devices ("
+                "network_id TEXT NOT NULL, ip TEXT NOT NULL, mac TEXT NOT NULL, "
+                "PRIMARY KEY(network_id, ip))"
             )
             connection.execute(
                 "CREATE TABLE IF NOT EXISTS mdns_annotations ("
@@ -357,7 +363,17 @@ class HostProfileStore:
                     (network_id, normalized),
                 )
             mac = HostProfileStore._usable_mac(mac_row[0] if mac_row else "")
-            if mac and network_id.startswith("gateway:"):
+            if mac and network_id != "public":
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS host_annotation_devices ("
+                    "network_id TEXT NOT NULL, ip TEXT NOT NULL, mac TEXT NOT NULL, "
+                    "PRIMARY KEY(network_id, ip))"
+                )
+                connection.execute(
+                    "INSERT INTO host_annotation_devices VALUES (?, ?, ?) "
+                    "ON CONFLICT(network_id, ip) DO UPDATE SET mac=excluded.mac",
+                    (network_id, normalized, mac),
+                )
                 connection.execute(
                     "CREATE TABLE IF NOT EXISTS device_annotations ("
                     "mac TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
@@ -369,7 +385,7 @@ class HostProfileStore:
                     "note=excluded.note, updated_at=excluded.updated_at",
                     (mac, name, note, time.time()),
                 )
-            if mdns_name:
+            if mdns_name and not mac:
                 connection.execute(
                     "CREATE TABLE IF NOT EXISTS mdns_identity_annotations ("
                     "mdns_name TEXT PRIMARY KEY, network_id TEXT NOT NULL, "
@@ -616,10 +632,24 @@ class HostProfileStore:
             "AND f.ip=h.ip AND f.kind='mac' "
             "ORDER BY f.last_seen DESC LIMIT 1)"
         )
+        historical_mac = (
+            "(SELECT lower(f.value) FROM facts f WHERE f.network_id=a.network_id "
+            "AND f.ip=a.ip AND f.kind='mac' AND f.first_seen<=a.updated_at "
+            "ORDER BY MIN(f.last_seen, a.updated_at) DESC, f.first_seen DESC LIMIT 1)"
+        )
+        has_bindings = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='host_annotation_devices'"
+        ).fetchone()
+        saved_mac = (
+            "COALESCE((SELECT d.mac FROM host_annotation_devices d WHERE "
+            "d.network_id=a.network_id AND d.ip=a.ip), " + historical_mac + ")"
+            if has_bindings
+            else historical_mac
+        )
         try:
             rows = connection.execute(
                 "SELECT h.network_id, h.ip, a.name, a.note, "
-                f"{mac_query} AS mac FROM hosts h "
+                f"{mac_query} AS mac, {saved_mac} AS annotation_mac FROM hosts h "
                 "LEFT JOIN host_annotations a ON a.network_id=h.network_id "
                 "AND a.ip=h.ip WHERE h.ip IN (" + placeholders + ") "
                 "ORDER BY h.last_seen DESC",
@@ -630,7 +660,7 @@ class HostProfileStore:
         macs = {
             HostProfileStore._usable_mac(row[4])
             for row in rows
-            if row[0].startswith("gateway:")
+            if row[0] != "public"
         } - {""}
         mdns_by_host: dict[tuple[str, str], str] = {}
         for network_id, ip, value in connection.execute(
@@ -646,11 +676,15 @@ class HostProfileStore:
         if mdns_names:
             mdns_placeholders = ",".join("?" for _ in mdns_names)
             try:
-                for mdns_name, name, note in connection.execute(
-                    "SELECT mdns_name, name, note FROM mdns_identity_annotations "
+                for mdns_name, name, note, source_mac in connection.execute(
+                    "SELECT m.mdns_name, m.name, m.note, (SELECT value FROM facts f "
+                    "WHERE f.network_id=m.network_id AND f.ip=m.ip AND f.kind='mac' "
+                    "ORDER BY f.last_seen DESC LIMIT 1) FROM mdns_identity_annotations m "
                     "WHERE mdns_name IN (" + mdns_placeholders + ")",
                     tuple(mdns_names),
                 ):
+                    if HostProfileStore._usable_mac(source_mac):
+                        continue
                     saved_mdns[mdns_name] = {
                         "name": name or "",
                         "note": note or "",
@@ -659,8 +693,8 @@ class HostProfileStore:
                 pass
         legacy_mdns: dict[str, dict[str, str]] = {}
         if mdns_names:
-            for name, note, value in connection.execute(
-                "SELECT a.name, a.note, f.value FROM host_annotations a "
+            for name, note, value, source_mac in connection.execute(
+                f"SELECT a.name, a.note, f.value, {saved_mac} FROM host_annotations a "
                 "JOIN facts f ON f.network_id=a.network_id AND f.ip=a.ip "
                 "AND f.kind='mdns_hostname' WHERE (a.name!='' OR a.note!='') "
                 f"AND f.value IN ({mdns_placeholders}) "
@@ -668,7 +702,7 @@ class HostProfileStore:
                 tuple(mdns_names),
             ):
                 stable = HostProfileStore._stable_mdns_name(value)
-                if stable:
+                if stable and not HostProfileStore._usable_mac(source_mac):
                     legacy_mdns.setdefault(
                         stable, {"name": name or "", "note": note or ""}
                     )
@@ -686,11 +720,8 @@ class HostProfileStore:
             pass
         legacy_annotations: dict[str, dict[str, str]] = {}
         for name, note, mac in connection.execute(
-            "SELECT a.name, a.note, "
-            "(SELECT lower(f.value) FROM facts f "
-            "WHERE f.network_id=a.network_id AND f.ip=a.ip "
-            "AND f.kind='mac' ORDER BY f.last_seen DESC LIMIT 1) AS mac "
-            "FROM host_annotations a WHERE a.network_id LIKE 'gateway:%' "
+            f"SELECT a.name, a.note, {saved_mac} AS mac "
+            "FROM host_annotations a WHERE a.network_id!='public' "
             "ORDER BY a.updated_at DESC"
         ):
             mac = HostProfileStore._usable_mac(mac)
@@ -699,21 +730,28 @@ class HostProfileStore:
                     mac, {"name": name or "", "note": note or ""}
                 )
         resolved: dict[tuple[str, str], dict[str, str]] = {}
-        for network_id, ip, name, note, mac in rows:
+        for network_id, ip, name, note, mac, annotation_mac in rows:
             mac = (
                 HostProfileStore._usable_mac(mac)
-                if network_id.startswith("gateway:")
+                if network_id != "public"
                 else ""
             )
+            annotation_mac = (
+                HostProfileStore._usable_mac(annotation_mac)
+                if network_id != "public"
+                else ""
+            )
+            if annotation_mac and annotation_mac != mac:
+                name = note = ""
             direct = {"name": name or "", "note": note or ""}
             mdns_name = mdns_by_host.get((network_id, ip), "")
             if mac in device_annotations:
                 resolved[(network_id, ip)] = device_annotations[mac]
             elif name or note:
                 resolved[(network_id, ip)] = direct
-            elif mdns_name in saved_mdns:
+            elif not mac and mdns_name in saved_mdns:
                 resolved[(network_id, ip)] = saved_mdns[mdns_name]
-            elif mdns_name in legacy_mdns:
+            elif not mac and mdns_name in legacy_mdns:
                 resolved[(network_id, ip)] = legacy_mdns[mdns_name]
             else:
                 resolved[(network_id, ip)] = legacy_annotations.get(
@@ -897,6 +935,7 @@ class HostProfileStore:
             return
         normalized, network_id, network_label = identity
         key = (network_id, normalized)
+        now = time.monotonic()
         own_ips = {item.get("ip") for item in state.get("addresses", [])}
         if state.get("host_ip"):
             own_ips.add(state["host_ip"])
@@ -906,12 +945,20 @@ class HostProfileStore:
             and (mac := self._usable_mac(state.get("mac")))
         ):
             facts = [*facts, ("mac", mac)]
-        filtered = [
-            (kind, value.strip()[:MAX_VALUE_LENGTH])
-            for kind, value in facts
-            if isinstance(value, str) and value.strip()
-        ]
-        now = time.monotonic()
+        filtered = []
+        saved_mac = ""
+        for kind, value in facts:
+            if not isinstance(value, str) or not value.strip():
+                continue
+            if kind == "mac":
+                value = self._usable_mac(value)
+                if not value:
+                    continue
+                previous_mac, saved_at = self._recent_macs.get(key, ("", 0))
+                if previous_mac == value and now - saved_at < 60:
+                    continue
+                saved_mac = value
+            filtered.append((kind, value.strip()[:MAX_VALUE_LENGTH]))
         capture_id = self.network_id_for_state(state, self.run_name)
         capture_key = (
             f"capture:{capture_id}:{state.get('changed_at', '')}",
@@ -985,10 +1032,69 @@ class HostProfileStore:
                     ),
                 )
         self._recent_sightings[key] = now
+        if saved_mac:
+            self._recent_macs[key] = (saved_mac, now)
+            if len(self._recent_macs) > 4096:
+                self._recent_macs.clear()
         if save_observation:
             self._recent_sightings[capture_key] = now
         if len(self._recent_sightings) > 10000:
             self._recent_sightings.clear()
+
+    @staticmethod
+    def _local_link_mac(
+        ip: str, value: str, state: dict[str, Any], arp: bool = False
+    ) -> str:
+        """Accept an endpoint MAC only when the address belongs to this link.
+
+        Parameters:
+            ip: Endpoint address.
+            value: Ethernet or ARP hardware address.
+            state: Capture settings at the packet timestamp.
+            arp: Whether the ARP payload explicitly binds the address.
+
+        Returns:
+            Usable local MAC, or an empty string for routed or invalid addresses.
+        """
+        mac = HostProfileStore._usable_mac(value)
+        if not mac:
+            return ""
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return ""
+        if (
+            address.is_global
+            or address.is_multicast
+            or address.is_unspecified
+            or address.is_loopback
+        ):
+            return ""
+        own = {item.get("ip") for item in state.get("addresses", [])}
+        own.add(state.get("host_ip"))
+        own_mac = HostProfileStore._usable_mac(state.get("mac"))
+        if str(address) in own and own_mac and mac != own_mac:
+            return ""
+        if arp:
+            return mac
+        if mac == HostProfileStore._usable_mac(
+            state.get("gateway_mac")
+        ) and str(address) != state.get("gateway_ip"):
+            return ""
+        if address.is_link_local:
+            return mac
+        networks = [
+            state.get("local_network", ""),
+            *(item.get("network", "") for item in state.get("addresses", [])),
+        ]
+        for value in networks:
+            try:
+                network = ipaddress.ip_network(value, strict=False)
+            except ValueError:
+                continue
+            if address in network and address != network.broadcast_address:
+                return mac
+        return ""
 
     def observe_flow(self, flow: Any) -> None:
         """Store both endpoints and names learned from one parsed flow.
@@ -1010,6 +1116,28 @@ class HostProfileStore:
         kind = str(getattr(flow, "type_", "") or "").lower()
         source_facts: list[tuple[str, str]] = []
         target_facts: list[tuple[str, str]] = []
+        if kind in {"arp", "conn"}:
+            state = self._observation_network(
+                self._network_state(interface), observed_at
+            )
+            if kind == "arp":
+                source_mac = str(
+                    getattr(flow, "src_hw", "")
+                    or getattr(flow, "smac", "")
+                    or ""
+                )
+                target_mac = str(getattr(flow, "dst_hw", "") or "")
+            else:
+                source_mac = str(getattr(flow, "smac", "") or "")
+                target_mac = str(getattr(flow, "dmac", "") or "")
+            source_mac = self._local_link_mac(
+                source, source_mac, state, kind == "arp"
+            )
+            target_mac = self._local_link_mac(
+                target, target_mac, state, kind == "arp"
+            )
+            source_facts.append(("mac", source_mac))
+            target_facts.append(("mac", target_mac))
         if kind == "dhcp":
             if self._identity(source, interface) is None:
                 source = str(getattr(flow, "requested_addr", "") or "")

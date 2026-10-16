@@ -124,7 +124,7 @@ function saveViewPreferences() {
   });
   const paneWidths = {};
   [["alerts-workspace", ["--alerts-host-width", "--alerts-list-width", "--alerts-detail-width"]],
-    ["evidence-workspace", ["--evidence-left-width", "--evidence-record-width"]]]
+    ["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width"]]]
     .forEach(([id, names]) => {
       const element = byId(id);
       paneWidths[id] = Object.fromEntries(names.map((name) => [name, element.style.getPropertyValue(name)]));
@@ -182,6 +182,8 @@ function restoreViewPreferences() {
     if (!["alerts-workspace", "evidence-workspace"].includes(id) || !byId(id)) return;
     Object.entries(widths || {}).forEach(([name, width]) => {
       if (/^--(?:alerts|evidence)-[a-z-]+-width$/.test(name) && /^\d+(?:\.\d+)?(?:px|%)$/.test(width)) {
+        if (id === "evidence-workspace" && name === "--evidence-left-width"
+            && width.endsWith("%") && Number.parseFloat(width) < 20) return;
         byId(id).style.setProperty(name, width);
       }
     });
@@ -2550,11 +2552,11 @@ function resizeEvidencePane(kind, desiredWidth) {
   const hasDetail = workspace.classList.contains("has-detail");
   const left = workspace.querySelector(".evidence-left").getBoundingClientRect().width;
   if (kind === "group") {
-    const minimum = hasDetail ? 130 : 240;
-    const remaining = hasDetail ? 130 + 320 + 16 : 240 + 8;
-    workspace.style.setProperty("--evidence-left-width", `${Math.round(Math.max(minimum, Math.min(desiredWidth, width - remaining)))}px`);
+    const records = byId("evidence-right").getBoundingClientRect().width;
+    const remaining = hasDetail ? records + 320 + 16 : 240 + 8;
+    workspace.style.setProperty(hasDetail ? "--evidence-detail-group-width" : "--evidence-left-width", `${Math.round(Math.max(240, Math.min(desiredWidth, width - remaining)))}px`);
   } else if (hasDetail) {
-    workspace.style.setProperty("--evidence-record-width", `${Math.round(Math.max(130, Math.min(desiredWidth, width - left - 320 - 16)))}px`);
+    workspace.style.setProperty("--evidence-detail-record-width", `${Math.round(Math.max(280, Math.min(desiredWidth, width - left - 320 - 16)))}px`);
   }
 }
 
@@ -4891,6 +4893,8 @@ const PROTOCOL_FIELDS = {
     ["Receiving hosts", ["rx_hosts"]],
   ],
   arp: [
+    ["Destination IP", ["daddr", "dst_ip", "resp_h"]],
+    ["Source IP", ["saddr", "src_ip", "orig_h"]],
     ["Operation", ["operation"]], ["Source MAC", ["smac", "src_hw"]],
     ["Destination MAC", ["dmac", "dst_hw"]], ["Source hardware", ["src_hw"]],
     ["Destination hardware", ["dst_hw"]],
@@ -5005,8 +5009,9 @@ function protocolFlowCard(record) {
   if (!details.length) grid.append(text("p", "No parsed protocol fields are available.", "muted"));
   details.forEach(([label, value]) => {
     const field = document.createElement("div");
-    field.className = "protocol-field" + (/query|host|uri|server name/i.test(label) ? " important" : "");
-    field.append(text("small", label), text("strong", value));
+    field.className = "protocol-field" + (/query|host|uri|server name|destination ip/i.test(label) ? " important" : "");
+    const isAddress = type === "arp" && /^(?:Source|Destination) IP$/.test(label);
+    field.append(text("small", label), isAddress ? hostLink(value) : text("strong", value));
     grid.append(field);
   });
   card.append(heading, context, grid, rawBlock(record, displayType + " protocol flow"));
@@ -5237,7 +5242,6 @@ function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
   if (state.evidenceDetail.inPane) {
     const workspace = byId("evidence-workspace");
     workspace.classList.remove("has-detail");
-    workspace.style.setProperty("--evidence-left-width", workspace.dataset.twoPaneLeft || "57%");
     byId("evidence-detail-divider").hidden = true;
     document.querySelector("main").append(byId("evidence-detail"));
     state.evidenceDetail.inPane = false;
@@ -5331,11 +5335,6 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   const inPane = !inAlertPane && state.activeTab === "evidence" && (detail.inPane || !cameFromDrawer);
   if (inPane) {
     const workspace = byId("evidence-workspace");
-    if (!workspace.classList.contains("has-detail")) {
-      workspace.dataset.twoPaneLeft = workspace.style.getPropertyValue("--evidence-left-width") || "57%";
-      workspace.style.setProperty("--evidence-left-width", "5%");
-      workspace.style.setProperty("--evidence-record-width", "5%");
-    }
     workspace.classList.add("has-detail");
     byId("evidence-detail-divider").hidden = false;
     workspace.append(page);
@@ -5669,6 +5668,14 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
     nameInput.maxLength = 80;
     nameInput.placeholder = "e.g. Sebastian's iPad";
     nameInput.value = state.hostAnnotationDrafts.get(annotationKey)?.name ?? profile.user_name ?? "";
+    const deviceMac = (profile.facts || []).filter((fact) => fact.kind === "mac")
+      .sort((a, b) => Number(b.last_seen || 0) - Number(a.last_seen || 0))
+      .map((fact) => String(fact.value || "").toLowerCase())
+      .find((mac) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(mac)
+        && mac !== "00:00:00:00:00:00" && !(parseInt(mac.slice(0, 2), 16) & 1));
+    const nameScope = text("small", deviceMac && profile.network_id !== "public"
+      ? `Name and note follow MAC ${deviceMac} across its observed IP addresses.`
+      : "No device MAC recorded. Name and note are saved on this network profile; a confirmed mDNS hostname can link addresses with unknown MACs.", "muted host-name-scope");
     const noteLabel = text("label", "Note");
     const noteInput = document.createElement("textarea");
     noteInput.maxLength = 1000;
@@ -5701,7 +5708,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
     const annotationSave = text("button", "Save host review", "secondary");
     annotationSave.type = "submit";
     const annotationFeedback = text("small", "", "network-name-feedback");
-    annotation.append(statusLabel, labelsLabel, nameLabel, noteLabel, annotationSave, annotationFeedback);
+    annotation.append(statusLabel, labelsLabel, nameLabel, nameScope, noteLabel, annotationSave, annotationFeedback);
     const annotationEdit = text("button", profile.user_name || profile.user_note
       ? "Edit host review and identity" : "Mark or name this host", "secondary profile-network-name-action");
     annotationEdit.type = "button";

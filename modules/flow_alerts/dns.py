@@ -334,7 +334,7 @@ class DNS(IFlowalertsAnalyzer):
 
         return back_to_queue
 
-    def check_dns_without_connection_timeout(self):
+    def check_dns_without_connection_timeout(self) -> None:
         """
         Waits 30 mins in zeek time for the connection of a dns to arrive
         Does so by receiving every dns msg this analyzer receives. then we
@@ -351,11 +351,10 @@ class DNS(IFlowalertsAnalyzer):
 
         This function runs in its own thread
         """
-        try:
-            while (
-                not self.flowalerts.should_stop()
-                and not self.stop_event.is_set()
-            ):
+        while (
+            not self.flowalerts.should_stop() and not self.stop_event.is_set()
+        ):
+            try:
                 # if self.pending_dns_without_conn.empty():
                 #     time.sleep(1)
                 #     continue
@@ -382,11 +381,10 @@ class DNS(IFlowalertsAnalyzer):
                     flow: Tuple[str, str, Any]
                     self.pending_dns_without_conn.put(flow)
 
-        except KeyboardInterrupt:
-            # the rest will be handled in shutdown_gracefully
-            return
-        except Exception:
-            self.print_traceback()
+            except KeyboardInterrupt:
+                return
+            except Exception:
+                self.flowalerts.print_traceback()
 
     async def check_dns_without_connection(
         self, profileid, twid, flow, waited_for_the_conn=False

@@ -230,6 +230,32 @@ def test_forced_child_cleanup_skips_another_grace_wait() -> None:
     child.join.assert_called_once_with(1)
 
 
+@pytest.mark.parametrize("recorded_stopped", [False, True])
+def test_child_cleanup_does_not_depend_on_redis_metadata(recorded_stopped: bool) -> None:
+    """Reap an owned live child even after Redis or stopped status loses its PID.
+
+    Parameters:
+        recorded_stopped: Whether the module already reported completion.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="flow_alerts")
+    child.name = "flow_alerts"
+    child.is_alive.return_value = True
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.side_effect = RuntimeError("Redis unavailable")
+    process_manager.stopped_modules = {"flow_alerts"} if recorded_stopped else set()
+    process_manager.deferred_stopped_modules = set()
+    process_manager._should_defer_web_interface_stopped_message = Mock(return_value=False)
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children(force=True)
+
+    process_manager.kill_process_tree.assert_called_once_with(123)
+    child.join.assert_called_once_with(1)
+    assert process_manager.print_stopped_module.call_count == (0 if recorded_stopped else 1)
+
+
 @pytest.mark.parametrize(
     "end_date_str, start_time_str, expected_analysis_time",
     [

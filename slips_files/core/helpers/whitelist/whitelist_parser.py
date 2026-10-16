@@ -148,6 +148,7 @@ class WhitelistParser:
             "ip": self.whitelisted_ips,
             "domain": self.whitelisted_domains,
             "org": self.whitelisted_orgs,
+            "organization": self.whitelisted_orgs,
             "mac": self.whitelisted_mac,
             "uri": self.whitelisted_uris,
         }
@@ -179,8 +180,12 @@ class WhitelistParser:
             "from": ..
             "what_to_ignore" : ..}
         """
-        entry_type = entry_to_remove["type"]
-        cache: Dict[str, dict] = self.get_dict_for_storing_data(entry_type)
+        try:
+            cache: Dict[str, dict] = self.get_dict_for_storing_data(
+                entry_to_remove.get("type", "")
+            )
+        except KeyError:
+            return False
         if entry_to_remove["data"] not in cache:
             return False
 
@@ -460,11 +465,12 @@ class WhitelistParser:
             found = True
             with whitelist:
                 for line_number, line in enumerate(whitelist, start=1):
+                    line = line.strip()
                     if line.startswith(('"IoCType"', ";")):
                         continue
                     if line.startswith("#"):
                         self.remove_entry_from_cache_db(
-                            self.parse_line(line.replace("#", ""))
+                            self.parse_line(line[1:])
                         )
                         continue
                     try:

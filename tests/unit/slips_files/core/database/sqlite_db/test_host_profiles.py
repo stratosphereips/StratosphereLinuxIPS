@@ -13,6 +13,133 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("known_network", [False, True])
+def test_arp_name_follows_mac_and_does_not_follow_a_reused_ip(
+    tmp_path: Path, known_network: bool
+) -> None:
+    """Keep a saved device name on its MAC across addresses and restarts.
+
+    Parameters:
+        tmp_path: Isolated permanent database.
+        known_network: Whether the router MAC is known during capture.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24", "gateway_ip": "192.168.1.1",
+             "gateway_mac": "aa:bb:cc:dd:ee:01" if known_network else ""}
+    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    store.observe_flow(SimpleNamespace(type_="arp", interface="en0", starttime=100,
+        saddr="192.168.1.20", daddr="192.168.1.1", operation="request",
+        src_hw="02:00:00:00:00:20", smac="02:00:00:00:00:20", dst_hw="00:00:00:00:00:00", dmac="ff:ff:ff:ff:ff:ff"))
+    network_id = HostProfileStore.read(path, "192.168.1.20")[0]["network_id"]
+    HostProfileStore.set_host_annotation(path, "192.168.1.20", network_id, "iPad-Storm", "Tablet")
+    restarted = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    restarted.observe_flow(SimpleNamespace(type_="conn", interface="en0", starttime=200,
+        saddr="fe80::20", daddr="ff02::fb", smac="02:00:00:00:00:20", dmac="33:33:00:00:00:fb"))
+    assert HostProfileStore.read(path, "fe80::20")[0]["user_name"] == "iPad-Storm"
+    restarted.observe_flow(SimpleNamespace(type_="arp", interface="en0", starttime=300,
+        saddr="192.168.1.20", daddr="192.168.1.1", operation="request",
+        src_hw="02:00:00:00:00:99", smac="02:00:00:00:00:99", dst_hw="00:00:00:00:00:00", dmac="ff:ff:ff:ff:ff:ff"))
+    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == ""
+    assert HostProfileStore.read(path, "fe80::20")[0]["user_name"] == "iPad-Storm"
+    assert not any(fact["kind"] == "mac" for fact in HostProfileStore.read(path, "192.168.1.1")[0]["facts"])
+
+
+@pytest.mark.parametrize(
+    "kind, target, target_mac, hardware, expected",
+    [
+        ("conn", "8.8.8.8", "aa:bb:cc:dd:ee:01", "", ""),
+        ("conn", "172.17.0.1", "aa:bb:cc:dd:ee:01", "", ""),
+        ("conn", "192.168.1.30", "aa:bb:cc:dd:ee:01", "", ""),
+        ("conn", "192.168.1.1", "aa:bb:cc:dd:ee:01", "", "aa:bb:cc:dd:ee:01"),
+        ("conn", "fe80::30", "02:00:00:00:00:30", "", "02:00:00:00:00:30"),
+        ("arp", "192.168.1.30", "ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00", ""),
+        ("arp", "192.168.1.30", "02:00:00:00:00:30", "02:00:00:00:00:30", "02:00:00:00:00:30"),
+    ],
+)
+def test_endpoint_mac_requires_local_ownership(
+    tmp_path: Path, kind: str, target: str, target_mac: str,
+    hardware: str, expected: str,
+) -> None:
+    """Retain local endpoint MACs without assigning a router MAC to routed IPs.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+        kind: Parsed connection or ARP record.
+        target: Destination IP address.
+        target_mac: Destination Ethernet address.
+        hardware: Explicit ARP target hardware address.
+        expected: Accepted device MAC, or empty if ownership is unproven.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24", "gateway_ip": "192.168.1.1",
+             "gateway_mac": "aa:bb:cc:dd:ee:01"}
+    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    store.observe_flow(SimpleNamespace(type_=kind, interface="en0", starttime=100,
+        saddr="192.168.1.20", daddr=target, smac="02:00:00:00:00:20",
+        dmac=target_mac, dst_hw=hardware))
+    facts = HostProfileStore.read(path, target)[0]["facts"]
+    assert [fact["value"] for fact in facts if fact["kind"] == "mac"] == (
+        [expected] if expected else []
+    )
+
+
+def test_repeated_mac_writes_are_throttled_and_changes_are_immediate(
+    tmp_path: Path,
+) -> None:
+    """Avoid per-connection MAC writes while recording replacement devices.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    store = HostProfileStore(path, "run", lambda _: {
+        "local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }, ["en0"])
+    flow = SimpleNamespace(type_="conn", interface="en0", starttime=100,
+        saddr="192.168.1.20", daddr="8.8.8.8", smac="02:00:00:00:00:20")
+    with patch.object(host_profiles.time, "monotonic", return_value=100):
+        store.observe_flow(flow)
+        store.observe_flows([flow] * 100)
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT SUM(observations) FROM facts WHERE kind='mac'").fetchone()[0] == 1
+    with patch.object(host_profiles.time, "monotonic", return_value=101):
+        flow.smac = "02:00:00:00:00:99"
+        store.observe_flow(flow)
+    with patch.object(host_profiles.time, "monotonic", return_value=162):
+        store.observe_flow(flow)
+    with sqlite3.connect(path) as connection:
+        assert dict(connection.execute("SELECT value, observations FROM facts WHERE kind='mac'")) == {
+            "02:00:00:00:00:20": 1, "02:00:00:00:00:99": 2,
+        }
+
+
+def test_legacy_annotation_uses_mac_observed_when_named(tmp_path: Path) -> None:
+    """Recover old annotations without naming a newer device at the same IP.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    store = HostProfileStore(path, "run", lambda _: {
+        "local_network": "192.168.1.0/24", "gateway_mac": "aa:bb:cc:dd:ee:01",
+    }, ["en0"])
+    for ip, mac, timestamp in [("192.168.1.20", "02:00:00:00:00:20", 100),
+                               ("192.168.1.20", "02:00:00:00:00:99", 300),
+                               ("fe80::20", "02:00:00:00:00:20", 400)]:
+        store.observe_flow(SimpleNamespace(type_="conn", interface="en0", starttime=timestamp,
+            saddr=ip, daddr="8.8.8.8", smac=mac))
+    with sqlite3.connect(path) as connection:
+        connection.execute("INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?)",
+            ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20", "iPad-Storm", "Tablet", 200))
+    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == ""
+    alias = HostProfileStore.read(path, "fe80::20")[0]
+    assert (alias["user_name"], alias["user_note"]) == ("iPad-Storm", "Tablet")
+
+
 def test_network_scoped_annotations_do_not_name_an_unverified_reused_ip(
     tmp_path: Path,
 ) -> None:
@@ -456,13 +583,15 @@ def test_user_annotation_persists_for_exact_network_host(
     assert HostProfileStore.read(path, "192.168.1.20")[1]["user_name"] == ""
 
 
-def test_saved_name_follows_stable_mdns_across_ip_and_mac_changes(
-    tmp_path: Path,
+@pytest.mark.parametrize("known_mac", [False, True])
+def test_saved_name_uses_mac_before_confirmed_mdns(
+    tmp_path: Path, known_mac: bool,
 ) -> None:
-    """Recover existing names when a device changes address and private MAC.
+    """Keep names on known MACs, with confirmed mDNS fallback for unknown MACs.
 
     Parameters:
         tmp_path: Isolated permanent database directory.
+        known_mac: Whether each address belongs to a different known MAC.
     """
     _module_factory = ModuleFactory()
     path = tmp_path / "host_profiles.sqlite"
@@ -478,28 +607,35 @@ def test_saved_name_follows_stable_mdns_across_ip_and_mac_changes(
                 "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (network_id, ip, "mdns_hostname", "cherry.local", 1, 1, 1),
             )
-            connection.execute(
-                "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    network_id,
-                    ip,
-                    "mac",
-                    f"02:00:00:00:00:0{index + 1}",
-                    1,
-                    1,
-                    1,
-                ),
-            )
+            if known_mac:
+                connection.execute(
+                    "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        network_id,
+                        ip,
+                        "mac",
+                        f"02:00:00:00:00:0{index + 1}",
+                        1,
+                        1,
+                        1,
+                    ),
+                )
         connection.execute(
             "INSERT INTO host_annotations VALUES (?, ?, ?, ?, ?)",
             ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.20", "Cherry", "", 1),
         )
 
-    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry"
+    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == (
+        "" if known_mac else "Cherry"
+    )
     HostProfileStore.set_host_annotation(
         path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "Cherry II", ""
     )
-    assert HostProfileStore.read(path, "192.168.1.22")[0]["user_name"] == "Cherry II"
+    assert HostProfileStore.read(path, "192.168.1.22")[0]["user_name"] == (
+        "" if known_mac else "Cherry II"
+    )
+    assert HostProfileStore.read(path, "192.168.1.21")[0]["user_name"] == "Cherry II"
+    assert HostProfileStore.read(path, "192.168.1.20")[0]["user_name"] == "Cherry"
     HostProfileStore.set_host_annotation(
         path, "192.168.1.21", "gateway:aa:bb:cc:dd:ee:02", "", ""
     )

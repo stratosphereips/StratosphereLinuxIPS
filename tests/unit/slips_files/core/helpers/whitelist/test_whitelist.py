@@ -15,6 +15,24 @@ from slips_files.core.structures.evidence import (
 )
 
 
+@pytest.mark.parametrize("comment", ["# My personal whitelist", "# note, with, several, commas", "#", "   # Name of my tablet"])
+def test_whitelist_comments_do_not_remove_rules_or_crash(tmp_path: Path, comment: str) -> None:
+    """Parse human comments without losing an active evidence-scoped rule.
+
+    Parameters:
+        tmp_path: Isolated whitelist directory.
+        comment: Human comment rather than a disabled rule.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    path = tmp_path / "personal.conf"
+    content = f"{comment}\nip,192.168.1.185,src,alerts,ARP_SCAN\n"
+    path.write_text(content)
+    whitelist.parser.local_whitelist_path = str(path)
+    assert whitelist.parser.parse()
+    assert "192.168.1.185|ARP_SCAN" in whitelist.parser.whitelisted_ips
+    assert path.read_text() == content
+
+
 @pytest.mark.parametrize(
     "flow_type,uri,service,expected",
     [

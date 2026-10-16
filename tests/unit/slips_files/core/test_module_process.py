@@ -3,6 +3,7 @@
 import multiprocessing
 import os
 import threading
+import time
 
 import pytest
 
@@ -34,6 +35,49 @@ class ChildProbe:
             self.logger._cli_has_dangling_line.value = True
             self._received_lines.value = 7
             self.result_queue.put((self.constructor_pid, os.getpid()))
+
+
+def wait_for_cleanup(ready: object) -> None:
+    """Keep an isolated child alive until the process manager reaps it.
+
+    Parameters:
+        ready: Queue reporting that the child has started.
+    """
+    ready.put(os.getpid())
+    time.sleep(30)
+
+
+@pytest.mark.parametrize("recorded_stopped", [False, True])
+def test_owned_child_is_reaped_without_redis(recorded_stopped: bool) -> None:
+    """Prevent a restarted analysis from retaining an old consumer process.
+
+    Parameters:
+        recorded_stopped: Whether the child reported completion prematurely.
+    """
+    factory = ModuleFactory()
+    manager = factory.create_process_manager_obj()
+    context = multiprocessing.get_context("spawn")
+    ready = context.Queue()
+    process = context.Process(target=wait_for_cleanup, args=(ready,), name="flow_alerts")
+    try:
+        process.start()
+        assert ready.get(timeout=20) == process.pid
+        manager.children = [process]
+        manager.main.db.get_name_of_module_at.side_effect = RuntimeError("Redis unavailable")
+        manager.stopped_modules = {"flow_alerts"} if recorded_stopped else set()
+        manager.deferred_stopped_modules = set()
+        manager._should_defer_web_interface_stopped_message = Mock(return_value=False)
+        manager.print_stopped_module = Mock()
+        manager.kill_all_children(force=True)
+        assert not process.is_alive()
+        assert process.exitcode is not None
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(timeout=5)
+        process.close()
+        ready.close()
+        ready.join_thread()
 
 
 @pytest.mark.parametrize("method", ["spawn", "forkserver"])

@@ -69,17 +69,12 @@ class ShutdownMixin:
             force: Kill living children immediately after the grace period.
         """
         for process in self.children:
-            module_name: str = self.main.db.get_name_of_module_at(process.pid)
-            if not module_name:
-                # if it's a thread started by one of the modules or
-                # by slips.py, we don't have it stored in
-                # the db so just skip it
-                continue
-            if (
+            module_name = process.name
+            already_reported = (
                 module_name in self.stopped_modules
                 or module_name in self.deferred_stopped_modules
-            ):
-                # already stopped
+            )
+            if already_reported and not process.is_alive():
                 continue
 
             if not force:
@@ -87,6 +82,8 @@ class ShutdownMixin:
             if process.is_alive():
                 self.kill_process_tree(process.pid)
                 process.join(1 if force else 3)
+            if already_reported:
+                continue
             if self._should_defer_web_interface_stopped_message(module_name):
                 self.deferred_stopped_modules.add(module_name)
                 continue
