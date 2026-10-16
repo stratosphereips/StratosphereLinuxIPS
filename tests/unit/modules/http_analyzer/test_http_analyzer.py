@@ -151,6 +151,14 @@ def test_get_user_agent_info(mocker):
     [
         # User agent is compatible with MAC vendor
         ("Intel Corp", {"browser": "firefox"}, None),
+        ("Apple, Inc.", {"browser": "Chrome", "os_name": "OS X", "os_type": "Macintosh"}, None),
+        ("Apple, Inc.", {"browser": "HeadlessChrome", "os_name": "OS X", "os_type": "Macintosh"}, None),
+        ("Apple, Inc.", {"browser": "Safari", "os_name": "macOS", "os_type": "Macintosh"}, None),
+        ("Microsoft Corporation", {"browser": "Chrome", "os_name": "Windows 11", "os_type": "Windows NT"}, None),
+        ("Google Inc.", {"browser": "Chrome", "os_name": "Android", "os_type": "Linux"}, None),
+        ("Apple, Inc.", {"browser": "Chrome", "os_name": "Windows 11", "os_type": "Windows NT"}, True),
+        ("Apple, Inc.", {"browser": "Chrome", "os_name": "Android", "os_type": "Linux"}, True),
+        ("Microsoft Corporation", {"browser": "Chrome", "os_name": "OS X", "os_type": "Macintosh"}, True),
         # Missing user agent information
         ("Apple Inc.", None, False),
         # Missing information
@@ -187,6 +195,12 @@ def test_check_incompatible_user_agent(
     result = http_analyzer.check_incompatible_user_agent(profileid, twid, flow)
 
     assert result is expected_result
+    if expected_result:
+        evidence = http_analyzer.db.set_evidence.call_args.args[0]
+        assert f"OS: {user_agent['os_name']} " in evidence.description
+        assert f"browser: {user_agent['browser']}." in evidence.description
+    else:
+        http_analyzer.db.set_evidence.assert_not_called()
 
 
 def test_extract_info_from_ua():

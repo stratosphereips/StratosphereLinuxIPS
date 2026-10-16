@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
 import json
+import re
 import urllib
 import requests
 from typing import Union, Dict, Optional, List, Tuple
@@ -14,7 +15,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.iasync_module import IAsyncModule
-
+from slips_files.core.flows.zeek import HTTP
 
 ESTAB = "Established"
 
@@ -160,10 +161,18 @@ class HTTPAnalyzer(IAsyncModule):
         self.connections_counter[host] = ([], 0)
         return True
 
-    def check_incompatible_user_agent(self, profileid, twid, flow):
-        """
-        Compare the user agent of this profile to the MAC vendor
-        and check incompatibility
+    def check_incompatible_user_agent(
+        self, profileid: str, twid: str, flow: HTTP
+    ) -> Optional[bool]:
+        """Compare parsed user-agent information with the profile's MAC vendor.
+
+        Parameters:
+            profileid: Source Slips profile.
+            twid: Detection time window.
+            flow: HTTP connection being inspected.
+
+        Returns:
+            True for an incompatibility, otherwise False or None.
         """
         vendor: Union[str, None] = self.db.get_mac_vendor_from_profile(
             profileid
@@ -219,7 +228,9 @@ class HTTPAnalyzer(IAsyncModule):
         # see if the os name and type has any keyword of the rest of the tuples
         for tuple_ in os_keywords:
             for keyword in tuple_:
-                if keyword in f"{os_name} {os_type}":
+                if re.search(
+                    rf"\b{re.escape(keyword)}\b", f"{os_name} {os_type}"
+                ):
                     # from the same example,
                     # this means that one of these keywords
                     # [('microsoft', 'windows', 'NT'), ('android'), ('linux')]

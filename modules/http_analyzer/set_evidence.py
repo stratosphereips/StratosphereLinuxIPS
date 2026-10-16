@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows.zeek import Weird
+from slips_files.core.flows.zeek import HTTP, Weird
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -252,14 +252,23 @@ class SetEvidenceHelper:
 
         return True
 
-    def incompatible_user_agent(self, twid, flow, user_agent, vendor):
+    def incompatible_user_agent(
+        self, twid: str, flow: HTTP, user_agent: dict, vendor: str
+    ) -> None:
+        """Record a user-agent/vendor mismatch with readable OS names.
 
-        os_type: str = user_agent.get("os_type", "").lower()
-        os_name: str = user_agent.get("os_name", "").lower()
-        browser: str = user_agent.get("browser", "").lower()
-        user_agent: str = user_agent.get("user_agent", "")
+        Parameters:
+            twid: Detection time window.
+            flow: HTTP connection associated with the mismatch.
+            user_agent: Parsed OS and browser names and the original agent.
+            vendor: MAC manufacturer associated with the source profile.
+        """
+        os_type: str = user_agent.get("os_type") or "Unknown"
+        os_name: str = user_agent.get("os_name") or "Unknown"
+        browser: str = user_agent.get("browser") or "Unknown"
+        raw_user_agent: str = user_agent.get("user_agent", "")
         description: str = (
-            f"using incompatible user-agent ({user_agent}) "
+            f"using incompatible user-agent ({raw_user_agent}) "
             f"that belongs to OS: {os_name} "
             f"type: {os_type} browser: {browser}. "
             f"while connecting to {flow.host}{flow.uri}. "
