@@ -630,6 +630,8 @@ class ModuleLogger:
                 "trained_labels",
                 "alert_uids",
                 "sofar_test",
+                "live_consistency",
+                "module_errors",
             ]:
                 path = os.path.join(
                     output_dir, filenames.get(name, f"{name}.log")
@@ -873,15 +875,25 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.training_count_window: int = 0
         self._training_trigger: str = ""
 
-        # Track whether current model is merged (affects testing log target)
+        # Two lineages. self.model = the LOCAL model: trained every close only
+        # from the previous local (never overwritten by a merge). merged_model
+        # = built at a close from a COPY of the fresh local + peer models; it
+        # serves exactly the next window and is discarded at the next close's
+        # training (no legacy: nothing of it flows back into the local model).
+        self.merged_model = None
+        # True while merged_model serves (selects the test/log streams)
         self._using_merged_model: bool = False
 
-        # Dual-stream testing (L1): the last fully-local-trained model is
-        # deep-copied after every full local train, so during the merged
-        # phase BOTH models evaluate each incoming flow — merged stream goes
-        # to merged_test.log via the legacy path, local stream accumulates in
-        # _local_test and lands in local_test.log.
-        self._local_only_model = None
+        # Dual-stream testing: while a merged model serves, every scored flow
+        # is scored by BOTH the merged model (merged_test.log) and the local
+        # model (local_test.log). Live scoring (new_flow / new_arp): serving
+        # merged predictions kept per flow id with the model generation, for
+        # the end-of-window consistency check. Errors: see _record_error.
+        self._model_gen: int = 0
+        self._live_pred: dict = {}
+        self._live_counts: dict = self._blank_live_counts()
+        self._error_count: int = 0
+        self._main_errors: int = 0
         self._local_test: dict = self._blank_test_statistics()
         self._local_stream_used: bool = False
         # Span the current models belong to ("<trigger>_<window>"); the local
@@ -1065,15 +1077,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.preprocessor = self.scaler
 
     def subscribe_to_channels(self):
-        """Train mode reads flows and alerts from SLIPS's sqlite at every
-        window close, so it subscribes to no flow/alert channel (an unread
-        subscription would only pile up in redis); test mode still
-        classifies new_flow messages as they arrive. P2P is attached later
+        """Both modes subscribe to the live flow channels SLIPS publishes
+        every stored conn flow (new_flow) and ARP record (new_arp) on, and
+        read them continuously (so nothing piles up in redis): train mode
+        scores them live with the serving merged model, test mode
+        classifies them. Training itself still reads flows and alerts from
+        SLIPS's sqlite at every window close. P2P is attached later
         (_try_p2p_subscribe)."""
         self.channels = {}
-        if self.mode != "train":
-            self.c_flows = self.db.subscribe("new_flow")
-            self.channels["new_flow"] = self.c_flows
+        self.c_flows = self.db.subscribe("new_flow")
+        self.channels["new_flow"] = self.c_flows
+        self.c_arp = self.db.subscribe("new_arp")
+        self.channels["new_arp"] = self.c_arp
         # Training uses an independent wall-clock window; Slips tw_closed is ignored.
         self._p2p_connected = False
 
@@ -1150,11 +1165,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self.print("Loaded local model and scaler from artifacts.", 0, 1)
         except Exception:
-            self.print(
-                f"Could not load local model: {traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("_load_local_model")
 
     def create_empty_model(self):
         """Instantiate the model class selected by yaml `model_class`
@@ -1432,16 +1443,24 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         self.print("fit_incremental_model: exiting", 1, 1)
 
+    def _serving_model(self):
+        """The model a live sensor acts on in this window: the merged model
+        built at the last close when there is one, else the local model."""
+        merged = getattr(self, "merged_model", None)
+        return merged if merged is not None else self.model
+
     def predict_batch(self, x_data: np.ndarray) -> np.ndarray:
-        """Predict labels for a batch."""
-        if self.model is None or not self.is_preprocessor_fitted:
+        """Labels of a scaled batch from the SERVING model (merged if one
+        serves this window, else local)."""
+        model = self._serving_model()
+        if model is None or not self.is_preprocessor_fitted:
             return np.array([BENIGN] * len(x_data))
 
-        self.model.eval()
+        model.eval()
         X_tensor = torch.FloatTensor(x_data).to(self.device)
 
         with torch.no_grad():
-            outputs = self.model(X_tensor)
+            outputs = model(X_tensor)
             probs = torch.softmax(outputs, dim=1)
             predictions = torch.argmax(probs, dim=1)
 
@@ -1509,47 +1528,265 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             elif not self._p2p_connected:
                 self._try_p2p_subscribe()
 
+            # live scoring: predict what arrived on the flow channels
+            self._read_live(self._LIVE_READ_LIMIT)
+
             # Wall-clock training window trigger (independent of Slips windows)
             if (
                 time.time() - self.training_window_start
                 >= self.window_size_seconds
             ):
+                # the window ends: first predict EVERY flow still queued in
+                # the channels with the model that served this window, then
+                # close (train/merge). What arrives meanwhile waits in redis
+                # and is predicted afterwards, by the new model.
+                self._read_live(None)
                 self._close_training_window()
             else:
                 time.sleep(0.1)
+            self._main_errors = 0
             return False
         except Exception:
-            self.print(f"Error in main: {traceback.format_exc()}", 0, 1)
-            return True
+            return self._main_loop_error("_main_training")
 
     def _main_testing(self) -> bool:
         """Testing main loop - returns True on error."""
         try:
-            if msg := self.get_msg("new_flow"):
-                flow = json.loads(msg["data"])
-                self.run_test_on_flow(flow)
+            for channel in self._LIVE_CHANNELS:
+                if channel in self.channels and (msg := self.get_msg(channel)):
+                    # the message is a wrapper; classify the inner flow
+                    flow = self._unwrap_flow_msg(msg)
+                    if flow is not None:
+                        self.run_test_on_flow(flow)
 
             if not self._p2p_connected:
                 self._try_p2p_subscribe()
 
             time.sleep(0.1)
+            self._main_errors = 0
             return False
         except Exception:
-            self.print(f"Error in main: {traceback.format_exc()}", 0, 1)
+            return self._main_loop_error("_main_testing")
+
+    # ------------------------------------------------------------------
+    # Errors: never silent
+    # ------------------------------------------------------------------
+    _MAX_CONSECUTIVE_MAIN_ERRORS = 20
+
+    def _record_error(self, where: str, detail: Optional[str] = None) -> None:
+        """No silent errors: a caught exception (or a detected inconsistency)
+        is printed at the always-shown level, counted, and appended to
+        module_errors.log. An empty module_errors.log means a clean run; the
+        runner flags every run whose file is not empty."""
+        text = detail if detail is not None else traceback.format_exc()
+        self._error_count = getattr(self, "_error_count", 0) + 1
+        try:
+            self.print(f"[FL ERROR] {where}: {text}", 0, 1)
+        except Exception:
+            pass
+        try:
+            self.logger._write(
+                "module_errors",
+                f"--- #{self._error_count} {where} | "
+                f"{time.strftime('%Y-%m-%d %H:%M:%S')} ---\n{text.rstrip()}",
+            )
+        except Exception:
+            pass
+
+    def _main_loop_error(self, where: str) -> bool:
+        """A main-loop exception is recorded and the module keeps running
+        (returning True makes the module base shut the whole module down).
+        Only an error repeating on _MAX_CONSECUTIVE_MAIN_ERRORS consecutive
+        passes stops it - and that is recorded too."""
+        self._record_error(where)
+        self._main_errors = getattr(self, "_main_errors", 0) + 1
+        if self._main_errors >= self._MAX_CONSECUTIVE_MAIN_ERRORS:
+            self._record_error(
+                where,
+                detail=f"{self._main_errors} consecutive main-loop errors: "
+                "stopping the module",
+            )
             return True
+        return False
+
+    # ------------------------------------------------------------------
+    # Live scoring (new_flow / new_arp channels)
+    # ------------------------------------------------------------------
+    _LIVE_CHANNELS = ("new_flow", "new_arp")
+    _LIVE_READ_LIMIT = 500  # per channel per pass: the timer stays responsive
+
+    @staticmethod
+    def _blank_live_counts() -> dict:
+        """Per-close live-scoring and consistency counters."""
+        return {
+            "seen": 0,
+            "predicted": 0,
+            "no_model": 0,
+            "no_features": 0,
+            "bad_msg": 0,
+            "compared": 0,
+            "matched": 0,
+            "mismatched": 0,
+            "gen_race": 0,
+            "no_live": 0,
+            "pruned": 0,
+        }
+
+    def _live_counters(self) -> dict:
+        """This close's live counters (created on first use)."""
+        counts = getattr(self, "_live_counts", None)
+        if counts is None:
+            counts = self._live_counts = self._blank_live_counts()
+        return counts
+
+    def _unwrap_flow_msg(self, msg) -> Optional[dict]:
+        """The flow dict of a new_flow / new_arp message. SLIPS publishes a
+        wrapper {"flow": asdict(flow), "profileid", "twid", ...}; the inner
+        flow is the same asdict() SLIPS stores in sqlite (read back at the
+        close), so live and end-of-window features are identical by
+        construction. Unparseable messages are counted (bad_msg)."""
+        try:
+            data = json.loads(msg["data"])
+            flow = data.get("flow") if isinstance(data, dict) else None
+        except (TypeError, ValueError, KeyError, AttributeError):
+            flow = None
+        if not isinstance(flow, dict):
+            self._live_counters()["bad_msg"] += 1
+            return None
+        return flow
+
+    def _read_live(self, limit: Optional[int] = None) -> int:
+        """Read the live flow channels into the live scorer: up to `limit`
+        messages per channel (None = until both are empty: the window
+        boundary). Never raises (errors are recorded). Returns flows read."""
+        flows = []
+        try:
+            for channel in self._LIVE_CHANNELS:
+                if channel not in getattr(self, "channels", {}):
+                    continue
+                n = 0
+                while limit is None or n < limit:
+                    msg = self.get_msg(channel)
+                    if not msg:
+                        break
+                    n += 1
+                    flow = self._unwrap_flow_msg(msg)
+                    if flow is not None:
+                        flows.append(flow)
+            if flows:
+                self._on_live_flows(flows)
+        except Exception:
+            self._record_error("_read_live")
+        return len(flows)
+
+    def _on_live_flows(self, flows: list) -> None:
+        """Live scoring: predict arriving flows at once with the MERGED model
+        serving this window (merged only - the model a live sensor acts on;
+        nothing before the first merge), through the one classification
+        path. Each prediction is kept with the serving model's generation
+        for the end-of-window consistency check."""
+        counts = self._live_counters()
+        counts["seen"] += len(flows)
+        if not (self._is_fitted and self._using_merged_model):
+            counts["no_model"] += len(flows)
+            return
+        items = [(self._get_flow_id(f), f) for f in flows]
+        try:
+            kept, x_scaled = self._scaled_features(items)
+            counts["no_features"] += len(items) - len(kept)
+            if not kept:
+                return
+            preds = self.predict_batch(x_scaled)
+        except Exception:
+            self._record_error("_on_live_flows")
+            return
+        gen = getattr(self, "_model_gen", 0)
+        window = self.training_count_window
+        live = getattr(self, "_live_pred", None)
+        if live is None:
+            live = self._live_pred = {}
+        for (fid, _), pred in zip(kept, preds):
+            live[fid] = (pred, gen, window)
+        counts["predicted"] += len(kept)
+
+    def _check_live_consistency(self, kept: list, batch_preds) -> None:
+        """A flow's live merged prediction must EQUAL its end-of-window merged
+        prediction when both come from the same model generation (same
+        weights, scaler and flow dict). A live prediction of another
+        generation straddled a training (gen_race, not compared); flows never
+        seen live are counted (no_live). A same-generation mismatch is a bug:
+        it is logged with the flow (live_consistency.log)."""
+        live = getattr(self, "_live_pred", None)
+        if live is None:
+            return
+        gen = getattr(self, "_model_gen", 0)
+        counts = self._live_counters()
+        for (fid, flow), batch in zip(kept, batch_preds):
+            entry = live.pop(fid, None)
+            if entry is None:
+                counts["no_live"] += 1
+                continue
+            live_pred, live_gen, _ = entry
+            if live_gen != gen:
+                counts["gen_race"] += 1
+                continue
+            counts["compared"] += 1
+            if live_pred == batch:
+                counts["matched"] += 1
+                continue
+            counts["mismatched"] += 1
+            self.logger._write(
+                "live_consistency",
+                f"MISMATCH window_{self.training_count_window} uid={fid} "
+                f"live={live_pred} batch={batch} gen={gen} "
+                f"flow={json.dumps(flow, default=str)[:600]}",
+            )
+
+    def _write_live_summary(self) -> None:
+        """One live_consistency.log line per close; live predictions older
+        than K+2 windows (consumed by no end-of-window scoring) are pruned.
+        Any mismatch is recorded as an error (never silent)."""
+        counts = self._live_counters()
+        live = getattr(self, "_live_pred", None)
+        if live:
+            horizon = self.training_count_window - (
+                getattr(self, "label_finalize_delay_windows", 1) + 2
+            )
+            stale = [fid for fid, (_, _, w) in live.items() if w < horizon]
+            for fid in stale:
+                del live[fid]
+            counts["pruned"] += len(stale)
+        c = counts
+        line = (
+            f"window_{self.training_count_window} | live seen {c['seen']} "
+            f"predicted {c['predicted']} no_model {c['no_model']} "
+            f"no_features {c['no_features']} bad_msg {c['bad_msg']} | "
+            f"compared {c['compared']} matched {c['matched']} "
+            f"MISMATCH {c['mismatched']} | gen_race {c['gen_race']} "
+            f"no_live {c['no_live']} pruned {c['pruned']}"
+        )
+        self.logger._write("live_consistency", line)
+        if c["mismatched"]:
+            self._record_error(
+                "live_consistency",
+                detail="live and end-of-window merged predictions differ: "
+                + line,
+            )
+        self._live_counts = self._blank_live_counts()
 
     def _classify_flow(self, flow: dict) -> Optional[str]:
-        """Extract features, scale, classify. Returns BENIGN/MALICIOUS or None."""
+        """Classify ONE flow with the serving model through the one
+        classification path (_scaled_features -> predict_batch). Returns
+        BENIGN/MALICIOUS, or None with no fitted model / no features."""
         if not self._is_fitted:
             return None
         try:
-            features = self._extract_flow_features(flow)
-            if features is None:
+            kept, x_scaled = self._scaled_features([(None, flow)])
+            if not kept:
                 return None
-            X = np.array([features], dtype=np.float32)
-            X_scaled = self.scaler.transform(X)
-            return self.predict_batch(X_scaled)[0]
+            return self.predict_batch(x_scaled)[0]
         except Exception:
+            self._record_error("_classify_flow")
             return None
 
     def _flow_matches(self, flow, malicious_uids) -> bool:
@@ -1664,10 +1901,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return 0.0
 
     def _place_flows(self, window_n: int, flows: list) -> dict:
-        """Open the cell of window_n and put every flow into the open cell
-        whose window contains its ts. ts after this window's end waits for
-        the next close; ts older than every open cell goes to the oldest
-        open cell (counted as late).
+        """Open the cell of window_n and put EVERY flow read at this close into
+        it: a flow belongs to the window in which SLIPS stored it in its DB,
+        never back-dated by its own start ts - a long-lived connection is
+        classified when it reaches the DB. This matches the live channels,
+        which deliver a flow when SLIPS stores it. Flows that started before
+        this window (long or late-written) are counted as late.
         """
         cell = {
             "window": window_n,
@@ -1675,31 +1914,35 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "mal_ids": set(),
             "preds": {},
             "tested": set(),
+            # option B: per-window test counters, scored by the CURRENT model
+            # before this close trains (the model live during the window);
+            # flushed once, as one disjoint span per window, at finalize.
+            "test": {
+                "main": self._blank_test_statistics(),
+                "conn_main": self._blank_test_statistics(),
+                "shadow_local": self._blank_test_statistics(),
+                "conn_shadow": self._blank_test_statistics(),
+            },
+            "merged_served": False,
+            # was a model live during this window? (fitted before this close
+            # trains). Windows with no live model are never scored - not even
+            # later, by a model born after the window (warm-up windows).
+            "scorable": bool(getattr(self, "_is_fitted", False)),
+            "flushed": False,
         }
         self._flow_ring.append(cell)
-        end = self._window_bounds[window_n][1]
-        pending = self._next_window_flows + flows
-        self._next_window_flows = []
+        start = self._window_bounds[window_n][0]
         late = 0
         newest_ts = 0.0
-        for flow in pending:
+        for flow in flows:
             ts = self._flow_ts(flow)
             newest_ts = max(newest_ts, ts)
-            if ts > end:
-                self._next_window_flows.append(flow)
-                continue
-            target = None
-            for open_cell in reversed(self._flow_ring):
-                if ts > self._window_bounds[open_cell["window"]][0]:
-                    target = open_cell
-                    break
-            if target is None:
-                target = self._flow_ring[0]
+            if ts and ts < start:
                 late += 1
-            target["flows"][self._get_flow_id(flow)] = flow
+            cell["flows"][self._get_flow_id(flow)] = flow
         return {
             "late": late,
-            "next": len(self._next_window_flows),
+            "next": 0,
             "newest_ts": newest_ts,
         }
 
@@ -1766,6 +2009,30 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     new_hits += 1
         return new_hits
 
+    def _scale(self, x_raw) -> np.ndarray:
+        """The ONE place features are scaled for a prediction (transform
+        only: the scaler is fit exclusively in _train_batch)."""
+        return np.asarray(
+            self.scaler.transform(np.asarray(x_raw, dtype=np.float32)),
+            dtype=np.float32,
+        )
+
+    def _scaled_features(self, items: list) -> tuple:
+        """THE feature path of every prediction - end-of-window scoring, the
+        live channels and single-flow classification: extract each flow's
+        features, then _scale them. items: [(key, flow)]. Returns
+        (kept_items, x_scaled); flows whose features cannot be extracted are
+        dropped (not predicted)."""
+        feats, kept = [], []
+        for key, flow in items:
+            x = self._extract_flow_features(flow)
+            if x is not None:
+                feats.append(x)
+                kept.append((key, flow))
+        if not kept:
+            return [], None
+        return kept, self._scale(feats)
+
     def _predict_batch_with(self, model, x_scaled: np.ndarray) -> np.ndarray:
         """Labels of a scaled batch from an arbitrary (frozen) model."""
         model.eval()
@@ -1778,11 +2045,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
         return np.array([MALICIOUS if p == 1 else BENIGN for p in idx])
 
+    @staticmethod
+    def _stat_total(stats: dict) -> int:
+        """Flows counted into one stream's confusion."""
+        return stats["tp"] + stats["fp"] + stats["tn"] + stats["fn"]
+
     def _test_cell(self, cell: dict) -> None:
-        """Classify the cell's not-yet-tested flows with the current model
-        (and the frozen local model while merged); store test results and
-        keep each prediction until the cell is finalized."""
-        if not self._is_fitted:
+        """Prequential test (option B): score the cell's not-yet-tested flows
+        with the CURRENT model, as it stands BEFORE this close's training (the
+        model live during the window), tallying into the cell's own per-window
+        counters. Each flow is scored exactly once (cell['tested'] guard) -
+        on-time at its own close, within-K late at the next - and written once,
+        as one disjoint span per window, at finalize (_flush_cell_streams).
+        A window that had no live model (cell['scorable'] False) is never
+        scored, so no model ever scores a window it did not serve."""
+        if not (cell.get("scorable") and self._is_fitted):
             return
         todo = [
             (fid, f)
@@ -1792,37 +2069,63 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         if not todo:
             return
         cell["tested"].update(fid for fid, _ in todo)
-        feats, kept = [], []
-        for fid, flow in todo:
-            x = self._extract_flow_features(flow)
-            if x is not None:
-                feats.append(x)
-                kept.append((fid, flow))
-        if not kept:
-            return
         try:
-            x_scaled = self.scaler.transform(np.array(feats, dtype=np.float32))
-            preds = self.predict_batch(x_scaled)
-            local = None
-            if self._using_merged_model and self._local_only_model is not None:
-                local = self._predict_batch_with(
-                    self._local_only_model, x_scaled
-                )
-        except Exception:
-            self.print(
-                f"Error testing window flows: {traceback.format_exc()}", 0, 1
+            kept, x_scaled = self._scaled_features(todo)
+            if not kept:
+                return
+            main = self.predict_batch(x_scaled)
+            # while merged serves, the local model is scored too (shadow)
+            local_model = getattr(self, "model", None)
+            local = (
+                self._predict_batch_with(local_model, x_scaled)
+                if self._using_merged_model and local_model is not None
+                else None
             )
+        except Exception:
+            self._record_error("_test_cell")
             return
+        cell["merged_served"] = bool(self._using_merged_model)
+        if self._using_merged_model:
+            self._check_live_consistency(kept, main)
+        t = cell["test"]
         for i, (fid, flow) in enumerate(kept):
-            gt_label = self._get_simulated_gt(flow) or BENIGN
-            self.store_testing_results(gt_label, preds[i])
-            cell["preds"][fid] = preds[i]
+            gt = self._get_simulated_gt(flow) or BENIGN
+            is_conn = flow.get("type_") == "conn"
+            self._tally(t["main"], gt, main[i])
+            cell["preds"][fid] = main[i]
+            if is_conn:
+                self._tally(t["conn_main"], gt, main[i])
             if local is not None:
-                self._store_local_stream(gt_label, local[i])
-            if flow.get("type_") == "conn":
-                self._store_conn_stream("active", gt_label, preds[i])
-                if local is not None:
-                    self._store_conn_stream("local", gt_label, local[i])
+                self._tally(t["shadow_local"], gt, local[i])
+                if is_conn:
+                    self._tally(t["conn_shadow"], gt, local[i])
+
+    def _flush_cell_streams(self, cell: dict) -> None:
+        """Write a finalized (or shutdown-drained) window's scores as ONE
+        disjoint span per stream, so the sum of per-window confusions equals
+        the run pool. The serving model's stream goes to merged_test when the
+        window was merge-served, else local_test; while merged, the frozen
+        local-only model's score is the local_test shadow stream. One line per
+        window per stream."""
+        if cell.get("flushed"):
+            return
+        merged = bool(cell.get("merged_served"))
+        t = cell["test"]
+        span = f"window_{cell['window']}"
+        main_t = "merged_test" if merged else "local_test"
+        pairs = [(main_t, t["main"]), (main_t + "_conn", t["conn_main"])]
+        if merged:
+            pairs += [
+                ("local_test", t["shadow_local"]),
+                ("local_test_conn", t["conn_shadow"]),
+            ]
+        for target, stats in pairs:
+            if self._stat_total(stats) > 0:
+                self.logger.log_test_marker(
+                    target, f"New local model ({span})"
+                )
+                self._write_stream_line(target, stats)
+        cell["flushed"] = True
 
     # ------------------------------------------------------------------
     # All-traffic-so-far evaluation (sofar_test.jsonl)
@@ -1855,12 +2158,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     )
                 )
         except Exception:
-            self.print(
-                f"Error storing flows for the so-far evaluation: "
-                f"{traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("_sofar_ingest")
 
     def _sofar_arrays(self) -> tuple:
         """Every stored flow, the per-close chunks merged into one.
@@ -1898,7 +2196,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         try:
             with torch.no_grad():
                 for i in range(0, len(x_raw), self._SOFAR_BATCH):
-                    x = self.scaler.transform(x_raw[i : i + self._SOFAR_BATCH])
+                    x = self._scale(x_raw[i : i + self._SOFAR_BATCH])
                     logits = model(torch.FloatTensor(x).to(self.device))
                     idx = torch.argmax(torch.softmax(logits, dim=1), dim=1)
                     out[i : i + len(x)] = (idx == 1).cpu().numpy()
@@ -1937,16 +2235,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """The named models of this training close, in row order. A further
         model is one more (name, model) pair.
 
-        :param local: this close's local-only snapshot (the model sent to
-            peers), None when it was not taken
+        :param local: this close's local model (the model sent to peers)
         :param merged: True when this close produced a merged model
         :return: [(name, model)]
         """
         models = []
         if local is not None:
             models.append(("local", local))
-        if merged and self.model is not None:
-            models.append(("merged", self.model))
+        merged_model = getattr(self, "merged_model", None)
+        if merged and merged_model is not None:
+            models.append(("merged", merged_model))
         return models
 
     def _sofar_evaluate(self, window_n: int, models: list) -> None:
@@ -1978,11 +2276,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             for row in rows:
                 self.logger._write("sofar_test", json.dumps(row))
         except Exception:
-            self.print(
-                f"Error in the so-far evaluation: {traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("_sofar_evaluate")
 
     def _record_pending_labels(
         self, malicious_flows: list, benign_flows: list, arrival_window: int
@@ -2190,6 +2484,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         malicious_flow_ids: set,
         window_header: str,
         predictions: dict,
+        merged: bool = False,
     ):
         """
         Log inferred-vs-GT and prediction-vs-label comparisons for the window.
@@ -2244,7 +2539,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Mal/Ben: {mal_inf}/{ben_inf} vs {mal_gt}/{ben_gt} | "
                 f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
             )
-            if self._using_merged_model:
+            if merged:
                 self.logger.log_comp_line(
                     "comp_merged_inferred_gt",
                     f"inferred vs GT: {len(gt_labels)} samples | "
@@ -2307,7 +2602,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     f"Mal/Ben: {mal_pvg}/{ben_pvg} vs {mal_gt2}/{ben_gt2} | "
                     f"TP/FP/TN/FN: {tp}/{fp}/{tn}/{fn} | Acc: {acc:.4f}",
                 )
-                if self._using_merged_model:
+                if merged:
                     self.logger.log_comp_line(
                         "comp_merged_test_gt",
                         f"pred vs GT: {len(pvg_preds)} samples | "
@@ -2324,12 +2619,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
            contains its ts (flow start) and, once, to the so-far store;
         2. label every open cell: a flow is malicious when the evidence of
            an alert (within the lookback) cites its uid;
-        3. test the still-untested flows of the cell about to finalize with
-           the current model (it trains on them next);
-        4. finalize the K-old cell and train on it (deferred training); the
-           models of this training are scored on all flows so far;
-        5. test the remaining open cells with the fresh model;
-        6. flips: alerts created since the last close vs trained flows.
+        3. PREQUENTIAL TEST: score every open cell's not-yet-tested flows with
+           the CURRENT model, BEFORE this close trains anything (so no model
+           ever scores a window it will train on); each flow scored once and
+           written as one disjoint per-window span at finalize;
+        4. finalize the K-old cell: flush its per-window span (routed to
+           merged_/local_ by whether it was merge-served), then train on it
+           (deferred training), updating the live model that serves later
+           windows; its models are also scored on all flows so far (sofar);
+        5. flips: alerts created since the last close vs already-trained flows.
         """
         try:
             self.training_count_window += 1
@@ -2371,15 +2669,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"{now - placed['newest_ts'] if placed['newest_ts'] else -1:.0f}s",
             )
 
-            finalized = None
-            if len(self._flow_ring) > self.label_finalize_delay_windows:
-                finalized = self._flow_ring[0]
-                # 3. late arrivals of the cell trained now meet the model
-                #    as it was before training on them
-                self._test_cell(finalized)
-                self._flow_ring.popleft()
+            # 3. prequential test (option B): score every open cell's untested
+            #    flows with the CURRENT serving model BEFORE this close trains
+            #    anything. Placement is read-window, so a cell is complete at the
+            #    close that opened it and the current model IS the one live
+            #    during that window - no per-cell snapshot is needed.
+            self._detect_label_flips(fresh_uids)
+            for cell in self._flow_ring:
+                self._test_cell(cell)
 
-            if finalized is None:
+            # 4. finalize the K-old cell: flush its one per-window score line,
+            #    then train on it (updating the live local model that serves
+            #    later windows).
+            if len(self._flow_ring) <= self.label_finalize_delay_windows:
                 self.print(
                     f"Window {window_n}: ring warm-up "
                     f"({len(self._flow_ring)}/{self.label_finalize_delay_windows} cells), "
@@ -2388,11 +2690,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     1,
                     1,
                 )
-                self._detect_label_flips(fresh_uids)
-                for cell in self._flow_ring:
-                    self._test_cell(cell)
                 self._end_window()
                 return
+
+            finalized = self._flow_ring[0]
+            self._flush_cell_streams(finalized)
+            self._flow_ring.popleft()
 
             malicious_flows = [
                 f
@@ -2410,20 +2713,17 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 0,
                 1,
             )
-            # flips: fresh alerts against flows trained at earlier closes
-            self._detect_label_flips(fresh_uids)
 
             total_labeled = len(malicious_flows) + len(benign_flows)
             if total_labeled == 0:
                 self.print(f"No flows in window {window_n}, skipping", 0, 1)
-                for cell in self._flow_ring:
-                    self._test_cell(cell)
                 self._end_window()
                 return
 
             self._add_flows_to_buffers(malicious_flows, MALICIOUS)
             self._add_flows_to_buffers(benign_flows, BENIGN)
 
+            finalized_merged = bool(finalized.get("merged_served"))
             header = (
                 f"window_{window_n} | "
                 f"{alert_count} alerts, {evidence_count} evidence. "
@@ -2437,9 +2737,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 finalized["mal_ids"],
                 header,
                 finalized["preds"],
+                merged=finalized_merged,
             )
-            # audit marker: finalization lag is visible directly in
-            # local_train.log next to the batch lines
             self.logger.log_comp_header(
                 "local_train",
                 f"ring | pending {len(self._flow_ring)} cells | "
@@ -2449,64 +2748,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"{alert_count} | flips {len(self._flip_events)}",
             )
 
-            # 4. deferred training on the finalized cell
+            # 5. deferred training on the finalized cell
             self._record_pending_labels(
                 malicious_flows, benign_flows, finalized["window"]
             )
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
-                # undersampling picks the batch BEFORE labels commit: the
-                # flows it drops never train and are not recorded as trained
                 if self._undersample:
                     self._undersample_buffer()
-                # flips/jsonl audit only for flows that actually trained
                 self._commit_training_labels(window_n)
                 self._write_label_flips("finalize")
-                # the span's tail below test_log_batch_size goes to the log
-                # of the model that tested it, before training switches it
-                self.flush_testing_results()
                 self._train_batch()
 
-                self.malware_metrics = {"TP": 0, "FP": 0, "TN": 0, "FN": 0}
-                self.seen_labels = {MALICIOUS: 0, BENIGN: 0}
-                self.predicted_labels = {MALICIOUS: 0, BENIGN: 0}
-
-                span = f"{self._training_trigger}_{window_n}"
-                target = (
-                    "merged_test" if self._using_merged_model else "local_test"
-                )
-                self._flush_conn_stream("active")
-                self._conn_active = self._blank_test_statistics()
-                self.logger.log_test_marker(
-                    target, f"New local model ({span})"
-                )
-                self.logger.log_test_marker(
-                    f"{target}_conn", f"New local model ({span})"
-                )
-
-                # Dual testing stream closeout: flush the local-only stream's
-                # span tail and reset its counters; the new span's header is
-                # written when the local stream is first used in it.
-                if self._local_stream_used:
-                    self._flush_local_stream()
-                    self._flush_conn_stream("local")
-                    self._local_test = self._blank_test_statistics()
-                    self._conn_local = self._blank_test_statistics()
-                    self._local_stream_used = False
-                self._span_label = span
-                self._local_span_marked = False
-
-            # 5. the open cells meet the freshly trained model
-            for cell in self._flow_ring:
-                self._test_cell(cell)
             self._end_window()
 
         except Exception:
-            self.print(
-                f"Error closing training window: {traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("_close_training_window")
 
     def _end_window(self) -> None:
         """Advance the wall-clock window and forget bounds no open cell uses."""
@@ -2518,8 +2775,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
         for w in [w for w in self._window_bounds if w < oldest]:
             del self._window_bounds[w]
-        if self.testing_flows_since_last_log > 0 and self._using_merged_model:
-            self.flush_testing_results()
+        self._write_live_summary()
 
     def handle_p2p_model(self, model_data: dict):
         """
@@ -2562,9 +2818,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("handle_p2p_model: exiting", 1, 1)
 
         except Exception:
-            self.print(
-                f"Error handling P2P model: {traceback.format_exc()}", 0, 1
-            )
+            self._record_error("handle_p2p_model")
 
     def _reset_head_adam_state(self):
         """Reset Adam state for head parameters before head-only fine-tuning."""
@@ -2641,6 +2895,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("_train_batch: entering", 1, 1)
             if len(self.training_buffer_x) == 0:
                 return
+            # the merged model served the window that just ended (already
+            # scored before this training); discard it - no legacy
+            self.merged_model = None
+            self._using_merged_model = False
+            # every live prediction from here on is by a new model generation
+            self._model_gen = getattr(self, "_model_gen", 0) + 1
 
             self.print(
                 f"_train_batch: buffer has {len(self.training_buffer_x)} samples",
@@ -2709,21 +2969,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             self._save_local_model()
 
-            # Snapshot the fresh local-only model for the dual testing stream
-            # (small model; deep copy keeps it frozen while self.model merges).
-            local_snapshot = None
-            try:
-                self._local_only_model = copy.deepcopy(self.model)
-                local_snapshot = self._local_only_model
-            except Exception:
-                self.print(
-                    "local-only model snapshot failed: "
-                    + traceback.format_exc(),
-                    0,
-                    1,
-                )
-
-            self._using_merged_model = False
+            # the local lineage is self.model itself: a merge never touches it
+            local_snapshot = self.model
             self._is_fitted = True
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
@@ -2756,9 +3003,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("_train_batch: exiting", 1, 1)
 
         except Exception:
-            self.print(
-                f"Error in _train_batch: {traceback.format_exc()}", 1, 1
-            )
+            self._record_error("_train_batch")
 
     _TRUST_CACHE_TTL_S = 60
 
@@ -2989,30 +3234,41 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         **vecs,
                     )
                 except Exception:
-                    self.print(
-                        "trigger_merge: weight snapshot failed: "
-                        + traceback.format_exc(),
-                        0,
-                        1,
-                    )
+                    self._record_error("trigger_merge")
             self.print(
                 f"trigger_merge: merging {len(usable)} peers over {numel} shared params",
                 1,
                 1,
             )
 
-            if self.model:
-                self.model.set_shared_weights(merged_shared)
+            if self.model is None:
+                return
+            # build the merged model on a COPY of the fresh local model: the
+            # local lineage is never overwritten by the merge
+            merged = copy.deepcopy(self.model)
+            merged.set_shared_weights(merged_shared)
 
             # Start merge head fine-tuning from the same head used for local
             # head fine-tuning, so local and merged differ only in fc1 origin.
             if head_before_w is not None and head_before_b is not None:
-                self.model.set_head_weights(head_before_w, head_before_b)
-                self._reset_head_adam_state()
+                merged.set_head_weights(head_before_w, head_before_b)
 
+            # fine-tune the merged head with the shared layers frozen, on the
+            # merged copy and with a FRESH, throwaway optimizer state: Adam
+            # moments are keyed by parameter name, so sharing them would leak
+            # the merged training into the next local training
             self.print("trigger_merge: calling _align_head_on_buffer", 1, 1)
-            self._align_head_on_buffer(self._last_train_X, self._last_train_Y)
+            local_model = self.model
+            local_adam = getattr(self, "_adam_state", {})
+            self.model, self._adam_state = merged, {}
+            try:
+                self._align_head_on_buffer(
+                    self._last_train_X, self._last_train_Y
+                )
+            finally:
+                self.model, self._adam_state = local_model, local_adam
 
+            self.merged_model = merged
             self._using_merged_model = True
 
             self.merge_count += 1
@@ -3026,9 +3282,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
         except Exception:
-            self.print(
-                f"Error in trigger_merge: {traceback.format_exc()}", 0, 1
-            )
+            self._record_error("trigger_merge")
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
@@ -3068,11 +3322,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
         except Exception:
-            self.print(
-                f"Error in _align_head_on_buffer: {traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("_align_head_on_buffer")
 
     def send_model_to_peers(self):
         """
@@ -3137,11 +3387,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("send_model_to_peers: exiting", 1, 1)
 
         except Exception:
-            self.print(
-                f"Error sending model to peers: {traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("send_model_to_peers")
 
     def _process_flow(self, flow: dict, label: str) -> tuple:
         """Process flow into features and label."""
@@ -3338,9 +3584,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 pickle.dump(self.scaler, f)
 
         except Exception:
-            self.print(
-                f"Error saving local model: {traceback.format_exc()}", 0, 1
-            )
+            self._record_error("_save_local_model")
 
     def _save_final_merged_model(self) -> None:
         """Persist the current (latest) MERGED model + scaler to the
@@ -3350,7 +3594,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         configured path always holds the FINAL merged weights; numbered
         per-merge artifacts stay at their hardcoded module paths."""
         try:
-            if self.model is None or self.merge_count <= 0:
+            merged = getattr(self, "merged_model", None)
+            if merged is None or self.merge_count <= 0:
                 return
             store_path = getattr(self, "model_path", None)
             prep_path = getattr(self, "preprocess_path", None)
@@ -3359,7 +3604,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             os.makedirs(os.path.dirname(store_path), exist_ok=True)
             torch.save(
                 {
-                    "state_dict": self.model.state_dict(),
+                    "state_dict": merged.state_dict(),
                     "model_class": self.model_class_name,
                     "merge_count": self.merge_count,
                 },
@@ -3374,35 +3619,33 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 2,
             )
         except Exception:
-            self.print(
-                "final merged model save failed: " + traceback.format_exc(),
-                0,
-                1,
-            )
+            self._record_error("_save_final_merged_model")
 
     def _save_merged_model(self, merge_count: int):
         """Save merged model (full state dict; class-driven persistence)."""
         try:
-            if self.model is None:
+            merged = getattr(self, "merged_model", None)
+            if merged is None:
                 return
 
             torch.save(
-                self.model.state_dict(),
+                merged.state_dict(),
                 os.path.join(
                     self.merged_dir, f"merged_{merge_count}_state.bin"
                 ),
             )
 
         except Exception:
-            self.print(
-                f"Error saving merged model {merge_count}: {traceback.format_exc()}",
-                0,
-                1,
-            )
+            self._record_error("_save_merged_model")
 
     def store_model(self):
         """Override base class to save both local and merged models."""
         self.print("Storing models on graceful shutdown.", 0, 2)
+        # drain the ring: the last K windows never finalize/train, but they
+        # were tested with their serving model during the run - flush their
+        # per-window scores so they are reported (still never trained).
+        for cell in list(self._flow_ring):
+            self._flush_cell_streams(cell)
         self._write_label_flips("shutdown")
         self._save_local_model()
         if self.merge_count > 0:
@@ -3424,7 +3667,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.store_testing_results(ground_truth, predicted)
 
         except Exception:
-            self.print(f"Error testing flow: {traceback.format_exc()}", 0, 1)
+            self._record_error("run_test_on_flow")
+
+    def set_evidence_malicious_flow(self, *args, **kwargs):
+        """DISABLED for the federation experiments: the module must not emit
+        evidence, because its own malicious-flow evidence would feed back into
+        the alerts we read for labeling (circular) and would change SLIPS'
+        alerting behaviour. The scoring harness (run_test_on_flow ->
+        _classify_flow and the window close) still runs - it just never emits.
+        A dedicated experiment will turn this on later; to re-enable, delete
+        this override so the base implementation runs again:
+            return super().set_evidence_malicious_flow(*args, **kwargs)
+        """
+        return None
 
     @staticmethod
     def _blank_test_statistics() -> dict:

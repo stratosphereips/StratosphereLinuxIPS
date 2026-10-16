@@ -296,23 +296,25 @@ def test_reinserted_uid_trains_once_and_its_late_alert_is_a_flip(
     assert p.flips() == [("x", 1, 2)]
 
 
-def test_flows_are_placed_by_start_time_into_half_open_windows(
+def test_a_flow_belongs_to_the_window_it_reached_the_db_in(
     monkeypatch, tmp_path
 ):
-    """Windows are (start, end]: a flow starting exactly at a boundary
-    belongs to the earlier window, a future flow waits for its own window,
-    and a flow without a start time joins the oldest open cell (late)."""
+    """Read-window placement: every flow read at a close joins that close's
+    window whatever its own start ts - a flow stamped in the next window is
+    not held back, a long-lived flow that started a window earlier is not
+    back-dated (it is counted as late), and a flow without a start time
+    joins the window it was read in."""
     p = Pipe(monkeypatch, tmp_path, k=1)
     p.add("a")
-    p.add("fut", ts=BASE + WIN + 50)  # starts in window 2, read at close 1
+    p.add("fut", ts=BASE + WIN + 50)  # stamped in window 2, read at close 1
     p.close()
-    p.add("edge", ts=BASE + WIN)  # == end of window 1
+    p.add("long", ts=BASE + 10)  # started in window 1, stored in window 2
     p.add("stale", ts=None)
     p.add("b")
     p.close()
     p.close()
     windows = {uid: r["train_window"] for uid, r in p.trained().items()}
-    assert windows == {"a": 2, "edge": 2, "stale": 2, "fut": 3, "b": 3}
+    assert windows == {"a": 2, "fut": 2, "long": 3, "stale": 3, "b": 3}
     db_hdr = [ln for ln in p.lines("local_train.log") if "db | window_2" in ln]
     assert len(db_hdr) == 1 and " late 1 " in db_hdr[0]
 
@@ -320,9 +322,10 @@ def test_flows_are_placed_by_start_time_into_half_open_windows(
 def test_each_flow_is_tested_once_before_the_window_that_trains_it(
     monkeypatch, tmp_path
 ):
-    """Prequential order: open cells are tested at every close, a late
-    flow that lands in the cell being finalized is tested right before
-    that cell trains, and open cells meet the freshly trained model."""
+    """Prequential order: every open cell is tested at every close BEFORE
+    that close trains; a flow read late (its ts in an earlier window) joins
+    the window it was read in - never back-dated; each flow is tested once,
+    before the training that uses it."""
     p = Pipe(monkeypatch, tmp_path, k=1, fitted=True)
     events = []
     real_test_cell = p.m._test_cell
@@ -341,7 +344,7 @@ def test_each_flow_is_tested_once_before_the_window_that_trains_it(
     p.m._test_cell = spy_test_cell
     p.m._train_batch = spy_train
     p.close("a", "b")
-    p.add("late", ts=BASE + 150)  # belongs to window 1, read at close 2
+    p.add("late", ts=BASE + 150)  # stamped in window 1, read at close 2
     p.close("c")
     p.close()
 
@@ -351,28 +354,28 @@ def test_each_flow_is_tested_once_before_the_window_that_trains_it(
     trains = [
         (i, uids) for i, (kind, uids) in enumerate(events) if kind == "train"
     ]
-    assert [set(u) for _, u in trains] == [{"a", "b", "late"}, {"c"}]
+    assert [set(u) for _, u in trains] == [{"a", "b"}, {"c", "late"}]
     for i, uids in trains:
         assert all(pos[uid] < i for uid in uids)
-    assert pos["c"] > trains[0][0]  # tested by the model trained at close 2
+    assert (
+        pos["c"] < trains[0][0]
+    )  # B: tested BEFORE close 2 trains (model live during its window)
 
 
-def test_training_close_keeps_the_residual_of_the_all_flows_stream(
+def test_a_window_is_one_complete_span_whatever_the_log_batch_size(
     monkeypatch, tmp_path
 ):
-    """With test_log_batch_size above the flows tested in a span, the
-    training close must write the span's residual to local_test.log before
-    the new span header, as it already does for local_test_conn.log."""
+    """Option B writes each window once, at finalize, as ONE line per stream
+    holding all of the window's scored flows: a large test_log_batch_size
+    can never leave a residual behind, and the header precedes its line."""
     p = Pipe(monkeypatch, tmp_path, k=0, fitted=True, batch=1000)
     p.add("m1", saddr=ATTACKER)
     p.close("b1")
-    conn = p.lines("local_test_conn.log")
-    assert FLOW_RE.match(conn[0]).group(1, 2, 3) == ("2", "1", "1")
-    assert conn[1] == "--- New local model (window_1) ---"
-    all_flows = p.lines("local_test.log")
-    assert all_flows[-1] == "--- New local model (window_1) ---"
-    counted = [FLOW_RE.match(ln) for ln in all_flows if FLOW_RE.match(ln)]
-    assert counted and counted[-1].group(1, 2, 3) == ("2", "1", "1")
+    for log in ("local_test.log", "local_test_conn.log"):
+        lines = p.lines(log)
+        assert lines[0] == "--- New local model (window_1) ---"
+        assert len(lines) == 2  # header + the window's one line
+        assert FLOW_RE.match(lines[1]).group(1, 2, 3) == ("2", "1", "1")
 
 
 # --------------------------------------------------------------------------
@@ -519,9 +522,12 @@ def test_incompatible_peer_is_skipped_and_the_rest_still_merge(tmp_path, bad):
         )
     m.trigger_merge()
     assert m._using_merged_model and m.merge_count == 1
-    merged = m.model.weights_for_sharing()
+    merged = m.merged_model.weights_for_sharing()
     for key in own:
         assert torch.allclose(merged[key], (own[key] + good[key]) / 2)
+    # the merge is built on a copy: the local lineage is untouched
+    local = m.model.weights_for_sharing()
+    assert all(torch.equal(local[key], own[key]) for key in own)
     merging = (tmp_path / "slips-a" / "merging_data.log").read_text()
     assert "peer=slips-b" in merging and "peer=slips-c" not in merging
 

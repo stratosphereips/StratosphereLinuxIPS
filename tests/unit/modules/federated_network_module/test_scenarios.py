@@ -260,6 +260,7 @@ class Peer:
         merge_rule="average",
         model_class="random_projection_mlp",
         min_samples=4,
+        live=False,
     ):
         self.name, self.clock, self.n = name, clock, 0
         self.root = tmp_path / name
@@ -279,9 +280,19 @@ class Peer:
             min_samples=min_samples,
         )
         self.inbox = deque()  # p2p_gopy messages waiting for the module
-        self.m.get_msg = lambda channel: (
-            self.inbox.popleft() if self.inbox else None
-        )
+        # live=True mirrors SLIPS: every stored flow is also published on
+        # new_flow (conn) / new_arp (ARP) as {"flow": <the same dict>, ...}
+        self.publish_live = live
+        self.live = {"new_flow": deque(), "new_arp": deque()}
+        if live:
+            self.m.channels["new_flow"] = object()
+            self.m.channels["new_arp"] = object()
+
+        def get_msg(channel):
+            queue = self.live.get(channel, self.inbox)
+            return queue.popleft() if queue else None
+
+        self.m.get_msg = get_msg
 
     # ---- SLIPS side: what lands in flows.sqlite ------------------------ #
     def add_flow(self, uid, ts, i=0):
@@ -300,6 +311,19 @@ class Peer:
                 (uid, raw),
             )
         self.w.commit()
+        if self.publish_live:
+            channel = "new_arp" if uid[0] == "r" else "new_flow"
+            self.live[channel].append(
+                {
+                    "data": json.dumps(
+                        {
+                            "flow": json.loads(raw),
+                            "profileid": "profile_x",
+                            "twid": "timewindow1",
+                        }
+                    )
+                }
+            )
 
     def add_alert(self, alert_id, uids, at):
         self.w.execute(
@@ -562,10 +586,11 @@ def test_carried_flow_cited_before_its_batch_trains_is_a_flip(net):
 
 def test_trained_labels_name_the_window_each_flow_arrived_in(net):
     """Every trained_labels.jsonl row carries arrival_window, the window of
-    the cell the flow was placed in (by its ts, so a flow SLIPS stores a
-    window late keeps its own window), next to the unchanged fields. The
-    cell finalizes at close arrival_window + K; a sub-threshold cell is
-    carried and trains later, so train_window - K is not its arrival."""
+    the cell the flow was placed in = the window SLIPS stored it in (a flow
+    stored a window late gets the later window, never back-dated), next to
+    the unchanged fields. The cell finalizes at close arrival_window + K; a
+    sub-threshold cell is carried and trains later, so train_window - K is
+    not its arrival."""
     p = net.peer(k=1, min_samples=8)
     p.close(flows=_ben(1, 5))
     p.close(flows=_ben(2, 5) + [("b1_late", BASE + 50)])  # 6 < 8: carried
@@ -576,8 +601,8 @@ def test_trained_labels_name_the_window_each_flow_arrived_in(net):
         uid: (r["arrival_window"], r["train_window"])
         for uid, r in rows.items()
     } == {
-        **{uid: (1, 3) for uid in _ben(1, 5) + ["b1_late"]},
-        **{uid: (2, 3) for uid in _ben(2, 5)},
+        **{uid: (1, 3) for uid in _ben(1, 5)},
+        **{uid: (2, 3) for uid in _ben(2, 5) + ["b1_late"]},
         **{uid: (3, 4) for uid in _ben(3, 9)},
     }
     fields = {"flow_id", "uid", "saddr", "daddr", "starttime", "label"}
@@ -660,25 +685,29 @@ def test_arp_scan_and_conn_flows_train_together_conn_twin_counts_conn(net):
     """One window holds an ARP scan and conn flows: both are labeled from the
     alert and trained in one batch; the all-flows test stream counts every
     record, the conn-only twin only the conn flows; simulated ground truth
-    is stamped back into both SLIPS tables."""
+    is stamped back into both SLIPS tables. At K=1 windows 1-2 ran with no
+    live model (the first model is born at window 2's close), so they are
+    never scored; the mixed window is window 3, the first one scored."""
     p = net.peer(k=1)
     p.close(flows=_ben(1, 6))
+    p.close(flows=_ben(2, 6))
     p.close(
-        flows=_scan(2, 10) + _ben(2, 4) + _atk(2, 2),
-        alerts=[("A1", _scan(2, 10) + _atk(2, 2))],
+        flows=_scan(3, 10) + _ben(3, 4) + _atk(3, 2),
+        alerts=[("A1", _scan(3, 10) + _atk(3, 2))],
     )
-    p.close(flows=_ben(3, 3))
-    assert p.batches() == {2: (0, 6), 3: (12, 4)}
+    p.close(flows=_ben(4, 3))
+    assert p.batches() == {2: (0, 6), 3: (0, 6), 4: (12, 4)}
     rows = p.trained_by_uid()
-    assert {rows[u]["label"] for u in _scan(2, 10) + _atk(2, 2)} == {1}
-    assert {rows[u]["label"] for u in _ben(2, 4)} == {0}
-    tested = p.span_tails("local_test.log")["window_2"]
-    assert tested.startswith("  flows=16 | GT(Mal/Ben): 12/4 |")
-    tested = p.span_tails("local_test_conn.log")["window_2"]
+    assert {rows[u]["label"] for u in _scan(3, 10) + _atk(3, 2)} == {1}
+    assert {rows[u]["label"] for u in _ben(3, 4)} == {0}
+    spans = p.span_tails("local_test.log")
+    assert "window_1" not in spans and "window_2" not in spans  # no live model
+    assert spans["window_3"].startswith("  flows=16 | GT(Mal/Ben): 12/4 |")
+    tested = p.span_tails("local_test_conn.log")["window_3"]
     assert tested.startswith("  flows=6 | GT(Mal/Ben): 2/4 |")
-    assert p.gt_in_db("altflows", "r2_0") == "malicious"
-    assert p.gt_in_db("flows", "a2_0") == "malicious"
-    assert p.gt_in_db("flows", "b2_0") == "benign"
+    assert p.gt_in_db("altflows", "r3_0") == "malicious"
+    assert p.gt_in_db("flows", "a3_0") == "malicious"
+    assert p.gt_in_db("flows", "b3_0") == "benign"
 
 
 # --------------------------------------------------------------------------
@@ -699,14 +728,14 @@ WINDOWS = [
     [
         (
             0,
-            {"window_1": 8, "window_2": 7, "window_3": 9, "window_5": 5},
-            {"window_1": 8, "window_2": 5, "window_3": 7, "window_5": 5},
+            {"window_2": 8, "window_3": 7, "window_5": 9, "window_6": 5},
+            {"window_2": 8, "window_3": 5, "window_5": 7, "window_6": 5},
             5,
         ),
         (
             1,
-            {"window_2": 8, "window_3": 7, "window_4": 9, "window_6": 5},
-            {"window_2": 8, "window_3": 5, "window_4": 7, "window_6": 5},
+            {"window_3": 7, "window_5": 9, "window_6": 5},
+            {"window_3": 5, "window_5": 7, "window_6": 5},
             4,
         ),
     ],
@@ -715,16 +744,19 @@ def test_merged_and_local_streams_share_spans_and_flow_counts(
     net, k, spans_all, spans_conn, merges
 ):
     """With a peer model in hand every training merges. Both testing streams
-    (and their conn twins) then carry the same span headers with the same
-    per-span flow counts, and each flow is tested exactly once, by the model
-    of the last training BEFORE the one that trains on it (a quiet window
-    extends the span instead of opening one)."""
+    (and their conn twins) then carry the same per-window spans with the same
+    flow counts (option B): each window's flows are scored exactly once, by
+    the model live during that window (the last training before the window's
+    own close), and written as one span labeled by that window. Windows with
+    no live model (warm-up: windows 1..K+1) and quiet windows open no span;
+    the last window is written by the shutdown drain."""
     p = net.peer(k=k)
     p.m.handle_p2p_model(net.payload("slips-a"))
     for w, flows in enumerate(WINDOWS, start=1):
         cited = [u for u in flows if u[0] in "ar"]
         p.close(flows=flows, alerts=[(f"A{w}", cited)] if cited else [])
     assert p.m.merge_count == merges
+    p.m.store_model()  # shutdown drains the ring: the last window is written
     for log in ("merged_test.log", "local_test.log"):
         assert list(p.spans(log).items()) == list(spans_all.items())
     for log in ("merged_test_conn.log", "local_test_conn.log"):
@@ -743,7 +775,9 @@ def test_undersample_trains_all_malicious_window_and_balances_mixed_one(net):
     p.close(flows=_ben(2, 5) + _atk(2, 1), alerts=[("A2", _atk(2, 1))])
     assert p.batches() == {1: (6, 0), 2: (1, 1)}
     assert p.m.model.USE_CLASS_WEIGHTING is False
-    assert p.spans("local_test.log") == {"window_1": 6}
+    assert p.spans("local_test.log") == {
+        "window_2": 6
+    }  # window 1: no live model
 
 
 def test_undersampled_out_flows_are_not_recorded_as_trained(net):
@@ -810,8 +844,10 @@ def test_merge_rule_runs_through_the_live_merge_path(net, rule, far, expected):
         snap["own"], snap["peer_slips-a"], snap["peer_slips-far"] if far else 0
     )
     np.testing.assert_allclose(snap["merged"], want, rtol=1e-5, atol=1e-6)
-    # the merged model now owns the test stream (nothing tested yet)
-    assert b.lines("merged_test.log") == ["--- New local model (window_1) ---"]
+    # B now serves the merged model; nothing is scored yet (window 1 had no
+    # live model), so neither stream holds a span
+    assert b.m._using_merged_model is True
+    assert b.lines("merged_test.log") == []
     assert b.lines("local_test.log") == []
 
 
@@ -831,11 +867,11 @@ def test_peers_exchange_local_models_and_merge_the_latest_one(net):
             )
         for src, dst in ((a, b), (b, a)):
             msg = net.route(src, dst)
-            local = _flat(src.m._local_only_model.weights_for_sharing())
+            local = _flat(src.m.model.weights_for_sharing())
             assert msg["peer_id"] == src.name
             assert np.array_equal(_wire_flat(msg), local.numpy())
             if w > 1:  # merged since window 2, and merged != local
-                merged = _flat(src.m.model.weights_for_sharing())
+                merged = _flat(src.m.merged_model.weights_for_sharing())
                 assert not torch.equal(merged, local)
             sent[src.name, w] = _wire_flat(msg)
     for me, peer in ((a, b), (b, a)):
@@ -917,7 +953,9 @@ def test_merge_without_a_usable_peer_keeps_testing_the_local_model(net):
     p.close(flows=_ben(2, 6) + _atk(2, 2), alerts=[("A2", _atk(2, 2))])
     assert p.m.merge_count == 0
     assert p.lines("merged_test.log") == []
-    assert p.spans("local_test.log") == {"window_1": 8}
+    assert p.spans("local_test.log") == {
+        "window_2": 8
+    }  # window 1: no live model
 
 
 # --------------------------------------------------------------------------
@@ -931,22 +969,24 @@ def _db_counter(p, window, name):
 
 
 @pytest.mark.parametrize(
-    "k, at_close, ts, counter",
+    "k, at_close, ts, train_window, flips",
     [
-        # stored at close 1 with a ts inside window 2: waits for window 2
-        (0, 1, BASE + WIN + 50, "next"),
-        # stored at close 2 with a ts before every open window: joins the
-        # oldest open cell (window 1, finalizing now) instead of vanishing
-        (1, 2, BASE - 500, "late"),
+        # stored at close 1, stamped in window 2: joins window 1 (the window
+        # SLIPS stored it in, nothing is held back); at K=0 it trains benign
+        # at close 1, before the close-2 alert reaches it - one flip
+        (0, 1, BASE + WIN + 50, 1, 1),
+        # stored at close 2, started before every window: joins window 2
+        # (never back-dated, counted late), labeled by the close-2 alert and
+        # trained malicious when window 2 finalizes at close 3 (K=1)
+        (1, 2, BASE - 500, 3, 0),
     ],
 )
-def test_flow_is_placed_by_its_ts_and_still_meets_its_alert(
-    net, k, at_close, ts, counter
+def test_a_flow_joins_the_window_it_was_stored_in_never_an_earlier_one(
+    net, k, at_close, ts, train_window, flips
 ):
-    """A flow joins the open window that contains its ts, never an earlier
-    one: a flow stamped in the next window is not trained benign before
-    its alert can reach it, and a flow older than every open window joins
-    the oldest (finalizing) cell, is labeled there and trains once."""
+    """Read-window placement: a flow belongs to the window in which SLIPS
+    stored it, whatever its own ts. Its label is the alerts available when
+    that window finalizes; a later alert is a flip."""
     p = net.peer(k=k)
     for close in (1, 2):
         extra = [("ax", ts)] if close == at_close else []
@@ -954,9 +994,14 @@ def test_flow_is_placed_by_its_ts_and_still_meets_its_alert(
         p.close(flows=_ben(close, 6) + extra, alerts=alerts)
     p.close(flows=_ben(3, 6))
     row = p.trained_by_uid()["ax"]
-    assert (row["label"], row["train_window"]) == (1, 2)
-    assert p.flip_snapshot().flips == 0
-    assert _db_counter(p, at_close, counter) == 1
+    assert (row["arrival_window"], row["train_window"]) == (
+        at_close,
+        train_window,
+    )
+    assert row["label"] == (0 if flips else 1)
+    assert p.flip_snapshot().flips == flips
+    started_before = ts < BASE + (at_close - 1) * WIN
+    assert _db_counter(p, at_close, "late") == int(started_before)
 
 
 # --------------------------------------------------------------------------
@@ -1021,7 +1066,7 @@ def test_sofar_scores_every_flow_read_so_far_at_each_training_close(net):
     x = p.m.scaler.transform(np.array(feats, dtype=np.float32))
     gt = np.array([p.m._get_simulated_gt(f) == MAL for f in flows])
     conn = np.array([f["type_"] == "conn" for f in flows])
-    models = {"local": p.m._local_only_model, "merged": p.m.model}
+    models = {"local": p.m.model, "merged": p.m.merged_model}
     for name, model in models.items():
         pred = p.m._predict_batch_with(model, x) == MAL
         for scope, mask in (("all", np.ones_like(conn)), ("conn", conn)):
@@ -1078,8 +1123,138 @@ def test_sofar_evaluation_leaves_training_and_testing_unchanged(net):
             for p in (on, off)
         )
         assert all(np.array_equal(a[key], b[key]) for key in a.files)
-    for attr in ("model", "_local_only_model"):
+    for attr in ("model", "merged_model"):
         a, b = (getattr(p.m, attr).state_dict() for p in (on, off))
         assert all(torch.equal(a[key], b[key]) for key in a)
     np.testing.assert_array_equal(on.m.scaler.mean_, off.m.scaler.mean_)
     np.testing.assert_array_equal(on.m.scaler.var_, off.m.scaler.var_)
+
+
+# --------------------------------------------------------------------------
+# two lineages: local trains only from local; merged serves one window
+# --------------------------------------------------------------------------
+def test_the_local_model_trains_only_from_the_previous_local_never_merged(
+    net,
+):
+    """No legacy: each close's local training starts from the previous
+    close's LOCAL model; the merged model of a close (built from a copy of
+    the fresh local + the peer models) is never its starting point."""
+    p = net.peer(k=0)
+    p.m.handle_p2p_model(net.payload("slips-a"))
+    starts = []
+    real_fit = p.m.fit_incremental_model
+
+    def spy(x, y, classes=None, train_target="local"):
+        if train_target == "local":
+            model = p.m.model  # None before the very first training
+            starts.append(
+                None
+                if model is None
+                else _flat(model.weights_for_sharing()).clone()
+            )
+        return real_fit(x, y, classes=classes, train_target=train_target)
+
+    p.m.fit_incremental_model = spy
+    after = []
+    for w in (1, 2, 3):
+        p.close(flows=_ben(w, 6) + _atk(w, 2), alerts=[(f"A{w}", _atk(w, 2))])
+        assert p.m.merged_model is not None
+        assert p.m.merged_model is not p.m.model
+        after.append(
+            (
+                _flat(p.m.model.weights_for_sharing()).clone(),
+                _flat(p.m.merged_model.weights_for_sharing()).clone(),
+            )
+        )
+    assert len(starts) == 3
+    for w in (1, 2):  # the local training of close w+1 starts from local_w
+        local_w, merged_w = after[w - 1]
+        assert torch.equal(starts[w], local_w)
+        assert not torch.equal(starts[w], merged_w)
+
+
+def test_the_merged_head_training_never_touches_the_local_optimizer(net):
+    """Adam moments are keyed by parameter name and both models share the
+    names: the merged head is fine-tuned with its own throwaway optimizer
+    state, so the local lineage's moments stay as local training left them."""
+    p = net.peer(k=0)
+    p.m.handle_p2p_model(net.payload("slips-a"))
+    seen = {}
+    real_merge = p.m.trigger_merge
+
+    def spy(*a, **kw):
+        seen["before"] = {
+            name: {
+                key: v.clone() if torch.is_tensor(v) else v
+                for key, v in state.items()
+            }
+            for name, state in p.m._adam_state.items()
+        }
+        out = real_merge(*a, **kw)
+        seen["after"] = p.m._adam_state
+        return out
+
+    p.m.trigger_merge = spy
+    p.close(flows=_ben(1, 6) + _atk(1, 2), alerts=[("A1", _atk(1, 2))])
+    assert p.m.merge_count == 1 and p.lines("merged_train.log")
+    before, after = seen["before"], seen["after"]
+    assert set(before) == set(after)
+    for name, state in before.items():
+        for key, v in state.items():
+            w = after[name][key]
+            assert torch.equal(v, w) if torch.is_tensor(v) else v == w
+
+
+def test_a_merged_model_serves_one_window_and_is_then_discarded(net):
+    """The next training discards the merged model; with no peer model to
+    merge at that close, the next window is served by the local model."""
+    p = net.peer(k=0)
+    p.m.handle_p2p_model(net.payload("slips-a"))
+    p.close(flows=_ben(1, 6) + _atk(1, 2), alerts=[("A1", _atk(1, 2))])
+    first = p.m.merged_model
+    assert first is not None and p.m._serving_model() is first
+    p.m.peer_models.clear()
+    p.close(flows=_ben(2, 6) + _atk(2, 2), alerts=[("A2", _atk(2, 2))])
+    assert p.m.merged_model is None and not p.m._using_merged_model
+    assert p.m._serving_model() is p.m.model
+
+
+# --------------------------------------------------------------------------
+# live scoring == end-of-window scoring (same model generation)
+# --------------------------------------------------------------------------
+def _counts(line):
+    return {
+        key: int(val)
+        for key, val in re.findall(
+            r"([a-zA-Z_]+) (\d+)", line.split("|", 1)[1]
+        )
+    }
+
+
+@pytest.mark.parametrize("read_limit", [500, 2])
+def test_live_merged_predictions_equal_the_end_of_window_scores(
+    net, read_limit
+):
+    """Every stored flow is also published live; the serving merged model
+    predicts it on arrival. The window boundary first drains the channels,
+    so every flow of a window meets that window's model - and the
+    end-of-window scoring of those flows by the same model generation gives
+    exactly the same labels: no mismatch, no flow missed, no error. Before
+    the first merge nothing is predicted live."""
+    p = net.peer(k=1, live=True)
+    p.m._LIVE_READ_LIMIT = read_limit
+    p.m.handle_p2p_model(net.payload("slips-a"))
+    for w, flows in enumerate(WINDOWS, start=1):
+        cited = [u for u in flows if u[0] in "ar"]
+        p.close(flows=flows, alerts=[(f"A{w}", cited)] if cited else [])
+    log = p.lines("live_consistency.log")
+    assert [ln for ln in log if ln.startswith("MISMATCH")] == []
+    assert p.lines("module_errors.log") == []
+    rows = [_counts(ln) for ln in log if ln.startswith("window_")]
+    assert len(rows) == len(WINDOWS)
+    assert rows[0]["no_model"] > 0  # window 1: no merged model yet
+    served = [r for r in rows if r["compared"]]
+    assert served, "no merged-served window was compared"
+    for r in served:
+        assert r["matched"] == r["compared"] and r["MISMATCH"] == 0
+        assert r["gen_race"] == 0 and r["no_live"] == 0
