@@ -131,6 +131,24 @@ async def test_get_vendor_from_database(mocker):
     mocker.patch.object(ip_info, "get_vendor_online").assert_not_called()
 
 
+@pytest.mark.parametrize("mac", ["A2:D7:7B:FA:6A:55", "02:00:00:00:00:01", "52:54:00:12:34:56"])
+async def test_local_mac_classification_does_not_query_manufacturer(mac: str) -> None:
+    """Local MAC prefixes cannot identify an IEEE hardware manufacturer.
+
+    Parameters:
+        mac: Private, manually assigned or virtual interface MAC.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.get_vendor_offline = Mock()
+    ip_info.run_lookup = AsyncMock()
+    result = await ip_info.get_vendor_async(mac, "profile_192.168.1.20")
+    assert result == {"MAC": mac, "Vendor": "Unknown", "mac_address_type": "locally_administered"}
+    ip_info.db.get_mac_vendor_from_profile.assert_not_called()
+    ip_info.get_vendor_offline.assert_not_called()
+    ip_info.run_lookup.assert_not_awaited()
+    ip_info.db.set_mac_vendor_to_profile.assert_not_called()
+
+
 async def test_get_vendor_from_offline(
     mocker,
 ):

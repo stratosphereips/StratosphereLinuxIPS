@@ -789,6 +789,38 @@ written at most once per minute per network/IP; changes are recorded immediately
 The in-process MAC cache is capped at 4,096 entries. These writes stay in the
 background module, outside the main analysis loop.
 
+### MAC address administration
+
+The Hosts/Devices inventory, host Identity card, saved MAC clues, and MAC
+fields in flow details show the address classification. The host/device APIs
+include `mac_address_type`, and the Hosts CSV includes the same field. Search
+the inventory for **locally administered** or **universally administered**.
+These values are derived from existing MACs, including retained snapshots;
+no database migration or external lookup is needed.
+
+IEEE defines the second least significant bit of the first octet as the
+Universal/Local (U/L) bit. For `A2:D7:7B:FA:6A:55`, `A2` is binary
+`10100010`: `0xA2 & 0x02 = 0x02`, so the address is **Locally administered**.
+The least significant bit, I/G, is zero, so it is an individual/unicast
+address. Unicast first octets ending in hexadecimal `2`, `6`, `A`, or `E`
+have the local bit set.
+
+Local administration can mean a private/randomized Wi-Fi address, a manual
+assignment, or a virtual interface. **The bits cannot prove randomization.**
+The web explanation makes that limit explicit. With U/L zero, the label is
+**Universally administered**; this describes the address format and does not
+prove that the address is authentic or unchanged. Broadcast, multicast,
+all-zero/unspecified, invalid, and missing MACs have separate labels.
+
+IP Info skips manufacturer-prefix lookup for locally administered and group
+addresses; their prefixes do not establish an IEEE hardware manufacturer.
+Classification does not change detection scores, whitelists, saved names,
+or grouping by an exact observed device MAC. It adds no database writes or
+network calls to the main analysis loop.
+
+References: [IEEE EUI/OUI/CID guidelines](https://standards-support.ieee.org/hc/en-us/articles/4888705676564-Guidelines-for-Use-of-Extended-Unique-Identifier-EUI-Organizationally-Unique-Identifier-OUI-and-Company-ID-CID)
+and [RFC 9797, Section 2](https://www.rfc-editor.org/rfc/rfc9797.html#section-2).
+
 New live captures load `zeek-scripts/mdns-identity.zeek`, which retains each
 mDNS A/AAAA record's owner and address in `slips_mdns_bindings`. Slips uses
 these bindings for mDNS identity, independently of the DNS question and the

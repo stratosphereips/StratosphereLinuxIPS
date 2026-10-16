@@ -29,8 +29,40 @@ from modules.web_interface.server import (
 )
 from slips_files.common.web_auth import SESSION_COOKIE_NAME, issue_token
 from slips_files.common.slips_utils import utils
+from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("mac,kind", [("A2:D7:7B:FA:6A:55", "locally_administered"),
+    ("d8:58:d7:0:67:11", "universally_administered")])
+def test_mac_classification_in_inventory_and_details(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool, mac: str, kind: str) -> None:
+    """Derive the same classification for old snapshots, devices and host details.
+
+    Parameters:
+        tmp_path: Isolated run data.
+        monkeypatch: Set the clock to the fixture's capture time.
+        device: Whether inventory combines addresses by device.
+        mac: Retained MAC notation, including operating-system shorthand.
+        kind: Classification expected from its IEEE bits.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    ip = "192.168.1.20"
+    with connect_history(reader.history_path) as connection:
+        connection.execute("UPDATE host_snapshots SET data=? WHERE ip=?",
+            (json.dumps({"ip": ip, "mac": mac, "scope": "local"}), ip))
+    query = {"range": ["all"], "search": [kind.replace("_", " ")], **({"device": ["1"]} if device else {})}
+    page = reader.hosts(query)
+    assert page["items"]
+    assert all(item["mac_address_type"] == kind for item in page["items"])
+    item = next(item for item in page["items"] if item["ip"] == ip)
+    assert item["mac_address_type"] == classify_mac(mac)
+    detail = reader.host(ip)
+    assert detail["mac_address_type"] == kind
+    assert detail["mac"] == mac
 
 
 @pytest.mark.parametrize("device", [False, True])

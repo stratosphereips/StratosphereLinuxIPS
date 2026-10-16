@@ -529,6 +529,67 @@ const threat = (value) => {
   const level = String(value || "info").toLowerCase();
   return text("span", level, `status threat-${level}`);
 };
+
+const MAC_ADDRESS_TYPES = {
+  locally_administered: ["Locally administered", "U/L bit = 1. May be private/randomized, manually assigned, or virtual. Randomization cannot be determined from the MAC address alone."],
+  universally_administered: ["Universally administered", "U/L bit = 0. Uses the IEEE universally administered address format; this does not prove that the address is unchanged or authentic."],
+  multicast: ["Multicast", "I/G bit = 1. A group address, not an individual device identity."],
+  broadcast: ["Broadcast", "All stations on the local link; not an individual device identity."],
+  unspecified: ["Unspecified", "All-zero hardware address; no individual device MAC is specified."],
+  invalid: ["Invalid MAC", "This value is not a valid 48-bit MAC address."],
+  unknown: ["Unknown", "No MAC address is available."],
+};
+
+/** Normalize supported 48-bit MAC notation without changing stored identities.
+ * @param {string|null} value Packet or operating-system MAC representation.
+ * @returns {string} Colon-separated address, or empty for invalid input.
+ */
+function normalizeMac(value) {
+  if (typeof value !== "string") return "";
+  value = value.trim().toLowerCase();
+  if (/^[0-9a-f]{12}$/.test(value)) return value.match(/../g).join(":");
+  if (/^[0-9a-f]{4}(?:\.[0-9a-f]{4}){2}$/.test(value)) return normalizeMac(value.replaceAll(".", ""));
+  for (const separator of [":", "-"]) {
+    const parts = value.split(separator);
+    if (parts.length === 6 && parts.every((part) => /^[0-9a-f]{1,2}$/.test(part))) {
+      return parts.map((part) => part.padStart(2, "0")).join(":");
+    }
+  }
+  return "";
+}
+
+/** Read IEEE I/G and U/L bits; local administration does not prove randomness.
+ * @param {string|null} value Candidate MAC address.
+ * @returns {string} MAC address classification, matching the Slips API.
+ */
+function classifyMac(value) {
+  if (value == null || value === "") return "unknown";
+  const mac = normalizeMac(value);
+  if (!mac) return "invalid";
+  if (mac === "00:00:00:00:00:00") return "unspecified";
+  if (mac === "ff:ff:ff:ff:ff:ff") return "broadcast";
+  const octet = parseInt(mac.slice(0, 2), 16);
+  if (octet & 0x01) return "multicast";
+  return octet & 0x02 ? "locally_administered" : "universally_administered";
+}
+
+/** Display a MAC with its verified address class and an explanatory tooltip.
+ * @param {string|null} value Candidate MAC address.
+ * @returns {HTMLElement} Original address and administration/group badge.
+ */
+function macIdentity(value) {
+  const kind = classifyMac(value);
+  const [label, description] = MAC_ADDRESS_TYPES[kind];
+  const node = text("span", "", "mac-identity");
+  node.title = description;
+  node.append(text("code", value || "—"));
+  if (kind !== "unknown") {
+    const badge = text("span", label, `mac-badge mac-${kind}`);
+    badge.title = description;
+    node.append(badge);
+  }
+  return node;
+}
 const slipsScore = (record) => {
   if (record.whitelisted) {
     const excluded = text("span", "Excluded", "slips-score whitelisted");
@@ -4393,7 +4454,7 @@ function renderHostsPage() {
     (row) => {
       const value = document.createElement("span");
       value.className = "hosts-mac-vendor";
-      value.append(text("code", row.mac || "—"), text("small", row.mac_vendor || ""));
+      value.append(macIdentity(row.mac), text("small", row.mac_vendor || ""));
       return value;
     },
     (row) => text("span", row.scope || "—", `hosts-scope-${row.scope || "unknown"}`),
@@ -5011,7 +5072,8 @@ function protocolFlowCard(record) {
     const field = document.createElement("div");
     field.className = "protocol-field" + (/query|host|uri|server name|destination ip/i.test(label) ? " important" : "");
     const isAddress = type === "arp" && /^(?:Source|Destination) IP$/.test(label);
-    field.append(text("small", label), isAddress ? hostLink(value) : text("strong", value));
+    field.append(text("small", label), isAddress ? hostLink(value)
+      : /(?:MAC|hardware)$/.test(label) ? macIdentity(value) : text("strong", value));
     grid.append(field);
   });
   card.append(heading, context, grid, rawBlock(record, displayType + " protocol flow"));
@@ -5046,7 +5108,9 @@ function flowFieldList(flow, displayedFields = []) {
       pair.forEach(([key, value]) => {
         const label = text("th", key.replaceAll("_", " "));
         label.scope = "row";
-        const cell = text("td", hidden ? "—" : protocolValueText(key, value));
+        const cell = text("td", "");
+        cell.append(!hidden && /^(?:smac|dmac|src_hw|dst_hw|mac|mac_addr)$/.test(key)
+          ? macIdentity(value) : document.createTextNode(hidden ? "—" : protocolValueText(key, value)));
         if (pair.length === 1) cell.colSpan = 3;
         row.append(label, cell);
       });
@@ -5870,7 +5934,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
       const list = document.createElement("ul");
       values.forEach((fact) => {
         const item = document.createElement("li");
-        item.append(text("span", fact.value, "host-profile-value"));
+        item.append(kind === "mac" ? macIdentity(fact.value) : text("span", fact.value, "host-profile-value"));
         item.append(text("small", `Seen ${compact(fact.observations)}× · ${formatTime(fact.first_seen)} to ${formatTime(fact.last_seen)}`, "muted"));
         list.append(item);
       });
@@ -5986,7 +6050,8 @@ function renderHostCards(host) {
       ...((networkScoped ? scopedProfiles.length : host.permanent_profiles?.length) || host.annotation_profile?.network_id
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
-      detailRow("MAC", host.mac ? text("code", host.mac) : "Unknown"),
+      detailRow("MAC", macIdentity(host.mac)),
+      detailRow("MAC assignment", MAC_ADDRESS_TYPES[classifyMac(host.mac)][1]),
       detailRow("Vendor", host.mac_vendor || "Unknown"),
       detailRow("DNS", host.dns?.domains?.[0] || "No A/AAAA record"),
     );
@@ -7043,7 +7108,7 @@ byId("hosts-more").addEventListener("click", () => loadMoreHosts().catch(() => {
 document.querySelector(".hosts-list-table").addEventListener("scroll", maybeLoadMoreHosts);
 byId("hosts-export").addEventListener("click", () => {
   const rows = state.pages.hosts.items;
-  const fields = ["ip", "user_name", "user_status", "user_labels", "user_note", "hostname", "mac", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
+  const fields = ["ip", "user_name", "user_status", "user_labels", "user_note", "hostname", "mac", "mac_address_type", "mac_vendor", "scope", "max_threat_level", "peak_alert_score", "alert_score", "flows", "bytes", "evidence_count", "alert_count", "last_seen"];
   const escapeCsv = (value) => {
     const plain = String(value ?? "");
     const safe = /^[=+\-@\t\r]/.test(plain) ? `'${plain}` : plain;
@@ -7051,6 +7116,7 @@ byId("hosts-export").addEventListener("click", () => {
   };
   const csv = [fields.join(","), ...rows.map((row) => fields.map((key) =>
     escapeCsv(key === "last_seen" ? row.last_seen || row.load?.last_seen
+      : key === "mac_address_type" ? classifyMac(row.mac)
       : ["flows", "bytes"].includes(key) ? row.load?.[key] : row[key])).join(","))].join("\n");
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));

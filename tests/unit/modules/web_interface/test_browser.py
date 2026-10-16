@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 
 from modules.web_interface.server import RunDataReader
+from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
@@ -378,6 +379,11 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
             return performance.now() - start;
         }""", record)
         assert elapsed < 3000
+        mac_cases = [f"{value:02x}:d7:7b:fa:6a:55" for value in range(256)] + [
+            "A2:D7:7B:FA:6A:55", "a2-d7-7b-fa-6a-55", "a2d7.7bfa.6a55", "a2d77bfa6a55",
+            "d8:58:d7:0:67:11", "ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00", "bad", None, "",
+        ]
+        assert page.evaluate("values => values.map(classifyMac)", mac_cases) == [classify_mac(value) for value in mac_cases]
         workspace = page.locator("#evidence-workspace")
         group_pane = workspace.locator(".evidence-left")
         records_pane = page.locator("#evidence-right")
@@ -449,6 +455,10 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert destination.locator("button").count() == 1
         assert "192.168.1.20" in arp.locator(".protocol-field").nth(1).inner_text()
         assert "DADDR" not in page.locator(".evidence-flow-fields").inner_text()
+        assert arp.locator(".mac-locally_administered").count() == 2
+        assert arp.locator(".mac-broadcast").inner_text() == "Broadcast"
+        assert arp.locator(".mac-unspecified").inner_text() == "Unspecified"
+        assert "Randomization cannot be determined" in arp.locator(".mac-locally_administered").first.get_attribute("title")
         assert errors == []
         page.evaluate("""host => {
             closeEvidenceDetail(); state.activeTab = 'hosts'; state.host = host;
@@ -479,6 +489,16 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert "To analyze" in page.locator("#host-identity").inner_text()
         assert "dns, lab" in page.locator("#host-identity").inner_text()
         assert "02:00:00:00:00:20" in page.locator("#host-identity").inner_text()
+        assert "Locally administered" in page.locator("#host-identity").inner_text()
+        assert "Randomization cannot be determined" in page.locator("#host-identity").inner_text()
+        for device in (False, True):
+            page.evaluate("""device => {
+                state.deviceView=device;
+                state.pages.hosts.items=[{ip:'192.168.1.20',mac:'A2:D7:7B:FA:6A:55',
+                    device_ips:['192.168.1.20','fe80::20']}];
+                renderHostsPage();
+            }""", device)
+            assert page.locator("#hosts-table .mac-locally_administered").inner_text() == "Locally administered"
         page.locator("#host-whitelist-action").click()
         assert page.locator("#drawer .whitelist-form input[list]").input_value() == "192.168.1.20"
         page.locator("#drawer .whitelist-form").get_by_role("button", name="Add rule", exact=True).click()

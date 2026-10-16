@@ -28,7 +28,7 @@ from functools import lru_cache, partial
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
-from slips_files.common.ips import BROADCAST_MAC, NULL_MAC
+from slips_files.common.mac import classify_mac
 from slips_files.common.style import green
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
@@ -290,7 +290,9 @@ class IPInfo(IAsyncModule):
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
-    async def get_vendor_async(self, mac_addr: str, profileid: str) -> dict:
+    async def get_vendor_async(
+        self, mac_addr: str, profileid: str
+    ) -> dict | bool:
         """
         Resolve MAC vendor information without blocking the event loop.
 
@@ -303,7 +305,14 @@ class IPInfo(IAsyncModule):
             # here is irrelevant (might be the gateway's)
             return False
 
-        if BROADCAST_MAC in mac_addr.lower() or NULL_MAC in mac_addr.lower():
+        address_type = classify_mac(mac_addr)
+        if address_type == "locally_administered":
+            return {
+                "MAC": mac_addr,
+                "Vendor": "Unknown",
+                "mac_address_type": address_type,
+            }
+        if address_type != "universally_administered":
             return False
 
         # don't look for the vendor again if we already have it for this

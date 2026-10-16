@@ -28,6 +28,8 @@ import psutil
 import redis
 import yaml
 
+from slips_files.common.mac import classify_mac
+
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.structures.evidence import EvidenceType
@@ -5275,10 +5277,12 @@ class RunDataReader:
                 clauses.append(f"{last_seen_expression} <= ?")
                 params.append(end)
             if search:
+                connection.create_function("mac_type", 1, classify_mac)
                 clauses.append(
-                    "(LOWER(hs.data) LIKE ? OR host_annotation_search(hs.ip) LIKE ?)"
+                    "(LOWER(hs.data) LIKE ? OR host_annotation_search(hs.ip) LIKE ? "
+                    "OR REPLACE(mac_type(json_extract(hs.data, '$.mac')), '_', ' ') LIKE ?)"
                 )
-                params.extend([f"%{search}%", f"%{search}%"])
+                params.extend([f"%{search}%"] * 3)
             review = self._query_value(query, "review")
             if review:
                 clauses.append("host_status(hs.ip) = ?")
@@ -5468,6 +5472,7 @@ class RunDataReader:
             annotation = annotations.get(ip, {})
             host["user_name"] = annotation.get("name", "")
             host["user_note"] = annotation.get("note", "")
+            host["mac_address_type"] = classify_mac(host.get("mac"))
             items.append(host)
         self._attach_current_host_scores(items)
         next_cursor = (
@@ -5708,6 +5713,7 @@ class RunDataReader:
                             data,
                             triage.get(ip, {}),
                             saved_annotations.get(ip, {}),
+                            classify_mac(data.get("mac")).replace("_", " "),
                         ],
                         ensure_ascii=False,
                     )
@@ -5871,6 +5877,7 @@ class RunDataReader:
                     "ti_feeds": identities.get(ip, {}).get("ti_feeds", []),
                 }
             )
+            host["mac_address_type"] = classify_mac(host.get("mac"))
             items.append(host)
         self._attach_current_host_scores(items)
         next_cursor = (
@@ -6397,6 +6404,7 @@ class RunDataReader:
                 ).values()
             )
         )
+        host["mac_address_type"] = classify_mac(host.get("mac"))
         return host
 
     def evidence_for_host(

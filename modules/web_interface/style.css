@@ -720,6 +720,10 @@ body.hosts-active main { max-width: none; padding: 0; }
 #hosts-table .host-name { overflow: hidden; color: var(--muted); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
 .hosts-mac-vendor { display: inline-flex; max-width: 100%; align-items: baseline; gap: .3rem; }
 .hosts-mac-vendor small { overflow: hidden; color: var(--muted); text-overflow: ellipsis; }
+.mac-identity { display: inline-flex; max-width: 100%; align-items: baseline; flex-wrap: wrap; gap: .2rem .35rem; overflow-wrap: anywhere; }
+.mac-badge { padding: .08rem .3rem; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font: 600 .6rem ui-sans-serif, system-ui, sans-serif; white-space: nowrap; }
+.mac-locally_administered { color: var(--accent); border-color: var(--accent); }
+.protocol-field > .mac-identity { margin-top: .24rem; }
 .hosts-scope-public { color: var(--warn); }
 .hosts-peak-cell { display: grid; grid-template-columns: 50px 43px minmax(30px, 1fr); align-items: center; gap: .45rem; }
 .hosts-peak-cell strong { text-align: right; font: 700 .7rem ui-monospace, SFMono-Regular, Menlo, monospace; }
