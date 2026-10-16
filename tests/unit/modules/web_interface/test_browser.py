@@ -19,6 +19,98 @@ from modules.web_interface.history import connect_history
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+def test_header_shows_all_ips_and_refreshes_outside_overview_in_chrome(theme: str) -> None:
+    """All monitored IPs stay visible and current while another tab is selected.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    ipv4 = ["192.168.1.247", "192.168.1.251"]
+    ipv6 = ["fe80::4d6:6ff0:6f58:42b7", "fd9f:2ebd:5f8:0:47d:ecd3:3d81:ac52",
+            *[f"2001:db8:1234:abcd:1111:2222:3333:{index}" for index in range(1, 8)]]
+    heartbeat = {"interface":"en0", "connected":True, "name":"Home", "network_id":"home",
+                 "host_ip":ipv4[0], "host_addresses":{"ipv4":ipv4, "ipv6":ipv6}}
+    current_start = 100
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Supply current interface snapshots without reading a live run.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/identity":
+            route.fulfill(json={"review_actions":True, "network_filter_supported":True,
+                "device_view_supported":True, "current_network_start":current_start, "current_network":heartbeat})
+        elif path == "/api/host-names":
+            route.fulfill(json={"names":{}})
+        else:
+            route.fulfill(status=503, json={"error":"Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width":1600, "height":1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof renderRunContext === 'function'")
+        page.evaluate("""data => {
+            setTheme(data.theme); state.activeTab='logs'; state.networkOnly=false;
+            state.networkFilterSupported=true; state.deviceViewSupported=true; state.currentNetworkStart=100;
+            state.headerNetwork=null;
+            state.overview={run:{interface:'en0',input_type:'interface',output_dir:'output/run',state:'running',uptime_seconds:10},
+                run_metadata:{'Slips version':'1.1.24'},computer_name:'Cherry.local',
+                host_addresses:{ipv4:data.ipv4,ipv6:[...data.ipv6,data.ipv6[0]]},
+                computer_addresses:{ipv4:[...data.ipv4,'198.51.100.20'],ipv6:data.ipv6},
+                network_states:[{interface:'en0',connected:true,name:'Home',host_ip:data.ipv4[0]}],
+                backend_status:{connected:true},counts:{alerts:0,evidence:0,hosts:0,module_errors:0}};
+            renderRunContext(state.overview);
+        }""", {"theme":theme,"ipv4":ipv4,"ipv6":ipv6})
+        addresses = page.locator("#run-addresses")
+        assert addresses.is_visible()
+        assert addresses.locator("code").all_text_contents() == ipv4 + ipv6
+        for width in (900, 1600):
+            page.set_viewport_size({"width":width,"height":1100})
+            for code in addresses.locator("code").all():
+                assert code.is_visible()
+                bounds = code.bounding_box()
+                assert bounds["x"] >= 0
+                assert bounds["x"] + bounds["width"] <= width
+            assert addresses.bounding_box()["y"] + addresses.bounding_box()["height"] <= page.locator("header").bounding_box()["y"] + page.locator("header").bounding_box()["height"]
+        page.screenshot(path=f"output/header-addresses-{theme}.png")
+        rotated = ipv6[:-1] + ["2001:db8:1234:abcd:aaaa:bbbb:cccc:dddd"]
+        heartbeat["host_addresses"] = {"ipv4":ipv4,"ipv6":rotated}
+        page.evaluate("pollBackendStatus()")
+        assert addresses.locator("code").all_text_contents() == ipv4 + rotated
+        assert page.evaluate("ip => state.ownAddresses.has(ip)", ipv6[-1]) is False
+        assert page.evaluate("ip => state.ownAddresses.has(ip)", rotated[-1]) is True
+        assert page.evaluate("state.ownAddresses.has('198.51.100.20')") is True
+        current_start = 200
+        new_addresses = {"ipv4":["10.0.0.20"],"ipv6":["fe80::20","fd00::20","2001:db8:2::20"]}
+        heartbeat.update(name="Office",network_id="office",host_ip="10.0.0.20",host_addresses=new_addresses)
+        page.evaluate("pollBackendStatus()")
+        assert "Office" in page.locator("#run-meta").inner_text()
+        assert addresses.locator("code").all_text_contents() == new_addresses["ipv4"] + new_addresses["ipv6"]
+        assert page.evaluate("state.activeTab") == "logs"
+        assert page.evaluate("state.overview.host_addresses.ipv4") == ipv4
+        heartbeat.update(connected=False,host_addresses={"ipv4":[],"ipv6":[]})
+        page.evaluate("pollBackendStatus()")
+        assert addresses.is_hidden()
+        assert addresses.locator("code").count() == 0
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_compact_mac_markers_across_views_in_chrome(theme: str) -> None:
     """Keep names legible and MAC markers compact across structured views.
 

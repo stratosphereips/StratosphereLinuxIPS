@@ -34,7 +34,7 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 #evidence-summary { margin-top: .4rem; }
 .error-banner { position: sticky; top: 0; z-index: 50; padding: .75rem 2.5rem; border-bottom: 1px solid var(--danger); background: #31171c; color: #ffd8dc; }
 .topbar { display: flex; align-items: center; justify-content: space-between; gap: 2rem; padding: 1.6rem 2.5rem 1.25rem; border-bottom: 1px solid var(--line); background: linear-gradient(100deg, #0c151d, #101e27); }
-.brand { display: flex; align-items: center; gap: .9rem; min-width: 0; }
+.brand { display: flex; flex: 1; align-items: center; gap: .9rem; min-width: 0; }
 .brand-copy { min-width: 0; }
 .brand-logo { width: 56px; height: 56px; flex: none; object-fit: contain; }
 .brand-name { margin-bottom: .2rem; color: var(--text); font-size: .9rem; font-weight: 850; letter-spacing: .14em; }
@@ -1014,7 +1014,13 @@ body.evidence-detail-active main > .panel:not(#evidence-detail) { display: none;
 .run-heading h1 { margin: 0; font-size: 1.17rem; line-height: 1.15; }
 .run-device { margin: 0; font-size: .92rem; }
 #run-meta { margin: .18rem 0 0; font: 600 .78rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-#run-network, #run-addresses { display: none; }
+#run-network, #run-addresses[hidden] { display: none; }
+#run-addresses { display: flex; flex-wrap: wrap; gap: .15rem .85rem; font-size: .7rem; line-height: 1.5; }
+.run-address-family { min-width: 0; max-width: 100%; }
+.run-address-kind { color: var(--text); }
+#run-addresses .host-name { display: none; }
+#run-addresses .host-label { display: inline; }
+#run-addresses .host-label code { white-space: normal; overflow-wrap: anywhere; }
 .run-state { width: auto; min-width: 0; gap: 1rem; }
 .run-state-pill { display: inline-flex; align-items: center; gap: .55rem; padding: .42rem .7rem; border: 1px solid #24433e; border-radius: 99px; background: #0b1d1b; color: #a5e3d9; font-size: .76rem; white-space: nowrap; }
 .run-state-pill .state-dot { width: 8px; height: 8px; box-shadow: none; }
@@ -1163,8 +1169,9 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-icon { font-size: 1rem; line-height: 1; }
 @media (max-width: 900px) {
-  .topbar { gap: .5rem; }
-  .topbar-actions { gap: .5rem; }
+  .topbar { flex-wrap: wrap; gap: .5rem; }
+  .brand { flex-basis: 100%; }
+  .topbar-actions { justify-content: flex-end; width: 100%; gap: .5rem; }
   .theme-toggle { min-width: 2rem; }
   .theme-label { display: none; }
   .network-filter { font-size: .68rem; }

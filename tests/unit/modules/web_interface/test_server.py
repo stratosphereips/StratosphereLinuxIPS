@@ -6143,17 +6143,24 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     assert peer["trust"] == pytest.approx(expected_trust)
 
 
-def test_identity_returns_current_named_network_in_any_tab() -> None:
-    """Supply the lightweight header heartbeat with the current name."""
+@pytest.mark.parametrize("interfaces", ["en0", "en0,en1"])
+@pytest.mark.parametrize("connected", [True, False])
+def test_identity_returns_current_named_network_in_any_tab(interfaces: str, connected: bool) -> None:
+    """The heartbeat includes every live monitored IP, even between connections.
+
+    Parameters:
+        interfaces: One or multiple monitored interfaces.
+        connected: Whether the stored network state reports a connection.
+    """
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
     reader.redis = Mock()
     reader.redis.hgetall.return_value = {
         "input_type": "interface",
-        "interface": "en0",
+        "interface": interfaces,
     }
     reader.redis.hget.return_value = json.dumps(
-        {"interface": "en0", "connected": True, "host_ip": "192.0.2.4"}
+        {"interface": "en0", "connected": connected, "host_ip": "192.0.2.4"}
     )
     reader._named_network_states = Mock(
         return_value=[
@@ -6165,13 +6172,30 @@ def test_identity_returns_current_named_network_in_any_tab() -> None:
         ]
     )
 
-    assert reader._current_header_network() == {
+    current_addresses = {
+        "en0": [SimpleNamespace(family=socket.AF_INET,address="192.0.2.4"),
+            SimpleNamespace(family=socket.AF_INET6,address="fe80::4%en0"),
+            SimpleNamespace(family=socket.AF_INET6,address="fd00::4"),
+            SimpleNamespace(family=socket.AF_INET6,address="2001:db8::4"),
+            SimpleNamespace(family=socket.AF_INET6,address="2001:db8::5")],
+        "en1": [SimpleNamespace(family=socket.AF_INET,address="198.51.100.4")],
+    }
+    expected = {
         "interface": "en0",
         "connected": True,
         "name": "Office",
         "network_id": "router-1",
         "host_ip": "192.0.2.4",
+    } if connected else {"interface":"en0", "connected":False}
+    expected["host_addresses"] = {
+        "ipv4": ["192.0.2.4"] + (["198.51.100.4"] if "," in interfaces else []),
+        "ipv6": ["fe80::4", "fd00::4", "2001:db8::4", "2001:db8::5"],
     }
+    with patch("modules.web_interface.server.psutil.net_if_addrs", return_value=current_addresses):
+        assert reader._current_header_network() == expected
+        current_addresses["en0"][4].address = "2001:db8::6"
+        assert reader._current_header_network()["host_addresses"]["ipv6"][-1] == "2001:db8::6"
+    reader.redis.hset.assert_not_called()
 
 
 def test_p2p_marks_recently_active_message_sender_online(
@@ -6735,9 +6759,7 @@ def test_header_shows_monitored_interface_addresses() -> None:
     )
     assert 'id="run-addresses"' in index_source
     assert "data.host_addresses || {}" in app_source
-    assert '["IPv4", addresses.ipv4 || []]' in app_source
-    assert '["IPv6", addresses.ipv6 || []]' in app_source
-    assert "addressLine.append(hostIdentity(ip))" in app_source
+    assert "function renderHeaderAddresses(data, network)" in app_source
 
 
 def test_header_uptime_ticks_from_server_baseline() -> None:

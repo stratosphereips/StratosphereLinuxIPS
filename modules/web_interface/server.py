@@ -2300,21 +2300,27 @@ class RunDataReader:
         """Return the named live network for the shared page header.
 
         Returns:
-            Current monitored interface, connection, name, and address.
+            Current monitored interface, connection, name and all its IPs.
         """
         analysis = self.redis.hgetall("analysis")
         if analysis.get("input_type") != "interface" or analysis.get(
             "analysis_end"
         ):
             return {}
-        interface = str(analysis.get("interface") or "").split(",", 1)[0]
+        interfaces = str(analysis.get("interface") or "")
+        interface = interfaces.split(",", 1)[0]
         if not interface:
             return {}
         state = self._loads(self.redis.hget("network_states", interface), {})
         if not isinstance(state, dict):
             return {}
+        addresses = self._interface_addresses(interfaces)
         if not state.get("connected"):
-            return {"interface": interface, "connected": False}
+            return {
+                "interface": interface,
+                "connected": False,
+                "host_addresses": addresses,
+            }
         try:
             network = self._named_network_states([state])[0]
         except sqlite3.Error:
@@ -2325,6 +2331,7 @@ class RunDataReader:
             "name": network.get("name") or "",
             "network_id": network.get("network_id") or "",
             "host_ip": network.get("host_ip") or "",
+            "host_addresses": addresses,
         }
 
     def live_counts(

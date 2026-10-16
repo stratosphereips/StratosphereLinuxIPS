@@ -1265,12 +1265,9 @@ function renderHeaderNetwork(data) {
   const overviewNetwork = (data.network_states || []).find((network) =>
     network.connected && network.interface === run.interface)
     || (data.network_states || []).find((network) => network.connected);
-  const liveNetwork = state.headerNetwork?.interface === run.interface
+  const liveNetwork = String(run.interface || "").split(/[,\s]+/).includes(state.headerNetwork?.interface)
     ? state.headerNetwork : null;
   const network = liveNetwork || overviewNetwork;
-  const primaryIp = liveNetwork && !liveNetwork.connected ? ""
-    : network?.host_ip || data.host_addresses?.ipv4?.[0]
-      || data.host_addresses?.ipv6?.[0];
   const detailsLink = text("button", "run details", "overview-link");
   detailsLink.type = "button";
   detailsLink.addEventListener("click", () => switchTab("metadata"));
@@ -1278,11 +1275,55 @@ function renderHeaderNetwork(data) {
     text("span", [
       run.interface || metadata.File || run.input_type || "input",
       network?.connected ? network.name || "" : "",
-      primaryIp || "",
       metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
     ].filter(Boolean).join(" · ")),
     text("span", " · "), detailsLink,
   );
+  renderHeaderAddresses(data, liveNetwork);
+}
+
+/** Show every current monitored address and refresh this-device labels.
+ * @param {Object} data Overview identity and address fallback for older servers.
+ * @param {Object|null} network Latest lightweight network heartbeat.
+ */
+function renderHeaderAddresses(data, network) {
+  const addresses = network?.host_addresses || (network?.connected === false
+    ? {} : data.host_addresses || {});
+  const ipv4 = [...new Set(addresses.ipv4 || [])];
+  const ipv6 = [...new Set(addresses.ipv6 || [])];
+  if (!network?.host_addresses && !ipv4.length && !ipv6.length && network?.host_ip) {
+    (network.host_ip.includes(":") ? ipv6 : ipv4).push(network.host_ip);
+  }
+  const previous = data.host_addresses || {};
+  const previousMonitored = new Set([...(previous.ipv4 || []), ...(previous.ipv6 || [])]);
+  const computer = data.computer_addresses || {};
+  const ownAddresses = new Set([
+    ...(computer.ipv4 || []), ...(computer.ipv6 || []),
+  ].filter((ip) => !previousMonitored.has(ip)));
+  [...ipv4, ...ipv6, "127.0.0.1", "::1"].forEach((ip) => ownAddresses.add(ip));
+  const changed = ownAddresses.size !== state.ownAddresses.size
+    || [...ownAddresses].some((ip) => !state.ownAddresses.has(ip));
+  state.ownAddresses = ownAddresses;
+  const addressLine = byId("run-addresses");
+  const key = JSON.stringify([ipv4, ipv6, state.computerName]);
+  if (addressLine.dataset.addresses === key) {
+    if (changed) refreshHostLabels();
+    return;
+  }
+  addressLine.dataset.addresses = key;
+  addressLine.replaceChildren();
+  [["IPv4", ipv4], ["IPv6", ipv6]].forEach(([kind, ips]) => {
+    if (!ips.length) return;
+    const group = text("span", "", "run-address-family");
+    group.append(text("span", `${kind}: `, "run-address-kind"));
+    ips.forEach((ip, index) => {
+      if (index) group.append(", ");
+      group.append(hostIdentity(ip));
+    });
+    addressLine.append(group);
+  });
+  addressLine.hidden = !addressLine.childNodes.length;
+  refreshHostLabels();
 }
 
 /**
@@ -1300,30 +1341,11 @@ function renderRunContext(data) {
   renderHeaderUptime();
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
-  renderHeaderNetwork(data);
   const addresses = data.host_addresses || {};
-  const computerAddresses = data.computer_addresses || {};
   state.computerName = data.computer_name || "";
   byId("run-device").textContent = state.computerName
     || addresses.ipv4?.[0] || addresses.ipv6?.[0] || "Name unavailable";
-  state.ownAddresses = new Set([
-    ...(addresses.ipv4 || []), ...(addresses.ipv6 || []),
-    ...(computerAddresses.ipv4 || []), ...(computerAddresses.ipv6 || []),
-    "127.0.0.1", "::1",
-  ]);
-  const addressLine = byId("run-addresses");
-  addressLine.replaceChildren();
-  [["IPv4", addresses.ipv4 || []], ["IPv6", addresses.ipv6 || []]]
-    .filter(([, ips]) => ips.length).forEach(([kind, ips], index) => {
-      if (index) addressLine.append(" · ");
-      addressLine.append(`${kind}: `);
-      ips.forEach((ip, position) => {
-        if (position) addressLine.append(", ");
-        addressLine.append(hostIdentity(ip));
-      });
-    });
-  addressLine.hidden = !addressLine.childNodes.length;
-  refreshHostLabels();
+  renderHeaderNetwork(data);
   renderConnectionState(backendConnected);
   byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts ?? data.counts.alerts);
   byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence ?? data.counts.evidence);
