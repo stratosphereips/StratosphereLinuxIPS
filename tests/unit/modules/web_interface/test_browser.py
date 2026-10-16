@@ -818,6 +818,21 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
         assert "10.0.0.101" in page.locator("#hosts-table").inner_text()
         assert page.locator("#hosts-table tbody tr").count() == 101
         assert page.locator("#hosts-badge").inner_text() == "101"
+        page.evaluate("""() => {
+            const table=document.querySelector('.hosts-list-table');
+            table.style.height='250px'; table.style.flex='none'; table.scrollTop=300;
+            window.hostScroll=table.scrollTop; window.hostRefresh=loadHosts();
+        }""")
+        page.wait_for_function("state.requests.has('hostsRefreshMore')")
+        page.wait_for_timeout(50)
+        assert page.evaluate("window.hostScroll") > 0
+        assert page.locator("#hosts-table tbody tr").count() == 101
+        assert page.locator(".hosts-list-table").evaluate("node => node.scrollTop") == page.evaluate("window.hostScroll")
+        assert len(pending_pages) == 1
+        pending_route, pending_payload = pending_pages.pop()
+        pending_route.fulfill(json=pending_payload)
+        page.evaluate("window.hostRefresh")
+        assert page.locator(".hosts-list-table").evaluate("node => node.scrollTop") == page.evaluate("window.hostScroll")
         profiles = [
             {
                 "ip": "192.168.1.20",

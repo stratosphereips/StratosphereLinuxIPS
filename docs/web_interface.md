@@ -732,6 +732,9 @@ previously loaded pages does not delay it. Finding counts, peak scores, and
 threats are aggregated together before sorting. Full-history aggregates use
 the existing covering evidence index; bounded ranges use the profile/time
 index. These reads add no indexes or work to packet processing.
+When already scrolled into a larger inventory, a routine refresh keeps the
+rendered rows in place until its loaded pages are ready, preserving the scroll
+position. A filter or network change still replaces stale rows.
 
 With **Current network only**, inventory membership and Last seen use actual
 flow, detection, or discovery observations. Refreshing cached metadata or

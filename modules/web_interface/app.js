@@ -4440,7 +4440,9 @@ async function loadHosts() {
       renderHostsPage();
       document.querySelector(".hosts-list-table").scrollTop = scroll;
     };
-    publish();
+    // Preserve a scrolled inventory while its later pages are revalidated.
+    const published = !scroll || page.items.length <= rows.length;
+    if (published) publish();
     let extended = false;
     while (rows.length < wanted && next) {
       const params = new URLSearchParams(path.split("?", 2)[1]);
@@ -4455,7 +4457,7 @@ async function loadHosts() {
       if (following.next_cursor === next) break;
       next = following.next_cursor;
     }
-    if (extended) publish();
+    if (extended || !published) publish();
   } finally {
     if (page.refreshGeneration === generation) page.refreshing = false;
   }
