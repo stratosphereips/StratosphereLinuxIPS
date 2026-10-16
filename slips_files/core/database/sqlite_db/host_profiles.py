@@ -57,6 +57,12 @@ class HostProfileStore:
                 "PRIMARY KEY (network_id, ip))"
             )
             connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_observations ("
+                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+                "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
+                "PRIMARY KEY(network_id, ip))"
+            )
+            connection.execute(
                 "CREATE TABLE IF NOT EXISTS facts ("
                 "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
                 "kind TEXT NOT NULL, value TEXT NOT NULL, "
@@ -483,6 +489,37 @@ class HostProfileStore:
         return result
 
     @staticmethod
+    def observation_times(
+        path: Path, network_ids: Iterable[str]
+    ) -> dict[str, float]:
+        """Read real sightings on selected networks without refreshing timestamps.
+
+        Parameters:
+            path: Permanent host database.
+            network_ids: Verified networks and the current run fallback.
+
+        Returns:
+            Latest actual observation timestamp for each address.
+        """
+        keys = list(dict.fromkeys(key for key in network_ids if key))
+        if not path.exists() or not keys:
+            return {}
+        try:
+            with sqlite3.connect(
+                f"file:{path}?mode=ro", uri=True, timeout=5
+            ) as connection:
+                marks = ",".join("?" for _ in keys)
+                return {
+                    str(ip): float(seen)
+                    for ip, seen in connection.execute(
+                        f"SELECT ip, MAX(last_seen) FROM host_observations WHERE network_id IN ({marks}) GROUP BY ip",
+                        keys,
+                    )
+                }
+        except sqlite3.OperationalError:
+            return {}
+
+    @staticmethod
     def triage_for_ips(
         path: Path, ips: Iterable[str]
     ) -> dict[str, dict[str, Any]]:
@@ -777,6 +814,7 @@ class HostProfileStore:
         interface: str,
         observed_at: float,
         facts: list[tuple[str, str]],
+        observed_traffic: bool = False,
     ) -> None:
         """Upsert a sighting and bounded distinct facts in one transaction.
 
@@ -785,6 +823,7 @@ class HostProfileStore:
             interface: Capture interface.
             observed_at: Observation timestamp.
             facts: Kind and value pairs learned from this observation.
+            observed_traffic: Whether a parsed packet flow caused the sighting.
         """
         identity = self._identity(ip, interface)
         if identity is None:
@@ -807,7 +846,20 @@ class HostProfileStore:
             if isinstance(value, str) and value.strip()
         ]
         now = time.monotonic()
-        if not filtered and now - self._recent_sightings.get(key, 0) < 60:
+        capture_id = self.network_id_for_state(state, self.run_name)
+        capture_key = (
+            f"capture:{capture_id}:{state.get('changed_at', '')}",
+            normalized,
+        )
+        save_observation = (
+            observed_traffic
+            and now - self._recent_sightings.get(capture_key, 0) >= 60
+        )
+        if (
+            not filtered
+            and not save_observation
+            and now - self._recent_sightings.get(key, 0) < 60
+        ):
             return
         context = (
             nullcontext(self._active_connection)
@@ -815,6 +867,14 @@ class HostProfileStore:
             else self._connect()
         )
         with context as connection:
+            if save_observation:
+                connection.execute(
+                    "INSERT INTO host_observations VALUES (?, ?, ?, ?) "
+                    "ON CONFLICT(network_id, ip) DO UPDATE SET "
+                    "first_seen=MIN(first_seen, excluded.first_seen), "
+                    "last_seen=MAX(last_seen, excluded.last_seen)",
+                    (capture_id, normalized, observed_at, observed_at),
+                )
             connection.execute(
                 "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
                 "ON CONFLICT(network_id, ip) DO UPDATE SET "
@@ -859,6 +919,8 @@ class HostProfileStore:
                     ),
                 )
         self._recent_sightings[key] = now
+        if save_observation:
+            self._recent_sightings[capture_key] = now
         if len(self._recent_sightings) > 10000:
             self._recent_sightings.clear()
 
@@ -913,10 +975,18 @@ class HostProfileStore:
                     answer = answer.get("rdata") or answer.get("data") or ""
                 answer = str(answer)
                 self._save(
-                    answer, interface, observed_at, [(answer_kind, query)]
+                    answer,
+                    interface,
+                    observed_at,
+                    [(answer_kind, query)],
+                    observed_traffic=True,
                 )
-        self._save(source, interface, observed_at, source_facts)
-        self._save(target, interface, observed_at, target_facts)
+        self._save(
+            source, interface, observed_at, source_facts, observed_traffic=True
+        )
+        self._save(
+            target, interface, observed_at, target_facts, observed_traffic=True
+        )
 
     def observe_flows(self, flows: Iterable[Any]) -> None:
         """Persist one bounded flow batch in a single SQLite transaction.

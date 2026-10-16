@@ -15,6 +15,198 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def test_current_network_host_refresh_and_history_in_chrome() -> None:
+    """Refreshing loaded pages removes stale hosts and clearly separates saved network history."""
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    rows = [
+        {
+            "ip": f"10.0.0.{index}",
+            "scope": "local",
+            "load": {"flows": 1},
+            "last_seen": 1000,
+            "evidence_count": 0,
+            "alert_count": 0,
+        }
+        for index in range(1, 102)
+    ]
+    ghost = {"ip": "192.168.12.1", "scope": "local", "load": {"flows": 3}}
+    requests: list[str] = []
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Supply two fresh host pages and shipped application assets.
+
+        Parameters:
+            route: Browser request intercepted before accessing the network.
+        """
+        url = urlparse(route.request.url)
+        if url.path == "/api/hosts":
+            requests.append(route.request.url)
+            query = parse_qs(url.query)
+            items = rows[100:] if "cursor" in query else rows[:100]
+            route.fulfill(
+                json={
+                    "items": items,
+                    "total": 101,
+                    "page_size": len(items),
+                    "next_cursor": None if "cursor" in query else "page-two",
+                    "sort": "peak_score",
+                    "order": "desc",
+                    "range": "live",
+                }
+            )
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        elif url.path == "/api/whitelists":
+            route.fulfill(
+                json={"rules": [], "counts": {}, "evidence_types": []}
+            )
+        elif url.path.startswith("/api/"):
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+        elif url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(
+                path=str(
+                    assets
+                    / ("index.html" if url.path == "/" else url.path[1:])
+                )
+            )
+        else:
+            route.fulfill(status=404, body="")
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1000})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof loadHosts === 'function'")
+        page.evaluate(
+            """async data => {
+            state.activeTab='hosts'; state.networkOnly=true; state.networkFilterSupported=true;
+            state.pages.hosts.items=[...data.rows.slice(0,100), data.ghost];
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === 'hosts'));
+            await loadHosts();
+        }""",
+            {"rows": rows, "ghost": ghost},
+        )
+        assert len(requests) == 2
+        assert all(
+            parse_qs(urlparse(url).query)["network"] == ["current"]
+            for url in requests
+        )
+        assert "192.168.12.1" not in page.locator("#hosts-table").inner_text()
+        assert "10.0.0.101" in page.locator("#hosts-table").inner_text()
+        assert page.locator("#hosts-table tbody tr").count() == 101
+        assert page.locator("#hosts-badge").inner_text() == "101"
+        profiles = [
+            {
+                "ip": "192.168.1.20",
+                "network_id": "run:old",
+                "network_label": "Unidentified network · old run",
+                "facts": [
+                    {
+                        "kind": "mdns_name",
+                        "value": "past-device.local",
+                        "last_seen": 100,
+                        "first_seen": 100,
+                    }
+                ],
+                "first_seen": 100,
+                "last_seen": 100,
+                "user_name": "",
+                "user_note": "",
+            },
+            {
+                "ip": "192.168.1.20",
+                "network_id": "gateway:home",
+                "network_label": "Home-Wifi6",
+                "network_name": "Home-Wifi6",
+                "facts": [
+                    {
+                        "kind": "mdns_name",
+                        "value": "current-device.local",
+                        "last_seen": 900,
+                        "first_seen": 900,
+                    }
+                ],
+                "first_seen": 900,
+                "last_seen": 900,
+                "user_name": "",
+                "user_note": "",
+            },
+        ]
+        host = {
+            "ip": "192.168.1.20",
+            "scope": "local",
+            "live": True,
+            "last_seen": 900,
+            "load": {"flows": 1},
+            "permanent_profiles": profiles,
+            "current_network_profiles": [profiles[1]],
+            "capture_network": {
+                "name": "Home-Wifi6",
+                "network_id": "gateway:home",
+            },
+            "seen_on_current_network": True,
+        }
+        page.evaluate(
+            """host => {
+            state.host=host; byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+            renderHostCards(host);
+        }""",
+            host,
+        )
+        assert (
+            "Observed on Home-Wifi6"
+            in page.locator("#host-subtitle").inner_text()
+        )
+        assert (
+            "Unidentified network"
+            not in page.locator("#host-subtitle").inner_text()
+        )
+        assert "Home-Wifi6" in page.locator("#host-networks-seen").inner_text()
+        assert (
+            "Unidentified"
+            not in page.locator("#host-networks-seen").inner_text()
+        )
+        assert (
+            "past-device.local"
+            not in page.locator("#host-mdns-names").inner_text()
+        )
+        page.locator("#host-saved-history-label").click()
+        assert (
+            "Unidentified network · old run"
+            in page.locator("#host-permanent-profiles").inner_text()
+        )
+        host.update(
+            {
+                "seen_on_current_network": False,
+                "current_network_profiles": [],
+                "load": {"flows": 0},
+            }
+        )
+        page.evaluate("host => {state.host=host; renderHostCards(host)}", host)
+        assert (
+            "No observed activity on Home-Wifi6"
+            in page.locator("#host-subtitle").inner_text()
+        )
+        assert page.locator("#host-network-scope-note").is_visible()
+        assert (
+            page.locator("#host-networks-seen").inner_text()
+            == "No observations on the current network."
+        )
+        assert errors == []
+        print(
+            "Chrome network scope: all loaded pages revalidated; current capture, inactive host and full saved history passed"
+        )
+        browser.close()
+
+
 @pytest.mark.parametrize("legacy", [False, True])
 def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, legacy: bool) -> None:
     """Opening a grouped device record renders one page and keeps protocol tabs usable.

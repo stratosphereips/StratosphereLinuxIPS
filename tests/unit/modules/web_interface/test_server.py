@@ -33,6 +33,363 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def _network_scope_reader(tmp_path: Path) -> RunDataReader:
+    """Build independent run data with fresh cache timestamps and older network activity.
+
+    Parameters:
+        tmp_path: Isolated databases.
+
+    Returns:
+        Reader connected only to test data and a mocked current network.
+    """
+    now = 2_000_000_000.0
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = Path("output/network-test")
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.score_mode = "ratl"
+    reader.alert_threshold = 5.0
+    reader.redis = Mock()
+    state = {
+        "interface": "en0",
+        "connected": True,
+        "changed_at": now - 600,
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "local_network": "192.168.1.0/24",
+    }
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"input_type": "interface", "interface": "en0"}
+        if key == "analysis"
+        else {"en0": json.dumps(state)} if key == "network_states" else {}
+    )
+    reader.redis.hget.side_effect = lambda key, field: (
+        json.dumps(state)
+        if key == "network_states"
+        else (
+            "interface"
+            if (key, field) == ("analysis", "input_type")
+            else "123" if (key, field) == ("PIDs", "main") else None
+        )
+    )
+    reader._attach_current_host_scores = Mock()
+    reader._ip_context_for_ip = Mock(return_value={})
+    reader._ti_for_ip = Mock(return_value={})
+    initialize_history(reader.history_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE flows(uid TEXT PRIMARY KEY, flow TEXT, label TEXT);"
+            "CREATE TABLE altflows(uid TEXT PRIMARY KEY, flow TEXT);"
+            "CREATE TABLE alerts(alert_id TEXT PRIMARY KEY, ip_alerted TEXT, alert_time REAL, label TEXT, accumulated_ratl REAL);"
+            "CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY, evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, source_module TEXT, description TEXT, confidence REAL, "
+            "data TEXT, accumulated_ratl REAL, whitelisted INTEGER DEFAULT 0);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);"
+            "CREATE TABLE alert_evidence(alert_id TEXT, evidence_id TEXT);"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, 'timewindow1','low','ARP_SCAN','arp','scan',0.8,'{}',1,0)",
+            [
+                ("old", now - 1200, "192.168.12.1"),
+                ("new", now - 100, "192.168.1.22"),
+            ],
+        )
+        connection.execute(
+            "INSERT INTO alerts VALUES ('new-alert','192.168.1.22',?,'malicious',5)",
+            (now - 100,),
+        )
+        connection.execute(
+            "INSERT INTO alert_evidence VALUES ('new-alert','new')"
+        )
+    addresses = [
+        "192.168.12.1",
+        "192.168.55.1",
+        "192.168.1.20",
+        "fe80::20",
+        "192.168.1.21",
+        "192.168.13.1",
+        "192.168.1.22",
+        "192.168.1.25",
+    ]
+    flows = [
+        ("old-unknown", now - 1200, "192.168.12.1", "8.8.8.8", 100),
+        ("old-internal", now - 1200, "192.168.1.20", "fe80::20", 100),
+        ("current-v4", now - 60, "192.168.1.20", "8.8.8.8", 20),
+        ("current-v6", now - 90, "fe80::20", "8.8.8.8", 40),
+        ("current-outside", now - 50, "192.168.13.1", "8.8.8.8", 30),
+    ]
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [
+                (
+                    ip,
+                    now,
+                    json.dumps(
+                        {
+                            "ip": ip,
+                            "scope": "local",
+                            "mac": (
+                                "02:00:00:00:00:20"
+                                if ip
+                                in {"192.168.12.1", "192.168.1.20", "fe80::20"}
+                                else ""
+                            ),
+                        }
+                    ),
+                )
+                for ip in addresses
+            ],
+        )
+        connection.executemany(
+            "INSERT INTO flow_index(uid,flow_rowid,event_time,src_ip,dst_ip,proto,bytes,packets) "
+            "VALUES (?,1,?,?,?,'udp',?,1)",
+            flows,
+        )
+    store = HostProfileStore(
+        reader.host_profiles_path,
+        "output/network-test:123",
+        lambda _: state,
+        ["en0"],
+    )
+    HostProfileStore.set_network_name(
+        reader.host_profiles_path, "gateway:aa:bb:cc:dd:ee:01", "Home-Wifi6"
+    )
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime=now - 1200,
+            type_="arp",
+            saddr="192.168.1.25",
+            daddr="192.168.1.1",
+        )
+    )
+    store.observe_hostname("metadata-refresh", "profile_192.168.1.25")
+    store.observe_hostname("metadata-only", "profile_192.168.55.1")
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime=now - 120,
+            type_="arp",
+            saddr="192.168.1.21",
+            daddr="192.168.1.1",
+        )
+    )
+    return reader
+
+
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("range_name", ["all", "live", "7d", "custom"])
+def test_current_network_hosts_ignore_refreshed_historical_metadata(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    device: bool,
+    range_name: str,
+) -> None:
+    """Fresh Redis snapshots and metadata enrichment cannot revive a past-network host.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fixes the live capture clock.
+        device: Whether verified MAC grouping is enabled.
+        range_name: A time filter that overlaps older network activity.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    query = {
+        "network": ["current"],
+        "range": [range_name],
+        "device": ["1" if device else "0"],
+        "limit": ["2"],
+        "from": ["1999998200"],
+        "to": ["2000000000"],
+    }
+    rows = []
+    while True:
+        page = reader.hosts(query)
+        rows.extend(page["items"])
+        if not page["next_cursor"]:
+            break
+        query["cursor"] = [page["next_cursor"]]
+    ips = {ip for row in rows for ip in row.get("device_ips", [row["ip"]])}
+    assert ips == {
+        "192.168.1.20",
+        "fe80::20",
+        "192.168.1.21",
+        "192.168.13.1",
+        "192.168.1.22",
+    }
+    assert page["total"] == (4 if device else 5)
+    if device:
+        combined = next(row for row in rows if row["ip"] == "192.168.1.20")
+        assert combined["load"]["flows"] == 2
+        assert combined["load"]["bytes"] == 60
+    all_networks = reader.hosts({"range": ["all"]})
+    assert "192.168.12.1" in {row["ip"] for row in all_networks["items"]}
+    assert (
+        reader.live_counts(
+            {"network": ["current"], "device": ["1" if device else "0"]}
+        )["hosts"]
+        == page["total"]
+    )
+
+
+@pytest.mark.parametrize("sort", ["flows", "bytes"])
+@pytest.mark.parametrize("device", [False, True])
+def test_current_network_traffic_sort_uses_displayed_totals(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, sort: str, device: bool
+) -> None:
+    """Sort current observations without allowing older traffic to affect paging.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fixes the live capture clock.
+        sort: Traffic column being sorted.
+        device: Whether MAC grouping is selected.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    page = reader.hosts(
+        {
+            "network": ["current"],
+            "range": ["all"],
+            "sort": [sort],
+            "device": ["1" if device else "0"],
+            "order": ["desc"],
+            "limit": ["2"],
+        }
+    )
+
+    assert [row["ip"] for row in page["items"]] == (
+        ["192.168.1.20", "192.168.13.1"]
+        if device
+        else ["fe80::20", "192.168.13.1"]
+    )
+    assert [row["load"][sort] for row in page["items"]] == (
+        [2, 1]
+        if sort == "flows" and device
+        else [1, 1] if sort == "flows" else [60, 30] if device else [40, 30]
+    )
+
+
+@pytest.mark.parametrize("device", [False, True])
+def test_current_network_alerts_only_excludes_resolved_alerts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool
+) -> None:
+    """Keep the alerts-only filter consistent with the displayed open-alert count.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fixes the live capture clock.
+        device: Whether MAC grouping is selected.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    query = {
+        "network": ["current"],
+        "range": ["all"],
+        "alerts_only": ["1"],
+        "device": ["1" if device else "0"],
+    }
+    assert [row["ip"] for row in reader.hosts(query)["items"]] == [
+        "192.168.1.22"
+    ]
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE alert_reviews(alert_id TEXT PRIMARY KEY, status TEXT);"
+            "INSERT INTO alert_reviews VALUES ('new-alert', 'resolved');"
+        )
+    assert reader.hosts(query)["items"] == []
+
+
+def test_host_traffic_and_score_endpoints_share_current_network_boundary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cards, flow pages, peer/protocol plots and scores exclude pre-connection records.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fixes the live capture clock.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    query = {"network": ["current"], "range": ["all"]}
+    load = reader._host_load("192.168.1.20", query)
+    assert (load["flows"], load["bytes"]) == (1, 20)
+    page_load = reader._host_page_loads(["192.168.1.20"], 1_999_999_400)
+    assert page_load["192.168.1.20"]["flows"] == 1
+    assert [
+        row["uid"]
+        for row in reader.flows_for_host("192.168.1.20", query)["items"]
+    ] == ["current-v4"]
+    summary = reader.traffic_summary("192.168.1.20", query)
+    assert sum(row["outbound_bytes"] for row in summary["timeline"]) == 20
+    assert summary["peers"] == [{"name": "8.8.8.8", "value": 1}]
+    assert reader._host_ips("192.168.1.20", {**query, "device": ["1"]}) == [
+        "192.168.1.20",
+        "fe80::20",
+    ]
+    stale = reader.host("192.168.12.1", query)
+    assert (
+        stale["load"]["flows"]
+        == stale["alert_count"]
+        == stale["evidence_count"]
+        == 0
+    )
+    assert stale["seen_on_current_network"] is False
+    assert stale["capture_network"]["name"] == "Home-Wifi6"
+    assert reader.flows_for_host("192.168.12.1", query)["total"] == 0
+    reader._live_host = Mock(
+        return_value={
+            "live": True,
+            "ip": "192.168.12.1",
+            "accumulated_ratl": 8,
+        }
+    )
+    assert reader.score_history("192.168.12.1", query)["timeline"] == []
+
+
+@pytest.mark.parametrize("device", [False, True])
+def test_current_network_does_not_fall_back_when_disconnected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool
+) -> None:
+    """An unavailable connection yields empty current-network lists and plots.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fixes the live capture clock.
+        device: Whether device grouping is selected.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    reader._current_network_start = Mock(return_value=None)
+    query = {
+        "network": ["current"],
+        "range": ["all"],
+        "device": ["1" if device else "0"],
+    }
+    assert reader.hosts(query)["total"] == 0
+    assert reader.live_counts(query)["hosts"] == 0
+    assert reader.flows_for_host("192.168.1.20", query)["total"] == 0
+    assert reader.traffic_summary("192.168.1.20", query)["timeline"] == []
+    assert reader.score_history("192.168.1.20", query)["timeline"] == []
+
+
 @pytest.mark.parametrize("device", [False, True])
 @pytest.mark.parametrize(
     "threat, expected",
@@ -69,6 +426,9 @@ def test_host_threat_filters_use_scoped_findings(
             (ip, json.dumps({"ip": ip, "scope": "local", "max_threat_level": "critical"}))
             for ip in ("10.0.0.1", "10.0.0.2", "10.0.0.3")
         ])
+    with connect_history(reader.history_path) as connection:
+        connection.execute("INSERT INTO flow_index (uid, flow_rowid, event_time, src_ip, dst_ip, bytes, packets) "
+                           "VALUES ('current-no-findings',1,110,'10.0.0.1','8.8.8.8',10,1)")
     page = reader.hosts({"range": ["all"], "network": ["current"],
                          "threat": [threat], "device": ["1" if device else "0"]})
     assert {row["ip"] for row in page["items"]} == expected

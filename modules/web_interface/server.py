@@ -2367,13 +2367,15 @@ class RunDataReader:
                 live_query, latest_host
             )
             device_view = self._query_value(query or {}, "device") == "1"
+            host_start = self._scoped_start(live_query, host_start)
+            scoped = self._query_value(live_query, "network") == "current"
+            if scoped:
+                history.execute(
+                    "ATTACH DATABASE ? AS run_db", (str(self.sqlite_path),)
+                )
+            seen = self._host_last_seen_expression(history, scoped)
             host_rows = history.execute(
-                "SELECT hs.ip FROM host_snapshots hs WHERE "
-                "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
-                "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
-                "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-                "WHERE fi.dst_ip = hs.ip), -1e300)), -1e300), "
-                "hs.observed_at) BETWEEN ? AND ?",
+                f"SELECT hs.ip FROM host_snapshots hs WHERE {seen} BETWEEN ? AND ?",
                 (host_start, host_end),
             ).fetchall()
             if device_view:
@@ -4609,7 +4611,7 @@ class RunDataReader:
             keys = self._device_key_map()
             key = keys.get(ip)
             if key:
-                return [
+                members = [
                     ip,
                     *sorted(
                         address
@@ -4617,6 +4619,15 @@ class RunDataReader:
                         if device == key and address != ip
                     ),
                 ]
+                network_start = self._scoped_start(query or {}, None)
+                if network_start is not None:
+                    activity = self._host_activity_times(members)
+                    members = [
+                        address
+                        for address in members
+                        if activity.get(address, 0) >= network_start
+                    ]
+                return members or [ip]
         return [ip]
 
     def _device_key_map(self) -> Dict[str, str]:
@@ -4701,12 +4712,106 @@ class RunDataReader:
             item["device_id"] = key
             item["device_ips"] = sorted(members.get(key, [ip]))
 
+    def _host_last_seen_expression(
+        self, connection: sqlite3.Connection, current_network: bool
+    ) -> str:
+        """Use actual host activity as evidence of a current-network observation.
+
+        Parameters:
+            connection: History connection with the run database attached as run_db.
+            current_network: Whether cache refreshes must be excluded as proof.
+
+        Returns:
+            SQL activity timestamp for a host_snapshots row aliased as hs.
+        """
+        missing = "-1e300"
+        flow_seen = (
+            "MAX(COALESCE((SELECT MAX(event_time) FROM flow_index fi "
+            f"WHERE fi.src_ip=hs.ip), {missing}), "
+            "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
+            f"WHERE fi.dst_ip=hs.ip), {missing}))"
+        )
+        if not current_network:
+            return f"COALESCE(NULLIF({flow_seen}, {missing}), hs.observed_at)"
+        capture = self._current_header_network()
+        run_name = (
+            self._network_run_name() if getattr(self, "redis", None) else ""
+        )
+        sightings = HostProfileStore.observation_times(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            [
+                capture.get("network_id", ""),
+                f"run:{run_name}" if run_name else "",
+            ],
+        )
+        connection.create_function(
+            "host_observed_at", 1, lambda ip: sightings.get(ip)
+        )
+        expressions = [
+            flow_seen,
+            f"COALESCE(host_observed_at(hs.ip), {missing})",
+        ]
+        for table, ip_column, time_column in (
+            ("evidence", "profile_ip", "evidence_time"),
+            ("alerts", "ip_alerted", "alert_time"),
+        ):
+            columns = {
+                str(row[1])
+                for row in connection.execute(
+                    f"PRAGMA run_db.table_info({table})"
+                )
+            }
+            if {ip_column, time_column} <= columns:
+                observed_time = (
+                    time_column
+                    if table == "evidence"
+                    else f"CAST({time_column} AS REAL)"
+                )
+                expressions.append(
+                    f"COALESCE((SELECT MAX({observed_time}) FROM run_db.{table} "
+                    f"WHERE {ip_column}=hs.ip), {missing})"
+                )
+        return f"NULLIF(MAX({', '.join(expressions)}), {missing})"
+
+    def _host_activity_times(self, ips: Sequence[str]) -> Dict[str, float]:
+        """Read actual observations for a bounded set of host or device addresses.
+
+        Parameters:
+            ips: Selected addresses from the current inventory.
+
+        Returns:
+            Actual latest observation times, excluding Redis metadata refreshes.
+        """
+        if not ips:
+            return {}
+        with connect_history(self.history_path, read_only=True) as connection:
+            connection.execute(
+                "ATTACH DATABASE ? AS run_db", (str(self.sqlite_path),)
+            )
+            seen = self._host_last_seen_expression(connection, True)
+            marks = ",".join("?" for _ in ips)
+            return {
+                str(row["ip"]): float(row["seen"] or 0)
+                for row in connection.execute(
+                    f"SELECT hs.ip, {seen} AS seen FROM host_snapshots hs WHERE hs.ip IN ({marks})",
+                    ips,
+                )
+            }
+
     def _host_load(
         self, ip: str, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
-        """Read compact all-time traffic totals for the selected identity."""
+        """Read traffic totals for the selected identity and network scope."""
         ips = self._host_ips(ip, query)
         predicate, params = self._ip_predicate(ips)
+        network_start = self._scoped_start(query or {}, None)
+        if network_start is not None:
+            predicate += " AND event_time >= ?"
+            params.append(network_start)
         placeholders = ",".join("?" for _ in ips)
         src_in = f"src_ip IN ({placeholders})"
         dst_in = f"dst_ip IN ({placeholders})"
@@ -4751,11 +4856,14 @@ class RunDataReader:
             }
         )
 
-    def _host_page_loads(self, ips: List[str]) -> Dict[str, Dict[str, Any]]:
+    def _host_page_loads(
+        self, ips: List[str], network_start: Optional[float] = None
+    ) -> Dict[str, Dict[str, Any]]:
         """Aggregate page traffic in one indexed history query.
 
         Parameters:
             ips: IPs in the requested Hosts page.
+            network_start: Optional earliest observation on this connection.
 
         Returns:
             Traffic totals keyed by IP.
@@ -4763,6 +4871,11 @@ class RunDataReader:
         if not ips:
             return {}
         placeholders = ",".join("?" for _ in ips)
+        scope = " AND event_time >= ?" if network_start is not None else ""
+        scoped_ips = [
+            *ips,
+            *([network_start] if network_start is not None else []),
+        ]
         with connect_history(self.history_path, read_only=True) as connection:
             rows = connection.execute(
                 "SELECT ip, COUNT(*) AS flows, SUM(bytes) AS bytes, "
@@ -4778,13 +4891,13 @@ class RunDataReader:
                 "AS outbound_flows, 0 AS inbound_bytes, "
                 "CASE WHEN src_ip != dst_ip THEN bytes ELSE 0 END "
                 "AS outbound_bytes FROM flow_index "
-                f"WHERE src_ip IN ({placeholders}) UNION ALL "
+                f"WHERE src_ip IN ({placeholders}){scope} UNION ALL "
                 "SELECT dst_ip AS ip, bytes, packets, event_time, "
                 "1 AS inbound_flows, 0 AS outbound_flows, "
                 "bytes AS inbound_bytes, 0 AS outbound_bytes "
-                f"FROM flow_index WHERE dst_ip IN ({placeholders}) "
+                f"FROM flow_index WHERE dst_ip IN ({placeholders}){scope} "
                 "AND src_ip != dst_ip) GROUP BY ip",
-                (*ips, *ips),
+                (*scoped_ips, *scoped_ips),
             ).fetchall()
         return {str(row["ip"]): dict(row) for row in rows}
 
@@ -4820,10 +4933,17 @@ class RunDataReader:
                         if network_start is not None
                         else ""
                     )
+                    reviews = (
+                        " AND NOT EXISTS (SELECT 1 FROM alert_reviews ar "
+                        "WHERE ar.alert_id=alerts.alert_id AND ar.status='resolved')"
+                        if table == "alerts"
+                        and self._table_exists(connection, "alert_reviews")
+                        else ""
+                    )
                     rows = connection.execute(
                         f"SELECT {column} AS ip, COUNT(*) AS count "
                         f"FROM {table} WHERE {column} IN ({placeholders})"
-                        f"{scope} "
+                        f"{scope}{reviews} "
                         f"GROUP BY {column}",
                         (
                             (*ips, network_start)
@@ -4949,13 +5069,23 @@ class RunDataReader:
                 ).fetchall()
             }
             start, end, range_name = self._time_bounds(query, latest)
+            start = self._scoped_start(query, start)
+            flow_network_clause = (
+                f" AND fi.event_time >= {network_start_sql}"
+                if network_start is not None
+                else ""
+            )
             flow_expression = (
                 "(SELECT COUNT(*) FROM flow_index fi "
-                "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
+                "WHERE (fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
+                + flow_network_clause
+                + ")"
             )
             byte_expression = (
                 "(SELECT COALESCE(SUM(bytes), 0) FROM flow_index fi "
-                "WHERE fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
+                "WHERE (fi.src_ip = hs.ip OR fi.dst_ip = hs.ip)"
+                + flow_network_clause
+                + ")"
             )
             evidence_expression = (
                 "(SELECT COUNT(*) FROM run_db.evidence e WHERE e.profile_ip = hs.ip"
@@ -4972,19 +5102,15 @@ class RunDataReader:
                 "(SELECT COUNT(*) FROM run_db.alerts a WHERE a.ip_alerted = hs.ip "
                 + alert_network_clause
                 + (
-                    "AND NOT EXISTS (SELECT 1 FROM run_db.alert_reviews ar "
+                    " AND NOT EXISTS (SELECT 1 FROM run_db.alert_reviews ar "
                     "WHERE ar.alert_id = a.alert_id AND ar.status = 'resolved')"
                     if has_alert_reviews
                     else ""
                 )
                 + ")"
             )
-            last_seen_expression = (
-                "COALESCE(NULLIF(MAX(COALESCE((SELECT MAX(event_time) "
-                "FROM flow_index fi WHERE fi.src_ip = hs.ip), -1e300), "
-                "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-                "WHERE fi.dst_ip = hs.ip), -1e300)), -1e300), "
-                "hs.observed_at)"
+            last_seen_expression = self._host_last_seen_expression(
+                connection, network_start is not None
             )
             threat_expression = (
                 "COALESCE((SELECT MAX(CASE LOWER(e.threat_level) "
@@ -5124,10 +5250,12 @@ class RunDataReader:
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
-            if range_name != "all" and start is not None:
+            if start is not None:
                 clauses.append(f"{last_seen_expression} >= ?")
                 params.append(start)
-            if range_name != "all" and end is not None:
+            if (
+                range_name != "all" or network_start is not None
+            ) and end is not None:
                 clauses.append(f"{last_seen_expression} <= ?")
                 params.append(end)
             if search:
@@ -5143,10 +5271,7 @@ class RunDataReader:
                 clauses.append("json_extract(hs.data, '$.scope') = ?")
                 params.append(scope)
             if alerts_only:
-                clauses.append(
-                    "EXISTS (SELECT 1 FROM run_db.alerts a "
-                    "WHERE a.ip_alerted = hs.ip" + alert_network_clause + ")"
-                )
+                clauses.append(f"{alert_expression} > 0")
             if threat:
                 levels = {
                     "info": 0,
@@ -5205,6 +5330,7 @@ class RunDataReader:
             rows = connection.execute(
                 f"SELECT hs.ip, hs.observed_at, hs.data, "
                 f"{peak_score_expression} AS peak_alert_score, "
+                f"{last_seen_expression} AS activity_time, "
                 f"{threat_expression} AS displayed_threat_rank, "
                 f"{sort_expression} AS sort_value FROM host_snapshots hs "
                 f"WHERE {where} ORDER BY {sort_expression} {direction}, "
@@ -5216,7 +5342,11 @@ class RunDataReader:
         page_ips = [str(row["ip"]) for row in page_rows]
         fast_page = getattr(self, "cache", None) is not None
         if fast_page:
-            loads = self._host_page_loads(page_ips)
+            loads = (
+                self._host_page_loads(page_ips, network_start)
+                if network_start is not None
+                else self._host_page_loads(page_ips)
+            )
             counts = self._host_page_counts(page_ips, network_start)
             identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
@@ -5254,6 +5384,7 @@ class RunDataReader:
             else:
                 host = self._live_host(ip)
             host["observed_at"] = float(row["observed_at"])
+            host["last_seen"] = float(row["activity_time"] or 0)
             if "threat_level" in evidence_columns:
                 host["has_findings"] = row["displayed_threat_rank"] >= 0
                 host["max_threat_level"] = (
@@ -5304,7 +5435,11 @@ class RunDataReader:
                 host["evidence_count"] = counts[ip]["evidence"]
                 host["alert_count"] = counts[ip]["alerts"]
             else:
-                host["load"] = self._host_load(ip)
+                host["load"] = (
+                    self._host_load(ip, query)
+                    if network_start is not None
+                    else self._host_load(ip)
+                )
                 host.update(self._ip_context_for_ip(ip, host.get("dns")))
                 if network_start is None:
                     host["evidence_count"] = self._profile_evidence_count(ip)
@@ -5347,17 +5482,40 @@ class RunDataReader:
             A bounded page of device aggregates and their member addresses.
         """
         keys = self._device_key_map()
+        network_start = self._scoped_start(query, None)
         with connect_history(self.history_path, read_only=True) as connection:
-            snapshots = connection.execute(
-                "SELECT ip, observed_at, data FROM host_snapshots"
-            ).fetchall()
+            full_total = len(
+                {
+                    keys.get(str(row[0]), str(row[0]))
+                    for row in connection.execute(
+                        "SELECT ip FROM host_snapshots"
+                    )
+                }
+            )
+            if network_start is not None:
+                connection.execute(
+                    "ATTACH DATABASE ? AS run_db", (str(self.sqlite_path),)
+                )
+                seen = self._host_last_seen_expression(connection, True)
+                snapshots = connection.execute(
+                    f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs "
+                    f"WHERE {seen} >= ?",
+                    (network_start,),
+                ).fetchall()
+            else:
+                snapshots = connection.execute(
+                    "SELECT ip, observed_at, data FROM host_snapshots"
+                ).fetchall()
         ips = [str(row["ip"]) for row in snapshots]
         loads: Dict[str, Dict[str, Any]] = {}
         counts: Dict[str, Dict[str, int]] = {}
-        network_start = self._scoped_start(query, None)
         for offset in range(0, len(ips), 300):
             batch = ips[offset : offset + 300]
-            loads.update(self._host_page_loads(batch))
+            loads.update(
+                self._host_page_loads(batch, network_start)
+                if network_start is not None
+                else self._host_page_loads(batch)
+            )
             counts.update(self._host_page_counts(batch, network_start))
         peak: Dict[str, float] = {}
         scoped_threats: Dict[str, int] = {}
@@ -5488,8 +5646,21 @@ class RunDataReader:
                 internal = connection.execute(
                     "SELECT COUNT(*) AS flows, COALESCE(SUM(bytes), 0) AS bytes "
                     f"FROM flow_index WHERE src_ip IN ({marks}) "
-                    f"AND dst_ip IN ({marks}) AND src_ip != dst_ip",
-                    (*addresses, *addresses),
+                    f"AND dst_ip IN ({marks}) AND src_ip != dst_ip"
+                    + (
+                        " AND event_time >= ?"
+                        if network_start is not None
+                        else ""
+                    ),
+                    (
+                        *addresses,
+                        *addresses,
+                        *(
+                            [network_start]
+                            if network_start is not None
+                            else []
+                        ),
+                    ),
                 ).fetchone()
                 group["flows"] -= int(internal["flows"] or 0)
                 group["bytes"] -= int(internal["bytes"] or 0)
@@ -5497,6 +5668,7 @@ class RunDataReader:
             (group["last_seen"] for group in groups.values()), default=0
         )
         start, end, range_name = self._time_bounds(query, latest)
+        start = self._scoped_start(query, start)
         search = self._query_value(query, "search").lower()
         scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
@@ -5654,6 +5826,7 @@ class RunDataReader:
                     "device_id": group["id"],
                     "device_ips": [member[0] for member in members],
                     "observed_at": observed,
+                    "last_seen": group["last_seen"],
                     "peak_alert_score": group["peak_score"],
                     "alert_count": group["alerts"],
                     "evidence_count": group["evidence"],
@@ -5689,7 +5862,7 @@ class RunDataReader:
         return {
             "items": items,
             "total": total,
-            "full_total": len(groups),
+            "full_total": full_total,
             "page_size": len(items),
             "next_cursor": next_cursor,
             "range": range_name,
@@ -6068,14 +6241,42 @@ class RunDataReader:
         host["permanent_profiles"] = self._current_network_profile_first(
             ip, host["permanent_profiles"]
         )
+        if network_start is not None:
+            capture = self._current_header_network()
+            run_name = (
+                self._network_run_name()
+                if getattr(self, "redis", None)
+                else ""
+            )
+            network_ids = {
+                capture.get("network_id", ""),
+                f"run:{run_name}" if run_name else "",
+            }
+            if ipaddress.ip_address(ip).is_global:
+                network_ids.add("public")
+            host["current_network_profiles"] = [
+                profile
+                for profile in host["permanent_profiles"]
+                if profile.get("network_id") in network_ids
+                and float(profile.get("last_seen") or 0) >= network_start
+            ]
+            activity = self._host_activity_times(host_ips)
+            host["last_seen"] = max(activity.values(), default=0)
+            host["seen_on_current_network"] = (
+                host["last_seen"] >= network_start
+            )
+            host["capture_network"] = capture
         host["annotation_profile"] = (
             {}
             if host["permanent_profiles"]
             else self._host_annotation_profile(ip, host)
         )
-        if host["permanent_profiles"]:
-            host["user_name"] = host["permanent_profiles"][0]["user_name"]
-            host["user_note"] = host["permanent_profiles"][0]["user_note"]
+        identity_profiles = host.get(
+            "current_network_profiles", host["permanent_profiles"]
+        )
+        if identity_profiles:
+            host["user_name"] = identity_profiles[0]["user_name"]
+            host["user_note"] = identity_profiles[0]["user_note"]
         else:
             host["user_name"] = ""
             host["user_note"] = ""
@@ -6088,7 +6289,7 @@ class RunDataReader:
                 host[field] = next(
                     (
                         fact["value"]
-                        for profile in host["permanent_profiles"]
+                        for profile in identity_profiles
                         for fact in profile.get("facts", [])
                         if fact["kind"] == kind
                     ),
@@ -6138,7 +6339,7 @@ class RunDataReader:
             mark = triage.get((profile["network_id"], ip), {})
             profile["user_status"] = mark.get("status", "")
             profile["user_labels"] = mark.get("labels", [])
-        current_profile = next(iter(host["permanent_profiles"]), {})
+        current_profile = next(iter(identity_profiles), {})
         host["user_status"] = current_profile.get("user_status", "")
         host["user_labels"] = current_profile.get("user_labels", [])
         alerts_by_id: Dict[str, Dict[str, Any]] = {}
@@ -6252,6 +6453,7 @@ class RunDataReader:
             ).fetchone()
         latest = float(latest_row["latest"] or 0)
         start, end, range_name = self._time_bounds(query, latest)
+        start = self._scoped_start(query, start)
         clauses = [predicate]
         if start is not None:
             clauses.append("event_time >= ?")
@@ -6494,6 +6696,7 @@ class RunDataReader:
             ).fetchone()
         latest = float(latest_row["latest"] or 0)
         start, end, range_name = self._time_bounds(query, latest)
+        start = self._scoped_start(query, start)
         clauses = [predicate]
         if start is not None:
             clauses.append("event_time >= ?")
@@ -6594,6 +6797,7 @@ class RunDataReader:
             ).fetchone()
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
+            start = self._scoped_start(query, start)
             clauses = [f"profile_ip IN ({placeholders})"]
             params: List[Any] = list(ips)
             if start is not None:
@@ -6657,6 +6861,10 @@ class RunDataReader:
         current_in_range = (start is None or current_wall_time >= start) and (
             range_name != "custom" or end is None or current_wall_time <= end
         )
+        if self._query_value(query, "network") == "current":
+            current_in_range = current_in_range and self._host_activity_times(
+                ips
+            ).get(ip, 0) >= (start or float("inf"))
         if current_host.get("live") and current_in_range:
             self._attach_current_host_scores([current_host])
             current_score = current_host.get("alert_score")

@@ -30,9 +30,11 @@ until a theme is selected.
 
 For live interface capture, the header offers **Current network only** on every
 tab. It limits alert and evidence lists, their grouped views, the Overview
-counts, and Host alert and evidence counts to detections recorded since the
-current continuous network connection began. The choice is saved in this
-browser. Turning it off restores the selected time range across the full run.
+counts, and the Hosts inventory to activity recorded since the current
+continuous network connection began. Host traffic totals, flow pages, peers,
+protocols, and score plots use the same boundary. Selected time ranges intersect
+this connection period. The choice is saved in this browser. Turning it off
+restores the selected time range across the full run.
 When the monitored interface disconnects, the scoped lists are empty until a
 network is connected. If the router MAC is unavailable, Slips uses the most
 recent network-settings change as the conservative boundary. The switch is
@@ -709,18 +711,37 @@ table, so the next selection starts a new investigation.
 The Hosts tab opens as a compact inventory sized to the available browser height. It shows every host in the first server page, then loads more pages automatically as you scroll until every host matching the selected time range and filters is visible. **Load more** is also available in the footer. The footer shows how many of the matching hosts have loaded. Sorting stays on the server. Threat and scope chips, search, and **Only with alerts** filter the inventory; the alerts-only filter is applied before server paging. **Columns** reveals hostname, TI feeds, and current score when needed. The table combines MAC with vendor and threat with the past peak score, including a marker for the alert threshold. **Export CSV** exports the loaded rows.
 All inventory headings, including the optional TI feeds column, sort the matching hosts before paging. TI feed sorting reads cached feed names only when that column is selected.
 
+With **Current network only**, inventory membership and Last seen use actual
+flow, detection, or discovery observations. Refreshing cached metadata or
+learning a hostname cannot make an old host current. New packet observations
+are kept separately in `permanent/host_profiles/hosts.sqlite`; older runs can
+still establish activity through retained flows and detections. Refreshing the
+inventory replaces every loaded page, so an old row beyond the first page does
+not survive a filter or network change. Device view includes only addresses
+observed during the selected connection.
+
+The current network identifies where Slips captured the traffic. An endpoint
+outside the local subnet can still appear when traffic involving it was
+observed from this network; this does not assert that the endpoint belongs to
+the local subnet. The Host workspace names the capture network explicitly.
+Older network identities remain available under **History · saved identity
+clues from all networks**, without supplying the current network summary. A
+previously selected host with no observations on the current connection shows
+an explanation and empty scoped activity.
+
 Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens a rule editor beside the host, with its IP filled in and **Both sides** selected. Suppression and evidence type remain editable. In Device view, a checkbox can save one rule for each known address; addresses learned later need their own rules. Rules use the existing persistence mechanism and the run's configured whitelist file, including a custom personal whitelist path.
 
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
-The host's Alerts summary card counts open alerts across the full run. If the
-Host range is Live and the host has older alerts but none in the past hour,
+The host's Alerts summary card counts open alerts across the full run, or the
+current connection when **Current network only** is enabled. If the
+Host range is Live and the host has older alerts in that network scope but none in the past hour,
 the Alerts panel shows those older alerts with an explicit label. The panel
 offers a button to switch all host graphs and activity to Full run. Other
 selected ranges remain strict; the Alerts panel and its count follow that
 range.
 
-The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible. It shows the MAC vendor beside the MAC address when Slips has identified one; vendor names can be searched. Inventory can be filtered by local/public scope and by the highest evidence threat in its selected network scope. The displayed threat and the threat filter use the same evidence records. **No evidence** is a status for hosts without findings in that scope, not an additional Slips threat level; these hosts appear under All but do not match Info+, Low+, or any other threat filter. Informational evidence is Info, not a benign verdict. The compact threat column shows the highest real score persisted after evidence processing for that exact profile IP over the full run. The score bar marks the configured alert threshold, while hovering shows the current active time-window score from Redis. The optional current-score column can be enabled from **Columns**. Both scores are sortable server-side.
+The host list combines current Redis metadata with persisted last-known identity, so hosts that expired from Redis remain visible when their observations match the selected scope. It shows the MAC vendor beside the MAC address when Slips has identified one; vendor names can be searched. Inventory can be filtered by local/public scope and by the highest evidence threat in its selected network scope. The displayed threat and the threat filter use the same evidence records. **No evidence** is a status for hosts without findings in that scope, not an additional Slips threat level; these hosts appear under All but do not match Info+, Low+, or any other threat filter. Informational evidence is Info, not a benign verdict. The compact threat column shows the highest real score persisted after evidence processing for that exact profile IP in the selected network scope. The score bar marks the configured alert threshold, while hovering shows the current active time-window score from Redis. The optional current-score column can be enabled from **Columns**. Both scores are sortable server-side.
 
 An IP mentioned in Evidence can be a destination without its own Slips
 profile. Selecting such an IP shows an explanation in the Host workspace;
@@ -783,4 +804,4 @@ Responses include bounded page metadata and selected ranges. Overview and identi
 
 ### Optional browser regression check
 
-`tests/unit/modules/web_interface/test_browser.py` uses Playwright and an installed Chrome to exercise the shipped HTML, JavaScript and styles against isolated API fixtures. It checks a grouped device record with 1,051 linked flows, protocol tabs, lazy JSON, flow paging, close/reopen, and saving host marks, labels and notes. It also checks the contextual host whitelist request. It skips when Playwright or Chrome is unavailable; neither is required to run Slips. The regular server tests verify durable persistence, configured whitelist-file writes, and filtering independently of browser availability.
+`tests/unit/modules/web_interface/test_browser.py` uses Playwright and an installed Chrome to exercise the shipped HTML, JavaScript and styles against isolated API fixtures. It checks a grouped device record with 1,051 linked flows, protocol tabs, lazy JSON, flow paging, close/reopen, and saving host marks, labels and notes. It also checks the contextual host whitelist request and current-network inventory refresh across multiple loaded pages, including the separation of current observations from saved network history. It skips when Playwright or Chrome is unavailable; neither is required to run Slips. The regular server tests verify durable persistence, configured whitelist-file writes, and filtering independently of browser availability.

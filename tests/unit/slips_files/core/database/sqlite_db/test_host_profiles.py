@@ -13,6 +13,74 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def test_only_parsed_traffic_advances_network_observations(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Names and IP metadata never move the network's actual observation time.
+
+    Parameters:
+        tmp_path: Isolated permanent database.
+        monkeypatch: Advances the metadata clock without observing another packet.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "local_network": "192.168.1.0/24",
+        "changed_at": 100,
+    }
+    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    store.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime=110,
+            type_="arp",
+            saddr="192.168.1.20",
+            daddr="192.168.1.1",
+        )
+    )
+    monkeypatch.setattr(
+        "slips_files.core.database.sqlite_db.host_profiles.time.time",
+        lambda: 500,
+    )
+    store.observe_hostname("refreshed-name", "profile_192.168.1.20")
+    store.observe_ip_info("192.168.1.20", {"reverse_dns": "refreshed.local"})
+    assert HostProfileStore.read(path, "192.168.1.20")[0]["last_seen"] == 500
+    assert (
+        HostProfileStore.observation_times(
+            path, ["gateway:aa:bb:cc:dd:ee:01"]
+        )["192.168.1.20"]
+        == 110
+    )
+    state = {
+        "gateway_mac": "aa:bb:cc:dd:ee:02",
+        "local_network": "192.168.1.0/24",
+        "changed_at": 200,
+    }
+    other = HostProfileStore(path, "second", lambda _: state, ["en0"])
+    other.observe_flow(
+        SimpleNamespace(
+            interface="en0",
+            starttime=210,
+            type_="arp",
+            saddr="192.168.1.20",
+            daddr="192.168.1.1",
+        )
+    )
+    assert (
+        HostProfileStore.observation_times(
+            path, ["gateway:aa:bb:cc:dd:ee:02"]
+        )["192.168.1.20"]
+        == 210
+    )
+    assert (
+        HostProfileStore.observation_times(
+            path, ["gateway:aa:bb:cc:dd:ee:01"]
+        )["192.168.1.20"]
+        == 110
+    )
+
+
 def test_triage_persists_by_verified_mac_and_isolates_reused_ips(tmp_path: Path) -> None:
     """Review marks follow a known MAC but never an unrelated device reusing its IP."""
     _module_factory = ModuleFactory()

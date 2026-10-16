@@ -4305,29 +4305,52 @@ async function loadP2P() {
 async function loadHosts() {
   const page = state.pages.hosts;
   const revision = page.revision;
+  const generation = (page.refreshGeneration || 0) + 1;
+  page.refreshGeneration = generation;
+  page.refreshing = true;
+  state.requests.get("hostsMore")?.abort();
+  state.requests.get("hostsRefreshMore")?.abort();
   const path = listPath("hosts");
-  const payload = await api("hosts", path);
-  if (!payload || page.revision !== revision || listPath("hosts") !== path) return;
-  payload.items.forEach(rememberHostRecord);
-  refreshHostLabels();
-  const retained = page.items.slice(100);
-  const retainedNext = page.next;
-  applyPage("hosts", payload);
-  if (retained.length) {
-    const known = new Set(page.items.map((row) => row.ip));
-    retained.forEach((row) => {
-      if (!known.has(row.ip)) page.items.push(row);
-    });
-    page.next = retainedNext;
+  const wanted = Math.max(100, page.items.length);
+  const scroll = document.querySelector(".hosts-list-table").scrollTop;
+  const valid = () => page.refreshGeneration === generation
+    && page.revision === revision && listPath("hosts") === path;
+  try {
+    const payload = await api("hosts", path);
+    if (!payload || !valid()) return;
+    const rows = [...payload.items];
+    const known = new Set(rows.map((row) => row.device_id || row.ip));
+    let next = payload.next_cursor;
+    while (rows.length < wanted && next) {
+      const params = new URLSearchParams(path.split("?", 2)[1]);
+      params.set("cursor", next);
+      const following = await api("hostsRefreshMore", `/api/hosts?${params}`);
+      if (!following || !valid()) return;
+      following.items.forEach((row) => {
+        const key = row.device_id || row.ip;
+        if (!known.has(key)) { known.add(key); rows.push(row); }
+      });
+      if (following.next_cursor === next) break;
+      next = following.next_cursor;
+    }
+    payload.items = rows;
+    payload.page_size = rows.length;
+    payload.next_cursor = next;
+    rows.forEach(rememberHostRecord);
+    refreshHostLabels();
+    applyPage("hosts", payload);
+    renderHostFilterChips(payload);
+    renderHostsPage();
+    document.querySelector(".hosts-list-table").scrollTop = scroll;
+  } finally {
+    if (page.refreshGeneration === generation) page.refreshing = false;
   }
-  renderHostFilterChips(payload);
-  renderHostsPage();
 }
 
 /** Append the next server page while keeping the initial Hosts load bounded. */
 async function loadMoreHosts() {
   const page = state.pages.hosts;
-  if (!page.next || page.loadingMore) return;
+  if (!page.next || page.loadingMore || page.refreshing) return;
   page.loadingMore = true;
   const revision = page.revision;
   const params = new URLSearchParams(listPath("hosts").split("?", 2)[1]);
@@ -4372,7 +4395,7 @@ function renderHostsPage() {
     (row) => formatBytes(row.load?.bytes),
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
-    (row) => formatShortTime(row.load?.last_seen || row.observed_at),
+    (row) => formatShortTime(row.last_seen || row.load?.last_seen || row.observed_at),
     (row) => row.hostname || "—",
     (row) => tiFeeds(row),
     (row) => slipsScore(row),
@@ -5598,7 +5621,7 @@ function hostRangeParams() {
  * @param {Object[]} profiles Permanent host records for this IP.
  * @param {HTMLElement|null} currentEditorTarget Editor location in the identity card.
  */
-function renderPermanentProfiles(profiles, currentEditorTarget = null) {
+function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNetworkId = null) {
   const container = byId("host-permanent-profiles");
   const profileIp = profiles?.[0]?.ip || "";
   if (container.dataset.profileIp === profileIp
@@ -5717,7 +5740,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
           currentProfile.user_status = payload.status;
           currentProfile.user_labels = payload.labels;
         }
-        if ((state.host?.permanent_profiles?.[0]?.network_id || state.host.annotation_profile?.network_id) === profile.network_id) {
+        if ((hostVisibleProfiles(state.host)[0]?.network_id || state.host.annotation_profile?.network_id) === profile.network_id) {
           state.host.user_name = payload.name;
           state.host.user_note = payload.note;
           state.host.user_status = payload.status;
@@ -5742,7 +5765,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
     });
     if (profile.user_name) group.append(text("p", `Custom name: ${profile.user_name}`, "host-user-name"));
     if (profile.user_note) group.append(text("p", profile.user_note, "host-user-note"));
-    if (index === 0 && currentEditorTarget) {
+    if (currentEditorTarget && (currentNetworkId === null ? index === 0 : profile.network_id === currentNetworkId)) {
       currentEditorTarget.append(annotationEdit, annotation);
     } else {
       group.append(annotationEdit, annotation);
@@ -5799,7 +5822,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null) {
         profile.network_name = payload.name;
         profile.network_label = payload.name || profile.default_network_label;
         title.textContent = profile.network_label;
-        renderHostNetworkClues(state.host?.permanent_profiles || []);
+        renderHostNetworkClues(hostVisibleProfiles(state.host));
         feedback.textContent = "";
         state.networkNameDrafts.delete(profile.network_id);
         state.networkNameEditorOpen.delete(profile.network_id);
@@ -5880,17 +5903,50 @@ function renderHostNetworkClues(profiles) {
   if (profiles.length > 4) networks.append(text("small", `+ ${profiles.length - 4} more networks`, "muted"));
 }
 
+/** Select identity observations for the active network, retaining the full archive separately.
+ * @param {object|null} host Host workspace data.
+ * @returns {object[]} Identity profiles visible beside current activity.
+ */
+function hostVisibleProfiles(host) {
+  return state.networkOnly && state.networkFilterSupported && Array.isArray(host?.current_network_profiles)
+    ? host.current_network_profiles : host?.permanent_profiles || [];
+}
+
+/** Describe capture activity separately from saved identity metadata.
+ * @param {object} host Current host workspace data.
+ */
+function renderHostScope(host) {
+  const scoped = state.networkOnly && state.networkFilterSupported;
+  const capture = host.capture_network;
+  const label = capture?.name || state.headerNetwork?.name || "current network";
+  const identityNetwork = hostVisibleProfiles(host)[0]?.network_label || "identity network not recorded";
+  const status = scoped && capture ? host.seen_on_current_network
+    ? `Observed on ${label}` : `No observed activity on ${label}`
+    : `${identityNetwork} · ${host.live ? "live metadata" : "saved metadata"}`;
+  byId("host-subtitle").textContent = `${host.scope || "unknown scope"} · ${status} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"}`;
+  byId("host-saved-history-label").textContent = scoped
+    ? "History · saved identity clues from all networks" : "All saved identity clues and network names";
+  const notice = byId("host-network-scope-note");
+  notice.hidden = !scoped || host.seen_on_current_network !== false;
+  notice.textContent = "No activity was observed for this host during the current network connection. Its saved identity history is available below; switch off Current network only to inspect older activity.";
+}
+
 const HOST_REVIEW_LABELS = { to_analyze: "To analyze", in_review: "Under review", reviewed: "Reviewed" };
 
 function renderHostCards(host) {
+  renderHostScope(host);
+  const scopedProfiles = hostVisibleProfiles(host);
+  const networkScoped = state.networkOnly && state.networkFilterSupported;
   const exactAggregates = host.exact_aggregates !== false;
   setSummaryCards([
     [state.networkOnly && state.networkFilterSupported ? "Alerts · current network" : "Alerts · full run", exactAggregates ? compact(host.alert_count) : "—"],
     [state.networkOnly && state.networkFilterSupported ? "Evidence · current network" : "Evidence", exactAggregates ? compact(host.evidence_count) : "—"],
-    ["Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
-    ["Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
-    ["Packets", exactAggregates ? compact(host.load?.packets) : "—"],
-    ["Seen on", `${compact(host.permanent_profiles?.length || 0)} networks`],
+    [networkScoped ? "Flows in / out · current network" : "Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
+    [networkScoped ? "Traffic in / out · current network" : "Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
+    [networkScoped ? "Packets · current network" : "Packets", exactAggregates ? compact(host.load?.packets) : "—"],
+    [networkScoped ? "Observed on" : "Saved networks", networkScoped
+      ? host.seen_on_current_network ? "Current network" : "No current observations"
+      : `${compact(host.permanent_profiles?.length || 0)} networks`],
   ], "host-summary");
   const summaryCards = byId("host-summary").children;
   summaryCards[2].append(text("small", `${compact(host.load?.inbound_flows)} in / ${compact(host.load?.outbound_flows)} out`));
@@ -5914,7 +5970,7 @@ function renderHostCards(host) {
       detailRow("Review", HOST_REVIEW_LABELS[host.user_status] || "Unmarked"),
       detailRow("Labels", (host.user_labels || []).join(", ") || "—"),
       detailRow("Note", host.user_note || "—"),
-      ...(host.permanent_profiles?.length || host.annotation_profile?.network_id
+      ...((networkScoped ? scopedProfiles.length : host.permanent_profiles?.length) || host.annotation_profile?.network_id
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
       detailRow("MAC", host.mac ? text("code", host.mac) : "Unknown"),
@@ -5925,8 +5981,19 @@ function renderHostCards(host) {
     refreshHostLabels();
   }
   renderPermanentProfiles(host.permanent_profiles?.length ? host.permanent_profiles
-    : host.annotation_profile?.network_id ? [host.annotation_profile] : [], byId("host-annotation-entry"));
-  renderHostNetworkClues(host.permanent_profiles || []);
+    : host.annotation_profile?.network_id ? [host.annotation_profile] : [], byId("host-annotation-entry"),
+  networkScoped && Array.isArray(host.current_network_profiles) ? scopedProfiles[0]?.network_id || "" : null);
+  renderHostNetworkClues(scopedProfiles);
+  if (networkScoped && host.capture_network) {
+    const networks = byId("host-networks-seen");
+    networks.replaceChildren();
+    if (host.seen_on_current_network) {
+      const row = text("div", "", "host-clue-row");
+      row.append(text("strong", host.capture_network.name || "Current monitored network"),
+        text("small", `Observed ${formatTime(host.last_seen)}`));
+      networks.append(row);
+    } else networks.append(text("p", "No observations on the current network.", "muted"));
+  }
   byId("host-dns-details").replaceChildren(renderDnsDetails(host.dns));
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
@@ -6504,8 +6571,6 @@ async function openHost(ip, summary = null) {
   byId("host-detail-view").classList.remove("unprofiled");
   byId("host-unprofiled").hidden = true;
   byId("host-title").replaceChildren(deviceIdentity(host));
-  byId("host-subtitle").textContent =
-    `${host.scope || "unknown scope"} · ${host.permanent_profiles?.[0]?.network_label || "network not recorded"} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"} · ${host.live ? "current" : "last-known metadata"}`;
   renderHostCards(host);
   const hasExactAlerts = host.alerts?.some((alert) => host.all_ips.includes(alert.ip_alerted));
   const initialActivity = hasExactAlerts || (host.exact_aggregates !== false && host.alert_count)
@@ -6682,7 +6747,7 @@ function updateNetworkFilterAvailability(identity) {
   byId("network-filter").disabled = !supported || start === null;
   label.title = start === null
     ? "Waiting for a monitored network connection"
-    : "Show alerts and evidence from the current continuous network connection only";
+    : "Show hosts, traffic, alerts and evidence observed during the current continuous network connection only";
   if (changed && state.networkOnly && supported && state.overview) {
     refreshNetworkScopedViews();
   }
@@ -6690,7 +6755,8 @@ function updateNetworkFilterAvailability(identity) {
 
 /** Reload all detection views after changing the network scope. */
 function refreshNetworkScopedViews() {
-  ["alerts", "evidence", "hosts", "hostAlerts", "host-evidence"].forEach(resetPage);
+  ["alerts", "evidence", "hosts", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
+  document.activeElement?.blur();
   state.filteredBadgeCounts = { alerts: null, evidence: null, hosts: null };
   ["alerts-badge", "evidence-badge", "hosts-badge"].forEach((id) => {
     byId(id).textContent = "—";
@@ -6970,8 +7036,8 @@ byId("hosts-export").addEventListener("click", () => {
     return `"${safe.replaceAll('"', '""')}"`;
   };
   const csv = [fields.join(","), ...rows.map((row) => fields.map((key) =>
-    escapeCsv(["flows", "bytes", "last_seen"].includes(key)
-      ? row.load?.[key] : row[key])).join(","))].join("\n");
+    escapeCsv(key === "last_seen" ? row.last_seen || row.load?.last_seen
+      : ["flows", "bytes"].includes(key) ? row.load?.[key] : row[key])).join(","))].join("\n");
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
   link.download = "slips-hosts-page.csv";
