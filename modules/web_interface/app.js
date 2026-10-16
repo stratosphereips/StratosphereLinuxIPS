@@ -5776,7 +5776,9 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
     group.className = "permanent-host-profile";
     const title = text("strong", `Network: ${profile.network_label || profile.network_id}`);
     group.append(title);
-    group.append(text("small", `First seen ${formatTime(profile.first_seen)} · Last seen ${formatTime(profile.last_seen)}`, "muted"));
+    const observation = hostProfileNetworkObservation(profile);
+    group.append(text("small", observation.label, "host-network-observation muted"));
+    group.append(text("small", `Record first saved ${formatTime(profile.first_seen)} · Last updated ${formatTime(profile.last_seen)}`, "muted"));
     const annotationKey = JSON.stringify([profile.network_id, profile.ip]);
     const annotation = document.createElement("form");
     annotation.className = "host-annotation-form";
@@ -5956,7 +5958,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
         if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
         profile.network_name = payload.name;
         profile.network_label = payload.name || profile.default_network_label;
-        title.textContent = profile.network_label;
+        title.textContent = `Network: ${profile.network_label}`;
         renderHostNetworkClues(hostVisibleProfiles(state.host));
         feedback.textContent = "";
         state.networkNameDrafts.delete(profile.network_id);
@@ -6003,14 +6005,46 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
   });
 }
 
-/** Summarize saved mDNS names and networks beside the selected host's traffic. */
+/** Describe the evidence for associating the selected device with a network.
+ * @param {object} profile One network-scoped IP history and its identity facts.
+ * @returns {object} Display text, supported observation range and summary eligibility.
+ */
+function hostProfileNetworkObservation(profile) {
+  const selectedMac = normalizeMac(state.host?.mac);
+  const macFacts = (profile.facts || []).filter((fact) => fact.kind === "mac"
+    && ["locally_administered", "universally_administered"].includes(classifyMac(fact.value)))
+    .sort((left, right) => numeric(right.last_seen) - numeric(left.last_seen));
+  const mac = normalizeMac(macFacts[0]?.value);
+  if (selectedMac && mac === selectedMac && profile.network_id !== "public") {
+    const matches = macFacts.filter((fact) => normalizeMac(fact.value) === selectedMac);
+    const knownNetwork = String(profile.network_id || "").startsWith("gateway:");
+    return { verified: knownNetwork, source: "mac", label: knownNetwork
+      ? "Matching device MAC observed on this network."
+      : "Matching device MAC recorded in an unidentified capture. Network identity is unverified.",
+      first: Math.min(...matches.map((fact) => numeric(fact.first_seen))),
+      last: Math.max(...matches.map((fact) => numeric(fact.last_seen))) };
+  }
+  if (selectedMac && mac && mac !== selectedMac) {
+    return { verified: false, differentDevice: true,
+      label: "A different device MAC was recorded for this IP on this network." };
+  }
+  if (profile.endpoint_last_seen !== null && profile.endpoint_last_seen !== undefined) {
+    return { verified: !selectedMac, source: "traffic", first: profile.endpoint_first_seen, last: profile.endpoint_last_seen,
+      label: "IP traffic was captured from this network. Device attachment is unverified." };
+  }
+  return { verified: false,
+    label: "Device presence is unverified. Saved address metadata alone does not establish a network visit." };
+}
+
+/** Summarize supported device observations, keeping address metadata in history. */
 function renderHostNetworkClues(profiles) {
   const mdns = byId("host-mdns-names");
   const networks = byId("host-networks-seen");
   mdns.replaceChildren();
   networks.replaceChildren();
   const names = new Map();
-  profiles.forEach((profile) => (profile.facts || []).forEach((fact) => {
+  profiles.filter((profile) => !hostProfileNetworkObservation(profile).differentDevice)
+    .forEach((profile) => (profile.facts || []).forEach((fact) => {
     if (fact.kind !== "mdns_hostname" || !fact.value) return;
     const previous = names.get(fact.value) || { observations: 0, last_seen: 0 };
     names.set(fact.value, {
@@ -6027,15 +6061,20 @@ function renderHostNetworkClues(profiles) {
   });
   if (!sortedNames.length) mdns.append(text("p", "No mDNS address record owners recorded.", "muted"));
   if (sortedNames.length > 4) mdns.append(text("small", `+ ${sortedNames.length - 4} more saved names`, "muted"));
-  profiles.slice(0, 4).forEach((profile) => {
+  const observed = profiles.map((profile) => ({ profile, observation: hostProfileNetworkObservation(profile) }))
+    .filter(({ observation }) => observation.verified);
+  observed.slice(0, 4).forEach(({ profile, observation }) => {
     const row = document.createElement("div");
     row.className = "host-clue-row";
+    row.title = observation.label;
     row.append(text("strong", profile.network_label || profile.network_id || "Unidentified network"),
-      text("small", `${new Date(numeric(profile.first_seen) * 1000).toLocaleDateString()} – ${new Date(numeric(profile.last_seen) * 1000).toLocaleDateString()}`));
+      text("small", `${observation.source === "mac" ? "MAC observed" : "IP traffic"} · ${new Date(numeric(observation.first) * 1000).toLocaleDateString()} – ${new Date(numeric(observation.last) * 1000).toLocaleDateString()}`));
     networks.append(row);
   });
-  if (!profiles.length) networks.append(text("p", "No permanent network history recorded.", "muted"));
-  if (profiles.length > 4) networks.append(text("small", `+ ${profiles.length - 4} more networks`, "muted"));
+  if (!observed.length) networks.append(text("p", "No verified device network history recorded.", "muted"));
+  if (observed.length > 4) networks.append(text("small", `+ ${observed.length - 4} more verified networks`, "muted"));
+  if (profiles.length > observed.length) networks.append(text("small",
+    `${profiles.length - observed.length} unverified address histories are available below.`, "muted"));
 }
 
 /** Select identity observations for the active network, retaining the full archive separately.
@@ -6075,6 +6114,8 @@ function renderHostCards(host) {
   renderHostScope(host);
   const scopedProfiles = hostVisibleProfiles(host);
   const networkScoped = state.networkOnly && state.networkFilterSupported;
+  const verifiedNetworks = (host.permanent_profiles || [])
+    .filter((profile) => hostProfileNetworkObservation(profile).verified).length;
   const exactAggregates = host.exact_aggregates !== false;
   const findingsRange = byId("host-range").selectedOptions[0]?.textContent || "selected range";
   const findingsScope = `${findingsRange}${networkScoped ? " · current network" : ""}`;
@@ -6084,9 +6125,9 @@ function renderHostCards(host) {
     [networkScoped ? "Flows in / out · current network" : "Flows in / out", exactAggregates ? compact(host.load?.flows) : "—"],
     [networkScoped ? "Traffic in / out · current network" : "Traffic in / out", exactAggregates ? formatBytes(host.load?.bytes) : "—"],
     [networkScoped ? "Packets · current network" : "Packets", exactAggregates ? compact(host.load?.packets) : "—"],
-    [networkScoped ? "Observed on" : "Saved networks", networkScoped
+    [networkScoped ? "IP traffic observed" : host.mac ? "Verified device networks" : "IP capture networks", networkScoped
       ? host.seen_on_current_network ? "Current network" : "No current observations"
-      : `${compact(host.permanent_profiles?.length || 0)} networks`],
+      : `${compact(verifiedNetworks)} network${verifiedNetworks === 1 ? "" : "s"}`],
   ], "host-summary");
   const summaryCards = byId("host-summary").children;
   summaryCards[2].append(text("small", `${compact(host.load?.inbound_flows)} in / ${compact(host.load?.outbound_flows)} out`));
@@ -6131,7 +6172,7 @@ function renderHostCards(host) {
     if (host.seen_on_current_network) {
       const row = text("div", "", "host-clue-row");
       row.append(text("strong", host.capture_network.name || "Current monitored network"),
-        text("small", `Observed ${formatTime(host.last_seen)}`));
+        text("small", `IP traffic observed ${formatTime(host.last_seen)}`));
       networks.append(row);
     } else networks.append(text("p", "No observations on the current network.", "muted"));
   }

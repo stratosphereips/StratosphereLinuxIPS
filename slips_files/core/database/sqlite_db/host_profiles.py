@@ -64,6 +64,16 @@ class HostProfileStore:
                 "PRIMARY KEY(network_id, ip))"
             )
             connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_endpoint_observations ("
+                "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
+                "first_seen REAL NOT NULL, last_seen REAL NOT NULL, "
+                "PRIMARY KEY(network_id, ip))"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS host_endpoint_ip_idx "
+                "ON host_endpoint_observations(ip, first_seen, last_seen)"
+            )
+            connection.execute(
                 "CREATE TABLE IF NOT EXISTS facts ("
                 "network_id TEXT NOT NULL, ip TEXT NOT NULL, "
                 "kind TEXT NOT NULL, value TEXT NOT NULL, "
@@ -213,15 +223,23 @@ class HostProfileStore:
             return unknown
         if not path.exists():
             return unknown
+        if ipaddress.ip_address(normalized_ip).is_global:
+            return {
+                "network_id": "public",
+                "network_name": "",
+                "network_label": "Public internet",
+            }
         try:
             with sqlite3.connect(
                 f"file:{path}?mode=ro", uri=True, timeout=5
             ) as connection:
                 rows = connection.execute(
-                    "SELECT h.network_id, h.network_label, h.first_seen, "
-                    "h.last_seen, n.name FROM hosts h "
-                    "LEFT JOIN network_names n ON n.network_id=h.network_id "
-                    "WHERE h.ip=?",
+                    "SELECT o.network_id, COALESCE(h.network_label,''), "
+                    "o.first_seen, o.last_seen, n.name "
+                    "FROM host_endpoint_observations o "
+                    "LEFT JOIN hosts h ON h.network_id=o.network_id AND h.ip=o.ip "
+                    "LEFT JOIN network_names n ON n.network_id=o.network_id "
+                    "WHERE o.ip=?",
                     (normalized_ip,),
                 ).fetchall()
         except sqlite3.Error:
@@ -241,7 +259,9 @@ class HostProfileStore:
         return {
             "network_id": str(row[0]),
             "network_name": network_name,
-            "network_label": network_name or str(row[1]),
+            "network_label": network_name
+            or str(row[1])
+            or f"Captured network · {row[0]}",
         }
 
     @staticmethod
@@ -543,7 +563,7 @@ class HostProfileStore:
                 return {
                     str(ip): float(seen)
                     for ip, seen in connection.execute(
-                        f"SELECT ip, MAX(last_seen) FROM host_observations WHERE network_id IN ({marks}) GROUP BY ip",
+                        f"SELECT ip, MAX(last_seen) FROM host_endpoint_observations WHERE network_id IN ({marks}) GROUP BY ip",
                         keys,
                     )
                 }
@@ -917,6 +937,7 @@ class HostProfileStore:
         observed_at: float,
         facts: list[tuple[str, str]],
         observed_traffic: bool = False,
+        from_packet: bool = False,
     ) -> None:
         """Upsert a sighting and bounded distinct facts in one transaction.
 
@@ -926,9 +947,10 @@ class HostProfileStore:
             observed_at: Observation timestamp.
             facts: Kind and value pairs learned from this observation.
             observed_traffic: Whether a parsed packet flow caused the sighting.
+            from_packet: Use capture-time settings for DNS-advertised metadata.
         """
         state = self._network_state(interface)
-        if observed_traffic:
+        if observed_traffic or from_packet:
             state = self._observation_network(state, observed_at)
         identity = self._identity(ip, interface, state)
         if identity is None:
@@ -940,7 +962,8 @@ class HostProfileStore:
         if state.get("host_ip"):
             own_ips.add(state["host_ip"])
         if (
-            normalized in own_ips
+            observed_traffic
+            and normalized in own_ips
             and time.monotonic() - self._recent_sightings.get(key, 0) >= 60
             and (mac := self._usable_mac(state.get("mac")))
         ):
@@ -980,28 +1003,44 @@ class HostProfileStore:
             else self._connect()
         )
         with context as connection:
+            metadata_update = not observed_traffic and not from_packet
+            write_host = not metadata_update or network_id == "public"
+            if metadata_update and network_id != "public":
+                existing_host = connection.execute(
+                    "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
+                    (network_id, normalized),
+                ).fetchone()
+                if not existing_host:
+                    network_id = self.network_id_for_state({}, self.run_name)
+                    network_label = f"Unidentified network · {self.run_name}"
+                    key = (network_id, normalized)
+                    write_host = not connection.execute(
+                        "SELECT 1 FROM hosts WHERE network_id=? AND ip=?",
+                        key,
+                    ).fetchone()
             if save_observation:
                 connection.execute(
-                    "INSERT INTO host_observations VALUES (?, ?, ?, ?) "
+                    "INSERT INTO host_endpoint_observations VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(network_id, ip) DO UPDATE SET "
                     "first_seen=MIN(first_seen, excluded.first_seen), "
                     "last_seen=MAX(last_seen, excluded.last_seen)",
                     (capture_id, normalized, observed_at, observed_at),
                 )
-            connection.execute(
-                "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
-                "ON CONFLICT(network_id, ip) DO UPDATE SET "
-                "network_label=excluded.network_label, "
-                "first_seen=MIN(first_seen, excluded.first_seen), "
-                "last_seen=MAX(last_seen, excluded.last_seen)",
-                (
-                    network_id,
-                    normalized,
-                    network_label,
-                    observed_at,
-                    observed_at,
-                ),
-            )
+            if write_host:
+                connection.execute(
+                    "INSERT INTO hosts VALUES (?, ?, ?, ?, ?) "
+                    "ON CONFLICT(network_id, ip) DO UPDATE SET "
+                    "network_label=excluded.network_label, "
+                    "first_seen=MIN(first_seen, excluded.first_seen), "
+                    "last_seen=MAX(last_seen, excluded.last_seen)",
+                    (
+                        network_id,
+                        normalized,
+                        network_label,
+                        observed_at,
+                        observed_at,
+                    ),
+                )
             for kind, value in dict.fromkeys(filtered):
                 existing = connection.execute(
                     "SELECT 1 FROM facts WHERE network_id=? AND ip=? "
@@ -1180,7 +1219,7 @@ class HostProfileStore:
                             interface,
                             observed_at,
                             [("mdns_hostname", hostname)],
-                            observed_traffic=True,
+                            from_packet=True,
                         )
             for answer in getattr(flow, "answers", []) or []:
                 if isinstance(answer, dict):
@@ -1191,7 +1230,7 @@ class HostProfileStore:
                     interface,
                     observed_at,
                     [] if mdns else [("dns_name", query)],
-                    observed_traffic=True,
+                    from_packet=True,
                 )
         self._save(
             source, interface, observed_at, source_facts, observed_traffic=True
@@ -1305,6 +1344,21 @@ class HostProfileStore:
             annotations = HostProfileStore._resolved_annotations(
                 conn, (normalized,)
             )
+            endpoint_times: dict[str, tuple[float, float]] = {}
+            try:
+                network_ids = [host["network_id"] for host in hosts]
+                marks = ",".join("?" for _ in network_ids)
+                endpoint_times = {
+                    str(network_id): (float(first), float(last))
+                    for network_id, first, last in conn.execute(
+                        "SELECT network_id, first_seen, last_seen "
+                        "FROM host_endpoint_observations WHERE ip=? "
+                        f"AND network_id IN ({marks})",
+                        (normalized, *network_ids),
+                    )
+                }
+            except sqlite3.OperationalError:
+                pass
             profiles = []
             for host in hosts:
                 facts = conn.execute(
@@ -1327,6 +1381,12 @@ class HostProfileStore:
                         "user_note": annotations.get(
                             (host["network_id"], normalized), {}
                         ).get("note", ""),
+                        "endpoint_first_seen": endpoint_times.get(
+                            host["network_id"], (None, None)
+                        )[0],
+                        "endpoint_last_seen": endpoint_times.get(
+                            host["network_id"], (None, None)
+                        )[1],
                         "facts": [
                             dict(fact)
                             for fact in facts

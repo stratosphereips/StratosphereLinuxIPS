@@ -768,6 +768,9 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-heading-copy h2 .host-label code { font-size: 1rem; }
 .host-heading-copy h2 .host-name { color: var(--muted); font-size: .8rem; }
 .host-heading-copy p { margin: .1rem 0 0; color: var(--muted); font-size: .7rem; }
+#host-networks-seen .host-clue-row { flex-direction: column; align-items: flex-start; gap: .1rem; }
+#host-networks-seen .host-clue-row > :first-child { overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
+#host-networks-seen .host-clue-row small { white-space: normal; }
 #host-score-pill { flex: none; padding: .33rem .55rem; border: 1px solid #633039; border-radius: 5px; color: #ee9fa8; font-size: .72rem; }
 #host-score-pill .slips-score { min-width: 0; }
 .host-workspace-head .toolbar { max-width: 100%; margin-left: auto; flex-wrap: wrap; }

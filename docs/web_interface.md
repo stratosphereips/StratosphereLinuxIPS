@@ -222,6 +222,27 @@ be expanded. Open groups stay open as live data refreshes. Private and
 unknown geolocation labels are omitted from the country group, including
 labels stored by older runs.
 
+**Network observations** separates verified device identity from an IP address
+mentioned in a capture. When the selected device has a MAC, the summary lists
+networks with a matching local MAC binding and uses that binding's observation
+dates. Reused-IP records with another MAC and records without identity proof
+remain in the expanded address history with an explicit warning. Packet
+endpoints establish that IP traffic was captured from a network; they do not
+by themselves establish that a named device joined it.
+
+DNS answers, including mDNS A/AAAA owner bindings, retain useful address/name
+metadata without marking the advertised IP as a packet endpoint. Cached names
+and IP information cannot create a named-network visit or advance a host's
+traffic observation time. New cached private addresses without a recorded
+network are kept under an unidentified run profile.
+
+New endpoint observations are stored separately from legacy observations in
+the permanent host database. Earlier versions also counted advertised DNS
+addresses, so those older observation rows cannot establish network presence.
+They remain available as unverified address history. Reading the page does
+not rewrite saved annotations, names, or legacy records. The recording runs in
+the existing bounded background host-profile worker.
+
 Public IPs share one profile across runs. Private addresses are grouped by
 the observed router MAC when the address belongs to the monitored subnet. If
 Slips cannot identify the network, it keeps that address under the run's

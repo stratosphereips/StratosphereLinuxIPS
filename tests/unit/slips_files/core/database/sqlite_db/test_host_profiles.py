@@ -285,6 +285,118 @@ def test_ambiguous_mdns_answers_never_transfer_a_saved_device_name(
     assert names["192.168.1.1"] == {"name": "", "note": ""}
 
 
+@pytest.mark.parametrize("mdns", [False, True])
+def test_dns_advertisements_do_not_establish_device_network_presence(
+    tmp_path: Path, mdns: bool,
+) -> None:
+    """Advertising a home address from a guest capture cannot record its visit.
+
+    Parameters:
+        tmp_path: Isolated permanent identity database.
+        mdns: Include an explicit multicast DNS address-owner binding.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    home = {"changed_at":100,"gateway_mac":"aa:bb:cc:dd:ee:01","local_network":"192.168.1.0/24"}
+    guest = {"changed_at":200,"gateway_mac":"aa:bb:cc:dd:ee:02","local_network":"192.168.1.0/24"}
+    ip = "192.168.1.185"
+    store = HostProfileStore(path,"home",lambda _: home,["en0"])
+    store.observe_flow(SimpleNamespace(type_="arp",interface="en0",starttime=110,
+        saddr=ip,daddr="192.168.1.1",src_hw="2c:cf:67:5a:2e:bd",dst_hw="00:00:00:00:00:00"))
+    HostProfileStore.set_host_annotation(path,ip,"gateway:aa:bb:cc:dd:ee:01","homeassistant","Keep this name")
+    other = HostProfileStore(path,"guest",lambda _: guest,["en0"])
+    other.observe_flow(SimpleNamespace(type_="dns",interface="en0",starttime=210,
+        saddr="192.168.1.1",daddr="224.0.0.251" if mdns else "192.168.1.100",
+        sport=5353 if mdns else 53,dport=5353 if mdns else 50000,
+        query="homeassistant.local",answers=[ip],
+        mdns_bindings=[f"homeassistant.local|{ip}"] if mdns else []))
+    profiles = {row["network_id"]:row for row in HostProfileStore.read(path,ip)}
+    assert profiles["gateway:aa:bb:cc:dd:ee:01"]["user_name"] == "homeassistant"
+    assert profiles["gateway:aa:bb:cc:dd:ee:01"]["endpoint_last_seen"] == 110
+    advertised = profiles["gateway:aa:bb:cc:dd:ee:02"]
+    assert advertised["endpoint_last_seen"] is None
+    assert advertised["user_name"] == ""
+    assert advertised["facts"][0]["kind"] == ("mdns_hostname" if mdns else "dns_name")
+    observed = HostProfileStore.observation_times(path,["gateway:aa:bb:cc:dd:ee:02"])
+    assert ip not in observed
+    assert observed["192.168.1.1"] == 210
+    assert HostProfileStore.network_for_observation(path,ip,210)["network_id"] == ""
+
+
+@pytest.mark.parametrize("kind", ["hostname", "reverse_dns"])
+def test_cached_private_identity_does_not_create_a_named_network_visit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, kind: str,
+) -> None:
+    """Keep cached names without claiming the device visited the current network.
+
+    Parameters:
+        tmp_path: Isolated permanent identity database.
+        monkeypatch: Advance metadata time after roaming.
+        kind: Cached identity update being retained.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    home = {"gateway_mac":"aa:bb:cc:dd:ee:01","local_network":"192.168.1.0/24"}
+    store = HostProfileStore(path,"home",lambda _: home,["en0"])
+    store.observe_flow(SimpleNamespace(type_="conn",interface="en0",starttime=110,
+        saddr="192.168.1.185",daddr="8.8.8.8"))
+    guest = {"gateway_mac":"aa:bb:cc:dd:ee:02","local_network":"192.168.1.0/24"}
+    other = HostProfileStore(path,"guest",lambda _: guest,["en0"])
+    monkeypatch.setattr(host_profiles.time,"time",lambda:300)
+    if kind == "hostname":
+        other.observe_hostname("homeassistant","profile_192.168.1.185")
+    else:
+        other.observe_ip_info("192.168.1.185",{"reverse_dns":"homeassistant.local"})
+    profiles = HostProfileStore.read(path,"192.168.1.185")
+    assert {row["network_id"] for row in profiles} == {"gateway:aa:bb:cc:dd:ee:01","run:guest"}
+    assert HostProfileStore.observation_times(path,["gateway:aa:bb:cc:dd:ee:02"]) == {}
+    assert next(row for row in profiles if row["network_id"]=="run:guest")["endpoint_last_seen"] is None
+
+
+@pytest.mark.parametrize("migrated", [False, True])
+def test_legacy_observations_do_not_prove_endpoint_presence(
+    tmp_path: Path, migrated: bool,
+) -> None:
+    """Retain earlier data while refusing unverified legacy network visits.
+
+    Parameters:
+        tmp_path: Isolated permanent identity database.
+        migrated: Whether the new endpoint table has already been created.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    HostProfileStore(path,"old",lambda _: {},[])
+    with sqlite3.connect(path) as connection:
+        connection.execute("INSERT INTO hosts VALUES ('gateway:guest','192.168.1.185','Stratoguest',100,500)")
+        connection.execute("INSERT INTO host_observations VALUES ('gateway:guest','192.168.1.185',100,500)")
+        if not migrated:
+            connection.execute("DROP TABLE host_endpoint_observations")
+    assert HostProfileStore.observation_times(path,["gateway:guest"]) == {}
+    assert HostProfileStore.network_for_observation(path,"192.168.1.185",300)["network_id"] == ""
+    profiles = HostProfileStore.read(path,"192.168.1.185")
+    assert profiles[0]["network_label"] == "Stratoguest"
+    assert profiles[0]["endpoint_last_seen"] is None
+    with sqlite3.connect(path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM host_observations").fetchone()[0] == 1
+
+
+def test_public_endpoint_keeps_its_public_identity_namespace(tmp_path: Path) -> None:
+    """Record remote traffic in its capture without treating the public IP as local.
+
+    Parameters:
+        tmp_path: Isolated permanent identity database.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {"gateway_mac":"aa:bb:cc:dd:ee:01","local_network":"192.168.1.0/24"}
+    store = HostProfileStore(path,"home",lambda _: state,["en0"])
+    store.observe_flow(SimpleNamespace(type_="conn",interface="en0",starttime=110,
+        saddr="192.168.1.20",daddr="8.8.8.8"))
+    assert HostProfileStore.network_for_observation(path,"8.8.8.8",110) == {
+        "network_id":"public","network_name":"","network_label":"Public internet"}
+    assert HostProfileStore.observation_times(path,["gateway:aa:bb:cc:dd:ee:01"])["8.8.8.8"] == 110
+
+
 def test_only_parsed_traffic_advances_network_observations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -317,7 +429,7 @@ def test_only_parsed_traffic_advances_network_observations(
     )
     store.observe_hostname("refreshed-name", "profile_192.168.1.20")
     store.observe_ip_info("192.168.1.20", {"reverse_dns": "refreshed.local"})
-    assert HostProfileStore.read(path, "192.168.1.20")[0]["last_seen"] == 500
+    assert HostProfileStore.read(path, "192.168.1.20")[0]["last_seen"] == 110
     assert (
         HostProfileStore.observation_times(
             path, ["gateway:aa:bb:cc:dd:ee:01"]

@@ -2508,6 +2508,10 @@ def test_detection_network_is_resolved_by_event_time(tmp_path: Path) -> None:
             "INSERT INTO network_names VALUES (?, ?)",
             ("gateway:bb:bb:bb:bb:bb:bb", "Current Wi-Fi"),
         )
+        connection.execute(
+            "INSERT INTO host_endpoint_observations "
+            "SELECT network_id,ip,first_seen,last_seen FROM hosts"
+        )
 
     assert HostProfileStore.network_for_observation(
         path, "192.168.1.20", 150

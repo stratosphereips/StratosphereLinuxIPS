@@ -20,6 +20,98 @@ from modules.web_interface.history import connect_history
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+def test_host_network_summary_requires_matching_device_evidence_in_chrome(theme: str) -> None:
+    """Keep guest DNS mentions and reused-IP devices out of device network history.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    ip = "192.168.1.185"
+    mac = "2c:cf:67:5a:2e:bd"
+    base = {"ip":ip,"first_seen":100,"last_seen":500,"user_name":"","user_note":"",
+        "endpoint_first_seen":None,"endpoint_last_seen":None}
+    profiles = [
+        {**base,"network_id":"gateway:home","network_label":"Home-Wifi6","user_name":"homeassistant",
+         "endpoint_first_seen":110,"endpoint_last_seen":190,
+         "facts":[{"kind":"mac","value":mac,"first_seen":110,"last_seen":190,"observations":3},
+                  {"kind":"mdns_hostname","value":"homeassistant.local","first_seen":110,"last_seen":190,"observations":2}]},
+        {**base,"network_id":"gateway:guest","network_label":"Stratoguest",
+         "facts":[{"kind":"dns_name","value":"homeassistant.local","first_seen":210,"last_seen":210,"observations":1}]},
+        {**base,"network_id":"gateway:routed","network_label":"Routed network",
+         "endpoint_first_seen":220,"endpoint_last_seen":230,"facts":[]},
+        {**base,"network_id":"gateway:reused","network_label":"Reused private IP",
+         "facts":[{"kind":"mac","value":"d8:58:d7:01:ff:e1","first_seen":300,"last_seen":400,"observations":2},
+                  {"kind":"mdns_hostname","value":"router.local","first_seen":300,"last_seen":400,"observations":2}]},
+    ]
+    host = {"ip":ip,"mac":mac,"user_name":"homeassistant","scope":"local","live":True,
+        "permanent_profiles":profiles,"alert_score":0,"alert_threshold":5,"load":{}}
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve shipped assets with isolated identity data.
+
+        Parameters:
+            route: Request intercepted before network access.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/","/app.js","/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/host-names":
+            route.fulfill(json={"names":{}})
+        else:
+            route.fulfill(status=503,json={"error":"Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome",headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width":1600,"height":1100})
+        page.on("pageerror",lambda error: errors.append(str(error)))
+        page.route("**/*",route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof renderHostCards === 'function'")
+        page.evaluate("""data => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(data.theme); state.host=data.host; state.activeTab='hosts'; state.networkOnly=false;
+            document.body.classList.add('hosts-active');
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='hosts'));
+            byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+            rememberHostRecord(data.host); renderHostCards(data.host); updateHostViewportHeight(); clearError();
+        }""",{"theme":theme,"host":host})
+        summary = page.locator("#host-networks-seen")
+        assert summary.locator(".host-clue-row").count() == 1
+        assert "Home-Wifi6" in summary.inner_text()
+        assert "MAC observed" in summary.inner_text()
+        assert "Stratoguest" not in summary.inner_text()
+        assert "Routed network" not in summary.inner_text()
+        assert "Reused private IP" not in summary.inner_text()
+        assert "3 unverified address histories" in summary.inner_text()
+        assert summary.locator("strong").evaluate("node => getComputedStyle(node).whiteSpace") == "normal"
+        assert "Verified device networks" in page.locator("#host-summary").inner_text()
+        assert page.locator("#host-summary .summary-card").last.locator("strong").text_content() == "1 network"
+        assert "router.local" not in page.locator("#host-mdns-names").inner_text()
+        assert "homeassistant.local" in page.locator("#host-mdns-names").inner_text()
+        assert "homeassistant" in page.locator("#host-title").inner_text()
+        page.locator("#host-saved-history-label").click()
+        archive = page.locator("#host-permanent-profiles")
+        guest = archive.locator(".permanent-host-profile").filter(has_text="Stratoguest")
+        assert guest.is_visible()
+        assert "Device presence is unverified" in guest.inner_text()
+        assert "homeassistant.local" in guest.inner_text()
+        assert "Device attachment is unverified" in archive.inner_text()
+        assert "A different device MAC" in archive.inner_text()
+        markers = page.locator("#host-identity .mac-badge").all_text_contents()
+        assert markers and set(markers) == {"U"}
+        page.screenshot(path=f"output/host-network-presence-{theme}.png")
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
     """Keep device addresses, identity and controls visible as aliases change.
 
