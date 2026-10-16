@@ -506,7 +506,7 @@ def test_incompatible_peer_is_skipped_and_the_rest_still_merge(tmp_path, bad):
     else:
         cls = "simple_mlp"
         shared = fnm.build_with_init_seed(
-            7, lambda: fnm.SimpleMLP3Layer(18)
+            7, lambda: fnm.SimpleMLP(18)
         ).weights_for_sharing()
     for pid, pcls, ws in (
         ("slips-c", cls, shared),

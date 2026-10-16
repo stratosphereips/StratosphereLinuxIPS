@@ -261,23 +261,25 @@ class SimpleFederatedNet(nn.Module):
         self.freeze_head() if frozen else self.unfreeze_head()
 
 
-class SimpleMLP3Layer(nn.Module):
-    """Model 1: plain 3-layer perceptron, NO random projection.
+class SimpleMLP(nn.Module):
+    """Model 1: plain 2-layer perceptron, NO random projection — the trainable
+    twin of the default R-L-H net (same neurons, but nothing is frozen).
 
-        input(18) -> Linear(18->64) -> ReLU -> Linear(64->32) -> ReLU -> head(32->2)
+        input(18) -> Linear(18->256) -> ReLU -> Linear(256->16) -> ReLU -> head(16->2)
 
-    Federated: BOTH hidden linears (fc1 + fc2, 4 tensors); head stays local
-    (fine-tuned around merges). No class weighting, no projection magic —
-    deliberately simple (USE_CLASS_WEIGHTING = False).
+    The 18->256 layer takes the place of R-L-H's frozen random projection at
+    the same width, learned end-to-end. Federated: BOTH linears (fc1 + fc2,
+    4 tensors); head stays local (fine-tuned around merges). No class
+    weighting (USE_CLASS_WEIGHTING = False).
     """
 
     USE_CLASS_WEIGHTING = False
 
     def __init__(self, input_dim: int = 18):
         super().__init__()
-        self.fc1 = nn.Linear(input_dim, 64)
-        self.fc2 = nn.Linear(64, 32)
-        self.head = nn.Linear(32, 2)
+        self.fc1 = nn.Linear(input_dim, 256)
+        self.fc2 = nn.Linear(256, 16)
+        self.head = nn.Linear(16, 2)
         self.relu = nn.ReLU()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -409,11 +411,11 @@ def _build_random_projection_mlp(module):
 
 
 def _build_simple_mlp(module):
-    """Builder for the plain 3-layer perceptron (no random projection)."""
+    """Builder for the plain 2-layer perceptron (no random projection)."""
     # getattr(..., default) returns None because module.input_dim EXISTS as
     # None before the first preprocess; mirror the other builders instead.
     module.input_dim = module.input_dim or SimpleFederatedNet.FIXED_INPUT_DIM
-    return SimpleMLP3Layer(module.input_dim)
+    return SimpleMLP(module.input_dim)
 
 
 def _build_random_projection_two_layer(module):
@@ -458,29 +460,6 @@ def merge_average(
         stack = [own_shared[key]] + [m[key] for m in peer_models.values()]
         merged[key] = torch.stack(stack).mean(dim=0)
     return merged
-
-
-def merge_blending(
-    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
-) -> dict:
-    """Blending selection: compute the plain mean, then adopt the single model
-    (own or a peer's) whose flat shared params are closest to it. One real
-    model wins; the rest is left unblended."""
-
-    def _flat(ws):
-        return torch.cat([ws[k].detach().reshape(-1) for k in shared_keys])
-
-    candidates = {"own": own_shared}
-    candidates.update(peer_models)
-    mean = merge_average(own_shared, peer_models, shared_keys)
-    mean_flat = _flat(mean)
-    best = min(
-        candidates,
-        key=lambda candidate_id: torch.norm(
-            _flat(candidates[candidate_id]) - mean_flat
-        ).item(),
-    )
-    return {k: candidates[best][k].clone() for k in shared_keys}
 
 
 def merge_mean_with_closest(
@@ -558,27 +537,21 @@ def merge_proximity(
 def merge_trust_weighted(
     own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
 ) -> dict:
-    """Trust-weighted average: peer weights scale with their SLIPS trust
-    (score * confidence, clipped to [0,1]; unknown trust = weight 0, own = 1).
-    `trust` maps peer_id -> {"score": float, "confidence": float} collected by
-    the module from the classic p2p trust db. When every weight is 0 (no
-    trust data available yet), falls back to plain averaging."""
+    """Trust-weighted blend on RAW local trust, own anchored at weight 1.
+    `trust` maps peer_id -> {"trust": float} where trust is the LOCAL
+    trustworthiness of that peer (1 = benign/fully trusted, 0 = confidently
+    malicious; computed by the module as 1 - clamp01(score*confidence) of our
+    own SLIPS threat verdict on the peer's IP). Peers missing from the map
+    weigh 1 (innocent until flagged). Weights are absolute per peer, never
+    rescaled with other peers: a lone low-trust peer does NOT inherit full
+    influence — it weighs exactly its trust against own's 1:
+    merged = (1*own + sum w_p*peer_p) / (1 + sum w_p), per shared key."""
     trust = trust or {}
-    if not trust:
-        # no trust data at all (system warm-up) -> treat everyone equally
-        return merge_average(own_shared, peer_models, shared_keys)
     weights = {"own": 1.0}
     for pid in peer_models:
-        t = trust.get(pid)
-        if not t:
-            weights[pid] = 0.0
-        else:
-            weights[pid] = max(0.0, t.get("score", 0.0)) * max(
-                0.0, t.get("confidence", 0.0)
-            )
+        t = trust.get(pid) or {}
+        weights[pid] = max(0.0, min(1.0, float(t.get("trust", 1.0))))
     total = sum(weights.values())
-    if total <= 0:
-        return merge_average(own_shared, peer_models, shared_keys)
     merged = {}
     for key in shared_keys:
         acc = weights["own"] * own_shared[key]
@@ -588,12 +561,46 @@ def merge_trust_weighted(
     return merged
 
 
+def merge_distance_weighted(
+    own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
+) -> dict:
+    """Distance-weighted blend: own pinned at weight 1/2, the peers split the
+    other 1/2 PROPORTIONAL to their L2 distance to own (one flat distance per
+    peer over all shared tensors, computed fresh per merge from the latest
+    received models). Farther peers pull MORE (the inverse of `proximity`).
+    Identical candidates (sum of distances ~ 0) collapse to a plain average;
+    exactly one peer -> 50/50; no peers -> own unchanged."""
+    if not peer_models:
+        return {key: own_shared[key].clone() for key in shared_keys}
+    own_flat = torch.cat(
+        [own_shared[k].detach().reshape(-1) for k in shared_keys]
+    )
+    dist = {
+        pid: torch.norm(
+            torch.cat([m[k].detach().reshape(-1) for k in shared_keys])
+            - own_flat
+        ).item()
+        for pid, m in peer_models.items()
+    }
+    total = sum(dist.values())
+    if total <= 1e-12:
+        # every candidate equals own -> the uniform split IS the plain average
+        return merge_average(own_shared, peer_models, shared_keys)
+    merged = {}
+    for key in shared_keys:
+        acc = 0.5 * own_shared[key]
+        for pid, m in peer_models.items():
+            acc = acc + (0.5 * dist[pid] / total) * m[key]
+        merged[key] = acc
+    return merged
+
+
 MERGE_REGISTRY = {
     "average": merge_average,
     "trust_weighted": merge_trust_weighted,
-    "blending": merge_blending,
     "mean_with_closest": merge_mean_with_closest,
     "proximity": merge_proximity,
+    "distance_weighted": merge_distance_weighted,
     # "my_rule": merge_my_rule,
 }
 
@@ -3024,12 +3031,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         return ip
 
     def _collect_peer_trust(self, peer_ids) -> dict:
-        """SLIPS classic p2p trust for merge functions, read-only, cached 60s.
+        """RAW local trustworthiness per peer for merge functions, cached 60s.
 
-        Returns {peer_id: {"score", "confidence", "network_score", "ip"}} with
-        peers missing a trust entry omitted. The trust sqlite lives inside the
-        p2p trust module's permanent dir (visible to this module's container);
-        we open it read-only (mode=ro) so we never disturb the writer.
+        Returns {peer_id: {"trust", "ip"}} where trust = 1 - malice and
+        malice = clamp01(score * confidence) of OUR local SLIPS threat verdict
+        on the peer's IP (trustdb.slips_reputation; threat_levels: 0 benign ..
+        1 malicious): 1 = benign/fully trusted, 0 = confidently malicious. A
+        peer with no local verdict yet is fully trusted (1.0). The trust
+        sqlite lives inside the p2p trust module's permanent dir (visible to
+        this module's container); we open it read-only (mode=ro) so we never
+        disturb the writer.
         """
         if (
             time.time() - getattr(self, "_trust_cache_ts", 0)
@@ -3048,25 +3059,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 cur = conn.cursor()
                 for pid in set(peer_ids):
                     ip = self._resolve_peer_ip(pid)
-                    for key in (("ip", ip), ("ip", pid)):
-                        if not key[1]:
-                            continue
-                        cur.execute(
-                            "SELECT score, confidence, network_score, update_time "
-                            "FROM opinion_cache WHERE key_type=? AND reported_key=? "
-                            "ORDER BY update_time DESC LIMIT 1",
-                            key,
+                    malice = 0.0
+                    cur.execute(
+                        "SELECT score, confidence "
+                        "FROM slips_reputation WHERE ipaddress=? "
+                        "ORDER BY update_time DESC LIMIT 1",
+                        (ip or pid,),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        malice = max(
+                            0.0,
+                            min(
+                                1.0,
+                                float(row[0] or 0.0) * float(row[1] or 0.0),
+                            ),
                         )
-                        row = cur.fetchone()
-                        if row:
-                            out[pid] = {
-                                "score": row[0],
-                                "confidence": row[1],
-                                "network_score": row[2],
-                                "ts": row[3],
-                                "ip": ip,
-                            }
-                            break
+                    out[pid] = {"trust": 1.0 - malice, "ip": ip}
                 conn.close()
             except Exception as exc:  # noqa: BLE001
                 self.print(
@@ -3195,7 +3204,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     trust_note = ""
                     t = trust_map.get(peer_id)
                     if t:
-                        trust_note = f" | trust={t.get('score', 0.0) * t.get('confidence', 0.0):.4f}"
+                        trust_note = f" | trust={t.get('trust', 0.0):.4f}"
                     self.logger._write(
                         "merging_data",
                         f"  peer={peer_id} | L2_dist={l2_norm:.6f} | L2_norm={l2_normalized:.6f} | n_params={numel}{trust_note}",

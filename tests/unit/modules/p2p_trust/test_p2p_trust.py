@@ -271,6 +271,46 @@ def test_start_pigeon_reports_start_errors_without_retry():
 
 
 @pytest.mark.parametrize(
+    "udp_fails,resolved,expected",
+    [
+        (False, None, "10.0.0.7"),  # primary route works
+        (True, "172.18.0.5", "172.18.0.5"),  # air-gapped: hostname fallback
+        (True, None, "127.0.0.1"),  # both fail: loopback
+    ],
+)
+def test_get_local_ip_falls_back_on_airgapped_network(
+    udp_fails, resolved, expected
+) -> None:
+    """
+    Fall back to the hostname address (Docker DNS), then loopback when the
+    UDP-route trick has no default route (air-gapped sim networks).
+
+    Returns:
+        None.
+    """
+    trust = create_trust()
+    fake_socket = Mock()
+    if udp_fails:
+        fake_socket.connect.side_effect = OSError("Network is unreachable")
+        fake_socket.getsockname.return_value = ("10.0.0.7", 1234)
+    else:
+        fake_socket.getsockname.return_value = ("10.0.0.7", 1234)
+    with (
+        patch(
+            "modules.p2p_trust.p2p_trust.socket.socket",
+            return_value=fake_socket,
+        ),
+        patch(
+            "modules.p2p_trust.p2p_trust.socket.gethostbyname",
+            side_effect=(
+                (lambda host: resolved) if resolved else OSError("no resolve")
+            ),
+        ),
+    ):
+        assert trust.get_local_IP() == expected
+
+
+@pytest.mark.parametrize(
     "ip_info",
     [
         {},

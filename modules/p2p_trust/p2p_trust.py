@@ -178,11 +178,22 @@ class Trust(IModule):
         self.p2p_listen_port: int = conf.p2p_listen_port()
 
     def get_local_IP(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+        # Preferred: learn the primary local IP by opening a UDP socket
+        # toward a public address (no packets are sent). Needs a default
+        # route; air-gapped/offline networks have none, so fall back to the
+        # hostname's address (Docker's embedded DNS maps the peer hostname to
+        # its eth0 IP), then loopback.
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            return local_ip
+        except OSError:
+            try:
+                return socket.gethostbyname(socket.gethostname())
+            except OSError:
+                return "127.0.0.1"
 
     def _configure(self):
         self.trust_db = self.db.trust_db

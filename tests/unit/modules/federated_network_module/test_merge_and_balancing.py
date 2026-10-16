@@ -25,10 +25,11 @@ def test_registry_has_all_rules():
     assert set(fnm.MERGE_REGISTRY) == {
         "average",
         "trust_weighted",
-        "blending",
         "mean_with_closest",
         "proximity",
+        "distance_weighted",
     }
+    assert "blending" not in fnm.MERGE_REGISTRY
 
 
 def test_average_is_mean_of_own_and_peers():
@@ -100,11 +101,98 @@ def test_proximity_with_no_peers_returns_own():
     assert torch.allclose(out["w"], _t(5.0, 5.0))
 
 
-def test_trust_weighted_falls_back_to_average_without_trust():
+# --- trust_weighted (raw local trust; own anchored at 1) --------------------
+def test_trust_weighted_no_trust_data_treats_peers_as_fully_trusted():
+    """Missing trust entries -> weight 1 (innocent until flagged) -> the merge
+    coincides with the plain average."""
     own = {"w": _t(0.0)}
     peers = {"a": {"w": _t(4.0)}}
     out = fnm.merge_trust_weighted(own, peers, ["w"], trust={})
     assert torch.allclose(out["w"], _t(2.0))
+
+
+def test_trust_weighted_benign_peer_weighs_like_own():
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(4.0)}}
+    out = fnm.merge_trust_weighted(
+        own, peers, ["w"], trust={"a": {"trust": 1.0}}
+    )
+    assert torch.allclose(out["w"], _t(2.0))  # 50/50
+
+
+def test_trust_weighted_low_trust_peer_stays_low_even_when_alone():
+    """The user's invariant: a 0.1-trust peer does NOT inherit full influence
+    as the only peer — it weighs 0.1 against own's 1: (0 + 0.1*4)/1.1."""
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(4.0)}}
+    out = fnm.merge_trust_weighted(
+        own, peers, ["w"], trust={"a": {"trust": 0.1}}
+    )
+    assert torch.allclose(out["w"], _t(0.4 / 1.1), atol=1e-6)
+
+
+def test_trust_weighted_malicious_peer_is_excluded():
+    own = {"w": _t(1.0)}
+    peers = {"a": {"w": _t(9.0)}}
+    out = fnm.merge_trust_weighted(
+        own, peers, ["w"], trust={"a": {"trust": 0.0}}
+    )
+    assert torch.allclose(out["w"], _t(1.0))  # merged == own
+
+
+def test_trust_weighted_trust_is_clamped_and_absolute_per_peer():
+    """Out-of-range trust is clamped; each peer's weight depends only on its
+    own trust, not on the other peers (no cross-peer normalization)."""
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(1.0)}, "b": {"w": _t(1.0)}}
+    out = fnm.merge_trust_weighted(
+        own,
+        peers,
+        ["w"],
+        trust={"a": {"trust": 2.0}, "b": {"trust": -1.0}},
+    )
+    # a clamps to 1, b clamps to 0 -> (0 + 1*1 + 0*1)/(1+1) = 0.5
+    assert torch.allclose(out["w"], _t(0.5))
+
+
+# --- distance_weighted (own 1/2, peers split 1/2 proportional to distance) --
+def test_distance_weighted_own_is_half_peer_split_by_distance():
+    """own=0, peers a at dist 1, b at dist 3: w = (0.5, 0.5*1/4, 0.5*3/4);
+    merged = 0.5*0 + 0.125*1 + 0.375*3 = 1.25. Farther peer pulls MORE."""
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(1.0)}, "b": {"w": _t(3.0)}}
+    out = fnm.merge_distance_weighted(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(1.25))
+
+
+def test_distance_weighted_single_peer_is_5050():
+    own = {"w": _t(0.0)}
+    peers = {"a": {"w": _t(6.0)}}
+    out = fnm.merge_distance_weighted(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(3.0))
+
+
+def test_distance_weighted_identical_candidates_collapses_to_average():
+    own = {"w": _t(2.0, 2.0)}
+    peers = {"a": {"w": _t(2.0, 2.0)}, "b": {"w": _t(2.0, 2.0)}}
+    out = fnm.merge_distance_weighted(own, peers, ["w"])
+    assert torch.allclose(out["w"], _t(2.0, 2.0))  # sum d ~ 0 -> plain mean
+
+
+def test_distance_weighted_with_no_peers_returns_own():
+    own = {"w": _t(5.0, 5.0)}
+    out = fnm.merge_distance_weighted(own, {}, ["w"])
+    assert torch.allclose(out["w"], _t(5.0, 5.0))
+
+
+def test_distance_weighted_distance_is_flat_over_all_shared_keys():
+    """The L2 distance is computed once per peer over ALL shared tensors
+    (flat), and the same weights then apply to every key."""
+    own = {"w1": _t(0.0), "w2": _t(0.0)}
+    peers = {"a": {"w1": _t(1.0), "w2": _t(1.0)}}  # flat dist sqrt(2)
+    out = fnm.merge_distance_weighted(own, peers, ["w1", "w2"])
+    assert torch.allclose(out["w1"], _t(0.5))
+    assert torch.allclose(out["w2"], _t(0.5))
 
 
 # --------------------------------------------------------------------------

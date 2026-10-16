@@ -51,18 +51,20 @@ The imaging notes below describe the pre-rebase setup.
   final-store `{state_dict, model_class, merge_count}`). Working scaffold:
   `random_projection_two_layer` (RP + fc1 + fc2 federated, unweighted CE).
   Model set (2026-09-15): `random_projection_mlp` (base, RP→fc1→head,
-  class-weighted CE), `simple_mlp` (plain 3-layer MLP, no RP, fc1+fc2
-  federated, plain CE), `random_projection_two_layer` (RP→fc1→fc2→head,
+  class-weighted CE), `simple_mlp` (plain 2-layer MLP 18→256→16→2, the RP
+  net's neurons with a trainable first layer — no RP, fc1+fc2 federated,
+  plain CE), `random_projection_two_layer` (RP→fc1→fc2→head,
   fc1+fc2 federated, plain CE). Class weighting is a per-model declared flag
   (`USE_CLASS_WEIGHTING`).
 - Merge-rule registry (2026-09-14): yaml `merge_rule` selects HOW peer models
   are combined (never WHEN): `average` (plain mean of shared weights, default), `trust_weighted`
-  (weighted by SLIPS classic p2p trust score×confidence — trust is passed to
-  the merge functions per merge; own=1, unknown peer=0, empty map → average),
-  `blending` (adopt the single model closest to the mean); Oct 2026:
+  (RAW local trust, own anchored at 1 — each peer weighs
+  1 − clamp01(score·confidence) of OUR local threat verdict on its IP from
+  `slips_reputation`: benign/unknown → 1, confidently malicious → 0),
   `mean_with_closest` (per layer, own averaged with the closest peer; was
-  mislabeled `byzantine`) and `proximity` (per layer, Gaussian-kernel weights
-  on distance to own) — pure functions in
+  mislabeled `byzantine`), `proximity` (per layer, Gaussian-kernel weights
+  on distance to own) and `distance_weighted` (own pinned at 1/2, peers split
+  the rest proportional to their flat-L2 distance to own) — pure functions in
   the module, add-and-register to extend. Merges also log
   `merge_rule=<name>` + per-peer `trust=` into merging_data.log.
 - Aracne-side config contract: `summarizer_source`/`summarizer_model` must

@@ -73,10 +73,10 @@ dict`; add your own in the registry in the module file.
 | rule | computation |
 |------|-------------|
 | `average` (default) | plain mean of own + peers, per shared tensor |
-| `trust_weighted` | weighted mean: peer weights scale with their **SLIPS trust** (score × confidence, clipped to [0,1]; unknown-trusted peer = weight 0, own = 1). The module reads the classic p2p trust sqlite read-only and hands the map to the merge function — trust is *visible to merge rules*, scoped per merge. Empty trust map (warm-up) → falls back to plain averaging |
-| `blending` | adopt the **single real model** (own or peer) whose flat shared params are closest to the plain mean — the other models sit out |
+| `trust_weighted` | weighted blend on RAW local trust: own anchored at weight 1, each peer weighs `1 − clamp01(score·confidence)` of OUR local SLIPS threat verdict on the peer's IP (`slips_reputation` in the trust sqlite, read-only): 1 = benign/fully trusted, 0 = confidently malicious; no local verdict → 1. `merged = (own + Σ w_p·peer_p)/(1 + Σ w_p)` per shared tensor — weights are absolute, never rescaled with other peers |
 | `mean_with_closest` | per shared layer: average own (50/50) with the single **peer** layer closest to own in L2; no peers → own, one peer → plain average. Not Byzantine-robust (formerly mislabeled `byzantine`) |
 | `proximity` | per shared layer: weighted mean of own + peers with Gaussian-kernel weights `exp(-d²/2σ²)` on each candidate's L2 distance to own (own weight 1); σ = median pairwise candidate distance of that layer; σ≈0 → plain average |
+| `distance_weighted` | own pinned at 1/2, peers split the other 1/2 **proportional** to their flat-L2 distance to own (one distance per peer, latest models, fresh per merge) — farther peers pull MORE (inverse of `proximity`); identical candidates → plain average, one peer → 50/50 |
 
 ## Model Sharing Protocol
 
@@ -143,13 +143,13 @@ Shipped classes (MODEL_REGISTRY):
 | `model_class` | architecture | federated | class-weighted |
 |---|---|---|---|
 | `random_projection_mlp` (default) | RP(18→256, frozen) → fc1 256→16 → head 16→2 | fc1 | yes |
-| `simple_mlp` | Linear 18→64 → Linear 64→32 → head 32→2 (no projection) | fc1 + fc2 | no |
+| `simple_mlp` | Linear 18→256 → Linear 256→16 → head 16→2 (trainable twin of the RP net, nothing frozen) | fc1 + fc2 | no |
 | `random_projection_two_layer` | RP(18→256, frozen, same seed) → fc1 256→64 → fc2 64→32 → head 32→2 | fc1 + fc2 | no |
 
 Training is identical for all: 15 full epochs + 5-local-head + 5-merged-head
 fine-tunes on flows labeled from SLIPS alerts at each wall-clock window close
 (`time_window_width`). To add your own model: implement the protocol (copy
-`SimpleMLP3Layer`), add a `_build_<name>` fn + a line in `MODEL_REGISTRY`,
+`SimpleMLP`), add a `_build_<name>` fn + a line in `MODEL_REGISTRY`,
 set `model_class: <name>` — peers warn loudly (not crash) on class mismatch.
 
 ## Analysis Outputs (telemetry in the slips output dir)

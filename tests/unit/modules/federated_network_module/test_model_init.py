@@ -143,3 +143,31 @@ def test_two_layer_second_projection_frozen_shared_and_forward(tmp_path):
     # end-to-end forward produces 2-class logits
     out = a(torch.randn(4, fnm.SimpleFederatedNet.FIXED_INPUT_DIM))
     assert out.shape == (4, 2)
+
+
+def test_simple_mlp_is_the_trainable_twin_of_rlh(tmp_path):
+    """simple_mlp: 18->256->16->2 — same neurons as R-L-H (256 from the RP
+    layer as a LEARNABLE linear, 16, head 2), no random projection, nothing
+    frozen, both linears federated."""
+    stub = SimpleNamespace(
+        rp_path=str(tmp_path / "rp.bin"), seed=SEED, input_dim=None
+    )
+    model = fnm.build_with_init_seed(
+        fnm.peer_init_seed(SEED, "slips-1"),
+        lambda: fnm._build_simple_mlp(stub),
+    )
+    assert not hasattr(model, "random_projection")
+    assert model.fc1.in_features == 18 and model.fc1.out_features == 256
+    assert model.fc2.in_features == 256 and model.fc2.out_features == 16
+    assert model.head.in_features == 16 and model.head.out_features == 2
+    # nothing frozen
+    assert all(p.requires_grad for p in model.parameters())
+    # federated tensors: the two linears (head stays local)
+    assert set(model.weights_for_sharing()) == {
+        "fc1_weight",
+        "fc1_bias",
+        "fc2_weight",
+        "fc2_bias",
+    }
+    out = model(torch.randn(4, fnm.SimpleFederatedNet.FIXED_INPUT_DIM))
+    assert out.shape == (4, 2)
