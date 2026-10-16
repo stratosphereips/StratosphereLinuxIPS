@@ -493,25 +493,27 @@ function deviceIdentity(row, field = "ip") {
   return element;
 }
 
-/** Add host names beside addresses mentioned in a detection description. */
+/** Add host names and compact MAC markers to detection descriptions. */
 function hostDescription(record, className = "") {
   const description = String(record.description || "—");
   const addresses = new Set(description.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []);
+  const macs = new Set(description.match(/(?<![\w:])(?:[0-9a-f]{1,2}:){5}[0-9a-f]{1,2}(?![\w:])/gi) || []);
   [record.attacker, record.victim].forEach((entity) => {
     if (String(entity?.ioc_type || "").toUpperCase() === "IP"
         && description.includes(entity.value)) addresses.add(entity.value);
   });
   const element = document.createElement("span");
   if (className) element.className = className;
-  if (!addresses.size) {
+  if (!addresses.size && !macs.size) {
     element.textContent = description;
     return element;
   }
-  const escaped = Array.from(addresses).sort((left, right) => right.length - left.length)
+  const escaped = Array.from(new Set([...addresses, ...macs])).sort((left, right) => right.length - left.length)
     .map((ip) => ip.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
   const matcher = new RegExp(`(${escaped.join("|")})`, "g");
   description.split(matcher).forEach((part) => {
-    if (addresses.has(part)) element.append(hostIdentity(part));
+    if (macs.has(part)) element.append(macIdentity(part));
+    else if (addresses.has(part)) element.append(hostIdentity(part));
     else element.append(part);
   });
   return element;
@@ -520,6 +522,7 @@ function hostDescription(record, className = "") {
 /** Show an indicator as a named host when it is an IP address. */
 function hostOrText(value) {
   const candidate = String(value || "");
+  if (normalizeMac(candidate)) return macIdentity(candidate);
   const ipv4 = /^(?:\d{1,3}\.){3}\d{1,3}$/.test(candidate);
   const ipv6 = /^[0-9a-fA-F:.]+$/.test(candidate)
     && (candidate.includes("::") || candidate.split(":").length === 8);
@@ -573,19 +576,24 @@ function classifyMac(value) {
   return octet & 0x02 ? "locally_administered" : "universally_administered";
 }
 
-/** Display a MAC with its verified address class and an explanatory tooltip.
+/** Display a MAC with a compact U/L marker and its full explanation on hover.
  * @param {string|null} value Candidate MAC address.
  * @returns {HTMLElement} Original address and administration/group badge.
  */
 function macIdentity(value) {
   const kind = classifyMac(value);
   const [label, description] = MAC_ADDRESS_TYPES[kind];
+  const marker = { locally_administered: "L", universally_administered: "U",
+    multicast: "M", broadcast: "B", unspecified: "0", invalid: "?" }[kind];
+  const explanation = `${label}. ${description}`;
   const node = text("span", "", "mac-identity");
-  node.title = description;
+  node.title = explanation;
   node.append(text("code", value || "—"));
-  if (kind !== "unknown") {
-    const badge = text("span", label, `mac-badge mac-${kind}`);
-    badge.title = description;
+  if (marker) {
+    const badge = text("span", marker, `mac-badge mac-${kind}`);
+    badge.title = explanation;
+    badge.setAttribute("role", "img");
+    badge.setAttribute("aria-label", explanation);
     node.append(badge);
   }
   return node;
@@ -1597,7 +1605,7 @@ function renderNetworkStates(networkStates) {
     router.append(text("span", "Router"), hostIdentity(network.gateway_ip));
     facts.append(router);
     const mac = text("div", "", "network-fact");
-    mac.append(text("span", "Router MAC"), text("code", network.gateway_mac || "Unknown"));
+    mac.append(text("span", "Router MAC"), macIdentity(network.gateway_mac));
     facts.append(mac);
     const dns = text("div", "", "network-fact");
     dns.append(text("span", "DNS"));
@@ -1676,7 +1684,7 @@ function logSeverity(record) {
 /** Append safe, lightly highlighted log text to a console line. */
 function appendHighlightedLogText(container, value) {
   const content = String(value || "");
-  const tokenPattern = /(\b(?:critical|fatal|panic|traceback|exception|error|failed|failure|warning|warn)\b|(?:\/[\w.@-]+)+(?:\.py)?(?::\d+)?|\b(?:\d{1,3}\.){3}\d{1,3}\b)/gi;
+  const tokenPattern = /((?<![\w:])(?:[0-9a-f]{1,2}:){5}[0-9a-f]{1,2}(?![\w:])|\b(?:critical|fatal|panic|traceback|exception|error|failed|failure|warning|warn)\b|(?:\/[\w.@-]+)+(?:\.py)?(?::\d+)?|\b(?:\d{1,3}\.){3}\d{1,3}\b)/gi;
   let offset = 0;
   for (const match of content.matchAll(tokenPattern)) {
     if (match.index > offset) {
@@ -1685,7 +1693,7 @@ function appendHighlightedLogText(container, value) {
     const token = match[0];
     const className = token.startsWith("/") || /^\d{1,3}(?:\.\d{1,3}){3}$/.test(token)
       ? "log-token-reference" : "log-token-alert";
-    container.append(text("span", token, className));
+    container.append(normalizeMac(token) ? macIdentity(token) : text("span", token, className));
     offset = match.index + token.length;
   }
   if (offset < content.length) {
@@ -1751,7 +1759,11 @@ function renderLogs(payload) {
     (row) => formatTime(row.event_time),
     (row) => text("span", logSeverity(row), `log-level ${logSeverity(row)}`),
     (row) => text("code", row.module, "log-module"),
-    (row) => text("span", row.message, `log-message ${logSeverity(row)}`),
+    (row) => {
+      const message = text("span", "", `log-message ${logSeverity(row)}`);
+      appendHighlightedLogText(message, row.message);
+      return message;
+    },
   ], openLog);
 }
 
@@ -3776,7 +3788,7 @@ function renderWhitelists() {
   byId("whitelists-count").textContent = `${rows.length} shown · ${payload.total} parsed local rules`;
   renderTable("whitelists-table", rows, [
     (row) => text("span", row.type, "type-chip"),
-    (row) => text("code", row.value),
+    (row) => row.type === "MAC address" ? macIdentity(row.value) : text("code", row.value),
     (row) => row.type === "Request URI" ? "Request" : row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
     (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
     (row) => row.evidence_type || "All",
@@ -3940,7 +3952,7 @@ function renderArpPoisoning() {
       (row) => row.current_tw ?? "—",
       (row) => row.release_tw ?? "—",
       (row) => row.extra_timewindows ?? "—",
-      (row) => text("code", row.mac || "—"),
+      (row) => macIdentity(row.mac),
     ], (row) => openHost(row.ip));
   renderTable("arp-poisoning-events-table",
     sortLocalRows("arp-poisoning-events-table", events), [
@@ -4454,7 +4466,12 @@ function renderHostsPage() {
     (row) => {
       const value = document.createElement("span");
       value.className = "hosts-mac-vendor";
-      value.append(macIdentity(row.mac), text("small", row.mac_vendor || ""));
+      if (row.mac_vendor) {
+        const vendor = text("strong", row.mac_vendor);
+        vendor.title = row.mac_vendor;
+        value.append(vendor);
+      }
+      value.append(macIdentity(row.mac));
       return value;
     },
     (row) => text("span", row.scope || "—", `hosts-scope-${row.scope || "unknown"}`),
@@ -5109,7 +5126,7 @@ function flowFieldList(flow, displayedFields = []) {
         const label = text("th", key.replaceAll("_", " "));
         label.scope = "row";
         const cell = text("td", "");
-        cell.append(!hidden && /^(?:smac|dmac|src_hw|dst_hw|mac|mac_addr)$/.test(key)
+        cell.append(!hidden && /^(?:[sd]mac|(?:src|dst|sender|target)_hw|(?:src|dst|client|server|gateway)_mac|mac(?:_addr(?:ess)?)?)$/i.test(key)
           ? macIdentity(value) : document.createTextNode(hidden ? "—" : protocolValueText(key, value)));
         if (pair.length === 1) cell.colSpan = 3;
         row.append(label, cell);
@@ -5738,9 +5755,12 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
       .map((fact) => String(fact.value || "").toLowerCase())
       .find((mac) => /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(mac)
         && mac !== "00:00:00:00:00:00" && !(parseInt(mac.slice(0, 2), 16) & 1));
-    const nameScope = text("small", deviceMac && profile.network_id !== "public"
-      ? `Name and note follow MAC ${deviceMac} across its observed IP addresses.`
-      : "No device MAC recorded. Name and note are saved on this network profile; a confirmed mDNS hostname can link addresses with unknown MACs.", "muted host-name-scope");
+    const nameScope = text("small", "", "muted host-name-scope");
+    if (deviceMac && profile.network_id !== "public") {
+      nameScope.append("Name and note follow MAC ", macIdentity(deviceMac), " across its observed IP addresses.");
+    } else {
+      nameScope.textContent = "No device MAC recorded. Name and note are saved on this network profile; a confirmed mDNS hostname can link addresses with unknown MACs.";
+    }
     const noteLabel = text("label", "Note");
     const noteInput = document.createElement("textarea");
     noteInput.maxLength = 1000;
@@ -6001,7 +6021,9 @@ function renderHostScope(host) {
   const status = scoped && capture ? host.seen_on_current_network
     ? `Observed on ${label}` : `No observed activity on ${label}`
     : `${identityNetwork} · ${host.live ? "live metadata" : "saved metadata"}`;
-  byId("host-subtitle").textContent = `${host.scope || "unknown scope"} · ${status} · ${host.mac || "MAC unknown"} · ${host.mac_vendor || "vendor unknown"}`;
+  byId("host-subtitle").replaceChildren(
+    document.createTextNode(`${host.scope || "unknown scope"} · ${status} · ${host.mac_vendor || "vendor unknown"} · `),
+    host.mac ? macIdentity(host.mac) : document.createTextNode("MAC unknown"));
   byId("host-saved-history-label").textContent = scoped
     ? "History · saved identity clues from all networks" : "All saved identity clues and network names";
   const notice = byId("host-network-scope-note");
@@ -6055,7 +6077,6 @@ function renderHostCards(host) {
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
       detailRow("MAC", macIdentity(host.mac)),
-      detailRow("MAC assignment", MAC_ADDRESS_TYPES[classifyMac(host.mac)][1]),
       detailRow("Vendor", host.mac_vendor || "Unknown"),
       detailRow("DNS", host.dns?.domains?.[0] || "No A/AAAA record"),
     );

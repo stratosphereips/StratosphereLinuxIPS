@@ -18,6 +18,103 @@ from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
 
 
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_compact_mac_markers_across_views_in_chrome(theme: str) -> None:
+    """Keep names legible and MAC markers compact across structured views.
+
+    Parameters:
+        theme: Browser color theme, including the daylight theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve the shipped interface without contacting a running analysis.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1000})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof renderHostsPage === 'function'")
+        page.evaluate("""theme => {
+            setTheme(theme); state.activeTab='hosts'; state.networkOnly=false;
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='hosts'));
+            state.pages.hosts.items=[
+                {ip:'192.168.1.20', user_name:'Kitchen Pi', mac:'88:a2:9e:5e:93:42', mac_vendor:'Raspberry Pi (Trading) Ltd'},
+                {ip:'192.168.1.21', user_name:'Work laptop', mac:'9c:b1:50:d4:c1:82', mac_vendor:'Intel Corporate'},
+                {ip:'192.168.1.22', user_name:'Phone', mac:'9e:94:88:be:22:01'}
+            ];
+            state.pages.hosts.items.forEach(rememberHostRecord); renderHostsPage();
+        }""", theme)
+        assert "Kitchen Pi" in page.locator("#hosts-table tbody tr").first.inner_text()
+        assert page.locator("#hosts-table .mac-badge").all_text_contents() == ["U", "U", "L"]
+        assert "Locally administered" not in page.locator("#hosts-table").inner_text()
+        local = page.locator("#hosts-table .mac-locally_administered")
+        universal = page.locator("#hosts-table .mac-universally_administered").first
+        local.hover()
+        assert "Locally administered" in local.get_attribute("title")
+        assert "Randomization cannot be determined" in local.get_attribute("aria-label")
+        assert "Universally administered" in universal.get_attribute("title")
+        assert local.evaluate("node => getComputedStyle(node).color") != universal.evaluate("node => getComputedStyle(node).color")
+        for width in (1200, 1800):
+            page.set_viewport_size({"width": width, "height": 1000})
+            cell = page.locator("#hosts-table tbody tr").first.locator("td").nth(1)
+            vendor = cell.locator("strong")
+            address = cell.locator(".mac-identity")
+            assert vendor.inner_text() == "Raspberry Pi (Trading) Ltd"
+            assert vendor.bounding_box()["y"] < address.bounding_box()["y"]
+            assert address.bounding_box()["height"] < 24
+            assert cell.locator(".mac-badge").bounding_box()["width"] < 18
+            assert address.bounding_box()["x"] + address.bounding_box()["width"] <= cell.bounding_box()["x"] + cell.bounding_box()["width"]
+        page.screenshot(path=f"output/compact-mac-{theme}.png")
+        page.evaluate("""() => {
+            const profile={ip:'192.168.1.20', network_id:'home', network_label:'Home',
+                facts:[{kind:'mac', value:'88:a2:9e:5e:93:42', last_seen:100}]};
+            renderHostCards({ip:profile.ip, user_name:'Kitchen Pi', mac:'88:a2:9e:5e:93:42',
+                mac_vendor:'Raspberry Pi (Trading) Ltd', permanent_profiles:[profile], annotation_profile:profile});
+            renderNetworkStates([{interface:'en0', connected:true, gateway_mac:'d8:58:d7:00:67:11'}]);
+            state.whitelists={rules:[{type:'MAC address',value:'A2:D7:7B:FA:6A:55'}],total:1}; renderWhitelists();
+            state.arpPoisoning={hosts:[{ip:'192.168.1.20',mac:'88:a2:9e:5e:93:42'}],events:[],evidence:[],counts:{hosts:1}};
+            renderArpPoisoning();
+            byId('evidence-detail-content').replaceChildren(flowFieldList({
+                client_mac:'A2:D7:7B:FA:6A:55',gateway_mac:'d8:58:d7:00:67:11'}));
+            byId('evidence-detail-content').append(hostDescription({description:
+                'MAC 9e:94:88:be:22:01 and 88:a2:9e:5e:93:42 at 192.168.1.20; fe80:aa:bb:cc:dd:ee:ff:00'}, 'test-mac-description'));
+            const indicator=hostOrText('9e:94:88:be:22:01'); indicator.id='test-mac-indicator';
+            byId('evidence-detail-content').append(indicator);
+            renderLogs({items:[{event_time:100,module:'main',message:'Gateway MAC d8:58:d7:0:67:11'}],total:1});
+        }""")
+        for selector, expected in [("#host-subtitle", "U"), ("#host-identity", "U"),
+            ("#host-permanent-profiles .host-profile-facts", "U"), (".host-name-scope", "U"),
+            ("#network-states", "U"), ("#whitelists-table", "L"), ("#arp-poisoning-hosts-table", "U")]:
+            assert page.locator(f"{selector} .mac-badge").first.text_content() == expected
+        assert "MAC assignment" not in page.locator("#host-identity").inner_text()
+        assert page.locator("#evidence-detail-content .evidence-flow-fields .mac-badge").all_text_contents() == ["L", "U"]
+        assert page.locator(".test-mac-description .mac-badge").all_text_contents() == ["L", "U"]
+        assert page.locator("#test-mac-indicator .mac-badge").text_content() == "L"
+        assert page.locator("#logs-table .mac-badge").text_content() == "U"
+        assert errors == []
+        browser.close()
+
+
 def test_host_findings_range_and_saved_filters_in_chrome(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -569,8 +666,8 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert "192.168.1.20" in arp.locator(".protocol-field").nth(1).inner_text()
         assert "DADDR" not in page.locator(".evidence-flow-fields").inner_text()
         assert arp.locator(".mac-locally_administered").count() == 2
-        assert arp.locator(".mac-broadcast").inner_text() == "Broadcast"
-        assert arp.locator(".mac-unspecified").inner_text() == "Unspecified"
+        assert arp.locator(".mac-broadcast").inner_text() == "B"
+        assert arp.locator(".mac-unspecified").inner_text() == "0"
         assert "Randomization cannot be determined" in arp.locator(".mac-locally_administered").first.get_attribute("title")
         assert errors == []
         page.evaluate("""host => {
@@ -584,7 +681,7 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         form.get_by_label("Review mark", exact=True).select_option("to_analyze")
         form.get_by_label("Labels (comma separated)", exact=True).fill("dns, lab")
         form.get_by_label("Custom name", exact=True).fill("My laptop")
-        assert "Name and note follow MAC 02:00:00:00:00:20" in form.inner_text()
+        assert "Name and note follow MAC 02:00:00:00:00:20" in form.locator(".host-name-scope").text_content()
         form.get_by_label("Note", exact=True).fill("Inspect tomorrow")
         form.get_by_role("button", name="Save host review", exact=True).click()
         page.wait_for_function("state.host.user_status === 'to_analyze'")
@@ -602,8 +699,10 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert "To analyze" in page.locator("#host-identity").inner_text()
         assert "dns, lab" in page.locator("#host-identity").inner_text()
         assert "02:00:00:00:00:20" in page.locator("#host-identity").inner_text()
-        assert "Locally administered" in page.locator("#host-identity").inner_text()
-        assert "Randomization cannot be determined" in page.locator("#host-identity").inner_text()
+        identity_marker = page.locator("#host-identity > .detail-row > .mac-identity .mac-locally_administered")
+        assert identity_marker.inner_text() == "L"
+        assert "Randomization cannot be determined" in identity_marker.get_attribute("title")
+        assert "MAC assignment" not in page.locator("#host-identity").inner_text()
         for device in (False, True):
             page.evaluate("""device => {
                 state.deviceView=device;
@@ -611,7 +710,7 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
                     device_ips:['192.168.1.20','fe80::20']}];
                 renderHostsPage();
             }""", device)
-            assert page.locator("#hosts-table .mac-locally_administered").inner_text() == "Locally administered"
+            assert page.locator("#hosts-table .mac-locally_administered").inner_text() == "L"
         page.locator("#host-whitelist-action").click()
         assert page.locator("#drawer .whitelist-form input[list]").input_value() == "192.168.1.20"
         page.locator("#drawer .whitelist-form").get_by_role("button", name="Add rule", exact=True).click()

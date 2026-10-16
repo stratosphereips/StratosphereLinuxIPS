@@ -800,8 +800,12 @@ background module, outside the main analysis loop.
 
 ### MAC address administration
 
-The Hosts/Devices inventory, host Identity card, saved MAC clues, and MAC
-fields in flow details show the address classification. The host/device APIs
+Every structured MAC display uses a small colored **L** (locally administered)
+or **U** (universally administered) marker beside the address. Hover over the
+marker or address for the full explanation. The inventory gives the vendor
+name priority, followed by the MAC and marker. This also applies to host
+headers, Identity cards, saved MAC clues, router addresses, whitelist rules,
+ARP poisoning tables, and MAC fields in flow details. The host/device APIs
 include `mac_address_type`, and the Hosts CSV includes the same field. Search
 the inventory for **locally administered** or **universally administered**.
 These values are derived from existing MACs, including retained snapshots;
@@ -818,8 +822,9 @@ Local administration can mean a private/randomized Wi-Fi address, a manual
 assignment, or a virtual interface. **The bits cannot prove randomization.**
 The web explanation makes that limit explicit. With U/L zero, the label is
 **Universally administered**; this describes the address format and does not
-prove that the address is authentic or unchanged. Broadcast, multicast,
-all-zero/unspecified, invalid, and missing MACs have separate labels.
+prove that the address is authentic or unchanged. Group addresses have **B**
+(broadcast) or **M** (multicast) markers; all-zero addresses use **0** and invalid
+addresses use **?**. Their explanations are also available on hover.
 
 IP Info skips manufacturer-prefix lookup for locally administered and group
 addresses; their prefixes do not establish an IEEE hardware manufacturer.
