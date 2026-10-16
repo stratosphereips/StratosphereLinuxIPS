@@ -416,6 +416,23 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .flow-metric { min-width: 0; padding: .55rem .65rem; border: 1px solid #203443; border-radius: 7px; }
 .flow-metric small { display: block; color: var(--muted); font-size: .63rem; text-transform: uppercase; }
 .flow-metric strong { display: block; margin-top: .2rem; overflow-wrap: anywhere; color: var(--text); font-size: .76rem; }
+.host-flow-inspector { container: host-flow / inline-size; }
+.host-flow-context, .host-flow-protocol-status { display: flex; align-items: center; flex-wrap: wrap; gap: .4rem .65rem; margin-bottom: .75rem; font-size: .75rem; }
+.host-flow-protocol-status { justify-content: space-between; }
+.host-flow-inspector .flow-card-head { flex-wrap: wrap; font-size: .8rem; }
+.host-flow-inspector .flow-related-count { color: var(--muted); font-size: .72rem; }
+.host-flow-inspector .flow-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.host-flow-inspector .protocol-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.host-flow-inspector .evidence-flow-table th { position: static; }
+@container host-flow (max-width: 480px) {
+  .host-flow-inspector .flow-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .host-flow-inspector .flow-path, .host-flow-inspector .protocol-details { grid-template-columns: minmax(0, 1fr); }
+  .host-flow-inspector .flow-endpoint:last-child { text-align: left; }
+  .host-flow-inspector .flow-arrow { justify-self: start; transform: rotate(90deg); }
+  .host-flow-inspector .evidence-flow-table, .host-flow-inspector .evidence-flow-table tbody { display: block; }
+  .host-flow-inspector .evidence-flow-table tr { display: grid; grid-template-columns: minmax(0, .7fr) minmax(0, 1.3fr); }
+  .host-flow-inspector .evidence-flow-table th, .host-flow-inspector .evidence-flow-table td { width: auto; }
+}
 .flow-group { border-left: 3px solid var(--accent); background: #101c25; }
 .network-flow-chip { background: #43c7b51c; color: var(--accent); }
 .flow-missing { margin: .5rem 0 0; padding: .75rem .85rem; border-left: 3px solid var(--warn); background: #2a2418; color: #e5d7b8; }

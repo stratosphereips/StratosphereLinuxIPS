@@ -3045,6 +3045,86 @@ def test_flows_for_evidence_falls_back_to_evidence_uids(tmp_path) -> None:
     assert result["protocol_flow_total"] == 0
 
 
+@pytest.mark.parametrize("primary", [True, False])
+@pytest.mark.parametrize("protocol_count", [0, 23])
+def test_flow_details_reads_only_selected_uid_with_protocol_pages(
+    tmp_path: Path, primary: bool, protocol_count: int,
+) -> None:
+    """Keep primary data and every related record accessible through bounded reads.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        primary: Whether the connection record was retained.
+        protocol_count: Number of retained protocol records sharing the UID.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    uid = "C'selected/flow+%"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript("CREATE TABLE flows(uid TEXT,flow TEXT,label TEXT);"
+            "CREATE INDEX flow_uid ON flows(uid);"
+            "CREATE TABLE altflows(uid TEXT,flow TEXT,flow_type TEXT);"
+            "CREATE INDEX alt_uid ON altflows(uid);")
+        if primary:
+            connection.execute("INSERT INTO flows VALUES (?,?,'malicious')", (uid, json.dumps({"saddr":"fe80::1", "daddr":"ff02::fb", "dport":5353})))
+        for index in range(protocol_count):
+            connection.execute("INSERT INTO altflows VALUES (?,?,'dns')", (uid, json.dumps({"query":f"query-{index}.local"})))
+        connection.execute("INSERT INTO altflows VALUES ('unrelated','{}','http')")
+
+    page = reader.flow_details(uid, {})
+    assert page["uid"] == uid
+    assert bool(page["network_flow"]) is primary
+    if primary:
+        assert page["network_flow"]["label"] == "malicious"
+        assert page["network_flow"]["flow"]["dport"] == 5353
+    assert page["protocol_flow_total"] == protocol_count
+    assert len(page["protocol_flows"]) == min(protocol_count, 20)
+    assert all(record["uid"] == uid and record["table"] == "altflows" for record in page["protocol_flows"])
+    if protocol_count:
+        second = reader.flow_details(uid, {"cursor":[page["next_cursor"]]})
+        assert [row["flow"]["query"] for row in second["protocol_flows"]] == [f"query-{index}.local" for index in range(20, protocol_count)]
+        assert second["next_cursor"] is None
+    else:
+        assert page["next_cursor"] is None
+    assert reader.flow_details("missing", {})["protocol_flows"] == []
+
+
+@pytest.mark.parametrize("limit,expected", [("bad",20),("0",1),("999",100)])
+def test_flow_details_bounds_protocol_request(
+    tmp_path: Path, limit: str, expected: int,
+) -> None:
+    """Bound protocol work even for invalid or oversized request limits.
+
+    Parameters:
+        tmp_path: Isolated legacy database containing only alternative flows.
+        limit: Requested protocol page size.
+        expected: Maximum returned records for the request.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE TABLE altflows(uid TEXT,flow TEXT,flow_type TEXT)")
+        connection.executemany("INSERT INTO altflows VALUES ('u','{}','dns')", [()] * 105)
+    result = reader.flow_details("u", {"limit":[limit]})
+    assert result["network_flow"] is None
+    assert len(result["protocol_flows"]) == expected
+    assert result["next_cursor"] == str(expected)
+
+
+def test_flow_details_route_decodes_uid_and_preserves_pagination() -> None:
+    """Forward a URL-encoded flow UID and its protocol paging parameters."""
+    _module_factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    handler.server.reader.flow_details.return_value = {"uid":"C/unsafe+%"}
+    handler.server.reader.response_metadata.return_value = {}
+    query = {"limit":["20"],"cursor":["40"]}
+    assert handler._api_response("/api/flows/C%2Funsafe%2B%25", query)["uid"] == "C/unsafe+%"
+    handler.server.reader.flow_details.assert_called_once_with("C/unsafe+%", query)
+
+
 def test_flows_for_evidence_reads_durable_conn_and_altflows(tmp_path) -> None:
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)

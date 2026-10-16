@@ -4734,7 +4734,7 @@ function renderDnsDetails(dns) {
 }
 /** Cancel requests whose results belong exclusively to drawer content. */
 function cancelDrawerRequests() {
-  ["alertDetail", "alertGroup", "evidenceGroup"].forEach((key) =>
+  ["alertDetail", "alertGroup", "evidenceGroup", "hostFlowDetail"].forEach((key) =>
     state.requests.get(key)?.abort());
 }
 
@@ -5184,9 +5184,10 @@ function flowFieldList(flow, displayedFields = []) {
  * @param {object} group Connection and related protocol records sharing a UID.
  * @param {number} position Position of this flow in the evidence.
  * @param {number} total Total triggering flows shown for the evidence.
+ * @param {string|null} title Optional heading outside an evidence investigation.
  * @returns {HTMLElement} Complete flow inspector.
  */
-function flowCard(group, position = 1, total = 1) {
+function flowCard(group, position = 1, total = 1, title = null) {
   if (group.network_flow === undefined && group.protocol_flows === undefined) {
     group = group.table === "altflows"
       ? { uid: group.uid, network_flow: null, protocol_flows: [group] }
@@ -5203,7 +5204,7 @@ function flowCard(group, position = 1, total = 1) {
   const heading = document.createElement("div");
   heading.className = "flow-card-head";
   const uid = group.uid || record?.uid || flow.uid || "Unknown UID";
-  heading.append(text("strong", `Triggering flow · ${position} of ${total}`));
+  heading.append(text("strong", title || `Triggering flow · ${position} of ${total}`));
   if (related.length) heading.append(text("span", `${related.length} related protocol ${related.length === 1 ? "flow" : "flows"}`, "flow-related-count"));
   const flowActions = document.createElement("div");
   flowActions.className = "evidence-flow-actions";
@@ -6448,6 +6449,74 @@ async function loadHostFlows() {
   renderHostFlows();
 }
 
+/** Inspect a host-table flow with the shared connection and protocol cards.
+ * @param {object} row Selected host flow, including its indexed context and raw data.
+ */
+async function openHostFlow(row) {
+  const title = [row.app_proto, row.proto].filter(Boolean).join(" · ").toUpperCase();
+  openDrawer("FLOW", `${title || "Flow"} · ${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`);
+  const container = document.createElement("section");
+  container.className = "host-flow-inspector";
+  const context = document.createElement("div");
+  context.className = "host-flow-context";
+  context.append(text("span", row.direction || "Flow", "status"), text("span", "Peer", "muted"), hostIdentity(row.peer));
+  const contents = document.createElement("div");
+  const group = { uid: row.uid, protocol_flows: [], network_flow: {
+    uid: row.uid, table: "flows", event_time: row.event_time, label: row.label,
+    flow: Object.keys(row.raw || {}).length ? row.raw : {
+      uid: row.uid, starttime: row.event_time, saddr: row.src_ip, daddr: row.dst_ip,
+      sport: row.src_port, dport: row.dst_port, proto: row.proto, appproto: row.app_proto,
+      state: row.state, dur: row.duration, pkts: row.packets, bytes: row.bytes,
+    },
+  } };
+  contents.append(flowCard(group, 1, 1, "Connection details"));
+  const footer = document.createElement("div");
+  footer.className = "host-flow-protocol-status";
+  const status = text("span", "Loading related protocol records…", "muted");
+  status.setAttribute("role", "status");
+  const more = text("button", "Load related protocol records", "secondary");
+  more.type = "button";
+  footer.append(status, more);
+  container.append(context, contents, footer);
+  byId("drawer-body").append(container);
+  let cursor = null;
+  const loadProtocols = async () => {
+    const generation = state.drawerGeneration;
+    more.disabled = true;
+    try {
+      const params = new URLSearchParams({ limit: "20" });
+      if (cursor) params.set("cursor", cursor);
+      const payload = await api("hostFlowDetail", `/api/flows/${escapePath(row.uid)}?${params}`, false, true);
+      if (!payload || generation !== state.drawerGeneration || !container.isConnected) return;
+      if (payload.not_found) throw new Error("Flow detail endpoint unavailable");
+      if (payload.network_flow && Object.keys(payload.network_flow.flow || {}).length) {
+        group.network_flow = payload.network_flow;
+      }
+      group.protocol_flows.push(...(payload.protocol_flows || []));
+      cursor = payload.next_cursor;
+      const active = contents.querySelector('[role="tab"].active')?.textContent;
+      contents.replaceChildren(flowCard(group, 1, 1, "Connection details"));
+      if (active) [...contents.querySelectorAll('[role="tab"]')]
+        .find((tab) => tab.textContent === active)?.click();
+      const total = numeric(payload.protocol_flow_total);
+      status.textContent = total
+        ? `${group.protocol_flows.length} of ${compact(total)} related protocol records loaded`
+        : "No related protocol records were stored for this UID.";
+      more.textContent = "Load more protocol records";
+      more.hidden = !cursor;
+    } catch (_) {
+      if (generation !== state.drawerGeneration || !container.isConnected) return;
+      status.textContent = "Related protocol records could not be loaded. The connection details remain available.";
+      more.textContent = "Retry loading protocol records";
+      more.hidden = false;
+    } finally {
+      more.disabled = false;
+    }
+  };
+  more.addEventListener("click", loadProtocols);
+  await loadProtocols();
+}
+
 /** Sort and render the currently loaded host flow page.
  * Later pages keep their own cursor and can be loaded with the existing pager.
  */
@@ -6470,17 +6539,7 @@ function renderHostFlows() {
     (row) => `${numeric(row.duration).toFixed(3)} s`,
     (row) => row.label || "—",
     (row) => row.linked_threat_level ? threat(row.linked_threat_level) : "—",
-  ], (row) => {
-    openDrawer("FLOW", row.uid);
-    byId("drawer-body").append(
-      detailRow("Direction", row.direction),
-      detailRow("Peer", hostIdentity(row.peer)),
-      detailRow("Source", hostLink(row.src_ip)),
-      detailRow("Destination", hostLink(row.dst_ip)),
-      detailRow("Ports", `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`),
-      rawBlock(row.raw, "flow"),
-    );
-  });
+  ], openHostFlow);
   addHostTableGroups("flows", "host-flows-table", rows);
   filterVisibleHostFlows();
   pager("hostFlows", "host-flows-pager", loadHostFlows);

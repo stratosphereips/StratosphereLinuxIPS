@@ -4298,6 +4298,63 @@ class RunDataReader:
                     continue
         return len(recovered)
 
+    def flow_details(
+        self, uid: str, query: Dict[str, List[str]]
+    ) -> Dict[str, Any]:
+        """Read one connection and a bounded page of its protocol records.
+
+        Parameters:
+            uid: Exact flow UID selected in the host table.
+            query: Optional protocol page limit and last row-ID cursor.
+
+        Returns:
+            Flow group with protocol pagination and the retained record count.
+        """
+        try:
+            limit = max(
+                1, min(int(self._query_value(query, "limit") or 20), 100)
+            )
+            after = max(0, int(self._query_value(query, "cursor") or 0))
+        except ValueError:
+            limit, after = 20, 0
+        result = {
+            "uid": uid,
+            "network_flow": None,
+            "protocol_flows": [],
+            "protocol_flow_total": 0,
+            "next_cursor": None,
+        }
+        with self._connect_sqlite() as connection:
+            if self._table_exists(connection, "flows"):
+                row = connection.execute(
+                    "SELECT * FROM flows WHERE uid=? LIMIT 1", (uid,)
+                ).fetchone()
+                if row:
+                    record = dict(row)
+                    record["flow"] = self._loads(record.get("flow"), {})
+                    record["table"] = "flows"
+                    result["network_flow"] = record
+            if self._table_exists(connection, "altflows"):
+                result["protocol_flow_total"] = connection.execute(
+                    "SELECT COUNT(*) FROM altflows WHERE uid=?", (uid,)
+                ).fetchone()[0]
+                rows = connection.execute(
+                    "SELECT rowid AS protocol_rowid, * FROM altflows "
+                    "WHERE uid=? AND rowid>? ORDER BY rowid LIMIT ?",
+                    (uid, after, limit + 1),
+                ).fetchall()
+                if len(rows) > limit:
+                    result["next_cursor"] = str(
+                        rows[limit - 1]["protocol_rowid"]
+                    )
+                for row in rows[:limit]:
+                    record = dict(row)
+                    record.pop("protocol_rowid", None)
+                    record["flow"] = self._loads(record.get("flow"), {})
+                    record["table"] = "altflows"
+                    result["protocol_flows"].append(record)
+        return result
+
     def flows_for_evidence(
         self, evidence_id: str, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -9393,6 +9450,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.alerts(query)
         elif path == "/api/evidence":
             payload = reader.evidence(query)
+        elif path.startswith("/api/flows/"):
+            uid = unquote(path[len("/api/flows/") :])
+            payload = reader.flow_details(uid, query)
         elif path == "/api/hosts":
             payload = reader.hosts(query)
         elif path == "/api/host-names":

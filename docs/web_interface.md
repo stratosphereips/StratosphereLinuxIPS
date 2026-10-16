@@ -868,6 +868,8 @@ DNS resolution context is shown as structured fields: domains pointing to the se
 
 In the default Host view, traffic, scores, alerts, and evidence match only the selected Slips profile IP. In Device view, local addresses with the same verified MAC are combined for traffic, alerts, and evidence. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
+Selecting a host flow opens the resizable investigation panel with the same flow cards used in evidence details: named source and destination endpoints, ports, connection metrics, compact additional fields, a copyable UID, and expandable complete JSON. Related DNS, HTTP, TLS, and other protocol records sharing that UID load only when the panel opens, in pages of 20. **Load more protocol records** keeps additional records accessible without enlarging the initial host-table response. Protocol tabs and JSON are built only when selected or expanded. Closing or switching the panel cancels the request; connection details remain readable if loading related records fails. The panel supports both themes and narrow widths.
+
 Native horizontal and vertical port-scan evidence links at most 20 contributing
 non-established connection UIDs. The interface identifies this limit when a
 scan is opened; other evidence types retain all of their triggering-flow links.

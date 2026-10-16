@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 from types import SimpleNamespace
@@ -16,6 +17,165 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: str) -> None:
+    """Inspect host flows with readable cards, related records, JSON and resizing.
+
+    Parameters:
+        tmp_path: Isolated retained flow database.
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    source = "fe80::4c79:8745:56b3:21b5"
+    flows = [
+        {"uid":"CaT8UtWwR1tbb8k7b", "starttime":100, "saddr":source, "daddr":"ff02::fb",
+         "sport":5353, "dport":5353, "proto":"udp", "appproto":"dns", "dur":8.1939,
+         "pkts":6,"bytes":1027,"state":"S0","smac":"b8:7b:d4:97:ce:be","dmac":"33:33:00:00:00:fb","history":"D","empty_field":""},
+        {"uid":"http-flow", "starttime":90,"saddr":source,"daddr":"192.0.2.10","sport":50000,"dport":80,"proto":"tcp","appproto":"http","pkts":10,"bytes":2000},
+        {"uid":"tls-flow", "starttime":80,"saddr":"2001:db8::10","daddr":source,"sport":443,"dport":50001,"proto":"tcp","appproto":"ssl","pkts":4,"bytes":500},
+        {"uid":"plain-flow", "starttime":70,"saddr":source,"daddr":"192.0.2.11","sport":2000,"dport":2001,"proto":"udp","pkts":1,"bytes":5},
+    ]
+    rows = [{"uid":flow["uid"],"raw":flow,"event_time":flow["starttime"],"src_ip":flow["saddr"],"dst_ip":flow["daddr"],
+        "src_port":flow["sport"],"dst_port":flow["dport"],"proto":flow["proto"],"app_proto":flow.get("appproto",""),
+        "direction":"inbound" if flow["uid"] == "tls-flow" else "outbound", "peer":flow["saddr"] if flow["uid"] == "tls-flow" else flow["daddr"],
+        "state":flow.get("state",""),"packets":flow["pkts"],"bytes":flow["bytes"],"duration":flow.get("dur",0),"label":"benign"} for flow in flows]
+    rows[-1]["raw"] = {}
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript("CREATE TABLE flows(uid TEXT PRIMARY KEY,flow TEXT,label TEXT);"
+            "CREATE TABLE altflows(uid TEXT,flow TEXT,flow_type TEXT);CREATE INDEX alt_uid ON altflows(uid);")
+        connection.executemany("INSERT INTO flows VALUES (?,?,'benign')", [(flow["uid"],json.dumps(flow)) for flow in flows])
+        connection.execute("UPDATE flows SET flow='{}' WHERE uid='plain-flow'")
+        for index in range(23):
+            connection.execute("INSERT INTO altflows VALUES (?,?,'dns')", (flows[0]["uid"],json.dumps({"uid":flows[0]["uid"],"query":f"printer-{index}.local","answers":["192.168.1.20"],"rcode_name":"NOERROR"})))
+        connection.execute("INSERT INTO altflows VALUES ('http-flow',?,'http')", (json.dumps({"host":"example.test","uri":"/status","method":"GET","status_code":200}),))
+        connection.execute("INSERT INTO altflows VALUES ('tls-flow',?,'ssl')", (json.dumps({"server_name":"secure.example.test","version":"TLSv13","validation_status":"ok"}),))
+    requests: list[str] = []
+    errors: list[str] = []
+    held: list[Any] = []
+    fail_http = False
+
+    def route_request(route: Any) -> None:
+        """Read selected flow details without touching a running capture.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path.startswith("/api/flows/"):
+            uid = unquote(parsed.path[len("/api/flows/"):])
+            requests.append(uid)
+            if uid == "slow-flow":
+                held.append(route)
+            elif uid == "http-flow" and fail_http:
+                route.fulfill(status=404, json={"error":"Temporarily unavailable"})
+            else:
+                route.fulfill(json=reader.flow_details(uid, parse_qs(parsed.query)))
+        elif parsed.path == "/api/host-names":
+            route.fulfill(json={"names":{source:{"name":"Android","source":"User name"}}})
+        else:
+            route.fulfill(status=503, json={"error":"Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width":1600,"height":1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof openHostFlow === 'function'")
+        page.evaluate("""data => {
+            setTheme(data.theme); state.activeTab='hosts'; state.host={ip:data.source};
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='hosts'));
+            byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+            state.pages.hostFlows.items=data.rows; state.pages.hostFlows.total=data.rows.length;
+            rememberHostName(data.source,'Android','User name');
+            showHostActivity('flows'); renderHostFlows();
+            Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText:async value => {window.testCopied=value;}}});
+        }""", {"theme":theme,"rows":rows,"source":source})
+        assert requests == []
+        table = page.locator("#host-flows-table")
+        table.locator("tbody tr").first.click()
+        page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('20 of 23')")
+        page.evaluate("clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer); clearError();")
+        inspector = page.locator(".host-flow-inspector")
+        assert inspector.locator(".flow-group").count() == 1
+        assert source in inspector.locator(".flow-path").inner_text()
+        assert inspector.locator(".flow-path .host-name").first.text_content() == "Android"
+        assert "ff02::fb" in inspector.locator(".flow-path").inner_text()
+        assert "Port 5353" in inspector.locator(".flow-path").inner_text()
+        assert inspector.locator(".flow-metric").count() == 9
+        assert "8.194 s" in inspector.inner_text()
+        assert "1.0 KiB" in inspector.inner_text()
+        assert inspector.locator(".json-details pre").count() == 0
+        inspector.locator(".evidence-flow-actions button").click()
+        assert page.evaluate("window.testCopied") == flows[0]["uid"]
+        inspector.get_by_role("tab",name="Related DNS · 1",exact=True).click()
+        assert "printer-0.local" in inspector.locator(".protocol-dns").inner_text()
+        assert inspector.locator(".protocol-dns").count() == 1
+        inspector.get_by_role("button",name="Load more protocol records",exact=True).click()
+        page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('23 of 23')")
+        assert inspector.get_by_role("tab",name="Related DNS · 1",exact=True).get_attribute("aria-selected") == "true"
+        inspector.get_by_role("tab",name="Related DNS · 23",exact=True).click()
+        assert "printer-22.local" in inspector.inner_text()
+        inspector.get_by_role("tab",name="conn · flow",exact=True).click()
+        assert inspector.locator(".mac-badge").all_text_contents() == ["U","M"]
+        assert "Source" not in inspector.locator(".evidence-flow-table").inner_text()
+        inspector.get_by_role("button",name="Show 1 empty fields",exact=True).click()
+        assert inspector.get_by_role("button",name="Hide 1 empty fields",exact=True).is_visible()
+        inspector.locator('[role="tabpanel"]:not([hidden]) summary').click()
+        page.wait_for_function("document.querySelector('.host-flow-inspector .json-details pre') !== null")
+        assert flows[0]["uid"] in inspector.locator(".json-details pre").inner_text()
+        page.screenshot(path=f"output/host-flow-inspector-{theme}.png")
+        handle = page.locator("#drawer-resize")
+        handle.focus()
+        before = page.locator("#drawer").bounding_box()["width"]
+        handle.press("ArrowLeft")
+        assert page.locator("#drawer").bounding_box()["width"] > before
+        page.evaluate("setDrawerWidth(440)")
+        assert inspector.locator(".flow-metrics").evaluate("node => getComputedStyle(node).gridTemplateColumns.split(' ').length") == 2
+        assert inspector.evaluate("node => node.scrollWidth <= node.clientWidth"), inspector.evaluate("node => ({width:node.clientWidth,scroll:node.scrollWidth,overflow:[...node.querySelectorAll('*')].filter(child => child.getBoundingClientRect().right > node.getBoundingClientRect().right+1).map(child => [child.tagName,child.className,child.getBoundingClientRect().width])})")
+        page.locator("#drawer-close").click()
+        assert table.locator("tbody tr").count() == 4
+        assert page.locator("#drawer-body").inner_text() == ""
+        for index, kind, expected in ((1,"http","example.test"),(2,"ssl","secure.example.test")):
+            table.locator("tbody tr").nth(index).click()
+            page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('1 of 1')")
+            inspector.get_by_role("tab",name=f"Related {kind.upper()} · 1",exact=True).click()
+            assert expected in inspector.locator(f".protocol-{kind}").inner_text()
+            page.locator("#drawer-close").click()
+        table.locator("tbody tr").nth(3).click()
+        page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('No related')")
+        assert inspector.locator(".flow-metric").count() == 9
+        assert "192.0.2.11" in inspector.locator(".flow-path").inner_text()
+        page.locator("#drawer-close").click()
+        fail_http = True
+        table.locator("tbody tr").nth(1).click()
+        page.get_by_role("button",name="Retry loading protocol records",exact=True).wait_for()
+        assert inspector.locator(".flow-path").is_visible()
+        fail_http = False
+        inspector.get_by_role("button",name="Retry loading protocol records",exact=True).click()
+        page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('1 of 1')")
+        page.locator("#drawer-close").click()
+        page.evaluate("row => {openHostFlow({...row,uid:'slow-flow'});}", rows[0])
+        page.wait_for_function("state.requests.has('hostFlowDetail')")
+        page.locator("#drawer-close").click()
+        page.wait_for_function("!state.requests.has('hostFlowDetail')")
+        for route in held:
+            with suppress(playwright.Error):
+                route.abort()
+        assert page.locator("#drawer-body").inner_text() == ""
+        assert errors == []
+        browser.close()
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
