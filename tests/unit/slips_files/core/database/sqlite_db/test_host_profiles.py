@@ -13,6 +13,151 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+def test_network_scoped_annotations_do_not_name_an_unverified_reused_ip(
+    tmp_path: Path,
+) -> None:
+    """A name from a previous network cannot label the current reused address.
+
+    Parameters:
+        tmp_path: Isolated permanent database.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    old = {
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "local_network": "192.168.1.0/24",
+    }
+    store = HostProfileStore(path, "old", lambda _: old, ["en0"])
+    store.observe_flow(
+        SimpleNamespace(
+            type_="conn",
+            interface="en0",
+            starttime=100,
+            saddr="192.168.1.112",
+            daddr="8.8.8.8",
+        )
+    )
+    HostProfileStore.set_host_annotation(
+        path,
+        "192.168.1.112",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "iPad-Storm",
+        "Tablet",
+    )
+    assert (
+        HostProfileStore.annotations_for_ips(
+            path, ["192.168.1.112"], ["gateway:aa:bb:cc:dd:ee:02"]
+        )
+        == {}
+    )
+    assert (
+        HostProfileStore.annotations_for_ips(
+            path, ["192.168.1.112"], ["gateway:aa:bb:cc:dd:ee:01"]
+        )["192.168.1.112"]["name"]
+        == "iPad-Storm"
+    )
+
+
+@pytest.mark.parametrize("recorded", [False, True])
+def test_replayed_identity_never_uses_a_later_network(
+    tmp_path: Path, recorded: bool
+) -> None:
+    """A retained DNS row cannot assign an old device to today's reused IP.
+
+    Parameters:
+        tmp_path: Isolated permanent database.
+        recorded: Whether packet-time network settings are still available.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    previous = {
+        "changed_at": 100,
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "local_network": "192.168.1.0/24",
+    }
+    current = {
+        "changed_at": 300,
+        "gateway_mac": "aa:bb:cc:dd:ee:02",
+        "local_network": "192.168.1.0/24",
+        "history": [previous] if recorded else [],
+    }
+    store = HostProfileStore(path, "replay", lambda _: current, ["en0"])
+    store.observe_flow(
+        SimpleNamespace(
+            type_="dns",
+            interface="en0",
+            starttime=150,
+            saddr="192.168.1.1",
+            daddr="224.0.0.251",
+            sport=5353,
+            dport=5353,
+            query="storm.local",
+            answers=["192.168.1.112"],
+            mdns_bindings=["storm.local|192.168.1.112"],
+        )
+    )
+    profiles = HostProfileStore.read(path, "192.168.1.112")
+    assert profiles[0]["network_id"] == (
+        "gateway:aa:bb:cc:dd:ee:01" if recorded else "run:replay"
+    )
+    assert all(
+        profile["network_id"] != "gateway:aa:bb:cc:dd:ee:02"
+        for profile in profiles
+    )
+
+
+@pytest.mark.parametrize("ipad_mac", ["", "02:00:00:00:01:12"])
+def test_ambiguous_mdns_answers_never_transfer_a_saved_device_name(
+    tmp_path: Path, ipad_mac: str
+) -> None:
+    """A router answering an iPad query must not inherit its manual name.
+
+    Parameters:
+        tmp_path: Isolated permanent database.
+        ipad_mac: Whether the named iPad has a known MAC address.
+    """
+    _module_factory = ModuleFactory()
+    path = tmp_path / "hosts.sqlite"
+    state = {
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "local_network": "192.168.1.0/24",
+    }
+    store = HostProfileStore(path, "run", lambda _: state, ["en0"])
+    for ip in ("192.168.1.112", "192.168.1.1"):
+        store.observe_flow(
+            SimpleNamespace(
+                interface="en0",
+                starttime=100,
+                type_="conn",
+                saddr=ip,
+                daddr="8.8.8.8",
+            )
+        )
+    with sqlite3.connect(path) as connection:
+        for ip in ("192.168.1.112", "192.168.1.1"):
+            connection.execute(
+                "INSERT INTO facts VALUES (?, ?, 'mdns_name', 'storm.local', 100, 100, 1)",
+                ("gateway:aa:bb:cc:dd:ee:01", ip),
+            )
+        if ipad_mac:
+            connection.execute(
+                "INSERT INTO facts VALUES (?, ?, 'mac', ?, 100, 100, 1)",
+                ("gateway:aa:bb:cc:dd:ee:01", "192.168.1.112", ipad_mac),
+            )
+    HostProfileStore.set_host_annotation(
+        path,
+        "192.168.1.112",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "iPad-Storm",
+        "Tablet",
+    )
+    names = HostProfileStore.annotations_for_ips(
+        path, ["192.168.1.112", "192.168.1.1"]
+    )
+    assert names["192.168.1.112"] == {"name": "iPad-Storm", "note": "Tablet"}
+    assert names["192.168.1.1"] == {"name": "", "note": ""}
+
+
 def test_only_parsed_traffic_advances_network_observations(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -331,7 +476,7 @@ def test_saved_name_follows_stable_mdns_across_ip_and_mac_changes(
             )
             connection.execute(
                 "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (network_id, ip, "mdns_name", "cherry.local", 1, 1, 1),
+                (network_id, ip, "mdns_hostname", "cherry.local", 1, 1, 1),
             )
             connection.execute(
                 "INSERT INTO facts VALUES (?, ?, ?, ?, ?, ?, ?)",
@@ -467,12 +612,12 @@ def test_device_annotation_uses_only_unicast_macs(value: str, expected: str) -> 
 
 @pytest.mark.parametrize(
     "port, expected_kind",
-    [("5353", "mdns_name"), ("53", "dns_name")],
+    [("5353", None), ("53", "dns_name")],
 )
 def test_dns_answers_identify_the_answered_host(
-    tmp_path: Path, port: str, expected_kind: str
+    tmp_path: Path, port: str, expected_kind: str | None
 ) -> None:
-    """Attach DNS and multicast DNS names to returned IPs.
+    """Keep flat multicast answers from asserting address ownership.
 
     Parameters:
         tmp_path: Isolated permanent database directory.
@@ -496,9 +641,9 @@ def test_dns_answers_identify_the_answered_host(
     )
 
     profile = HostProfileStore.read(path, "9.9.9.9")[0]
-    assert [(fact["kind"], fact["value"]) for fact in profile["facts"]] == [
-        (expected_kind, "printer.local")
-    ]
+    assert [(fact["kind"], fact["value"]) for fact in profile["facts"]] == (
+        [(expected_kind, "printer.local")] if expected_kind else []
+    )
     assert HostProfileStore.read(path, "not-an-ip") == []
 
 

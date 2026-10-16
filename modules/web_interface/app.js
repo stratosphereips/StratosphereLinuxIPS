@@ -410,6 +410,8 @@ function hostNamePriority(source) {
 /** Remember the best currently available identity from a Host record. */
 function rememberHostRecord(record) {
   if (!record?.ip) return;
+  if (Object.hasOwn(record, "user_name") && !record.user_name
+      && state.hostNames.get(record.ip)?.source === "User name") state.hostNames.delete(record.ip);
   if (record.user_name) rememberHostName(record.ip, record.user_name, "User name");
   else if (record.hostname) rememberHostName(record.ip, record.hostname, "Hostname");
   else if (record.dns_name) rememberHostName(record.ip, record.dns_name, record.dns_name_source || "DNS");
@@ -425,16 +427,19 @@ async function loadHostNames() {
       const ips = Array.from(state.pendingHostNames).slice(0, 100);
       ips.forEach((ip) => state.pendingHostNames.delete(ip));
       const params = new URLSearchParams();
+      const networkOnly = state.networkOnly && state.networkFilterSupported;
+      const networkStart = state.currentNetworkStart;
+      if (networkOnly) params.set("network", "current");
       ips.forEach((ip) => params.append("ip", ip));
       const response = await fetch(`/api/host-names?${params}`, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
+      if (networkOnly !== (state.networkOnly && state.networkFilterSupported)
+          || networkStart !== state.currentNetworkStart) continue;
       applyRunIdentity(payload.run_identity);
       ips.forEach((ip) => {
-        const fetched = payload.names?.[ip] || {};
-        const existing = state.hostNames.get(ip);
-        if (existing?.name && (!fetched.name
-            || hostNamePriority(existing.source) > hostNamePriority(fetched.source))) return;
+        if (!Object.hasOwn(payload.names || {}, ip)) return;
+        const fetched = payload.names[ip];
         state.hostNames.set(ip, { ...fetched, checkedAt: Date.now() });
       });
       refreshHostLabels();
@@ -5642,7 +5647,8 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
   }
   const labels = {
     hostname: "Names", reverse_dns: "Reverse DNS", dns_name: "DNS names",
-    mdns_name: "Multicast DNS names", sni: "HTTPS SNI",
+    mdns_hostname: "mDNS address record owners",
+    mdns_name: "Old mDNS question associations · ownership unverified", sni: "HTTPS SNI",
     http_host: "HTTP hosts", url: "Requested URLs", mac: "MAC addresses",
     asn: "ASN", country: "Country",
     threat_feed: "Threat feed appearances",
@@ -5850,7 +5856,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
       details.dataset.key = JSON.stringify([profile.network_id, kind]);
       details.open = openSections.has(details.dataset.key)
         ? openSections.get(details.dataset.key)
-        : ["hostname", "mdns_name", "dns_name"].includes(kind);
+        : ["hostname", "mdns_hostname", "mdns_name", "dns_name"].includes(kind);
       const summary = document.createElement("summary");
       summary.append(text("span", label), text("span", compact(values.length), "count-chip"));
       details.append(summary);
@@ -5876,7 +5882,7 @@ function renderHostNetworkClues(profiles) {
   networks.replaceChildren();
   const names = new Map();
   profiles.forEach((profile) => (profile.facts || []).forEach((fact) => {
-    if (fact.kind !== "mdns_name" || !fact.value) return;
+    if (fact.kind !== "mdns_hostname" || !fact.value) return;
     const previous = names.get(fact.value) || { observations: 0, last_seen: 0 };
     names.set(fact.value, {
       observations: previous.observations + numeric(fact.observations),
@@ -5890,7 +5896,7 @@ function renderHostNetworkClues(profiles) {
     row.append(text("code", name), text("small", `${compact(details.observations)}× · ${formatShortTime(details.last_seen)}`));
     mdns.append(row);
   });
-  if (!sortedNames.length) mdns.append(text("p", "No mDNS names recorded.", "muted"));
+  if (!sortedNames.length) mdns.append(text("p", "No mDNS address record owners recorded.", "muted"));
   if (sortedNames.length > 4) mdns.append(text("small", `+ ${sortedNames.length - 4} more saved names`, "muted"));
   profiles.slice(0, 4).forEach((profile) => {
     const row = document.createElement("div");
@@ -6742,6 +6748,7 @@ function updateNetworkFilterAvailability(identity) {
     || start !== state.currentNetworkStart;
   state.networkFilterSupported = supported;
   state.currentNetworkStart = start;
+  if (changed) state.hostNames.clear();
   const label = byId("network-filter-label");
   label.hidden = !supported;
   byId("network-filter").disabled = !supported || start === null;

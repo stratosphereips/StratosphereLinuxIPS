@@ -94,6 +94,12 @@ class HostProfileStore:
                 "mdns_name TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
                 "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
             )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS mdns_identity_annotations ("
+                "mdns_name TEXT PRIMARY KEY, network_id TEXT NOT NULL, "
+                "ip TEXT NOT NULL, name TEXT NOT NULL, note TEXT NOT NULL, "
+                "updated_at REAL NOT NULL)"
+            )
         if os.geteuid() == 0:
             os.chown(path, owner.st_uid, owner.st_gid)
         path.chmod(0o600)
@@ -320,7 +326,7 @@ class HostProfileStore:
             ).fetchone()
             mdns_rows = connection.execute(
                 "SELECT value FROM facts WHERE network_id=? AND ip=? "
-                "AND kind='mdns_name' ORDER BY last_seen DESC",
+                "AND kind='mdns_hostname' ORDER BY last_seen DESC",
                 (network_id, normalized),
             ).fetchall()
             mdns_name = next(
@@ -365,15 +371,24 @@ class HostProfileStore:
                 )
             if mdns_name:
                 connection.execute(
-                    "CREATE TABLE IF NOT EXISTS mdns_annotations ("
-                    "mdns_name TEXT PRIMARY KEY, name TEXT NOT NULL DEFAULT '', "
-                    "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+                    "CREATE TABLE IF NOT EXISTS mdns_identity_annotations ("
+                    "mdns_name TEXT PRIMARY KEY, network_id TEXT NOT NULL, "
+                    "ip TEXT NOT NULL, name TEXT NOT NULL, note TEXT NOT NULL, "
+                    "updated_at REAL NOT NULL)"
                 )
                 connection.execute(
-                    "INSERT INTO mdns_annotations VALUES (?, ?, ?, ?) "
+                    "INSERT INTO mdns_identity_annotations VALUES (?, ?, ?, ?, ?, ?) "
                     "ON CONFLICT(mdns_name) DO UPDATE SET name=excluded.name, "
-                    "note=excluded.note, updated_at=excluded.updated_at",
-                    (mdns_name, name, note, time.time()),
+                    "note=excluded.note, network_id=excluded.network_id, "
+                    "ip=excluded.ip, updated_at=excluded.updated_at",
+                    (
+                        mdns_name,
+                        network_id,
+                        normalized,
+                        name,
+                        note,
+                        time.time(),
+                    ),
                 )
 
             if status is not None:
@@ -619,7 +634,7 @@ class HostProfileStore:
         } - {""}
         mdns_by_host: dict[tuple[str, str], str] = {}
         for network_id, ip, value in connection.execute(
-            "SELECT network_id, ip, value FROM facts WHERE kind='mdns_name' "
+            "SELECT network_id, ip, value FROM facts WHERE kind='mdns_hostname' "
             "AND ip IN (" + placeholders + ") ORDER BY last_seen DESC",
             keys,
         ):
@@ -632,7 +647,7 @@ class HostProfileStore:
             mdns_placeholders = ",".join("?" for _ in mdns_names)
             try:
                 for mdns_name, name, note in connection.execute(
-                    "SELECT mdns_name, name, note FROM mdns_annotations "
+                    "SELECT mdns_name, name, note FROM mdns_identity_annotations "
                     "WHERE mdns_name IN (" + mdns_placeholders + ")",
                     tuple(mdns_names),
                 ):
@@ -643,17 +658,20 @@ class HostProfileStore:
             except sqlite3.OperationalError:
                 pass
         legacy_mdns: dict[str, dict[str, str]] = {}
-        for name, note, value in connection.execute(
-            "SELECT a.name, a.note, f.value FROM host_annotations a "
-            "JOIN facts f ON f.network_id=a.network_id AND f.ip=a.ip "
-            "AND f.kind='mdns_name' WHERE a.name!='' OR a.note!='' "
-            "ORDER BY a.updated_at DESC, f.last_seen DESC"
-        ):
-            stable = HostProfileStore._stable_mdns_name(value)
-            if stable:
-                legacy_mdns.setdefault(
-                    stable, {"name": name or "", "note": note or ""}
-                )
+        if mdns_names:
+            for name, note, value in connection.execute(
+                "SELECT a.name, a.note, f.value FROM host_annotations a "
+                "JOIN facts f ON f.network_id=a.network_id AND f.ip=a.ip "
+                "AND f.kind='mdns_hostname' WHERE (a.name!='' OR a.note!='') "
+                f"AND f.value IN ({mdns_placeholders}) "
+                "ORDER BY a.updated_at DESC, f.last_seen DESC",
+                tuple(mdns_names),
+            ):
+                stable = HostProfileStore._stable_mdns_name(value)
+                if stable:
+                    legacy_mdns.setdefault(
+                        stable, {"name": name or "", "note": note or ""}
+                    )
         device_annotations: dict[str, dict[str, str]] = {}
         try:
             for mac, name, note in connection.execute(
@@ -705,13 +723,14 @@ class HostProfileStore:
 
     @staticmethod
     def annotations_for_ips(
-        path: Path, ips: Iterable[str]
+        path: Path, ips: Iterable[str], network_ids: Iterable[str] = ()
     ) -> dict[str, dict[str, str]]:
         """Read each displayed device's effective saved annotation.
 
         Parameters:
             path: Permanent host profile database.
             ips: IP addresses displayed in the current view.
+            network_ids: Selected capture networks; empty includes all history.
 
         Returns:
             User names and notes indexed by IP address.
@@ -724,7 +743,24 @@ class HostProfileStore:
         ) as connection:
             rows = HostProfileStore._resolved_annotations(connection, keys)
         result: dict[str, dict[str, str]] = {}
-        for (_, ip), annotation in rows.items():
+        preference = {
+            key: index for index, key in enumerate(network_ids) if key
+        }
+        ordered = (
+            sorted(
+                rows.items(),
+                key=lambda row: preference.get(row[0][0], len(preference)),
+            )
+            if preference
+            else rows.items()
+        )
+        for (network_id, ip), annotation in ordered:
+            if (
+                preference
+                and network_id not in preference
+                and network_id != "public"
+            ):
+                continue
             result.setdefault(ip, annotation)
         return result
 
@@ -752,14 +788,42 @@ class HostProfileStore:
         self._network_cache[name] = (now, state)
         return state
 
+    @staticmethod
+    def _observation_network(
+        state: dict[str, Any], observed_at: float
+    ) -> dict[str, Any]:
+        """Select capture settings at packet time when replaying retained flows.
+
+        Parameters:
+            state: Current cached interface settings and bounded history.
+            observed_at: Packet observation time.
+
+        Returns:
+            Recorded settings, or an unidentified network if history is missing.
+        """
+        if observed_at >= float(state.get("changed_at") or 0):
+            return state
+        candidates = [
+            item
+            for item in state.get("history", [])
+            if isinstance(item, dict)
+            and float(item.get("changed_at") or 0) <= observed_at
+        ]
+        return max(
+            candidates,
+            key=lambda item: float(item.get("changed_at") or 0),
+            default={},
+        )
+
     def _identity(
-        self, ip: str, interface: str
+        self, ip: str, interface: str, state: dict[str, Any] | None = None
     ) -> tuple[str, str, str] | None:
         """Find a safe public or network-specific key for an IP.
 
         Parameters:
             ip: Candidate host address.
             interface: Interface on which it was observed.
+            state: Optional capture settings at the packet's timestamp.
 
         Returns:
             Normalized IP, network key, and display label when valid.
@@ -777,7 +841,7 @@ class HostProfileStore:
         normalized = str(address)
         if address.is_global:
             return normalized, "public", "Public internet"
-        state = self._network_state(interface)
+        state = self._network_state(interface) if state is None else state
         try:
             network = ipaddress.ip_network(
                 state.get("local_network", ""), strict=False
@@ -825,12 +889,14 @@ class HostProfileStore:
             facts: Kind and value pairs learned from this observation.
             observed_traffic: Whether a parsed packet flow caused the sighting.
         """
-        identity = self._identity(ip, interface)
+        state = self._network_state(interface)
+        if observed_traffic:
+            state = self._observation_network(state, observed_at)
+        identity = self._identity(ip, interface, state)
         if identity is None:
             return
         normalized, network_id, network_label = identity
         key = (network_id, normalized)
-        state = self._network_state(interface)
         own_ips = {item.get("ip") for item in state.get("addresses", [])}
         if state.get("host_ip"):
             own_ips.add(state["host_ip"])
@@ -968,8 +1034,26 @@ class HostProfileStore:
             )
         elif kind == "dns":
             query = str(getattr(flow, "query", "") or "")
-            port = str(getattr(flow, "dport", "") or "")
-            answer_kind = "mdns_name" if port == "5353" else "dns_name"
+            mdns = "5353" in {
+                str(getattr(flow, "sport", "") or ""),
+                str(getattr(flow, "dport", "") or ""),
+            }
+            if mdns:
+                bindings = getattr(flow, "mdns_bindings", []) or []
+                if isinstance(bindings, str):
+                    bindings = bindings.split(",")
+                for binding in bindings[:64]:
+                    owner, separator, address = str(binding).partition("|")
+                    if separator and (
+                        hostname := self._stable_mdns_name(owner)
+                    ):
+                        self._save(
+                            address,
+                            interface,
+                            observed_at,
+                            [("mdns_hostname", hostname)],
+                            observed_traffic=True,
+                        )
             for answer in getattr(flow, "answers", []) or []:
                 if isinstance(answer, dict):
                     answer = answer.get("rdata") or answer.get("data") or ""
@@ -978,7 +1062,7 @@ class HostProfileStore:
                     answer,
                     interface,
                     observed_at,
-                    [(answer_kind, query)],
+                    [] if mdns else [("dns_name", query)],
                     observed_traffic=True,
                 )
         self._save(

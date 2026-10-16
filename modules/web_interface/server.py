@@ -4465,6 +4465,20 @@ class RunDataReader:
         )
         return result
 
+    def _annotation_networks(self, query: Dict[str, List[str]]) -> List[str]:
+        """Use the selected capture network when resolving saved private host names.
+
+        Parameters:
+            query: Current pane's network filter.
+
+        Returns:
+            Selected private-network keys, or an empty list for all history.
+        """
+        if self._query_value(query, "network") != "current":
+            return []
+        network_id = self._current_header_network().get("network_id", "")
+        return [network_id] if network_id else []
+
     def host_names(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Resolve a bounded set of displayed IPs to stored host names.
 
@@ -4491,6 +4505,7 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             ips,
+            self._annotation_networks(query),
         )
 
         snapshots: Dict[str, Dict[str, Any]] = {}
@@ -5024,6 +5039,7 @@ class RunDataReader:
         threat = self._query_value(query, "threat").lower()
         alerts_only = self._query_value(query, "alerts_only") == "1"
         network_start = self._scoped_start(query, None)
+        annotation_networks = self._annotation_networks(query)
         network_start_sql = (
             str(min(network_start, 1e300)) if network_start is not None else ""
         )
@@ -5140,7 +5156,7 @@ class RunDataReader:
             )
             saved_annotations = (
                 HostProfileStore.annotations_for_ips(
-                    profile_path, candidate_ips
+                    profile_path, candidate_ips, annotation_networks
                 )
                 if search
                 else {}
@@ -5357,6 +5373,7 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             page_ips,
+            annotation_networks,
         )
         for row in page_rows:
             ip = str(row["ip"])
@@ -5483,6 +5500,7 @@ class RunDataReader:
         """
         keys = self._device_key_map()
         network_start = self._scoped_start(query, None)
+        annotation_networks = self._annotation_networks(query)
         with connect_history(self.history_path, read_only=True) as connection:
             full_total = len(
                 {
@@ -5527,7 +5545,7 @@ class RunDataReader:
         )
         triage = HostProfileStore.triage_for_ips(profile_path, ips)
         saved_annotations = HostProfileStore.annotations_for_ips(
-            profile_path, ips
+            profile_path, ips, annotation_networks
         )
         try:
             with self._connect_sqlite() as connection:
@@ -5807,6 +5825,7 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             page_ips,
+            annotation_networks,
         )
         identities = (
             self._host_page_identity(page_ips)

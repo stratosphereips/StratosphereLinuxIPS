@@ -101,6 +101,7 @@ class DNS(BaseFlow):
     TTLs: str
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
+    mdns_bindings: List[str] = field(default_factory=list)
 
     answers: List[str] = field(default_factory=list)
     type_: str = field(default="dns")

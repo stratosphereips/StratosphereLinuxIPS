@@ -33,6 +33,82 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("device", [False, True])
+def test_host_names_inventory_and_details_reject_ambiguous_mdns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool
+) -> None:
+    """All host name surfaces retain the manual iPad name without naming the router.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fixes the current connection clock.
+        device: Whether the inventory groups device addresses.
+    """
+    _module_factory = ModuleFactory()
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    reader.redis.pipeline.return_value.execute.return_value = [None] * 6
+    network = {
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "local_network": "192.168.1.0/24",
+    }
+    store = HostProfileStore(
+        reader.host_profiles_path, "current", lambda _: network, ["en0"]
+    )
+    with connect_history(reader.history_path) as connection:
+        for ip in ("192.168.1.1", "192.168.1.112"):
+            connection.execute(
+                "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+                (ip, now, json.dumps({"ip": ip, "scope": "local"})),
+            )
+            store.observe_flow(
+                SimpleNamespace(
+                    type_="conn",
+                    interface="en0",
+                    starttime=now - 60,
+                    saddr=ip,
+                    daddr="8.8.8.8",
+                )
+            )
+    with sqlite3.connect(reader.host_profiles_path) as connection:
+        for ip in ("192.168.1.1", "192.168.1.112"):
+            connection.execute(
+                "INSERT INTO facts VALUES (?,?,'mdns_name','storm.local',100,100,1)",
+                ("gateway:aa:bb:cc:dd:ee:01", ip),
+            )
+    HostProfileStore.set_host_annotation(
+        reader.host_profiles_path,
+        "192.168.1.112",
+        "gateway:aa:bb:cc:dd:ee:01",
+        "iPad-Storm",
+        "Tablet",
+    )
+    with sqlite3.connect(reader.host_profiles_path) as connection:
+        connection.execute(
+            "INSERT INTO hosts VALUES ('run:past-network','192.168.1.112','Unknown network',?,?)",
+            (now, now + 1),
+        )
+    names = reader.host_names(
+        {"ip": ["192.168.1.1", "192.168.1.112"], "network": ["current"]}
+    )["names"]
+    assert names["192.168.1.1"]["name"] == ""
+    assert names["192.168.1.112"] == {
+        "name": "iPad-Storm",
+        "source": "User name",
+    }
+    query = {
+        "network": ["current"],
+        "range": ["all"],
+        "device": ["1" if device else "0"],
+    }
+    rows = {row["ip"]: row for row in reader.hosts(query)["items"]}
+    assert rows["192.168.1.1"]["user_name"] == ""
+    assert rows["192.168.1.112"]["user_name"] == "iPad-Storm"
+    assert reader.host("192.168.1.1", query)["user_name"] == ""
+    assert reader.host("192.168.1.112", query)["user_name"] == "iPad-Storm"
+
+
 def _network_scope_reader(tmp_path: Path) -> RunDataReader:
     """Build independent run data with fresh cache timestamps and older network activity.
 

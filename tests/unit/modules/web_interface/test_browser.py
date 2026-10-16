@@ -58,7 +58,20 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
                 }
             )
         elif url.path == "/api/host-names":
-            route.fulfill(json={"names": {}})
+            route.fulfill(
+                json={
+                    "names": {
+                        "192.168.1.1": {
+                            "name": "Router",
+                            "source": "Hostname",
+                        },
+                        "192.168.1.112": {
+                            "name": "iPad-Storm",
+                            "source": "User name",
+                        },
+                    }
+                }
+            )
         elif url.path == "/api/whitelists":
             route.fulfill(
                 json={"rules": [], "counts": {}, "evidence_types": []}
@@ -110,7 +123,7 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
                 "network_label": "Unidentified network · old run",
                 "facts": [
                     {
-                        "kind": "mdns_name",
+                        "kind": "mdns_hostname",
                         "value": "past-device.local",
                         "last_seen": 100,
                         "first_seen": 100,
@@ -128,7 +141,7 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
                 "network_name": "Home-Wifi6",
                 "facts": [
                     {
-                        "kind": "mdns_name",
+                        "kind": "mdns_hostname",
                         "value": "current-device.local",
                         "last_seen": 900,
                         "first_seen": 900,
@@ -140,6 +153,14 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
                 "user_note": "",
             },
         ]
+        profiles[1]["facts"].append(
+            {
+                "kind": "mdns_name",
+                "value": "storm.local",
+                "last_seen": 950,
+                "first_seen": 950,
+            }
+        )
         host = {
             "ip": "192.168.1.20",
             "scope": "local",
@@ -180,6 +201,17 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
         )
         page.locator("#host-saved-history-label").click()
         assert (
+            "current-device.local"
+            in page.locator("#host-mdns-names").inner_text()
+        )
+        assert (
+            "storm.local" not in page.locator("#host-mdns-names").inner_text()
+        )
+        assert (
+            "ownership unverified"
+            in page.locator("#host-permanent-profiles").inner_text()
+        )
+        assert (
             "Unidentified network · old run"
             in page.locator("#host-permanent-profiles").inner_text()
         )
@@ -199,6 +231,31 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
         assert (
             page.locator("#host-networks-seen").inner_text()
             == "No observations on the current network."
+        )
+        page.wait_for_function(
+            "!state.hostNamesLoading && !state.pendingHostNames.size"
+        )
+        page.evaluate("""async () => {
+            state.hostNames.set('192.168.1.1', {name:'iPad-Storm', source:'User name'});
+            state.pendingHostNames.add('192.168.1.1');
+            state.pendingHostNames.add('192.168.1.112');
+            await loadHostNames();
+        }""")
+        assert (
+            page.evaluate("state.hostNames.get('192.168.1.1').name")
+            == "Router"
+        )
+        assert (
+            page.evaluate("state.hostNames.get('192.168.1.112').name")
+            == "iPad-Storm"
+        )
+        page.evaluate("""() => {
+            state.hostNames.set('192.168.1.1', {name:'iPad-Storm', source:'User name'});
+            rememberHostRecord({ip:'192.168.1.1', user_name:'', hostname:'Router'});
+        }""")
+        assert (
+            page.evaluate("state.hostNames.get('192.168.1.1').name")
+            == "Router"
         )
         assert errors == []
         print(

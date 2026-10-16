@@ -751,7 +751,7 @@ profile for an address Slips ignored.
 
 The selected host workspace includes:
 
-- **Review**, **Labels**, **Name**, and **Note** in the Identity card. **Mark or name this host** / **Edit host review and identity** opens the editor for the current permanent profile. Review marks are Unmarked, To analyze, Under review, and Reviewed; up to ten custom labels and an analyst note can be saved. The inventory has sortable Review and Labels columns, a review-mark filter, and search across labels, saved names and notes before paging. These fields are included in its CSV export. Review marks, labels, name and note are saved together in one transaction. Review marks and labels persist across restarts in the permanent host database and follow a verified device MAC; a reused private IP on another network does not inherit another device's mark. Marking a host does not relabel its flows or whitelist its traffic. Editors for older network profiles remain in **Networks and names**. A saved custom name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Names follow a known device MAC across network and IP changes. When a device changes its private MAC or its MAC is unavailable, a stable device mDNS hostname such as `cherry.local` also carries the saved name and note to its new address. Existing names are recovered from earlier profiles with the same device hostname. Service discovery names and random UUID names are not used as device identities. Clearing both fields clears the linked device name. Hosts without a usable MAC or device hostname retain names only on their exact network profile;
+- **Review**, **Labels**, **Name**, and **Note** in the Identity card. **Mark or name this host** / **Edit host review and identity** opens the editor for the current permanent profile. Review marks are Unmarked, To analyze, Under review, and Reviewed; up to ten custom labels and an analyst note can be saved. The inventory has sortable Review and Labels columns, a review-mark filter, and search across labels, saved names and notes before paging. These fields are included in its CSV export. Review marks, labels, name and note are saved together in one transaction. Review marks and labels persist across restarts in the permanent host database and follow a verified device MAC; a reused private IP on another network does not inherit another device's mark. Marking a host does not relabel its flows or whitelist its traffic. Editors for older network profiles remain in **Networks and names**. A saved custom name and note remain in `permanent/host_profiles/hosts.sqlite` across Slips runs. Names follow a known device MAC across network and IP changes. When a device changes its private MAC or its MAC is unavailable, a device mDNS hostname such as `cherry.local` can carry the saved name and note to its new address only when address-record owners establish that hostname for both the originally named profile and the new address. A DNS question and flat answer list do not establish that relationship. Service discovery names and random UUID names are not used as device identities. Clearing both fields clears the linked device name. Hosts without a usable MAC or device hostname retain names only on their exact network profile;
 - the displayed name beside the IP and in the Name row. This may be a saved user name, or a name learned from DNS or another source. A user name always takes priority;
 - MAC and vendor metadata, the exact profile IP, hostname, DNS, scope, and cached threat intelligence. Empty Redis fields do not replace saved identity clues. For this computer during a live interface capture, the detail pane reads its MAC from the operating system's monitored interface, and new permanent observations save that MAC for the computer's IPv4 and IPv6 addresses; the host and alert tables also show cached rDNS (or the most related DNS domain) and the TI feeds that contain the IP;
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
@@ -765,6 +765,31 @@ Every related-evidence and flow-table heading is sortable across the selected ho
 IP labels throughout the web interface use the saved user name first, then a
 learned hostname, DNS or reverse DNS name, and finally the MAC vendor followed
 by “device” when no name is available. The IP stays visible beside the label.
+
+New live captures load `zeek-scripts/mdns-identity.zeek`, which retains each
+mDNS A/AAAA record's owner and address in `slips_mdns_bindings`. Slips uses
+these bindings for mDNS identity, independently of the DNS question and the
+packet's source. Queries containing known answers and records with zero TTL
+cannot establish a binding. Each DNS log record retains at most 64 bindings.
+The host profile module stores them as `mdns_hostname` facts; old `mdns_name`
+facts remain visible in saved history as question associations with unverified
+ownership, and cannot transfer an analyst's name or note to another device.
+Explicit names and notes already saved for an exact network profile or MAC
+remain intact. With **Current network only**, labels use that network's
+annotations; a newer metadata refresh from another network cannot hide the
+saved name or lend it to a reused address. Older imported logs without
+record-owner fields still support
+these explicit names and MAC identities; mDNS name transfer waits for an
+owner record on the originally named profile and the new address. The browser
+accepts corrected or cleared names from the server instead of keeping an old
+cached user name indefinitely.
+
+Identity storage stays in the separate `host_profile` process, using its
+existing bounded batches and caches. Replaying retained flow rows selects
+network settings at the packet timestamp; if that history is unavailable,
+the identity stays on an unidentified run profile instead of being assigned
+to today's network. No per-flow identity database access is added to the main
+Slips process or profiler. Restart Slips to load the updated Zeek policy.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
@@ -803,5 +828,11 @@ Responses include bounded page metadata and selected ranges. Overview and identi
 `DIFFERENT_LOCALNET` describes a connection involving a private address outside the monitored subnet. The source that initiated the connection owns the evidence profile; the destination remains the destination even when it is the outside address. For example, a connection from `192.168.1.163` to `172.17.0.1:6668` is attributed to `192.168.1.163`, not to an attack by `172.17.0.1`. The address `172.17.0.1` commonly belongs to a Docker bridge, but the address and port alone do not establish which process initiated the connection. This correction applies to new detections; stored alerts retain their original attribution and can be reviewed through the usual workflow.
 
 ### Optional browser regression check
+
+`tests/unit/zeek_scripts/test_mdns_identity.py` replays isolated packets through
+installed Zeek and the Slips parser and identity store. It covers mixed address
+record owners, IPv4 and IPv6 aliases, known-answer queries, expired records,
+ordinary DNS, and the 64-binding bound. It skips if Zeek or Scapy is unavailable.
+It does not capture from a live interface.
 
 `tests/unit/modules/web_interface/test_browser.py` uses Playwright and an installed Chrome to exercise the shipped HTML, JavaScript and styles against isolated API fixtures. It checks a grouped device record with 1,051 linked flows, protocol tabs, lazy JSON, flow paging, close/reopen, and saving host marks, labels and notes. It also checks the contextual host whitelist request and current-network inventory refresh across multiple loaded pages, including the separation of current observations from saved network history. It skips when Playwright or Chrome is unavailable; neither is required to run Slips. The regular server tests verify durable persistence, configured whitelist-file writes, and filtering independently of browser availability.
