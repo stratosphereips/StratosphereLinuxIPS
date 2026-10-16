@@ -149,7 +149,15 @@ slips can write to those files.
 
 ## Running Several slips instances
 
-By default, Slips will assume you are running only one instance and will use the redis port 6379 on each run.
+By default, Slips uses Redis port 6379. Logical database 0 on that server holds
+the active run's profiles, time windows, alerts, and other live state. Logical
+database 1 on port 6379 holds the cache shared by all Slips instances,
+including threat intelligence. These are two logical databases in one Redis
+server. A run started with `-m` or `-P` has a second Redis server for its
+database 0 on its own port, while its cache still uses port 6379 database 1.
+The default startup clears database 0 for a new run; it does not clear the
+shared cache. `deletePrevdb: false` can prevent that Redis flush, but does not
+preserve the output directory or safely resume the previous run.
 
 You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory.
@@ -157,13 +165,67 @@ You can run several instances of slips at the same time using the -m flag, and t
 If you want Slips to run on a certain port, you can use the ```-P <portnumber>``` parameter to specify the
 port you want Slips to use. but it will always use port 6379 db 1 for the cache db.
 
-Each instance of Slips will connect to redis server on a randomly generated port in the range (32768 to 32850).
+With `-m`, each instance uses an available port in the range 32768 to 32850.
 
 In macos, you will get a popup asking for permission to open and use that random port, press yes to allow it.
 
 However, all instance share 1 cached redis database on redis://localhost:6379 DB 1, to store the IoCs taken from TI files.
 
-Both redis servers, the main sever (DB 0) and the cache server (DB 1) are opened automatically by Slips.
+Slips opens the required Redis servers automatically.
+
+### Keep detections across a live-interface restart
+
+Stop the previous Slips run, then restart on the same interface and output
+directory:
+
+```bash
+./slips.py -i en0 -o output/my-network --keep-history -w
+```
+
+`--keep-history` retains `flows.sqlite`, web history, and other files in that
+directory. Alerts and evidence are durable SQLite records, so the web interface
+can show detections from before the restart. Redis database 0 starts clean:
+process IDs, time-window state, and other temporary values from the prior run
+must not influence new detections. The shared cache in port 6379 database 1 is
+preserved. This mode requires the original run's metadata and output database,
+uses port 6379, and refuses to start while any other Slips instance is running.
+It cannot be combined with `-m` or a different `-P` port. Start a normal run
+without the flag when you want a fresh output directory and detection history.
+
+In a live-interface run, `flow_retention` in `config/slips.yaml` keeps ordinary
+raw flows for 24 hours and evidence-linked raw flows for up to 30 days by
+default. It also targets a 512 MiB logical database size. When over that
+target, bounded background batches prune the oldest raw flows without
+non-excluded evidence first. Linked raw flows are ranked by the latest
+non-excluded evidence that cites them, so new evidence takes priority over
+older evidence even when its triggering flow started earlier. Linked flows
+stay protected for at least the configured ordinary-flow age after that
+evidence. Recent evidence-linked flows remain available even when durable
+detection records alone exceed the size target.
+Evidence, alerts, and their relationships remain available after a raw flow is
+removed. Set `max_size_mb: 0` to disable the size target, or `enabled: false`
+to disable all flow retention. Imported captures are not pruned.
+
+The size target measures live SQLite pages; deleted pages may remain allocated
+in an older database file until it is compacted offline. Stop Slips before
+running `VACUUM` on that file. Evidence, alerts, and their links are retained
+and can themselves exceed the target in a long-running deployment.
+
+New output databases return deleted pages to the filesystem incrementally.
+For an output database created before flow retention was added, stop Slips
+before compacting it:
+
+```bash
+sqlite3 output/my-network/databases/flows.sqlite 'VACUUM;'
+```
+
+SQLite needs temporary free disk space roughly equal to the
+database size during that operation. Normal live retention can reuse freed
+pages in the old database even without this one-time compaction.
+
+The option preserves past detections in the output directory; it does not
+restore active Redis state after a machine reboot. For an archival Redis
+snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
 
 The local web interface is intentionally not a multi-instance viewer. Do not enable `-w` on several concurrent runs. It stays connected only to the Redis port and output directory of the Slips process that launched it.
 
@@ -306,6 +368,17 @@ request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 This whitelist can be enabled or disabled by changing the ```enable_local_whitelist``` key in `config/slips.yaml`.
 
+When monitoring a live interface, Slips also excludes its own information
+lookup connections from profiling. Python lookup sockets, including update
+checks, are matched by their full source and destination IPs, ports, and
+protocol. The external `whois` command is covered by a ten-second allowance
+for TCP port 43 from the current
+local interface addresses. These automatic exclusions apply only to the
+current Slips run and do not affect imported captures. Redis marks expire
+automatically, including when run history is retained. The database import
+also reads local interface addresses without making a public-IP request;
+public-IP lookups made by running modules use the same socket tracking.
+
 Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
 
 Example:
@@ -358,6 +431,7 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+    - We match organization domains and their subdomains, such as `captive.apple.com` for `apple.com`.
 
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
@@ -393,6 +467,8 @@ For example, your copied whitelist file can contain:
 
     "IoCType","IoCValue","Direction","IgnoreType"
     ip,1.2.3.4,both,alerts
+    ip,192.168.1.163:5353,dst,alerts
+    ip,[fe80::1]:5353,dst,alerts
     domain,google.com,src,flows
     domain,apple.com,both,both
     ip,94.23.253.72,both,alerts
@@ -410,6 +486,15 @@ The values for each column are the following:
         - Supported IoCTypes: ip, domain, organization, mac
     Column IoCValue
         - Supported organizations: google, microsoft, apple, facebook, twitter.
+        - IP rules may include one port as `IPv4:port` or `[IPv6]:port`.
+          A port rule matches the source port for `src` and the destination
+          port for `dst`. `both` accepts either side when its IP and port match.
+          The port applies to all transport protocols; choose `alerts` if you
+          want to keep processing the flows. Rules without a port still match
+          the IP on every port. Add separate lines for additional ports.
+          Use `*:port` to match that port on any IP address. For example,
+          `ip,*:5353,both,alerts` suppresses alerts when either the source or
+          destination port is 5353, regardless of its IP address.
     Column Direction
         - Direction: src, dst or both
             - Src: Check if the IoCValue is the source
@@ -500,6 +585,11 @@ update:
 ```
 
 This setting is separate from the runtime ```feeds_update_manager``` module, which only updates TI feeds and related files.
+When a remote TI feed responds with an empty or whitespace-only body, Slips keeps the last valid
+entries for that feed and records the skipped update in `slips.log`. A later
+nonempty version is loaded at the next scheduled check. Invalid individual
+entries are skipped and noted in `slips.log`; they do not stop the rest of a
+valid feed from loading.
 
 Automatic Slips updates may overwrite the default config files shipped with Slips. If you want to keep local config changes safe, do not modify the default config files. Create and use your own config files with different names instead.
 
@@ -766,8 +856,8 @@ this file can be used for training Slips RNN module.
 - ```-l``` or  ```--createlogfiles``` Create log files with all the traffic info and detections.
 - ```-F``` or  ```--pcapfilter``` Packet filter for Zeek. BPF style.
 - ```-cc``` or  ```--clearcache``` Clear the cache database.
-- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.
-- ```-cb``` or  ```--clearblocking``` Flush and delete slipsBlocking iptables chain
+- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Linux uses iptables; macOS uses a dedicated Packet Filter anchor (`com.apple/slips`).
+- ```-cb``` or  ```--clearblocking``` Remove Slips-owned iptables or macOS Packet Filter rules.
 - ```-o``` or  ```--output``` Store alerts.json and alerts.txt in the given folder.
 - ```-s``` or  ```--save``` Save the analysed file db to disk.
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
@@ -776,6 +866,7 @@ this file can be used for training Slips RNN module.
 - ```-k``` or  ```--killall``` Kill all unused redis servers
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
+- ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory; start with a clean Redis database 0.
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.

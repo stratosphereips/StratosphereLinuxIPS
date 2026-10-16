@@ -38,6 +38,36 @@ def create_update_manager():
         )
 
 
+def test_update_metadata_lookup_tracks_its_socket() -> None:
+    """Mark main-process update checks before they open network sockets."""
+    _module_factory = ModuleFactory()
+    update_manager = create_update_manager()
+    response = Mock()
+    response.read.return_value = b'{"version": "1.1.23"}'
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=None)
+
+    with (
+        patch.object(
+            update_manager,
+            "_get_update_json_link",
+            return_value="https://example.com/update.json",
+        ),
+        patch(
+            "managers.update_manager.request.urlopen", return_value=response
+        ),
+        patch(
+            "managers.update_manager.SlipsTrafficTracker"
+        ) as tracker_class,
+    ):
+        update_manager._read_update_json()
+
+    tracker = tracker_class.return_value
+    tracker.install.assert_called_once()
+    tracker.attach.assert_called_once_with(update_manager.db)
+    tracker.stop.assert_called_once()
+
+
 @pytest.mark.parametrize(
     "configured_branch, remote_url, expected_link",
     [

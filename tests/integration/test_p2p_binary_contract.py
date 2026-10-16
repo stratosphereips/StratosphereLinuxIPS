@@ -48,6 +48,7 @@ def test_python_pigeon_arguments_are_accepted_by_go_binary(tmp_path) -> None:
     trust.pigeon_binary_dir = "p2p4slips"
     trust.port = 32769
     trust.host = "127.0.0.1"
+    trust.rendezvous = "slips"
     trust.pigeon_key_file = "pigeon.keys"
     trust.redis_port = 32768
     trust.pygo_channel_raw = "p2p_pygo"
@@ -58,7 +59,10 @@ def test_python_pigeon_arguments_are_accepted_by_go_binary(tmp_path) -> None:
     trust._rebuild_pigeon_binary_after_slips_update = lambda: True
     trust.print = lambda *args, **kwargs: None
 
-    with patch("modules.p2p_trust.p2p_trust.subprocess.Popen") as popen:
+    with (
+        patch.object(trust, "_pigeon_supports_flag", return_value=True),
+        patch("modules.p2p_trust.p2p_trust.subprocess.Popen") as popen,
+    ):
         trust._start_pigeon()
 
     command = list(popen.call_args.args[0]) + ["-help"]

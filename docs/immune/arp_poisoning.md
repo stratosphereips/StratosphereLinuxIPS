@@ -12,6 +12,11 @@
 
 The ARP Poisoning Module is designed as a part of the Slips Immune, where Slips takes down attackers using ARP poisoning in addition to blocking them through the firewall, protecting the rest of the local network before the attacker reaches them.
 
+On macOS, run Slips with root privileges, `-i <interface> -p`, and install
+`arp-scan`. ARP discovery and Scapy's ARP packets use the monitored interface;
+Slips keeps one fake MAC for each isolated target until its poisoning period
+ends. The module applies only to IPv4 targets on the monitored local network.
+
 ARP Poisoning module:
 * <https://github.com/stratosphereips/StratosphereLinuxIPS/pull/1499>
 * https://github.com/stratosphereips/StratosphereLinuxIPS/tree/develop/modules/arp_poisoner

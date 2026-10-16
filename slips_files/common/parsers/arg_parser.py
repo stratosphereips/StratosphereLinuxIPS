@@ -267,6 +267,13 @@ class ArgumentParser(argparse.ArgumentParser):
             help="The redis-server port to use",
         )
         self.add_argument(
+            "--keep-history",
+            action="store_true",
+            required=False,
+            help="Keep detections and flows from a previous live run in the "
+            "same output directory. Requires -i and -o and one Slips instance.",
+        )
+        self.add_argument(
             "-t",
             "--testing",
             action="store_true",

@@ -18,7 +18,6 @@ from typing import (
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.risk_weights import RiskWeight
 
-
 # IMPORTANT: remember to update dict_to_evidence() function based on the
 # field you add to the evidence class, or any class used by the evidence
 # class.
@@ -327,6 +326,8 @@ class Evidence:
     evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
     # Canonical name of the module that submitted this evidence.
     source_module: str = field(default="")
+    detection_provenance: dict = field(default_factory=dict)
+    peer_report: dict = field(default_factory=dict)
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -412,6 +413,8 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "method": Method[evidence["method"].upper()],
         "evidence_signal": evidence_signal,
         "source_module": str(evidence.get("source_module", "")),
+        "detection_provenance": evidence.get("detection_provenance") or {},
+        "peer_report": evidence.get("peer_report") or {},
     }
 
     return Evidence(**evidence_attributes)

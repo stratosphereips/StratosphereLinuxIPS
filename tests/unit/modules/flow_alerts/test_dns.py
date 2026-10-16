@@ -5,8 +5,10 @@
 from dataclasses import asdict
 
 from slips_files.core.flows.zeek import DNS
+from slips_files.core.input_profilers.zeek import ZeekJSON
 from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
+
 from numpy import arange
 from unittest.mock import (
     patch,
@@ -22,6 +24,53 @@ uid = "CAeDWs37BipkfP21u8"
 timestamp = 1635765895.037696
 daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
+
+
+@pytest.mark.parametrize("bindings", [None, [], ["storm.local|192.168.1.112"]])
+async def test_parsed_dns_reconstructs_in_analyzer_and_timeout_queue(bindings: list[str] | None) -> None:
+    """Exercise DNS parsing, serialized module delivery and timer reconstruction.
+
+    Parameters:
+        bindings: Optional Zeek mDNS ownership metadata, including old logs.
+    """
+    module_factory = ModuleFactory()
+    dns = module_factory.create_dns_analyzer_obj()
+    data = {"ts": 100, "uid": "dns-roundtrip", "id.orig_h": "192.168.1.1",
+            "id.resp_h": "224.0.0.251", "id.orig_p": 5353, "id.resp_p": 5353,
+            "proto": "udp", "query": "storm.local", "qclass_name": "C_INTERNET",
+            "qtype_name": "A", "rcode_name": "NOERROR", "answers": ["192.168.1.112"], "TTLs": [120]}
+    if bindings is not None:
+        data["slips_mdns_bindings"] = bindings
+    flow, error = ZeekJSON(module_factory.logger).process_line({"type": "dns.log", "interface": "en0", "data": data})
+    assert not error
+    dns.flowalerts.create_task = Mock()
+    detectors = ["check_high_entropy_dns_answers", "check_invalid_dns_answers", "detect_dga",
+                 "check_different_localnet_usage", "detect_young_domains", "check_dns_arpa_scan"]
+    for name in detectors:
+        setattr(dns, name, Mock())
+    await dns.analyze({"channel": "new_dns", "data": json.dumps({"profileid": "profile_192.168.1.1",
+        "twid": "timewindow1", "flow": asdict(flow)})})
+    queued = dns.get_dns_flow_from_queue()
+    assert isinstance(queued, DNS)
+    assert asdict(queued) == asdict(flow)
+    assert queued.mdns_bindings == (bindings or [])
+    dns.check_high_entropy_dns_answers.assert_called_once_with("timewindow1", queued)
+    assert dns.flowalerts.create_task.call_args.args[-1] == queued
+
+
+def test_dns_timeout_logs_error_and_processes_the_next_message() -> None:
+    """A malformed message must not kill the timeout thread or hide its cause."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    reference = Mock()
+    dns.flowalerts.should_stop = Mock(side_effect=[False, False, True])
+    dns.get_dns_flow_from_queue = Mock(side_effect=[ValueError("Malformed DNS message"), reference])
+    dns.check_pending_flows_timeout = Mock(return_value=[])
+    dns.flowalerts.print_traceback = Mock()
+
+    dns.check_dns_without_connection_timeout()
+
+    dns.flowalerts.print_traceback.assert_called_once_with()
+    dns.check_pending_flows_timeout.assert_called_once_with(reference)
 
 
 @pytest.mark.parametrize(
@@ -448,6 +497,76 @@ def test_check_high_entropy_dns_answers_with_call():
 
 
 @pytest.mark.parametrize(
+    ("entropy", "expected_calls"),
+    [(5.56, 0), (5.79, 0), (5.8, 1), (6.1, 1)],
+)
+def test_arpa_txt_answers_need_higher_entropy(
+    entropy: float, expected_calls: int
+) -> None:
+    """Avoid high entropy evidence for ordinary reverse DNS TXT metadata.
+
+    Parameters:
+        entropy: Measured Shannon entropy for a TXT answer.
+        expected_calls: Number of evidence reports expected.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.shannon_entropy_threshold = 4.0
+    dns.estimate_shannon_entropy = Mock(return_value=entropy)
+    dns.set_evidence.suspicious_dns_answer = Mock()
+    flow = DNS(
+        starttime="1726568479.5997488", uid="arpa-txt", saddr="1.1.1.1",
+        daddr="192.168.1.5", query="8.e.f.ip6.arpa", qclass_name="",
+        qtype_name="TXT", rcode_name="", dport="53", sport="5353",
+        proto="udp", answers=["TXT deviceid=483409358cca14c37ab1"], TTLs="",
+    )
+
+    dns.check_high_entropy_dns_answers("timewindow1", flow)
+
+    assert dns.set_evidence.suspicious_dns_answer.call_count == expected_calls
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "encoded._slips._udp.local",
+        "encoded._rpi-isolated-a._udp.LOCAL.",
+    ],
+)
+def test_mdns_txt_does_not_raise_high_entropy_evidence(
+    query: str,
+) -> None:
+    """Ignore encoded service discovery TXT records from unicast senders.
+
+    Parameters:
+        query: mDNS service name being answered.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.shannon_entropy_threshold = 4.0
+    dns.estimate_shannon_entropy = Mock(return_value=6.0)
+    dns.set_evidence.suspicious_dns_answer = Mock()
+    flow = DNS(
+        starttime="1726568479.5997488",
+        uid="mdns-flow",
+        saddr="fe80::8aa2:9eff:fe5e:9342",
+        daddr="ff02::fb",
+        query=query,
+        qclass_name="",
+        qtype_name="TXT",
+        rcode_name="NOERROR",
+        dport="5353",
+        sport="5353",
+        proto="udp",
+        answers=["TXT dnsaddr=/ip4/127.0.0.1/tcp/6668/p2p/QmExample"],
+        TTLs="",
+    )
+
+    dns.check_high_entropy_dns_answers(twid, flow)
+
+    dns.estimate_shannon_entropy.assert_not_called()
+    dns.set_evidence.suspicious_dns_answer.assert_not_called()
+
+
+@pytest.mark.parametrize(
     "domain, saddr, answers, expected_entropy, "
     "estimate_shannon_entropy_call_count",
     [
@@ -634,7 +753,7 @@ async def test_analyze_new_flow_msg(test_case, expected_calls):
                     [uid] * 9,
                 )
             },
-            None,
+            False,
         ),
     ],
 )
@@ -720,8 +839,93 @@ def test_detect_dga_alert():
     result = dns.detect_dga(profileid, twid, flow)
     expected_result = True
     assert result == expected_result
-    assert dns.nxdomains == {f"{profileid}_{twid}": ([], [])}
+    assert dns.nxdomains == {
+        f"{profileid}_{twid}": (
+            [f"example{index}.com" for index in range(1, 11)],
+            [uid] * 10,
+        )
+    }
     dns.set_evidence.dga.assert_called_once_with(twid, flow, 10, [uid] * 10)
+
+
+@pytest.mark.parametrize(
+    "queries, expected_distinct",
+    [
+        (["example.com"] * 12, 1),
+        (["EXAMPLE.COM.", "example.com.lan"] * 6, 1),
+        (["probe.invalid"] * 12, 0),
+        (["_dns-sd._udp.lan"] * 12, 0),
+    ],
+)
+def test_detect_dga_counts_distinct_public_names(
+    queries: list[str], expected_distinct: int
+) -> None:
+    """Repeated and local DNS lookups do not create a DGA alert.
+
+    Parameters:
+        queries: Lookup names to replay.
+        expected_distinct: Number of names retained for DGA detection.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock(
+        return_value=False
+    )
+    dns.set_evidence.dga = Mock()
+
+    for index, query in enumerate(queries):
+        flow = DNS(
+            starttime="1726568479.5997488",
+            uid=f"{uid}{index}",
+            saddr="1.1.1.1",
+            daddr="192.168.1.5",
+            query=query,
+            qclass_name="",
+            qtype_name="A",
+            rcode_name="NXDOMAIN",
+            dport="53",
+            sport="12345",
+            proto="udp",
+            answers=[""],
+            TTLs="",
+        )
+        assert dns.detect_dga(profileid, twid, flow) is False
+
+    stored = dns.nxdomains.get(f"{profileid}_{twid}", ([], []))
+    assert len(stored[0]) == expected_distinct
+    dns.set_evidence.dga.assert_not_called()
+
+
+def test_detect_dga_realerts_only_for_new_distinct_names() -> None:
+    """The next DGA threshold requires five new names in the same window."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.flowalerts.whitelist.domain_analyzer.is_whitelisted = Mock(
+        return_value=False
+    )
+    dns.set_evidence.dga = Mock()
+
+    for index in range(15):
+        flow = DNS(
+            starttime="1726568479.5997488",
+            uid=f"{uid}{index}",
+            saddr="1.1.1.1",
+            daddr="192.168.1.5",
+            query=f"new{index}.example.com",
+            qclass_name="",
+            qtype_name="A",
+            rcode_name="NXDOMAIN",
+            dport="53",
+            sport="12345",
+            proto="udp",
+            answers=[""],
+            TTLs="",
+        )
+        assert dns.detect_dga(profileid, twid, flow) is (index in (9, 14))
+
+    assert [call.args[2] for call in dns.set_evidence.dga.call_args_list] == [
+        10,
+        15,
+    ]
+    assert len(dns.nxdomains[f"{profileid}_{twid}"][0]) == 15
 
 
 def test_detect_dga_whitelisted():
@@ -1002,3 +1206,23 @@ def test_check_pending_flows_timeout():
         "profile5678", "twid_123", dns_flow_to_check, waited_for_the_conn=False
     )
     assert back_to_queue == []
+
+
+def test_shutdown_drains_thread_queue() -> None:
+    """Finish pending DNS checks without multiprocessing queue cleanup."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    dns.dns_without_connection_timeout_checker_thread = Mock()
+    dns.dns_without_connection_timeout_checker_thread.is_alive.return_value = (
+        False
+    )
+    dns.check_dns_without_connection = Mock()
+    flow = Mock()
+    dns.pending_dns_without_conn.put(("profile_1", "timewindow1", flow))
+
+    dns.shutdown_gracefully()
+
+    assert dns.stop_event.is_set()
+    assert dns.pending_dns_without_conn.empty()
+    dns.check_dns_without_connection.assert_called_once_with(
+        "profile_1", "timewindow1", flow, waited_for_the_conn=True
+    )

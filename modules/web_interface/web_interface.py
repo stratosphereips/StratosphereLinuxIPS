@@ -36,6 +36,66 @@ class WebInterface(IModule):
         self.history_thread: Optional[threading.Thread] = None
         self.backfill_thread: Optional[threading.Thread] = None
         self.history_stop = threading.Event()
+        self.bound_address: Optional[str] = None
+        self.bind_mode: str = "localhost"
+
+    def _start_server(self, bind_address: str, port: int) -> None:
+        """Launch the run-owned web server on one exact address.
+
+        Parameters:
+            bind_address: IPv4 address on which the server should listen.
+            port: Configured web port.
+        """
+        command = [
+            sys.executable,
+            "-m",
+            "modules.web_interface.server",
+            "--bind-address",
+            bind_address,
+            "--port",
+            str(port),
+            "--host-profiles-path",
+            str(
+                Path(self.conf.permanent_dir())
+                / "host_profiles"
+                / "hosts.sqlite"
+            ),
+            "--redis-port",
+            str(self.redis_port),
+            "--output-dir",
+            self.parent_output_dir,
+        ]
+        self.server_process = subprocess.Popen(
+            command,
+            cwd=Path.cwd(),
+            stdin=subprocess.DEVNULL,
+            stdout=self.server_log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
+        self.bound_address = bind_address
+        self.db.store_pid("Web Interface", self.server_process.pid)
+
+    def _stop_owned_server(self) -> bool:
+        """Stop this launcher's own server before changing its bind address.
+
+        Returns:
+            True when the old child process has exited.
+        """
+        if not self.server_process or self.server_process.poll() is not None:
+            return True
+        try:
+            self.server_process.terminate()
+            self.server_process.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            self.server_process.kill()
+            try:
+                self.server_process.wait(timeout=2)
+            except (subprocess.TimeoutExpired, OSError):
+                return False
+        except OSError:
+            return False
+        return True
 
     def subscribe_to_channels(self) -> None:
         """Declare that the launcher does not consume Redis channels."""
@@ -74,15 +134,35 @@ class WebInterface(IModule):
         """
         try:
             connections = psutil.net_connections(kind="tcp")
-        except psutil.Error:
-            return None
+        except (psutil.Error, OSError):
+            connections = []
         for connection in connections:
             if (
                 connection.status == psutil.CONN_LISTEN
                 and connection.laddr
                 and connection.laddr.port == port
+                and connection.pid
             ):
                 return connection.pid
+
+        # macOS can expose system-wide listeners without their owning PID to
+        # an unprivileged process. Same-user per-process inspection still
+        # provides the PID and lets the caller verify the command safely.
+        try:
+            for process in psutil.process_iter(["pid"]):
+                try:
+                    process_connections = process.net_connections(kind="tcp")
+                except (psutil.Error, OSError, AttributeError):
+                    continue
+                for connection in process_connections:
+                    if (
+                        connection.status == psutil.CONN_LISTEN
+                        and connection.laddr
+                        and connection.laddr.port == port
+                    ):
+                        return process.pid
+        except (psutil.Error, OSError):
+            return None
         return None
 
     def _bind_address(self, mode: str) -> Optional[str]:
@@ -247,6 +327,7 @@ class WebInterface(IModule):
         utils.drop_root_privs_permanently()
         port = self.conf.web_interface_port
         bind_mode = self.conf.web_interface_bind
+        self.bind_mode = bind_mode
         bind_address = self._bind_address(bind_mode)
         if not bind_address:
             self.print(
@@ -294,28 +375,7 @@ class WebInterface(IModule):
         utils.start_thread(self.history_thread, self.db)
         log_path = self.get_module_specific_output_path("server.log")
         self.server_log = open(log_path, "a", encoding="utf-8")
-        command = [
-            sys.executable,
-            "-m",
-            "modules.web_interface.server",
-            "--bind-address",
-            bind_address,
-            "--port",
-            str(port),
-            "--redis-port",
-            str(self.redis_port),
-            "--output-dir",
-            self.parent_output_dir,
-        ]
-        self.server_process = subprocess.Popen(
-            command,
-            cwd=Path.cwd(),
-            stdin=subprocess.DEVNULL,
-            stdout=self.server_log,
-            stderr=subprocess.STDOUT,
-            start_new_session=True,
-        )
-        self.db.store_pid("Web Interface", self.server_process.pid)
+        self._start_server(bind_address, port)
         self.backfill_thread = threading.Thread(
             target=self._backfill_history,
             daemon=True,
@@ -342,6 +402,23 @@ class WebInterface(IModule):
         if not self.server_process:
             return True
         if self.server_process.poll() is None:
+            if self.bind_mode == "interface":
+                new_address = self._bind_address("interface")
+                if new_address and new_address != self.bound_address:
+                    if not self._stop_owned_server():
+                        self.print(
+                            "Could not move the web interface to its new IP.",
+                            0,
+                            1,
+                        )
+                        return False
+                    self._start_server(
+                        new_address, self.conf.web_interface_port
+                    )
+                    self.print(
+                        f"Web interface moved to http://{new_address}:"
+                        f"{self.conf.web_interface_port}/ after network change."
+                    )
             return False
         self.print(
             f"Web interface stopped with exit code "

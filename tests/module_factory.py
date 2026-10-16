@@ -38,6 +38,23 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_module_process_obj(
+        self, module: type | str, *args: object, **kwargs: object
+    ) -> object:
+        """Create an unstarted module process for process-boundary tests.
+
+        Parameters:
+            module: Module class or import path.
+            args: Module constructor arguments.
+            kwargs: Module constructor keyword arguments.
+
+        Returns:
+            Process that initializes the module in its child.
+        """
+        from slips_files.core.module_process import ModuleProcess
+
+        return ModuleProcess(module, *args, **kwargs)
+
     def __init__(self):
         self.profiler_queue = Queue()
         self.input_queue = Queue()
@@ -47,8 +64,60 @@ class ModuleFactory:
         """default is o port 6379, this is the one we're using in conftest"""
         return self.create_db_manager_obj(6379)
 
+    def create_redis_publisher_obj(self) -> object:
+        """Return a Redis publisher with a mocked client and no connection."""
+        from slips_files.core.database.redis_db.database import RedisDB
+
+        db = object.__new__(RedisDB)
+        db.r = Mock()
+        return db
+
     def mocked_init_flock(self):
         self.lockfile_path = "/tmp/fake.lock"
+
+    def _assert_redis_has_no_run_owner(self, port: int) -> None:
+        """Refuse to write unit-test data into an existing Slips run.
+
+        Parameters:
+            port: Redis port requested by the test.
+        """
+        import redis
+        from slips_files.common.slips_utils import utils
+        from slips_files.core.database.redis_db.redis_auth import (
+            try_connect_with_and_without_password,
+        )
+
+        if not utils.is_port_in_use(port):
+            return
+        client = None
+        try:
+            client = try_connect_with_and_without_password(
+                redis.Redis,
+                host="127.0.0.1",
+                port=port,
+                db=0,
+                decode_responses=True,
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5,
+            )
+            owner = client.hget("analysis", "output_dir")
+            if owner:
+                raise RuntimeError(
+                    f"Refusing unit-test writes to Redis port {port}: "
+                    f"it belongs to Slips run {owner}. "
+                    "Use a separate Redis instance for tests."
+                )
+        except (
+            redis.exceptions.ConnectionError,
+            redis.exceptions.TimeoutError,
+        ) as error:
+            raise RuntimeError(
+                f"Cannot verify ownership of Redis port {port}; "
+                "refusing unit-test writes."
+            ) from error
+        finally:
+            if client is not None:
+                client.close()
 
     def create_db_manager_obj(
         self,
@@ -58,12 +127,25 @@ class ModuleFactory:
         start_redis_server=True,
         disabled_detections: list[str] | None = None,
     ):
-        from slips_files.core.database.database_manager import DBManager
+        """Create a database manager for tests without flushing by default.
 
+        Parameters:
+            port: Redis port used by the test database.
+            output_dir: Directory for test output.
+            flush_db: Whether to clear Redis during initialization.
+            start_redis_server: Whether the test may start Redis.
+            disabled_detections: Detection names disabled in the test.
+
+        Returns:
+            Configured test database manager.
         """
-        flush_db is False by default  because we use this function to check
-        the db after integration tests to make sure everything's going fine
-        """
+        self._assert_redis_has_no_run_owner(port)
+        from slips_files.core.database.database_manager import DBManager
+        from slips_files.common.parsers.config_parser import ConfigParser
+
+        # Redis authentication reads the real persistent path while the
+        # constructor below temporarily mocks builtins.open.
+        ConfigParser()
 
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = None
@@ -579,6 +661,9 @@ class ModuleFactory:
             patch(
                 "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
             ),
+            patch(
+                "modules.p2p_trust.trust.trustdb.TrustDB._ensure_unique_peer_addresses"
+            ),
         ):
             trust_db = TrustDB(
                 logger=self.logger,
@@ -635,6 +720,10 @@ class ModuleFactory:
         from modules.blocking.blocking import Blocking
 
         with (
+            patch(
+                "modules.blocking.blocking.platform.system",
+                return_value="Linux",
+            ),
             patch(
                 "modules.blocking.blocking.utils.get_sudo_according_to_env",
                 return_value="",
@@ -882,7 +971,8 @@ class ModuleFactory:
         return leak_detector
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_profiler_obj(self, mock_db):
+    @patch("slips_files.core.profiler.AIDManager")
+    def create_profiler_obj(self, mock_aid: Mock, mock_db: Mock) -> object:
         from slips_files.core.profiler import Profiler
 
         slips_args = Mock()
@@ -1237,7 +1327,7 @@ class ModuleFactory:
         ):
             handler = EvidenceHandler(
                 logger=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1283,7 +1373,7 @@ class ModuleFactory:
         ):
             worker = EvidenceHandlerWorker(
                 logger=self.logger,
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1331,7 +1421,7 @@ class ModuleFactory:
             handler = EvidenceLogger(
                 logger_stop_signal=Mock(),
                 evidence_logger_q=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
             )
         return handler
 
@@ -1393,6 +1483,32 @@ class ModuleFactory:
         )
         risk_iq.db = mock_db
         return risk_iq
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_iris_obj(self, mock_db: Mock) -> object:
+        """Create an Iris adapter with mocked database resources.
+
+        Parameters:
+            mock_db: Patched database constructor.
+
+        Returns:
+            Iris adapter ready for isolated protocol tests.
+        """
+        from modules.iris.iris import Iris
+
+        iris = Iris(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        iris.db = mock_db
+        iris.print = Mock()
+        return iris
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):

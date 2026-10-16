@@ -820,6 +820,11 @@ Available keywords for Microsoft: ('microsoft', 'windows', 'nt')
 
 Available keywords for Android: ('android', 'google')
 
+OS keywords must match complete words: `nt` inside `Macintosh` is not Windows
+NT. The evidence preserves the OS and browser names' capitalization, including
+`OS X`. Compatible macOS Chrome and HeadlessChrome observations do not generate
+an incompatibility solely because their OS family is `Macintosh`.
+
 ### Multiple user agents
 
 Slips stores the MAC address and vendor of every IP it sees

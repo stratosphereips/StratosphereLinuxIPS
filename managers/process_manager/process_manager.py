@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from multiprocessing.synchronize import SEM_VALUE_MAX
 from multiprocessing import Event, Process, Queue, Semaphore
 from typing import List, Set
 
@@ -71,10 +72,17 @@ class ProcessManager(
         self.processes: List[Process] = []
         # this is the queue that will be used by the input process
         # to pass flows to the profiler
-        # this max size is decided based on the avg size of each flow (650
-        # bytes), and the max memory that this queue is allowed to
-        # use (1GB), so 1321528 bytes will be 2033 flows in queue at max
-        self.profiler_queue = Queue(maxsize=1321528)
+        # Queue capacity counts items, not bytes. Preserve the existing
+        # bound where supported, and respect macOS's smaller semaphore limit.
+        self.profiler_queue = Queue(maxsize=min(1321528, SEM_VALUE_MAX))
+        # The main process owns queues shared by child workers. If a child
+        # must be killed, its queue semaphores still belong to this process
+        # and can be released during final shutdown.
+        self.aid_queue = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
+        self.evidence_worker_queue = Queue(
+            maxsize=min(30000000, SEM_VALUE_MAX)
+        )
+        self.evidence_logger_q = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         self.termination_event = Event()
         # to make sure we only warn the user once about
         # the pending modules

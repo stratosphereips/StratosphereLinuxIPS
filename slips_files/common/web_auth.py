@@ -7,39 +7,53 @@ raw BaseHTTPRequestHandler). Gates access behind the same password used
 for redis (see redis_auth.py) - one secret for a single local analyst to
 remember.
 
-This is deliberately not a full user-accounts system: slips is a
-single-user, per-analysis tool, so one shared password behind a signed,
-time-limited session cookie is the right amount of protection.
+This is deliberately not a full user-accounts system: Slips is a
+single-user tool, so one shared password behind a signed, persistent
+session cookie is the right amount of protection.
 """
 import hmac
+import json
 import os
 import pwd
-import secrets
 import time
 from hashlib import sha256
 from html import escape
 from typing import Dict, Optional, Tuple
 
 from slips_files.core.database.redis_db.redis_auth import (
+    ensure_web_password_matches_redis_password,
     get_redis_auth_conf_path,
+    get_web_auth_path,
 )
 
 SESSION_COOKIE_NAME = "slips_session"
-SESSION_TTL_SECONDS = 8 * 60 * 60
-
-# generated once per process. sessions are naturally invalidated whenever
-# slips restarts, which matches a per-analysis tool.
-_SESSION_KEY = secrets.token_bytes(32)
+SESSION_TTL_SECONDS = 365 * 24 * 60 * 60
 
 # ip -> (consecutive failed attempts, unlock-at epoch)
 _login_attempts: Dict[str, Tuple[int, float]] = {}
 _MAX_TRACKED_IPS = 1000
 
 
+def _session_signing_key() -> bytes:
+    """Derive a stable session key from the persistent web password hash.
+
+    Returns:
+        Key shared by web server processes until the web password changes.
+    """
+    ensure_web_password_matches_redis_password()
+    with open(get_web_auth_path(), "r") as auth_file:
+        password_hash = bytes.fromhex(json.load(auth_file)["hash"])
+    if len(password_hash) != 32:
+        raise ValueError("Invalid web password hash")
+    return sha256(b"Slips web session v2\0" + password_hash).digest()
+
+
 def issue_token() -> str:
     """returns a new signed, time-limited session token"""
     expiry = int(time.time()) + SESSION_TTL_SECONDS
-    mac = hmac.new(_SESSION_KEY, str(expiry).encode(), sha256).hexdigest()
+    mac = hmac.new(
+        _session_signing_key(), str(expiry).encode(), sha256
+    ).hexdigest()
     return f"{expiry}.{mac}"
 
 
@@ -54,7 +68,11 @@ def validate_token(token: Optional[str]) -> bool:
         return False
     if time.time() > expiry:
         return False
-    expected = hmac.new(_SESSION_KEY, expiry_str.encode(), sha256).hexdigest()
+    try:
+        key = _session_signing_key()
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError):
+        return False
+    expected = hmac.new(key, expiry_str.encode(), sha256).hexdigest()
     return hmac.compare_digest(mac, expected)
 
 
@@ -104,6 +122,7 @@ def login_page_html(error: Optional[str], post_path: str = "/login") -> str:
     return f"""<!doctype html>
 <html><head><title>Slips - login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
 <style>
 :root {{
   color-scheme: dark;
@@ -141,7 +160,7 @@ button:hover {{ opacity:.9; }}
 <body>
 <form method="post" action="{post_path}">
 <div class="login-brand">
-<img class="login-logo" src="/slips-logo.png" alt="Slips">
+<img class="login-logo" src="/slips-logo.png?v=4" alt="Slips">
 <h2>Slips</h2>
 <p class="password-hint">{escape(_password_hint())}</p>
 </div>

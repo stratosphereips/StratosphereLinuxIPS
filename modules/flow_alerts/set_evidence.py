@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
-from typing import List
+from typing import Any, List
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import SMTP
@@ -207,13 +207,16 @@ class SetEvidenceHelper:
         )
         self.db.set_evidence(evidence)
 
-    def different_localnet_usage(self, twid, flow, ip_outside_localnet=""):
+    def different_localnet_usage(
+        self, twid: str, flow: Any, ip_outside_localnet: str = ""
+    ) -> None:
+        """Attribute an outside-subnet connection to its initiating source.
+
+        Parameters:
+            twid: Detection time window.
+            flow: Connection involving a private address outside the subnet.
+            ip_outside_localnet: Whether srcip or dstip is outside the subnet.
         """
-        :param ip_outside_localnet: was the
-        'srcip' outside the localnet or the 'dstip'?
-        """
-        # the attacker here is the IP found to be
-        # private and outside the localnet
         if ip_outside_localnet == "srcip":
             attacker = Attacker(
                 direction=Direction.SRC,
@@ -235,14 +238,14 @@ class SetEvidenceHelper:
             )
         else:
             attacker = Attacker(
-                direction=Direction.DST,
-                ioc_type=IoCType.IP,
-                value=flow.daddr,
-            )
-            victim = Victim(
                 direction=Direction.SRC,
                 ioc_type=IoCType.IP,
                 value=flow.saddr,
+            )
+            victim = Victim(
+                direction=Direction.DST,
+                ioc_type=IoCType.IP,
+                value=flow.daddr,
             )
             threat_level = ThreatLevel.HIGH
             description = (
@@ -272,6 +275,8 @@ class SetEvidenceHelper:
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
+            interface=flow.interface,
+            proto=flow.proto,
             confidence=confidence,
             src_port=flow.sport,
             dst_port=flow.dport,
@@ -319,8 +324,8 @@ class SetEvidenceHelper:
         confidence: float = min(1, (1 / 100) * (nxdomains - 100) + 1)
         confidence = round(confidence, 2)  # for readability
         description = (
-            f"Possible DGA or domain scanning. {flow.saddr} "
-            f"failed to resolve {nxdomains} different domains"
+            f"{flow.saddr} received NXDOMAIN for {nxdomains} distinct DNS names. "
+            "Possible DGA or domain scanning; DNS filtering can also cause this."
         )
 
         evidence: Evidence = Evidence(

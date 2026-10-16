@@ -176,6 +176,50 @@ def test_is_ip_outside_local_network(
 
 
 @pytest.mark.parametrize(
+    "timestamp, expected_outside, expected_old_dns",
+    [
+        (150.0, False, True),
+        (250.0, True, False),
+        (50.0, False, False),
+    ],
+)
+def test_network_checks_use_settings_at_flow_time(
+    timestamp: float, expected_outside: bool, expected_old_dns: bool
+) -> None:
+    """Avoid applying the new Wi-Fi subnet and DNS to delayed old flows.
+
+    Parameters:
+        timestamp: Captured flow time.
+        expected_outside: Whether the old host IP is outside the active subnet.
+        expected_old_dns: Whether the old resolver was active at flow time.
+    """
+    module_factory = ModuleFactory()
+    flow_alert_utils = module_factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = {
+        "changed_at": 200.0, "local_network": "10.0.0.0/24",
+        "dns_servers": ["10.0.0.53"],
+        "history": [{
+            "changed_at": 100.0, "local_network": "192.168.1.0/24",
+            "dns_servers": ["192.168.1.53"],
+        }],
+    }
+    db.is_official_dns_server.return_value = False
+    flow = SimpleNamespace(
+        interface="wlan0", starttime=timestamp,
+        saddr="192.168.1.20", daddr="192.168.1.53",
+        dport=53, sport=40000,
+    )
+
+    assert flow_alert_utils.is_ip_outside_local_network(
+        db, flow, "192.168.1.20"
+    ) is expected_outside
+    assert flow_alert_utils.is_official_dns_server(
+        db, flow, "dstip"
+    ) is expected_old_dns
+
+
+@pytest.mark.parametrize(
     "is_running_non_stop, time_diff, expected_result",
     [
         (False, 0, True),

@@ -8,7 +8,7 @@ import subprocess
 import os
 import sys
 import threading
-from multiprocessing import Queue
+from queue import Queue
 
 
 class UIManager:

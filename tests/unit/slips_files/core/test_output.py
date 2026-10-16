@@ -54,6 +54,20 @@ def test_print():
     (mock_print.assert_called_once_with(f"[{sender}] {txt}", end="\n"))
 
 
+def test_print_skips_stuck_terminal_lock() -> None:
+    """Do not block monitoring when another process holds the CLI lock."""
+    output = ModuleFactory().create_output_obj()
+    output.cli_lock = MagicMock()
+    output.cli_lock.acquire.return_value = False
+
+    with patch("builtins.print") as mock_print:
+        output.print("main", "status")
+
+    output.cli_lock.acquire.assert_called_once_with(timeout=2)
+    output.cli_lock.release.assert_not_called()
+    mock_print.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "output_verbose, input_verbose, expected_result",
     [  # Testcase1: Input verbose less than output verbose
