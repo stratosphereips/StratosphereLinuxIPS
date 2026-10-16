@@ -239,6 +239,23 @@ class RedisDB(
             cls.output_dir, f"redis-server-port-{redis_port}.conf"
         )
 
+    @classmethod
+    def _get_pid_file_path(cls, redis_port: Optional[int] = None) -> str:
+        """Locate a writable, port-specific PID file beside the Redis logs.
+
+        Parameters:
+            redis_port: Server port, defaulting to this instance's port.
+
+        Returns:
+            PID file path resolved before Redis changes its working directory.
+        """
+        port = cls.redis_port if redis_port is None else redis_port
+        return cls._absolute_path(
+            get_redis_logs_path_inside_output_dir(
+                cls.output_dir, f"redis-server-port-{port}.pid"
+            )
+        )
+
     @staticmethod
     def _absolute_path(path: str) -> str:
         return os.path.abspath(os.fspath(path))
@@ -277,11 +294,8 @@ class RedisDB(
                 setup(self)
 
     @classmethod
-    def _setup_config_file(cls):
-        """
-        Update cls._conf_file (config/redis.conf) based on the params given
-        to slips (e.g -s)
-        """
+    def _setup_config_file(cls) -> None:
+        """Write per-run Redis paths and options from the template."""
         cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
@@ -310,7 +324,9 @@ class RedisDB(
                 cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
             )
         )
-        cls._options.update({"logfile": logfile})
+        cls._options.update(
+            {"logfile": logfile, "pidfile": cls._get_pid_file_path()}
+        )
         cls._options.update(
             {
                 # manual SAVE writes the .rdb file to <output_dir>/databases
@@ -2373,6 +2389,7 @@ class RedisDB(
                     "dbfilename": os.path.basename(safe_backup_file),
                     "dir": os.path.dirname(safe_backup_file),
                     "port": 32850,
+                    "pidfile": RedisDB._get_pid_file_path(32850),
                 }
             )
 

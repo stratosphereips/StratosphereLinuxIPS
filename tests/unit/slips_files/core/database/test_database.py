@@ -804,6 +804,109 @@ def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
             db.rdb.rcache.delete(key)
 
 
+@pytest.mark.parametrize("owner", [None, "output/a-slips-run"])
+def test_factory_refuses_a_redis_run_owner(owner: str | None) -> None:
+    """Refuse an owned database before its constructor can write test values.
+
+    Parameters:
+        owner: Existing Slips run identity or a Redis instance reserved for tests.
+    """
+    factory = ModuleFactory()
+    client = Mock()
+    client.hget.return_value = owner
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", return_value=client), patch("slips_files.core.database.database_manager.DBManager") as constructor:
+        if owner:
+            with pytest.raises(RuntimeError, match="Refusing unit-test writes"):
+                factory.create_db_manager_obj(6379)
+            constructor.assert_not_called()
+        else:
+            factory._assert_redis_has_no_run_owner(6379)
+        client.close.assert_called_once()
+
+
+def test_factory_allows_an_unused_redis_port() -> None:
+    """Allow a new isolated server without treating refused connections as ownership."""
+    factory = ModuleFactory()
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=False), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password") as connect:
+        factory._assert_redis_has_no_run_owner(65000)
+    connect.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError])
+def test_factory_refuses_unverified_redis_ownership(failure: type[Exception]) -> None:
+    """Fail closed if an existing server's run ownership cannot be checked.
+
+    Parameters:
+        failure: Connection loss or timeout while checking the occupied port.
+    """
+    factory = ModuleFactory()
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", side_effect=failure("connection lost")):
+        with pytest.raises(RuntimeError, match="Cannot verify ownership"):
+            factory._assert_redis_has_no_run_owner(65000)
+
+
+@pytest.mark.parametrize("redis_port", [6379, 32768, 32850])
+@pytest.mark.parametrize("output_name", ["first-run", "second-run"])
+def test_setup_config_file_owns_port_specific_pidfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    redis_port: int, output_name: str,
+) -> None:
+    """Override a template PID path with a writable path for this run and port.
+
+    Parameters:
+        tmp_path: Isolated configuration and output directory.
+        monkeypatch: Restore Redis class settings after the test.
+        redis_port: Default, alternate, or database-loading port.
+        output_name: Separate output directories must not share PID files.
+    """
+    _module_factory = ModuleFactory()
+    template = tmp_path / "redis.conf.template"
+    template.write_text('daemonize yes\npidfile redis-default.pid\nsave ""\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
+    monkeypatch.setattr(RedisDB, "_conf_file", "", raising=False)
+    monkeypatch.setattr(RedisDB, "output_dir", output_name, raising=False)
+    monkeypatch.setattr(RedisDB, "redis_port", redis_port, raising=False)
+    monkeypatch.setattr(RedisDB, "args", SimpleNamespace(save=False), raising=False)
+    monkeypatch.setattr("slips_files.core.database.redis_db.database.ensure_redis_password", lambda: "fixture")
+    monkeypatch.setattr("slips_files.core.database.redis_db.database.get_redis_auth_conf_path", lambda: str(tmp_path / "redis-auth.conf"))
+
+    RedisDB._setup_config_file()
+
+    expected = tmp_path / output_name / "redis" / f"redis-server-port-{redis_port}.pid"
+    assert RedisDB._get_pid_file_path() == str(expected)
+    assert RedisDB._get_pid_file_path(32850) == str(expected.with_name("redis-server-port-32850.pid"))
+    assert RedisDB._options["pidfile"] == str(expected)
+    assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
+    expected.write_text("12345\n")
+    assert expected.read_text() == "12345\n"
+
+
+def test_load_redis_database_keeps_a_separate_pidfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The restore server must not overwrite another Redis server's PID file.
+
+    Parameters:
+        tmp_path: Isolated backup and Redis output directory.
+        monkeypatch: Restore Redis class settings after the test.
+    """
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.sudo = ""
+    db.print = Mock()
+    backup = tmp_path / "dump.rdb"
+    backup.write_bytes(b"test")
+    monkeypatch.setattr(RedisDB, "output_dir", str(tmp_path), raising=False)
+    monkeypatch.setattr(RedisDB, "_conf_file", "", raising=False)
+    monkeypatch.setattr(RedisDB, "_options", {"pidfile": "cache.pid"}, raising=False)
+    with patch("slips_files.core.database.redis_db.database.subprocess.run", return_value=SimpleNamespace(stdout=b"Redis RDB dump")), patch("os.system", return_value=0):
+        assert db.load(str(backup)) is True
+    expected = tmp_path / "redis" / "redis-server-port-32850.pid"
+    assert RedisDB._options["pidfile"] == str(expected)
+    assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
+
+
 def test_setup_config_file_uses_isolated_path_and_preserves_save(tmp_path, monkeypatch):
     template = tmp_path / "redis.conf.template"
     template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
