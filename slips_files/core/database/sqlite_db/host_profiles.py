@@ -653,9 +653,11 @@ class HostProfileStore:
             "ORDER BY f.last_seen DESC LIMIT 1)"
         )
         historical_mac = (
-            "(SELECT lower(f.value) FROM facts f WHERE f.network_id=a.network_id "
-            "AND f.ip=a.ip AND f.kind='mac' AND f.first_seen<=a.updated_at "
-            "ORDER BY MIN(f.last_seen, a.updated_at) DESC, f.first_seen DESC LIMIT 1)"
+            "(SELECT lower(f.value) FROM facts f JOIN host_annotations saved "
+            "ON saved.network_id=f.network_id AND saved.ip=f.ip "
+            "WHERE f.network_id=a.network_id AND f.ip=a.ip AND f.kind='mac' "
+            "AND f.first_seen<=saved.updated_at "
+            "ORDER BY MIN(f.last_seen, saved.updated_at) DESC, f.first_seen DESC LIMIT 1)"
         )
         has_bindings = connection.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='host_annotation_devices'"
