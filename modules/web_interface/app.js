@@ -4028,9 +4028,14 @@ async function loadArpPoisoning() {
   renderArpPoisoning();
 }
 
-/** Render one compact reliability-history line for every known P2P peer. */
-function renderP2PTrustChart(history, peers) {
-  const rows = history.filter((row) => Number.isFinite(Number(row.timestamp))
+/** Plot measured reliability, matching the peers table's Reliability column.
+ * @param {Array<object>} history - Retained reliability samples per peer.
+ * @param {Array<object>} peers - Peer identities shown in the table.
+ */
+function renderP2PReliabilityChart(history, peers) {
+  const rows = history.filter((row) => row.timestamp !== null && row.timestamp !== undefined
+    && row.reliability !== null && row.reliability !== undefined
+    && Number.isFinite(Number(row.timestamp))
     && Number.isFinite(Number(row.reliability)));
   const peerIds = [...new Set(rows.map((row) => String(row.peer_id)))];
   const peerIndexes = new Map(peerIds.map((peerId, index) => [peerId, index]));
@@ -4058,7 +4063,7 @@ function renderP2PTrustChart(history, peers) {
     "p2p-trust-chart",
     points,
     series,
-    (value) => numeric(value).toFixed(2),
+    (value) => numeric(value).toFixed(3),
     minimumReliability,
   );
   const legend = byId("p2p-trust-legend");
@@ -4399,7 +4404,7 @@ async function loadP2P() {
     line.append(text("span", label), code, copy);
     identity.append(line);
   });
-  renderP2PTrustChart(payload.trust_history || [], payload.peers || []);
+  renderP2PReliabilityChart(payload.trust_history || [], payload.peers || []);
   renderP2PPeers();
   renderP2PMessages();
 }

@@ -208,12 +208,12 @@
         <article class="surface table-surface p2p-peers-panel"><div class="table-heading"><div><h3>Peers <span id="p2p-peer-count" class="muted"></span></h3><p>Live connectivity and latest persistent trust</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th data-sort="ip">Peer</th><th data-sort="peer_id">Peer ID</th><th data-sort="connected">Connectivity</th><th data-sort="trust" title="Calculated trust ranges from −0.5 to 0.85 with reliability weight 0.7; it is not a probability.">Trust</th><th data-sort="reliability" title="Measured only on the peer's confirmed local network; preserved while away.">Reliability</th><th data-sort="reports_received">Reports</th><th data-sort="confirmed_reports" title="Validated distinct hosts; accuracy adjustments apply separately to each evidence type and detector version. Hover for details.">Report accuracy</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div><div class="p2p-panel-foot">Trust “—” = not yet computed. Reliability is preserved while away from the peer’s network. Click a peer to filter messages.</div></article>
         <article class="surface p2p-trust-history">
           <div class="table-heading p2p-chart-heading">
-            <div><h3>Peer trust history</h3><p>Persistent reliability used by the trust model</p></div>
-            <select id="p2p-range" class="range-select" aria-label="Peer trust history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
+            <div><h3>Peer reliability history</h3><p>Same metric as the table’s Reliability column · 0 to 1</p></div>
+            <select id="p2p-range" class="range-select" aria-label="Peer reliability history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
           </div>
           <div id="p2p-trust-legend" class="p2p-trust-legend"></div>
           <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
-          <p class="p2p-chart-note">Hover for precise values. Offline peers stop at last seen.</p>
+          <p class="p2p-chart-note">Reliability measures connectivity; Trust also uses local reputation. Hover for values. Offline peers stop at last seen.</p>
         </article>
         </div>
         <div class="p2p-two-column p2p-message-workspace">

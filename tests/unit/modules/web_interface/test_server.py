@@ -6598,12 +6598,18 @@ def test_p2p_trust_history_honors_selected_range(
         "QmOldPeer",
         "QmRecentPeer",
     }
+    recent_peer = next(
+        peer for peer in result["peers"]
+        if peer["peer_id"] == "QmRecentPeer"
+    )
+    assert recent_peer["reliability"] == result["trust_history"][0]["reliability"] == 0.75
+    assert recent_peer["trust"] == pytest.approx(0.2625)
 
 
 def test_p2p_trust_full_history_keeps_first_detection(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Keep the first and latest trust samples after history grows large.
+    """Keep the first and latest reliability samples after history grows large.
 
     Parameters:
         tmp_path: Isolated trust database directory.
@@ -6671,7 +6677,7 @@ def test_p2p_api_forwards_selected_history_range() -> None:
     handler.server.reader.p2p.assert_called_once_with(query)
 
 
-def test_p2p_trust_chart_uses_compact_range_control() -> None:
+def test_p2p_reliability_chart_uses_compact_range_control() -> None:
     """Wire the compact peer chart to the selected API history range."""
     _module_factory = ModuleFactory()
     app_source = Path("modules/web_interface/app.js").read_text(
@@ -6686,7 +6692,7 @@ def test_p2p_trust_chart_uses_compact_range_control() -> None:
 
     assert 'id="p2p-range"' in html_source
     assert 'id="p2p-trust-chart"' in html_source
-    assert "function renderP2PTrustChart" in app_source
+    assert "function renderP2PReliabilityChart" in app_source
     assert "/api/p2p?range=${encodeURIComponent(range)}" in app_source
     assert 'byId("p2p-range").addEventListener("change"' in app_source
     assert (

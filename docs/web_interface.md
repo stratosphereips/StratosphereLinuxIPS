@@ -501,16 +501,20 @@ search applies to isolation state, transition history, and ARP evidence.
 
 ### P2P
 
-The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent per-peer reliability chart keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges, with hover values. Full history starts at the peer's first recorded detection and samples the whole trust timeline, keeping each peer's first and latest measured reliability; no reliability value is invented before the first measurement. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.
+The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent **Peer reliability history** chart plots the same metric as the table's **Reliability** column, with three decimal places on its numeric axis and hover values. It keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges. Full history starts at the peer's first recorded detection and samples the whole reliability timeline, keeping each peer's first and latest measured reliability; no reliability value is invented before the first measurement or for a missing measurement. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.
 Every peers-table heading is sortable, including connectivity, trust, reliability, report count, and last seen time.
 
 Peer IDs appear shortened in tables, message details, and chart labels; hover
 shows the full ID and the copy controls retain it. The IP column prefers an
 authenticated TCP endpoint or the newest usable peer IP. Loopback updates
-from Pigeon do not replace a known remote address. Trust uses Slips' current
-cached value when available. If that short-lived cache expires, the page
-calculates the same value from stored reliability and local reputation. A dash
-means those inputs are unavailable. Reliability is a separate Pigeon measure.
+from Pigeon do not replace a known remote address. The table calculates Trust
+from the latest stored reliability and local reputation; a dash means those
+inputs are unavailable. Reliability is Pigeon's connectivity measure, ranging
+from 0 to 1. Trust also includes the local assessment of the peer, so these
+columns need not have the same value. With no local assessment (confidence
+zero), the current formula gives `Trust = 0.7 × Reliability / 2`: reliability
+`1.000` therefore gives trust `0.350`. The chart shows reliability history,
+not calculated trust history.
 
 The reports and message activity table combines bounded send/receive telemetry with retained reports from the current run. Filter chips show all messages, reports, requests, or connection changes. The Show menu also keeps received reports, sent reports, and blame reports available. Every column is sortable; Load more exposes the remaining retained rows. Selecting a row opens its content beside the table, including Copy JSON. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
 

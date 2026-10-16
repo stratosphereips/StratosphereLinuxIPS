@@ -19,6 +19,106 @@ from modules.web_interface.history import connect_history
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
+    """Identify the plotted metric and match its points and hover to the table.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    first_id = "QmFirstPeerWithAFullAuthenticatedIdentity123456789"
+    second_id = "QmSecondPeerWithAFullAuthenticatedIdentity987654321"
+    payload = {
+        "enabled": True, "trust_range": "all",
+        "counts": {"connected": 1, "known": 2},
+        "peers": [
+            {"peer_id": first_id, "ip": "192.168.1.170", "connected": True,
+             "trust": 0.350, "reliability": 1, "first_seen": 50, "last_seen": 200},
+            {"peer_id": second_id, "ip": "192.168.1.248", "connected": False,
+             "trust": 0.34125, "reliability": 0.975, "first_seen": 75, "last_seen": 300},
+        ],
+        "trust_history": [
+            {"peer_id": first_id, "timestamp": 100, "reliability": 0.9},
+            {"peer_id": second_id, "timestamp": 100, "reliability": 0.94},
+            {"peer_id": first_id, "timestamp": 200, "reliability": 1},
+            {"peer_id": second_id, "timestamp": 300, "reliability": 0.975},
+            {"peer_id": "missing-reliability", "timestamp": 350, "reliability": None},
+            {"peer_id": "missing-time", "timestamp": None, "reliability": 0.5},
+        ],
+    }
+    errors: list[str] = []
+    ranges: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve a reliability history with distinct calculated trust values.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/p2p":
+            selected_range = parse_qs(parsed.query)["range"][0]
+            ranges.append(selected_range)
+            route.fulfill(json={**payload, "trust_range": selected_range})
+        elif parsed.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width": 1800, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof loadP2P === 'function'")
+        page.evaluate("""async theme => {
+            setTheme(theme); state.activeTab='p2p';
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='p2p'));
+            byId('p2p-range').value='all'; await loadP2P();
+        }""", theme)
+        assert page.locator(".p2p-chart-heading h3").inner_text() == "Peer reliability history"
+        assert "table’s Reliability column" in page.locator(".p2p-chart-heading p").inner_text()
+        assert page.locator("#p2p-range").get_attribute("aria-label") == "Peer reliability history range"
+        rows = page.locator("#p2p-peers-table tbody tr")
+        assert rows.nth(0).locator("td").nth(3).inner_text() == "0.350"
+        assert rows.nth(0).locator("td").nth(4).inner_text() == "1.000"
+        assert rows.nth(1).locator("td").nth(3).inner_text() == "0.341"
+        assert rows.nth(1).locator("td").nth(4).inner_text() == "0.975"
+        assert page.locator("#p2p-trust-legend > span").count() == 2
+        assert page.locator("#p2p-trust-legend code").first.inner_text() != first_id
+        assert page.locator("#p2p-trust-legend > span").first.get_attribute("title") == first_id
+        chart = page.locator("#p2p-trust-chart")
+        assert chart.locator(".chart-y-label").all_text_contents() == ["0.800", "0.900", "1.000"]
+        for index, reliability in enumerate((1, 0.975)):
+            endpoint = chart.locator(f".peer-trust-line-{index}").evaluate(
+                "path => path.getPointAtLength(path.getTotalLength()).y"
+            )
+            assert endpoint == pytest.approx(100 - (reliability - 0.8) / 0.2 * 88, abs=0.01)
+        area = chart.locator(".chart-hit-area").bounding_box()
+        for fraction, ip, expected in ((0.6, "192.168.1.170", "1.000"), (0.999, "192.168.1.248", "0.975")):
+            page.mouse.move(area["x"] + area["width"] * fraction, area["y"] + area["height"] / 2)
+            tooltip = page.locator(".p2p-trust-chart-grid .chart-tooltip")
+            assert tooltip.is_visible()
+            assert ip in tooltip.inner_text()
+            assert tooltip.inner_text().endswith(f": {expected}")
+        page.screenshot(path=f"output/p2p-reliability-{theme}.png")
+        page.locator("#p2p-range").select_option("24h")
+        page.wait_for_function("state.p2p.trust_range === '24h'")
+        assert ranges[-1] == "24h"
+        assert chart.locator(".chart-line").count() == 2
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_header_shows_all_ips_and_refreshes_outside_overview_in_chrome(theme: str) -> None:
     """All monitored IPs stay visible and current while another tab is selected.
 
