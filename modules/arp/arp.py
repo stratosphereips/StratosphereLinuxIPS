@@ -5,6 +5,7 @@ import ipaddress
 import os
 import time
 import threading
+import zlib
 
 import queue
 from typing import List
@@ -87,6 +88,17 @@ class ARP(IModule):
                 "delete_zeek_files in the config file."
             )
         self.store_zeek_files_copy = conf.store_zeek_files_copy()
+        # Experiment knob (federation peer variants): cite only this fraction
+        # of a detected sweep's ARP flows as evidence. 1.0 (the default, and
+        # for any config without an [arp] section, i.e. normal SLIPS) = full
+        # strength, unchanged behaviour; a lower value models a weaker sensor
+        # so fewer ARP flows get labeled.
+        rate = conf.read_configuration("arp", "scan_detection_rate", 1.0)
+        try:
+            rate = float(rate)
+        except (TypeError, ValueError):
+            rate = 1.0
+        self.arp_scan_detection_rate = min(1.0, max(0.0, rate))
 
     def is_running_zeek(self) -> bool:
         return (
@@ -257,7 +269,35 @@ class ARP(IModule):
                 return True
         return False
 
+    def _sample_scan_uids(self, uids: List[str]) -> List[str]:
+        """Keep the deterministic fraction of a detected sweep's uids set by
+        the `arp.scan_detection_rate` config (default 1.0 = all, unchanged).
+        A lower rate models a weaker sensor that attributes only part of a
+        sweep, so fewer ARP flows are cited as evidence. The choice is stable
+        per uid (crc32), so a given flow is consistently kept or dropped across
+        the initial and the combined evidence. rate<=0 cites none.
+        """
+        rate = getattr(self, "arp_scan_detection_rate", 1.0)
+        if rate >= 1.0:
+            return uids
+        if rate <= 0.0:
+            return []
+        kept = [
+            uid
+            for uid in uids
+            if zlib.crc32(str(uid).encode()) % 1000 < rate * 1000
+        ]
+        # a sweep we did detect still cites at least one flow
+        if uids and not kept:
+            kept = [uids[0]]
+        return kept
+
     def set_evidence_arp_scan(self, ts, profileid, twid, uids: List[str]):
+        sampled = self._sample_scan_uids(uids)
+        if uids and not sampled:
+            # weakened sensor (rate<1) attributed none of this sweep
+            return
+        uids = sampled
         confidence: float = 0.8
         threat_level: ThreatLevel = ThreatLevel.LOW
         saddr: str = profileid.split("_")[1]

@@ -279,6 +279,35 @@ def test_set_evidence_arp_scan():
     assert set(evidence.uid) == set(uids)
 
 
+def test_arp_scan_detection_rate_subsamples_cited_uids():
+    """A weaker sensor (scan_detection_rate < 1) cites only a deterministic
+    fraction of a sweep's uids; rate 1.0 cites all; rate 0 cites none."""
+    uids = [f"u{i}" for i in range(200)]
+
+    full = ModuleFactory().create_arp_obj()
+    full.arp_scan_detection_rate = 1.0
+    assert full._sample_scan_uids(uids) == uids
+
+    weak = ModuleFactory().create_arp_obj()
+    weak.arp_scan_detection_rate = 0.3
+    kept = weak._sample_scan_uids(uids)
+    assert 0 < len(kept) < len(uids)
+    assert kept == weak._sample_scan_uids(uids)  # deterministic per uid
+    assert set(kept) <= set(uids)
+
+    off = ModuleFactory().create_arp_obj()
+    off.arp_scan_detection_rate = 0.0
+    assert off._sample_scan_uids(uids) == []
+
+
+def test_set_evidence_arp_scan_skips_sweep_when_rate_zero():
+    """rate 0 attributes no flow, so no ARP_SCAN evidence is set."""
+    arp = ModuleFactory().create_arp_obj()
+    arp.arp_scan_detection_rate = 0.0
+    arp.set_evidence_arp_scan("1632214645.78", profileid, twid, ["a", "b"])
+    arp.db.set_evidence.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "operation, dst_hw, expected_result",
     [
