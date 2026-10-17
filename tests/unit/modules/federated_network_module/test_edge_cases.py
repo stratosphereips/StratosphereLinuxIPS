@@ -419,7 +419,7 @@ def _net(tmp_path, peer):
         rp_path=str(tmp_path / "rp.bin"), seed=SEED, input_dim=None
     )
     return fnm.build_with_init_seed(
-        fnm.peer_init_seed(SEED, peer),
+        fnm.shared_init_seed(SEED),
         lambda: fnm._build_random_projection_mlp(stub),
     )
 
@@ -616,7 +616,7 @@ def test_proximity_gives_a_far_outlier_peer_almost_no_weight():
 def _trainable(tmp_path, balancing=""):
     m = _peer_module(tmp_path, "slips-a")
     m.seed = SEED
-    m.init_seed = fnm.peer_init_seed(SEED, "slips-a")
+    m.init_seed = fnm.shared_init_seed(SEED)
     m.rp_path = str(tmp_path / "rp.bin")
     m.input_dim = None
     m.balancing = balancing

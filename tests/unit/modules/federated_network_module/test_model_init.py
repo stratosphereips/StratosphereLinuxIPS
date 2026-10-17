@@ -1,8 +1,9 @@
 """Model initialisation of the federated network module.
 
 The frozen random projection is shared by every peer (and equals the
-distributed artifacts/random_projection.bin); the trainable layers use the
-same init scheme on every peer but a per-peer, run-to-run reproducible seed.
+distributed artifacts/random_projection.bin); the trainable layers are also
+SHARED across peers - every peer starts fc1/head from the same seed so FedAvg's
+averaging of the shared layers is meaningful.
 """
 
 import os
@@ -58,8 +59,8 @@ def test_projection_is_identical_across_peers_however_obtained(
     elif rp_file == "shipped":
         with open(SHIPPED_RP, "rb") as src, open(rp_path, "wb") as dst:
             dst.write(src.read())
-    peer_a = _build(builder, fnm.peer_init_seed(SEED, "slips-1"), rp_path)
-    peer_b = _build(builder, fnm.peer_init_seed(SEED, "slips-2"), rp_path)
+    peer_a = _build(builder, fnm.shared_init_seed(SEED), rp_path)
+    peer_b = _build(builder, fnm.shared_init_seed(SEED), rp_path)
     shipped = torch.load(SHIPPED_RP, weights_only=True)
     for model in (peer_a, peer_b):
         assert torch.equal(model.random_projection.weight.data, shipped.T)
@@ -67,21 +68,19 @@ def test_projection_is_identical_across_peers_however_obtained(
 
 
 @pytest.mark.parametrize("builder", BUILDERS)
-def test_trainable_layers_differ_between_peers(builder, tmp_path):
+def test_trainable_layers_are_identical_across_peers(builder, tmp_path):
+    # shared init: every peer starts fc1/head from the same weights, so FedAvg
+    # averages compatible layers (per-peer init broke merging)
     rp_path = str(tmp_path / "rp.bin")
-    a = _trainable(
-        _build(builder, fnm.peer_init_seed(SEED, "slips-1"), rp_path)
-    )
-    b = _trainable(
-        _build(builder, fnm.peer_init_seed(SEED, "slips-2"), rp_path)
-    )
+    a = _trainable(_build(builder, fnm.shared_init_seed(SEED), rp_path))
+    b = _trainable(_build(builder, fnm.shared_init_seed(SEED), rp_path))
     assert a.keys() == b.keys() and a
-    assert all(not torch.equal(a[k], b[k]) for k in a)
+    assert all(torch.equal(a[k], b[k]) for k in a)
 
 
 @pytest.mark.parametrize("builder", BUILDERS)
-def test_trainable_layers_are_reproducible_per_peer(builder, tmp_path):
-    seed = fnm.peer_init_seed(SEED, "slips-3")
+def test_trainable_layers_are_reproducible(builder, tmp_path):
+    seed = fnm.shared_init_seed(SEED)
     first = _trainable(_build(builder, seed, str(tmp_path / "a.bin")))
     # the shipped/regenerated projection file must not change the result
     second = _trainable(_build(builder, seed, str(tmp_path / "a.bin")))
@@ -94,14 +93,11 @@ def test_building_a_model_leaves_the_global_rng_untouched(tmp_path):
     assert torch.equal(torch.get_rng_state(), state)
 
 
-def test_peer_init_seed_is_stable_and_peer_specific():
-    assert fnm.peer_init_seed(SEED, "slips-1") == fnm.peer_init_seed(
-        SEED, "slips-1"
-    )
-    assert fnm.peer_init_seed(SEED, "slips-1") != fnm.peer_init_seed(
-        SEED, "slips-2"
-    )
-    assert 0 <= fnm.peer_init_seed(SEED, "slips-1") < 2**31
+def test_shared_init_seed_is_stable_and_shared():
+    # no peer_id: identical for every peer, stable run-to-run, in range
+    assert fnm.shared_init_seed(SEED) == fnm.shared_init_seed(SEED)
+    assert fnm.shared_init_seed(SEED) != fnm.shared_init_seed(SEED + 1)
+    assert 0 <= fnm.shared_init_seed(SEED) < 2**31
 
 
 def test_two_layer_second_projection_frozen_shared_and_forward(tmp_path):
@@ -110,12 +106,12 @@ def test_two_layer_second_projection_frozen_shared_and_forward(tmp_path):
     """
     a = _build(
         fnm._build_random_projection_two_layer,
-        fnm.peer_init_seed(SEED, "slips-1"),
+        fnm.shared_init_seed(SEED),
         str(tmp_path / "a.bin"),
     )
     b = _build(
         fnm._build_random_projection_two_layer,
-        fnm.peer_init_seed(SEED, "slips-2"),
+        fnm.shared_init_seed(SEED),
         str(tmp_path / "b.bin"),
     )
     # RP2 exists, is frozen, and is identical on both peers (shared by seed)
@@ -153,7 +149,7 @@ def test_simple_mlp_is_the_trainable_twin_of_rlh(tmp_path):
         rp_path=str(tmp_path / "rp.bin"), seed=SEED, input_dim=None
     )
     model = fnm.build_with_init_seed(
-        fnm.peer_init_seed(SEED, "slips-1"),
+        fnm.shared_init_seed(SEED),
         lambda: fnm._build_simple_mlp(stub),
     )
     assert not hasattr(model, "random_projection")

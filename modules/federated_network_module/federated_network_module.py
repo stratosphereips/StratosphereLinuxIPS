@@ -84,13 +84,14 @@ def shared_random_projection(
     return weights
 
 
-def peer_init_seed(seed: int, peer_id: str) -> int:
-    """Per-peer seed for the trainable layers: same init scheme on every
-    peer, different (but run-to-run reproducible) starting weights."""
-    import hashlib
-
-    digest = hashlib.md5(f"{seed}:{peer_id}".encode()).hexdigest()
-    return int(digest, 16) % (2**31)
+def shared_init_seed(seed: int) -> int:
+    """SHARED seed for the trainable layers: every peer starts fc1/head from
+    the SAME weights. FedAvg averages the shared layers, which is only
+    meaningful when all peers began from one common init (averaging weights
+    from different inits averages across incompatible neuron permutations and
+    destroys the model). A fixed salt keeps this distinct from the
+    random-projection seed. Shared across peers, reproducible run-to-run."""
+    return (int(seed) ^ 0x51ED5EED) % (2**31)
 
 
 def build_with_init_seed(init_seed: int, build):
@@ -847,9 +848,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self.my_peer_id = "unknown"
         self.print(f"My peer ID: {self.my_peer_id}", 1, 1)
-        # Trainable layers: same init scheme on every peer, per-peer seed
-        # (reproducible across runs); the random projection stays shared.
-        self.init_seed = peer_init_seed(self.seed, self.my_peer_id)
+        # Trainable layers: SHARED init across peers (classic FedAvg needs a
+        # common starting point so averaging fc1 is meaningful); the random
+        # projection is shared too. Per-peer init broke merging - see MANIFEST.
+        self.init_seed = shared_init_seed(self.seed)
         self.print(
             f"Trainable-layer init seed {self.init_seed} "
             f"(seed={self.seed}, peer={self.my_peer_id})",
@@ -1271,9 +1273,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         Train model on provided batch.
 
-        Note: epochs come from config. Set _freeze_fc1_for_training=True for
-        head-only fine-tuning (freezes ALL federated/shared layers, trains the
-        head only). The head is never frozen.
+        Note: epochs come from config. Set _finetune_stage=True for a fine-tune
+        pass (fewer epochs: merge_finetune_epochs). Every pass trains the shared
+        layers and the head; only the random projection stays frozen (at init).
 
         Args:
             x_train: Normalized features
@@ -1285,13 +1287,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         self.print("fit_incremental_model: entering", 1, 1)
 
-        # head-only fine-tuning freezes ALL federated/shared layers (the head is
-        # never frozen). Legacy flag name _freeze_fc1_for_training kept for its
-        # existing set-sites.
-        freeze_shared = getattr(self, "_freeze_fc1_for_training", False)
+        # Fine-tune stages (local polish + merged alignment) train the shared
+        # layers AND the head - only the epoch count is shorter. Freezing the
+        # shared layers starved the merged model: it could not adapt the
+        # averaged fc1 and collapsed to the majority class. The random
+        # projection stays frozen (set at model init), never trained.
+        finetune = getattr(self, "_finetune_stage", False)
         epochs = (
             self.merge_finetune_epochs
-            if freeze_shared
+            if finetune
             else self.local_training_epochs
         )
 
@@ -1308,13 +1312,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("fit_incremental_model: creating model...", 1, 1)
             self.model = self.create_empty_model().to(self.device)
 
-        if freeze_shared:
-            # head-only fine-tuning: freeze every federated layer, train head
-            self.model.set_shared_frozen(True)
-            self.model.set_head_frozen(False)
-        else:
-            self.model.set_shared_frozen(False)
-            self.model.set_head_frozen(False)
+        # every stage trains the shared layers and the head; only the random
+        # projection stays frozen (set at model init)
+        self.model.set_shared_frozen(False)
+        self.model.set_head_frozen(False)
 
         self.print(
             f"fit_incremental_model: creating tensors, x_shape={x_train.shape}",
@@ -2960,19 +2961,19 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Capture the head produced by local training; merge will start from here too
             head_before_w, head_before_b = self.model.get_head_weights()
 
-            # Phase 2: local head fine-tuning (fc1 frozen)
+            # Phase 2: local fine-tune (shorter; trains fc1+head, RP stays frozen)
             self.logger.log_train_header(
                 "local_head_train",
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
             self._reset_head_adam_state()
-            self._freeze_fc1_for_training = True
+            self._finetune_stage = True
             self.fit_incremental_model(
                 self._last_train_X,
                 self._last_train_Y,
                 train_target="local_head",
             )
-            self._freeze_fc1_for_training = False
+            self._finetune_stage = False
 
             self._save_local_model()
 
@@ -3295,11 +3296,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
-        Freeze fc1, train head ONLY on the provided batch with configured epochs.
+        Fine-tune the merged model (fc1 + head; RP stays frozen) on the provided
+        batch for merge_finetune_epochs, so it adapts the AVERAGED fc1 instead
+        of being stuck with it (a frozen averaged fc1 collapsed the merged
+        model).
 
-        X is the ALREADY-SCALED batch the local head fine-tuned on
-        (_last_train_X): it is neither fed to the scaler (fit on raw
-        training features only) nor scaled a second time.
+        X is the ALREADY-SCALED batch the local fine-tune used (_last_train_X):
+        it is neither fed to the scaler (fit on raw training features only) nor
+        scaled a second time.
         """
         try:
             if len(X) == 0:
@@ -3311,17 +3315,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Get epochs from instance variable (set in init)
             epochs = self.merge_finetune_epochs
 
-            # Train head ONLY (fc1 frozen) for specified epochs
+            # Fine-tune the whole merged model (fc1+head) for the shorter
+            # fine-tune epoch count so it can adapt the averaged fc1.
             self.print(
-                f"Fine-tuning head for {epochs} epochs on {len(y)} samples",
+                f"Fine-tuning merged model for {epochs} epochs on {len(y)} samples",
                 1,
                 1,
             )
-            # For head alignment, we need to train with frozen fc1
-            # Override by temporarily setting a flag
-            self._freeze_fc1_for_training = True
+            self._finetune_stage = True
             self.fit_incremental_model(X, y, train_target="merged")
-            self._freeze_fc1_for_training = False
+            self._finetune_stage = False
 
             self.print(
                 f"Head aligned ({self.merge_finetune_epochs} epochs) on {len(y)} samples "
