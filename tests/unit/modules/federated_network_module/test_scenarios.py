@@ -895,11 +895,11 @@ def test_peers_exchange_local_models_and_merge_the_latest_one(net):
 
 
 @pytest.mark.parametrize("stage", ["local_head", "merged"])
-def test_finetune_updates_the_federated_layers(net, stage):
-    """The fine-tune (local polish and merged alignment) now TRAINS the shared
-    layers too, so the merged model can adapt the averaged fc1 instead of being
-    stuck with it (a frozen averaged fc1 collapsed the merged model to the
-    majority class). The random projection stays frozen (see test_model_init).
+def test_head_only_finetune_leaves_federated_layers_untouched(net, stage):
+    """Head-only fine-tuning must not change the federated layers: after local
+    training the model sent to peers keeps the fc1 its full fit produced, and
+    after a merge the merged model keeps the averaged fc1 (which, with shared
+    init, is already a good feature extractor - only the head is polished).
     """
     p = net.peer(k=0)
     p.m.handle_p2p_model(net.payload("slips-a"))
@@ -923,7 +923,7 @@ def test_finetune_updates_the_federated_layers(net, stage):
     staged = [(b, a) for t, b, a in calls if t == stage]
     assert len(staged) == 2
     for before, after in staged:
-        assert not torch.equal(before, after)
+        assert torch.equal(before, after)
 
 
 def test_merge_leaves_the_feature_scaler_of_the_run_untouched(net):

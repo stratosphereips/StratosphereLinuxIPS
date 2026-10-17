@@ -1273,9 +1273,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         Train model on provided batch.
 
-        Note: epochs come from config. Set _finetune_stage=True for a fine-tune
-        pass (fewer epochs: merge_finetune_epochs). Every pass trains the shared
-        layers and the head; only the random projection stays frozen (at init).
+        Note: epochs come from config. Set _finetune_stage=True for a head-only
+        fine-tune pass (fewer epochs: merge_finetune_epochs; freezes the shared
+        layers, trains the head). The random projection is always frozen.
 
         Args:
             x_train: Normalized features
@@ -1287,11 +1287,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         self.print("fit_incremental_model: entering", 1, 1)
 
-        # Fine-tune stages (local polish + merged alignment) train the shared
-        # layers AND the head - only the epoch count is shorter. Freezing the
-        # shared layers starved the merged model: it could not adapt the
-        # averaged fc1 and collapsed to the majority class. The random
-        # projection stays frozen (set at model init), never trained.
+        # _finetune_stage selects the fine-tune pass (fewer epochs). With shared
+        # init the averaged fc1 is already a good feature extractor, so the
+        # fine-tune freezes the shared layers and trains only the head (below) -
+        # retraining fc1 here over-trained the weak peer's noisy data.
         finetune = getattr(self, "_finetune_stage", False)
         epochs = (
             self.merge_finetune_epochs
@@ -1312,10 +1311,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("fit_incremental_model: creating model...", 1, 1)
             self.model = self.create_empty_model().to(self.device)
 
-        # every stage trains the shared layers and the head; only the random
-        # projection stays frozen (set at model init)
-        self.model.set_shared_frozen(False)
-        self.model.set_head_frozen(False)
+        # fine-tune stages freeze the shared layers and train only the head;
+        # full training trains both. The random projection is always frozen.
+        if finetune:
+            self.model.set_shared_frozen(True)
+            self.model.set_head_frozen(False)
+        else:
+            self.model.set_shared_frozen(False)
+            self.model.set_head_frozen(False)
 
         self.print(
             f"fit_incremental_model: creating tensors, x_shape={x_train.shape}",
@@ -2961,7 +2964,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Capture the head produced by local training; merge will start from here too
             head_before_w, head_before_b = self.model.get_head_weights()
 
-            # Phase 2: local fine-tune (shorter; trains fc1+head, RP stays frozen)
+            # Phase 2: local head fine-tune (shorter; fc1 frozen, head only)
             self.logger.log_train_header(
                 "local_head_train",
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
@@ -3296,10 +3299,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
-        Fine-tune the merged model (fc1 + head; RP stays frozen) on the provided
-        batch for merge_finetune_epochs, so it adapts the AVERAGED fc1 instead
-        of being stuck with it (a frozen averaged fc1 collapsed the merged
-        model).
+        Fine-tune the merged HEAD (fc1 frozen) on the provided batch for
+        merge_finetune_epochs. With shared init the averaged fc1 is already a
+        good feature extractor, so polishing only the head suffices.
 
         X is the ALREADY-SCALED batch the local fine-tune used (_last_train_X):
         it is neither fed to the scaler (fit on raw training features only) nor
@@ -3318,7 +3320,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Fine-tune the whole merged model (fc1+head) for the shorter
             # fine-tune epoch count so it can adapt the averaged fc1.
             self.print(
-                f"Fine-tuning merged model for {epochs} epochs on {len(y)} samples",
+                f"Fine-tuning merged head for {epochs} epochs on {len(y)} samples",
                 1,
                 1,
             )
