@@ -1,6 +1,9 @@
 import json
 import sqlite3
+from pathlib import Path
 from unittest.mock import Mock, patch
+
+import pytest
 
 from modules.web_interface.history import (
     HistoryCollector,
@@ -8,6 +11,67 @@ from modules.web_interface.history import (
     initialize_history,
 )
 from tests.module_factory import ModuleFactory
+
+
+def test_rotated_error_log_resets_offset_even_when_larger(
+    tmp_path: Path,
+) -> None:
+    """Read a replacement file from its beginning using inode checkpoints.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "errors.log"
+    path.write_text("2026/10/09 13:54:02 [first] old\n")
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999
+    )
+    assert collector.tail_errors() == 1
+    path.rename(tmp_path / "rotated.log")
+    path.write_text(
+        "2026/10/09 13:54:03 [second] replacement with a longer message\n"
+    )
+    assert collector.tail_errors() == 1
+    with connect_history(collector.history_path) as connection:
+        assert [
+            row[0]
+            for row in connection.execute(
+                "SELECT module FROM error_events ORDER BY id"
+            )
+        ] == ["first", "second"]
+
+
+@pytest.mark.parametrize(
+    "input_type,expected", [("interface", 3), ("pcap", 0)]
+)
+def test_operational_history_retention_leaves_imported_captures_intact(
+    tmp_path: Path, input_type: str, expected: int
+) -> None:
+    """Expire old metrics, errors and transient hosts only in continuous runs.
+
+    Parameters:
+        tmp_path: Isolated history directory.
+        input_type: Source of the analysis.
+        expected: Number of expired records.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.hget.return_value = input_type
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999
+    )
+    with connect_history(collector.history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time,module,message,line) VALUES (1,'module','message','line')"
+        )
+        connection.execute(
+            "INSERT INTO host_snapshots VALUES ('192.0.2.1',1,'{}')"
+        )
+        connection.execute(
+            "INSERT INTO runtime_metrics_1m VALUES (1,0,0,0,0,0,0,0,1)"
+        )
+    assert collector.prune_operational_history(2_000_000_000.0) == expected
 
 
 def create_flow_database(path) -> None:

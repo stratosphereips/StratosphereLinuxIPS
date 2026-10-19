@@ -181,7 +181,7 @@ parameters:
   # client_ips : [10.0.0.1, 11.0.0.0/24]
   client_ips: []
 
-# Live-interface flow retention. Detection records stay in flows.sqlite;
+# Live-interface raw-flow retention. Detection history has separate limits;
 # ordinary raw flows expire sooner than flows linked to non-excluded evidence.
 # This does not run when importing a capture file.
 flow_retention:
@@ -198,6 +198,26 @@ flow_retention:
   # evidence and protected for ordinary_hours after that evidence.
   # 0 disables the size cap.
   max_size_mb: 512
+
+#############################
+detection_history:
+  enabled: true
+  active_days: 90
+  # Rotate older details sooner under size pressure, preserving the last day.
+  max_active_size_mb: 2048
+  min_active_hours: 24
+  # Monthly SQLite archives expire 30 days after their last write.
+  archive_retention_days: 30
+  archive_file_size_mb: 256
+  # Expire the oldest completed segments sooner if archives exceed this cap.
+  max_archive_size_mb: 4096
+  batch_size: 200
+  interval_seconds: 10
+  work_budget_ms: 250
+  min_free_disk_mb: 1024
+  # Rotate Slips logs at this size; retain rotated logs for the archive age.
+  log_max_size_mb: 64
+  log_backup_count: 30
 
 #############################
 Debug:

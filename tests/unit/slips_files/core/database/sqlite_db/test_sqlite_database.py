@@ -3,6 +3,7 @@
 import json
 import sqlite3
 from datetime import datetime
+from pathlib import Path
 from types import SimpleNamespace
 import os
 from unittest.mock import MagicMock
@@ -22,6 +23,90 @@ from slips_files.core.flows.zeek import (
 def db(tmp_path):
     logger = MagicMock()
     return SQLiteDB(logger, str(tmp_path), 12345)
+
+
+@pytest.mark.parametrize("new_evidence", [False, True])
+def test_legacy_priority_migration_resumes_large_link_sets(
+    tmp_path: Path, new_evidence: bool
+) -> None:
+    """Checkpoint a heavily referenced UID without exposing an unknown priority.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        new_evidence: Add a newer canonical decision while migration is pending.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    for index in range(9):
+        database.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time) VALUES (?,?)",
+            (str(index), index + 10),
+        )
+        database.execute(
+            "INSERT INTO evidence_flows VALUES (?,'shared')", (str(index),)
+        )
+    database.execute(
+        "INSERT INTO flows(uid,flow,event_time) VALUES ('shared','{}',1)"
+    )
+    database.execute("UPDATE flows SET retention_priority=NULL")
+    database.conn.execute("BEGIN IMMEDIATE")
+    database._backfill_retention_times(database.conn.cursor(), "flows", 3)
+    database.conn.commit()
+    assert database.conn.execute(
+        "SELECT retention_priority FROM flows"
+    ).fetchone() == (None,)
+    assert database.conn.execute(
+        "SELECT link_rowid FROM flow_retention_jobs"
+    ).fetchone() == (3,)
+    database.close()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    if new_evidence:
+        database.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time) VALUES ('new',1000)"
+        )
+        database.execute("INSERT INTO evidence_flows VALUES ('new','shared')")
+    for _ in range(10):
+        database.conn.execute("BEGIN IMMEDIATE")
+        database._backfill_retention_times(database.conn.cursor(), "flows", 3)
+        database.conn.commit()
+    assert database.conn.execute(
+        "SELECT retention_class,retention_priority FROM flows"
+    ).fetchone() == (1, 1000 if new_evidence else 18)
+    assert (
+        database.conn.execute("SELECT * FROM flow_retention_jobs").fetchall()
+        == []
+    )
+    database.close()
+
+
+def test_completed_migration_batches_survive_later_interruption(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Preserve committed classification progress if a later prune times out.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        monkeypatch: Interrupt pruning after the migration commits.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    database.execute(
+        "INSERT INTO flows(uid,flow,event_time) VALUES ('old','{}',1)"
+    )
+    database.execute("UPDATE flows SET retention_priority=NULL")
+    monkeypatch.setattr(
+        database,
+        "_prune_flow_table",
+        MagicMock(side_effect=sqlite3.OperationalError("interrupted")),
+    )
+    assert database.maintain_flow_retention(100, 0) == []
+    assert database.conn.execute(
+        "SELECT retention_priority FROM flows"
+    ).fetchone() == (1,)
+    assert database.conn.execute(
+        "SELECT backfill_rowid FROM flow_retention_state WHERE table_name='flows'"
+    ).fetchone() == (-1,)
+    database.close()
 
 
 def test_sqlite_lockfile_is_world_writable(tmp_path):
@@ -69,6 +154,52 @@ def test_review_schema_migrates_existing_alert_reviews(tmp_path):
         "WHERE alert_id = 'old-alert'"
     ).fetchone() == ("resolved", "checked", "")
     migrated.close()
+
+
+@pytest.mark.parametrize("parameterized", [False, True])
+def test_locked_snapshot_retries_with_a_fresh_transaction(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    parameterized: bool,
+) -> None:
+    """Recover writes after another connection invalidates a WAL snapshot.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+        monkeypatch: Replace retry delays with a recording mock.
+        parameterized: Use query parameters instead of a literal value.
+    """
+    module_factory = ModuleFactory()
+    database = SQLiteDB(module_factory.logger, str(tmp_path), 12345)
+    sleep = MagicMock()
+    monkeypatch.setattr("slips_files.common.abstracts.isqlite.sleep", sleep)
+    try:
+        database.execute("CREATE TABLE retry_test(value TEXT)")
+        database.conn.execute("BEGIN")
+        database.conn.execute("SELECT * FROM retry_test").fetchall()
+        with sqlite3.connect(database.get_db_path()) as writer:
+            writer.execute("INSERT INTO retry_test VALUES ('other writer')")
+
+        cursor = database.execute(
+            (
+                "INSERT INTO retry_test VALUES (?)"
+                if parameterized
+                else "INSERT INTO retry_test VALUES ('retried')"
+            ),
+            ("retried",) if parameterized else None,
+        )
+
+        assert cursor is not None
+        assert not database.conn.in_transaction
+        assert database.conn.execute(
+            "SELECT value FROM retry_test ORDER BY rowid"
+        ).fetchall() == [
+            ("other writer",),
+            ("retried",),
+        ]
+        sleep.assert_called_once_with(5)
+    finally:
+        database.close()
 
 
 def test_get_flow_uses_parameterized_query(db):
@@ -621,7 +752,18 @@ def test_evidence_and_alert_relationships_are_persisted(db) -> None:
         return_value={"id": "evidence-1"},
     ):
         db.add_evidence(evidence)
+        db.execute(
+            "UPDATE evidence SET whitelisted=1,accumulated_ratl=2 WHERE evidence_id='evidence-1'"
+        )
+        db.add_evidence(evidence)
     db.add_alert(alert)
+    db.add_alert(alert)
+    assert dict(
+        db.conn.execute("SELECT entity,count FROM history_totals")
+    ) == {"evidence": 1, "alerts": 1}
+    assert db.conn.execute(
+        "SELECT whitelisted,accumulated_ratl FROM evidence"
+    ).fetchone() == (1, 2)
 
     assert db.select("evidence")[0][0] == "evidence-1"
     assert (

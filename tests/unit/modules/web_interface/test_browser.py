@@ -19,6 +19,127 @@ from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
 
 
+def test_archive_selection_is_scoped_and_read_only_in_chrome() -> None:
+    """Send archive queries and restore active controls when leaving an archive."""
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    requests: list[str] = []
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve the real interface with an isolated archive catalogue.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(
+                path=str(assets / ("index.html" if path == "/" else path[1:]))
+            )
+        elif path == "/api/archives":
+            route.fulfill(
+                json={
+                    "items": [
+                        {
+                            "id": "detections-2026-09-0001.sqlite",
+                            "label": "2026-09-0001",
+                        }
+                    ]
+                }
+            )
+        elif path == "/api/evidence":
+            requests.append(route.request.url)
+            route.fulfill(json={"items": [], "total": 0, "full_total": 0})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.evaluate("() => loadArchiveCatalog()")
+        page.locator('[data-tab="evidence"]').click()
+        page.locator("#history-source").select_option(
+            "detections-2026-09-0001.sqlite"
+        )
+        page.wait_for_function("() => !state.requests.has('evidence')")
+        assert parse_qs(urlparse(requests[-1]).query)["archive"] == [
+            "detections-2026-09-0001.sqlite"
+        ]
+        assert parse_qs(urlparse(requests[-1]).query)["range"] == ["all"]
+        assert page.locator("#evidence-export").is_hidden()
+        assert page.locator("#network-filter").is_disabled()
+        assert page.evaluate("() => state.reviewAvailable") is False
+        page.locator("#history-source").select_option("")
+        assert page.locator("#evidence-export").is_visible()
+        assert page.evaluate("() => state.reviewAvailable") is True
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("tab", ["evidence", "hosts"])
+def test_polling_preserves_slow_table_requests_in_chrome(tab: str) -> None:
+    """Let slow tables finish while allowing filters to replace stale requests.
+
+    Parameters:
+        tab: Primary table whose request exceeds the polling interval.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    pending: list[Any] = []
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Hold table responses and serve local assets with isolated API data.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(
+                path=str(assets / ("index.html" if path == "/" else path[1:]))
+            )
+        elif path == f"/api/{tab}":
+            pending.append(route)
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.clock.install()
+        page.locator(f'[data-tab="{tab}"]').click()
+        page.wait_for_function("() => state.requests.has(state.activeTab)")
+        page.wait_for_timeout(50)
+        assert len(pending) == 1
+        page.evaluate("() => schedulePoll()")
+        page.clock.run_for(15000)
+        assert len(pending) == 1
+        assert page.evaluate("() => state.requests.has(state.activeTab)")
+
+        page.locator(f"#{tab}-search").fill("scan")
+        page.clock.run_for(300)
+        page.wait_for_timeout(50)
+        assert len(pending) == 2
+        assert errors == []
+        browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_network_summary_requires_matching_device_evidence_in_chrome(theme: str) -> None:
     """Keep guest DNS mentions and reused-IP devices out of device network history.

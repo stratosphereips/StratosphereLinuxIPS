@@ -12,6 +12,8 @@ const state = {
   metadata: null,
   metrics: [],
   configuration: null,
+  archiveSource: "",
+  archivesCheckedAt: 0,
   configurationSection: "detection",
   configurationFilter: "all",
   whitelists: null,
@@ -799,6 +801,12 @@ async function api(key, path, trackFailures = true, allowNotFound = false) {
   const controller = new AbortController();
   state.requests.set(key, controller);
   try {
+    if (state.archiveSource && /^\/api\/(?:alerts|evidence|hosts|flows)(?:[/?]|$)/.test(path)) {
+      const url = new URL(path, window.location.origin);
+      url.searchParams.set("archive", state.archiveSource);
+      url.searchParams.delete("network");
+      path = `${url.pathname}${url.search}`;
+    }
     const response = await fetch(path, {
       cache: "no-store", signal: controller.signal,
     });
@@ -3375,7 +3383,8 @@ async function saveWhitelistRule(change) {
  */
 async function saveReviewChange(entity, change) {
   if (!state.reviewAvailable) {
-    throw new Error("Restart Slips manually to enable the new review controls.");
+    throw new Error(state.archiveSource ? "Detection archives are read-only."
+      : "Restart Slips manually to enable the new review controls.");
   }
   const response = await fetch(`/api/${entity}-review`, {
     method: "POST",
@@ -3430,7 +3439,8 @@ function reviewEditor(entity, record) {
   const panel = document.createElement("section");
   panel.className = "surface review-editor";
   panel.append(text("h3", entity === "alert" ? "Review this alert" : "Review this evidence"));
-  const availability = text("p", "Restart Slips manually to enable review actions in the running web server.", "muted review-availability");
+  const availability = text("p", state.archiveSource ? "Detection archives are read-only."
+    : "Restart Slips manually to enable review actions in the running web server.", "muted review-availability");
   availability.hidden = state.reviewAvailable;
   panel.append(availability);
   const current = record.review_status || (entity === "alert" ? "active" : "unreviewed");
@@ -6733,6 +6743,7 @@ async function loadHostScoreHistory() {
   if (!state.host) return;
   const params = hostRangeParams();
   params.set("max_points", "600");
+  if (state.archiveSource) params.set("archive", state.archiveSource);
   const path = `/api/hosts/${escapePath(state.host.ip)}/score-history?${params}`;
   try {
     const response = await fetch(path, { cache: "no-store" });
@@ -6950,6 +6961,7 @@ async function refreshActive() {
 }
 
 function activeRangeIsLive() {
+  if (state.archiveSource && ["alerts", "evidence", "hosts"].includes(state.activeTab)) return false;
   if (["configuration", "whitelists"].includes(state.activeTab)) return false;
   if (state.activeTab === "metadata") return true;
   if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
@@ -6969,7 +6981,13 @@ function schedulePoll() {
   const interval = state.activeTab === "alerts" && byId("alerts-range").value === "all"
     ? 30000 : 5000;
   const delay = Math.min(interval * (2 ** state.failures), 60000);
-  state.timer = window.setTimeout(refreshActive, delay);
+  state.timer = window.setTimeout(() => {
+    const pending = state.requests.has(state.activeTab)
+      || (state.activeTab === "hosts"
+        && (state.pages.hosts.refreshing || state.requests.has("host")));
+    if (pending) schedulePoll();
+    else refreshActive();
+  }, delay);
 }
 
 /** Poll backend liveness independently from the active tab's data range. */
@@ -6984,12 +7002,52 @@ async function pollBackendStatus() {
       state.headerNetwork = identity.current_network || null;
       if (state.overview) renderHeaderNetwork(state.overview);
     }
+    if (Date.now() - state.archivesCheckedAt > 60000) loadArchiveCatalog().catch(() => {});
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
     scheduleBackendStatusPoll();
   }
 }
+
+/** Refresh archive choices and expose cleanup progress without opening history files. */
+async function loadArchiveCatalog() {
+  state.archivesCheckedAt = Date.now();
+  const payload = await api("archiveCatalog", "/api/archives", false, true);
+  if (!payload || payload.not_found) return;
+  const select = byId("history-source");
+  select.replaceChildren(new Option("Active detection history", ""));
+  (payload.items || []).forEach((item) => select.add(new Option(`Archive · ${item.label}`, item.id)));
+  byId("history-source-label").hidden = !payload.items?.length;
+  if ([...select.options].some((option) => option.value === state.archiveSource)) select.value = state.archiveSource;
+  else if (state.archiveSource) {
+    state.archiveSource = "";
+    toast("The selected archive expired. Showing active detection history.");
+    refreshNetworkScopedViews();
+  }
+  const status = payload.maintenance || {};
+  const storage = byId("history-storage-status");
+  storage.replaceChildren();
+  [["Monthly archives", `${payload.items?.length || 0} · ${formatBytes(payload.archive_size_bytes)}`],
+    ["Last maintenance pass", status.last_run ? formatTime(status.last_run) : "Waiting for the next pass"],
+    ["History maintenance", status.disk_pressure ? "Paused: low disk space" : status.pending_hours || status.pending_archives
+      ? `Catching up · ${compact(status.pending_hours || 0)} hours pending · ${status.pending_archives || 0} transfers pending` : "Up to date"]]
+    .forEach(([label, value]) => storage.append(detailRow(label, value)));
+}
+
+byId("history-source").addEventListener("change", (event) => {
+  state.archiveSource = event.currentTarget.value;
+  if (state.archiveSource) {
+    state.networkOnly = false;
+    byId("network-filter").checked = false;
+    byId("alerts-review").value = "all";
+    byId("evidence-review").value = "all";
+    ["alerts", "evidence", "hosts", "host"].forEach((name) => { byId(`${name}-range`).value = "all"; });
+  }
+  updateReviewAvailability(true);
+  byId("network-filter").disabled = Boolean(state.archiveSource) || !state.networkFilterSupported;
+  refreshNetworkScopedViews();
+});
 
 /** Enable device grouping only when the running backend supports it. */
 function updateDeviceViewAvailability(identity) {
@@ -7023,7 +7081,7 @@ function updateNetworkFilterAvailability(identity) {
   if (changed) state.hostNames.clear();
   const label = byId("network-filter-label");
   label.hidden = !supported;
-  byId("network-filter").disabled = !supported || start === null;
+  byId("network-filter").disabled = !supported || start === null || Boolean(state.archiveSource);
   label.title = start === null
     ? "Waiting for a monitored network connection"
     : "Show hosts, traffic, alerts and evidence observed during the current continuous network connection only";
@@ -7080,6 +7138,8 @@ byId("device-view").addEventListener("change", (event) => {
  * @param {boolean} available Whether the server accepts review actions.
  */
 function updateReviewAvailability(available) {
+  available = available && !state.archiveSource;
+  byId("evidence-export").hidden = Boolean(state.archiveSource);
   state.reviewAvailable = available;
   ["alerts-review", "evidence-review"].forEach((id) => {
     byId(id).disabled = !available;
@@ -7089,7 +7149,11 @@ function updateReviewAvailability(available) {
       button.disabled = !available;
     });
     const notice = editor.querySelector(".review-availability");
-    if (notice) notice.hidden = available;
+    if (notice) {
+      notice.hidden = available;
+      notice.textContent = state.archiveSource ? "Detection archives are read-only."
+        : "Restart Slips manually to enable review actions in the running web server.";
+    }
   });
 }
 

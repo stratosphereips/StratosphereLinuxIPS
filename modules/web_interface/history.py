@@ -13,6 +13,7 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 import redis
+from slips_files.common.parsers.config_parser import ConfigParser
 
 ERROR_LINE = re.compile(
     r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+"
@@ -551,8 +552,16 @@ class HistoryCollector:
                 self._metadata_set(connection, backfill_key, 1)
             offset = int(self._metadata_get(connection, offset_key, "0"))
             try:
-                if error_path.stat().st_size < offset:
+                stat = error_path.stat()
+                inode_key = f"error_inode:{error_path.name}"
+                inode = f"{stat.st_dev}:{stat.st_ino}"
+                if (
+                    stat.st_size < offset
+                    or self._metadata_get(connection, inode_key, inode)
+                    != inode
+                ):
                     offset = 0
+                self._metadata_set(connection, inode_key, inode)
             except OSError:
                 return 0
             active_id: Optional[int] = None
@@ -590,7 +599,7 @@ class HistoryCollector:
                     "r", encoding="utf-8", errors="replace"
                 ) as handle:
                     handle.seek(offset)
-                    while True:
+                    for _ in range(FLOW_INDEX_BATCH_SIZE):
                         line_start = handle.tell()
                         line = handle.readline()
                         if not line:
@@ -922,6 +931,21 @@ class HistoryCollector:
                 if not isinstance(evidence, dict):
                     continue
                 canonical_id = str(evidence.get("id") or evidence_id)
+                if (
+                    getattr(self, "_archive_tombstones_available", False)
+                    and connection.execute(
+                        "SELECT 1 FROM history_archived_ids WHERE entity='evidence' AND record_id=?",
+                        (canonical_id,),
+                    ).fetchone()
+                ):
+                    continue
+                cutoff = getattr(self, "_active_history_cutoff", None)
+                if (
+                    cutoff is not None
+                    and self._event_timestamp(evidence.get("timestamp"))
+                    < cutoff
+                ):
+                    continue
                 if ("evidence", canonical_id) in deleted:
                     continue
                 profile = evidence.get("profile", {})
@@ -1035,6 +1059,20 @@ class HistoryCollector:
         if deleted is None:
             deleted = self._deleted_record_ids(connection)
         entity = "alert" if record.get("Status") == "Incident" else "evidence"
+        if (
+            getattr(self, "_archive_tombstones_available", False)
+            and connection.execute(
+                "SELECT 1 FROM history_archived_ids WHERE entity=? AND record_id=?",
+                ("alerts" if entity == "alert" else "evidence", record_id),
+            ).fetchone()
+        ):
+            return
+        cutoff = getattr(self, "_active_history_cutoff", None)
+        if (
+            cutoff is not None
+            and self._event_timestamp(record.get("CreateTime")) < cutoff
+        ):
+            return
         if (entity, record_id) in deleted:
             return
         note = self._json_value(record.get("Note"), {})
@@ -1145,6 +1183,14 @@ class HistoryCollector:
             offset = int(
                 self._metadata_get(history, "alerts_json_offset", "0")
             )
+            stat = alerts_path.stat()
+            inode = f"{stat.st_dev}:{stat.st_ino}"
+            if (
+                self._metadata_get(history, "alerts_json_inode", inode)
+                != inode
+            ):
+                offset = 0
+            self._metadata_set(history, "alerts_json_inode", inode)
         deleted = self._deleted_record_ids(connection)
         try:
             if alerts_path.stat().st_size < offset:
@@ -1192,8 +1238,24 @@ class HistoryCollector:
         """
         if not self.flows_path.exists():
             return 0
+        policy = ConfigParser().detection_history_policy()
+        live = self.redis.hget("analysis", "input_type") in {
+            "interface",
+            "stdin",
+            "cyst",
+        }
+        self._active_history_cutoff = (
+            time.time() - int(policy["active_days"]) * 86400
+            if live and policy["enabled"]
+            else None
+        )
         try:
             with sqlite3.connect(self.flows_path, timeout=20) as connection:
+                self._archive_tombstones_available = bool(
+                    connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE name='history_archived_ids'"
+                    ).fetchone()
+                )
                 schema_upgraded = False
                 if not self._detection_schema_ready:
                     schema_upgraded = self._detection_schema(connection)
@@ -1289,6 +1351,35 @@ class HistoryCollector:
 
         return len(rows)
 
+    def prune_operational_history(self, now: float) -> int:
+        """Expire bounded batches of old live-run operational records.
+
+        Parameters:
+            now: Current Unix timestamp.
+
+        Returns:
+            Number of deleted records.
+        """
+        policy = ConfigParser().detection_history_policy()
+        if not policy["enabled"] or self.redis.hget(
+            "analysis", "input_type"
+        ) not in {"interface", "stdin", "cyst"}:
+            return 0
+        cutoff = now - int(policy["active_days"]) * 86400
+        count = 0
+        with connect_history(self.history_path) as connection:
+            for table, timestamp in (
+                ("error_events", "event_time"),
+                ("runtime_metrics_1m", "bucket_ts"),
+                ("host_snapshots", "observed_at"),
+            ):
+                count += connection.execute(
+                    f"DELETE FROM {table} WHERE rowid IN (SELECT rowid FROM {table} "
+                    f"WHERE {timestamp}<? ORDER BY {timestamp} LIMIT ?)",
+                    (cutoff, FLOW_INDEX_BATCH_SIZE),
+                ).rowcount
+        return count
+
     def collect_once(self) -> None:
         """Run one bounded collector iteration."""
         now = time.time()
@@ -1305,4 +1396,5 @@ class HistoryCollector:
         self.tail_errors()
         if now - self._last_rollup >= 60:
             self.rollup_metrics()
+            self.prune_operational_history(now)
             self._last_rollup = now

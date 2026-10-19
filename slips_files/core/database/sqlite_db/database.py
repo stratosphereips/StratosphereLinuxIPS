@@ -17,6 +17,10 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.output import Output
+from slips_files.core.database.sqlite_db.detection_history import (
+    DetectionHistory,
+    initialize_detection_history,
+)
 
 
 class SQLiteDB(ISQLite):
@@ -62,6 +66,31 @@ class SQLiteDB(ISQLite):
             self._ensure_history_schema()
         self._ensure_retention_schema()
         self._ensure_review_schema()
+        with self.conn_lock:
+            with self._acquire_flock():
+                initialize_detection_history(self.conn)
+
+    def maintain_detection_history(
+        self, policy: dict[str, int | bool], now: float | None = None
+    ) -> dict:
+        """Maintain detection summaries and rotated archives under writer locks.
+
+        Parameters:
+            policy: Validated detection history configuration.
+            now: Optional Unix time for retention and archive rotation.
+
+        Returns:
+            Maintenance health and bounded progress statistics.
+        """
+        with self.conn_lock:
+            with self._acquire_flock():
+                self.conn.execute("PRAGMA busy_timeout=100")
+                try:
+                    return DetectionHistory(
+                        self.conn, self.output_dir
+                    ).maintain(policy, time.time() if now is None else now)
+                finally:
+                    self.conn.execute("PRAGMA busy_timeout=20000")
 
     def _ensure_review_schema(self) -> None:
         """Keep analyst decisions in the durable run database."""
@@ -107,15 +136,76 @@ class SQLiteDB(ISQLite):
                     f"ALTER TABLE {table} ADD COLUMN retention_class "
                     "INTEGER NOT NULL DEFAULT 0"
                 )
+            if "retention_priority" not in columns:
+                self.execute(
+                    f"ALTER TABLE {table} ADD COLUMN retention_priority REAL"
+                )
+                if self.get_count(
+                    "sqlite_master",
+                    "type='table' AND name='flow_retention_state'",
+                ):
+                    self.execute(
+                        "DELETE FROM flow_retention_state WHERE table_name=?",
+                        (table,),
+                    )
             self.execute(
                 f"CREATE INDEX IF NOT EXISTS {table}_retention_idx "
                 f"ON {table}(retention_class, event_time) "
                 "WHERE event_time IS NOT NULL"
             )
+            self.execute(
+                f"CREATE INDEX IF NOT EXISTS {table}_priority_idx "
+                f"ON {table}(retention_class,retention_priority,event_time)"
+            )
+            priority = (
+                "(SELECT MAX(e.evidence_time) FROM evidence_flows ef "
+                "JOIN evidence e ON e.evidence_id=ef.evidence_id "
+                "WHERE ef.uid=NEW.uid AND COALESCE(e.whitelisted,0)=0)"
+            )
+            self.execute(
+                f"CREATE TRIGGER IF NOT EXISTS {table}_initial_priority AFTER INSERT ON {table} BEGIN "
+                f"UPDATE {table} SET retention_priority=MAX(COALESCE(NEW.event_time,0),COALESCE({priority},NEW.event_time,0)),"
+                "retention_class=CASE WHEN EXISTS (SELECT 1 FROM evidence_flows ef JOIN evidence e "
+                "ON e.evidence_id=ef.evidence_id WHERE ef.uid=NEW.uid AND COALESCE(e.whitelisted,0)=0) "
+                "THEN 1 ELSE 0 END WHERE uid=NEW.uid; END"
+            )
+            self.execute(
+                f"CREATE TRIGGER IF NOT EXISTS {table}_linked_priority AFTER INSERT ON evidence_flows BEGIN "
+                f"UPDATE {table} SET retention_class=1,retention_priority=MAX(COALESCE(retention_priority,event_time,0),"
+                "COALESCE((SELECT evidence_time FROM evidence WHERE evidence_id=NEW.evidence_id),event_time,0)) "
+                "WHERE uid=NEW.uid AND EXISTS (SELECT 1 FROM evidence WHERE evidence_id=NEW.evidence_id "
+                "AND COALESCE(whitelisted,0)=0); END"
+            )
+            self.execute(
+                f"CREATE TRIGGER IF NOT EXISTS {table}_updated_evidence_priority AFTER UPDATE OF evidence_time,whitelisted "
+                "ON evidence WHEN COALESCE(NEW.whitelisted,0)=0 AND "
+                "(NEW.evidence_time IS NOT OLD.evidence_time OR NEW.whitelisted IS NOT OLD.whitelisted) BEGIN "
+                f"UPDATE {table} SET retention_class=1,retention_priority=MAX(COALESCE(retention_priority,event_time,0),"
+                "COALESCE(NEW.evidence_time,event_time,0)) WHERE uid IN "
+                "(SELECT uid FROM evidence_flows WHERE evidence_id=NEW.evidence_id); END"
+            )
+            remaining = (
+                "SELECT MAX(e.evidence_time) FROM evidence_flows ef JOIN evidence e "
+                f"ON e.evidence_id=ef.evidence_id WHERE ef.uid={table}.uid AND COALESCE(e.whitelisted,0)=0"
+            )
+            self.execute(
+                f"CREATE TRIGGER IF NOT EXISTS {table}_excluded_evidence_priority AFTER UPDATE OF whitelisted "
+                "ON evidence WHEN NEW.whitelisted=1 AND COALESCE(OLD.whitelisted,0)=0 BEGIN "
+                f"UPDATE {table} SET retention_priority=MAX(COALESCE(event_time,0),COALESCE(({remaining}),event_time,0)),"
+                "retention_class=CASE WHEN EXISTS (SELECT 1 FROM evidence_flows ef JOIN evidence e "
+                f"ON e.evidence_id=ef.evidence_id WHERE ef.uid={table}.uid AND COALESCE(e.whitelisted,0)=0) "
+                "THEN 1 ELSE 0 END WHERE uid IN (SELECT uid FROM evidence_flows WHERE evidence_id=NEW.evidence_id); END"
+            )
         self.create_table(
             "flow_retention_state",
             "table_name TEXT PRIMARY KEY, backfill_rowid INTEGER NOT NULL, "
             "backfill_max_rowid INTEGER NOT NULL",
+        )
+        self.create_table(
+            "flow_retention_jobs",
+            "table_name TEXT PRIMARY KEY, flow_rowid INTEGER NOT NULL, uid TEXT NOT NULL, "
+            "event_time REAL NOT NULL, link_rowid INTEGER NOT NULL DEFAULT 0, "
+            "latest_evidence_time REAL, linked INTEGER NOT NULL DEFAULT 0",
         )
 
     def _ensure_history_schema(self) -> None:
@@ -530,17 +620,17 @@ class SQLiteDB(ISQLite):
         return value if math.isfinite(value) else time.time()
 
     def _backfill_retention_times(
-        self, cursor, table: str, batch_size: int
+        self, cursor: sqlite3.Cursor, table: str, batch_size: int
     ) -> int:
-        """Migrate one bounded batch of legacy flow timestamps.
+        """Resume a bounded batch of legacy timestamps and linked priorities.
 
         Parameters:
             cursor: Cursor in the retention transaction.
             table: The flows or altflows table.
-            batch_size: Maximum number of legacy rows to update.
+            batch_size: Maximum legacy rows and evidence links to inspect.
 
         Returns:
-            Number of timestamps populated in this batch.
+            Number of flow records examined, including partial link scans.
         """
         state = cursor.execute(
             "SELECT backfill_rowid, backfill_max_rowid "
@@ -563,31 +653,84 @@ class SQLiteDB(ISQLite):
         if last_rowid < 0:
             return 0
         rows = cursor.execute(
-            f"SELECT rowid, flow FROM {table} WHERE rowid > ? "
-            "AND rowid <= ? AND event_time IS NULL "
-            "ORDER BY rowid LIMIT ?",
-            (last_rowid, max_rowid, batch_size),
+            f"SELECT rowid,uid,CASE WHEN event_time IS NULL OR retention_priority IS NULL THEN flow END,"
+            f"event_time,retention_priority FROM {table} WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT ?",
+            (last_rowid, max_rowid, min(batch_size, 16)),
         ).fetchall()
         if not rows:
+            cursor.execute(
+                "DELETE FROM flow_retention_jobs WHERE table_name=?", (table,)
+            )
             cursor.execute(
                 "UPDATE flow_retention_state SET backfill_rowid = -1 "
                 "WHERE table_name = ?",
                 (table,),
             )
             return 0
-        cursor.executemany(
-            f"UPDATE {table} SET event_time = ? WHERE rowid = ?",
-            [
-                (self._stored_flow_event_time(raw), rowid)
-                for rowid, raw in rows
-            ],
-        )
-        cursor.execute(
-            "UPDATE flow_retention_state SET backfill_rowid = ? "
-            "WHERE table_name = ?",
-            (rows[-1][0], table),
-        )
-        return len(rows)
+        remaining = batch_size
+        scanned = 0
+        for rowid, uid, raw, timestamp, priority in rows:
+            scanned += 1
+            if timestamp is not None and priority is not None:
+                cursor.execute(
+                    "DELETE FROM flow_retention_jobs WHERE table_name=?",
+                    (table,),
+                )
+                cursor.execute(
+                    "UPDATE flow_retention_state SET backfill_rowid=? WHERE table_name=?",
+                    (rowid, table),
+                )
+                continue
+            timestamp = (
+                timestamp
+                if timestamp is not None
+                else self._stored_flow_event_time(raw)
+            )
+            job = cursor.execute(
+                "SELECT flow_rowid,link_rowid,latest_evidence_time,linked FROM flow_retention_jobs WHERE table_name=?",
+                (table,),
+            ).fetchone()
+            if job is None or job[0] != rowid:
+                cursor.execute(
+                    "INSERT OR REPLACE INTO flow_retention_jobs VALUES (?,?,?,?,0,NULL,0)",
+                    (table, rowid, uid, timestamp),
+                )
+                link_rowid, latest, linked = 0, timestamp, False
+            else:
+                _, link_rowid, latest, linked = job
+                latest = max(timestamp, latest or timestamp)
+            links = cursor.execute(
+                "SELECT ef.rowid,e.evidence_id,e.evidence_time,COALESCE(e.whitelisted,0) "
+                "FROM evidence_flows ef INDEXED BY evidence_flows_uid_idx LEFT JOIN evidence e "
+                "INDEXED BY evidence_alert_group_idx ON e.evidence_id=ef.evidence_id "
+                "WHERE ef.uid=? AND ef.rowid>? ORDER BY ef.rowid LIMIT ?",
+                (uid, link_rowid, remaining),
+            ).fetchall()
+            for _, evidence_id, evidence_time, excluded in links:
+                if evidence_id is not None and not excluded:
+                    linked = True
+                    latest = max(latest, evidence_time or timestamp)
+            if len(links) == remaining:
+                cursor.execute(
+                    "UPDATE flow_retention_jobs SET link_rowid=?,latest_evidence_time=?,linked=? WHERE table_name=?",
+                    (links[-1][0], latest, int(linked), table),
+                )
+                return scanned
+            cursor.execute(
+                f"UPDATE {table} SET event_time=?,retention_class=CASE WHEN retention_priority IS NULL "
+                "THEN ? ELSE retention_class END,retention_priority=MAX(COALESCE(retention_priority,0),?) "
+                "WHERE rowid=? AND (event_time IS NULL OR retention_priority IS NULL)",
+                (timestamp, int(linked), latest, rowid),
+            )
+            cursor.execute(
+                "DELETE FROM flow_retention_jobs WHERE table_name=?", (table,)
+            )
+            cursor.execute(
+                "UPDATE flow_retention_state SET backfill_rowid=? WHERE table_name=?",
+                (rowid, table),
+            )
+            remaining -= len(links)
+        return scanned
 
     def _prune_flow_table(
         self,
@@ -609,59 +752,27 @@ class SQLiteDB(ISQLite):
         Returns:
             UIDs deleted from this table.
         """
-        candidates = [
-            row[0]
-            for row in cursor.execute(
-                f"SELECT uid FROM {table} WHERE retention_class = 0 "
-                "AND event_time < ? ORDER BY event_time LIMIT ?",
-                (ordinary_cutoff, batch_size),
-            ).fetchall()
-        ]
         deleted: list[str] = []
-        if candidates:
-            placeholders = ",".join("?" for _ in candidates)
-            linked = {
+        for retention_class, cutoff in (
+            (0, ordinary_cutoff),
+            (1, linked_cutoff),
+        ):
+            candidates = [
                 row[0]
                 for row in cursor.execute(
-                    "SELECT DISTINCT ef.uid FROM evidence_flows ef "
-                    "JOIN evidence e ON e.evidence_id = ef.evidence_id "
-                    f"WHERE ef.uid IN ({placeholders}) "
-                    "AND COALESCE(e.whitelisted, 0) = 0",
-                    candidates,
+                    f"SELECT uid FROM {table} INDEXED BY {table}_priority_idx "
+                    "WHERE retention_class=? AND retention_priority<? "
+                    "ORDER BY retention_priority,event_time LIMIT ?",
+                    (retention_class, cutoff, batch_size),
                 ).fetchall()
-            }
-            if linked:
-                linked_placeholders = ",".join("?" for _ in linked)
+            ]
+            if candidates:
+                placeholders = ",".join("?" for _ in candidates)
                 cursor.execute(
-                    f"UPDATE {table} SET retention_class = 1 "
-                    f"WHERE uid IN ({linked_placeholders})",
-                    tuple(linked),
+                    f"DELETE FROM {table} WHERE uid IN ({placeholders})",
+                    candidates,
                 )
-            ordinary = [uid for uid in candidates if uid not in linked]
-            if ordinary:
-                ordinary_placeholders = ",".join("?" for _ in ordinary)
-                cursor.execute(
-                    f"DELETE FROM {table} WHERE uid IN "
-                    f"({ordinary_placeholders})",
-                    ordinary,
-                )
-                deleted.extend(ordinary)
-        expired_linked = [
-            row[0]
-            for row in cursor.execute(
-                f"SELECT f.uid FROM {table} f WHERE f.retention_class = 1 "
-                f"AND {self._linked_priority_time('f')} < ? "
-                f"ORDER BY {self._linked_priority_time('f')} LIMIT ?",
-                (linked_cutoff, batch_size),
-            ).fetchall()
-        ]
-        if expired_linked:
-            placeholders = ",".join("?" for _ in expired_linked)
-            cursor.execute(
-                f"DELETE FROM {table} WHERE uid IN ({placeholders})",
-                expired_linked,
-            )
-            deleted.extend(expired_linked)
+                deleted.extend(candidates)
         return deleted
 
     def maintain_flow_retention(
@@ -671,6 +782,7 @@ class SQLiteDB(ISQLite):
         batch_size: int = 500,
         max_size_bytes: int = 512 * 1024 * 1024,
         unlinked_size_cutoff: float | None = None,
+        work_budget_ms: int = 250,
     ) -> list[str]:
         """Prune bounded flow batches while retaining recent evidence flows.
 
@@ -681,6 +793,7 @@ class SQLiteDB(ISQLite):
             max_size_bytes: Logical database size target; zero disables it.
             unlinked_size_cutoff: Oldest age eligible for unlinked size
                 pruning. Defaults to ordinary_cutoff.
+            work_budget_ms: Maximum SQLite execution time per cleanup pass.
 
         Returns:
             Connection UIDs removed, for the web's compact index cleanup.
@@ -697,15 +810,30 @@ class SQLiteDB(ISQLite):
             unlinked_size_cutoff = ordinary_cutoff
         with self.conn_lock:
             with self._acquire_flock():
+                deadline = time.monotonic() + work_budget_ms / 1000
+                self.conn.execute("PRAGMA busy_timeout=100")
+                self.conn.set_progress_handler(
+                    lambda: int(time.monotonic() >= deadline), 1000
+                )
                 cursor = self.conn.cursor()
+                removed: list[str] = []
+                any_removed = False
                 try:
                     cursor.execute("BEGIN IMMEDIATE")
-                    removed: list[str] = []
-                    any_removed = False
+                    migration_deadline = (
+                        time.monotonic() + work_budget_ms / 2000
+                    )
+                    while time.monotonic() < migration_deadline:
+                        progress = 0
+                        for table in ("flows", "altflows"):
+                            progress += self._backfill_retention_times(
+                                cursor, table, min(batch_size * 4, 50)
+                            )
+                            self.conn.commit()
+                            cursor.execute("BEGIN IMMEDIATE")
+                        if not progress:
+                            break
                     for table in ("flows", "altflows"):
-                        self._backfill_retention_times(
-                            cursor, table, batch_size * 4
-                        )
                         deleted = self._prune_flow_table(
                             cursor,
                             table,
@@ -713,9 +841,11 @@ class SQLiteDB(ISQLite):
                             linked_cutoff,
                             batch_size,
                         )
+                        self.conn.commit()
                         any_removed = any_removed or bool(deleted)
                         if table == "flows":
                             removed.extend(deleted)
+                        cursor.execute("BEGIN IMMEDIATE")
                     if (
                         max_size_bytes
                         and self._logical_size_bytes(cursor) > max_size_bytes
@@ -731,19 +861,35 @@ class SQLiteDB(ISQLite):
                                     else unlinked_size_cutoff
                                 ),
                             )
+                            self.conn.commit()
                             any_removed = any_removed or any(deleted.values())
                             removed.extend(deleted["flows"])
+                            cursor.execute("BEGIN IMMEDIATE")
                             if (
                                 self._logical_size_bytes(cursor)
                                 <= max_size_bytes
                             ):
                                 break
                     self.conn.commit()
+                except sqlite3.OperationalError as error:
+                    self.conn.set_progress_handler(None, 0)
+                    self.conn.rollback()
+                    if (
+                        "interrupt" in str(error).lower()
+                        or "locked" in str(error).lower()
+                    ):
+                        return removed
+                    raise
                 except Exception:
+                    self.conn.set_progress_handler(None, 0)
                     self.conn.rollback()
                     raise
+                finally:
+                    self.conn.set_progress_handler(None, 0)
+                    self.conn.execute("PRAGMA busy_timeout=20000")
                 if any_removed:
-                    cursor.execute("PRAGMA incremental_vacuum(2048)")
+                    cursor.execute("PRAGMA incremental_vacuum(32)")
+                cursor.execute("PRAGMA wal_checkpoint(PASSIVE)")
         return removed
 
     def _logical_size_bytes(self, cursor) -> int:
@@ -791,38 +937,20 @@ class SQLiteDB(ISQLite):
         Returns:
             Deleted UIDs grouped by raw flow table.
         """
-        evidence_condition = "EXISTS" if linked_only else "NOT EXISTS"
-        priority_time = (
-            self._linked_priority_time("f") if linked_only else "f.event_time"
-        )
-        age_filter = f" AND {priority_time} < ?"
-        parameters = (linked_size_cutoff, linked_size_cutoff, batch_size)
-        candidates = cursor.execute(
-            "SELECT table_name, uid FROM ("
-            "SELECT 'flows' AS table_name, f.uid AS uid, "
-            f"f.event_time AS event_time, {priority_time} AS priority_time, "
-            "f.rowid AS flow_rowid "
-            "FROM flows f WHERE "
-            f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
-            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
-            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
-            f"{age_filter} "
-            "UNION ALL "
-            "SELECT 'altflows' AS table_name, f.uid AS uid, "
-            f"f.event_time AS event_time, {priority_time} AS priority_time, "
-            "f.rowid AS flow_rowid "
-            "FROM altflows f WHERE "
-            f"{evidence_condition} (SELECT 1 FROM evidence_flows ef "
-            "JOIN evidence e ON e.evidence_id = ef.evidence_id "
-            "WHERE ef.uid = f.uid AND COALESCE(e.whitelisted, 0) = 0)"
-            f"{age_filter}"
-            ") ORDER BY priority_time ASC, event_time ASC, "
-            "table_name ASC, flow_rowid ASC "
-            "LIMIT ?",
-            parameters,
-        ).fetchall()
+        candidates = []
+        for table in ("flows", "altflows"):
+            candidates.extend(
+                (table, *row)
+                for row in cursor.execute(
+                    f"SELECT uid,retention_priority,event_time,rowid FROM {table} INDEXED BY {table}_priority_idx "
+                    "WHERE retention_class=? AND retention_priority<? "
+                    "ORDER BY retention_priority,event_time LIMIT ?",
+                    (int(linked_only), linked_size_cutoff, batch_size),
+                ).fetchall()
+            )
+        candidates.sort(key=lambda row: (row[2], row[3], row[0], row[4]))
         deleted: dict[str, list[str]] = {"flows": [], "altflows": []}
-        for table, uid in candidates:
+        for table, uid, *_ in candidates[:batch_size]:
             deleted[table].append(uid)
         for table, uids in deleted.items():
             if not uids:
@@ -898,10 +1026,14 @@ class SQLiteDB(ISQLite):
         )
         statements = [
             (
-                "INSERT OR REPLACE INTO evidence "
+                "INSERT INTO evidence "
                 "(evidence_id, evidence_time, profile_ip, timewindow, "
                 "threat_level, evidence_type, source_module, description, "
-                "confidence, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "confidence, data) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(evidence_id) DO UPDATE SET evidence_time=excluded.evidence_time,"
+                "profile_ip=excluded.profile_ip,timewindow=excluded.timewindow,threat_level=excluded.threat_level,"
+                "evidence_type=excluded.evidence_type,source_module=excluded.source_module,"
+                "description=excluded.description,confidence=excluded.confidence,data=excluded.data",
                 (
                     evidence.id,
                     evidence_time,
@@ -999,11 +1131,15 @@ class SQLiteDB(ISQLite):
         now = utils.convert_ts_format(datetime.now(), "unixtimestamp")
         statements = [
             (
-                "INSERT OR REPLACE INTO alerts "
+                "INSERT INTO alerts "
                 "(alert_id, ip_alerted, timewindow, tw_start, tw_end, "
                 "label, alert_time, accumulated_threat_level, "
                 "accumulated_ratl, risk_weight) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
+                "ON CONFLICT(alert_id) DO UPDATE SET ip_alerted=excluded.ip_alerted,timewindow=excluded.timewindow,"
+                "tw_start=excluded.tw_start,tw_end=excluded.tw_end,label=excluded.label,alert_time=excluded.alert_time,"
+                "accumulated_threat_level=excluded.accumulated_threat_level,accumulated_ratl=excluded.accumulated_ratl,"
+                "risk_weight=excluded.risk_weight",
                 (
                     alert.id,
                     alert.profile.ip,

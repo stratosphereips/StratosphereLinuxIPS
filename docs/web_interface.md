@@ -337,7 +337,43 @@ All paths belong to this specific run. Nothing is written to a repository-level 
 
 For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Under size pressure, evidence-linked flows remain protected for at least the configured ordinary-flow age after their newest linked evidence; the size target is allowed to be exceeded when durable evidence alone is larger than the target. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires. The evidence drawer first reads SQLite and then recovers missing linked flows from bounded current or saved Zeek JSON logs when available. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. On older databases, deleted rows may not reduce the file's physical size until Slips is stopped and SQLite `VACUUM` is run; allow temporary free disk space for that operation.
 
-New run databases use incremental SQLite vacuuming so deleted raw pages can return to the filesystem. Existing databases reuse freed pages for future writes but do not shrink physically without a separate maintenance vacuum. Evidence and alert records are not expired by this flow policy, so they can still grow over a long unattended run.
+New run databases use incremental SQLite vacuuming so deleted raw pages can return to the filesystem. Existing databases reuse freed pages for future writes but do not shrink physically without a separate maintenance vacuum.
+
+Continuous runs also apply `detection_history` in the configuration file. Active
+evidence and alerts are kept for up to 90 days, targeting 2 GiB of live pages.
+Under size pressure, records older than the protected 24-hour window move
+sooner. Full detection records, reviews and relationships are committed to
+monthly SQLite archives before removal from the active database. A saved
+checkpoint makes interrupted transfers restartable. Raw flow JSON is governed
+by `flow_retention` and is not duplicated in detection archives.
+
+Archives live in `databases/archives/detections-YYYY-MM-NNNN.sqlite`, rotate
+into segments targeting 256 MiB, and expire 30 days after their last write.
+`detection_history.archive_retention_days` configures this one-month policy.
+The default 4 GiB archive cap can expire older completed segments sooner.
+Size limits are soft while recent records or unfinished transfers are protected.
+Copying pauses when less than 1 GiB of disk space is free. Imported captures
+are preserved. See [Usage](usage.md) for the complete configuration example.
+
+Use the header's **Detection history** selector to open an archive explicitly.
+Archive detection queries are read-only, use the selected file, and do not
+filter by the current live network. Related evidence and retained raw flows
+can be read from other retained databases. Expired details cannot be restored.
+The Overview, live counters and operational panels continue to describe the
+active run. Metadata reports maintenance progress and archive storage.
+
+Compact evidence grouping uses exact hourly summaries plus raw rows at the
+selected range's boundaries. Updates invalidate affected summaries, and queries
+fall back to the time index while those summaries are rebuilt. Maintained
+record counters avoid scanning the entire database for each page.
+
+`slips.log`, `errors.log`, `alerts.log`, `alerts.json` and the web server log
+rotate at `detection_history.log_max_size_mb` (64 MiB by default). Their rotated
+files stay beside the active logs in `rotated/` for the archive retention age,
+with at most `log_backup_count` backups each (30 by default). The collector
+detects replaced log files by inode as well as size. Live web error events,
+minute metrics and transient host snapshots expire after `active_days` in
+bounded batches; one-second samples roll up after 24 hours.
 
 The browser never loads a complete run:
 

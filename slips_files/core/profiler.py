@@ -43,6 +43,8 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.worker_manager_mixin import WorkerManagerMixin
+from slips_files.common.log_rotation import expire_rotated_logs
+from pathlib import Path
 
 SUPPORTED_INPUT_TYPES = {
     InputType.ZEEK: ZeekJSON,
@@ -143,6 +145,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         ]
         self.client_ips = conf.client_ips()
         self.flow_retention_policy = conf.flow_retention_policy()
+        self.detection_history_policy = conf.detection_history_policy()
 
     def _run_flow_retention(self) -> None:
         """Prune small flow batches away from the profiler hot path."""
@@ -153,18 +156,45 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         linked_age = int(policy["linked_days"]) * 86400
         batch_size = int(policy["batch_size"])
         max_size_bytes = int(policy["max_size_mb"]) * 1024 * 1024
-        while not self.did_all_workers_stop.wait(interval):
+        history_policy = getattr(self, "detection_history_policy", {})
+        history_interval = int(
+            history_policy.get("interval_seconds", interval)
+        )
+        last_flow_pass = 0.0
+        last_log_pass = 0.0
+        while not self.did_all_workers_stop.wait(
+            min(interval, history_interval)
+        ):
             now = time.time()
             try:
-                removed = self.db.maintain_flow_retention(
-                    now - ordinary_age,
-                    now - linked_age,
-                    batch_size=batch_size,
-                    max_size_bytes=max_size_bytes,
-                    unlinked_size_cutoff=now - min(ordinary_age, size_min_age),
-                )
-                if removed:
-                    self.db.remove_flow_index_uids(removed)
+                if history_policy.get("enabled"):
+                    if now - last_log_pass >= 60:
+                        expire_rotated_logs(
+                            Path(self.parent_output_dir), history_policy, now
+                        )
+                        last_log_pass = now
+                    try:
+                        self.db.maintain_detection_history(
+                            history_policy, now=now
+                        )
+                    except Exception as error:
+                        self.print(
+                            f"Detection history maintenance failed: {error}",
+                            0,
+                            1,
+                        )
+                if policy["enabled"] and now - last_flow_pass >= interval:
+                    removed = self.db.maintain_flow_retention(
+                        now - ordinary_age,
+                        now - linked_age,
+                        batch_size=batch_size,
+                        max_size_bytes=max_size_bytes,
+                        unlinked_size_cutoff=now
+                        - min(ordinary_age, size_min_age),
+                    )
+                    if removed:
+                        self.db.remove_flow_index_uids(removed)
+                    last_flow_pass = now
             except Exception as error:
                 self.print(
                     f"Flow retention maintenance failed: {error}",
@@ -391,7 +421,10 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
 
-        if self.args.interface and self.flow_retention_policy["enabled"]:
+        if self.args.interface and (
+            self.flow_retention_policy["enabled"]
+            or self.detection_history_policy["enabled"]
+        ):
             utils.start_thread(self.flow_retention_thread, self.db)
 
         self.is_profiler_done_starting_initial_workers_event.set()

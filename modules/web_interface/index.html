@@ -21,6 +21,7 @@
       </div>
     </div>
     <div class="topbar-actions">
+      <label id="history-source-label" class="network-filter" hidden>Detection history <select id="history-source" aria-label="Detection history source"><option value="">Active · last 90 days</option></select></label>
       <label id="network-filter-label" class="network-filter" title="Show detections from the current continuous network connection only" hidden><input id="network-filter" type="checkbox" disabled><span>Current network only</span></label>
       <label id="device-view-label" class="network-filter" title="Group local IPv4 and IPv6 hosts that have the same verified MAC address" hidden><input id="device-view" type="checkbox" disabled><span>Device view</span></label>
       <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch to light theme"><span class="theme-icon" aria-hidden="true">☀</span><span class="theme-label">Light</span></button>
@@ -80,6 +81,7 @@
         <div class="table-heading"><h3>Modules <small>· moved from Overview</small></h3><div class="table-actions"><button class="secondary" id="load-module-evidence" disabled>Load evidence counts</button><input id="module-search" type="search" placeholder="Filter modules" aria-label="Filter modules"></div></div>
         <div class="table-wrap"><table id="modules-table"><thead><tr><th data-sort="name">Module</th><th data-sort="state">State</th><th data-sort="pid">PID</th><th data-sort="cpu_percent">CPU</th><th data-sort="memory_mb">Memory</th><th data-sort="flows_per_minute">Flows/min</th><th data-sort="evidence_count">Evidence</th><th data-sort="error_count">Errors</th></tr></thead><tbody></tbody></table></div>
       </article>
+      <article class="surface"><h3>History storage</h3><div id="history-storage-status" class="metadata-grid">Waiting for history maintenance information…</div></article>
     </section>
 
     <section id="alerts" class="panel" aria-labelledby="alerts-title">

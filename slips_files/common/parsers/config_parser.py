@@ -513,6 +513,55 @@ class ConfigParser(object):
             policy["linked_days"] = (policy["ordinary_hours"] + 23) // 24
         return policy
 
+    def detection_history_policy(
+        self, settings: dict | None = None
+    ) -> dict[str, int | bool]:
+        """Read limits for active detections, rotated archives and maintenance.
+
+        Parameters:
+            settings: Optional captured settings for a run-scoped web server.
+
+        Returns:
+            Validated retention ages, batch sizes and work budgets.
+        """
+        policy: dict[str, int | bool] = {
+            "enabled": (
+                settings.get("enabled", True)
+                if settings is not None
+                else self.read_configuration(
+                    "detection_history", "enabled", True
+                )
+            )
+            is True
+        }
+        limits = {
+            "active_days": (90, 1, 3650),
+            "max_active_size_mb": (2048, 0, 1024 * 1024),
+            "min_active_hours": (24, 1, 24 * 365),
+            "archive_retention_days": (30, 1, 3650),
+            "archive_file_size_mb": (256, 1, 65536),
+            "max_archive_size_mb": (4096, 0, 1024 * 1024),
+            "batch_size": (200, 1, 500),
+            "interval_seconds": (10, 5, 3600),
+            "work_budget_ms": (250, 50, 5000),
+            "min_free_disk_mb": (1024, 0, 1024 * 1024),
+            "log_max_size_mb": (64, 1, 4096),
+            "log_backup_count": (30, 1, 1000),
+        }
+        for key, (default, minimum, maximum) in limits.items():
+            try:
+                value = int(
+                    settings.get(key, default)
+                    if settings is not None
+                    else self.read_configuration(
+                        "detection_history", key, default
+                    )
+                )
+            except (TypeError, ValueError):
+                value = default
+            policy[key] = value if minimum <= value <= maximum else default
+        return policy
+
     def store_zeek_files_copy(self):
         return self.read_configuration(
             "parameters", "store_a_copy_of_zeek_files", True

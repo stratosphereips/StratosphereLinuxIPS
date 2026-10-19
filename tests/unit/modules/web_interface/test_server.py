@@ -32,6 +32,143 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.core.database.sqlite_db.detection_history import (
+    DetectionHistory,
+)
+
+
+@pytest.mark.parametrize("group", ["type", "host", "host_type"])
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("hide_excluded", [False, True])
+@pytest.mark.parametrize("threat", ["", "low_or_more", "info"])
+def test_hourly_detection_pages_match_direct_queries(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    group: str,
+    device: bool,
+    hide_excluded: bool,
+    threat: str,
+) -> None:
+    """Keep summaries equivalent to raw queries, including nullable legacy fields.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        monkeypatch: Fix the live clock.
+        group: Requested evidence grouping.
+        device: Combine verified address aliases.
+        hide_excluded: Omit excluded evidence.
+        threat: Exact or minimum severity filter.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 20000.0
+    )
+    records = [
+        ("edge-first", 1200, "192.0.2.1", "SCAN", "low", 0.2, 0),
+        ("inside", 3700, "fe80::1", "SCAN", "medium", 0.8, 0),
+        ("excluded", 3800, "192.0.2.1", "SCAN", "critical", 5, 1),
+        ("dns", 7400, "192.0.2.2", "DNS", "low", 1, 0),
+        ("nullable", 7500, None, None, None, None, 0),
+        ("edge-last", 18100, "192.0.2.1", "SCAN", "high", 4, 0),
+        ("outside", 19100, "192.0.2.1", "SCAN", "critical", 9, 0),
+    ]
+    for record in records:
+        db.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,threat_level,"
+            "accumulated_ratl,whitelisted) VALUES (?,?,?,?,?,?,?)",
+            record,
+        )
+        db.execute(
+            "INSERT INTO alert_evidence VALUES ('alert',?)", (record[0],)
+        )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = Path(db.get_db_path())
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    initialize_history(reader.history_path)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "interface"
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"input_type": "interface"} if key == "analysis" else {}
+    )
+    reader._device_key_map = Mock(
+        return_value={"192.0.2.1": "device-1", "fe80::1": "device-1"}
+    )
+    query = {
+        "range": ["custom"],
+        "from": ["1000"],
+        "to": ["19000"],
+        "group": [group],
+        "compact": ["1"],
+        "device": ["1" if device else "0"],
+        "hide_excluded": ["1" if hide_excluded else "0"],
+        "threat": [threat],
+    }
+    expected = reader.evidence(query)
+    maintenance = DetectionHistory(db.conn, str(tmp_path))
+    for _ in range(100):
+        if not maintenance.summary_step(2):
+            break
+    result = reader.evidence(query)
+    assert result == expected
+    db.close()
+
+
+@pytest.mark.parametrize("extra_segments", [0, 12])
+def test_archive_context_resolves_other_segments_and_active_evidence(
+    tmp_path: Path,
+    extra_segments: int,
+) -> None:
+    """Keep an archived alert's links readable across rotated segments.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+        extra_segments: Unrelated files exceeding SQLite's attachment limit.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    db.execute(
+        "INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1),('recent',1000)"
+    )
+    db.execute("INSERT INTO alerts(alert_id,alert_time) VALUES ('alert',2)")
+    db.execute(
+        "INSERT INTO alert_evidence VALUES ('alert','old'),('alert','recent')"
+    )
+    maintenance = DetectionHistory(db.conn, str(tmp_path))
+    for _ in range(5):
+        maintenance.archive_step("evidence", 100, 10, 1700000000)
+    for _ in range(5):
+        maintenance.archive_step("alerts", 100, 10, 1703000000)
+    for index in range(extra_segments):
+        archive = maintenance._open_archive(
+            f"detections-2023-12-{index+10:04d}.sqlite"
+        )
+        archive.close()
+    db.execute("INSERT INTO altflows(uid,flow) VALUES ('retained-uid','{}')")
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = Path(db.get_db_path())
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
+    files = reader.archives()["items"]
+    assert len(files) == 2
+    archived = reader.with_archive(files[0]["id"], context=True)
+    with archived._connect_sqlite() as connection:
+        items = archived._alert_evidence(connection, {"alert_id": "alert"})
+    assert {item["id"] for item in items} == {"old", "recent"}
+    assert reader.sqlite_path == Path(db.get_db_path())
+    with pytest.raises(KeyError):
+        reader.with_archive("../flows.sqlite")
+    with pytest.raises(ValueError, match="read-only"):
+        archived.save_review("alert", {"id": "alert", "action": "review"})
+    assert (
+        len(archived.flow_details("retained-uid", {})["protocol_flows"]) == 1
+    )
+    db.close()
 
 
 @pytest.mark.parametrize("device", [False, True])
@@ -4710,7 +4847,7 @@ def test_device_grouping_verifies_own_interface_after_many_addresses(
 def test_host_finding_queries_choose_indexes_without_changing_filters(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, indexed: bool, bounded: bool,
 ) -> None:
-    """Use covering history or time indexes while keeping exact scoped findings.
+    """Use covering indexes while keeping exact scoped findings.
 
     Parameters:
         tmp_path: Isolated retained evidence.
@@ -4760,12 +4897,11 @@ def test_host_finding_queries_choose_indexes_without_changing_filters(
     with original() as connection:
         for sql in aggregates:
             if indexed:
-                expected = "evidence_profile_time_idx" if bounded else "evidence_group_cover_idx"
+                expected = "evidence_group_cover_idx"
                 assert f"INDEXED BY {expected}" in sql
                 plan = " ".join(str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN "+sql))
                 assert expected in plan
-                if not bounded:
-                    assert "COVERING INDEX" in plan
+                assert "COVERING INDEX" in plan
             else:
                 assert "INDEXED BY" not in sql
 
@@ -5588,6 +5724,7 @@ def test_evidence_aggregation_groups_host_and_type(tmp_path) -> None:
     [
         ("custom", "none", 1),
         ("custom", "time", 1),
+        ("custom", "alert_cover", 1),
         ("all", "alert_cover", 2),
     ],
 )
@@ -5678,6 +5815,96 @@ def test_type_grouping_counts_alerts_only_for_visible_groups(
             "SCAN",
             "DNS",
         ]
+
+
+@pytest.mark.parametrize("group", ["type", "host", "host_type"])
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("hide_excluded", [False, True])
+def test_compact_evidence_preserves_scoped_alert_links(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    group: str,
+    device: bool,
+    hide_excluded: bool,
+) -> None:
+    """Keep compact pages equivalent across time, exclusion and device filters.
+
+    Parameters:
+        tmp_path: Isolated detection databases.
+        monkeypatch: Fix the capture clock.
+        group: Evidence grouping selected in the browser.
+        device: Combine verified address aliases.
+        hide_excluded: Omit evidence excluded by the whitelist.
+    """
+    _module_factory = ModuleFactory()
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    reader._device_key_map = Mock(
+        return_value={
+            "192.168.1.20": "mac:aa:bb:cc:dd:ee:ff",
+            "fe80::20": "mac:aa:bb:cc:dd:ee:ff",
+        }
+    )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "DELETE FROM evidence; DELETE FROM alert_evidence;"
+            "CREATE INDEX evidence_group_cover_idx ON evidence(profile_ip,"
+            "evidence_type,evidence_time,threat_level,source_module,whitelisted,accumulated_ratl);"
+            "CREATE INDEX evidence_alert_group_idx ON evidence(evidence_id,"
+            "evidence_type,profile_ip,evidence_time,whitelisted);"
+            "CREATE INDEX alert_evidence_evidence_idx ON alert_evidence(evidence_id);"
+        )
+        records = [
+            ("old", now - 7200, "192.168.1.20", "SCAN", 0),
+            ("scan", now - 30, "192.168.1.20", "SCAN", 0),
+            ("alias", now - 20, "fe80::20", "SCAN", 0),
+            ("dns", now - 10, "192.168.1.20", "DNS", 0),
+            ("excluded", now - 5, "192.168.1.20", "SCAN", 1),
+            ("future", now + 10, "192.168.1.20", "SCAN", 0),
+        ]
+        connection.executemany(
+            "INSERT INTO evidence(evidence_id,evidence_time,profile_ip,"
+            "evidence_type,whitelisted,threat_level,accumulated_ratl) "
+            "VALUES (?,?,?,?,?,'low',0.1)",
+            records,
+        )
+        connection.executemany(
+            "INSERT INTO alert_evidence VALUES (?,?)",
+            [(f"alert-{identifier}", identifier) for identifier, *_ in records]
+            + [("second-alert", "scan")],
+        )
+    query = {
+        "range": ["live"],
+        "group": [group],
+        "device": ["1" if device else "0"],
+        "hide_excluded": ["1" if hide_excluded else "0"],
+        "limit": ["1"],
+    }
+    expected = reader.evidence({**query, "limit": ["100"]})
+    items = []
+    while True:
+        page = reader.evidence({**query, "compact": ["1"]})
+        assert page["total"] == expected["total"]
+        assert (
+            page["matching_total"]
+            == expected["matching_total"]
+            == (3 if hide_excluded else 4)
+        )
+        items.extend(page["items"])
+        if not page["next_cursor"]:
+            break
+        query["cursor"] = [page["next_cursor"]]
+    assert [
+        (item["id"], item["evidence_count"], item["alert_count"])
+        for item in items
+    ] == [
+        (item["id"], item["evidence_count"], item["alert_count"])
+        for item in expected["items"]
+    ]
+    assert sum(item["alert_count"] for item in items) == (
+        4 if hide_excluded else 5
+    )
 
 
 def test_alert_aggregation_groups_each_host(tmp_path) -> None:

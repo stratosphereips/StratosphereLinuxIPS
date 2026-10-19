@@ -206,10 +206,60 @@ Evidence, alerts, and their relationships remain available after a raw flow is
 removed. Set `max_size_mb: 0` to disable the size target, or `enabled: false`
 to disable all flow retention. Imported captures are not pruned.
 
+Detection history has separate limits in `detection_history`:
+
+```yaml
+detection_history:
+  enabled: true
+  active_days: 90
+  max_active_size_mb: 2048
+  min_active_hours: 24
+  archive_retention_days: 30
+  archive_file_size_mb: 256
+  max_archive_size_mb: 4096
+  batch_size: 200
+  interval_seconds: 10
+  work_budget_ms: 250
+  min_free_disk_mb: 1024
+  log_max_size_mb: 64
+  log_backup_count: 30
+```
+
+Evidence, alerts, analyst reviews and their relationships move to
+`databases/archives/detections-YYYY-MM-NNNN.sqlite` after 90 days. Under the
+2 GiB active-size target, older records move sooner, protecting at least the
+last 24 hours. Each record is committed to its archive before its active copy
+is removed. Interrupted copies resume from saved checkpoints. Raw flows keep
+their independent `flow_retention` policy and are not duplicated in archives.
+
+Archives rotate by UTC month and into segments targeting 256 MiB. Completed
+segments expire 30 days after their last write, or earlier when the 4 GiB
+archive target is exceeded. Change `archive_retention_days` to configure this
+one-month policy. Set either size target to `0` to disable that size limit.
+The web interface's **Detection history** selector opens retained archives on
+demand, with review editing disabled. Expired raw flow details remain unavailable.
+
+Maintenance runs in short batches outside flow processing. Low disk space
+pauses copying instead of removing unarchived detections. Size targets are
+soft: a protected recent window, an unfinished transfer or a large detection
+can temporarily exceed them. A recent alert also protects its supporting
+evidence until that alert becomes eligible for rotation. Existing backlog
+drains gradually. Legacy raw flows with many evidence links use resumable
+classification checkpoints before they become eligible for cleanup. Hourly
+summaries speed compact evidence queries once their backfill catches up;
+dirty or incomplete hours use exact raw queries.
+
+Slips, errors, alerts and web server logs rotate into a `rotated/` directory
+beside each active log at 64 MiB. Rotated logs use the same 30-day age limit,
+with at most 30 backups per log. Live web error events, minute metrics and
+transient host snapshots expire after `active_days`; one-second metrics roll
+up after 24 hours. Imported captures are not pruned by detection maintenance.
+Restart Slips after changing these settings, keeping the same output directory
+and `--keep-history` when continuing a run.
+
 The size target measures live SQLite pages; deleted pages may remain allocated
 in an older database file until it is compacted offline. Stop Slips before
-running `VACUUM` on that file. Evidence, alerts, and their links are retained
-and can themselves exceed the target in a long-running deployment.
+running `VACUUM` on that file.
 
 New output databases return deleted pages to the filesystem incrementally.
 For an output database created before flow retention was added, stop Slips

@@ -2,6 +2,7 @@
 """Serve the run-scoped Slips web interface."""
 
 import argparse
+import copy
 import base64
 import csv
 import fcntl
@@ -12,6 +13,7 @@ import math
 import os
 import re
 import socket
+import sys
 import sqlite3
 import tempfile
 import time
@@ -29,9 +31,18 @@ import redis
 import yaml
 
 from slips_files.common.mac import classify_mac
+from slips_files.common.log_rotation import RotatingTextLog
 
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+from slips_files.core.database.sqlite_db.detection_queries import (
+    detection_total,
+    hourly_evidence_source,
+)
+from slips_files.core.database.sqlite_db.detection_history import (
+    ARCHIVE_GLOB,
+    ARCHIVE_NAME,
+)
 from slips_files.core.structures.evidence import EvidenceType
 from modules.supported_module_names import Modules
 from modules.p2p_trust.trust.base_model import (
@@ -184,6 +195,7 @@ CONFIG_SECTION_DESCRIPTIONS = {
     "modules": "Which detection and support modules are enabled for this run.",
     "whitelists": "Sources Slips trusts and the traffic or alerts they suppress.",
     "web_interface": "Run-scoped local web server settings.",
+    "detection_history": "Active detection limits, monthly archives, log rotation, and maintenance budgets.",
     "global_p2p": "Global peer-to-peer threat-intelligence behaviour.",
     "local_p2p": "Local peer-to-peer transport and identity settings.",
 }
@@ -1625,7 +1637,9 @@ class RunDataReader:
             ).lower()
         except (AttributeError, redis.RedisError):
             input_type = ""
-        if input_type in {"interface", "stdin", "cyst"}:
+        if input_type in {"interface", "stdin", "cyst"} and not getattr(
+            self, "archive_mode", False
+        ):
             now = time.time()
         if range_name in TIME_RANGES:
             return now - TIME_RANGES[range_name], now, range_name
@@ -1696,7 +1710,165 @@ class RunDataReader:
             f"file:{self.sqlite_path}?mode=ro", uri=True, timeout=5
         )
         connection.row_factory = sqlite3.Row
+        if getattr(self, "archive_context", False):
+            paths = [self.output_dir / "databases" / "flows.sqlite"]
+            paths.extend(
+                sorted(
+                    (
+                        path
+                        for path in (
+                            self.output_dir / "databases" / "archives"
+                        ).glob(ARCHIVE_GLOB)
+                        if ARCHIVE_NAME.fullmatch(path.name)
+                        and not path.is_symlink()
+                    ),
+                    key=lambda path: abs(
+                        int(path.stem[11:15]) * 12
+                        + int(path.stem[16:18])
+                        - int(self.sqlite_path.stem[11:15]) * 12
+                        - int(self.sqlite_path.stem[16:18])
+                    ),
+                )
+            )
+            evidence_id = getattr(self, "archive_evidence_id", "")
+            if evidence_id:
+                matching = []
+                for path in paths[1:]:
+                    try:
+                        with sqlite3.connect(
+                            f"file:{path}?mode=ro", uri=True, timeout=1
+                        ) as archive:
+                            if archive.execute(
+                                "SELECT 1 FROM evidence_flows WHERE evidence_id=? LIMIT 1",
+                                (evidence_id,),
+                            ).fetchone():
+                                matching.append(path)
+                    except sqlite3.OperationalError:
+                        continue
+                paths = (
+                    paths[:1]
+                    + matching
+                    + [path for path in paths[1:] if path not in matching]
+                )
+            databases = ["main"]
+            for path in paths:
+                if (
+                    path == self.sqlite_path
+                    or not path.is_file()
+                    or len(databases) >= 10
+                ):
+                    continue
+                alias = f"context{len(databases)}"
+                connection.execute(
+                    f"ATTACH DATABASE ? AS {alias}", (f"file:{path}?mode=ro",)
+                )
+                databases.append(alias)
+            for table, keys in (
+                ("evidence", ("evidence_id",)),
+                ("evidence_flows", ("evidence_id", "uid")),
+                ("flows", ("uid",)),
+                ("altflows", ("uid",)),
+            ):
+                columns = [
+                    str(row[1])
+                    for row in connection.execute(
+                        f"PRAGMA main.table_info({table})"
+                    )
+                ]
+                if table in {"flows", "altflows"}:
+                    columns.insert(0, "rowid")
+                sources = []
+                for index, database in enumerate(databases):
+                    exists = connection.execute(
+                        f"SELECT 1 FROM {database}.sqlite_master WHERE name=?",
+                        (table,),
+                    ).fetchone()
+                    if not exists:
+                        continue
+                    missing = " AND ".join(
+                        f"NOT EXISTS (SELECT 1 FROM {previous}.{table} prior WHERE "
+                        + " AND ".join(
+                            f"prior.{key}=current.{key}" for key in keys
+                        )
+                        + ")"
+                        for previous in databases[:index]
+                    )
+                    sources.append(
+                        f"SELECT {','.join('current.' + column for column in columns)} "
+                        f"FROM {database}.{table} current"
+                        + (f" WHERE {missing}" if missing else "")
+                    )
+                connection.execute(
+                    f"CREATE TEMP VIEW {table} AS "
+                    + " UNION ALL ".join(sources)
+                )
         return connection
+
+    def archives(self) -> Dict[str, Any]:
+        """List monthly archives without loading their detection records.
+
+        Returns:
+            Archive filenames, sizes and current maintenance health.
+        """
+        directory = self.output_dir / "databases" / "archives"
+        items = []
+        for path in sorted(directory.glob(ARCHIVE_GLOB), reverse=True):
+            if not ARCHIVE_NAME.fullmatch(path.name) or path.is_symlink():
+                continue
+            try:
+                with sqlite3.connect(
+                    f"file:{path}?mode=ro", uri=True, timeout=0.1
+                ) as archive:
+                    ready = archive.execute(
+                        "SELECT value FROM archive_metadata WHERE key='ready'"
+                    ).fetchone()
+            except (OSError, sqlite3.Error):
+                continue
+            if ready and ready[0] == "1":
+                items.append(
+                    {
+                        "id": path.name,
+                        "label": path.stem.removeprefix("detections-"),
+                        "size_bytes": path.stat().st_size,
+                        "updated_at": path.stat().st_mtime,
+                    }
+                )
+        maintenance = {}
+        with self._connect_sqlite() as connection:
+            if self._table_exists(connection, "history_state"):
+                row = connection.execute(
+                    "SELECT value FROM history_state WHERE key='maintenance'"
+                ).fetchone()
+                if row:
+                    maintenance = self._loads(row[0], {})
+        return {
+            "items": items,
+            "maintenance": maintenance,
+            "archive_size_bytes": sum(item["size_bytes"] for item in items),
+        }
+
+    def with_archive(
+        self, filename: str, context: bool = False
+    ) -> "RunDataReader":
+        """Select an archive explicitly while preserving the live run identity.
+
+        Parameters:
+            filename: Allow-listed archive basename returned by archives().
+            context: Resolve related evidence from other retained databases.
+
+        Returns:
+            Request-local reader using the selected read-only archive.
+        """
+        if not ARCHIVE_NAME.fullmatch(filename):
+            raise KeyError("Unknown archive")
+        path = self.output_dir / "databases" / "archives" / filename
+        if not path.is_file() or path.is_symlink():
+            raise KeyError("Archive expired or does not exist")
+        reader = copy.copy(self)
+        reader.sqlite_path = path
+        reader.archive_mode = True
+        reader.archive_context = context
+        return reader
 
     def iter_reviewed_flows(self) -> Iterator[Dict[str, Any]]:
         """Stream retained flow rows with a separate analyst label.
@@ -1901,6 +2073,8 @@ class RunDataReader:
         Returns:
             Saved state or counts of deleted and protected shared records.
         """
+        if getattr(self, "archive_mode", False):
+            raise ValueError("Detection archives are read-only")
         if entity not in {"alert", "evidence"}:
             raise ValueError("Unknown review entity")
         identifier = payload.get("id")
@@ -2276,7 +2450,10 @@ class RunDataReader:
         Returns:
             Effective lower bound, or infinity when no network is connected.
         """
-        if self._query_value(query, "network") != "current":
+        if (
+            getattr(self, "archive_mode", False)
+            or self._query_value(query, "network") != "current"
+        ):
             return start
         network_start = self._current_network_start()
         if network_start is None:
@@ -2603,20 +2780,25 @@ class RunDataReader:
         page_ids: set[str],
         hide_excluded: bool,
         end: Optional[float],
+        start: Optional[float] = None,
+        group_expression: str = "evidence_type",
     ) -> Dict[str, int]:
-        """Count full-run alert links by merging two ordered covering indexes.
+        """Count grouped alert links by merging two ordered covering indexes.
 
         Parameters:
             connection: Current flows database connection.
             page_ids: Evidence types visible on the requested page.
             hide_excluded: Whether excluded evidence is filtered out.
             end: Upper bound of the selected run clock.
+            start: Optional lower bound of the selected time range.
+            group_expression: Trusted SQL expression identifying each group.
 
         Returns:
-            Alert-link counts for the requested evidence types.
+            Alert-link counts for the requested groups.
         """
         evidence_rows = connection.execute(
-            "SELECT evidence_id, evidence_type, evidence_time, whitelisted "
+            f"SELECT evidence_id, {group_expression} AS evidence_type, "
+            "evidence_time, whitelisted "
             "FROM evidence INDEXED BY evidence_alert_group_idx "
             "ORDER BY evidence_id"
         )
@@ -2639,6 +2821,11 @@ class RunDataReader:
             if evidence_type not in page_ids:
                 continue
             if hide_excluded and evidence["whitelisted"] not in (None, 0, "0"):
+                continue
+            if (
+                start is not None
+                and float(evidence["evidence_time"] or 0) < start
+            ):
                 continue
             if end is not None and float(evidence["evidence_time"] or 0) > end:
                 continue
@@ -2723,11 +2910,7 @@ class RunDataReader:
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            full_total = int(
-                connection.execute(
-                    "SELECT COUNT(*) AS count FROM evidence"
-                ).fetchone()["count"]
-            )
+            full_total = detection_total(connection, "evidence")
             clauses = ["1 = 1"]
             params: List[Any] = []
             review_status = self._query_value(query, "review", "all")
@@ -2800,18 +2983,48 @@ class RunDataReader:
                     "AND name = 'evidence_type_group_cover_idx'"
                 ).fetchone()
             )
-            matching_source = (
-                "evidence INDEXED BY evidence_type_group_cover_idx"
-                if type_cover_index_available
-                and range_name == "all"
+            cover_index_available = bool(
+                connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+                    "AND name = 'evidence_group_cover_idx'"
+                ).fetchone()
+            )
+            covered_groups = bool(
+                compact_groups
                 and not search
                 and not association
                 and review_status == "all"
-                else "evidence"
             )
+            group_source = (
+                "evidence INDEXED BY evidence_type_group_cover_idx"
+                if covered_groups and type_cover_index_available
+                else (
+                    "evidence INDEXED BY evidence_group_cover_idx"
+                    if covered_groups and cover_index_available
+                    else "evidence"
+                )
+            )
+            time_cover = bool(
+                start is not None
+                and connection.execute(
+                    "SELECT 1 FROM sqlite_master WHERE name='evidence_time_cover_idx'"
+                ).fetchone()
+            )
+            if covered_groups and time_cover:
+                group_source = "evidence INDEXED BY evidence_time_cover_idx"
+            summary_source = (
+                hourly_evidence_source(connection, start, end)
+                if covered_groups
+                and self._query_value(query, "scored_only") != "1"
+                else None
+            )
+            if summary_source:
+                group_source = summary_source
+            record_count = "SUM(weight)" if summary_source else "COUNT(*)"
+            first_time = "first_time" if summary_source else "evidence_time"
             matching_total = int(
                 connection.execute(
-                    f"SELECT COUNT(*) FROM {matching_source} "
+                    f"SELECT COALESCE({record_count},0) FROM {group_source} "
                     f"WHERE {' AND '.join(clauses)}",
                     params,
                 ).fetchone()[0]
@@ -2821,41 +3034,19 @@ class RunDataReader:
                 if device_view and group_mode != "type"
                 else "''"
             )
-            cover_index_available = bool(
-                connection.execute(
-                    "SELECT 1 FROM sqlite_master WHERE type = 'index' "
-                    "AND name = 'evidence_group_cover_idx'"
-                ).fetchone()
-            )
-            compact_full_run = bool(
-                compact_groups
-                and range_name == "all"
-                and not search
-                and not association
-                and review_status == "all"
-            )
-            group_source = (
-                "evidence INDEXED BY evidence_type_group_cover_idx"
-                if compact_full_run and type_cover_index_available
-                else (
-                    "evidence INDEXED BY evidence_group_cover_idx"
-                    if compact_full_run and cover_index_available
-                    else "evidence"
-                )
-            )
             grouped_sql = (
                 f"SELECT {group_fields[0]}, "
                 f"{group_id} AS group_id, "
                 f"{device_ips_expression} AS device_ips, "
                 "MAX(evidence_time) AS timestamp, "
-                "MIN(evidence_time) AS first_timestamp, "
+                f"MIN({first_time}) AS first_timestamp, "
                 f"MAX({threat_expression}) AS threat_rank, "
                 f"GROUP_CONCAT(DISTINCT {module_expression}) AS module, "
-                "COUNT(*) AS evidence_count, "
-                f"SUM({whitelist_expression}) AS persisted_whitelisted_count, "
+                f"{record_count} AS evidence_count, "
+                f"SUM({whitelist_expression}{' * weight' if summary_source else ''}) AS persisted_whitelisted_count, "
                 f"{('0' if compact_groups else f'SUM({flow_expression})')} "
                 "AS flow_count, "
-                f"{('0' if compact_groups else f'SUM({alert_expression})')} AS alert_count, "
+                f"{('SUM(summarized_alerts)' if summary_source else '0' if compact_groups else f'SUM({alert_expression})')} AS alert_count, "
                 f"MAX({score_expression}) AS alert_score "
                 f"FROM {group_source} WHERE {' AND '.join(clauses)} "
                 f"GROUP BY {group_fields[1]}"
@@ -2888,7 +3079,7 @@ class RunDataReader:
                 total = int(
                     connection.execute(
                         "SELECT COUNT(*) AS count FROM (SELECT 1 FROM "
-                        f"evidence WHERE {' AND '.join(clauses)} "
+                        f"{group_source} WHERE {' AND '.join(clauses)} "
                         f"GROUP BY {group_fields[1]})",
                         params,
                     ).fetchone()["count"]
@@ -2912,8 +3103,16 @@ class RunDataReader:
                 (*params, *outer_params, limit + 1),
             ).fetchall()
             alert_counts: Dict[str, int] = {}
-            if compact_groups and rows and association != "unlinked":
+            if (
+                compact_groups
+                and rows
+                and association != "unlinked"
+                and not summary_source
+            ):
                 page_ids = [str(row["group_id"]) for row in rows[:limit]]
+                page_has_null = any(
+                    row["group_id"] is None for row in rows[:limit]
+                )
                 page_marks = ",".join("?" for _ in page_ids)
                 time_index = bool(
                     start is not None
@@ -2923,15 +3122,15 @@ class RunDataReader:
                     ).fetchone()
                 )
                 alert_cover_index = bool(
-                    start is None
-                    and group_mode == "type"
-                    and connection.execute(
+                    connection.execute(
                         "SELECT 1 FROM sqlite_master WHERE type = 'index' "
                         "AND name = 'evidence_alert_group_idx'"
                     ).fetchone()
                 )
                 stream_counts = bool(
                     alert_cover_index
+                    and not page_has_null
+                    and not time_cover
                     and not search
                     and not threat
                     and not association
@@ -2949,9 +3148,13 @@ class RunDataReader:
                         set(page_ids),
                         self._query_value(query, "hide_excluded") == "1",
                         end,
+                        start,
+                        group_id,
                     )
                 else:
-                    if alert_cover_index:
+                    if time_cover:
+                        alert_source = "evidence INDEXED BY evidence_time_cover_idx CROSS JOIN alert_evidence ae"
+                    elif alert_cover_index:
                         alert_source = (
                             "alert_evidence ae CROSS JOIN evidence "
                             "INDEXED BY evidence_alert_group_idx"
@@ -2971,7 +3174,13 @@ class RunDataReader:
                             f"FROM {alert_source} "
                             f"WHERE {' AND '.join(clauses)} "
                             "AND ae.evidence_id = evidence.evidence_id "
-                            f"AND {group_id} IN ({page_marks}) "
+                            f"AND ({group_id} IN ({page_marks})"
+                            + (
+                                f" OR {group_id} IS NULL"
+                                if page_has_null
+                                else ""
+                            )
+                            + ") "
                             f"GROUP BY {group_id}",
                             (*params, *page_ids),
                         )
@@ -2988,8 +3197,8 @@ class RunDataReader:
             item["id"] = str(item.pop("group_id"))
             if device_view and group_mode != "type":
                 item["device_id"] = item["id"].split("\x1f", 1)[0]
-                item["device_ips"] = str(item.get("device_ips") or "").split(
-                    ","
+                item["device_ips"] = sorted(
+                    str(item.get("device_ips") or "").split(",")
                 )
             item["threat_level"] = self._threat_from_rank(
                 item.pop("threat_rank")
@@ -3006,7 +3215,7 @@ class RunDataReader:
             )
             item["alert_count"] = (
                 alert_counts.get(item["id"], 0)
-                if compact_groups
+                if compact_groups and not summary_source
                 else int(item["alert_count"] or 0)
             )
             item.update(
@@ -3104,11 +3313,7 @@ class RunDataReader:
                 latest_row = connection.execute(
                     "SELECT MAX(evidence_time) AS latest FROM evidence"
                 ).fetchone()
-                full_total = int(
-                    connection.execute(
-                        "SELECT COUNT(*) AS count FROM evidence"
-                    ).fetchone()["count"]
-                )
+                full_total = detection_total(connection, "evidence")
                 latest = float(latest_row["latest"] or 0)
                 start, end, range_name = self._time_bounds(query, latest)
                 start = self._scoped_start(query, start)
@@ -3378,6 +3583,8 @@ class RunDataReader:
     ) -> List[Dict[str, Any]]:
         """Load bounded durable or live evidence for one alert."""
         alert_id = str(alert["alert_id"])
+        if getattr(self, "archive_mode", False):
+            return self._archive_alert_evidence(alert_id, maximum)
         rows: List[sqlite3.Row] = []
         if self._table_exists(connection, "alert_evidence"):
             rows = connection.execute(
@@ -3407,6 +3614,71 @@ class RunDataReader:
         )
         by_id = {item["id"]: item for item in self._redis_evidence()}
         items = [by_id[item] for item in ids if item in by_id][:maximum]
+        self._annotate_detection_networks(items, "profile_ip", "timestamp")
+        self._annotate_whitelisted_evidence(items)
+        return items
+
+    def _archive_alert_evidence(
+        self, alert_id: str, maximum: int
+    ) -> List[Dict[str, Any]]:
+        """Resolve an archived alert across all retained segments in bounded pages.
+
+        Parameters:
+            alert_id: Alert in the selected archive.
+            maximum: Maximum evidence records returned.
+
+        Returns:
+            Newest linked evidence available in retained storage.
+        """
+        paths = [
+            self.sqlite_path,
+            self.output_dir / "databases" / "flows.sqlite",
+        ]
+        paths.extend(
+            path
+            for path in (self.output_dir / "databases" / "archives").glob(
+                ARCHIVE_GLOB
+            )
+            if ARCHIVE_NAME.fullmatch(path.name)
+            and path != self.sqlite_path
+            and not path.is_symlink()
+        )
+        found: Dict[str, Dict[str, Any]] = {}
+        for path in paths:
+            if not path.is_file():
+                continue
+            try:
+                with sqlite3.connect(
+                    f"file:{path}?mode=ro", uri=True, timeout=1
+                ) as source:
+                    source.row_factory = sqlite3.Row
+                    source.execute(
+                        "ATTACH DATABASE ? AS selected",
+                        (f"file:{self.sqlite_path}?mode=ro",),
+                    )
+                    rows = source.execute(
+                        "SELECT e.* FROM main.evidence e JOIN selected.alert_evidence ae "
+                        "ON ae.evidence_id=e.evidence_id WHERE ae.alert_id=? "
+                        "ORDER BY e.evidence_time DESC,e.evidence_id DESC LIMIT ?",
+                        (alert_id, maximum),
+                    ).fetchall()
+                    for row in rows:
+                        if row["evidence_id"] not in found:
+                            item = self._durable_evidence_row(source, row)
+                            found[item["id"]] = item
+                    found = dict(
+                        sorted(
+                            found.items(),
+                            key=lambda entry: (
+                                entry[1]["timestamp"],
+                                entry[0],
+                            ),
+                            reverse=True,
+                        )[:maximum]
+                    )
+            except (FileNotFoundError, sqlite3.OperationalError):
+                continue
+        items = list(found.values())
         self._annotate_detection_networks(items, "profile_ip", "timestamp")
         self._annotate_whitelisted_evidence(items)
         return items
@@ -3465,9 +3737,7 @@ class RunDataReader:
             )
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            full_total = int(
-                connection.execute("SELECT COUNT(*) FROM alerts").fetchone()[0]
-            )
+            full_total = detection_total(connection, "alerts")
             open_total = full_total - (
                 int(
                     connection.execute(
@@ -3717,11 +3987,7 @@ class RunDataReader:
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            full_total = int(
-                connection.execute(
-                    "SELECT COUNT(*) AS count FROM alerts"
-                ).fetchone()["count"]
-            )
+            full_total = detection_total(connection, "alerts")
             open_total = full_total - (
                 int(
                     connection.execute(
@@ -3941,11 +4207,7 @@ class RunDataReader:
             latest_row = connection.execute(
                 "SELECT MAX(CAST(alert_time AS REAL)) AS latest FROM alerts"
             ).fetchone()
-            full_total = int(
-                connection.execute(
-                    "SELECT COUNT(*) AS count FROM alerts"
-                ).fetchone()["count"]
-            )
+            full_total = detection_total(connection, "alerts")
             open_total = full_total - (
                 int(
                     connection.execute(
@@ -5128,10 +5390,12 @@ class RunDataReader:
             for row in connection.execute("PRAGMA index_list(evidence)")
         }
         preferred = (
-            "evidence_profile_time_idx"
-            if bounded
+            "evidence_time_cover_idx"
+            if bounded and "evidence_time_cover_idx" in indexes
             else "evidence_group_cover_idx"
         )
+        if preferred not in indexes and bounded:
+            preferred = "evidence_profile_time_idx"
         return f" INDEXED BY {preferred}" if preferred in indexes else ""
 
     def _host_finding_stats(
@@ -9501,8 +9765,25 @@ class RequestHandler(BaseHTTPRequestHandler):
         """Route one bounded API request and attach indexing metadata."""
         reader = self.server.reader
         reader.validate_run_identity()
+        archive = query.get("archive", [""])[0]
+        if archive:
+            if not path.startswith(
+                ("/api/evidence", "/api/alerts", "/api/hosts", "/api/flows")
+            ):
+                raise KeyError("This endpoint does not support archives")
+            reader = reader.with_archive(
+                archive,
+                context=path.startswith(("/api/alerts", "/api/flows/"))
+                or path.endswith("/flows"),
+            )
+            if path.startswith("/api/evidence/") and path.endswith("/flows"):
+                reader.archive_evidence_id = unquote(
+                    path[len("/api/evidence/") : -len("/flows")]
+                )
         if path == "/api/identity":
             payload = reader.identity()
+        elif path == "/api/archives":
+            payload = reader.archives()
         elif path == "/api/live-counts":
             payload = reader.live_counts(query)
         elif path == "/api/overview":
@@ -9666,6 +9947,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         """Handle login and authenticated API changes."""
         parsed = urlparse(self.path)
         if parsed.path != "/login":
+            if parse_qs(parsed.query).get("archive"):
+                self._send_json(
+                    {"error": "Detection archives are read-only"},
+                    HTTPStatus.BAD_REQUEST,
+                )
+                return
             self._post_annotation(parsed.path)
             return
 
@@ -9891,6 +10178,14 @@ def main() -> None:
     server = SlipsHTTPServer(
         (args.bind_address, args.port), RequestHandler, reader
     )
+    policy = ConfigParser().detection_history_policy(
+        reader._run_config()[0].get("detection_history", {})
+    )
+    stream = RotatingTextLog(
+        Path(args.output_dir) / "web_interface" / "server.log", policy
+    )
+    sys.stdout = stream
+    sys.stderr = stream
     display_host = (
         "localhost"
         if args.bind_address == LOOPBACK_ADDRESS

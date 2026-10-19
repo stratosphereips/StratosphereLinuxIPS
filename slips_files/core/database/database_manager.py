@@ -1601,6 +1601,9 @@ class DBManager:
     def remove_flow_index_uids(self, *args, **kwargs):
         return self.sqlite.remove_flow_index_uids(*args, **kwargs)
 
+    def maintain_detection_history(self, *args, **kwargs):
+        return self.sqlite.maintain_detection_history(*args, **kwargs)
+
     def insert(self, *args, **kwargs):
         return self.sqlite.insert(*args, **kwargs)
 

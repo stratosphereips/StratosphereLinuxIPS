@@ -10,6 +10,32 @@ from slips_files.common.input_type import InputType
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize(
+    "value,expected", [(30, 30), (7, 7), ("60", 60), (0, 30), ("invalid", 30)]
+)
+def test_detection_archive_retention_is_configurable(
+    value: object, expected: int
+) -> None:
+    """Validate the configured monthly archive age and invalid-value fallback.
+
+    Parameters:
+        value: Configured archive retention.
+        expected: Validated number of days.
+    """
+    _factory = ModuleFactory()
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {"detection_history": {"archive_retention_days": value}}
+    assert (
+        parser.detection_history_policy()["archive_retention_days"] == expected
+    )
+    assert (
+        parser.detection_history_policy({"archive_retention_days": value})[
+            "archive_retention_days"
+        ]
+        == expected
+    )
+
+
 def test_evidence_signal_default_falls_back_to_pamp():
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {"EvidenceSignals": {"default_signal": "invalid"}}
