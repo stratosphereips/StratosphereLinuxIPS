@@ -90,6 +90,7 @@ class SQLiteDB(ISQLite):
                         self.conn, self.output_dir
                     ).maintain(policy, time.time() if now is None else now)
                 finally:
+                    self.conn.rollback()
                     self.conn.execute("PRAGMA busy_timeout=20000")
 
     def _ensure_review_schema(self) -> None:
@@ -277,8 +278,12 @@ class SQLiteDB(ISQLite):
                     )
 
     def _create_history_indexes(self) -> None:
-        """Create indexes needed for bounded historical web queries."""
+        """Index detector lookups and bounded historical web queries."""
         indexes = (
+            "CREATE INDEX IF NOT EXISTS flows_profile_tw_idx "
+            "ON flows(profileid, twid)",
+            "CREATE INDEX IF NOT EXISTS altflows_profile_tw_idx "
+            "ON altflows(profileid, twid)",
             "CREATE INDEX IF NOT EXISTS alerts_time_idx "
             "ON alerts(alert_time DESC, alert_id)",
             "CREATE INDEX IF NOT EXISTS alerts_ip_time_idx "

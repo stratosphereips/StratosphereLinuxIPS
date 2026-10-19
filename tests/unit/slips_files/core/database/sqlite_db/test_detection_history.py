@@ -19,6 +19,36 @@ from slips_files.core.database.sqlite_db.detection_queries import (
 )
 
 
+def test_maintenance_writer_contention_leaves_connection_reusable(
+    tmp_path: Path,
+) -> None:
+    """Recover the writer connection after early archive maintenance fails.
+
+    Parameters:
+        tmp_path: Isolated run database.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    policy = ConfigParser().detection_history_policy()
+    competing_writer = sqlite3.connect(db._flows_db)
+    competing_writer.execute("BEGIN IMMEDIATE")
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="locked"):
+            db.maintain_detection_history(policy, 2_000_000_000.0)
+        assert not db.conn.in_transaction
+        assert db.conn.execute("PRAGMA busy_timeout").fetchone() == (20000,)
+    finally:
+        competing_writer.rollback()
+        competing_writer.close()
+    status = db.maintain_detection_history(policy, 2_000_000_000.0)
+    assert not status["interrupted"]
+    db.execute("INSERT INTO flows(uid,flow) VALUES ('after-contention','{}')")
+    assert db.conn.execute(
+        "SELECT uid FROM flows WHERE uid='after-contention'"
+    ).fetchone() == ("after-contention",)
+    db.close()
+
+
 @pytest.mark.parametrize("disk_pressure", [False, True])
 def test_maintenance_respects_disk_pressure_and_rotates_by_size(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, disk_pressure: bool

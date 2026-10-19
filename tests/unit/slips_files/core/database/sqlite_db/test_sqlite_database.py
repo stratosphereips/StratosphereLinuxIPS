@@ -25,6 +25,47 @@ def db(tmp_path):
     return SQLiteDB(logger, str(tmp_path), 12345)
 
 
+@pytest.mark.parametrize("table", ["flows", "altflows"])
+def test_profile_timewindow_lookup_avoids_retained_flow_scan(
+    tmp_path: Path, table: str
+) -> None:
+    """Keep detector lookups indexed when unrelated traffic has accumulated.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        table: Connection or protocol flow table.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    database.execute(
+        f"INSERT INTO {table}(uid,flow,profileid,twid) VALUES "
+        "('match','{\"daddr\":\"198.51.100.1\"}','profile_192.0.2.1','timewindow1'),"
+        "('other-host','{}','profile_192.0.2.2','timewindow1'),"
+        "('other-window','{}','profile_192.0.2.1','timewindow2')"
+    )
+    rows = database.conn.execute(
+        f"SELECT uid FROM {table} WHERE profileid=? AND twid=?",
+        ("profile_192.0.2.1", "timewindow1"),
+    ).fetchall()
+    plan = database.conn.execute(
+        f"EXPLAIN QUERY PLAN SELECT * FROM {table} WHERE profileid=? AND twid=?",
+        ("profile_192.0.2.1", "timewindow1"),
+    ).fetchall()
+    assert rows == [("match",)]
+    assert any(
+        f"SEARCH {table} USING INDEX {table}_profile_tw_idx" in row[3]
+        for row in plan
+    )
+    assert not any(f"SCAN {table}" in row[3] for row in plan)
+    database.execute(f"DROP INDEX {table}_profile_tw_idx")
+    database.close()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    assert database.conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE name=?", (f"{table}_profile_tw_idx",)
+    ).fetchone()
+    database.close()
+
+
 @pytest.mark.parametrize("new_evidence", [False, True])
 def test_legacy_priority_migration_resumes_large_link_sets(
     tmp_path: Path, new_evidence: bool

@@ -337,6 +337,12 @@ All paths belong to this specific run. Nothing is written to a repository-level 
 
 For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Under size pressure, evidence-linked flows remain protected for at least the configured ordinary-flow age after their newest linked evidence; the size target is allowed to be exceeded when durable evidence alone is larger than the target. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires. The evidence drawer first reads SQLite and then recovers missing linked flows from bounded current or saved Zeek JSON logs when available. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. On older databases, deleted rows may not reduce the file's physical size until Slips is stopped and SQLite `VACUUM` is run; allow temporary free disk space for that operation.
 
+Detector lookups by profile and time window use composite indexes on both raw
+flow tables. This keeps DNS checks from scanning retained traffic while holding
+the shared database lock. After roaming, current-network hosts appear as their
+new packet observations reach processing; previous-network hosts remain in
+historical views.
+
 New run databases use incremental SQLite vacuuming so deleted raw pages can return to the filesystem. Existing databases reuse freed pages for future writes but do not shrink physically without a separate maintenance vacuum.
 
 Continuous runs also apply `detection_history` in the configuration file. Active
