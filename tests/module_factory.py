@@ -58,7 +58,13 @@ class ModuleFactory:
         start_redis_server=True,
         disabled_detections: list[str] | None = None,
     ):
+        self._assert_redis_has_no_run_owner(port)
         from slips_files.core.database.database_manager import DBManager
+        from slips_files.core.database.redis_db.database import RedisDB
+        from slips_files.common.parsers.config_parser import ConfigParser
+
+        ConfigParser()
+        RedisDB.instances.pop(port, None)
 
         """
         flush_db is False by default  because we use this function to check
@@ -579,6 +585,9 @@ class ModuleFactory:
             patch(
                 "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
             ),
+            patch(
+                "modules.p2p_trust.trust.trustdb.TrustDB._ensure_unique_peer_addresses"
+            ),
         ):
             trust_db = TrustDB(
                 logger=self.logger,
@@ -958,9 +967,7 @@ class ModuleFactory:
     def create_host_ip_manager_obj(self, mock_db):
         from managers.host_ip_manager import HostIPManager
 
-        main = self.create_main_obj()
-        main.db = mock_db
-        main.print = Mock()
+        main = Mock(db=mock_db, args=Mock(interface=None, access_point=None))
         return HostIPManager(main)
 
     def create_utils_obj(self):
@@ -1591,3 +1598,55 @@ class ModuleFactory:
         )
         module.print = Mock()
         return module
+
+    def _assert_redis_has_no_run_owner(self, port: int) -> None:
+        """Refuse to write unit-test data into an existing Slips run.
+
+        Parameters:
+            port: Redis port requested by the test.
+        """
+        import redis
+        from slips_files.common.slips_utils import utils
+        from slips_files.core.database.redis_db.redis_auth import (
+            try_connect_with_and_without_password,
+        )
+
+        if not utils.is_port_in_use(port):
+            return
+        client = None
+        try:
+            client = try_connect_with_and_without_password(
+                redis.Redis,
+                host="127.0.0.1",
+                port=port,
+                db=0,
+                decode_responses=True,
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5,
+            )
+            owner = client.hget("analysis", "output_dir")
+            if owner:
+                raise RuntimeError(
+                    f"Refusing unit-test writes to Redis port {port}: "
+                    f"it belongs to Slips run {owner}. "
+                    "Use a separate Redis instance for tests."
+                )
+        except (
+            redis.exceptions.ConnectionError,
+            redis.exceptions.TimeoutError,
+        ) as error:
+            raise RuntimeError(
+                f"Cannot verify ownership of Redis port {port}; "
+                "refusing unit-test writes."
+            ) from error
+        finally:
+            if client is not None:
+                client.close()
+
+    def create_redis_publisher_obj(self) -> object:
+        """Return a Redis publisher with a mocked client and no connection."""
+        from slips_files.core.database.redis_db.database import RedisDB
+
+        db = object.__new__(RedisDB)
+        db.r = Mock()
+        return db

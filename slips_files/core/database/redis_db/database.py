@@ -2312,3 +2312,163 @@ class RedisDB(
         :returns: {channel_name: number_of_msgs, ...}
         """
         return self.r.hgetall(f"{module}_msgs_received_at_runtime")
+
+    def get_network_state(self, interface: str) -> dict | None:
+        """Read current live network settings for one interface.
+
+        Parameters:
+            interface: Monitored interface name.
+
+        Returns:
+            Current settings, or None before first collection.
+        """
+        value = self.r.hget(self.constants.NETWORK_STATES, interface)
+        if value:
+            self.r.expire(self.constants.NETWORK_STATES, self.default_ttl)
+        return json.loads(value) if value else None
+
+    def replace_network_state(self, interface: str, state: dict) -> None:
+        """Replace current live addressing and service data together.
+
+        Parameters:
+            interface: Monitored interface name.
+            state: Collected settings, including its change version.
+        """
+        states = {
+            name: json.loads(value)
+            for name, value in self.r.hgetall(
+                self.constants.NETWORK_STATES
+            ).items()
+        }
+        previous = states.get(interface, {})
+        states[interface] = state
+        configured_dns = {
+            address
+            for item in states.values()
+            for address in item.get("dns_servers", [])
+        }
+        with self.r.pipeline(transaction=True) as pipe:
+            pipe.hset(
+                self.constants.NETWORK_STATES, interface, json.dumps(state)
+            )
+            pipe.expire(self.constants.NETWORK_STATES, self.default_ttl)
+            if state.get("local_network"):
+                pipe.hset(
+                    self.constants.LOCAL_NETWORK,
+                    interface,
+                    state["local_network"],
+                )
+            else:
+                pipe.hdel(self.constants.LOCAL_NETWORK, interface)
+            gateway = {
+                key: value
+                for key, value in (
+                    ("IP", state.get("gateway_ip")),
+                    ("MAC", state.get("gateway_mac")),
+                )
+                if value
+            }
+            if gateway:
+                pipe.hset(
+                    self.constants.DEFAULT_GATEWAY,
+                    interface,
+                    json.dumps(gateway),
+                )
+            else:
+                pipe.hdel(self.constants.DEFAULT_GATEWAY, interface)
+            host_key = f"host_ip_{interface}"
+            pipe.delete(host_key)
+            if state.get("host_ip"):
+                pipe.zadd(host_key, {state["host_ip"]: state["version"]})
+            # Traffic-observed resolvers belong to the old network. They can
+            # be learned again; configured resolvers of all live links stay.
+            network_changed = any(
+                previous.get(key) != state.get(key)
+                for key in (
+                    "host_ip",
+                    "local_network",
+                    "gateway_ip",
+                    "gateway_mac",
+                    "dns_servers",
+                )
+            )
+            if network_changed:
+                pipe.delete(self.constants.OFFICIAL_DNS_SERVERS)
+            if configured_dns:
+                pipe.sadd(self.constants.OFFICIAL_DNS_SERVERS, *configured_dns)
+            pipe.execute()
+
+    def record_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int,
+        dst_ip: str,
+        dst_port: int,
+    ) -> None:
+        """Keep one module-owned socket tuple for a bounded live interval.
+
+        Parameters:
+            run_id: Main Slips process ID, separating retained Redis runs.
+            proto: TCP or UDP transport.
+            src_ip: Local socket address.
+            src_port: Local socket port.
+            dst_ip: Remote socket address.
+            dst_port: Remote socket port.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{proto}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        sources = f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}"
+        ttl = self.constants.SLIPS_OWN_CONNECTION_TTL
+        pipe = self.r.pipeline(transaction=False)
+        pipe.set(key, "1", ex=ttl)
+        pipe.sadd(sources, src_ip)
+        pipe.expire(sources, ttl)
+        pipe.execute()
+
+    def is_slips_own_source_ip(self, run_id: int, ip: str) -> bool:
+        """Check whether a Slips module recently opened a socket from an IP.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            ip: Flow source address.
+
+        Returns:
+            True when a tracked socket used this source IP.
+        """
+        return bool(
+            self.r.sismember(
+                f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}", ip
+            )
+        )
+
+    def is_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int | str,
+        dst_ip: str,
+        dst_port: int | str,
+    ) -> bool:
+        """Match a captured flow to one exact Slips-owned socket tuple.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            src_ip: Flow source IP.
+            src_port: Flow source port.
+            dst_ip: Flow destination IP.
+            dst_port: Flow destination port.
+
+        Returns:
+            True when the full tuple was registered by a Slips process.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{str(proto).lower()}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        return bool(self.r.exists(key))

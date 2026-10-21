@@ -2417,8 +2417,12 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "peer_id": "QmRemotePeer",
             "ip": "192.0.2.10",
             "connected": True,
-            "trust": None,
+            "trust": (0.75 * 0.7) / 2,
+            "report_accuracy": [],
+            "confirmed_reports": 0,
+            "false_reports": 0,
             "reliability": 0.75,
+            "first_seen": 1649445643.0,
             "last_seen": 1649445643.0,
             "reports_received": 0,
             "connections": [
@@ -2686,7 +2690,7 @@ def test_p2p_trust_chart_uses_compact_range_control() -> None:
 
     assert 'id="p2p-range"' in html_source
     assert 'id="p2p-trust-chart"' in html_source
-    assert "function renderP2PTrustChart" in app_source
+    assert "function renderP2PReliabilityChart" in app_source
     assert "/api/p2p?range=${encodeURIComponent(range)}" in app_source
     assert 'byId("p2p-range").addEventListener("change"' in app_source
     assert (

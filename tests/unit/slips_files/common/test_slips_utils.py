@@ -6,6 +6,7 @@ import ipaddress
 from unittest.mock import patch
 import requests
 import sys
+import netifaces
 import pytest
 import pytz
 import json
@@ -906,3 +907,62 @@ def test_all_uids_p2p_related_exits_on_first_non_matching_chunk():
     assert utils.all_uids_p2p_related(uids, db, chunk_size=10) is False
     # only the first 10-uid chunk was ever checked
     assert db.batch_call_sizes == [10]
+
+
+@pytest.mark.parametrize(
+    "gateways, interface, expected",
+    [
+        (
+            {
+                "default": {netifaces.AF_INET: ("192.168.1.1", "en16")},
+                netifaces.AF_INET: [
+                    ("192.168.1.1", "en16", True),
+                    ("192.168.1.1", "en0", False),
+                ],
+            },
+            "en0",
+            "192.168.1.1",
+        ),
+        (
+            {"default": {netifaces.AF_INET: ("10.0.0.1", "eth0")}},
+            "eth0",
+            "10.0.0.1",
+        ),
+        (
+            {"default": {netifaces.AF_INET: ("10.0.0.1", "eth0")}},
+            "wlan0",
+            None,
+        ),
+    ],
+)
+def test_get_gateway_for_iface_accepts_secondary_default_route(
+    gateways, interface, expected
+):
+    """Resolve a monitored interface when another route has priority."""
+    utils = ModuleFactory().create_utils_obj()
+    with patch(
+        "slips_files.common.slips_utils.netifaces.gateways",
+        return_value=gateways,
+    ):
+        assert utils.get_gateway_for_iface(interface) == expected
+
+
+def test_get_own_ips_can_skip_public_lookup() -> None:
+    """Keep database imports from opening an untracked network socket."""
+    utils = ModuleFactory().create_utils_obj()
+    with (
+        patch.object(sys, "argv", ["slips.py", "-i", "en0"]),
+        patch(
+            "slips_files.common.slips_utils.netifaces.interfaces",
+            return_value=["en0"],
+        ),
+        patch(
+            "slips_files.common.slips_utils.netifaces.ifaddresses",
+            return_value={2: [{"addr": "192.0.2.10"}]},
+        ),
+        patch.object(utils, "get_public_ip") as public_lookup,
+    ):
+        assert utils.get_own_ips(ret="List", include_public=False) == [
+            "192.0.2.10"
+        ]
+    public_lookup.assert_not_called()

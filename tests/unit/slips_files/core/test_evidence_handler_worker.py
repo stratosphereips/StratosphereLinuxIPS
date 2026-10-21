@@ -907,3 +907,51 @@ def test_mixed_p2p_and_unrelated_evidence_is_not_filtered() -> None:
     ]
 
     assert worker.is_filtered_evidence(evidence, []) is False
+
+
+@pytest.mark.parametrize(
+    "evidence_type, should_score",
+    [
+        (EvidenceType.P2P_REPORT, False),
+        (EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK, True),
+    ],
+)
+def test_received_p2p_report_does_not_add_to_host_score(
+    evidence_type: EvidenceType, should_score: bool
+) -> None:
+    """Score an observed P2P finding once, without scoring its raw report.
+
+    Parameters:
+        evidence_type: P2P signal being processed.
+        should_score: Whether the signal contributes to the host score.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=evidence_type,
+        description="Peer reported a malicious IP",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.66.100",
+        ),
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+        profile=ProfileID("10.0.66.100"),
+        timewindow=TimeWindow(1),
+        uid=["uid-p2p"],
+        timestamp="2023/02/16 17:46:13.000000+0000",
+    )
+    worker.db.get_accumulated_threat_level.return_value = 0.4
+    worker.db.update_accumulated_threat_level.return_value = 1.4
+    worker.is_filtered_evidence = Mock(return_value=False)
+
+    score = worker.get_accumulated_threat_level(
+        str(evidence.profile), str(evidence.timewindow), evidence
+    )
+
+    if should_score:
+        assert score == 1.4
+        worker.db.update_accumulated_threat_level.assert_called_once()
+    else:
+        assert score == 0.4
+        worker.db.update_accumulated_threat_level.assert_not_called()

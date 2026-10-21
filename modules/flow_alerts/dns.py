@@ -438,7 +438,9 @@ class DNS(IFlowalertsAnalyzer):
         """
         # to avoid FPs when devices announce their presence in the TXT
         # records of mDNS answers
-        if ipaddress.ip_address(flow.saddr).is_multicast:
+        if ipaddress.ip_address(flow.saddr).is_multicast or (
+            flow.query or ""
+        ).rstrip(".").lower().endswith(".local"):
             return
 
         if not flow.answers:

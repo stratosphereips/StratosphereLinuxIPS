@@ -582,3 +582,22 @@ class SQLiteDB(ISQLite):
         if not results:
             return []
         return [row[0] for row in results if row and row[0] is not None]
+
+    def alert_evidence_records(self, alert_id: str) -> list[dict]:
+        """Read a bounded set of distinct detector sources for a local alert.
+
+        Parameters:
+            alert_id: Durable alert identifier.
+
+        Returns:
+            Up to 100 associated evidence snapshots, newest first.
+        """
+        rows = self.select(
+            "evidence",
+            columns="data",
+            condition="evidence_id IN (SELECT evidence_id FROM alert_evidence WHERE alert_id = ?)",
+            params=(alert_id,),
+            order_by="evidence_time DESC",
+            limit=100,
+        )
+        return [json.loads(row[0]) for row in (rows or [])]

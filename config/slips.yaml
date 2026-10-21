@@ -1142,3 +1142,5 @@ local_p2p:
    connection_ttl: 30
    # Briefly hold candidate handshake flows while authentication completes.
    handshake_pending_seconds: 2
+   # mDNS group used by local peers.
+   rendezvous: slips

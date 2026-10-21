@@ -8,6 +8,7 @@ import sqlite3
 import time
 from pathlib import Path
 from typing import (
+    Any,
     Dict,
     Iterable,
     List,
@@ -117,10 +118,12 @@ class DBManager:
             self.print(f"Database error during integrity_check: {e}")
             return True
 
-    def backup_db(self, db_path: str):
+    def backup_db(self, db_path: str) -> None:
         """
-        Backs up the database file to a new file with a timestamp. and
-        deleted the file at db_path if successfully backed up.
+        Back up a SQLite database and its WAL sidecars before replacement.
+
+        Parameters:
+            db_path: Path to the SQLite database file.
         """
         try:
             # backup the DB aside (optional safety)
@@ -129,6 +132,10 @@ class DBManager:
             )
             backup_path = f"{db_path}.{date_time}.bak"
             shutil.move(db_path, backup_path)
+            for suffix in ("-wal", "-shm"):
+                sidecar_path = f"{db_path}{suffix}"
+                if os.path.exists(sidecar_path):
+                    shutil.move(sidecar_path, f"{backup_path}{suffix}")
 
             db_short = Path(db_path).parent.name + "/" + Path(db_path).name
             backup_short = (
@@ -167,14 +174,12 @@ class DBManager:
                     "trustdb.db is malformed. Backing it up and creating another one..."
                 )
                 self.backup_db(db_path)
-            if not self.has_write_access_to_sqlite(db_path):
+            elif not self.has_write_access_to_sqlite(db_path):
                 self.print(
                     "trustdb.db is not writable. Backing it up and "
                     "creating another one..."
                 )
                 self.backup_db(db_path)
-                # TODO LAST THING HERE IS WE'RE NOT CREATING A NEW DB AFTER
-                #  BACKING UP THE OLDONE??
 
         return db_path
 
@@ -897,16 +902,45 @@ class DBManager:
 
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
-        evidence_set = self.rdb.set_evidence(evidence)
+        if self.trust_db and evidence.evidence_type not in {
+            EvidenceType.P2P_REPORT,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+        }:
+            from modules.p2p_trust.trust.report_validation import (
+                provenance_for_evidence,
+            )
+            from modules.p2p_trust.utils.network import network_id_for_state
+
+            metadata = provenance_for_evidence(
+                utils.to_dict(evidence), utils.get_slips_version()
+            )
+            if metadata:
+                state = (
+                    self.rdb.get_network_state(interface) if interface else {}
+                )
+                metadata["network_id"] = network_id_for_state(
+                    state if isinstance(state, dict) else {},
+                    f"{self.output_dir}:{self.main_pid}",
+                )
+                metadata["observed_at"] = utils.convert_ts_format(
+                    evidence.timestamp, "unixtimestamp"
+                )
+                evidence.detection_provenance = metadata
+        evidence_set = self.rdb.set_evidence(evidence, notify=False)
         if evidence_set:
             self.sqlite.add_evidence(evidence)
+            self.rdb.publish_evidence_added(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
-            self.update_threat_level(
-                str(evidence.attacker.profile),
-                str(evidence.threat_level),
-                evidence.confidence,
-            )
+            if evidence.evidence_type not in {
+                EvidenceType.P2P_REPORT,
+                EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            }:
+                self.update_threat_level(
+                    str(evidence.attacker.profile),
+                    str(evidence.threat_level),
+                    evidence.confidence,
+                )
         return evidence_set
 
     def set_alert(
@@ -922,7 +956,15 @@ class DBManager:
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
-        self.update_threat_level(str(alert.profile), "critical", 1)
+        if all(
+            evidence.evidence_type
+            not in {
+                EvidenceType.P2P_REPORT,
+                EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            }
+            for evidence in evidence_causing_the_alert.values()
+        ):
+            self.update_threat_level(str(alert.profile), "critical", 1)
 
         for evidence_id in evidence_causing_the_alert.keys():
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
@@ -976,15 +1018,20 @@ class DBManager:
     ):
         """updates the threat level and confidence of an ip in redis and
         trust db for other peers to use it"""
-        if self.trust_db:
+        result = self.rdb.update_threat_level(
+            profileid, threat_level, confidence
+        )
+        if self.trust_db and threat_level != "info":
             ip = profileid.split("_")[-1]
-            float_threat_level = utils.threat_levels[threat_level]
+            stored_score = self.rdb.get_ip_info(ip, "score")
+            try:
+                float_threat_level = float(stored_score)
+            except (TypeError, ValueError):
+                float_threat_level = utils.threat_levels[threat_level]
             self.trust_db.insert_slips_score(
                 ip, float_threat_level, confidence
             )
-        return self.rdb.update_threat_level(
-            profileid, threat_level, confidence
-        )
+        return result
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
@@ -1646,3 +1693,34 @@ class DBManager:
         return self.rdb.get_cached_network_opinion(
             target, cache_valid_seconds, current_time
         )
+
+    def get_network_state(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+        return self.rdb.get_network_state(*args, **kwargs)
+
+    def replace_network_state(self, *args: Any, **kwargs: Any) -> None:
+        return self.rdb.replace_network_state(*args, **kwargs)
+
+    def record_slips_own_connection(self, *args: Any, **kwargs: Any) -> None:
+        return self.rdb.record_slips_own_connection(*args, **kwargs)
+
+    def is_slips_own_source_ip(self, *args: Any, **kwargs: Any) -> bool:
+        return self.rdb.is_slips_own_source_ip(*args, **kwargs)
+
+    def is_slips_own_connection(self, *args: Any, **kwargs: Any) -> bool:
+        return self.rdb.is_slips_own_connection(*args, **kwargs)
+
+    def clear_peer_trust(self, *args: Any, **kwargs: Any) -> None:
+        return self.rdb.clear_peer_trust(*args, **kwargs)
+
+    def clear_authenticated_p2p_connections(
+        self, *args: Any, **kwargs: Any
+    ) -> None:
+        return self.rdb.clear_authenticated_p2p_connections(*args, **kwargs)
+
+    def refresh_authenticated_p2p_connections(
+        self, *args: Any, **kwargs: Any
+    ) -> None:
+        return self.rdb.refresh_authenticated_p2p_connections(*args, **kwargs)
+
+    def alert_evidence_records(self, *args: Any, **kwargs: Any) -> list[dict]:
+        return self.sqlite.alert_evidence_records(*args, **kwargs)

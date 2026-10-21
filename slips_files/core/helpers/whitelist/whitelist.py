@@ -127,6 +127,18 @@ class Whitelist:
         Checks if the src IP, dst IP, domain, dns answer, or organization
          of this flow is whitelisted.
         """
+        if (
+            self.db.is_slips_own_connection(
+                self.db.main_pid,
+                flow.proto,
+                flow.saddr,
+                getattr(flow, "sport", None),
+                flow.daddr,
+                getattr(flow, "dport", None),
+            )
+            is True
+        ):
+            return True
         if self._check_if_whitelisted_domains_of_flow(flow):
             return True
 
