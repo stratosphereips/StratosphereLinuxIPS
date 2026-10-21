@@ -212,6 +212,22 @@ on shutdown.
 The dedicated host profile directory is restricted to its owner because
 requested URLs can contain private information.
 
+The core hostname getter used by console alerts and summaries consults the same
+permanent identity store. The snapshot writer also resolves durable names before
+saving, so expired Redis metadata cannot overwrite a known device with blank
+identity fields. Redis profile TTLs remain bounded: with a one-hour time window,
+the profile cache expires after 48 hours even if other profile fields change.
+Names belong to permanent device/network history, independently of that cache.
+
+Host labels, inventory pages, device pages, searches and host details read saved
+DHCP/profile hostnames, verified mDNS address-record names and reverse DNS from
+this permanent database. Redis expiry and an empty refreshed run snapshot do
+not erase the displayed name. A name can follow a recorded unicast MAC to a new
+IPv4 or IPv6 address or another network. Reusing a private IP does not transfer
+another device's name: the selected network and MAC ownership at the name's
+observation must agree. Ambiguous ownership, mDNS questions, service labels,
+visited DNS names and TLS server names cannot supply a recovered device name.
+
 The Host workspace shows up to 50 recently seen network profiles for its IP,
 with first and last observation times. It records hostnames learned from DHCP
 or profile updates, DNS answers, multicast DNS answers on port 5353, TLS SNI,

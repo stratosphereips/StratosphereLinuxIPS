@@ -20,6 +20,7 @@ from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.output_paths import (
     get_this_filepath_inside_permanent_dir,
@@ -1503,8 +1504,23 @@ class DBManager:
     def is_a_port_scanner(self, *args, **kwargs):
         return self.rdb.is_a_port_scanner(*args, **kwargs)
 
-    def get_hostname_from_profile(self, *args, **kwargs):
-        return self.rdb.get_hostname_from_profile(*args, **kwargs)
+    def get_hostname_from_profile(
+        self, *args: Any, **kwargs: Any
+    ) -> str | None:
+        return HostProfileStore.hostname_for_profile(
+            *args,
+            **kwargs,
+            path=Path(self.conf.permanent_dir())
+            / "host_profiles"
+            / "hosts.sqlite",
+            network_states=[
+                self.rdb.get_network_state(interface)
+                for interface in self.all_interfaces
+            ],
+            run_name=f"{self.output_dir}:{self.main_pid}",
+            current_mac=self.rdb.get_mac_addr_from_profile(*args, **kwargs),
+            cached_name=self.rdb.get_hostname_from_profile(*args, **kwargs),
+        )
 
     def add_host_name_to_profile(self, *args, **kwargs):
         return self.rdb.add_host_name_to_profile(*args, **kwargs)

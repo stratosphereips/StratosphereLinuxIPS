@@ -4793,6 +4793,53 @@ class RunDataReader:
         )
         return result
 
+    def _restore_host_identities(
+        self,
+        hosts: List[Dict[str, Any]],
+        query: Dict[str, List[str]],
+        live_identity: Optional[Dict[str, Dict[str, Any]]] = None,
+    ) -> None:
+        """Restore durable identity after transient Redis fields expire.
+
+        Parameters:
+            hosts: Host records being displayed or exported.
+            query: Selected capture network and view filters.
+            live_identity: Optional freshly read profile fields to verify MACs.
+        """
+        stored = HostProfileStore.identities_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            [host["ip"] for host in hosts],
+            self._annotation_networks(query),
+            {
+                ip: (record.get("fields") or {}).get("MAC", "")
+                for ip, record in (live_identity or {}).items()
+            },
+        )
+        for host in hosts:
+            identity = stored.get(host["ip"], {})
+            fields = (live_identity or {}).get(host["ip"], {}).get(
+                "fields"
+            ) or {}
+            if identity.get("identity_changed") or (
+                identity.get("mac")
+                and host.get("mac")
+                and identity["mac"]
+                != HostProfileStore._usable_mac(host["mac"])
+            ):
+                host["hostname"] = fields.get("host_name", "")
+                host["dns_name"] = ""
+                host["dns_name_source"] = ""
+            if identity.get("name"):
+                host["hostname"] = identity["name"]
+                host["hostname_source"] = identity["source"]
+            if identity.get("mac"):
+                host["mac"] = identity["mac"]
+            host["mac_address_type"] = classify_mac(host.get("mac"))
+
     def _annotation_networks(self, query: Dict[str, List[str]]) -> List[str]:
         """Use the selected capture network when resolving saved private host names.
 
@@ -4859,28 +4906,58 @@ class RunDataReader:
                 pipeline.hget(f"profile_{ip}", "host_name")
                 pipeline.hget("DNSresolution", ip)
                 pipeline.hget(f"profile_{ip}", "MAC_vendor")
+                pipeline.hget(f"profile_{ip}", "MAC")
             live_identity = pipeline.execute()
         except (AttributeError, redis.RedisError):
             live_identity = []
 
+        stored = HostProfileStore.identities_for_ips(
+            getattr(
+                self,
+                "host_profiles_path",
+                Path("permanent/host_profiles/hosts.sqlite"),
+            ),
+            ips,
+            self._annotation_networks(query),
+            {
+                ip: live_identity[index * 4 + 3]
+                for index, ip in enumerate(ips)
+                if index * 4 + 3 < len(live_identity)
+            },
+        )
         names: Dict[str, Dict[str, str]] = {}
         for index, ip in enumerate(ips):
             snapshot = snapshots.get(ip, {})
+            identity_changed = bool(
+                stored.get(ip, {}).get("identity_changed")
+            ) or bool(
+                stored.get(ip, {}).get("mac")
+                and snapshot.get("mac")
+                and stored[ip]["mac"]
+                != HostProfileStore._usable_mac(snapshot["mac"])
+            )
+            if identity_changed:
+                snapshot = {}
             annotation = annotations.get(ip, {})
             live_name = (
-                live_identity[index * 3]
-                if index * 3 < len(live_identity)
+                live_identity[index * 4]
+                if index * 4 < len(live_identity)
                 else ""
             )
+            if identity_changed:
+                live_name = ""
             name = str(annotation.get("name") or "")
             source = "User name" if name else ""
+            if not name and stored.get(ip, {}).get("name"):
+                name = stored[ip]["name"]
+                source = stored[ip]["source"]
             if not name:
                 name = str(live_name or snapshot.get("hostname") or "")
                 source = "Hostname" if name else ""
-            if not name:
+            if not name and not identity_changed:
                 live_dns = (
-                    live_identity[index * 3 + 1]
-                    if index * 3 + 1 < len(live_identity)
+                    live_identity[index * 4 + 1]
+                    if index * 4 + 1 < len(live_identity)
                     else None
                 )
                 dns = self._loads(live_dns, {}) or snapshot.get("dns") or {}
@@ -4890,7 +4967,11 @@ class RunDataReader:
                 if isinstance(domains, list) and domains:
                     name = str(domains[0])
                     source = "DNS"
-            if not name and getattr(self, "cache", None) is not None:
+            if (
+                not name
+                and not identity_changed
+                and getattr(self, "cache", None) is not None
+            ):
                 try:
                     reverse_dns = self.cache.hget("IPsInfo:reverse_dns", ip)
                 except (AttributeError, redis.RedisError):
@@ -4903,8 +4984,8 @@ class RunDataReader:
                     source = "rDNS"
             if not name:
                 vendor = (
-                    live_identity[index * 3 + 2]
-                    if index * 3 + 2 < len(live_identity)
+                    live_identity[index * 4 + 2]
+                    if index * 4 + 2 < len(live_identity)
                     else ""
                 ) or snapshot.get("mac_vendor")
                 if vendor:
@@ -5693,6 +5774,13 @@ class RunDataReader:
                 if search
                 else {}
             )
+            saved_identities = (
+                HostProfileStore.identities_for_ips(
+                    profile_path, candidate_ips, annotation_networks
+                )
+                if search
+                else {}
+            )
             connection.create_function(
                 "host_status",
                 1,
@@ -5707,7 +5795,11 @@ class RunDataReader:
                 "host_annotation_search",
                 1,
                 lambda ip: json.dumps(
-                    [triage.get(ip, {}), saved_annotations.get(ip, {})],
+                    [
+                        triage.get(ip, {}),
+                        saved_annotations.get(ip, {}),
+                        saved_identities.get(ip, {}),
+                    ],
                     ensure_ascii=False,
                 ).lower(),
             )
@@ -6007,6 +6099,9 @@ class RunDataReader:
             host["user_note"] = annotation.get("note", "")
             host["mac_address_type"] = classify_mac(host.get("mac"))
             items.append(host)
+        self._restore_host_identities(
+            items, query, identities if fast_page else {}
+        )
         self._attach_current_host_scores(items)
         next_cursor = (
             self._encode_cursor(
@@ -6191,6 +6286,13 @@ class RunDataReader:
         scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
         alerts_only = self._query_value(query, "alerts_only") == "1"
+        saved_identities = (
+            HostProfileStore.identities_for_ips(
+                profile_path, ips, annotation_networks
+            )
+            if search
+            else {}
+        )
         filtered: List[Dict[str, Any]] = []
         for group in groups.values():
             members = group["members"]
@@ -6208,6 +6310,7 @@ class RunDataReader:
                             data,
                             triage.get(ip, {}),
                             saved_annotations.get(ip, {}),
+                            saved_identities.get(ip, {}),
                             classify_mac(data.get("mac")).replace("_", " "),
                         ],
                         ensure_ascii=False,
@@ -6374,6 +6477,7 @@ class RunDataReader:
             )
             host["mac_address_type"] = classify_mac(host.get("mac"))
             items.append(host)
+        self._restore_host_identities(items, query, identities)
         self._attach_current_host_scores(items)
         next_cursor = (
             self._encode_cursor(sort_value(page[-1]), page[-1]["id"])
@@ -6816,6 +6920,7 @@ class RunDataReader:
                     ),
                     "",
                 )
+        self._restore_host_identities([host], query or {})
         analysis = (
             self.redis.hgetall("analysis")
             if getattr(self, "redis", None)

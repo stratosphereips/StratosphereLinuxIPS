@@ -362,6 +362,9 @@ class WebInterface(IModule):
             history_path,
             redis_client,
             self.ppid,
+            host_profiles_path=Path(self.conf.permanent_dir())
+            / "host_profiles"
+            / "hosts.sqlite",
         )
         # Publish live hosts before the HTTP server accepts requests. Detection
         # backfill runs separately so it cannot delay live host refreshes.

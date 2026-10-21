@@ -408,7 +408,7 @@ function rememberHostName(ip, name, source) {
 
 /** Rank user names above learned names and vendor fallback. */
 function hostNamePriority(source) {
-  return { "User name": 4, Hostname: 3, DNS: 2, rDNS: 2, "MAC vendor": 1 }[source] || 0;
+  return { "User name": 4, Hostname: 3, mDNS: 2, DNS: 2, rDNS: 2, "MAC vendor": 1 }[source] || 0;
 }
 
 /** Remember the best currently available identity from a Host record. */
@@ -417,7 +417,7 @@ function rememberHostRecord(record) {
   if (Object.hasOwn(record, "user_name") && !record.user_name
       && state.hostNames.get(record.ip)?.source === "User name") state.hostNames.delete(record.ip);
   if (record.user_name) rememberHostName(record.ip, record.user_name, "User name");
-  else if (record.hostname) rememberHostName(record.ip, record.hostname, "Hostname");
+  else if (record.hostname) rememberHostName(record.ip, record.hostname, record.hostname_source || "Hostname");
   else if (record.dns_name) rememberHostName(record.ip, record.dns_name, record.dns_name_source || "DNS");
   else if (record.mac_vendor) rememberHostName(record.ip, `${record.mac_vendor} device`, "MAC vendor");
 }

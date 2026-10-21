@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import psutil
 import redis
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 
 ERROR_LINE = re.compile(
     r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+"
@@ -141,6 +142,7 @@ class HistoryCollector:
         history_path: Path,
         redis_client: redis.Redis,
         root_pid: int,
+        host_profiles_path: Optional[Path] = None,
     ) -> None:
         """
         Initialize collector state.
@@ -150,12 +152,19 @@ class HistoryCollector:
             history_path: Module-specific history database.
             redis_client: Current run Redis client.
             root_pid: Main Slips process identifier.
+            host_profiles_path: Shared permanent identity store.
         """
         self.output_dir = Path(output_dir)
         self.flows_path = self.output_dir / "databases" / "flows.sqlite"
         self.history_path = history_path
         self.redis = redis_client
         self.root_pid = root_pid
+        self.host_profiles_path = (
+            host_profiles_path
+            or Path(ConfigParser().permanent_dir())
+            / "host_profiles"
+            / "hosts.sqlite"
+        )
         self._processes: Dict[int, psutil.Process] = {}
         self._last_flow_count: Optional[int] = None
         self._last_flow_check = time.monotonic()
@@ -705,6 +714,34 @@ class HistoryCollector:
         except (redis.RedisError, TypeError, ValueError):
             pass
 
+        try:
+            raw_states = self.redis.hgetall("network_states")
+        except redis.RedisError:
+            raw_states = {}
+        states = []
+        for raw in raw_states.values() if isinstance(raw_states, dict) else []:
+            state = self._json_value(raw, {})
+            if isinstance(state, dict):
+                states.append(state)
+        run_name = f"{self.output_dir}:{self.root_pid}"
+        networks = [
+            HostProfileStore.network_id_for_state(state, run_name)
+            for state in states
+        ]
+        networks.append(f"run:{run_name}")
+        try:
+            durable = HostProfileStore.identities_for_ips(
+                self.host_profiles_path,
+                [ip for ip, _, _, _ in profile_data],
+                networks,
+                {
+                    ip: fields.get("MAC", "")
+                    for ip, fields, _, _ in profile_data
+                },
+            )
+        except (OSError, sqlite3.Error):
+            durable = {}
+
         rows: List[tuple[Any, ...]] = []
         observed_at = time.time()
         for ip, fields, dns, twid in profile_data:
@@ -719,8 +756,14 @@ class HistoryCollector:
             data = {
                 "ip": ip,
                 "scope": scope,
-                "hostname": fields.get("host_name", ""),
-                "mac": fields.get("MAC", ""),
+                "hostname": durable.get(ip, {}).get("name")
+                or (
+                    ""
+                    if durable.get(ip, {}).get("identity_changed")
+                    else fields.get("host_name", "")
+                ),
+                "hostname_source": durable.get(ip, {}).get("source", ""),
+                "mac": durable.get(ip, {}).get("mac") or fields.get("MAC", ""),
                 "mac_vendor": fields.get("MAC_vendor", ""),
                 "threat_level": fields.get("threat_level", "info"),
                 "max_threat_level": fields.get("max_threat_level", "info"),

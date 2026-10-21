@@ -3741,18 +3741,10 @@ def test_host_names_resolves_live_and_historical_identity(
         )
     reader.redis = Mock()
     reader.redis.pipeline.return_value.execute.return_value = [
-        "current-host",
-        None,
-        None,
-        None,
-        None,
-        None,
-        None,
-        json.dumps({"domains": ["new.local"]}),
-        None,
-        None,
-        None,
-        None,
+        "current-host", None, None, None,
+        None, None, None, None,
+        None, json.dumps({"domains": ["new.local"]}), None, None,
+        None, None, None, None,
     ]
     reader.cache = Mock()
     reader.cache.hget.return_value = "cached.example"
@@ -3775,7 +3767,7 @@ def test_host_names_resolves_live_and_historical_identity(
         "10.0.0.3": {"name": "new.local", "source": "DNS"},
         "2001:0DB8:0:0::5": {"name": "cached.example", "source": "rDNS"},
     }
-    assert reader.redis.pipeline.return_value.hget.call_count == 12
+    assert reader.redis.pipeline.return_value.hget.call_count == 16
     reader.cache.hget.assert_called_once_with(
         "IPsInfo:reverse_dns", "2001:db8::5"
     )

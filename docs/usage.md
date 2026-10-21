@@ -563,7 +563,10 @@ This feature is disabled by default. You can enable it by changing ```popup_aler
 
 This feature is supported in Linux and it requires root privileges.
 
-This feature is supported in MaOS without root privileges.
+On macOS, Slips uses the built-in `osascript` command without root privileges.
+Allow notifications for **Script Editor** in **System Settings → Notifications**
+and check Focus settings if banners are hidden. Restart Slips after enabling
+`popup_alerts` or updating the notification code.
 
 This feature is not supported in Docker
 

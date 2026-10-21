@@ -86,6 +86,15 @@ class HostProfileStore:
                 "ON facts(network_id, ip, kind, last_seen DESC)"
             )
             connection.execute(
+                "CREATE INDEX IF NOT EXISTS facts_mac_lookup_idx ON facts(kind,value,network_id,ip)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS facts_ip_kind_idx ON facts(ip,kind,last_seen DESC)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS hosts_ip_seen_idx ON hosts(ip,last_seen DESC)"
+            )
+            connection.execute(
                 "CREATE TABLE IF NOT EXISTS network_names ("
                 "network_id TEXT PRIMARY KEY, name TEXT NOT NULL)"
             )
@@ -780,6 +789,260 @@ class HostProfileStore:
                     mac, direct
                 )
         return resolved
+
+    @staticmethod
+    def hostname_for_profile(
+        profileid: str,
+        path: Path,
+        network_states: Iterable[dict[str, Any]],
+        run_name: str,
+        current_mac: str | None = None,
+        cached_name: str | None = None,
+    ) -> str | None:
+        """Read a durable hostname for core consumers in their capture context.
+
+        Parameters:
+            profileid: Slips profile containing the endpoint address.
+            path: Shared permanent identity database.
+            network_states: Current settings of the monitored interfaces.
+            run_name: Fallback identity for this capture.
+            current_mac: Optional cached hardware address to check ownership.
+            cached_name: Fresh cache value used when durable ownership permits it.
+
+        Returns:
+            Learned name for this network/device, or None if unverified.
+        """
+        try:
+            ip = str(ipaddress.ip_address(profileid.removeprefix("profile_")))
+        except (AttributeError, ValueError):
+            return None
+        address = ipaddress.ip_address(ip)
+        networks = []
+        for state in network_states:
+            if not isinstance(state, dict) or state.get("connected") is False:
+                continue
+            try:
+                local = ipaddress.ip_network(
+                    state.get("local_network", ""), strict=False
+                )
+            except ValueError:
+                local = None
+            if address.is_link_local or (local and address in local):
+                networks.append(
+                    HostProfileStore.network_id_for_state(state, run_name)
+                )
+        networks.append(f"run:{run_name}")
+        try:
+            identities = HostProfileStore.identities_for_ips(
+                path, [ip], networks, {ip: current_mac or ""}
+            )
+            identity = identities.get(ip, {})
+            if identity:
+                if identity.get("name"):
+                    return identity["name"]
+                return None
+            if path.exists() and HostProfileStore.identities_for_ips(
+                path, [ip]
+            ):
+                return None
+        except (OSError, sqlite3.Error):
+            pass
+        return cached_name or None
+
+    @staticmethod
+    def identities_for_ips(
+        path: Path,
+        ips: Iterable[str],
+        network_ids: Iterable[str] = (),
+        current_macs: dict[str, str] | None = None,
+    ) -> dict[str, dict[str, Any]]:
+        """Recover learned device names from durable, scoped identity facts.
+
+        Parameters:
+            path: Permanent host database, opened without creating it.
+            ips: Addresses whose displayed identity is being resolved.
+            network_ids: Preferred capture networks; empty selects recent history.
+            current_macs: Live MACs that override historical address ownership.
+
+        Returns:
+            Names, sources and verified MACs indexed by requested address.
+        """
+        keys = list(dict.fromkeys(ips))
+        if not keys or not path.exists():
+            return {}
+        networks = list(dict.fromkeys(key for key in network_ids if key))
+        preference = {key: index for index, key in enumerate(networks)}
+        result: dict[str, dict[str, Any]] = {}
+        priority = {"hostname": 3, "mdns_hostname": 2, "reverse_dns": 1}
+        sources = {
+            "hostname": "Hostname",
+            "mdns_hostname": "mDNS",
+            "reverse_dns": "rDNS",
+        }
+        with sqlite3.connect(
+            f"file:{path}?mode=ro", uri=True, timeout=5
+        ) as connection:
+            connection.row_factory = sqlite3.Row
+            for offset in range(0, len(keys), 200):
+                batch = keys[offset : offset + 200]
+                marks = ",".join("?" for _ in batch)
+                try:
+                    profiles = connection.execute(
+                        "SELECT h.network_id,h.ip,h.last_seen,o.last_seen AS endpoint_seen "
+                        "FROM hosts h LEFT JOIN host_endpoint_observations o "
+                        "ON o.network_id=h.network_id AND o.ip=h.ip "
+                        f"WHERE h.ip IN ({marks}) ORDER BY h.last_seen DESC",
+                        batch,
+                    ).fetchall()
+                except sqlite3.OperationalError:
+                    profiles = connection.execute(
+                        "SELECT network_id,ip,last_seen,NULL AS endpoint_seen "
+                        f"FROM hosts WHERE ip IN ({marks}) ORDER BY last_seen DESC",
+                        batch,
+                    ).fetchall()
+                profiles = sorted(
+                    profiles,
+                    key=lambda row: (
+                        preference.get(row["network_id"], len(preference)),
+                        row["endpoint_seen"] is None,
+                        -float(row["endpoint_seen"] or row["last_seen"]),
+                    ),
+                )
+                selected = {}
+                for row in profiles:
+                    if (
+                        preference
+                        and row["network_id"] not in preference
+                        and row["network_id"] != "public"
+                    ):
+                        continue
+                    selected.setdefault(
+                        row["ip"], (row["network_id"], row["ip"])
+                    )
+                if not selected:
+                    continue
+                facts = connection.execute(
+                    "SELECT network_id,ip,kind,value,first_seen,last_seen FROM facts "
+                    f"WHERE ip IN ({marks}) AND kind IN ('mac','hostname','mdns_hostname','reverse_dns') "
+                    "ORDER BY last_seen DESC,first_seen DESC",
+                    batch,
+                ).fetchall()
+                by_profile: dict[tuple[str, str], list[sqlite3.Row]] = {}
+                for fact in facts:
+                    by_profile.setdefault(
+                        (fact["network_id"], fact["ip"]), []
+                    ).append(fact)
+                target_macs = {}
+                conflicts = set()
+                for ip, key in selected.items():
+                    mac = next(
+                        (
+                            HostProfileStore._usable_mac(f["value"])
+                            for f in by_profile.get(key, [])
+                            if f["kind"] == "mac"
+                        ),
+                        "",
+                    )
+                    live_mac = HostProfileStore._usable_mac(
+                        (current_macs or {}).get(ip)
+                    )
+                    if live_mac and mac and live_mac != mac:
+                        conflicts.add(ip)
+                    target_macs[ip] = live_mac or mac
+                macs = sorted(set(target_macs.values()) - {""})
+                if macs:
+                    mac_marks = ",".join("?" for _ in macs)
+                    aliases = connection.execute(
+                        "SELECT DISTINCT network_id,ip FROM facts "
+                        f"WHERE kind='mac' AND value IN ({mac_marks}) AND network_id!='public'",
+                        macs,
+                    ).fetchall()
+                    missing = [
+                        (row[0], row[1])
+                        for row in aliases
+                        if (row[0], row[1]) not in by_profile
+                    ]
+                    for start in range(0, len(missing), 200):
+                        chunk = missing[start : start + 200]
+                        pairs = ",".join("(?,?)" for _ in chunk)
+                        extra = connection.execute(
+                            "SELECT network_id,ip,kind,value,first_seen,last_seen FROM facts "
+                            f"WHERE (network_id,ip) IN ({pairs}) "
+                            "AND kind IN ('mac','hostname','mdns_hostname','reverse_dns') "
+                            "ORDER BY last_seen DESC,first_seen DESC",
+                            [value for pair in chunk for value in pair],
+                        ).fetchall()
+                        for fact in extra:
+                            by_profile.setdefault(
+                                (fact["network_id"], fact["ip"]), []
+                            ).append(fact)
+                previous_owners: dict[str, set[str]] = {}
+                by_mac: dict[str, list[tuple[int, float, str, str]]] = {}
+                direct: dict[
+                    tuple[str, str], list[tuple[int, float, str, str]]
+                ] = {}
+                for key, values in by_profile.items():
+                    hardware = [
+                        f
+                        for f in values
+                        if f["kind"] == "mac"
+                        and HostProfileStore._usable_mac(f["value"])
+                    ]
+                    previous_owners.setdefault(key[1], set()).update(
+                        HostProfileStore._usable_mac(f["value"])
+                        for f in hardware
+                    )
+                    for fact in values:
+                        kind = fact["kind"]
+                        if kind not in priority:
+                            continue
+                        name = str(fact["value"] or "").strip()
+                        if kind == "mdns_hostname":
+                            name = HostProfileStore._stable_mdns_name(name)
+                        if not name:
+                            continue
+                        candidate = (
+                            priority[kind],
+                            float(fact["last_seen"]),
+                            name,
+                            sources[kind],
+                        )
+                        owners = {
+                            HostProfileStore._usable_mac(mac["value"])
+                            for mac in hardware
+                            if mac["first_seen"] <= fact["last_seen"]
+                            and mac["last_seen"] >= fact["first_seen"]
+                        }
+                        if not owners:
+                            owners = {
+                                HostProfileStore._usable_mac(mac["value"])
+                                for mac in hardware
+                                if mac["first_seen"] <= fact["last_seen"]
+                            }
+                        if len(owners) == 1 and key[0] != "public":
+                            by_mac.setdefault(next(iter(owners)), []).append(
+                                candidate
+                            )
+                        if not hardware:
+                            direct.setdefault(key, []).append(candidate)
+                for ip, key in selected.items():
+                    mac = target_macs[ip] if key[0] != "public" else ""
+                    candidates = (
+                        by_mac.get(mac, []) if mac else direct.get(key, [])
+                    )
+                    best = (
+                        max(candidates, default=(0, 0, "", ""))
+                        if ip not in conflicts
+                        else (0, 0, "", "")
+                    )
+                    result[ip] = {
+                        "name": best[2],
+                        "source": best[3],
+                        "mac": mac,
+                    }
+                    if mac and previous_owners.get(ip, set()) - {mac}:
+                        result[ip]["identity_changed"] = True
+        return result
 
     @staticmethod
     def annotations_for_ips(
