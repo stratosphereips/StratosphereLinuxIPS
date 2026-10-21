@@ -50,6 +50,12 @@ class TrustDB(ISQLite):
                 "reliability REAL NOT NULL, "
                 "update_time REAL NOT NULL"
             ),
+            "peer_trust_history": (
+                "peerid TEXT NOT NULL, ipaddress TEXT NOT NULL, "
+                "network_id TEXT NOT NULL, trust REAL NOT NULL, "
+                "reliability REAL NOT NULL, update_time REAL NOT NULL, "
+                "PRIMARY KEY(peerid, update_time)"
+            ),
             "peer_ips": (
                 "id INTEGER PRIMARY KEY NOT NULL, "
                 "ipaddress TEXT NOT NULL, "
@@ -110,6 +116,8 @@ class TrustDB(ISQLite):
         # Opinion calculation looks up reports and peer metadata for every
         # previously unseen IP, so keep those lookups indexed.
         indexes = (
+            "CREATE INDEX IF NOT EXISTS peer_trust_history_time_idx "
+            "ON peer_trust_history(update_time)",
             "CREATE INDEX IF NOT EXISTS reports_key_type_idx "
             "ON reports(reported_key, key_type)",
             "CREATE INDEX IF NOT EXISTS peer_ips_peer_time_idx "
@@ -280,6 +288,7 @@ class TrustDB(ISQLite):
             "opinion_cache",
             "slips_reputation",
             "go_reliability",
+            "peer_trust_history",
             "peer_ips",
             "peer_addresses",
             "reports",
@@ -307,6 +316,33 @@ class TrustDB(ISQLite):
             WHERE excluded.update_time >= slips_reputation.update_time
         """
         self.execute(query, (ip, score, confidence, timestamp))
+
+    def store_peer_trust_samples(
+        self,
+        samples: list[tuple[str, str, str, float, float]],
+        timestamp: float,
+        retention_days: int = 90,
+    ) -> None:
+        """Persist measured trust and expire a bounded batch of old samples.
+
+        Parameters:
+            samples: Peer ID, IP, network ID, trust and reliability tuples.
+            timestamp: Time these inputs were measured.
+            retention_days: Maximum retained age in days.
+        """
+        with self.conn_lock, self._acquire_flock(), self.conn:
+            self.conn.executemany(
+                "INSERT OR REPLACE INTO peer_trust_history "
+                "(peerid, ipaddress, network_id, trust, reliability, update_time) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                [(*sample, timestamp) for sample in samples],
+            )
+            self.conn.execute(
+                "DELETE FROM peer_trust_history WHERE rowid IN "
+                "(SELECT rowid FROM peer_trust_history WHERE update_time < ? "
+                "ORDER BY update_time LIMIT 1000)",
+                (timestamp - max(1, retention_days) * 86400,),
+            )
 
     def insert_go_reliability(
         self, peerid: str, reliability: float, timestamp: int = None

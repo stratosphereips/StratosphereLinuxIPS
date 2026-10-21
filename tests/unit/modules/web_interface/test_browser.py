@@ -540,6 +540,12 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
             {"peer_id": second_id, "ip": "192.168.1.248", "connected": False,
              "trust": 0.34125, "reliability": 0.975, "first_seen": 75, "last_seen": 300},
         ],
+        "calculated_trust_history": [
+            {"peer_id": first_id, "timestamp": 100, "trust": -0.5},
+            {"peer_id": first_id, "timestamp": 200, "trust": 0.350},
+            {"peer_id": second_id, "timestamp": 100, "trust": 0.85},
+            {"peer_id": second_id, "timestamp": 300, "trust": 0.34125},
+        ],
         "trust_history": [
             {"peer_id": first_id, "timestamp": 100, "reliability": 0.9},
             {"peer_id": second_id, "timestamp": 100, "reliability": 0.94},
@@ -587,7 +593,7 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
         }""", theme)
         assert page.locator(".p2p-chart-heading h3").inner_text() == "Peer reliability history"
         assert "table’s Reliability column" in page.locator(".p2p-chart-heading p").inner_text()
-        assert page.locator("#p2p-range").get_attribute("aria-label") == "Peer reliability history range"
+        assert page.locator("#p2p-range").get_attribute("aria-label") == "Peer reliability and trust history range"
         rows = page.locator("#p2p-peers-table tbody tr")
         assert rows.nth(0).locator("td").nth(3).inner_text() == "0.350"
         assert rows.nth(0).locator("td").nth(4).inner_text() == "1.000"
@@ -606,10 +612,19 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
         area = chart.locator(".chart-hit-area").bounding_box()
         for fraction, ip, expected in ((0.6, "192.168.1.170", "1.000"), (0.999, "192.168.1.248", "0.975")):
             page.mouse.move(area["x"] + area["width"] * fraction, area["y"] + area["height"] / 2)
-            tooltip = page.locator(".p2p-trust-chart-grid .chart-tooltip")
+            tooltip = chart.locator("..").locator(".chart-tooltip")
             assert tooltip.is_visible()
             assert ip in tooltip.inner_text()
             assert tooltip.inner_text().endswith(f": {expected}")
+        trust_chart = page.locator("#p2p-calculated-trust-chart")
+        assert trust_chart.locator(".chart-y-label").all_text_contents() == ["-0.500", "0.175", "0.850"]
+        assert trust_chart.locator(".chart-line").count() == 2
+        for index, trust in enumerate((0.35, 0.34125)):
+            endpoint = trust_chart.locator(f".peer-trust-line-{index}").evaluate("path => path.getPointAtLength(path.getTotalLength()).y")
+            assert endpoint == pytest.approx(100 - (trust + 0.5) / 1.35 * 88, abs=0.01)
+        area = trust_chart.locator(".chart-hit-area").bounding_box()
+        page.mouse.move(area["x"] + area["width"] * 0.999, area["y"] + area["height"] / 2)
+        assert trust_chart.locator("..").locator(".chart-tooltip").inner_text().endswith(": 0.341")
         page.screenshot(path=f"output/p2p-reliability-{theme}.png")
         page.locator("#p2p-range").select_option("24h")
         page.wait_for_function("state.p2p.trust_range === '24h'")

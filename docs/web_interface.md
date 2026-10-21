@@ -592,8 +592,14 @@ inputs are unavailable. Reliability is Pigeon's connectivity measure, ranging
 from 0 to 1. Trust also includes the local assessment of the peer, so these
 columns need not have the same value. With no local assessment (confidence
 zero), the current formula gives `Trust = 0.7 × Reliability / 2`: reliability
-`1.000` therefore gives trust `0.350`. The chart shows reliability history,
-not calculated trust history.
+`1.000` therefore gives trust `0.350`. The separate **Peer trust history** chart plots calculated trust on its −0.5 to
+0.85 scale, using the same peer colors and time-range selector. The P2P module
+saves actual trust, reliability, IP and network context every minute while a
+peer is connected, even when the web tab is closed. These samples survive
+restarts in the permanent trust database and expire after the configured
+`detection_history.active_days` (90 days by default). Trust history starts
+when this sampling feature is installed; earlier values are not reconstructed
+from today’s reputation. Offline peers stop at their last recorded sample.
 
 The reports and message activity table combines bounded send/receive telemetry with retained reports from the current run. Filter chips show all messages, reports, requests, or connection changes. The Show menu also keeps received reports, sent reports, and blame reports available. Every column is sortable; Load more exposes the remaining retained rows. Selecting a row opens its content beside the table, including Copy JSON. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
 

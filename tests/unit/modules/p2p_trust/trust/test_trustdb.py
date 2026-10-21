@@ -55,6 +55,7 @@ def test_delete_tables(existing_tables):
         call("DROP TABLE IF EXISTS opinion_cache;"),
         call("DROP TABLE IF EXISTS slips_reputation;"),
         call("DROP TABLE IF EXISTS go_reliability;"),
+        call("DROP TABLE IF EXISTS peer_trust_history;"),
         call("DROP TABLE IF EXISTS peer_ips;"),
         call("DROP TABLE IF EXISTS peer_addresses;"),
         call("DROP TABLE IF EXISTS reports;"),
@@ -536,6 +537,10 @@ def test_create_tables():
             "id INTEGER PRIMARY KEY NOT NULL, peerid TEXT NOT NULL, reliability REAL NOT NULL, update_time REAL NOT NULL",
         ),
         (
+            "peer_trust_history",
+            "peerid TEXT NOT NULL, ipaddress TEXT NOT NULL, network_id TEXT NOT NULL, trust REAL NOT NULL, reliability REAL NOT NULL, update_time REAL NOT NULL, PRIMARY KEY(peerid, update_time)",
+        ),
+        (
             "peer_ips",
             "id INTEGER PRIMARY KEY NOT NULL, ipaddress TEXT NOT NULL, peerid TEXT NOT NULL, update_time REAL NOT NULL",
         ),
@@ -921,3 +926,34 @@ def test_unobserved_reporter_uses_reliability_without_local_confidence() -> None
     assert trust_db.get_opinion_on_ip("192.0.2.11") == [
         (0.8, 0.9, 0.7, 0.5, 0.0, "192.0.2.10", 1)
     ]
+
+
+@pytest.mark.parametrize("retention_days", [1, 30, 90])
+def test_trust_samples_survive_reopening_and_expire(
+    tmp_path: Path, retention_days: int
+) -> None:
+    """Preserve measured trust and prune expired samples in bounded batches.
+
+    Parameters:
+        tmp_path: Isolated trust database directory.
+        retention_days: Configured retention age.
+    """
+    module_factory = ModuleFactory()
+    db = module_factory.create_trust_db_obj()
+    db.conn = sqlite3.connect(tmp_path / "trust-history.db")
+    db._acquire_flock = Mock(return_value=nullcontext())
+    TrustDB.create_tables(db)
+    now = 10000000.0
+    old = now - retention_days * 86400 - 1
+    samples = [("peer", "192.0.2.1", "network", -0.15, 1.0)]
+    TrustDB.store_peer_trust_samples(db, samples, old, retention_days)
+    TrustDB.store_peer_trust_samples(db, samples, now, retention_days)
+    with sqlite3.connect(tmp_path / "trust-history.db") as reopened:
+        assert reopened.execute("SELECT peerid, trust, update_time FROM peer_trust_history").fetchall() == [("peer", -0.15, now)]
+    with db.conn:
+        db.conn.executemany(
+            "INSERT INTO peer_trust_history VALUES (?, ?, ?, ?, ?, ?)",
+            [("old-" + str(index), "192.0.2.1", "network", 0.35, 1, old) for index in range(1001)],
+        )
+    TrustDB.store_peer_trust_samples(db, [], now, retention_days)
+    assert db.conn.execute("SELECT COUNT(*) FROM peer_trust_history WHERE update_time < ?", (now,)).fetchone()[0] == 1

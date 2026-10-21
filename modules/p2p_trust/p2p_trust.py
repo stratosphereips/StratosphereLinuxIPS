@@ -1431,6 +1431,54 @@ class Trust(IModule):
         """
         return self.termination_event.is_set()
 
+    def _sample_peer_trust(self, now: float) -> None:
+        """Save current trust once a minute, including while the UI is closed.
+
+        Parameters:
+            now: Current Unix timestamp.
+        """
+        if now - getattr(self, "_last_trust_sample", 0) < 60:
+            return
+        self._last_trust_sample = now
+        network = self._network_identity()
+        samples = []
+        seen = set()
+        validator = getattr(self, "report_validation", None)
+        connections = sorted(
+            self.db.get_authenticated_p2p_connections(),
+            key=lambda row: str(row.get("remote_ip") or ""),
+        )
+        for connection in connections:
+            peer = connection.get("peer_id")
+            ip = connection.get("remote_ip")
+            if (
+                not peer
+                or peer in seen
+                or connection.get("connected") is False
+                or not p2p_utils.is_unicast_ip(ip)
+            ):
+                continue
+            seen.add(peer)
+            reliability = self.trust_db.get_reporter_reliability(peer)
+            if reliability is None:
+                continue
+            score, confidence = self.trust_db.get_reporter_reputation(ip)
+            if isinstance(validator, ReportValidator):
+                score, confidence, _ = validator.local_report(
+                    f"{network}|{ip}", max_age=None
+                )
+            score = 0.5 if score is None else score
+            confidence = 0.0 if confidence is None else confidence
+            trust = self.reputation_model.compute_peer_trust(
+                reliability, score, confidence
+            )
+            samples.append((peer, ip, network, trust, reliability))
+        self.trust_db.store_peer_trust_samples(
+            samples,
+            now,
+            ConfigParser().detection_history_policy()["active_days"],
+        )
+
     def main(self):
         self._drain_review_feedback()
         if self.create_p2p_logfile:
@@ -1488,6 +1536,10 @@ class Trust(IModule):
             pass
 
         now = time.time()
+        try:
+            self._sample_peer_trust(now)
+        except sqlite3.OperationalError as error:
+            self.print(f"Deferring P2P trust sampling: {error}", 0, 1)
         if now - getattr(
             self, "last_p2p_connection_heartbeat_time", 0
         ) >= getattr(self, "p2p_connection_heartbeat_interval", 60):

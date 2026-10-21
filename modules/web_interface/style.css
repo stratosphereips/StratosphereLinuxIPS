@@ -1332,3 +1332,6 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 [data-theme="light"] .toast { background: #fff2f3; color: var(--text); }
 .device-identity { display: inline-flex; flex-direction: column; min-width: 0; }
 .device-addresses { color: var(--muted); font-size: .72em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 38ch; }
+
+.p2p-trust-subheading { margin: .6rem .7rem 0; font-size: .8rem; }
+.p2p-trust-subheading span { margin-left: .5rem; font-size: .65rem; font-weight: normal; }

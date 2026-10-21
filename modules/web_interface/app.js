@@ -1087,7 +1087,7 @@ function bindChartHover(svg, target, points, series, formatValue, maximum, left,
 }
 
 /** Render a performance chart with numeric and time axes and an optional lower bound. */
-function renderLineChart(id, points, series, formatValue = formatChartValue, minimumValue = 0) {
+function renderLineChart(id, points, series, formatValue = formatChartValue, minimumValue = 0, maximumValue = 1) {
   const svg = byId(id);
   svg.replaceChildren();
   chartTooltip(svg).hidden = true;
@@ -1120,7 +1120,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
   const values = points.flatMap((point) => series
     .filter((item) => hasValue(point, item.key))
     .map((item) => numeric(point[item.key])));
-  const maximum = Math.max(...values, 1);
+  const maximum = Math.max(...values, maximumValue);
   const valueSpan = Math.max(maximum - minimumValue, 0.001);
   const minimumTime = numeric(points[0].ts);
   const maximumTime = numeric(points.at(-1).ts);
@@ -4038,23 +4038,27 @@ async function loadArpPoisoning() {
   renderArpPoisoning();
 }
 
-/** Plot measured reliability, matching the peers table's Reliability column.
- * @param {Array<object>} history - Retained reliability samples per peer.
+/** Plot retained peer values for the selected P2P metric.
+ * @param {Array<object>} history - Actual retained samples per peer.
  * @param {Array<object>} peers - Peer identities shown in the table.
+ * @param {string} metric - Reliability or calculated trust.
  */
-function renderP2PReliabilityChart(history, peers) {
+function renderP2PMetricChart(history, peers, metric) {
   const rows = history.filter((row) => row.timestamp !== null && row.timestamp !== undefined
-    && row.reliability !== null && row.reliability !== undefined
+    && row[metric] !== null && row[metric] !== undefined
     && Number.isFinite(Number(row.timestamp))
-    && Number.isFinite(Number(row.reliability)));
-  const peerIds = [...new Set(rows.map((row) => String(row.peer_id)))];
+    && Number.isFinite(Number(row[metric])));
+  const measuredPeers = new Set(rows.map((row) => String(row.peer_id)));
+  const peerIds = peers.map((peer) => String(peer.peer_id)).filter((peerId) => measuredPeers.has(peerId));
+  rows.forEach((row) => { if (!peerIds.includes(String(row.peer_id))) peerIds.push(String(row.peer_id)); });
+  const colors = new Map(peers.map((peer, index) => [String(peer.peer_id), index]));
   const peerIndexes = new Map(peerIds.map((peerId, index) => [peerId, index]));
   const peerIps = new Map(peers.map((peer) => [String(peer.peer_id), peer.ip]));
   const points = rows.map((row) => ({
     ts: numeric(row.timestamp),
-    [`peer_${peerIndexes.get(String(row.peer_id))}`]: numeric(row.reliability),
+    [`peer_${peerIndexes.get(String(row.peer_id))}`]: numeric(row[metric]),
   })).sort((left, right) => left.ts - right.ts);
-  if (state.p2p?.trust_range === "all" && points.length) {
+  if (metric === "reliability" && state.p2p?.trust_range === "all" && points.length) {
     const firstDetected = Math.min(...peers.map((peer) => numeric(peer.first_seen))
       .filter((timestamp) => timestamp > 0));
     if (Number.isFinite(firstDetected) && firstDetected < points[0].ts) {
@@ -4063,26 +4067,27 @@ function renderP2PReliabilityChart(history, peers) {
   }
   const series = peerIds.map((peerId, index) => ({
     key: `peer_${index}`,
-    className: `peer-trust-line-${index % 8}`,
+    className: `peer-trust-line-${(colors.get(peerId) ?? index) % 8}`,
     label: `${peerIps.get(peerId) || "Unknown IP"} · ${shortPeerId(peerId)}`,
   }));
   const minimumReliability = rows.length
-    ? Math.max(0, Math.floor((Math.min(...rows.map((row) => Number(row.reliability))) - 0.01) * 10) / 10)
+    ? Math.max(0, Math.floor((Math.min(...rows.map((row) => Number(row[metric]))) - 0.01) * 10) / 10)
     : 0;
   renderLineChart(
-    "p2p-trust-chart",
+    metric === "trust" ? "p2p-calculated-trust-chart" : "p2p-trust-chart",
     points,
     series,
     (value) => numeric(value).toFixed(3),
-    minimumReliability,
+    metric === "trust" ? -0.5 : minimumReliability,
+    metric === "trust" ? 0.85 : 1,
   );
-  const legend = byId("p2p-trust-legend");
+  const legend = byId(metric === "trust" ? "p2p-calculated-trust-legend" : "p2p-trust-legend");
   legend.replaceChildren();
   peerIds.forEach((peerId, index) => {
     const item = document.createElement("span");
     item.className = "p2p-trust-legend-item";
     const marker = document.createElement("i");
-    marker.className = `peer-trust-key peer-trust-line-${index % 8}`;
+    marker.className = `peer-trust-key peer-trust-line-${(colors.get(peerId) ?? index) % 8}`;
     if (peerIps.get(peerId)) item.append(marker, hostIdentity(peerIps.get(peerId)),
       text("code", shortPeerId(peerId)));
     else item.append(marker, text("code", shortPeerId(peerId)));
@@ -4414,7 +4419,8 @@ async function loadP2P() {
     line.append(text("span", label), code, copy);
     identity.append(line);
   });
-  renderP2PReliabilityChart(payload.trust_history || [], payload.peers || []);
+  renderP2PMetricChart(payload.trust_history || [], payload.peers || [], "reliability");
+  renderP2PMetricChart(payload.calculated_trust_history || [], payload.peers || [], "trust");
   renderP2PPeers();
   renderP2PMessages();
 }

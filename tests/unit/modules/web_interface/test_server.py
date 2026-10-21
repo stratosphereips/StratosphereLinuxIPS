@@ -7146,7 +7146,7 @@ def test_p2p_reliability_chart_uses_compact_range_control() -> None:
 
     assert 'id="p2p-range"' in html_source
     assert 'id="p2p-trust-chart"' in html_source
-    assert "function renderP2PReliabilityChart" in app_source
+    assert "function renderP2PMetricChart" in app_source
     assert "/api/p2p?range=${encodeURIComponent(range)}" in app_source
     assert 'byId("p2p-range").addEventListener("change"' in app_source
     assert (
@@ -7311,3 +7311,28 @@ def test_response_metadata_exposes_stale_backend_status(
         "age_seconds": 16.0,
         "timeout_seconds": 15,
     }
+
+
+@pytest.mark.parametrize("selected_range,expected", [("all", [-0.5, 0.85]), ("live", [0.85])])
+def test_calculated_trust_history_preserves_actual_signed_samples(
+    tmp_path: Path, selected_range: str, expected: list[float]
+) -> None:
+    """Read measured trust without applying today's reputation to old values.
+
+    Parameters:
+        tmp_path: Isolated permanent database directory.
+        selected_range: Requested chart range.
+        expected: Recorded trust values inside that range.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "trustdb.db"
+    with sqlite3.connect(path) as connection:
+        connection.execute("CREATE TABLE peer_trust_history(peerid TEXT, trust REAL, update_time REAL)")
+        connection.executemany("INSERT INTO peer_trust_history VALUES (?, ?, ?)", [("peer", -0.5, 100), ("peer", 0.85, 4000)])
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "pcap"
+    result = reader._p2p_calculated_trust_history(path, {"range": [selected_range]})
+    assert [row["trust"] for row in result] == expected
+    assert reader._p2p_calculated_trust_history(tmp_path / "missing.db", {}) == []
+    assert not (tmp_path / "missing.db").exists()

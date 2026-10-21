@@ -211,10 +211,14 @@
         <article class="surface p2p-trust-history">
           <div class="table-heading p2p-chart-heading">
             <div><h3>Peer reliability history</h3><p>Same metric as the table’s Reliability column · 0 to 1</p></div>
-            <select id="p2p-range" class="range-select" aria-label="Peer reliability history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
+            <select id="p2p-range" class="range-select" aria-label="Peer reliability and trust history range"><option value="live">Live</option><option value="1h">1 hour</option><option value="24h">24 hours</option><option value="7d">7 days</option><option value="all" selected>Full history</option></select>
           </div>
           <div id="p2p-trust-legend" class="p2p-trust-legend"></div>
           <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130"></svg></div>
+          <h4 class="p2p-trust-subheading">Peer trust history <span class="muted">−0.5 to 0.85</span></h4>
+          <div id="p2p-calculated-trust-legend" class="p2p-trust-legend"></div>
+          <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-calculated-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130" role="img" aria-label="Calculated peer trust history"></svg></div>
+          <p class="p2p-chart-note">Trust is sampled every minute while connected. Its history starts when sampling is enabled.</p>
           <p class="p2p-chart-note">Reliability measures connectivity; Trust also uses local reputation. Hover for values. Offline peers stop at last seen.</p>
         </article>
         </div>

@@ -9269,6 +9269,60 @@ class RunDataReader:
             or address.is_multicast
         )
 
+    def _p2p_calculated_trust_history(
+        self, path: Path, query: Dict[str, List[str]]
+    ) -> List[Dict[str, Any]]:
+        """Read bounded actual trust samples across the selected time range.
+
+        Parameters:
+            path: Persistent P2P trust database.
+            query: Selected history range or explicit time bounds.
+
+        Returns:
+            Chronological measured trust values, preserving peer endpoints.
+        """
+        if not path.exists():
+            return []
+        try:
+            with sqlite3.connect(
+                f"file:{path}?mode=ro", uri=True, timeout=5
+            ) as connection:
+                latest = connection.execute(
+                    "SELECT MAX(update_time) FROM peer_trust_history"
+                ).fetchone()[0]
+                start, end, _ = self._time_bounds(query, latest)
+                clauses = ["1=1"]
+                params: List[Any] = []
+                for bound, operator in ((start, ">="), (end, "<=")):
+                    if bound is not None:
+                        clauses.append(f"update_time {operator} ?")
+                        params.append(bound)
+                rows = connection.execute(
+                    "WITH ordered AS (SELECT peerid, trust, update_time, "
+                    "ROW_NUMBER() OVER (ORDER BY update_time, peerid) AS rn, "
+                    "COUNT(*) OVER () AS total, "
+                    "ROW_NUMBER() OVER (PARTITION BY peerid ORDER BY update_time) AS first_rn, "
+                    "ROW_NUMBER() OVER (PARTITION BY peerid ORDER BY update_time DESC) AS last_rn "
+                    "FROM peer_trust_history WHERE "
+                    + " AND ".join(clauses)
+                    + ") "
+                    "SELECT peerid, trust, update_time FROM ordered "
+                    "WHERE first_rn=1 OR last_rn=1 "
+                    "OR rn % MAX(1, CAST((total + 1997) / 1998 AS INTEGER))=0 "
+                    "ORDER BY update_time, peerid",
+                    params,
+                )
+                return [
+                    {
+                        "peer_id": str(peer),
+                        "trust": float(trust),
+                        "timestamp": float(timestamp),
+                    }
+                    for peer, trust, timestamp in rows
+                ]
+        except sqlite3.Error:
+            return []
+
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -9527,12 +9581,17 @@ class RunDataReader:
             ):
                 if self._usable_peer_ip(source):
                     candidates.append((timestamp, str(source)))
-            for connection in live_connections:
-                if str(connection.get("peer_id")) == peer_id:
-                    remote_ip = connection.get("remote_ip")
-                    if self._usable_peer_ip(remote_ip):
-                        candidates.append((time.time(), str(remote_ip)))
-            peer_ip_values[peer_id] = max(candidates)[1] if candidates else ""
+            remote_ips = [
+                str(item["remote_ip"])
+                for item in live_connections
+                if str(item.get("peer_id")) == peer_id
+                and self._usable_peer_ip(item.get("remote_ip"))
+            ]
+            peer_ip_values[peer_id] = (
+                min(remote_ips)
+                if remote_ips
+                else max(candidates)[1] if candidates else ""
+            )
         reputations: Dict[str, tuple[float, float]] = {}
         peer_ip_set = {ip for ip in peer_ip_values.values() if ip}
         if peer_ip_set and trust_path.exists():
@@ -9682,6 +9741,9 @@ class RunDataReader:
             "local_peer_id": local_peer_id,
             "peers": peers,
             "trust_history": trust_history,
+            "calculated_trust_history": self._p2p_calculated_trust_history(
+                trust_path, query
+            ),
             "trust_range": trust_range,
             "reports": current_reports[:200],
             "activity": [
