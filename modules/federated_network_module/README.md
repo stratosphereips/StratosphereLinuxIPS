@@ -247,7 +247,14 @@ federated_network_module:
   test_log_batch_size: 1
   seed: 1111
   evidence_detection_threshold: 0.20
+  # run_seed: 2   # optional, for repeat runs (see below)
 ```
+
+`run_seed` (optional, unset by default) gives repeat experiments run-to-run
+variation while keeping the model start fixed: it re-seeds each peer's window
+offset and the undersampling draw, while the random projection and the
+trainable-layer init still come from `seed`, so every repeat starts from the
+same model. Unset = the previous behaviour.
 
 ### Hyperparameter Summary
 

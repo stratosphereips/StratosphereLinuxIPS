@@ -45,6 +45,7 @@ import os
 import pickle
 import random
 import copy
+import hashlib
 import shutil
 import sqlite3
 import time
@@ -92,6 +93,49 @@ def shared_init_seed(seed: int) -> int:
     destroys the model). A fixed salt keeps this distinct from the
     random-projection seed. Shared across peers, reproducible run-to-run."""
     return (int(seed) ^ 0x51ED5EED) % (2**31)
+
+
+def run_seed_from_config(value) -> Optional[int]:
+    """Parse the optional per-run seed.
+
+    :param value: the raw `run_seed` config value
+    :return: the seed as an int, or None when unset or invalid (no change)
+    """
+    if value is None or str(value).strip().lower() in ("", "none", "null"):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def window_offset_seed(peer_id: str, run_seed: Optional[int]) -> int:
+    """Seed of a peer's window offset: the peer id alone (default, the same
+    every run) or the peer id plus the run seed, so repeats get different
+    offsets while the peers of one run still differ from each other.
+
+    :param peer_id: this peer's id
+    :param run_seed: the per-run seed, or None
+    :return: a seed in [0, 2**31)
+    """
+    key = peer_id if run_seed is None else "%s:%d" % (peer_id, run_seed)
+    return int(hashlib.md5(key.encode()).hexdigest(), 16) % (2**31)
+
+
+def undersample_rng(
+    seed: int, run_seed: Optional[int], window: int
+) -> np.random.Generator:
+    """RNG for undersampling one training window: seeded with seed + window
+    by default, with (run_seed, window) when a run seed is set.
+
+    :param seed: the module's config seed
+    :param run_seed: the per-run seed, or None
+    :param window: the training window index
+    :return: a numpy Generator
+    """
+    if run_seed is None:
+        return np.random.default_rng(int(seed) + int(window))
+    return np.random.default_rng((int(run_seed), int(window)))
 
 
 def build_with_init_seed(init_seed: int, build):
@@ -942,6 +986,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.merge_finetune_epochs, self.finetune_head
         )
         self.print(f"finetune_head: {self.finetune_head}", 0, 2)
+        # Optional per-run seed for repeat experiments: re-seeds the per-peer
+        # window offset and the undersampling draw. The random projection and
+        # the trainable init keep `seed`, so every repeat starts from the same
+        # model. Unset = unchanged behaviour.
+        self.run_seed = run_seed_from_config(
+            conf.read_configuration(section, "run_seed", None)
+        )
+        self.print(f"run_seed: {self.run_seed}", 0, 2)
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )
@@ -1003,12 +1055,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         # Deterministic per-instance sub-window offset (0–5 minutes).
         # Uses hostname hash to avoid all peers getting the same offset
-        # when containers start simultaneously (same system-time random seed).
-        import hashlib
-
-        seed = int(hashlib.md5(self.my_peer_id.encode()).hexdigest(), 16) % (
-            2**31
-        )
+        # when containers start simultaneously (same system-time random seed);
+        # a run_seed re-seeds it per repeat.
+        seed = window_offset_seed(self.my_peer_id, self.run_seed)
         rng = random.Random(seed)
         self._time_offset: float = rng.uniform(0, 300)
         self.print(
@@ -2855,8 +2904,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         n = min(len(idx_mal), len(idx_ben))
         if n == 0 or len(idx_mal) == len(idx_ben):
             return X, y
-        rng = np.random.default_rng(
-            int(self.seed) + int(self.training_count_window)
+        rng = undersample_rng(
+            self.seed,
+            getattr(self, "run_seed", None),
+            self.training_count_window,
         )
         keep_mal = (
             rng.choice(idx_mal, n, replace=False)

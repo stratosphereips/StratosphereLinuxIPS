@@ -167,3 +167,43 @@ def test_simple_mlp_is_the_trainable_twin_of_rlh(tmp_path):
     }
     out = model(torch.randn(4, fnm.SimpleFederatedNet.FIXED_INPUT_DIM))
     assert out.shape == (4, 2)
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, None),
+        ("", None),
+        ("None", None),
+        ("x", None),
+        ("3", 3),
+        (4, 4),
+        (0, 0),
+    ],
+)
+def test_run_seed_from_config(value, expected):
+    assert fnm.run_seed_from_config(value) == expected
+
+
+def test_window_offset_seed_without_run_seed_is_the_peer_id_hash():
+    import hashlib
+
+    peer = "slips-weak"
+    expected = int(hashlib.md5(peer.encode()).hexdigest(), 16) % (2**31)
+    assert fnm.window_offset_seed(peer, None) == expected
+
+
+def test_window_offset_seed_varies_per_run_and_per_peer():
+    a = fnm.window_offset_seed("slips-weak", 2)
+    assert a == fnm.window_offset_seed("slips-weak", 2)
+    assert a != fnm.window_offset_seed("slips-weak", 3)
+    assert a != fnm.window_offset_seed("slips-strong", 2)
+    assert a != fnm.window_offset_seed("slips-weak", None)
+    assert 0 <= a < 2**31
+
+
+def test_run_seed_does_not_touch_the_model_init_seed():
+    # the trainable init and the random projection derive from `seed` only
+    import inspect
+
+    assert list(inspect.signature(fnm.shared_init_seed).parameters) == ["seed"]

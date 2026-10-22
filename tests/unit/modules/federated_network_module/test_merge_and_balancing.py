@@ -238,6 +238,31 @@ def test_undersample_noop_on_single_class_or_balanced():
     assert len(yb2) == 4  # already 50/50 -> unchanged
 
 
+def test_undersample_rng_without_run_seed_is_seed_plus_window():
+    # unset run_seed keeps the original draw: default_rng(seed + window)
+    a = fnm.undersample_rng(5, None, 2).random(8)
+    assert np.array_equal(a, np.random.default_rng(7).random(8))
+
+
+def test_run_seed_changes_the_undersampling_draw():
+    X = np.arange(200, dtype=float).reshape(100, 2)
+    y = np.array([fnm.MALICIOUS] * 90 + [fnm.BENIGN] * 10)
+
+    def draw(run_seed):
+        m = _bare_module(seed=5, window=2)
+        m.run_seed = run_seed
+        return m._undersample_majority(X, y)[0]
+
+    assert np.array_equal(draw(3), draw(3))  # reproducible per run seed
+    assert not np.array_equal(draw(3), draw(4))  # repeats differ
+    assert not np.array_equal(draw(3), draw(None))
+    # a module without the attribute behaves as unset
+    assert np.array_equal(
+        _bare_module(seed=5, window=2)._undersample_majority(X, y)[0],
+        draw(None),
+    )
+
+
 # --------------------------------------------------------------------------
 # feature extraction: one definitive extractor (process_features delegates)
 # --------------------------------------------------------------------------
