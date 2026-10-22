@@ -85,11 +85,13 @@ def test_archive_selection_is_scoped_and_read_only_in_chrome() -> None:
 
 
 @pytest.mark.parametrize("tab", ["evidence", "hosts"])
-def test_polling_preserves_slow_table_requests_in_chrome(tab: str) -> None:
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_polling_preserves_slow_table_requests_in_chrome(tab: str, theme: str) -> None:
     """Let slow tables finish while allowing filters to replace stale requests.
 
     Parameters:
         tab: Primary table whose request exceeds the polling interval.
+        theme: Browser color theme.
     """
     _module_factory = ModuleFactory()
     playwright = pytest.importorskip("playwright.sync_api")
@@ -122,20 +124,38 @@ def test_polling_preserves_slow_table_requests_in_chrome(tab: str) -> None:
         page.on("pageerror", lambda error: errors.append(str(error)))
         page.route("**/*", route_request)
         page.goto("http://slips.test/")
+        page.evaluate("theme => setTheme(theme)", theme)
         page.clock.install()
         page.locator(f'[data-tab="{tab}"]').click()
         page.wait_for_function("() => state.requests.has(state.activeTab)")
         page.wait_for_timeout(50)
         assert len(pending) == 1
+        assert page.locator("#request-status").is_visible()
+        assert page.locator("#request-status-label").inner_text() == "Loading…"
+        assert page.locator("main").get_attribute("aria-busy") == "true"
         page.evaluate("() => schedulePoll()")
         page.clock.run_for(15000)
         assert len(pending) == 1
         assert page.evaluate("() => state.requests.has(state.activeTab)")
 
         page.locator(f"#{tab}-search").fill("scan")
-        page.clock.run_for(300)
+        page.locator(f"#{tab}-search").press("Enter")
         page.wait_for_timeout(50)
         assert len(pending) == 2
+        assert page.locator("#request-status-label").inner_text() == "Searching…"
+        page.clock.run_for(300)
+        assert len(pending) == 2
+        pending[-1].fulfill(json={"items": [], "total": 0})
+        page.locator("#request-status").wait_for(state="hidden")
+        assert page.locator("main").get_attribute("aria-busy") == "false"
+        page.locator(f"#{tab}-search").fill("other")
+        page.locator(f"#{tab}-search").press("Enter")
+        page.wait_for_timeout(50)
+        assert page.locator("#request-status").is_visible()
+        page.screenshot(path=f"output/request-status-{tab}-{theme}.png")
+        pending[-1].fulfill(status=503, json={"error": "Search fixture failed"})
+        page.locator("#request-status").wait_for(state="hidden")
+        assert "Search fixture failed" in page.locator("#error-banner").inner_text()
         assert errors == []
         browser.close()
 

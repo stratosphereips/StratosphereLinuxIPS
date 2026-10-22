@@ -796,10 +796,26 @@ function applyRunIdentity(identity) {
   state.runIdentity = token;
 }
 
+/** Show foreground work until all active reads finish or are cancelled. */
+function renderRequestActivity() {
+  const labels = [...state.requests.values()]
+    .filter((controller) => !controller.signal.aborted && controller.activityLabel)
+    .map((controller) => controller.activityLabel);
+  const busy = labels.length > 0;
+  const indicator = byId("request-status");
+  indicator.hidden = !busy;
+  const label = labels.includes("Searching…") ? "Searching…" : "Loading…";
+  if (byId("request-status-label").textContent !== label) byId("request-status-label").textContent = label;
+  document.querySelector("main").setAttribute("aria-busy", String(busy));
+}
+
 async function api(key, path, trackFailures = true, allowNotFound = false) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
+  controller.activityLabel = ["backendStatus", "liveTitleCounts", "archiveCatalog"].includes(key)
+    ? "" : new URL(path, window.location.origin).searchParams.get("search") ? "Searching…" : "Loading…";
   state.requests.set(key, controller);
+  renderRequestActivity();
   try {
     if (state.archiveSource && /^\/api\/(?:alerts|evidence|hosts|flows)(?:[/?]|$)/.test(path)) {
       const url = new URL(path, window.location.origin);
@@ -833,6 +849,7 @@ async function api(key, path, trackFailures = true, allowNotFound = false) {
     throw error;
   } finally {
     if (state.requests.get(key) === controller) state.requests.delete(key);
+    renderRequestActivity();
   }
 }
 
@@ -7209,12 +7226,20 @@ function bindFilters(name, controls, loader) {
     const element = byId(id);
     const eventName = element.type === "search" ? "input" : "change";
     let timer;
+    /** Apply filters immediately and cancel the pending debounce. */
+    const run = () => {
+      window.clearTimeout(timer);
+      resetPage(name);
+      loader().catch(() => {}).finally(schedulePoll);
+    };
     element.addEventListener(eventName, () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => {
-        resetPage(name);
-        loader().catch(() => {}).finally(schedulePoll);
-      }, element.type === "search" ? 250 : 0);
+      timer = window.setTimeout(run, element.type === "search" ? 250 : 0);
+    });
+    if (element.type === "search") element.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      run();
     });
   });
 }

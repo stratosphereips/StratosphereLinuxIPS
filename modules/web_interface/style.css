@@ -1335,3 +1335,9 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 
 .p2p-trust-subheading { margin: .6rem .7rem 0; font-size: .8rem; }
 .p2p-trust-subheading span { margin-left: .5rem; font-size: .65rem; font-weight: normal; }
+
+.request-status { display: inline-flex; align-items: center; gap: .4rem; flex: none; padding: .25rem .55rem; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); background: var(--surface); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.request-status[hidden] { display: none; }
+.request-spinner { width: .75rem; height: .75rem; border: 2px solid var(--line); border-top-color: currentColor; border-radius: 50%; animation: request-spin .8s linear infinite; }
+@keyframes request-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .request-spinner { animation: none; } }

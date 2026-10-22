@@ -416,6 +416,8 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ## Tabs
 
+The header shows **Searching…** or **Loading…** with a small activity indicator while foreground requests are running. It clears when they finish, fail or are cancelled. Press Enter in a search field to run the search immediately; typing still searches after a short pause. Background heartbeat and title-count checks do not activate the indicator.
+
 ### Overview
 
 Overview puts the run state, alerts grouped by host, system warnings, five key counts, current network, host load, and three Slips performance charts (CPU, resident memory, and flows per second) on one desktop screen. The alert card uses the Alerts tab's selected time range, review state, severity, and search; it reports matching alert and host counts and shows the first four host groups. Its Alerts count card follows the same selection. Each chart shows numeric Y-axis values with its unit, and hovering shows the sampled time and value. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact. The sortable Modules table is in Metadata; the **Modules** action in a high-CPU warning opens it there.
