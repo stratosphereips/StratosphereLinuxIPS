@@ -7519,6 +7519,32 @@ def test_p2p_chart_work_is_bounded_with_large_history(
         assert instructions < 500000
 
 
+@pytest.mark.parametrize("values", [(0.1, 0.9), (0.9, 0.1)])
+def test_p2p_reliability_uses_last_update_within_the_same_second(
+    tmp_path: Path, values: tuple[float, float],
+) -> None:
+    """Keep table and chart values consistent with the trust model's latest row.
+
+    Parameters:
+        tmp_path: Isolated metric database.
+        values: Two successive reliability updates at the same timestamp.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "pcap"
+    with sqlite3.connect(tmp_path / "ties.db") as connection:
+        connection.execute("CREATE TABLE go_reliability(id INTEGER PRIMARY KEY, peerid TEXT, reliability REAL, update_time REAL)")
+        connection.execute("CREATE INDEX peer_time ON go_reliability(peerid, update_time DESC, reliability)")
+        connection.executemany("INSERT INTO go_reliability(peerid,reliability,update_time) VALUES ('peer',?,100)",
+                               [(value,) for value in values])
+        history, latest, _ = reader._p2p_metric_history(
+            connection, "go_reliability", "reliability", {"range": ["all"]})
+
+    assert latest["peer"]["reliability"] == values[-1]
+    assert [row["reliability"] for row in history] == list(values)
+
+
 def test_run_config_cache_detects_snapshot_edits(tmp_path: Path) -> None:
     """Reuse an immutable snapshot and reload it when its contents change.
 

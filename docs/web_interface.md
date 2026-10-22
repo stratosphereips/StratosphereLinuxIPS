@@ -611,6 +611,13 @@ restarts in the permanent trust database and expire after the configured
 `detection_history.active_days` (90 days by default). Trust history starts
 when this sampling feature is installed; earlier values are not reconstructed
 from today’s reputation. Offline peers stop at their last recorded sample.
+Pigeon accepts both padded and shortened gateway MAC addresses from macOS
+when verifying the peer's local network. Interactions on a different or
+disconnected network do not penalize reliability. A stable value can be
+correct when the measured reliability and local assessment remain unchanged;
+receiving more reports alone does not increase the peer's base trust. Updates
+received within the same second retain their insertion order, so the table,
+chart and trust model use the same latest measurement.
 
 The reports and message activity table combines bounded send/receive telemetry with retained reports from the current run. Filter chips show all messages, reports, requests, or connection changes. The Show menu also keeps received reports, sent reports, and blame reports available. Every column is sortable; Load more exposes the remaining retained rows. Selecting a row opens its content beside the table, including Copy JSON. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
 

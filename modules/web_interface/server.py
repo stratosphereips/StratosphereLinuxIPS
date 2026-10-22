@@ -9436,7 +9436,7 @@ class RunDataReader:
         for peer in peers:
             row = connection.execute(
                 f"SELECT {metric}, update_time FROM {table} "
-                "WHERE peerid=? ORDER BY update_time DESC LIMIT 1",
+                "WHERE peerid=? ORDER BY update_time DESC, rowid DESC LIMIT 1",
                 (peer,),
             ).fetchone()
             if row is not None:
@@ -9459,12 +9459,12 @@ class RunDataReader:
         for peer in peers:
             sql = f"SELECT {metric}, update_time FROM {table} WHERE {where} "
             rows = connection.execute(
-                sql + "ORDER BY update_time LIMIT ?",
+                sql + "ORDER BY update_time, rowid LIMIT ?",
                 (peer, *bounds, budget + 1),
             ).fetchall()
             if len(rows) > budget:
                 last = connection.execute(
-                    sql + "ORDER BY update_time DESC LIMIT 1",
+                    sql + "ORDER BY update_time DESC, rowid DESC LIMIT 1",
                     (peer, *bounds),
                 ).fetchone()
                 first_time = self._event_timestamp(rows[0][1])
@@ -9476,7 +9476,7 @@ class RunDataReader:
                     )
                     point = connection.execute(
                         sql
-                        + "AND update_time >= ? ORDER BY update_time LIMIT 1",
+                        + "AND update_time >= ? ORDER BY update_time, rowid LIMIT 1",
                         (peer, *bounds, target),
                     ).fetchone()
                     if point is not None and tuple(point) != tuple(
