@@ -616,6 +616,9 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
             assert tooltip.is_visible()
             assert ip in tooltip.inner_text()
             assert tooltip.inner_text().endswith(f": {expected}")
+        page.evaluate("() => { window.savedReliabilityPath = document.querySelector('#p2p-trust-chart .chart-line'); }")
+        page.evaluate("() => loadP2P()")
+        assert page.evaluate("() => window.savedReliabilityPath === document.querySelector('#p2p-trust-chart .chart-line')")
         trust_chart = page.locator("#p2p-calculated-trust-chart")
         assert trust_chart.locator(".chart-y-label").all_text_contents() == ["-0.500", "0.175", "0.850"]
         assert trust_chart.locator(".chart-line").count() == 2

@@ -16,6 +16,7 @@ from urllib.request import Request, urlopen
 from unittest.mock import Mock, patch
 
 import pytest
+import yaml
 import psutil
 from pytest_mock import MockerFixture
 
@@ -2321,30 +2322,38 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('modules/web_interface/app.js', 'utf8');
 const definition = source.match(/function startLiveTitlePolling\(\) \{[\s\S]*?\n\}/);
-assert.ok(definition, 'live title polling function is present');
+assert.ok(definition);
 let requests = 0;
 let tick;
+let finish;
 const context = {
-  document: { hidden: true },
-  state: { titleTimer: null },
+  document: { hidden: true }, state: { titleTimer: null },
   window: {
-    clearInterval() {},
-    setInterval(callback, interval) {
-      assert.equal(interval, 5000);
+    clearTimeout() {},
+    setTimeout(callback, interval) {
+      assert.equal(interval, 30000);
       tick = callback;
       return 1;
     },
   },
   loadLiveTitleCounts() {
     requests += 1;
-    return Promise.resolve();
+    return new Promise(resolve => { finish = resolve; });
   },
 };
-vm.createContext(context);
-vm.runInContext(definition[0], context);
-context.startLiveTitlePolling();
-tick();
-assert.equal(requests, 2, 'title counts still refresh in a hidden tab');
+(async () => {
+  vm.createContext(context);
+  vm.runInContext(definition[0], context);
+  context.startLiveTitlePolling();
+  assert.equal(requests, 1);
+  assert.equal(tick, undefined, 'a pending request must not schedule another');
+  finish();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(typeof tick, 'function');
+  tick();
+  assert.equal(requests, 2, 'hidden title counts still refresh at a slower rate');
+  finish();
+})().catch(error => { console.error(error); process.exitCode = 1; });
 """
     result = subprocess.run(
         ["node", "-e", script],
@@ -7336,3 +7345,69 @@ def test_calculated_trust_history_preserves_actual_signed_samples(
     assert [row["trust"] for row in result] == expected
     assert reader._p2p_calculated_trust_history(tmp_path / "missing.db", {}) == []
     assert not (tmp_path / "missing.db").exists()
+
+
+@pytest.mark.parametrize("table,metric", [("go_reliability", "reliability"), ("peer_trust_history", "trust")])
+def test_p2p_chart_work_is_bounded_with_large_history(
+    tmp_path: Path, table: str, metric: str
+) -> None:
+    """Read a large history under a SQLite instruction budget, keeping endpoints.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+        table: Metric history table.
+        metric: Stored score column.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "pcap"
+    with sqlite3.connect(tmp_path / "large-history.db") as connection:
+        connection.execute(f"CREATE TABLE {table} (peerid TEXT, {metric} REAL, update_time REAL)")
+        connection.execute(f"CREATE INDEX peer_time ON {table}(peerid, update_time)")
+        connection.executemany(
+            f"INSERT INTO {table} VALUES (?, ?, ?)",
+            ((peer, index / 100000, float(index)) for peer in ("first", "second") for index in range(100000)),
+        )
+        instructions = 0
+        def progress() -> int:
+            """Interrupt a regression that scans or sorts the full history.
+
+            Returns:
+                Nonzero once the bounded-read instruction budget is exhausted.
+            """
+            nonlocal instructions
+            instructions += 1000
+            return int(instructions > 500000)
+        connection.set_progress_handler(progress, 1000)
+        history, latest, selected_range = reader._p2p_metric_history(connection, table, metric, {"range": ["all"]})
+        assert 2 <= len(history) <= 2000
+        assert selected_range == "all"
+        for peer in ("first", "second"):
+            rows = [row for row in history if row["peer_id"] == peer]
+            assert rows[0]["timestamp"] == 0
+            assert rows[-1]["timestamp"] == 99999
+            assert latest[peer]["timestamp"] == 99999
+        assert instructions < 500000
+
+
+def test_run_config_cache_detects_snapshot_edits(tmp_path: Path) -> None:
+    """Reuse an immutable snapshot and reload it when its contents change.
+
+    Parameters:
+        tmp_path: Isolated run metadata directory.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    snapshot = metadata / "slips.yaml"
+    snapshot.write_text("parameters: {permanent_dir: first}\n")
+    with patch("modules.web_interface.server.yaml.safe_load", wraps=yaml.safe_load) as load:
+        assert reader._run_config()[0]["parameters"]["permanent_dir"] == "first"
+        assert reader._run_config()[0]["parameters"]["permanent_dir"] == "first"
+        assert load.call_count == 1
+        snapshot.write_text("parameters: {permanent_dir: changed}\n")
+        assert reader._run_config()[0]["parameters"]["permanent_dir"] == "changed"
+        assert load.call_count == 2

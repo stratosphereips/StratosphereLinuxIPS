@@ -294,9 +294,16 @@ class RunDataReader:
         if path is None:
             return {}, None
         try:
+            stat = path.stat()
+            signature = (str(path), stat.st_mtime_ns, stat.st_size)
+            cached = getattr(self, "_run_config_cache", None)
+            if cached is not None and cached[0] == signature:
+                return cached[1], path
             with path.open("r", encoding="utf-8") as handle:
                 value = yaml.safe_load(handle) or {}
-            return (value if isinstance(value, dict) else {}), path
+            config = value if isinstance(value, dict) else {}
+            self._run_config_cache = (signature, config)
+            return config, path
         except (OSError, yaml.YAMLError):
             return {}, path
 
@@ -9269,6 +9276,119 @@ class RunDataReader:
             or address.is_multicast
         )
 
+    @staticmethod
+    def _p2p_history_peers(
+        connection: sqlite3.Connection, table: str
+    ) -> List[str]:
+        """Seek distinct peer IDs through the history's peer index.
+
+        Parameters:
+            connection: Read-only trust database connection.
+            table: Internal reliability, trust or endpoint table name.
+
+        Returns:
+            Known peer IDs without scanning their historical rows.
+        """
+        if table not in {"go_reliability", "peer_trust_history", "peer_ips"}:
+            raise ValueError("Unsupported peer history table")
+        rows = connection.execute(
+            "WITH RECURSIVE peers(peerid) AS ("
+            f"SELECT MIN(peerid) FROM {table} UNION ALL "
+            f"SELECT (SELECT MIN(peerid) FROM {table} WHERE peerid > peers.peerid) "
+            "FROM peers WHERE peerid IS NOT NULL) "
+            "SELECT peerid FROM peers WHERE peerid IS NOT NULL"
+        )
+        return [str(row[0]) for row in rows if row[0]]
+
+    def _p2p_metric_history(
+        self,
+        connection: sqlite3.Connection,
+        table: str,
+        metric: str,
+        query: Dict[str, List[str]],
+    ) -> tuple[List[Dict[str, Any]], Dict[str, Dict[str, Any]], str]:
+        """Read chart samples with indexed seeks bounded by the plot size.
+
+        Parameters:
+            connection: Read-only trust database connection.
+            table: Persistent metric table.
+            metric: Reliability or calculated trust column.
+            query: Selected range or explicit time bounds.
+
+        Returns:
+            Actual chart samples, latest values per peer and normalized range.
+        """
+        if (table, metric) not in {
+            ("go_reliability", "reliability"),
+            ("peer_trust_history", "trust"),
+        }:
+            raise ValueError("Unsupported peer metric")
+        peers = self._p2p_history_peers(connection, table)
+        latest: Dict[str, Dict[str, Any]] = {}
+        for peer in peers:
+            row = connection.execute(
+                f"SELECT {metric}, update_time FROM {table} "
+                "WHERE peerid=? ORDER BY update_time DESC LIMIT 1",
+                (peer,),
+            ).fetchone()
+            if row is not None:
+                latest[peer] = {
+                    "peer_id": peer,
+                    metric: float(row[0]),
+                    "timestamp": self._event_timestamp(row[1]),
+                }
+        newest = max((row["timestamp"] for row in latest.values()), default=0)
+        start, end, range_name = self._time_bounds(query, newest)
+        clauses = ["peerid=?"]
+        bounds: List[Any] = []
+        for bound, operator in ((start, ">="), (end, "<=")):
+            if bound is not None:
+                clauses.append(f"update_time {operator} ?")
+                bounds.append(bound)
+        where = " AND ".join(clauses)
+        budget = max(2, 2000 // max(1, len(peers)))
+        history = []
+        for peer in peers:
+            sql = f"SELECT {metric}, update_time FROM {table} WHERE {where} "
+            rows = connection.execute(
+                sql + "ORDER BY update_time LIMIT ?",
+                (peer, *bounds, budget + 1),
+            ).fetchall()
+            if len(rows) > budget:
+                last = connection.execute(
+                    sql + "ORDER BY update_time DESC LIMIT 1",
+                    (peer, *bounds),
+                ).fetchone()
+                first_time = self._event_timestamp(rows[0][1])
+                last_time = self._event_timestamp(last[1])
+                sampled = [rows[0]]
+                for index in range(1, budget - 1):
+                    target = first_time + (last_time - first_time) * index / (
+                        budget - 1
+                    )
+                    point = connection.execute(
+                        sql
+                        + "AND update_time >= ? ORDER BY update_time LIMIT 1",
+                        (peer, *bounds, target),
+                    ).fetchone()
+                    if point is not None and tuple(point) != tuple(
+                        sampled[-1]
+                    ):
+                        sampled.append(point)
+                if tuple(last) != tuple(sampled[-1]):
+                    sampled.append(last)
+                rows = sampled
+            history.extend(
+                {
+                    "peer_id": peer,
+                    metric: float(row[0]),
+                    "timestamp": self._event_timestamp(row[1]),
+                }
+                for row in rows
+            )
+        history.sort(key=lambda row: (row["timestamp"], row["peer_id"]))
+        return history, latest, range_name
+
     def _p2p_calculated_trust_history(
         self, path: Path, query: Dict[str, List[str]]
     ) -> List[Dict[str, Any]]:
@@ -9287,39 +9407,9 @@ class RunDataReader:
             with sqlite3.connect(
                 f"file:{path}?mode=ro", uri=True, timeout=5
             ) as connection:
-                latest = connection.execute(
-                    "SELECT MAX(update_time) FROM peer_trust_history"
-                ).fetchone()[0]
-                start, end, _ = self._time_bounds(query, latest)
-                clauses = ["1=1"]
-                params: List[Any] = []
-                for bound, operator in ((start, ">="), (end, "<=")):
-                    if bound is not None:
-                        clauses.append(f"update_time {operator} ?")
-                        params.append(bound)
-                rows = connection.execute(
-                    "WITH ordered AS (SELECT peerid, trust, update_time, "
-                    "ROW_NUMBER() OVER (ORDER BY update_time, peerid) AS rn, "
-                    "COUNT(*) OVER () AS total, "
-                    "ROW_NUMBER() OVER (PARTITION BY peerid ORDER BY update_time) AS first_rn, "
-                    "ROW_NUMBER() OVER (PARTITION BY peerid ORDER BY update_time DESC) AS last_rn "
-                    "FROM peer_trust_history WHERE "
-                    + " AND ".join(clauses)
-                    + ") "
-                    "SELECT peerid, trust, update_time FROM ordered "
-                    "WHERE first_rn=1 OR last_rn=1 "
-                    "OR rn % MAX(1, CAST((total + 1997) / 1998 AS INTEGER))=0 "
-                    "ORDER BY update_time, peerid",
-                    params,
-                )
-                return [
-                    {
-                        "peer_id": str(peer),
-                        "trust": float(trust),
-                        "timestamp": float(timestamp),
-                    }
-                    for peer, trust, timestamp in rows
-                ]
+                return self._p2p_metric_history(
+                    connection, "peer_trust_history", "trust", query
+                )[0]
         except sqlite3.Error:
             return []
 
@@ -9390,79 +9480,34 @@ class RunDataReader:
                     f"file:{trust_path}?mode=ro", uri=True, timeout=5
                 ) as connection:
                     connection.row_factory = sqlite3.Row
-                    latest_reliability_row = connection.execute(
-                        "SELECT MAX(update_time) AS latest FROM go_reliability"
-                    ).fetchone()
-                    latest_reliability_time = self._event_timestamp(
-                        latest_reliability_row["latest"]
+                    trust_history, latest_reliability, trust_range = (
+                        self._p2p_metric_history(
+                            connection, "go_reliability", "reliability", query
+                        )
                     )
-                    trust_start, trust_end, trust_range = self._time_bounds(
-                        query, latest_reliability_time
-                    )
-                    trust_clauses = ["1 = 1"]
-                    trust_params: List[Any] = []
-                    if trust_start is not None:
-                        trust_clauses.append("update_time >= ?")
-                        trust_params.append(trust_start)
-                    if trust_end is not None:
-                        trust_clauses.append("update_time <= ?")
-                        trust_params.append(trust_end)
-                    trust_where = " AND ".join(trust_clauses)
-                    for row in connection.execute(
-                        "WITH ordered AS ("
-                        "SELECT peerid, reliability, update_time, "
-                        "ROW_NUMBER() OVER (ORDER BY update_time, peerid) AS rn, "
-                        "COUNT(*) OVER () AS total, "
-                        "ROW_NUMBER() OVER (PARTITION BY peerid "
-                        "ORDER BY update_time) AS peer_rn, "
-                        "ROW_NUMBER() OVER (PARTITION BY peerid "
-                        "ORDER BY update_time DESC) AS peer_last_rn "
-                        f"FROM go_reliability WHERE {trust_where}) "
-                        "SELECT peerid, reliability, update_time FROM ordered "
-                        "WHERE rn = 1 OR rn = total OR peer_rn = 1 "
-                        "OR peer_last_rn = 1 "
-                        "OR rn % MAX(1, CAST((total + 1997) / 1998 AS INTEGER)) = 0 "
-                        "ORDER BY update_time",
-                        trust_params,
+                    for peer in self._p2p_history_peers(
+                        connection, "peer_ips"
                     ):
-                        trust_history.append(
-                            {
-                                "peer_id": str(row["peerid"]),
-                                "reliability": float(row["reliability"]),
-                                "timestamp": self._event_timestamp(
-                                    row["update_time"]
-                                ),
-                            }
-                        )
-                    for row in connection.execute(
-                        "SELECT peerid, reliability, update_time "
-                        "FROM go_reliability ORDER BY update_time DESC"
-                    ):
-                        latest_reliability.setdefault(
-                            str(row["peerid"]),
-                            {
-                                "peer_id": str(row["peerid"]),
-                                "reliability": float(row["reliability"]),
-                                "timestamp": self._event_timestamp(
-                                    row["update_time"]
-                                ),
-                            },
-                        )
-                    for row in connection.execute(
-                        "SELECT peerid, ipaddress, update_time FROM peer_ips "
-                        "ORDER BY update_time DESC LIMIT 1000"
-                    ):
-                        if not self._usable_peer_ip(row["ipaddress"]):
-                            continue
-                        peer_ips.setdefault(
-                            str(row["peerid"]),
-                            {
-                                "ip": str(row["ipaddress"]),
-                                "timestamp": self._event_timestamp(
-                                    row["update_time"]
-                                ),
-                            },
-                        )
+                        first = connection.execute(
+                            "SELECT update_time FROM peer_ips WHERE peerid=? "
+                            "ORDER BY update_time LIMIT 1",
+                            (peer,),
+                        ).fetchone()
+                        if first is not None:
+                            peer_first_seen[peer] = self._event_timestamp(
+                                first[0]
+                            )
+                        for row in connection.execute(
+                            "SELECT ipaddress, update_time FROM peer_ips "
+                            "WHERE peerid=? ORDER BY update_time DESC LIMIT 16",
+                            (peer,),
+                        ):
+                            if self._usable_peer_ip(row[0]):
+                                peer_ips[peer] = {
+                                    "ip": str(row[0]),
+                                    "timestamp": self._event_timestamp(row[1]),
+                                }
+                                break
                     if connection.execute(
                         "SELECT 1 FROM sqlite_master WHERE type = 'table' "
                         "AND name = 'peer_addresses'"
@@ -9483,15 +9528,6 @@ class RunDataReader:
                                     ),
                                 },
                             )
-                    peer_first_seen = {
-                        str(row["peerid"]): self._event_timestamp(
-                            row["first_seen"]
-                        )
-                        for row in connection.execute(
-                            "SELECT peerid, MIN(update_time) AS first_seen "
-                            "FROM peer_ips GROUP BY peerid"
-                        )
-                    }
                     for row in connection.execute(
                         "SELECT reporter_peerid, reported_key, score, confidence, "
                         "update_time FROM reports ORDER BY update_time DESC LIMIT 500"

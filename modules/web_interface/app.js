@@ -1257,11 +1257,17 @@ async function loadLiveTitleCounts() {
 
 /** Keep the browser title current even when the dashboard tab is hidden. */
 function startLiveTitlePolling() {
-  window.clearInterval(state.titleTimer);
-  loadLiveTitleCounts().catch(() => {});
-  state.titleTimer = window.setInterval(() => {
-    loadLiveTitleCounts().catch(() => {});
-  }, 5000);
+  window.clearTimeout(state.titleTimer);
+  const tick = async () => {
+    try {
+      await loadLiveTitleCounts();
+    } catch (_) {
+      // The next tick retries without overlapping an unfinished request.
+    } finally {
+      state.titleTimer = window.setTimeout(tick, document.hidden ? 30000 : 5000);
+    }
+  };
+  tick();
 }
 
 /** Update the network name in the shared header from the latest heartbeat.
@@ -4044,6 +4050,13 @@ async function loadArpPoisoning() {
  * @param {string} metric - Reliability or calculated trust.
  */
 function renderP2PMetricChart(history, peers, metric) {
+  peers = [...peers].sort((left, right) => String(left.peer_id).localeCompare(String(right.peer_id)));
+  const chartId = metric === "trust" ? "p2p-calculated-trust-chart" : "p2p-trust-chart";
+  const revision = JSON.stringify([state.p2p?.trust_range, byId(chartId).clientWidth, history,
+    peers.map((peer) => [peer.peer_id, peer.ip, peer.first_seen])]);
+  state.p2pChartRevisions ||= new Map();
+  if (state.p2pChartRevisions.get(metric) === revision) return;
+  state.p2pChartRevisions.set(metric, revision);
   const rows = history.filter((row) => row.timestamp !== null && row.timestamp !== undefined
     && row[metric] !== null && row[metric] !== undefined
     && Number.isFinite(Number(row.timestamp))
@@ -7577,7 +7590,7 @@ document.addEventListener("visibilitychange", () => {
 window.addEventListener("beforeunload", () => {
   saveViewPreferences();
   window.clearTimeout(state.statusTimer);
-  window.clearInterval(state.titleTimer);
+  window.clearTimeout(state.titleTimer);
   state.requests.forEach((controller) => controller.abort());
 });
 

@@ -116,6 +116,10 @@ class TrustDB(ISQLite):
         # Opinion calculation looks up reports and peer metadata for every
         # previously unseen IP, so keep those lookups indexed.
         indexes = (
+            "CREATE INDEX IF NOT EXISTS go_reliability_peer_time_idx "
+            "ON go_reliability(peerid, update_time DESC, reliability)",
+            "CREATE INDEX IF NOT EXISTS reports_time_idx "
+            "ON reports(update_time DESC)",
             "CREATE INDEX IF NOT EXISTS peer_trust_history_time_idx "
             "ON peer_trust_history(update_time)",
             "CREATE INDEX IF NOT EXISTS reports_key_type_idx "
