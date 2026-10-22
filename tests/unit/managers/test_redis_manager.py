@@ -3,6 +3,7 @@
 from unittest.mock import ANY, patch, mock_open, Mock, call
 import os
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 import psutil
 import redis
@@ -894,29 +895,180 @@ def test_validate_keep_history_rejects_running_slips(
     manager.main.args.port = None
     manager.main.args.is_slips_started_by_an_update = False
     active = Mock(info={"pid": 123, "cmdline": ["python", "./slips.py"]})
+    active.cwd.return_value = os.getcwd()
 
     with patch(
         "managers.redis_manager.psutil.process_iter", return_value=[active]
     ):
-        with pytest.raises(SystemExit, match="all other Slips instances"):
+        with pytest.raises(SystemExit, match="history Redis port"):
             manager.validate_keep_history()
 
 
 def test_active_history_run_blocks_second_instance() -> None:
     """Refuse a normal Slips launch while another run keeps history."""
     manager = ModuleFactory().create_redis_manager_obj()
-    manager.main.args.keep_history = False
+    manager.main.args = SimpleNamespace(
+        keep_history=False, port=None, multiinstance=False
+    )
     active = Mock(
         info={
             "pid": 123,
             "cmdline": ["python", "./slips.py", "--keep-history"],
         }
     )
+    active.cwd.return_value = os.getcwd()
 
     with patch(
         "managers.redis_manager.psutil.process_iter", return_value=[active]
     ):
         with pytest.raises(SystemExit, match="Another Slips run"):
+            manager.reject_active_history_run()
+
+
+@pytest.mark.parametrize("history_starting", [False, True])
+@pytest.mark.parametrize(
+    "collision",
+    [None, "redis", "redis-explicit", "output", "nested-output", "permanent", "web", "web-string"],
+)
+def test_history_run_concurrency_isolation(
+    tmp_path: Path, history_starting: bool, collision: str | None
+) -> None:
+    """Allow concurrent analysis only with independent writable resources.
+
+    Parameters:
+        tmp_path: Temporary run and configuration directory.
+        history_starting: Whether the retained live run starts second.
+        collision: Resource shared by the two runs, or None for isolation.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    live_output = tmp_path / "live-output"
+    offline_output = tmp_path / "offline-output"
+    if collision == "output":
+        offline_output = live_output
+    elif collision == "nested-output":
+        offline_output = live_output / "pcap"
+    live_permanent = tmp_path / "live-permanent"
+    offline_permanent = (
+        live_permanent if collision == "permanent" else tmp_path / "pcap-state"
+    )
+    live_port = 55000
+    offline_port = 55000 if collision in {"web", "web-string"} else 55002
+    offline_multi = collision != "redis"
+    live_args = SimpleNamespace(
+        interface="en0", output=str(live_output), multiinstance=False,
+        port=None, db=None, is_slips_started_by_an_update=False,
+        keep_history=True, webinterface=True,
+    )
+    offline_args = SimpleNamespace(
+        output=str(offline_output), multiinstance=offline_multi,
+        port="6379" if collision == "redis-explicit" else None,
+        keep_history=False, webinterface=True,
+    )
+    manager.main.args = live_args if history_starting else offline_args
+    own_permanent = live_permanent if history_starting else offline_permanent
+    other_permanent = offline_permanent if history_starting else live_permanent
+    own_web_port = live_port if history_starting else offline_port
+    other_web_port = offline_port if history_starting else live_port
+    manager.main.conf = Mock(web_interface_port=own_web_port)
+    manager.main.conf.permanent_dir.return_value = str(own_permanent)
+    manager.main.conf.web_interface_enabled.return_value = True
+    other_output = offline_output if history_starting else live_output
+    other_config = tmp_path / "other.yaml"
+    port_value = (
+        repr(str(other_web_port)) if collision == "web-string"
+        else str(other_web_port)
+    )
+    other_config.write_text(
+        f"parameters:\n  permanent_dir: {other_permanent}\n"
+        f"web_interface:\n  enabled: true\n  port: {port_value}\n"
+    )
+    command = [
+        "python", "./slips.py", "-c", other_config.name,
+        "-o", str(other_output), "-w",
+    ]
+    if history_starting:
+        if offline_multi:
+            command.append("-m")
+        if collision == "redis-explicit":
+            command.extend(["-P", "6379"])
+        (live_output / "databases").mkdir(parents=True)
+        (live_output / "databases" / "flows.sqlite").touch()
+        (live_output / "metadata").mkdir()
+        (live_output / "metadata" / "info.txt").write_text("File: en0\n")
+    else:
+        command.append("--keep-history")
+    active = Mock(info={"pid": 123, "cmdline": command})
+    active.cwd.return_value = str(tmp_path)
+    validate = (
+        manager.validate_keep_history if history_starting
+        else manager.reject_active_history_run
+    )
+
+    with patch(
+        "managers.redis_manager.psutil.process_iter", return_value=[active]
+    ):
+        if collision is None:
+            assert validate() is None
+        else:
+            with pytest.raises(SystemExit):
+                validate()
+
+
+@pytest.mark.parametrize("multiinstance", [False, True])
+@pytest.mark.parametrize("port", ["6379", "6381"])
+def test_explicit_redis_port_takes_precedence_for_history_isolation(
+    multiinstance: bool, port: str
+) -> None:
+    """Do not let -m bypass an explicitly shared Redis port.
+
+    Parameters:
+        multiinstance: Whether -m accompanies the explicit port.
+        port: Redis port requested by the second run.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    manager.main.args = SimpleNamespace(
+        keep_history=False, port=port, multiinstance=multiinstance, output=None
+    )
+    active = Mock(info={
+        "pid": 123,
+        "cmdline": ["python", "./slips.py", "--keep-history"],
+    })
+    active.cwd.return_value = os.getcwd()
+    message = "history Redis port" if port == "6379" else "explicit -o"
+
+    with patch(
+        "managers.redis_manager.psutil.process_iter", return_value=[active]
+    ):
+        with pytest.raises(SystemExit, match=message):
+            manager.reject_active_history_run()
+
+
+@pytest.mark.parametrize(
+    "configuration",
+    ["[broken", "- not-a-mapping", "parameters: invalid", "web_interface:\n  port: invalid"],
+)
+def test_history_run_refuses_unverifiable_configuration(
+    tmp_path: Path, configuration: str
+) -> None:
+    """Leave an existing capture alone when its resources cannot be read.
+
+    Parameters:
+        tmp_path: Temporary configuration directory.
+        configuration: Invalid YAML or resource settings.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    manager.main.args.keep_history = False
+    (tmp_path / "other.yaml").write_text(configuration)
+    active = Mock(info={
+        "pid": 123,
+        "cmdline": ["python", "./slips.py", "--keep-history", "-c", "other.yaml"],
+    })
+    active.cwd.return_value = str(tmp_path)
+
+    with patch(
+        "managers.redis_manager.psutil.process_iter", return_value=[active]
+    ):
+        with pytest.raises(SystemExit, match="Cannot verify isolation"):
             manager.reject_active_history_run()
 
 

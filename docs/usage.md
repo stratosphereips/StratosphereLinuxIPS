@@ -173,6 +173,54 @@ However, all instance share 1 cached redis database on redis://localhost:6379 DB
 
 Slips opens the required Redis servers automatically.
 
+To analyze a PCAP alongside a live capture using `--keep-history`, give the
+PCAP run its own output, persistent data directory, and web port. Copy your
+active configuration to `permanent/pcap-analysis/slips.yaml`, then change
+these settings in the copy:
+
+```yaml
+parameters:
+  permanent_dir: permanent/pcap-analysis
+  store_zeek_files_in_the_output_dir: true
+web_interface:
+  enabled: true
+  bind: localhost
+  port: 55002
+  require_password: true
+```
+
+Preserve the other settings from the copied configuration. Copy
+`redis_auth.conf` and `web_auth.json` from the live run's permanent directory
+into `permanent/pcap-analysis/`, preserving their restrictive permissions.
+The separate Redis server must use the same credentials for the shared
+cache. The separate persistent directory keeps offline host identities and
+learned models away from the live capture's persistent data.
+
+Run from the repository root, using an unused output directory:
+
+```bash
+nice -n 15 .venv-macos/bin/python slips.py -m -w \
+  -c permanent/pcap-analysis/slips.yaml \
+  -f dataset/test7-malicious.pcap -o output/pcap-analysis-01
+```
+
+On a native Linux installation, replace `.venv-macos/bin/python` with your
+Python environment, for example `.venv/bin/python`. Open
+`http://127.0.0.1:55002/` for this PCAP. The live capture keeps its existing
+web port. At the completion prompt, answer `n` or press Enter to keep the
+PCAP web interface available; keep that terminal open. For remote analysis,
+use an interactive SSH session and a separate tunnel:
+
+```bash
+ssh -N -L 127.0.0.1:55002:127.0.0.1:55002 bsyclass
+```
+
+Slips refuses resource conflicts before clearing the second run's output.
+Do not pass `--keep-history` to the PCAP run. Concurrent runs still share
+the Redis cache and the computer's CPU and memory. `nice` lowers CPU
+priority but does not limit memory; a machine with little spare RAM should
+analyze PCAPs elsewhere while live capture continues.
+
 ### Keep detections across a live-interface restart
 
 Stop the previous Slips run, then restart on the same interface and output
@@ -188,7 +236,9 @@ can show detections from before the restart. Redis database 0 starts clean:
 process IDs, time-window state, and other temporary values from the prior run
 must not influence new detections. The shared cache in port 6379 database 1 is
 preserved. This mode requires the original run's metadata and output database,
-uses port 6379, and refuses to start while any other Slips instance is running.
+uses port 6379, and refuses concurrent runs that share its writable data or
+web port. An isolated analysis using `-m` or a separate `-P` port can run
+alongside it, as described above.
 It cannot be combined with `-m` or a different `-P` port. Start a normal run
 without the flag when you want a fresh output directory and detection history.
 

@@ -6,6 +6,7 @@ from unittest.mock import Mock, mock_open, patch
 import pytest
 
 from tests.module_factory import ModuleFactory
+from modules.web_interface.history import HistoryCollector, connect_history
 
 
 @pytest.mark.parametrize(
@@ -329,3 +330,42 @@ def test_shutdown_marks_retained_page_backend_disconnected() -> None:
 
     module.history_collector.collect_once.assert_called_once_with()
     module.history_collector.mark_backend_disconnected.assert_called_once_with()
+
+
+@pytest.mark.parametrize("last_snapshot_age", [1, 59])
+def test_short_capture_retains_hosts_at_shutdown(
+    tmp_path: Path, last_snapshot_age: int
+) -> None:
+    """Keep hosts discovered after an initially empty inventory snapshot.
+
+    Parameters:
+        tmp_path: Isolated output and identity store.
+        last_snapshot_age: Seconds since the last periodic host snapshot.
+    """
+    module = ModuleFactory().create_web_interface_obj()
+    client = Mock()
+    client.zrange.return_value = ["profile_192.0.2.10"]
+    identities = Mock()
+    identities.execute.return_value = [{"host_name": "pcap-host"}, "{}", []]
+    scores = Mock()
+    scores.execute.return_value = [0]
+    client.pipeline.side_effect = [identities, scores]
+    client.hget.return_value = "0.32"
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999,
+        host_profiles_path=tmp_path / "hosts.sqlite",
+    )
+    collector._last_host_snapshot = 100 - last_snapshot_age
+    collector.collect_once = Mock()
+    collector.mark_backend_disconnected = Mock()
+    module.history_collector = collector
+
+    with patch("modules.web_interface.history.time.time", return_value=100):
+        module.shutdown_gracefully()
+
+    with connect_history(collector.history_path, read_only=True) as connection:
+        row = connection.execute(
+            "SELECT ip, data FROM host_snapshots"
+        ).fetchone()
+    assert row["ip"] == "192.0.2.10"
+    assert '"hostname": "pcap-host"' in row["data"]

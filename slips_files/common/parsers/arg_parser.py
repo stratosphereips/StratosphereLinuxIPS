@@ -271,7 +271,8 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store_true",
             required=False,
             help="Keep detections and flows from a previous live run in the "
-            "same output directory. Requires -i and -o and one Slips instance.",
+            "same output directory. Requires -i and -o; concurrent runs "
+            "need separate data directories and ports.",
         )
         self.add_argument(
             "-t",

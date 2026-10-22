@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import contextlib
+import argparse
 import shutil
 import redis
 import os
@@ -9,6 +10,7 @@ import socket
 import sys
 import time
 import subprocess
+import yaml
 from typing import Dict, Union
 from pathlib import Path
 
@@ -60,11 +62,7 @@ class RedisManager:
             del RedisDB.instances[port]
 
     def validate_keep_history(self) -> None:
-        """Require one live interface run and an existing matching output.
-
-        The retained SQLite database belongs to one interface. Reusing it
-        for another input or while another Slips runs would mix detections.
-        """
+        """Require a matching interface output and isolated concurrent runs."""
         args = self.main.args
         if (
             not getattr(args, "interface", None)
@@ -108,13 +106,109 @@ class RedisManager:
                 continue
             command = process.info["cmdline"] or []
             if any(os.path.basename(part) == "slips.py" for part in command):
-                raise SystemExit(
-                    "--keep-history requires the previous Slips run and "
-                    "all other Slips instances to be stopped first."
-                )
+                self._assert_history_run_isolated(process)
+
+    def _assert_history_run_isolated(self, process: psutil.Process) -> None:
+        """Reject resources shared with a concurrent history-preserving run.
+
+        Parameters:
+            process: Other Slips process, with cached PID and command line.
+        """
+        command = process.info["cmdline"] or []
+        script_index = next(
+            index
+            for index, part in enumerate(command)
+            if os.path.basename(part) == "slips.py"
+        )
+        parser = argparse.ArgumentParser(
+            add_help=False, allow_abbrev=False, exit_on_error=False
+        )
+        parser.add_argument("-m", "--multiinstance", action="store_true")
+        parser.add_argument("-P", "--port")
+        parser.add_argument("-o", "--output")
+        parser.add_argument("-c", "--config", default="config/slips.yaml")
+        parser.add_argument("-cc", "--clearcache", action="store_true")
+        parser.add_argument("-w", "--webinterface", action="store_true")
+        try:
+            other, _ = parser.parse_known_args(command[script_index + 1 :])
+            other_cwd = Path(process.cwd())
+            config_path = other_cwd / other.config
+            with config_path.open(encoding="utf-8") as source:
+                config = yaml.safe_load(source) or {}
+            if not isinstance(config, dict):
+                raise ValueError("Invalid Slips configuration")
+            parameters = config.get("parameters") or {}
+            other_web = config.get("web_interface") or {}
+            if not isinstance(parameters, dict) or not isinstance(
+                other_web, dict
+            ):
+                raise ValueError("Invalid Slips configuration sections")
+            other_web_port = int(other_web.get("port", 55000))
+            current_port = int(self.main.args.port or DEFAULT_REDIS_PORT)
+            other_port = int(other.port or DEFAULT_REDIS_PORT)
+        except (
+            OSError,
+            psutil.Error,
+            ValueError,
+            TypeError,
+            argparse.ArgumentError,
+            yaml.YAMLError,
+        ) as error:
+            raise SystemExit(
+                "Cannot verify isolation from another Slips run; "
+                "leaving the existing run untouched."
+            ) from error
+
+        if (
+            current_port == other_port
+            and not (
+                self.main.args.multiinstance is True
+                and not self.main.args.port
+            )
+            and not (other.multiinstance and not other.port)
+        ):
+            raise SystemExit(
+                "Another Slips run uses the history Redis port. "
+                "Use -m or -P <unused-port> for the separate analysis."
+            )
+
+        if not self.main.args.output or not other.output:
+            raise SystemExit(
+                "Concurrent history runs require separate explicit -o paths."
+            )
+        output = Path(self.main.args.output).resolve()
+        other_output = (other_cwd / other.output).resolve()
+        permanent = Path(self.main.conf.permanent_dir()).resolve()
+        other_permanent = (
+            other_cwd / (parameters.get("permanent_dir") or "permanent")
+        ).resolve()
+        if (
+            output.is_relative_to(other_output)
+            or other_output.is_relative_to(output)
+            or permanent.is_relative_to(other_output)
+            or other_permanent.is_relative_to(output)
+            or permanent == other_permanent
+        ):
+            raise SystemExit(
+                "Another Slips run shares output or persistent data. "
+                "Use separate -o and parameters.permanent_dir paths."
+            )
+
+        if (
+            (
+                self.main.args.webinterface is True
+                or self.main.conf.web_interface_enabled()
+            )
+            and (other.webinterface or other_web.get("enabled", False))
+            and self.main.conf.web_interface_port == other_web_port
+        ):
+            raise SystemExit(
+                "Another Slips run uses this web port. "
+                "Set a different web_interface.port for the separate analysis."
+            )
 
     def reject_active_history_run(self) -> None:
-        """Prevent a second Slips run while history mode is active."""
+        """Protect history mode from a second run sharing its resources."""
         if getattr(self.main.args, "keep_history", False) is True:
             return
         for process in psutil.process_iter(attrs=["pid", "cmdline"]):
@@ -124,10 +218,7 @@ class RedisManager:
             if any(
                 os.path.basename(part) == "slips.py" for part in command
             ) and ("--keep-history" in command):
-                raise SystemExit(
-                    "Another Slips run is using --keep-history. Stop it "
-                    "before starting a second Slips instance."
-                )
+                self._assert_history_run_isolated(process)
 
     def get_start_port(self):
         return self.start_port
