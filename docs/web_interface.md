@@ -52,6 +52,14 @@ ranges, grouping, table sort and direction, optional host columns, and resized
 pane widths after Slips restarts. These view choices stay in browser storage.
 Restart a running Slips server after updating its Python code.
 
+Searches reuse the existing evidence covering index to reject out-of-range
+and excluded records before reading full evidence details. Hosts calculates
+finding statistics after search and pagination when the selected sort and
+filters allow it. Device searches filter identities before aggregating
+traffic, while retaining every address belonging to a matching device.
+Evidence counts are reused from the same finding statistics. These paths add
+no database indexes, background workers, or persistent result caches.
+
 The input watcher observes only Zeek log files. It does not watch or remove
 files in `config/`. A whitelist saved by the web interface is written to the
 configured local whitelist file; its private recovery copy is kept beside it.

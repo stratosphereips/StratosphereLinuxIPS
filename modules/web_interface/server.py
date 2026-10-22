@@ -2945,9 +2945,9 @@ class RunDataReader:
             if search:
                 term = f"%{search}%"
                 clauses.append(
-                    "(LOWER(description) LIKE ? OR "
-                    "LOWER(evidence_type) LIKE ? OR "
-                    "LOWER(profile_ip) LIKE ?)"
+                    "(LOWER(evidence_type) LIKE ? OR "
+                    "LOWER(profile_ip) LIKE ? OR "
+                    "LOWER(description) LIKE ?)"
                 )
                 params.extend([term, term, term])
             if profile:
@@ -3008,7 +3008,11 @@ class RunDataReader:
                 else (
                     "evidence INDEXED BY evidence_group_cover_idx"
                     if covered_groups and cover_index_available
-                    else "evidence"
+                    else self._evidence_page_source(
+                        connection,
+                        start is not None,
+                        bool(profile or evidence_type),
+                    )
                 )
             )
             time_cover = bool(
@@ -3257,6 +3261,32 @@ class RunDataReader:
             "group": group_mode,
         }
 
+    @staticmethod
+    def _evidence_page_source(
+        connection: sqlite3.Connection, bounded: bool, narrowed: bool
+    ) -> str:
+        """Filter time-bounded evidence from its existing covering index.
+
+        Parameters:
+            connection: Read-only detection database connection.
+            bounded: Whether the query has an earliest timestamp.
+            narrowed: Whether a profile or type index may be more selective.
+
+        Returns:
+            Evidence table with an available covering index hint when useful.
+        """
+        if (
+            bounded
+            and not narrowed
+            and connection.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='index' "
+                "AND name='evidence_time_cover_idx' AND NOT EXISTS "
+                "(SELECT 1 FROM sqlite_temp_master WHERE name='evidence')"
+            ).fetchone()
+        ):
+            return "evidence INDEXED BY evidence_time_cover_idx"
+        return "evidence"
+
     def evidence(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return one filtered, cursor-bounded evidence page."""
         if self._query_value(query, "group") in {"host_type", "type", "host"}:
@@ -3324,6 +3354,11 @@ class RunDataReader:
                 latest = float(latest_row["latest"] or 0)
                 start, end, range_name = self._time_bounds(query, latest)
                 start = self._scoped_start(query, start)
+                source = self._evidence_page_source(
+                    connection,
+                    start is not None,
+                    bool(profiles or device_id or evidence_type),
+                )
                 sort_key, sort_expression, direction = self._sort_spec(
                     query,
                     {
@@ -3376,36 +3411,57 @@ class RunDataReader:
                     clauses.append("evidence_time <= ?")
                     params.append(end)
                 if search:
-                    clauses.append(
-                        "(LOWER(COALESCE(evidence_id, '')) LIKE ? OR "
-                        "LOWER(COALESCE(CAST(evidence_time AS TEXT), '')) LIKE ? OR "
-                        "LOWER(COALESCE(strftime('%d/%m/%Y, %H:%M:%S', "
-                        "evidence_time, 'unixepoch'), '')) LIKE ? OR "
-                        "LOWER(COALESCE(profile_ip, '')) LIKE ? OR "
-                        "LOWER(COALESCE(timewindow, '')) LIKE ? OR "
-                        "LOWER(COALESCE(threat_level, '')) LIKE ? OR "
-                        "LOWER(COALESCE(evidence_type, '')) LIKE ? OR "
-                        "LOWER(REPLACE(COALESCE(evidence_type, ''), '_', ' ')) LIKE ? OR "
-                        "LOWER(COALESCE(description, '')) LIKE ? OR "
-                        "LOWER(COALESCE(CAST(confidence AS TEXT), '')) LIKE ? OR "
-                        "LOWER(printf('%d%%', CAST(ROUND(confidence * 100) AS INTEGER))) LIKE ? OR "
-                        "LOWER(COALESCE(data, '')) LIKE ? OR "
-                        f"LOWER(COALESCE({module_expression}, '')) LIKE ? OR "
-                        f"LOWER(CASE WHEN {whitelist_expression} > 0 "
-                        "THEN 'excluded' ELSE 'scored' END) LIKE ? OR "
-                        f"CAST({flow_expression} AS TEXT) LIKE ? OR "
-                        f"CAST({alert_expression} AS TEXT) LIKE ? OR "
-                        f"LOWER(CASE WHEN {alert_expression} = 0 "
-                        "THEN 'none' ELSE 'linked' END) LIKE ? OR "
-                        "EXISTS (SELECT 1 FROM evidence_flows ef "
-                        "WHERE ef.evidence_id = evidence.evidence_id "
-                        "AND LOWER(ef.uid) LIKE ?) OR "
-                        "EXISTS (SELECT 1 FROM alert_evidence ae "
-                        "WHERE ae.evidence_id = evidence.evidence_id "
-                        "AND LOWER(ae.alert_id) LIKE ?))"
+                    searchable = [
+                        "LOWER(COALESCE(profile_ip, ''))",
+                        "LOWER(COALESCE(evidence_type, ''))",
+                        "LOWER(REPLACE(COALESCE(evidence_type, ''), '_', ' '))",
+                        "LOWER(COALESCE(threat_level, ''))",
+                        f"LOWER(COALESCE({module_expression}, ''))",
+                        f"CASE WHEN {whitelist_expression} > 0 "
+                        "THEN 'excluded' ELSE 'scored' END",
+                        "LOWER(COALESCE(evidence_id, ''))",
+                        "LOWER(COALESCE(timewindow, ''))",
+                        "LOWER(COALESCE(description, ''))",
+                        "LOWER(COALESCE(CAST(evidence_time AS TEXT), ''))",
+                        "LOWER(COALESCE(CAST(confidence AS TEXT), ''))",
+                    ]
+                    if re.fullmatch(r"[0-9/, :%_\-]+", search):
+                        searchable.append(
+                            "COALESCE(strftime('%d/%m/%Y, %H:%M:%S', "
+                            "evidence_time, 'unixepoch'), '')"
+                        )
+                    if re.fullmatch(r"[0-9%_\-]+", search):
+                        searchable.extend(
+                            [
+                                "printf('%d%%', CAST(ROUND(confidence * 100) AS INTEGER))",
+                                f"CAST({flow_expression} AS TEXT)",
+                                f"CAST({alert_expression} AS TEXT)",
+                            ]
+                        )
+                    if any(char in search for char in "%_") or any(
+                        search in label for label in ("none", "linked")
+                    ):
+                        searchable.append(
+                            f"CASE WHEN {alert_expression} = 0 "
+                            "THEN 'none' ELSE 'linked' END"
+                        )
+                    searchable.append("LOWER(COALESCE(data, ''))")
+                    search_sql = [
+                        f"{expression} LIKE ?" for expression in searchable
+                    ]
+                    search_sql.extend(
+                        [
+                            "EXISTS (SELECT 1 FROM evidence_flows ef "
+                            "WHERE ef.evidence_id = evidence.evidence_id "
+                            "AND LOWER(ef.uid) LIKE ?)",
+                            "EXISTS (SELECT 1 FROM alert_evidence ae "
+                            "WHERE ae.evidence_id = evidence.evidence_id "
+                            "AND LOWER(ae.alert_id) LIKE ?)",
+                        ]
                     )
+                    clauses.append("(" + " OR ".join(search_sql) + ")")
                     term = f"%{search}%"
-                    params.extend([term] * 19)
+                    params.extend([term] * len(search_sql))
                 if profiles:
                     placeholders = ",".join("?" for _ in profiles)
                     clauses.append(f"profile_ip IN ({placeholders})")
@@ -3452,12 +3508,12 @@ class RunDataReader:
                     params.extend([cursor[0], cursor[0], cursor[1]])
                 where = " AND ".join(clauses)
                 total = connection.execute(
-                    f"SELECT COUNT(*) AS count FROM evidence WHERE {count_where}",
+                    f"SELECT COUNT(*) AS count FROM {source} WHERE {count_where}",
                     count_params,
                 ).fetchone()["count"]
                 rows = connection.execute(
                     f"SELECT evidence.*, {sort_expression} AS sort_value "
-                    f"FROM evidence WHERE {where} ORDER BY "
+                    f"FROM {source} WHERE {where} ORDER BY "
                     f"{sort_expression} {direction}, evidence_id {direction} LIMIT ?",
                     (*params, limit + 1),
                 ).fetchall()
@@ -5368,6 +5424,7 @@ class RunDataReader:
         ips: List[str],
         network_start: Optional[float] = None,
         query: Optional[Dict[str, List[str]]] = None,
+        include_evidence: bool = True,
     ) -> Dict[str, Dict[str, int]]:
         """Count scoped evidence and alerts with batched indexed queries.
 
@@ -5375,6 +5432,7 @@ class RunDataReader:
             ips: IPs in the requested Hosts page.
             network_start: Optional earliest event in the current connection.
             query: Optional activity time, network and exclusion selections.
+            include_evidence: Count evidence unless finding statistics supply it.
 
         Returns:
             Evidence and alert counts keyed by IP.
@@ -5389,6 +5447,8 @@ class RunDataReader:
                     ("evidence", "profile_ip", "evidence"),
                     ("alerts", "ip_alerted", "alerts"),
                 ):
+                    if table == "evidence" and not include_evidence:
+                        continue
                     time_column = (
                         "evidence_time"
                         if table == "evidence"
@@ -5649,6 +5709,9 @@ class RunDataReader:
             if threat and threat != "info_or_more"
             else {}
         )
+        findings_before_page = bool(threat) or self._query_value(
+            query, "sort"
+        ) in {"threat", "evidence", "peak_score"}
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         with connect_history(self.history_path, read_only=True) as connection:
             connection.execute("BEGIN")
@@ -5716,25 +5779,30 @@ class RunDataReader:
                 str(row[0])
                 for row in connection.execute("SELECT ip FROM host_snapshots")
             ]
-            findings = self._host_finding_stats(
-                candidate_ips,
-                {
-                    "range": [self._query_value(query, "range", "live")],
-                    **query,
-                },
+            finding_query = {
+                "range": [self._query_value(query, "range", "live")],
+                **query,
+            }
+            findings = (
+                self._host_finding_stats(candidate_ips, finding_query)
+                if findings_before_page
+                else {}
             )
+            empty_findings = {"evidence": 0, "peak": None, "threat_rank": -1}
             connection.create_function(
                 "host_evidence_count",
                 1,
-                lambda ip: findings[ip]["evidence"],
+                lambda ip: findings.get(ip, empty_findings)["evidence"],
             )
             connection.create_function(
-                "host_evidence_peak", 1, lambda ip: findings[ip]["peak"]
+                "host_evidence_peak",
+                1,
+                lambda ip: findings.get(ip, empty_findings)["peak"],
             )
             connection.create_function(
                 "host_evidence_threat",
                 1,
-                lambda ip: findings[ip]["threat_rank"],
+                lambda ip: findings.get(ip, empty_findings)["threat_rank"],
             )
             evidence_expression = "host_evidence_count(hs.ip)"
             has_alert_reviews = bool(
@@ -5988,6 +6056,8 @@ class RunDataReader:
         has_more = len(rows) > limit
         page_rows = rows[:limit]
         page_ips = [str(row["ip"]) for row in page_rows]
+        if not findings_before_page:
+            findings = self._host_finding_stats(page_ips, finding_query)
         fast_page = getattr(self, "cache", None) is not None
         if fast_page:
             loads = (
@@ -5995,7 +6065,9 @@ class RunDataReader:
                 if network_start is not None
                 else self._host_page_loads(page_ips)
             )
-            counts = self._host_page_counts(page_ips, query=query)
+            counts = self._host_page_counts(
+                page_ips, query=query, include_evidence=False
+            )
             identities = self._host_page_identity(page_ips)
         items: List[Dict[str, Any]] = []
         annotations = HostProfileStore.annotations_for_ips(
@@ -6035,17 +6107,18 @@ class RunDataReader:
             host["observed_at"] = float(row["observed_at"])
             host["last_seen"] = float(row["activity_time"] or 0)
             if "threat_level" in evidence_columns:
-                host["has_findings"] = row["displayed_threat_rank"] >= 0
+                rank = findings[ip]["threat_rank"]
+                host["has_findings"] = rank >= 0
                 host["max_threat_level"] = (
-                    self._threat_from_rank(row["displayed_threat_rank"])
+                    self._threat_from_rank(rank)
                     if host["has_findings"]
                     else ""
                 )
             host["user_status"] = triage.get(ip, {}).get("status", "")
             host["user_labels"] = triage.get(ip, {}).get("labels", [])
             host["peak_alert_score"] = (
-                float(row["peak_alert_score"])
-                if row["peak_alert_score"] is not None
+                float(findings[ip]["peak"])
+                if findings[ip]["peak"] is not None
                 else None
             )
             if fast_page:
@@ -6081,7 +6154,7 @@ class RunDataReader:
                         "ti_feeds": identities.get(ip, {}).get("ti_feeds", []),
                     }
                 )
-                host["evidence_count"] = counts[ip]["evidence"]
+                host["evidence_count"] = findings[ip]["evidence"]
                 host["alert_count"] = counts[ip]["alerts"]
             else:
                 host["load"] = (
@@ -6164,6 +6237,79 @@ class RunDataReader:
                 snapshots = connection.execute(
                     "SELECT ip, observed_at, data FROM host_snapshots"
                 ).fetchall()
+            latest = max(
+                (float(row["observed_at"]) for row in snapshots), default=0
+            )
+            if network_start is None:
+                seen = self._host_last_seen_expression(connection, False)
+                latest = float(
+                    connection.execute(
+                        f"SELECT MAX(MAX(hs.observed_at, {seen})) "
+                        "FROM host_snapshots hs"
+                    ).fetchone()[0]
+                    or latest
+                )
+        ips = [str(row["ip"]) for row in snapshots]
+        search = self._query_value(query, "search").lower()
+        scope = self._query_value(query, "scope")
+        profile_path = getattr(
+            self,
+            "host_profiles_path",
+            Path("permanent/host_profiles/hosts.sqlite"),
+        )
+        triage = HostProfileStore.triage_for_ips(profile_path, ips)
+        saved_annotations = HostProfileStore.annotations_for_ips(
+            profile_path, ips, annotation_networks
+        )
+        saved_identities = (
+            HostProfileStore.identities_for_ips(
+                profile_path, ips, annotation_networks
+            )
+            if search
+            else {}
+        )
+        snapshot_data = {}
+        matching_keys = set()
+        scope_keys = set()
+        for snapshot in snapshots:
+            ip = str(snapshot["ip"])
+            data = self._loads(snapshot["data"], {})
+            data = data if isinstance(data, dict) else {}
+            snapshot_data[ip] = data
+            key = keys.get(ip, ip)
+            if scope and data.get("scope") == scope:
+                scope_keys.add(key)
+            if (
+                search
+                and search
+                in (
+                    ip
+                    + " "
+                    + json.dumps(
+                        [
+                            data,
+                            triage.get(ip, {}),
+                            saved_annotations.get(ip, {}),
+                            saved_identities.get(ip, {}),
+                            classify_mac(data.get("mac")).replace("_", " "),
+                        ],
+                        ensure_ascii=False,
+                    )
+                ).lower()
+            ):
+                matching_keys.add(key)
+        snapshots = [
+            snapshot
+            for snapshot in snapshots
+            if (
+                not search
+                or keys.get(snapshot["ip"], snapshot["ip"]) in matching_keys
+            )
+            and (
+                not scope
+                or keys.get(snapshot["ip"], snapshot["ip"]) in scope_keys
+            )
+        ]
         ips = [str(row["ip"]) for row in snapshots]
         loads: Dict[str, Dict[str, Any]] = {}
         counts: Dict[str, Dict[str, int]] = {}
@@ -6174,18 +6320,15 @@ class RunDataReader:
                 if network_start is not None
                 else self._host_page_loads(batch)
             )
-            counts.update(self._host_page_counts(batch, query=query))
+            counts.update(
+                self._host_page_counts(
+                    batch,
+                    query=query,
+                    include_evidence=not bool(query.get("range")),
+                )
+            )
         finding_stats = self._host_finding_stats(ips, query)
         has_threat_column = False
-        profile_path = getattr(
-            self,
-            "host_profiles_path",
-            Path("permanent/host_profiles/hosts.sqlite"),
-        )
-        triage = HostProfileStore.triage_for_ips(profile_path, ips)
-        saved_annotations = HostProfileStore.annotations_for_ips(
-            profile_path, ips, annotation_networks
-        )
         try:
             with self._connect_sqlite() as connection:
                 evidence_columns = {
@@ -6200,9 +6343,7 @@ class RunDataReader:
         groups: Dict[str, Dict[str, Any]] = {}
         for snapshot in snapshots:
             ip = str(snapshot["ip"])
-            data = self._loads(snapshot["data"], {})
-            if not isinstance(data, dict):
-                data = {}
+            data = snapshot_data[ip]
             key = keys.get(ip, ip)
             group = groups.setdefault(
                 key,
@@ -6223,6 +6364,8 @@ class RunDataReader:
             load = loads.get(ip, {})
             count = counts.get(ip, {})
             findings = finding_stats[ip]
+            if query.get("range"):
+                count["evidence"] = findings["evidence"]
             group["members"].append((ip, data, float(snapshot["observed_at"])))
             group["last_seen"] = max(
                 group["last_seen"],
@@ -6284,51 +6427,16 @@ class RunDataReader:
                 ).fetchone()
                 group["flows"] -= int(internal["flows"] or 0)
                 group["bytes"] -= int(internal["bytes"] or 0)
-        latest = max(
-            (group["last_seen"] for group in groups.values()), default=0
-        )
         start, end, range_name = self._time_bounds(query, latest)
         start = self._scoped_start(query, start)
-        search = self._query_value(query, "search").lower()
-        scope = self._query_value(query, "scope")
         threat = self._query_value(query, "threat").lower()
         alerts_only = self._query_value(query, "alerts_only") == "1"
-        saved_identities = (
-            HostProfileStore.identities_for_ips(
-                profile_path, ips, annotation_networks
-            )
-            if search
-            else {}
-        )
         filtered: List[Dict[str, Any]] = []
         for group in groups.values():
             members = group["members"]
             if start is not None and group["last_seen"] < start:
                 continue
             if end is not None and group["last_seen"] > end:
-                continue
-            if search and not any(
-                search
-                in (
-                    ip
-                    + " "
-                    + json.dumps(
-                        [
-                            data,
-                            triage.get(ip, {}),
-                            saved_annotations.get(ip, {}),
-                            saved_identities.get(ip, {}),
-                            classify_mac(data.get("mac")).replace("_", " "),
-                        ],
-                        ensure_ascii=False,
-                    )
-                ).lower()
-                for ip, data, _ in members
-            ):
-                continue
-            if scope and not any(
-                data.get("scope") == scope for _, data, _ in members
-            ):
                 continue
             if alerts_only and not group["alerts"]:
                 continue

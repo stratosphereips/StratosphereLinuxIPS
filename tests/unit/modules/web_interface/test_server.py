@@ -4429,7 +4429,8 @@ def test_evidence_cursor_is_stable_when_newer_rows_arrive(tmp_path) -> None:
     ]
 
 
-@pytest.mark.parametrize("search", ["UNKNOWN_PORT", "unknown port", "scored", "100%"])
+@pytest.mark.parametrize("search", ["UNKNOWN_PORT", "unknown port", "scored", "100%",
+    "info", "none", "1970", "01/01/1970", "00:00:01", "1.0", "0", "%", "_"])
 def test_host_evidence_search_covers_displayed_columns(
     tmp_path: Path, search: str
 ) -> None:
@@ -4928,6 +4929,133 @@ def test_hosts_batch_findings_once_before_sorting_and_paging(
     assert first["next_cursor"]
     reader.hosts({**query,"cursor":[first["next_cursor"]]})
     assert reader._host_finding_stats.call_count == 2
+
+
+@pytest.mark.parametrize("sort", ["last_seen", "ip", "hostname", "bytes"])
+def test_hosts_findings_follow_search_and_page(
+    tmp_path: Path, sort: str,
+) -> None:
+    """Read findings only for returned hosts when filtering does not need them.
+
+    Parameters:
+        tmp_path: Isolated inventory and findings.
+        sort: A column that does not depend on evidence statistics.
+    """
+    _module_factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    reader._host_finding_stats = Mock(wraps=reader._host_finding_stats)
+
+    page = reader.hosts({"range": ["all"], "sort": [sort], "limit": ["1"]})
+
+    reader._host_finding_stats.assert_called_once()
+    assert reader._host_finding_stats.call_args.args[0] == [page["items"][0]["ip"]]
+    assert page["total"] == 8
+    reader._host_finding_stats.reset_mock()
+    empty = reader.hosts({"range": ["all"], "search": ["absent-host-token"]})
+    assert empty["total"] == 0
+    assert reader._host_finding_stats.call_args.args[0] == []
+
+
+@pytest.mark.parametrize("scope", ["", "local"])
+def test_device_search_filters_before_traffic_and_preserves_members(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, scope: str,
+) -> None:
+    """A match on one address keeps all device members without unrelated work.
+
+    Parameters:
+        tmp_path: Isolated inventory and real traffic rows.
+        monkeypatch: Match the live clock to the fixture timestamps.
+        scope: Optional local scope combined with the search.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    reader._host_page_loads = Mock(wraps=reader._host_page_loads)
+    reader._host_page_counts = Mock(wraps=reader._host_page_counts)
+    reader._host_finding_stats = Mock(wraps=reader._host_finding_stats)
+    page = reader.hosts({"range": ["all"], "device": ["1"],
+                         "search": ["fe80::20"], "scope": [scope]})
+
+    members = {"192.168.12.1", "192.168.1.20", "fe80::20"}
+    assert page["total"] == 1
+    assert set(page["items"][0]["device_ips"]) == members
+    assert set(reader._host_page_loads.call_args.args[0]) == members
+    assert set(reader._host_finding_stats.call_args.args[0]) == members
+    assert reader._host_page_counts.call_args.kwargs["include_evidence"] is False
+    assert page["items"][0]["load"]["flows"] == 4
+    assert page["items"][0]["evidence_count"] == 1
+
+
+def test_device_search_keeps_unfiltered_offline_range_clock(tmp_path: Path) -> None:
+    """An old search match cannot move the offline interval back to itself.
+
+    Parameters:
+        tmp_path: Isolated offline inventory and traffic timestamps.
+    """
+    _module_factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    reader.redis.hget.side_effect = None
+    reader.redis.hget.return_value = "pcap"
+    with connect_history(reader.history_path) as connection:
+        connection.execute("UPDATE host_snapshots SET observed_at=1")
+        connection.execute("UPDATE flow_index SET event_time=20000 WHERE src_ip='192.168.13.1'")
+        connection.execute("UPDATE flow_index SET event_time=100 WHERE src_ip!='192.168.13.1'")
+
+    page = reader.hosts({"range": ["live"], "device": ["1"], "search": ["fe80::20"]})
+
+    assert page["total"] == 0
+
+
+@pytest.mark.parametrize("group", ["", "host_type"])
+@pytest.mark.parametrize("narrowed", ["", "profile", "type"])
+@pytest.mark.parametrize("indexed", [True, False])
+def test_bounded_evidence_search_uses_existing_covering_index(
+    tmp_path: Path, group: str, narrowed: str, indexed: bool,
+) -> None:
+    """Use a covering time scan while preserving selective and legacy queries.
+
+    Parameters:
+        tmp_path: Isolated detection database.
+        group: Individual records or host/type groups.
+        narrowed: Optional selective host or type filter.
+        indexed: Whether the existing time covering index is available.
+    """
+    _module_factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    reader.redis.hget.side_effect = None
+    reader.redis.hget.return_value = "pcap"
+    if indexed:
+        with sqlite3.connect(reader.sqlite_path) as connection:
+            connection.execute("CREATE INDEX evidence_time_cover_idx ON evidence("
+                "evidence_time,evidence_id,profile_ip,evidence_type,threat_level,"
+                "source_module,whitelisted,accumulated_ratl)")
+    statements: list[str] = []
+    original = reader._connect_sqlite
+
+    def traced_connection() -> sqlite3.Connection:
+        """Trace database reads.
+
+        Returns:
+            A read-only connection recording each SQL statement.
+        """
+        connection = original()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    reader._connect_sqlite = traced_connection
+    query = {"range": ["24h"], "search": ["scan"], "group": [group],
+             "compact": ["1"], "hide_excluded": ["1"]}
+    if narrowed:
+        query[narrowed] = ["ARP_SCAN" if narrowed == "type" else "192.168.1.22"]
+    result = reader.evidence(query)
+
+    assert result["total"] == (1 if narrowed == "profile" else 2)
+    selections = [statement for statement in statements if " LIKE " in statement]
+    assert selections
+    assert all(("INDEXED BY evidence_time_cover_idx" in statement) == (indexed and not narrowed)
+               for statement in selections[:2])
+    with original() as connection:
+        assert reader._evidence_page_source(connection, False, False) == "evidence"
 
 
 def test_device_view_combines_local_addresses_before_paging(
