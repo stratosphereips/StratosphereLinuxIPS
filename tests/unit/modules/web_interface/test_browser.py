@@ -564,7 +564,7 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
             {"peer_id": first_id, "timestamp": 100, "trust": -0.5},
             {"peer_id": first_id, "timestamp": 200, "trust": 0.350},
             {"peer_id": second_id, "timestamp": 100, "trust": 0.85},
-            {"peer_id": second_id, "timestamp": 300, "trust": 0.34125},
+            {"peer_id": second_id, "timestamp": 400, "trust": 0.34125},
         ],
         "trust_history": [
             {"peer_id": first_id, "timestamp": 100, "reliability": 0.9},
@@ -630,7 +630,7 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
             )
             assert endpoint == pytest.approx(100 - (reliability - 0.8) / 0.2 * 88, abs=0.01)
         area = chart.locator(".chart-hit-area").bounding_box()
-        for fraction, ip, expected in ((0.6, "192.168.1.170", "1.000"), (0.999, "192.168.1.248", "0.975")):
+        for fraction, ip, expected in ((150 / 350, "192.168.1.170", "1.000"), (250 / 350, "192.168.1.248", "0.975")):
             page.mouse.move(area["x"] + area["width"] * fraction, area["y"] + area["height"] / 2)
             tooltip = chart.locator("..").locator(".chart-tooltip")
             assert tooltip.is_visible()
@@ -640,11 +640,18 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
         page.evaluate("() => loadP2P()")
         assert page.evaluate("() => window.savedReliabilityPath === document.querySelector('#p2p-trust-chart .chart-line')")
         trust_chart = page.locator("#p2p-calculated-trust-chart")
-        assert trust_chart.locator(".chart-y-label").all_text_contents() == ["-0.500", "0.175", "0.850"]
+        assert trust_chart.locator(".chart-y-label").all_text_contents() == ["0.000", "0.425", "0.850"]
         assert trust_chart.locator(".chart-line").count() == 2
+        assert trust_chart.locator(".chart-time-label").all_text_contents() == chart.locator(".chart-time-label").all_text_contents()
+        for svg in (chart, trust_chart):
+            endpoint = svg.locator(".peer-trust-line-0").evaluate("path => path.getPointAtLength(path.getTotalLength()).x")
+            bounds = svg.locator(".chart-hit-area").evaluate("node => ({left:Number(node.getAttribute('x')),width:Number(node.getAttribute('width'))})")
+            assert endpoint == pytest.approx(bounds["left"] + 150 / 350 * bounds["width"], abs=0.01)
         for index, trust in enumerate((0.35, 0.34125)):
             endpoint = trust_chart.locator(f".peer-trust-line-{index}").evaluate("path => path.getPointAtLength(path.getTotalLength()).y")
-            assert endpoint == pytest.approx(100 - (trust + 0.5) / 1.35 * 88, abs=0.01)
+            assert endpoint == pytest.approx(100 - trust / 0.85 * 88, abs=0.01)
+            assert trust_chart.locator(f".peer-trust-line-{index}").get_attribute("clip-path")
+        assert page.evaluate("() => state.p2p.calculated_trust_history[0].trust") == -0.5
         area = trust_chart.locator(".chart-hit-area").bounding_box()
         page.mouse.move(area["x"] + area["width"] * 0.999, area["y"] + area["height"] / 2)
         assert trust_chart.locator("..").locator(".chart-tooltip").inner_text().endswith(": 0.341")
@@ -653,7 +660,93 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
         page.wait_for_function("state.p2p.trust_range === '24h'")
         assert ranges[-1] == "24h"
         assert chart.locator(".chart-line").count() == 2
+        assert trust_chart.locator(".chart-time-label").all_text_contents() == chart.locator(".chart-time-label").all_text_contents()
+        page.evaluate("() => { window.savedTrustPath = document.querySelector('#p2p-calculated-trust-chart .chart-line'); }")
+        payload["trust_history"].append({"peer_id": first_id, "timestamp": 500, "reliability": 1})
+        page.evaluate("() => loadP2P()")
+        assert not page.evaluate("() => window.savedTrustPath === document.querySelector('#p2p-calculated-trust-chart .chart-line')")
+        assert trust_chart.locator(".chart-time-label").all_text_contents() == chart.locator(".chart-time-label").all_text_contents()
+        for key in ("trust_history", "calculated_trust_history"):
+            saved = payload[key]
+            payload[key] = []
+            page.evaluate("() => loadP2P()")
+            assert trust_chart.locator(".chart-time-label").all_text_contents() == chart.locator(".chart-time-label").all_text_contents()
+            assert len(chart.locator(".chart-time-label").all_text_contents()) == 3
+            payload[key] = saved
         assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("width", [900, 1280, 1800])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_request_indicator_preserves_header_geometry_in_chrome(width: int, theme: str) -> None:
+    """Keep loading, searching and idle header geometry identical.
+
+    Parameters:
+        width: Desktop or compact browser viewport width.
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+
+    def route_request(route: Any) -> None:
+        """Serve local assets and isolate the header from live API traffic.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page(viewport={"width": width, "height": 1100})
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        layouts = page.evaluate("""theme => {
+            setTheme(theme);
+            byId('run-name').textContent='sebas-en0';
+            byId('run-device').textContent='This device · sebas-MacBook-Pro.local';
+            for (const id of ['history-source-label','network-filter-label','device-view-label']) byId(id).hidden=false;
+            state.requests.clear(); renderRequestActivity();
+            const measure = () => ({
+                scrollWidth:document.documentElement.scrollWidth,
+                clientWidth:document.documentElement.clientWidth,
+                brandScrollWidth:document.querySelector('.brand').scrollWidth,
+                brandClientWidth:document.querySelector('.brand').clientWidth,
+                checkboxWidths:[...document.querySelectorAll('.network-filter input')].map(input=>input.getBoundingClientRect().width),
+                boxes:['.topbar','.brand','.topbar-actions','.tabs','main','#request-status'].map(selector => {
+                    const rect=document.querySelector(selector).getBoundingClientRect();
+                    return [rect.x,rect.y,rect.width,rect.height];
+                }),
+            });
+            const layouts=[measure()];
+            for (const label of ['Loading…','Searching…','Loading…']) {
+                const controller=new AbortController(); controller.activityLabel=label;
+                state.requests.set('layout-test',controller); renderRequestActivity();
+                layouts.push(measure());
+                state.requests.delete('layout-test'); renderRequestActivity();
+                layouts.push(measure());
+            }
+            return layouts;
+        }""", theme)
+        for layout in layouts:
+            assert layout["scrollWidth"] <= layout["clientWidth"] + 1
+            assert layout["brandScrollWidth"] <= layout["brandClientWidth"] + 1
+            assert all(width <= 24 for width in layout["checkboxWidths"])
+            assert layout["scrollWidth"] == layouts[0]["scrollWidth"]
+            for actual, expected in zip(layout["boxes"], layouts[0]["boxes"]):
+                assert actual == pytest.approx(expected, abs=0.1)
+        assert page.locator("#request-status").is_hidden()
+        assert page.locator("main").get_attribute("aria-busy") == "false"
         browser.close()
 
 

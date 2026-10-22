@@ -1028,12 +1028,12 @@ body.evidence-detail-active main > .panel:not(#evidence-detail) { display: none;
 @media (max-width: 980px) { .evidence-detail-banner { flex-direction: column; } .evidence-detail-stats { min-width: 0; } .evidence-detail-columns { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 540px) { .evidence-detail-side .whitelist-form { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 640px) { .evidence-detail-toolbar { align-items: flex-start; } .evidence-detail-breadcrumb code { display: none; } .evidence-detail-controls > span { display: none; } .evidence-detail-stats .investigation-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); } .evidence-detail-flow-list .flow-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.topbar { min-height: 70px; padding: .65rem 1.15rem; background: #0e1721; }
-.brand { gap: .85rem; }
+.topbar { flex-wrap: wrap; row-gap: .5rem; min-height: 70px; padding: .65rem 1.15rem; background: #0e1721; }
+.brand { flex-basis: 22rem; gap: .85rem; }
 .brand-logo { width: 42px; height: 42px; }
 .brand-name { display: none; }
-.run-heading { display: flex; align-items: baseline; gap: .75rem; }
-.run-heading h1 { margin: 0; font-size: 1.17rem; line-height: 1.15; }
+.run-heading { display: flex; flex-wrap: wrap; align-items: center; gap: .25rem .75rem; }
+.run-heading h1 { min-width: 0; margin: 0; font-size: 1.17rem; line-height: 1.15; overflow-wrap: anywhere; }
 .run-device { margin: 0; font-size: .92rem; }
 #run-meta { margin: .18rem 0 0; font: 600 .78rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 #run-network, #run-addresses[hidden] { display: none; }
@@ -1182,10 +1182,10 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .review-delete { color: var(--danger); }
 
 /* The theme switch stays in the header on every view. */
-.topbar-actions { display: flex; align-items: center; gap: 1rem; flex: none; }
+.topbar-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 1rem; flex: none; max-width: 100%; }
 .network-filter { display: inline-flex; align-items: center; gap: .4rem; padding: .38rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: .75rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .network-filter[hidden] { display: none; }
-.network-filter input { accent-color: var(--accent); margin: 0; }
+.network-filter input { flex: none; min-width: 0; padding: 0; accent-color: var(--accent); margin: 0; }
 .network-filter:has(input:disabled) { opacity: .6; cursor: wait; }
 .theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-width: 5.2rem; padding: .38rem .55rem; font-size: .75rem; font-weight: 700; white-space: nowrap; }
 .theme-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
@@ -1336,8 +1336,9 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .p2p-trust-subheading { margin: .6rem .7rem 0; font-size: .8rem; }
 .p2p-trust-subheading span { margin-left: .5rem; font-size: .65rem; font-weight: normal; }
 
-.request-status { display: inline-flex; align-items: center; gap: .4rem; flex: none; padding: .25rem .55rem; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); background: var(--surface); font-size: .75rem; font-weight: 700; white-space: nowrap; }
-.request-status[hidden] { display: none; }
+.request-status { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; flex: none; width: 8rem; padding: .25rem .55rem; border: 1px solid var(--accent); border-radius: 999px; color: var(--accent); background: var(--surface); font-size: .75rem; font-weight: 700; white-space: nowrap; }
+.request-status[hidden] { display: inline-flex; visibility: hidden; }
+.request-status[hidden] .request-spinner { animation-play-state: paused; }
 .request-spinner { width: .75rem; height: .75rem; border: 2px solid var(--line); border-top-color: currentColor; border-radius: 50%; animation: request-spin .8s linear infinite; }
 @keyframes request-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .request-spinner { animation: none; } }

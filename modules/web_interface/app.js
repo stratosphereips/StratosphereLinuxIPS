@@ -1103,8 +1103,16 @@ function bindChartHover(svg, target, points, series, formatValue, maximum, left,
   target.addEventListener("pointerleave", () => { tooltip.hidden = true; });
 }
 
-/** Render a performance chart with numeric and time axes and an optional lower bound. */
-function renderLineChart(id, points, series, formatValue = formatChartValue, minimumValue = 0, maximumValue = 1) {
+/** Render a chart with numeric axes and optional shared time bounds.
+ * @param {string} id - Target SVG ID.
+ * @param {Array<object>} points - Timestamped metric values.
+ * @param {Array<object>} series - Metric keys, colors and labels.
+ * @param {Function} formatValue - Numeric axis and tooltip formatter.
+ * @param {number} minimumValue - Lower numeric axis bound.
+ * @param {number} maximumValue - Minimum upper numeric axis bound.
+ * @param {Array<number>|null} timeBounds - Shared first and last timestamps.
+ */
+function renderLineChart(id, points, series, formatValue = formatChartValue, minimumValue = 0, maximumValue = 1, timeBounds = null) {
   const svg = byId(id);
   svg.replaceChildren();
   chartTooltip(svg).hidden = true;
@@ -1129,7 +1137,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     label.setAttribute("text-anchor", "middle");
     label.textContent = "No samples in this range";
     svg.append(label);
-    return;
+    if (!timeBounds) return;
   }
   const hasValue = (point, key) => point[key] !== null
     && point[key] !== undefined
@@ -1139,9 +1147,19 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     .map((item) => numeric(point[item.key])));
   const maximum = Math.max(...values, maximumValue);
   const valueSpan = Math.max(maximum - minimumValue, 0.001);
-  const minimumTime = numeric(points[0].ts);
-  const maximumTime = numeric(points.at(-1).ts);
+  const minimumTime = timeBounds ? timeBounds[0] : numeric(points[0].ts);
+  const maximumTime = timeBounds ? timeBounds[1] : numeric(points.at(-1).ts);
   const span = Math.max(maximumTime - minimumTime, 1);
+  const definitions = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+  const clip = document.createElementNS("http://www.w3.org/2000/svg", "clipPath");
+  clip.id = `${id}-plot-clip`;
+  const clipArea = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+  for (const [key, value] of Object.entries({ x: left, y: top, width: plotWidth, height: plotHeight })) {
+    clipArea.setAttribute(key, String(value));
+  }
+  clip.append(clipArea);
+  definitions.append(clip);
+  svg.append(definitions);
   const grid = document.createElementNS("http://www.w3.org/2000/svg", "path");
   grid.setAttribute("d", `M${left} ${height - bottom}H${width - right}M${left} ${top}V${height - bottom}`);
   grid.setAttribute("class", "grid-line");
@@ -1185,6 +1203,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
+    path.setAttribute("clip-path", `url(#${clip.id})`);
     svg.append(path);
     if (seriesPoints.length === 1) {
       const point = seriesPoints[0];
@@ -1193,6 +1212,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
       marker.setAttribute("cy", String(height - bottom - ((numeric(point[item.key]) - minimumValue) / valueSpan) * plotHeight));
       marker.setAttribute("r", "3");
       marker.setAttribute("class", `chart-point ${item.className || ""}`);
+      marker.setAttribute("clip-path", `url(#${clip.id})`);
       svg.append(marker);
     }
   }
@@ -1203,7 +1223,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
   hitArea.setAttribute("height", String(plotHeight));
   hitArea.setAttribute("class", "chart-hit-area");
   svg.append(hitArea);
-  bindChartHover(svg, hitArea, points, series, formatValue, maximum,
+  if (points.length) bindChartHover(svg, hitArea, points, series, formatValue, maximum,
     left, plotWidth, minimumTime, span);
   points.filter((point) => point.reset_reason).forEach((point) => {
     const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
@@ -4061,15 +4081,43 @@ async function loadArpPoisoning() {
   renderArpPoisoning();
 }
 
+/** Find one time domain for both P2P history charts.
+ * @param {object} payload - Peer identities and the two retained histories.
+ * @returns {Array<number>|null} Shared time bounds, or null without samples.
+ */
+function p2pChartTimeBounds(payload) {
+  const timestamps = [];
+  for (const [history, metric] of [[payload.trust_history || [], "reliability"],
+    [payload.calculated_trust_history || [], "trust"]]) {
+    for (const row of history) {
+      if (row.timestamp !== null && row.timestamp !== undefined
+        && row[metric] !== null && row[metric] !== undefined
+        && Number.isFinite(Number(row.timestamp)) && Number.isFinite(Number(row[metric]))) {
+        timestamps.push(Number(row.timestamp));
+      }
+    }
+  }
+  if (!timestamps.length) return null;
+  if (payload.trust_range === "all") {
+    for (const peer of payload.peers || []) {
+      if (Number.isFinite(Number(peer.first_seen)) && Number(peer.first_seen) > 0) {
+        timestamps.push(Number(peer.first_seen));
+      }
+    }
+  }
+  return [Math.min(...timestamps), Math.max(...timestamps)];
+}
+
 /** Plot retained peer values for the selected P2P metric.
  * @param {Array<object>} history - Actual retained samples per peer.
  * @param {Array<object>} peers - Peer identities shown in the table.
  * @param {string} metric - Reliability or calculated trust.
+ * @param {Array<number>|null} timeBounds - Shared first and last timestamps.
  */
-function renderP2PMetricChart(history, peers, metric) {
+function renderP2PMetricChart(history, peers, metric, timeBounds) {
   peers = [...peers].sort((left, right) => String(left.peer_id).localeCompare(String(right.peer_id)));
   const chartId = metric === "trust" ? "p2p-calculated-trust-chart" : "p2p-trust-chart";
-  const revision = JSON.stringify([state.p2p?.trust_range, byId(chartId).clientWidth, history,
+  const revision = JSON.stringify([state.p2p?.trust_range, byId(chartId).clientWidth, timeBounds, history,
     peers.map((peer) => [peer.peer_id, peer.ip, peer.first_seen])]);
   state.p2pChartRevisions ||= new Map();
   if (state.p2pChartRevisions.get(metric) === revision) return;
@@ -4088,13 +4136,6 @@ function renderP2PMetricChart(history, peers, metric) {
     ts: numeric(row.timestamp),
     [`peer_${peerIndexes.get(String(row.peer_id))}`]: numeric(row[metric]),
   })).sort((left, right) => left.ts - right.ts);
-  if (metric === "reliability" && state.p2p?.trust_range === "all" && points.length) {
-    const firstDetected = Math.min(...peers.map((peer) => numeric(peer.first_seen))
-      .filter((timestamp) => timestamp > 0));
-    if (Number.isFinite(firstDetected) && firstDetected < points[0].ts) {
-      points.unshift({ ts: firstDetected });
-    }
-  }
   const series = peerIds.map((peerId, index) => ({
     key: `peer_${index}`,
     className: `peer-trust-line-${(colors.get(peerId) ?? index) % 8}`,
@@ -4108,8 +4149,9 @@ function renderP2PMetricChart(history, peers, metric) {
     points,
     series,
     (value) => numeric(value).toFixed(3),
-    metric === "trust" ? -0.5 : minimumReliability,
+    metric === "trust" ? 0 : minimumReliability,
     metric === "trust" ? 0.85 : 1,
+    timeBounds,
   );
   const legend = byId(metric === "trust" ? "p2p-calculated-trust-legend" : "p2p-trust-legend");
   legend.replaceChildren();
@@ -4449,8 +4491,9 @@ async function loadP2P() {
     line.append(text("span", label), code, copy);
     identity.append(line);
   });
-  renderP2PMetricChart(payload.trust_history || [], payload.peers || [], "reliability");
-  renderP2PMetricChart(payload.calculated_trust_history || [], payload.peers || [], "trust");
+  const timeBounds = p2pChartTimeBounds(payload);
+  renderP2PMetricChart(payload.trust_history || [], payload.peers || [], "reliability", timeBounds);
+  renderP2PMetricChart(payload.calculated_trust_history || [], payload.peers || [], "trust", timeBounds);
   renderP2PPeers();
   renderP2PMessages();
 }

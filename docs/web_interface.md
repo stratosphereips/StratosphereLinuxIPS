@@ -424,7 +424,7 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ## Tabs
 
-The header shows **Searching…** or **Loading…** with a small activity indicator while foreground requests are running. It clears when they finish, fail or are cancelled. Press Enter in a search field to run the search immediately; typing still searches after a short pause. Background heartbeat and title-count checks do not activate the indicator.
+The header shows **Searching…** or **Loading…** with a small activity indicator while foreground requests are running. It clears when they finish, fail or are cancelled. Its reserved space keeps the page width and header height stable during refreshes. Press Enter in a search field to run the search immediately; typing still searches after a short pause. Background heartbeat and title-count checks do not activate the indicator.
 
 ### Overview
 
@@ -603,8 +603,11 @@ inputs are unavailable. Reliability is Pigeon's connectivity measure, ranging
 from 0 to 1. Trust also includes the local assessment of the peer, so these
 columns need not have the same value. With no local assessment (confidence
 zero), the current formula gives `Trust = 0.7 × Reliability / 2`: reliability
-`1.000` therefore gives trust `0.350`. The separate **Peer trust history** chart plots calculated trust on its −0.5 to
-0.85 scale, using the same peer colors and time-range selector. The P2P module
+`1.000` therefore gives trust `0.350`. The separate **Peer trust history** chart plots calculated trust on a 0 to
+0.85 scale, using the same peer colors and time-range selector. Both charts share
+the same time bounds and aligned time ticks, including when one history starts
+later or updates less frequently. Negative trust values remain available in
+the table and sample tooltips; chart lines are clipped at the zero baseline. The P2P module
 saves actual trust, reliability, IP and network context every minute while a
 peer is connected, even when the web tab is closed. These samples survive
 restarts in the permanent trust database and expire after the configured
