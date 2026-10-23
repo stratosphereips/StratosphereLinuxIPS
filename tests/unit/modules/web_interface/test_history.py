@@ -11,6 +11,7 @@ from modules.web_interface.history import (
     initialize_history,
 )
 from tests.module_factory import ModuleFactory
+from slips_files.common.sqlite_flock import SQLiteFlock
 
 
 def test_rotated_error_log_resets_offset_even_when_larger(
@@ -85,6 +86,73 @@ def create_flow_database(path) -> None:
             "CREATE TABLE alerts (alert_id TEXT PRIMARY KEY, alert_time REAL, "
             "ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT)"
         )
+
+
+def test_detection_backfill_coordinates_with_capture_writers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Use the capture's writer lock during legacy detection recovery.
+
+    Parameters:
+        tmp_path: Isolated run output.
+        monkeypatch: Scope the writer lock and recovery probe.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks"))
+    output_dir = tmp_path / "run"
+    create_flow_database(output_dir / "databases" / "flows.sqlite")
+    client = Mock()
+    client.hget.return_value = "other-run"
+    collector = HistoryCollector(str(output_dir), output_dir / "history.sqlite", client, 12345)
+    probe = SQLiteFlock("sqlite_db", 12345)
+
+    def check_writer(connection: sqlite3.Connection) -> int:
+        """Probe the lock while the backfill operation owns its connection.
+
+        Parameters:
+            connection: Protected active database connection.
+
+        Returns:
+            Synthetic recovery record count.
+        """
+        assert isinstance(connection, sqlite3.Connection)
+        with probe.try_acquire() as acquired:
+            assert acquired is False
+        return 1
+
+    monkeypatch.setattr(collector, "_backfill_alert_file", check_writer)
+    assert collector.backfill_detections() == 1
+    with probe.try_acquire() as acquired:
+        assert acquired is True
+
+
+def test_detection_backfill_resumes_after_short_work_budget(tmp_path: Path) -> None:
+    """Commit a bounded import and resume its file offset without duplication.
+
+    Parameters:
+        tmp_path: Isolated legacy capture directory.
+    """
+    _factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    create_flow_database(output_dir / "databases" / "flows.sqlite")
+    alerts_path = output_dir / "alerts" / "alerts.json"
+    alerts_path.parent.mkdir()
+    alerts_path.write_text("".join(json.dumps({
+        "Status": "Event", "ID": f"bounded-{index}",
+        "StartTime": "2026-10-23T10:00:00+00:00", "Confidence": 0.5,
+    }) + "\n" for index in range(5)))
+    client = Mock()
+    client.hget.return_value = "another-run"
+    collector = HistoryCollector(str(output_dir), output_dir / "history.sqlite", client, 999999)
+    with patch("modules.web_interface.history.time.monotonic", side_effect=[0, 0, .01, .06]):
+        assert collector.backfill_detections() == 2
+    with connect_history(collector.history_path, read_only=True) as connection:
+        offset = int(collector._metadata_get(connection, "alerts_json_offset"))
+    assert 0 < offset < alerts_path.stat().st_size
+    assert collector.backfill_detections() == 3
+    assert collector.backfill_detections() == 0
+    with sqlite3.connect(collector.flows_path) as connection:
+        assert connection.execute("SELECT count(*) FROM evidence").fetchone()[0] == 5
 
 
 def test_tail_errors_retains_traceback_across_polls(tmp_path) -> None:

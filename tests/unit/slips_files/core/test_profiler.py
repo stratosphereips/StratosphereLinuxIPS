@@ -54,6 +54,42 @@ def test_flow_retention_runs_in_bounded_background_pass() -> None:
     profiler.db.remove_flow_index_uids.assert_called_once_with(["old-flow"])
 
 
+@pytest.mark.parametrize("persistent", [False, True])
+def test_deferred_history_does_not_interrupt_flow_retention(persistent: bool) -> None:
+    """Keep capture cleanup running and report only persistent contention.
+
+    Parameters:
+        persistent: Whether every pass remains busy beyond a minute.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.flow_retention_policy = {
+        "enabled": True, "ordinary_hours": 24, "linked_days": 30,
+        "interval_seconds": 10, "batch_size": 500, "max_size_mb": 512,
+    }
+    profiler.detection_history_policy = {"enabled": True, "interval_seconds": 10}
+    profiler.did_all_workers_stop = Mock()
+    profiler.did_all_workers_stop.wait.side_effect = [False] * 9 + [True]
+    profiler.db.maintain_detection_history.side_effect = [
+        {"deferred": persistent or index == 0, "phase": "cleanup", "sqlite_errorname": "SQLITE_BUSY"}
+        for index in range(9)
+    ]
+    profiler.db.maintain_flow_retention.return_value = []
+    with (
+        patch("slips_files.core.profiler.time.time", side_effect=[1000 + index * 10 for index in range(9)]),
+        patch("slips_files.core.profiler.expire_rotated_logs"),
+    ):
+        profiler._run_flow_retention()
+    assert profiler.db.maintain_flow_retention.call_count == 9
+    assert profiler.db.maintain_detection_history.call_count == 9
+    assert profiler.print.call_count == int(persistent)
+    if persistent:
+        message, verbosity, debug = profiler.print.call_args.args
+        assert "phase=cleanup" in message
+        assert "SQLITE_BUSY" in message
+        assert debug == 0
+        assert verbosity == 1
+
+
 @pytest.mark.parametrize(
     "msg_from_queue, handler_obj, expected_start_workers",
     [

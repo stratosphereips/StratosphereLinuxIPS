@@ -6221,9 +6221,6 @@ function renderHostCards(host) {
   const summaryCards = byId("host-summary").children;
   summaryCards[2].append(text("small", `${compact(host.load?.inbound_flows)} in / ${compact(host.load?.outbound_flows)} out`));
   summaryCards[3].append(text("small", `${formatBytes(host.load?.inbound_bytes)} in / ${formatBytes(host.load?.outbound_bytes)} out`));
-  byId("host-flows-tab-count").textContent = "";
-  byId("host-alerts-tab-count").textContent = "";
-  byId("host-evidence-tab-count").textContent = "";
   const scorePill = byId("host-score-pill");
   scorePill.replaceChildren(text("span", "Current "), slipsScore(host),
     text("span", " · Peak "), pastPeakSlipsScore(host));
@@ -6932,7 +6929,8 @@ async function openHost(ip, summary = null) {
   byId("host-alerts").replaceChildren(text("p", "Loading alerts…", "muted"));
   byId("host-evidence-table").querySelector("tbody").replaceChildren();
   byId("host-flows-table").querySelector("tbody").replaceChildren();
-  ["host-alert-count", "host-evidence-count", "host-flow-count"].forEach((id) => {
+  ["host-alert-count", "host-evidence-count", "host-flow-count",
+    "host-alerts-tab-count", "host-evidence-tab-count", "host-flows-tab-count"].forEach((id) => {
     byId(id).textContent = "";
   });
   byId("hosts-list-view").hidden = true;

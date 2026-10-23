@@ -289,7 +289,7 @@ class DetectionHistory:
         self.directory.mkdir(parents=True, exist_ok=True)
         if (self.directory / filename).is_symlink():
             raise OSError("Archive destination must not be a symbolic link")
-        archive = sqlite3.connect(self.directory / filename, timeout=0.1)
+        archive = sqlite3.connect(self.directory / filename, timeout=0)
         try:
             archive.execute("PRAGMA synchronous=FULL")
             for table in ARCHIVE_TABLES:
@@ -601,6 +601,34 @@ class DetectionHistory:
             return 1
         return 0
 
+    @staticmethod
+    def _record_interruption(
+        error: sqlite3.OperationalError, status: dict[str, Any]
+    ) -> None:
+        """Classify a busy writer or an exhausted maintenance budget.
+
+        Parameters:
+            error: SQLite operation failure.
+            status: Current pass statistics, including its operation phase.
+        """
+        code = getattr(error, "sqlite_errorcode", None)
+        primary = code & 0xFF if isinstance(code, int) else None
+        busy = primary == getattr(sqlite3, "SQLITE_BUSY", 5) or (
+            code is None
+            and str(error).lower()
+            in {"database is locked", "database is busy"}
+        )
+        interrupted = primary == getattr(sqlite3, "SQLITE_INTERRUPT", 9) or (
+            code is None and str(error).lower() == "interrupted"
+        )
+        if not busy and not interrupted:
+            error.history_phase = status["phase"]
+            raise error
+        status["interrupted"] = True
+        status["deferred"] = busy
+        status["sqlite_errorcode"] = code
+        status["sqlite_errorname"] = getattr(error, "sqlite_errorname", "")
+
     def maintain(
         self, policy: dict[str, int | bool], now: float
     ) -> dict[str, Any]:
@@ -620,81 +648,95 @@ class DetectionHistory:
             "last_run": now,
             "units": 0,
             "interrupted": False,
+            "deferred": False,
+            "phase": "expiration",
         }
-        status["expired_archives"] = self.expire_archives(
-            now,
-            int(policy["archive_retention_days"]),
-            int(policy.get("max_archive_size_mb", 4096)),
-        )
-        self.connection.execute(
-            "DELETE FROM history_archived_ids WHERE rowid IN "
-            "(SELECT rowid FROM history_archived_ids WHERE archived_at<? LIMIT ?)",
-            (now - int(policy["active_days"]) * 86400, batch),
-        )
-        self.connection.commit()
-        free = shutil.disk_usage(self.directory.parent).free
-        status["disk_pressure"] = (
-            free < int(policy["min_free_disk_mb"]) * 1024 * 1024
-        )
-        page_size = self.connection.execute("PRAGMA page_size").fetchone()[0]
-        pages = self.connection.execute("PRAGMA page_count").fetchone()[0]
-        free_pages = self.connection.execute(
-            "PRAGMA freelist_count"
-        ).fetchone()[0]
         target = int(policy.get("max_active_size_mb", 2048)) * 1024 * 1024
-        status["active_size_bytes"] = (pages - free_pages) * page_size
-        status["size_pressure"] = bool(
-            target and status["active_size_bytes"] > target
-        )
-        age_seconds = int(policy["active_days"]) * 86400
-        if status["size_pressure"]:
-            age_seconds = min(
-                age_seconds, int(policy.get("min_active_hours", 24)) * 3600
-            )
         self.connection.set_progress_handler(
             lambda: int(time.monotonic() >= deadline), 1000
         )
         try:
+            status["expired_archives"] = self.expire_archives(
+                now,
+                int(policy["archive_retention_days"]),
+                int(policy.get("max_archive_size_mb", 4096)),
+            )
+            status["phase"] = "cleanup"
+            self.connection.execute(
+                "DELETE FROM history_archived_ids WHERE rowid IN "
+                "(SELECT rowid FROM history_archived_ids WHERE archived_at<? LIMIT ?)",
+                (now - int(policy["active_days"]) * 86400, batch),
+            )
+            self.connection.commit()
+            status["phase"] = "storage"
+            free = shutil.disk_usage(self.directory.parent).free
+            status["disk_pressure"] = (
+                free < int(policy["min_free_disk_mb"]) * 1024 * 1024
+            )
+            page_size = self.connection.execute("PRAGMA page_size").fetchone()[
+                0
+            ]
+            pages = self.connection.execute("PRAGMA page_count").fetchone()[0]
+            free_pages = self.connection.execute(
+                "PRAGMA freelist_count"
+            ).fetchone()[0]
+            status["active_size_bytes"] = (pages - free_pages) * page_size
+            status["size_pressure"] = bool(
+                target and status["active_size_bytes"] > target
+            )
+            age_seconds = int(policy["active_days"]) * 86400
+            if status["size_pressure"]:
+                age_seconds = min(
+                    age_seconds, int(policy.get("min_active_hours", 24)) * 3600
+                )
             while time.monotonic() < deadline:
+                status["phase"] = "summary"
                 units = self.summary_step(batch)
+                status["units"] += units
                 if not status["disk_pressure"]:
                     for entity in ENTITIES:
                         if time.monotonic() >= deadline:
                             break
-                        units += self.archive_step(
+                        status["phase"] = f"archive_{entity}"
+                        archived = self.archive_step(
                             entity,
                             now - age_seconds,
                             batch,
                             now,
                             int(policy.get("archive_file_size_mb", 256)),
                         )
-                status["units"] += units
+                        units += archived
+                        status["units"] += archived
                 if not units:
                     break
         except sqlite3.OperationalError as error:
-            if (
-                "interrupt" not in str(error).lower()
-                and "locked" not in str(error).lower()
-            ):
-                raise
-            status["interrupted"] = True
+            self._record_interruption(error, status)
         finally:
             self.connection.set_progress_handler(None, 0)
             self.connection.rollback()
         status["elapsed_ms"] = round((time.monotonic() - started) * 1000, 1)
-        status["pending_hours"] = self.connection.execute(
-            "SELECT COUNT(*) FROM history_dirty_hours"
-        ).fetchone()[0]
-        status["pending_archives"] = self.connection.execute(
-            "SELECT COUNT(*) FROM history_archive_queue"
-        ).fetchone()[0]
-        status["oldest_detection_at"] = self.connection.execute(
-            "SELECT MIN(evidence_time) FROM evidence"
-        ).fetchone()[0]
-        status["active_target_bytes"] = target
-        status["archive_target_bytes"] = (
-            int(policy.get("max_archive_size_mb", 4096)) * 1024 * 1024
-        )
-        self._set_state("maintenance", json.dumps(status))
-        self.connection.commit()
+        if status["deferred"]:
+            return status
+        try:
+            status["phase"] = "health"
+            status["pending_hours"] = self.connection.execute(
+                "SELECT COUNT(*) FROM history_dirty_hours"
+            ).fetchone()[0]
+            status["pending_archives"] = self.connection.execute(
+                "SELECT COUNT(*) FROM history_archive_queue"
+            ).fetchone()[0]
+            status["oldest_detection_at"] = self.connection.execute(
+                "SELECT MIN(evidence_time) FROM evidence"
+            ).fetchone()[0]
+            status["active_target_bytes"] = target
+            status["archive_target_bytes"] = (
+                int(policy.get("max_archive_size_mb", 4096)) * 1024 * 1024
+            )
+            status["phase"] = "checkpoint"
+            self._set_state("maintenance", json.dumps(status))
+            self.connection.commit()
+        except sqlite3.OperationalError as error:
+            self._record_interruption(error, status)
+        finally:
+            self.connection.rollback()
         return status

@@ -2,8 +2,9 @@
 
 import os
 import sqlite3
+import time
 from pathlib import Path
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -19,24 +20,42 @@ from slips_files.core.database.sqlite_db.detection_queries import (
 )
 
 
+@pytest.fixture(autouse=True)
+def isolated_writer_locks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep parallel test databases from sharing a synthetic process lock.
+
+    Parameters:
+        tmp_path: Per-test storage root.
+        monkeypatch: Scope the lock directory override to one test.
+    """
+    monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks"))
+
+
+@pytest.mark.parametrize("timeout_ms", [17, 20000])
 def test_maintenance_writer_contention_leaves_connection_reusable(
-    tmp_path: Path,
+    tmp_path: Path, timeout_ms: int,
 ) -> None:
-    """Recover the writer connection after early archive maintenance fails.
+    """Yield immediately to a writer and resume from a clean connection.
 
     Parameters:
         tmp_path: Isolated run database.
+        timeout_ms: Existing timeout that must survive a maintenance attempt.
     """
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    db.conn.execute(f"PRAGMA busy_timeout={timeout_ms}")
     policy = ConfigParser().detection_history_policy()
     competing_writer = sqlite3.connect(db._flows_db)
     competing_writer.execute("BEGIN IMMEDIATE")
     try:
-        with pytest.raises(sqlite3.OperationalError, match="locked"):
-            db.maintain_detection_history(policy, 2_000_000_000.0)
+        started = time.monotonic()
+        status = db.maintain_detection_history(policy, 2_000_000_000.0)
+        assert time.monotonic() - started < 0.1
+        assert status["deferred"] is True
+        assert status["phase"] == "cleanup"
+        assert status["sqlite_errorcode"] == sqlite3.SQLITE_BUSY
         assert not db.conn.in_transaction
-        assert db.conn.execute("PRAGMA busy_timeout").fetchone() == (20000,)
+        assert db.conn.execute("PRAGMA busy_timeout").fetchone() == (timeout_ms,)
     finally:
         competing_writer.rollback()
         competing_writer.close()
@@ -47,6 +66,163 @@ def test_maintenance_writer_contention_leaves_connection_reusable(
         "SELECT uid FROM flows WHERE uid='after-contention'"
     ).fetchone() == ("after-contention",)
     db.close()
+
+
+def test_busy_archive_keeps_uncommitted_evidence_active(tmp_path: Path) -> None:
+    """Defer a busy archive without removing the only durable evidence copy.
+
+    Parameters:
+        tmp_path: Isolated run output and monthly archive.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('protected',1)")
+    history = DetectionHistory(db.conn, str(tmp_path))
+    filename = "detections-2033-05-0001.sqlite"
+    archive = history._open_archive(filename)
+    archive.execute("INSERT INTO archive_metadata VALUES ('updated_at','2000000000')")
+    archive.commit()
+    archive.close()
+    competing_writer = sqlite3.connect(history.directory / filename)
+    competing_writer.execute("BEGIN IMMEDIATE")
+    policy = ConfigParser().detection_history_policy()
+    try:
+        started = time.monotonic()
+        status = db.maintain_detection_history(policy, 2_000_000_000.0)
+        assert time.monotonic() - started < 0.1
+        assert status["deferred"] is True
+        assert status["phase"] == "archive_evidence"
+        assert db.conn.execute("SELECT evidence_id FROM evidence").fetchall() == [("protected",)]
+        assert not db.conn.in_transaction
+    finally:
+        competing_writer.rollback()
+        competing_writer.close()
+    assert not db.maintain_detection_history(policy, 2_000_000_000.0)["deferred"]
+    with sqlite3.connect(history.directory / filename) as archive:
+        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [("protected",)]
+    db.close()
+
+
+@pytest.mark.parametrize("phase", ["summary", "archive_evidence", "checkpoint"])
+def test_maintenance_defers_busy_phases_and_resumes(
+    tmp_path: Path, phase: str
+) -> None:
+    """Recover real writer collisions at each transaction boundary.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+        phase: Maintenance phase in which a competing writer starts.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('retained',1)")
+    policy = ConfigParser().detection_history_policy()
+    competing_writer = sqlite3.connect(db._flows_db)
+    method = {"summary": "summary_step", "archive_evidence": "archive_step", "checkpoint": "_set_state"}[phase]
+    original = getattr(DetectionHistory, method)
+
+    def collide(history: DetectionHistory, *args: object, **kwargs: object) -> object:
+        """Hold the writer lock just before the selected maintenance write.
+
+        Parameters:
+            history: Maintenance instance under test.
+            args: Original operation arguments.
+            kwargs: Original named arguments.
+
+        Returns:
+            Original maintenance operation result.
+        """
+        if phase != "checkpoint" or args[0] == "maintenance":
+            competing_writer.execute("BEGIN IMMEDIATE")
+        return original(history, *args, **kwargs)
+
+    try:
+        with patch.object(DetectionHistory, method, collide):
+            started = time.monotonic()
+            status = db.maintain_detection_history(policy, 2_000_000_000.0)
+            assert time.monotonic() - started < 0.3
+        assert status["deferred"] is True
+        assert status["phase"] == phase
+        assert status["sqlite_errorcode"] == sqlite3.SQLITE_BUSY
+        assert not db.conn.in_transaction
+    finally:
+        competing_writer.rollback()
+        competing_writer.close()
+    for _ in range(20):
+        status = db.maintain_detection_history(policy, 2_000_000_000.0)
+        if detection_total(db.conn, "evidence") == 0:
+            break
+    assert not status["deferred"]
+    assert detection_total(db.conn, "evidence") == 0
+    with sqlite3.connect(next((tmp_path / "databases" / "archives").glob("*.sqlite"))) as archive:
+        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [("retained",)]
+    db.close()
+
+
+@pytest.mark.parametrize("lock_kind", ["connection", "writer"])
+def test_maintenance_never_queues_behind_capture_locks(
+    tmp_path: Path, lock_kind: str
+) -> None:
+    """Skip a pass without touching SQLite while capture owns a lock.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+        lock_kind: Thread or process lock held by a capture writer.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    policy = ConfigParser().detection_history_policy()
+    if lock_kind == "connection":
+        lock = db.conn_lock
+        lock.acquire()
+    else:
+        lock = open(db.lockfile_path, "w")
+        import fcntl
+        fcntl.flock(lock, fcntl.LOCK_EX)
+    try:
+        with patch.object(DetectionHistory, "maintain") as maintenance:
+            started = time.monotonic()
+            status = db.maintain_detection_history(policy)
+            assert time.monotonic() - started < 0.1
+            maintenance.assert_not_called()
+        assert status["deferred"] is True
+        assert status["phase"] == f"{lock_kind}_lock"
+    finally:
+        if lock_kind == "connection":
+            lock.release()
+        else:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+            lock.close()
+    assert not db.maintain_detection_history(policy)["deferred"]
+    db.close()
+
+
+@pytest.mark.parametrize(
+    "code,deferred,raises",
+    [(sqlite3.SQLITE_BUSY, True, False), (sqlite3.SQLITE_BUSY_SNAPSHOT, True, False),
+     (sqlite3.SQLITE_INTERRUPT, False, False), (sqlite3.SQLITE_LOCKED, False, True),
+     (sqlite3.SQLITE_ERROR, False, True)],
+)
+def test_maintenance_interruption_classification(code: int, deferred: bool, raises: bool) -> None:
+    """Preserve genuine errors while recognizing extended busy codes.
+
+    Parameters:
+        code: SQLite result code.
+        deferred: Expected retry classification.
+        raises: Whether the error must remain visible to the operator.
+    """
+    _factory = ModuleFactory()
+    error = sqlite3.OperationalError("controlled SQLite failure")
+    error.sqlite_errorcode = code
+    status = {"phase": "checkpoint"}
+    if raises:
+        with pytest.raises(sqlite3.OperationalError):
+            DetectionHistory._record_interruption(error, status)
+        assert error.history_phase == "checkpoint"
+    else:
+        DetectionHistory._record_interruption(error, status)
+        assert status["deferred"] is deferred
+        assert status["interrupted"] is True
 
 
 @pytest.mark.parametrize("disk_pressure", [False, True])

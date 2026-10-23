@@ -871,6 +871,12 @@ Selecting a host opens a three-column workspace. The left column holds identity 
 
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
+Alerts, Evidence, and Flows tab counts retain their last known values during
+periodic refreshes and update when their activity query completes, including
+zero results. Counts clear when opening another host so its labels cannot
+inherit the previous host's totals. Keeping the labels stable adds no API
+requests or polling work.
+
 Opening a host or device from the inventory copies its selected time range,
 including custom start and end times, into the detail workspace. The Alerts
 and Evidence summary cards, peak score, highest evidence threat, score plot,

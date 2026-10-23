@@ -31,12 +31,37 @@ from modules.web_interface.server import (
 from slips_files.common.web_auth import SESSION_COOKIE_NAME, issue_token
 from slips_files.common.slips_utils import utils
 from slips_files.common.mac import classify_mac
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
 )
+
+
+@pytest.mark.parametrize("main_pid", [12345, "12345", None])
+def test_review_writer_lock_matches_capture_namespace(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, main_pid: int | str | None
+) -> None:
+    """Serialize live reviews with capture while allowing completed runs.
+
+    Parameters:
+        tmp_path: Isolated lock storage.
+        monkeypatch: Scope file locks to the test.
+        main_pid: Redis owner of the active run, if any.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path))
+    reader = object.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = main_pid
+    probe = SQLiteFlock("sqlite_db", 12345)
+    with reader._writer_lock():
+        with probe.try_acquire() as acquired:
+            assert acquired is (main_pid is None)
+    with probe.try_acquire() as acquired:
+        assert acquired is True
 
 
 @pytest.mark.parametrize("group", ["type", "host", "host_type"])

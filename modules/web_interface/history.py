@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional
 import psutil
 import redis
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 
 ERROR_LINE = re.compile(
@@ -1242,12 +1243,13 @@ class HistoryCollector:
             return 0
         count = 0
         new_offset = offset
+        deadline = time.monotonic() + 0.05
         try:
             with alerts_path.open(
                 "r", encoding="utf-8", errors="replace"
             ) as handle:
                 handle.seek(offset)
-                while count < maximum:
+                while count < maximum and time.monotonic() < deadline:
                     line_start = handle.tell()
                     line = handle.readline()
                     if not line:
@@ -1293,7 +1295,10 @@ class HistoryCollector:
             else None
         )
         try:
-            with sqlite3.connect(self.flows_path, timeout=20) as connection:
+            with (
+                SQLiteFlock("sqlite_db", self.root_pid).acquire(),
+                sqlite3.connect(self.flows_path, timeout=0) as connection,
+            ):
                 self._archive_tombstones_available = bool(
                     connection.execute(
                         "SELECT 1 FROM sqlite_master WHERE name='history_archived_ids'"
@@ -1319,7 +1324,7 @@ class HistoryCollector:
                     else:
                         durable_evidence = int(
                             connection.execute(
-                                "SELECT COUNT(*) FROM evidence"
+                                "SELECT EXISTS(SELECT 1 FROM evidence LIMIT 1)"
                             ).fetchone()[0]
                         )
                         redis_available = self._redis_belongs_to_run()

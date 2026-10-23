@@ -19,6 +19,100 @@ from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
 
 
+@pytest.mark.parametrize("activity", ["alerts", "evidence", "flows"])
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_host_tab_counts_survive_polling_in_chrome(activity: str, theme: str) -> None:
+    """Retain all last-known counts while a periodic refresh is pending.
+
+    Parameters:
+        activity: Host tab refreshed by the five-second timer.
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    pending: list[Any] = []
+    errors: list[str] = []
+    host = {"ip": "192.0.2.10", "scope": "local", "all_ips": ["192.0.2.10"],
+            "alert_count": 0, "evidence_count": 0, "alert_score": 0,
+            "alert_threshold": 0.25, "load": {"flows": 41}}
+
+    def route_request(route: Any) -> None:
+        """Hold the activity response while serving fresh host metadata.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path in {"/api/alerts", "/api/evidence"} or path.endswith("/flows"):
+            pending.append(route)
+        elif path.startswith("/api/hosts/"):
+            route.fulfill(json={**host, "ip": path.rsplit("/", 1)[-1]})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.clock.install()
+        page.clock.pause_at(page.evaluate("Date.now() + 100"))
+        page.evaluate("""({host, activity, theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); clearError(); state.failures = 0;
+            state.activeTab = 'hosts'; state.host = host; state.hostActivity = activity;
+            state.hostActivityPreferred = true;
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id === 'hosts'));
+            byId('hosts-list-view').hidden = true; byId('host-detail-view').hidden = false;
+            byId('host-range').value = 'live';
+            renderHostCards(host);
+            ['alerts', 'evidence', 'flows'].forEach(kind => {
+                byId(`host-${kind}-panel`).hidden = kind !== activity;
+                byId(`host-${kind}-tab-count`).textContent = {alerts:'7', evidence:'9', flows:'41'}[kind];
+            });
+            loadHostSummary = async () => {}; loadHostScoreHistory = async () => {};
+            window.blankCounts = [];
+            new MutationObserver(() => {
+                ['alerts', 'evidence', 'flows'].forEach(kind => {
+                    if (byId(`host-${kind}-tab-count`).textContent === '') blankCounts.push(kind);
+                });
+            }).observe(document.querySelector('.host-activity-tabs'), {subtree:true, childList:true});
+            schedulePoll();
+        }""", {"host": host, "activity": activity, "theme": theme})
+        labels = [page.locator(f"#host-{kind}-tab-count") for kind in ["alerts", "evidence", "flows"]]
+        before = [label.bounding_box() for label in labels]
+        page.clock.run_for(5000)
+        page.wait_for_function("() => state.requests.has({alerts:'hostAlerts', evidence:'hostEvidence', flows:'hostFlows'}[state.hostActivity])")
+        assert [label.text_content() for label in labels] == ["7", "9", "41"]
+        assert [label.bounding_box() for label in labels] == before
+        assert page.evaluate("blankCounts") == []
+        total = 0 if theme == "light" else 42
+        assert len(pending) == 1
+        pending.pop().fulfill(json={"items": [], "total": total, "page_size": 0})
+        page.wait_for_function("() => !state.requests.has({alerts:'hostAlerts', evidence:'hostEvidence', flows:'hostFlows'}[state.hostActivity])")
+        expected = {"alerts": "7", "evidence": "9", "flows": "41"}
+        expected[activity] = str(total)
+        assert [label.text_content() for label in labels] == list(expected.values())
+        assert page.evaluate("blankCounts") == []
+        page.evaluate("() => {clearTimeout(state.timer); window.openingHost = openHost('192.0.2.11');}")
+        page.wait_for_function("() => state.host.ip === '192.0.2.11'")
+        assert [label.text_content() for label in labels] == ["", "", ""]
+        assert len(pending) == 1
+        pending.pop().fulfill(json={"items": [], "total": 3, "page_size": 0})
+        page.evaluate("() => window.openingHost")
+        assert page.locator(f"#host-{activity}-tab-count").text_content() == "3"
+        assert errors == []
+        browser.close()
+
+
 def test_archive_selection_is_scoped_and_read_only_in_chrome() -> None:
     """Send archive queries and restore active controls when leaving an archive."""
     _factory = ModuleFactory()

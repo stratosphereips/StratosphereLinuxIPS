@@ -2,6 +2,7 @@ import fcntl
 import os
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Iterator
 
 SLIPS_LOCKS_DIR = "/tmp/slips"
 
@@ -158,6 +159,30 @@ class SQLiteFlock:
                 self.lockfile_fd.close()
             except ValueError:
                 pass
+
+    @contextmanager
+    def try_acquire(self) -> Iterator[bool]:
+        """Try the writer lock once without delaying capture work.
+
+        Returns:
+            Context yielding whether the writer lock was acquired.
+        """
+        if self._lock_acquired:
+            yield True
+            return
+        with open(self.lockfile_path, "w") as descriptor:
+            self.lockfile_fd = descriptor
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                yield False
+                return
+            self._lock_acquired = True
+            try:
+                yield True
+            finally:
+                self._lock_acquired = False
+                fcntl.flock(descriptor, fcntl.LOCK_UN)
 
     def delete_lockfile(self):
         """

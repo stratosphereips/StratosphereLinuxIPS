@@ -82,16 +82,37 @@ class SQLiteDB(ISQLite):
         Returns:
             Maintenance health and bounded progress statistics.
         """
-        with self.conn_lock:
-            with self._acquire_flock():
-                self.conn.execute("PRAGMA busy_timeout=100")
+        now = time.time() if now is None else now
+        deferred = {
+            "last_run": now,
+            "units": 0,
+            "interrupted": False,
+            "deferred": True,
+            "phase": "connection_lock",
+        }
+        if not self.conn_lock.acquire(blocking=False):
+            return deferred
+        try:
+            with self.sqlite_flock.try_acquire() as acquired:
+                if not acquired:
+                    deferred["phase"] = "writer_lock"
+                    return deferred
+                previous_timeout = self.conn.execute(
+                    "PRAGMA busy_timeout"
+                ).fetchone()[0]
+                self.conn.execute("PRAGMA busy_timeout=0")
                 try:
                     return DetectionHistory(
                         self.conn, self.output_dir
-                    ).maintain(policy, time.time() if now is None else now)
+                    ).maintain(policy, now)
                 finally:
+                    self.conn.set_progress_handler(None, 0)
                     self.conn.rollback()
-                    self.conn.execute("PRAGMA busy_timeout=20000")
+                    self.conn.execute(
+                        f"PRAGMA busy_timeout={int(previous_timeout)}"
+                    )
+        finally:
+            self.conn_lock.release()
 
     def _ensure_review_schema(self) -> None:
         """Keep analyst decisions in the durable run database."""

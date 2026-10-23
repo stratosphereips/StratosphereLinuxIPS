@@ -282,6 +282,17 @@ last 24 hours. Each record is committed to its archive before its active copy
 is removed. Interrupted copies resume from saved checkpoints. Raw flows keep
 their independent `flow_retention` policy and are not duplicated in archives.
 
+Maintenance tries the connection and shared writer locks without waiting.
+If capture or another writer is busy, it rolls back only the unfinished
+transaction and resumes at the next configured interval. Cleanup, rollups,
+archive writes, and final status writes all follow this rule. The batch size
+and work budget remain bounded. Contention lasting at least six intervals
+(a minimum of 60 seconds) produces a rate-limited warning with the operation
+phase and last successful pass; genuine SQLite errors remain errors.
+Web detection recovery and analyst reviews share the capture writer lock.
+Legacy alerts.json recovery checks a 50 ms budget between records and resumes
+from its committed file offset.
+
 Archives rotate by UTC month and into segments targeting 256 MiB. Completed
 segments expire 30 days after their last write, or earlier when the 4 GiB
 archive target is exceeded. Change `archive_retention_days` to configure this

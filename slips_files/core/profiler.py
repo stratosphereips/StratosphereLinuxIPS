@@ -162,6 +162,11 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         )
         last_flow_pass = 0.0
         last_log_pass = 0.0
+        history_deferred_since: float | None = None
+        history_last_success: float | None = None
+        history_last_warning = 0.0
+        history_deferrals = 0
+        history_warning_interval = max(60, history_interval * 6)
         while not self.did_all_workers_stop.wait(
             min(interval, history_interval)
         ):
@@ -174,12 +179,43 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
                         )
                         last_log_pass = now
                     try:
-                        self.db.maintain_detection_history(
+                        status = self.db.maintain_detection_history(
                             history_policy, now=now
                         )
+                        if isinstance(status, dict) and status.get("deferred"):
+                            history_deferrals += 1
+                            if history_deferred_since is None:
+                                history_deferred_since = now
+                            if (
+                                now - history_deferred_since
+                                >= history_warning_interval
+                                and now - history_last_warning
+                                >= history_warning_interval
+                            ):
+                                last_success = (
+                                    f"{now - history_last_success:.0f}s ago"
+                                    if history_last_success is not None
+                                    else "not yet completed"
+                                )
+                                self.print(
+                                    "Warning: History maintenance is waiting for database writers: "
+                                    f"{history_deferrals} deferred passes, "
+                                    f"phase={status.get('phase', 'unknown')}, "
+                                    f"SQLite={status.get('sqlite_errorname', 'not acquired')}, "
+                                    f"last successful pass {last_success}.",
+                                    1,
+                                    0,
+                                )
+                                history_last_warning = now
+                        else:
+                            history_last_success = now
+                            history_deferred_since = None
+                            history_deferrals = 0
                     except Exception as error:
                         self.print(
-                            f"Detection history maintenance failed: {error}",
+                            f"Detection history maintenance failed: {error} "
+                            f"(phase={getattr(error, 'history_phase', 'unknown')}, "
+                            f"SQLite={getattr(error, 'sqlite_errorname', 'unknown')})",
                             0,
                             1,
                         )

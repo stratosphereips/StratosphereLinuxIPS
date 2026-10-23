@@ -20,6 +20,7 @@ import time
 import traceback
 from datetime import datetime
 from collections import Counter, defaultdict
+from contextlib import AbstractContextManager, ExitStack, nullcontext
 from http import HTTPStatus, cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -32,6 +33,7 @@ import yaml
 
 from slips_files.common.mac import classify_mac
 from slips_files.common.log_rotation import RotatingTextLog
+from slips_files.common.sqlite_flock import SQLiteFlock
 
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
@@ -2068,6 +2070,23 @@ class RunDataReader:
                 records.append(observed)
         return records
 
+    def _writer_lock(self) -> AbstractContextManager:
+        """Coordinate a review transaction with this run's capture writers.
+
+        Returns:
+            Shared writer context, or an empty context for a completed run.
+        """
+        client = getattr(self, "redis", None)
+        if client is None:
+            return nullcontext()
+        try:
+            main_pid = client.hget("PIDs", "main")
+        except redis.RedisError:
+            return nullcontext()
+        if isinstance(main_pid, (str, int)) and str(main_pid).isdigit():
+            return SQLiteFlock("sqlite_db", int(main_pid)).acquire()
+        return nullcontext()
+
     def save_review(
         self, entity: str, payload: Dict[str, Any]
     ) -> Dict[str, Any]:
@@ -2145,7 +2164,10 @@ class RunDataReader:
         key = f"{entity}_id"
         connection = sqlite3.connect(str(self.sqlite_path), timeout=15)
         connection.row_factory = sqlite3.Row
+        writer_lock = ExitStack()
         try:
+            writer_lock.enter_context(self._writer_lock())
+            connection.execute("PRAGMA busy_timeout=100")
             history_path = getattr(self, "history_path", None)
             history_attached = bool(
                 history_path and Path(history_path).exists()
@@ -2331,6 +2353,7 @@ class RunDataReader:
                 deleted_evidence_ids,
             )
             connection.commit()
+            writer_lock.close()
             if feedback_records:
                 try:
                     validator = ReportValidator(self._report_validation_path())
@@ -2347,13 +2370,15 @@ class RunDataReader:
                 except (sqlite3.Error, OSError):
                     result["p2p_feedback"] = "pending"
             if action == "delete" and depth == "flows":
-                connection.execute("PRAGMA incremental_vacuum(1000)")
+                with self._writer_lock():
+                    connection.execute("PRAGMA incremental_vacuum(1000)")
             return result
         except Exception:
             connection.rollback()
             raise
         finally:
             connection.close()
+            writer_lock.close()
 
     @staticmethod
     def _table_exists(connection: sqlite3.Connection, table: str) -> bool:
