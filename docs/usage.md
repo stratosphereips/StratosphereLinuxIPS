@@ -338,7 +338,10 @@ The option preserves past detections in the output directory; it does not
 restore active Redis state after a machine reboot. For an archival Redis
 snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
 
-The local web interface is intentionally not a multi-instance viewer. Do not enable `-w` on several concurrent runs. It stays connected only to the Redis port and output directory of the Slips process that launched it.
+Each web interface stays connected to the Redis port and output directory of
+the Slips process that launched it. Concurrent runs can each use `-w` with
+separate web ports and writable directories, as in the PCAP example above.
+Open each run's own URL; one page does not combine or switch between runs.
 
 Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
 
@@ -467,7 +470,8 @@ the saved database will contain all analyzed flows.
 
 ## Whitelisting
 
-Slips allows you to whitelist some pieces of data in order to avoid its processing.
+Slips whitelist rules can suppress flow processing, evidence and alerts, or
+only firewall blocking and ARP poisoning.
 In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization.
 You can choose to whitelist what is going __to__ them, what is coming __from__ them, or both directions.
 You can also choose to whitelist the flows, so they are not processed, or alerts, so
@@ -505,7 +509,11 @@ Then set ```local_whitelist_path: config/my_whitelist.conf``` in ```config/my_sl
 ./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
 ```
 
-The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
+Alert suppression checks the attacker and victim of each evidence, including
+their related IPs, DNS resolutions, SNI and CNAMEs. A matching `alerts` or
+`both` rule excludes that evidence from scoring and alerting. Flow suppression
+is separate. A `blocking` rule preserves detections and protects only the
+address targeted by enforcement.
 
 Whitelists now use bloom filters to speed up the process of checking if an IoC is whitelisted or not.
 
@@ -543,6 +551,9 @@ Changes take effect within a few seconds in a running version that supports
 this mode, including removal of existing Slips firewall blocks and cancellation
 of repeated poisoning. Existing alert/flow suppression rules remain independent;
 restart Slips when replacing those rules by editing the file.
+After upgrading to code that introduces this mode, restart Slips once to load
+the new enforcement checks. The web editor's **Blocking only (keep alerts)**
+option writes the same rule into the configured whitelist file.
 
 ### Alerts Whitelist
 
@@ -639,7 +650,10 @@ Slips Support displaying popup notifications whenever there's an alert.
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.yaml```
 
-This feature is supported in Linux and it requires root privileges.
+On Linux, install `notify-send` (the `libnotify-bin` package on Debian/Ubuntu)
+and run with access to a graphical desktop notification session. Notifications
+do not require root. If Slips runs as root for capture or prevention, it tries
+to send the notification through the logged-in desktop user's session.
 
 On macOS, Slips uses the built-in `osascript` command without root privileges.
 Allow notifications for **Script Editor** in **System Settings → Notifications**

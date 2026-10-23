@@ -158,6 +158,11 @@ block request when their equally weighted sum reaches 0.5. A blame alone does
 not bypass that check, although one sufficiently strong report can reach the
 threshold. Local blames send the current local score and confidence.
 
+An IP's [blocking-only whitelist rule](usage.md#blocking-whitelist) also
+prevents firewall blocking and ARP poisoning requested through P2P. Peer
+reports, detections and alerts remain available; the exemption applies to the
+target IP at enforcement time.
+
 At startup, the P2P trust database migrates older peer address records to
 keep the newest endpoint for each peer. This lets existing installations use
 authenticated endpoint updates without resetting their trust history. If

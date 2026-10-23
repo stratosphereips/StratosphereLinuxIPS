@@ -615,7 +615,9 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 To enable blocking in slips, start slips with the ```-p``` flag.
 
-This feature is only supported in linux using iptables natively and using docker.
+Linux uses iptables, either natively or in a container with the required
+network privileges. Native macOS uses the Slips-owned `com.apple/slips`
+Packet Filter anchor and requires root privileges.
 
 To keep detections while preventing firewall blocking and ARP poisoning, add
 an IP rule to your copied whitelist file (the configured `local_whitelist_path`):

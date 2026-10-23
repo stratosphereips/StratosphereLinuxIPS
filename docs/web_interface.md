@@ -15,13 +15,17 @@ five-second backend heartbeat, including while another tab is open. It does
 not wait for Overview to load.
 
 The browser tab title shows alert and host counts from the rolling one-hour
-**Live** range. It checks for new counts every five seconds, including while
-the tab is in the background, and refreshes immediately when the tab becomes
+**Live** range. It checks every five seconds while visible and every thirty
+seconds in the background, and refreshes immediately when the tab becomes
 visible again. Browsers may delay background timers. It does not depend on the
 selected tab, search, or date filter. The Alerts and Evidence navigation
 badges show the records matching those tabs' selected range and filters after
 each tab loads; the Hosts badge likewise shows the matching host count.
 Overview keeps its run totals.
+
+The shared header shows **Loading** or **Searching** while a foreground data
+request is pending. Its reserved space keeps the page width stable as the
+indicator appears and disappears.
 
 Use the **Light** or **Dark** button in the page header to switch between the
 daylight and dark themes. The choice is saved in this browser and restored when
@@ -304,7 +308,10 @@ Every data request checks that Redis still advertises the output directory confi
 
 ARP scan evidence requires at least five requests from one source to five distinct destination IPs within 30 seconds. The bundled ARP Zeek script writes a unique synthetic UID into every `arp.log` request and reply. Slips preserves that UID through parsing, storage, and evidence linking; it also assigns a fallback UID when reading legacy or externally generated ARP logs without one. New ARP scan evidence can therefore display every retained contributing request. Older evidence explicitly reports that its linked records were collapsed and states the detector threshold instead of implying that one packet triggered the detection.
 
-Do not enable this interface with -m or for several concurrent Slips instances.
+Concurrent Slips instances can each use this interface with their own Redis
+server, output directory, persistent directory and web port. Follow the
+[separate PCAP instance example](usage.md#running-several-slips-instances).
+Each webpage shows only its own run.
 
 ## Storage and retention
 
@@ -653,8 +660,8 @@ The Whitelists tab shows what the run actually parsed. Local IP, request URI,
 domain, organization, and MAC rules come from the run's Redis whitelist hashes, with
 the captured `metadata/*.conf` file as an offline fallback. Each row explains
 whether the rule applies to a source, destination, or either side and whether
-it suppresses flows, evidence/alerts, or both. The table is searchable and can
-be filtered by rule type.
+it suppresses flows, evidence/alerts, both, or only enforcement. The table is
+searchable and can be filtered by rule type.
 
 The source cards also show whether local and online whitelisting were enabled,
 the captured local filename, the configured online benign-domain source and
@@ -674,6 +681,24 @@ Web-added rules appear in the Whitelists table with a **Remove** action.
 Choose an **Evidence type** to limit an IP rule to one detection, for example
 `192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
 only that evidence type; they do not hide its flows or other detections.
+
+Choose **Blocking only (keep alerts)** to preserve flow analysis, evidence,
+scores and alerts while preventing firewall blocking and ARP poisoning of an
+individual IP. Select **All evidence types** first if using a scoped evidence
+editor. This mode requires **Both sides**, without a port or evidence type,
+because enforcement isolates the entire target IP. The editor saves:
+
+```csv
+ip,192.168.1.128,both,blocking
+```
+
+The same rule can be entered directly in the configured whitelist file.
+Running enforcement checks detect file changes at most once every two seconds;
+adding a rule also removes existing Slips firewall blocks and stops repeated
+poisoning. Removing the rule permits future enforcement without automatically
+re-blocking the host. After updating the Python code, restart Slips once to
+load this feature. Restart also refreshes any old alert/flow suppression rules
+replaced by editing the file; those other rules remain independent.
 
 Choose **Request URI** to suppress an exact URI independently of IP
 and port. URI rules drop matching future HTTP records before detection. For
@@ -713,9 +738,10 @@ that are still in the backup, without overwriting either copy. Web edits
 recover from the same copy and never create a new
 partial whitelist in place of a missing configured file. Keep an additional
 copy of any personal whitelist outside the repository before replacing a
-checkout. Existing evidence and alerts are historical records;
-new matching evidence is excluded from scoring
-and alerts and is hidden by the default **Hide excluded** setting. Saving
+checkout. Existing evidence and alerts are historical records.
+With an `alerts` or `both` rule, new matching evidence is excluded from scoring
+and alerts and is hidden by the default **Hide excluded** setting. A `blocking`
+rule keeps evidence eligible for scoring and alerts. Saving
 changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web
 interface; an unprotected web interface accepts these changes only locally.

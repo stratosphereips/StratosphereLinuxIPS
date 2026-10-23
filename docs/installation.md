@@ -95,12 +95,17 @@ leave an older module consuming traffic after a restart. A malformed DNS
 message is logged by Flow Alerts; the DNS timeout thread continues with the
 next message instead of failing in its error handler.
 
-Foreground file and stdin analysis, growing Zeek logs, and a local two-peer
-Iris exchange are covered by the [native macOS investigation](macos.md).
-Live interfaces need permission to capture through macOS BPF devices. Live
-capture, daemon mode, Intel Macs, and other optional integrations have not
-been validated by this change. The Linux access-point workflow remains
-Linux-specific. On macOS, active
+Native live capture and file analysis have been verified on Apple Silicon.
+Live interfaces need permission to capture through macOS BPF devices. For
+example, after granting capture access, run from the repository root:
+
+```bash
+python slips.py -i en0 -w -o output/macos-live
+```
+
+Choose the interface appropriate to your machine. Daemon mode, Intel Macs and
+other optional integrations have not been validated by these checks. The Linux
+access-point workflow remains Linux-specific. On macOS, active
 blocking uses the Slips-owned `com.apple/slips` Packet Filter anchor and
 requires running Slips with root privileges.
 
@@ -131,9 +136,10 @@ Merge these settings into the existing configuration. Paths are relative to
 the repository root. Global P2P still requires an interface (`-i`, optionally
 with `-g` for growing Zeek logs). The verification used two loopback peers
 with external bootstrapping disabled; it does not establish public-network or
-Fides reputation correctness. The separate `local_p2p`/`p2p4slips` backend
-still fails to build with Go 1.25.1 because of its old networking dependencies.
-See [macos.md](macos.md) for the remaining work and exact validation scope.
+Fides reputation correctness. The separate `local_p2p`/`p2p4slips` backend uses
+the checked-out Pigeon submodule and its pinned Go toolchain. Follow the
+[local P2P build instructions](P2P.md#installation) rather than building
+that backend with an older Go version.
 
 ##### Docker
 
