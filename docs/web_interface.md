@@ -656,6 +656,12 @@ browser.
 
 ### Whitelists
 
+Findings from the optional [service anomaly detector](service_anomaly_detection.md)
+appear as `ANOMALOUS_FLOW` evidence from `anomaly_detection_services`. Their
+descriptions explain unusual clients, connection times and completed flow
+durations. Linked flow details retain the original Zeek UID. Alert creation
+continues to use the normal Slips score threshold.
+
 The Whitelists tab shows what the run actually parsed. Local IP, request URI,
 domain, organization, and MAC rules come from the run's Redis whitelist hashes, with
 the captured `metadata/*.conf` file as an offline fallback. Each row explains

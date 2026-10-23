@@ -69,9 +69,14 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>HTTPS</td>
-    <td>training&test of RandomForest to detect malicious https flows</td>
-    <td>⏳</td>
+    <td>HTTPS Anomaly Detection</td>
+    <td>Learns hourly TLS behavior and per-server flow deviations.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Service Anomaly Detection</td>
+    <td>Optional training-based detection of unfamiliar service clients, unusual access times and completed TCP durations.</td>
+    <td>✅</td>
   </tr>
   <tr>
     <td>Port Scan Detector</td>
@@ -229,6 +234,10 @@ For the full state machine, formulas, DB schema, and configuration, see
 [T Cell Module](t_cell_module.md).
 
 ## HTTPS Anomaly Detection Module
+
+For service/client novelty, access times and completed connection durations,
+see [Service anomaly detection](service_anomaly_detection.md). It is a separate
+optional module that consumes connection records across TCP and UDP services.
 
 For the full technical description of the HTTPS anomaly detector (features, training, adaptation, z-score logic, evidence format, and configuration), see:
 

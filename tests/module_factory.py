@@ -19,6 +19,9 @@ from multiprocessing import Queue
 import unittest.mock as mock
 
 if TYPE_CHECKING:
+    from modules.anomaly_detection_services.anomaly_detection_services import (
+        AnomalyDetectionServices,
+    )
     from slips_files.core.helpers.whitelist.blocking_whitelist import (
         BlockingWhitelist,
     )
@@ -44,6 +47,42 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_service_anomaly_obj(
+        self, output_dir: str = "output/unit_service_anomaly", **settings: object
+    ) -> "AnomalyDetectionServices":
+        """Create the service detector without opening Redis or model files.
+
+        Parameters:
+            output_dir: Isolated test output directory.
+            settings: Overrides for the module's detector settings.
+
+        Returns:
+            Module with mocked external services and real detector objects.
+        """
+        from modules.anomaly_detection_services.anomaly_detection_services import (
+            AnomalyDetectionServices,
+        )
+
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: settings.get(key, default)
+        conf.permanent_dir.return_value = os.path.join(output_dir, "permanent")
+        db = Mock()
+        db.get_input_type.return_value = InputType.INTERFACE
+        db.get_network_state.return_value = {
+            "gateway_mac": "aa:bb:cc:dd:ee:ff", "local_network": "192.0.2.0/24",
+            "changed_at": 0,
+        }
+        db.get_mac_addr_from_profile.return_value = None
+        with patch(MODULE_DB_MANAGER, return_value=db):
+            module = AnomalyDetectionServices(
+                logger=Mock(), output_dir=output_dir, redis_port=6379,
+                termination_event=Mock(),
+                slips_args=SimpleNamespace(interface=["eth0"], growing=False),
+                conf=conf, ppid=12345, bloom_filters_manager=Mock(),
+            )
+        module.print = Mock()
+        return module
+
     def create_module_process_obj(
         self, module: type | str, *args: object, **kwargs: object
     ) -> object:

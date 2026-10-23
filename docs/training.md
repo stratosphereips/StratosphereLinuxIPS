@@ -23,6 +23,11 @@ trained as Benign. Other values, including `unknown`, are skipped by training.
 The `detailedlabel` field is retained as metadata; it is not the training
 target.
 
+For unsupervised service/client, access-time and connection-duration baselines,
+see [Service anomaly detection](service_anomaly_detection.md). Its `train`,
+`auto` and `detect` modes learn accepted local observations without flow labels;
+the supervised training instructions below do not apply to that module.
+
 ## Reproducible training workflow
 
 1. Choose one module and set only that module's `mode: train`.

@@ -792,6 +792,7 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
     """
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.core_module_failure = True
+    process_manager.main.args.blocking = False
     process_manager.main.args.stopdaemon = False
     process_manager.main.args.save = False
     process_manager.main.input_information = "test_input"

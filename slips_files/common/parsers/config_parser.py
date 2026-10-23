@@ -658,6 +658,19 @@ class ConfigParser(object):
             permanent_dir = "permanent"
         return os.path.normpath(permanent_dir)
 
+    def service_anomaly_enabled(self) -> bool:
+        """Check the service anomaly feature flag.
+
+        Returns:
+            Whether the module is explicitly enabled.
+        """
+        return (
+            self.read_configuration(
+                Modules.ANOMALY_DETECTION_SERVICES.value, "enabled", False
+            )
+            is True
+        )
+
     def use_local_p2p(self):
         return self.read_configuration("local_p2p", "use_p2p", False)
 

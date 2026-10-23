@@ -352,3 +352,15 @@ def test_flow_retention_policy_bounds_settings(
         )
         == expected
     )
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("false", False), (None, False)])
+def test_service_anomaly_is_enabled_only_explicitly(value: object, expected: bool) -> None:
+    """Keep the new detector opt-in, including older custom configurations.
+
+    Parameters:
+        value: Configured feature value or missing-section default.
+        expected: Whether the optional module should start.
+    """
+    _factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    with patch.object(parser, "read_configuration", return_value=value):
+        assert parser.service_anomaly_enabled() is expected
