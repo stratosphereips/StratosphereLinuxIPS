@@ -527,6 +527,23 @@ If you whitelist a MAC address, then:
 - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
 
 
+### Blocking Whitelist
+
+To keep flows, evidence and alerts while preventing firewall blocking and ARP
+poisoning, put this rule in your copied whitelist file:
+
+```csv
+ip,192.168.1.128,both,blocking
+```
+
+This mode applies to the IP being blocked, not every host communicating with it.
+Use an individual IPv4 or IPv6 address with `both` directions; ports, subnets,
+other IoC types and evidence types are not supported in `blocking` rules.
+Changes take effect within a few seconds in a running version that supports
+this mode, including removal of existing Slips firewall blocks and cancellation
+of repeated poisoning. Existing alert/flow suppression rules remain independent;
+restart Slips when replacing those rules by editing the file.
+
 ### Alerts Whitelist
 
 If you whitelist some piece of data not to generate alerts, the process is the following:

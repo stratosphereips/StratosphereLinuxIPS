@@ -597,6 +597,11 @@ class RunDataReader:
         }.get(ignored, ignored)
         if rule_type == "uri":
             return "Suppresses matching request flows and their detections."
+        if ignored == "blocking":
+            return (
+                "Prevents firewall blocking and ARP poisoning of this IP; "
+                "keeps flows, evidence and alerts."
+            )
         return f"Suppresses {target} when this value appears on the {side}."
 
     def _runtime_whitelist_rules(self) -> List[Dict[str, Any]]:
@@ -864,6 +869,7 @@ class RunDataReader:
             "alerts",
             "flows",
             "both",
+            "blocking",
         }:
             raise ValueError("Choose what the rule suppresses")
         if evidence_type in (None, ""):
@@ -890,6 +896,13 @@ class RunDataReader:
             if rule_type == "uri"
             else self._normalize_whitelist_ip(value)
         )
+        if ignored == "blocking":
+            try:
+                ipaddress.ip_address(normalized)
+            except ValueError:
+                raise ValueError("Blocking rules require an individual IP")
+            if rule_type != "ip" or direction != "both" or evidence_type:
+                raise ValueError("Blocking rules require an IP on both sides")
         redis_value = (
             f"{normalized}|{evidence_type}" if evidence_type else normalized
         )

@@ -324,6 +324,24 @@ class WhitelistParser:
         }
 
         entry_type = parsed_line["type"]
+        if parsed_line["what_to_ignore"] == "blocking":
+            try:
+                address = str(ipaddress.ip_address(parsed_line["data"]))
+            except ValueError:
+                address = ""
+            if (
+                entry_type != "ip"
+                or not address
+                or parsed_line["from"] != "both"
+                or parsed_line.get("evidence_type")
+            ):
+                self.manager.printer.print(
+                    "Blocking whitelist rules require an IP address, "
+                    "both directions and no evidence type.",
+                    1,
+                    0,
+                )
+                return
         if entry_type not in handlers:
             self.manager.printer.print(
                 f"{parsed_line['data']} is not a valid" f" {entry_type}.", 1, 0

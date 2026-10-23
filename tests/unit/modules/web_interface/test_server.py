@@ -1820,6 +1820,77 @@ def test_web_whitelist_rule_persists_and_can_be_removed(tmp_path) -> None:
     reader.redis.hdel.assert_called_once_with("whitelist_IPs", "192.0.2.4:443")
 
 
+@pytest.mark.parametrize("value", ["192.0.2.10", "2001:db8::1"])
+def test_web_blocking_whitelist_uses_configured_file(tmp_path: Path, value: str) -> None:
+    """Save and remove the same enforcement-only CSV used by action modules.
+
+    Parameters:
+        tmp_path: Isolated run and whitelist directory.
+        value: Individual IPv4 or IPv6 host address.
+    """
+    factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    path = tmp_path / "whitelist.conf"
+    path.write_text("")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {path}\n"
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(return_value={"backend_status": {"connected": True}})
+
+    reader.save_whitelist_rule("add", value, "both", "blocking")
+
+    assert f"ip,{value},both,blocking\n" in path.read_text()
+    policy = factory.create_blocking_whitelist_obj(str(path))
+    assert policy.is_exempt(value)
+    reader.redis.hset.assert_called_once_with(
+        "whitelist_IPs", value,
+        json.dumps({"from": "both", "what_to_ignore": "blocking"}),
+    )
+    effect = reader._whitelist_effect("both", "blocking")
+    assert "keeps flows, evidence and alerts" in effect
+    assert "ARP poisoning" in effect
+    reader.save_whitelist_rule("remove", value, "both", "blocking")
+    assert f"ip,{value},both,blocking" not in path.read_text()
+    policy._next_check = 0
+    assert not policy.is_exempt(value)
+
+
+@pytest.mark.parametrize(
+    "value,direction,evidence_type,rule_type",
+    [
+        ("192.0.2.10:443", "both", None, "ip"),
+        ("*:443", "both", None, "ip"),
+        ("192.0.2.10", "src", None, "ip"),
+        ("192.0.2.10", "dst", None, "ip"),
+        ("192.0.2.10", "both", "ARP_SCAN", "ip"),
+        ("/example", "both", None, "uri"),
+    ],
+)
+def test_web_rejects_ambiguous_blocking_whitelist(
+    value: str, direction: str, evidence_type: str | None, rule_type: str
+) -> None:
+    """Reject selectors that cannot describe whole-IP enforcement.
+
+    Parameters:
+        value: Unsupported address or URI selector.
+        direction: Unsupported direction for an IP-wide exemption.
+        evidence_type: Optional alert-type scope.
+        rule_type: IP or URI rule category.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    with pytest.raises(ValueError):
+        reader.save_whitelist_rule(
+            "add", value, direction, "blocking", evidence_type, rule_type
+        )
+
+
 def test_web_whitelist_refuses_missing_configured_file(tmp_path: Path) -> None:
     """Never replace a vanished personal file with a partial web rule file.
 

@@ -5,6 +5,41 @@ from unittest.mock import patch, MagicMock
 from tests.module_factory import ModuleFactory
 
 
+def test_exempt_ip_cannot_be_poisoned() -> None:
+    """Reject both blocking requests and direct poisoning for an exempt IP."""
+    poisoner = ModuleFactory().create_arp_poisoner_obj()
+    poisoner.blocking_whitelist = MagicMock(
+        is_exempt=MagicMock(return_value=True)
+    )
+    assert poisoner.can_poison_ip("192.168.1.138", "eth0") is False
+    with (
+        patch.object(poisoner, "_get_interface_of_ip") as interface,
+        patch.object(poisoner, "_cut_targets_internet") as internet,
+        patch.object(poisoner, "_isolate_target_from_localnet") as isolate,
+    ):
+        poisoner._attack("192.168.1.138", first_time=True)
+    interface.assert_not_called()
+    internet.assert_not_called()
+    isolate.assert_not_called()
+
+
+def test_exempt_ip_is_removed_from_repeat_poisoning() -> None:
+    """Drop an exempt host's pending poison schedule before sending packets."""
+    poisoner = ModuleFactory().create_arp_poisoner_obj()
+    ip = "192.168.1.138"
+    poisoner.blocking_whitelist = MagicMock(
+        is_exempt=MagicMock(return_value=True)
+    )
+    poisoner.unblocker.requests = {ip: {}}
+    poisoner.fake_macs[ip] = "02:00:00:00:00:01"
+    poisoner._time_since_last_repoison[ip] = time.time()
+    with patch.object(poisoner, "_attack") as attack:
+        poisoner.keep_attackers_poisoned()
+    attack.assert_not_called()
+    assert ip not in poisoner.unblocker.requests
+    assert ip not in poisoner.fake_macs
+
+
 @pytest.fixture
 def poisoner():
     obj = ModuleFactory().create_arp_poisoner_obj()

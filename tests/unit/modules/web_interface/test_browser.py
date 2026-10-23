@@ -19,6 +19,68 @@ from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
 
 
+def test_blocking_only_whitelist_editor_in_chrome() -> None:
+    """Save a blocking-only IP rule while keeping detection options explicit."""
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve local assets without contacting a running capture.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""() => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            state.whitelists = {evidence_types:['ARP_SCAN']}; state.deviceView = false;
+            saveWhitelistRule = async change => {window.savedWhitelist = change; return change;};
+            const editor = whitelistEditor('blocking-test', null, {ip:'192.0.2.10'});
+            editor.id = 'blocking-test'; document.body.append(editor);
+        }""")
+        editor = page.locator("#blocking-test")
+        selects = editor.locator("select")
+        selects.nth(2).select_option("blocking")
+        assert selects.nth(1).input_value() == "both"
+        assert selects.nth(1).is_disabled()
+        assert selects.nth(3).input_value() == ""
+        assert selects.nth(3).is_disabled()
+        editor.get_by_role("button", name="Add rule", exact=True).click()
+        page.wait_for_function("() => window.savedWhitelist")
+        assert page.evaluate("window.savedWhitelist") == {
+            "action": "add", "rule_type": "ip", "value": "192.0.2.10",
+            "direction": "both", "ignore": "blocking", "evidence_type": "",
+        }
+        assert "detections stay enabled" in editor.locator(".whitelist-feedback").text_content()
+        selects.nth(2).select_option("alerts")
+        assert not selects.nth(1).is_disabled()
+        assert not selects.nth(3).is_disabled()
+        selects.nth(2).select_option("blocking")
+        selects.nth(0).select_option("uri")
+        assert selects.nth(2).input_value() == "flows"
+        assert not selects.nth(1).is_disabled()
+        assert not selects.nth(3).is_disabled()
+        assert errors == []
+        browser.close()
+
+
 @pytest.mark.parametrize("activity", ["alerts", "evidence", "flows"])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_tab_counts_survive_polling_in_chrome(activity: str, theme: str) -> None:

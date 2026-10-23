@@ -26,6 +26,45 @@ from slips_files.core.structures.risk_weights import (
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("already_blocked", [False, True])
+def test_exempt_host_alerts_are_logged_without_blocking(already_blocked: bool) -> None:
+    """Keep repeated alerts visible, including after a previous block.
+
+    Parameters:
+        already_blocked: Whether this timewindow already recorded a block.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.blocking_whitelist = Mock(is_exempt=Mock(return_value=True))
+    worker.blocking_modules_supported = True
+    worker.our_ips = []
+    worker.notify = None
+    worker.db.is_blocked_profile_and_tw.return_value = already_blocked
+    worker.escalate_risk_level = Mock(side_effect=lambda alert: alert)
+    worker.send_to_exporting_module = Mock()
+    worker.log_alert = Mock()
+    worker.formatter.format_evidence_for_printing = Mock(return_value="alert")
+    alert = Alert(
+        profile=ProfileID("192.168.1.138"),
+        timewindow=TimeWindow(1),
+        last_evidence=Mock(),
+        accumulated_threat_level=12.2,
+        last_flow_datetime="2026/10/23 14:00:00.000000+0000",
+    )
+    evidence = {"test": Mock(spec=Evidence)}
+
+    worker.handle_new_alert(alert, evidence)
+    worker.handle_new_alert(alert, evidence)
+
+    assert worker.db.set_alert.call_count == 2
+    assert worker.send_to_exporting_module.call_count == 2
+    assert worker.log_alert.call_args_list == [
+        ((alert,), {"blocked": False}),
+        ((alert,), {"blocked": False}),
+    ]
+    worker.db.publish.assert_not_called()
+    worker.db.mark_profile_and_timewindow_as_blocked.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "profileid, our_ips, expected_result, expected_publish_call_count",
     [

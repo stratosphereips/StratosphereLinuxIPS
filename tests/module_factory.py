@@ -4,7 +4,8 @@ import shutil
 import importlib.util
 import sys
 from contextlib import contextmanager
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import (
     patch,
     Mock,
@@ -16,6 +17,11 @@ from slips_files.common.input_type import InputType
 from multiprocessing import Queue
 
 import unittest.mock as mock
+
+if TYPE_CHECKING:
+    from slips_files.core.helpers.whitelist.blocking_whitelist import (
+        BlockingWhitelist,
+    )
 
 
 def read_configuration():
@@ -742,7 +748,7 @@ class ModuleFactory:
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
-                conf=Mock(),
+                conf=Mock(enable_local_whitelist=Mock(return_value=False)),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
             )
@@ -1126,6 +1132,31 @@ class ModuleFactory:
         whitelist.whitelist_path = "tests/unit/test_whitelist.conf"
         return whitelist
 
+    def create_blocking_whitelist_obj(
+        self, whitelist_path: str = "tests/unit/test_whitelist.conf"
+    ) -> "BlockingWhitelist":
+        """Create a file-backed blocking whitelist with isolated dependencies.
+
+        Parameters:
+            whitelist_path: Local rule file to read.
+
+        Returns:
+            Blocking policy without a Redis or firewall connection.
+        """
+        from slips_files.core.helpers.whitelist.blocking_whitelist import (
+            BlockingWhitelist,
+        )
+
+        manager = SimpleNamespace(
+            db=Mock(),
+            printer=Mock(),
+            conf=Mock(
+                enable_local_whitelist=Mock(return_value=True),
+                local_whitelist_path=Mock(return_value=whitelist_path),
+            ),
+        )
+        return BlockingWhitelist(manager)
+
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flow_handler_obj(self, flow, mock_db):
         from slips_files.core.helpers.flow_handler import FlowHandler
@@ -1311,7 +1342,7 @@ class ModuleFactory:
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),
-            conf=Mock(),
+            conf=Mock(enable_local_whitelist=Mock(return_value=False)),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
@@ -1345,6 +1376,9 @@ class ModuleFactory:
         )
 
         def fake_read_configuration(worker):
+            worker.blocking_whitelist = Mock(
+                is_exempt=Mock(return_value=False)
+            )
             worker.width = 3600
             worker.detection_threshold = 0.25
             worker.risk_accumulated_threat_level_threshold = 15

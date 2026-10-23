@@ -3762,7 +3762,8 @@ function whitelistEditor(kind, record = null, host = null) {
   ignoreLabel.append(text("span", "Suppress"));
   const ignored = document.createElement("select");
   [["alerts", "Future evidence and alerts"], ["flows", "Flows"],
-    ["both", "Flows, evidence and alerts"]].forEach(([key, label]) => {
+    ["both", "Flows, evidence and alerts"],
+    ["blocking", "Blocking only (keep alerts)"]].forEach(([key, label]) => {
     const option = text("option", label);
     option.value = key;
     ignored.append(option);
@@ -3788,6 +3789,16 @@ function whitelistEditor(kind, record = null, host = null) {
     ignored.disabled = Boolean(evidenceType.value);
   });
   ignored.disabled = Boolean(evidenceType.value);
+  ignored.addEventListener("change", () => {
+    const blocking = ignored.value === "blocking";
+    if (blocking) {
+      direction.value = "both";
+      evidenceType.value = "";
+    }
+    direction.disabled = blocking;
+    evidenceType.disabled = blocking;
+    value.placeholder = blocking ? "192.168.1.10" : "192.168.1.10:443 or *:443";
+  });
   typeLabel.append(evidenceType);
   ruleType.addEventListener("change", () => {
     const uri = ruleType.value === "uri";
@@ -3804,6 +3815,8 @@ function whitelistEditor(kind, record = null, host = null) {
       ignored.value = "flows";
       evidenceType.value = "";
       ignored.disabled = false;
+      direction.disabled = false;
+      evidenceType.disabled = false;
     }
   });
   const save = text("button", "Add rule", "secondary");
@@ -3840,7 +3853,9 @@ function whitelistEditor(kind, record = null, host = null) {
         saved.push(result.value);
         feedback.textContent = `${saved.join(", ")} saved to the configured whitelist file.`;
       }
-      feedback.textContent += " New matching activity will be suppressed within a few seconds.";
+      feedback.textContent += ignored.value === "blocking"
+        ? " Blocking and ARP poisoning will stop within a few seconds; detections stay enabled."
+        : " New matching activity will be suppressed within a few seconds.";
       value.value = "";
       toast("Whitelist rule added");
     } catch (error) {
@@ -3865,7 +3880,7 @@ function renderWhitelists() {
     (row) => text("span", row.type, "type-chip"),
     (row) => row.type === "MAC address" ? macIdentity(row.value) : text("code", row.value),
     (row) => row.type === "Request URI" ? "Request" : row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
-    (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
+    (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "blocking" ? "Blocking only (keep alerts)" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
     (row) => row.evidence_type || "All",
     (row) => row.effect,
     (row) => row.source,

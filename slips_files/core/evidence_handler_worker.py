@@ -17,6 +17,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.startup_report import format_started_line
 from slips_files.core.helpers.notify import Notify
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.blocking_whitelist import (
+    BlockingWhitelist,
+)
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -72,6 +75,7 @@ class EvidenceHandlerWorker(IModule):
 
     def read_configuration(self) -> None:
         conf = ConfigParser()
+        self.blocking_whitelist = BlockingWhitelist(self)
         self.width: float = conf.get_tw_width_in_seconds()
         self.detection_threshold = conf.evidence_detection_threshold()
         self.risk_accumulated_threat_level_threshold = (
@@ -400,7 +404,9 @@ class EvidenceHandlerWorker(IModule):
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
         )
-        if profile_already_blocked:
+        if profile_already_blocked and not self.blocking_whitelist.is_exempt(
+            alert.profile.ip
+        ):
             return
 
         self.send_to_exporting_module(evidence_causing_the_alert)
@@ -427,7 +433,9 @@ class EvidenceHandlerWorker(IModule):
         if not self.blocking_modules_supported:
             return False
 
-        if ip_to_block in self.our_ips:
+        if ip_to_block in self.our_ips or self.blocking_whitelist.is_exempt(
+            ip_to_block
+        ):
             return False
 
         blocking_data = {

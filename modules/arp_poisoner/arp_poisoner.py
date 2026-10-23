@@ -16,6 +16,9 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.ips import BROADCAST_MAC, NULL_MAC
 from modules.arp_poisoner.unblocker import ARPUnblocker
 from slips_files.common.slips_utils import utils
+from slips_files.core.helpers.whitelist.blocking_whitelist import (
+    BlockingWhitelist,
+)
 
 logging.getLogger("scapy.runtime").setLevel(logging.ERROR)
 
@@ -31,7 +34,8 @@ class ARPPoisoner(IModule):
     description = "ARP poisons attackers to isolate them from the network."
     authors = ["Alya Gomaa"]
 
-    def init(self):
+    def init(self) -> None:
+        self.blocking_whitelist = BlockingWhitelist(self)
         self.arp_scan_path = shutil.which("arp-scan")
         self.arp_scan_bin_available = self.arp_scan_path is not None
         self._time_since_last_repoison = {}
@@ -115,7 +119,7 @@ class ARPPoisoner(IModule):
 
         return False
 
-    def keep_attackers_poisoned(self):
+    def keep_attackers_poisoned(self) -> None:
         """
         is called in a loop, executes once every 10s
         repoisons all ips in self.unblocker.requests
@@ -126,6 +130,9 @@ class ARPPoisoner(IModule):
         ips_to_stop_poisoning = []
         # the unblocker will remove ips that should be unblocked from this dict
         for ip in self.unblocker.requests:
+            if self.blocking_whitelist.is_exempt(ip):
+                ips_to_stop_poisoning.append(ip)
+                continue
             # to keep all attackers poisoned, we re-poison every 30s,
             # check if the target last poisoned time is more than 30s ago
             if not self._is_time_to_repoison(ip):
@@ -376,7 +383,7 @@ class ARPPoisoner(IModule):
             self.ip_interface_map[ip] = interface
             return interface
 
-    def _attack(self, target_ip: str, first_time=False):
+    def _attack(self, target_ip: str, first_time: bool = False) -> None:
         """
         Prevents the target from accessing the internet and isolates it
         from the rest of the network.
@@ -384,6 +391,8 @@ class ARPPoisoner(IModule):
         based on a new_blocking msg, and should be false when we're
         repoisoning every x seconds.
         """
+        if self.blocking_whitelist.is_exempt(target_ip):
+            return
         interface: str | None = self._get_interface_of_ip(target_ip)
         if not interface:
             self.print(
@@ -420,11 +429,11 @@ class ARPPoisoner(IModule):
         except ValueError:
             return False
 
-    def can_poison_ip(self, ip, interface: str) -> bool:
+    def can_poison_ip(self, ip: str, interface: str) -> bool:
         """
         Checks if the ip is in out localnet, isnt the router
         """
-        if not interface:
+        if not interface or self.blocking_whitelist.is_exempt(ip):
             return False
         try:
             target = ipaddress.IPv4Address(ip)
