@@ -1,6 +1,7 @@
 """Start modules with only configuration and IPC state crossing processes."""
 
 import os
+import signal
 from multiprocessing import Process, Value
 from typing import Any
 
@@ -43,6 +44,7 @@ class ModuleProcess(Process):
 
     def run(self) -> None:
         """Initialize and run the module entirely inside this process."""
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         module_class = self.module
         if isinstance(module_class, str):
             from managers.process_manager.module_loading_mixin import (

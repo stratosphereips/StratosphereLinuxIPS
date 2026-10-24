@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 import signal
+import multiprocessing
+import time
 from unittest.mock import Mock, call, patch
 
 import pytest
@@ -11,6 +13,68 @@ from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
+
+
+def abandon_event_lock(event: object, ready: object) -> None:
+    """Leave a shared event lock held to reproduce an interrupted worker.
+
+    Parameters:
+        event: Stop event whose condition becomes unusable.
+        ready: Pipe reporting when the lock is held.
+    """
+    event._cond.acquire()
+    ready.send(True)
+    ready.close()
+
+
+def test_shutdown_notification_cannot_hang_on_an_abandoned_lock() -> None:
+    """Reproduce the real semaphore deadlock and enforce the shared deadline."""
+    manager = ModuleFactory().create_process_manager_obj()
+    context = multiprocessing.get_context("spawn")
+    event = context.Event()
+    receiver, sender = context.Pipe(duplex=False)
+    child = context.Process(target=abandon_event_lock, args=(event, sender))
+    try:
+        child.start()
+        assert receiver.poll(20)
+        assert receiver.recv() is True
+        child.join(5)
+        assert child.exitcode == 0
+        before = time.monotonic()
+        assert not manager._notify_shutdown_event(event, before + 0.05)
+        assert time.monotonic() - before < 1
+        manager.main.print.assert_called_with(
+            "Could not deliver the stop signal before the shutdown deadline; "
+            "terminating the remaining workers.", 0, 1,
+        )
+    finally:
+        if child.is_alive():
+            child.kill()
+            child.join(5)
+        event._cond.release()
+        for thread, _ in getattr(manager, "_shutdown_notifications", {}).values():
+            thread.join(2)
+            assert not thread.is_alive()
+        child.close()
+        sender.close()
+        receiver.close()
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_shutdown_notification_reports_failure_and_reuses_one_thread(failed: bool) -> None:
+    """Notify each event once, retaining failures instead of losing thread errors.
+
+    Parameters:
+        failed: Whether signalling raises an exception.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    event = Mock()
+    if failed:
+        event.set.side_effect = RuntimeError("damaged event")
+    for _ in range(2):
+        assert manager._notify_shutdown_event(event, time.monotonic() + 1) is (not failed)
+    assert len(manager._shutdown_notifications) == 1
+    event.set.assert_called_once_with()
 
 
 def test_process_manager_includes_shutdown_mixin() -> None:
@@ -833,6 +897,38 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
         "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_failed_stop_notification_always_reaps_workers(interrupted: bool) -> None:
+    """Keep failed or interrupted notification out of unbounded child joins.
+
+    Parameters:
+        interrupted: Whether a second Ctrl-C interrupts the event notification.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    manager.shutdown_signal_received = True
+    manager.main.args.stopdaemon = False
+    manager.main.conf.wait_for_modules_to_finish.return_value = 1
+    manager.main.conf.export_labeled_flows.return_value = False
+    manager._generate_plots = Mock()
+    manager.get_hitlist_in_order = Mock(return_value=([], []))
+    manager._notify_shutdown_event = Mock(return_value=False)
+    if interrupted:
+        manager._notify_shutdown_event.side_effect = KeyboardInterrupt()
+    manager.shutdown_interactive = Mock()
+    manager.kill_all_children = Mock()
+    manager.get_analysis_time = Mock(return_value=(1.0, "2026/10/24 16:39:54"))
+    manager._handle_firewall_after_analysis = Mock()
+    manager._handle_web_interface_after_analysis = Mock()
+    manager._is_web_interface_enabled = Mock(return_value=False)
+    with patch("managers.process_manager.shutdown_mixin.multiprocessing.active_children", return_value=[]):
+        manager.shutdown_gracefully()
+    manager.shutdown_interactive.assert_not_called()
+    assert manager.kill_all_children.call_count >= 1
+    assert all(item.kwargs.get("force") is True for item in manager.kill_all_children.call_args_list)
+    assert manager.force_shutdown_requested is True
+    assert manager.profiler_queue._closed
 
 
 @pytest.mark.parametrize("still_alive", [False, True])

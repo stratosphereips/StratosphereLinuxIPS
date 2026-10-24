@@ -165,6 +165,13 @@ a nonzero exit status rather than force-killing them. Review that run's
 `errors.log` if shutdown does not finish. An analysis stopped this way is
 interrupted; unread traffic in a PCAP is not analyzed.
 
+Ctrl-C is handled by the main process. Workers receive its shared stop signal
+so they can save state without being interrupted inside a shared lock.
+The stop notification and module waits share one shutdown deadline (at most
+30 seconds after an interrupt). If a damaged shared lock prevents notification,
+main reports it and terminates remaining workers rather than waiting forever.
+A second Ctrl-C also cleans up workers before main exits.
+
 Listing and stopping do not start a capture, load a configuration, create logs
 or connect to Redis. They do not flush Redis or delete saved capture history.
 Existing retention and shutdown settings still apply inside the running Slips

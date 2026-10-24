@@ -8,6 +8,7 @@ import platform
 import select
 import signal
 import sys
+import threading
 import time
 from datetime import datetime
 from multiprocessing import Process
@@ -38,6 +39,49 @@ class ShutdownMixin:
     """Provide shutdown orchestration and process cleanup helpers."""
 
     INTERRUPT_SHUTDOWN_GRACE_SECONDS = 30
+
+    def _notify_shutdown_event(self, event: object, deadline: float) -> bool:
+        """Signal workers without letting a damaged shared lock block main.
+
+        Parameters:
+            event: Shared stop event for modules or the evidence handler.
+            deadline: Monotonic end of the shared shutdown grace period.
+
+        Returns:
+            Whether notification completed successfully before the deadline.
+        """
+        notifications = getattr(self, "_shutdown_notifications", None)
+        if notifications is None:
+            notifications = self._shutdown_notifications = {}
+        key = id(event)
+        if key not in notifications:
+            errors = []
+
+            def notify() -> None:
+                """Record signalling failures for the shutdown coordinator."""
+                try:
+                    event.set()
+                except Exception as error:
+                    errors.append(error)
+
+            thread = threading.Thread(
+                target=notify,
+                daemon=True,
+                name=f"shutdown_notification_{len(notifications)}",
+            )
+            notifications[key] = (thread, errors)
+            utils.start_thread(thread, self.main.db)
+        thread, errors = notifications[key]
+        thread.join(max(0.0, deadline - time.monotonic()))
+        if thread.is_alive() or errors:
+            self.main.print(
+                "Could not deliver the stop signal before the shutdown deadline; "
+                "terminating the remaining workers.",
+                0,
+                1,
+            )
+            return False
+        return True
 
     def kill_process_tree(self, pid: int) -> None:
         """
@@ -439,7 +483,15 @@ class ShutdownMixin:
 
         to_kill_first = []
         # tell evidence to stop since all the modules are done
-        self.evidence_handler_termination_event.set()
+        notification_deadline = (
+            deadline
+            if deadline is not None
+            else time.monotonic() + self.INTERRUPT_SHUTDOWN_GRACE_SECONDS
+        )
+        if not self._notify_shutdown_event(
+            self.evidence_handler_termination_event, notification_deadline
+        ):
+            return to_kill_first, to_kill_last
 
         alive_processes = self.wait_for_processes_to_finish(
             to_kill_last, deadline
@@ -741,14 +793,22 @@ class ShutdownMixin:
                 )
 
                 to_kill_first, to_kill_last = self.get_hitlist_in_order()
-                self.termination_event.set()
+                stop_notified = self._notify_shutdown_event(
+                    self.termination_event, deadline
+                )
 
                 try:
-                    if self.core_module_failure:
+                    if self.core_module_failure or not stop_notified:
                         # dont wait for failed core modules to stop
                         self.kill_all_children(force=True)
-                        shutdown_reason = "Core module failure."
+                        shutdown_reason = (
+                            "Core module failure."
+                            if self.core_module_failure
+                            else "Worker stop notification failed."
+                        )
                         graceful_shutdown = False
+                        normal_completion = False
+                        self.force_shutdown_requested = True
                     else:
                         # Wait timeout_seconds for all the processes to finish
                         while time.monotonic() < deadline:
@@ -758,11 +818,7 @@ class ShutdownMixin:
                             ) = self.shutdown_interactive(
                                 to_kill_first,
                                 to_kill_last,
-                                (
-                                    deadline
-                                    if self.shutdown_signal_received
-                                    else None
-                                ),
+                                deadline,
                             )
                             if not to_kill_first and not to_kill_last:
                                 break
@@ -790,6 +846,7 @@ class ShutdownMixin:
                     print(shutdown_reason)
                     graceful_shutdown = False
                     normal_completion = False
+                    self.force_shutdown_requested = True
 
                 self.kill_all_children(force=not graceful_shutdown)
 
@@ -820,6 +877,9 @@ class ShutdownMixin:
             )
         except KeyboardInterrupt:
             self.shutdown_signal_received = True
+            self.force_shutdown_requested = True
+            self.children = multiprocessing.active_children()
+            self.kill_all_children(force=True)
             if self._is_web_interface_enabled():
                 port = int(self.main.conf.web_interface_port)
                 self._stop_web_interface(port)
