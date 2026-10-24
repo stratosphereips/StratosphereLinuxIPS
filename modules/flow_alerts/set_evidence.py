@@ -3,6 +3,7 @@
 import json
 from typing import Any, List
 from uuid import uuid4
+from modules.flow_alerts.utils import different_localnet_evidence
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import SMTP
 from slips_files.core.structures.evidence import (
@@ -208,80 +209,27 @@ class SetEvidenceHelper:
         self.db.set_evidence(evidence)
 
     def different_localnet_usage(
-        self, twid: str, flow: Any, ip_outside_localnet: str = ""
+        self,
+        twid: str,
+        flow: Any,
+        ip_outside_localnet: str,
+        local_network: str | None = None,
     ) -> None:
-        """Attribute an outside-subnet connection to its initiating source.
+        """Save one finding for the flow's private addresses outside its subnet.
 
         Parameters:
             twid: Detection time window.
-            flow: Connection involving a private address outside the subnet.
-            ip_outside_localnet: Whether srcip or dstip is outside the subnet.
+            flow: Connection whose initiating source owns the finding.
+            ip_outside_localnet: Outside direction: srcip, dstip, or both.
+            local_network: Subnet used by the check, or the current subnet.
         """
-        if ip_outside_localnet == "srcip":
-            attacker = Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
+        if local_network is None:
+            local_network = self.db.get_local_network(flow.interface)
+        self.db.set_evidence(
+            different_localnet_evidence(
+                twid, flow, ip_outside_localnet, local_network
             )
-            victim = Victim(
-                direction=Direction.DST,
-                ioc_type=IoCType.IP,
-                value=flow.daddr,
-            )
-            threat_level = ThreatLevel.LOW
-            description = (
-                f"A connection from a private IP ({flow.saddr}) on port "
-                f"{flow.dport}/{flow.proto} "
-                f"outside of the used local network "
-                f"{self.db.get_local_network(flow.interface)}. To IP:"
-                f" {flow.daddr} "
-            )
-        else:
-            attacker = Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
-            )
-            victim = Victim(
-                direction=Direction.DST,
-                ioc_type=IoCType.IP,
-                value=flow.daddr,
-            )
-            threat_level = ThreatLevel.HIGH
-            description = (
-                f"A connection to a private IP ({flow.daddr}) on port"
-                f" {flow.dport}/{flow.proto} "
-                f"outside of the used local network "
-                f"{self.db.get_local_network(flow.interface)}. "
-                f"From IP: {flow.saddr} "
-            )
-            proto = flow.proto.lower()
-            description += (
-                "using ARP"
-                if "arp" in proto
-                else f"on destination port: {flow.dport}/{flow.proto.upper()}"
-            )
-
-        confidence = 1.0
-
-        twid_number = int(twid.replace("timewindow", ""))
-        evidence = Evidence(
-            evidence_type=EvidenceType.DIFFERENT_LOCALNET,
-            attacker=attacker,
-            threat_level=threat_level,
-            description=description,
-            victim=victim,
-            profile=ProfileID(ip=attacker.value),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
-            interface=flow.interface,
-            proto=flow.proto,
-            confidence=confidence,
-            src_port=flow.sport,
-            dst_port=flow.dport,
         )
-        self.db.set_evidence(evidence)
 
     def incompatible_cn(self, twid, flow, org: str) -> None:
         confidence: float = 0.9

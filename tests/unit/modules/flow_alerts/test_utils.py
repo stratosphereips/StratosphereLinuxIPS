@@ -176,6 +176,50 @@ def test_is_ip_outside_local_network(
 
 
 @pytest.mark.parametrize(
+    "saddr, daddr, subnet, resolver, expected",
+    [
+        ("10.0.2.2", "10.0.2.15", "192.168.0.0/16", "", "both"),
+        ("192.168.1.5", "10.0.2.2", "192.168.0.0/16", "", "dstip"),
+        ("10.0.2.2", "192.168.1.5", "192.168.0.0/16", "", "srcip"),
+        ("192.168.1.5", "192.168.1.6", "192.168.0.0/16", "", ""),
+        ("192.168.1.5", "8.8.8.8", "192.168.0.0/16", "", ""),
+        ("10.0.2.2", "169.254.1.1", "192.168.0.0/16", "", "srcip"),
+        ("10.0.2.2", "10.0.2.53", "192.168.0.0/16", "10.0.2.53", "srcip"),
+        ("192.168.1.5", "10.0.2.53", "192.168.0.0/16", "10.0.2.53", ""),
+        ("10.0.2.2", "10.0.2.15", "", "", ""),
+        ("10.0.2.2", "10.0.2.15", "fd00:1::/64", "", ""),
+    ],
+)
+def test_different_localnet_context(
+    saddr: str, daddr: str, subnet: str, resolver: str, expected: str,
+) -> None:
+    """Compare both ends together, preserving subnet and DNS exemptions.
+
+    Parameters:
+        saddr: Source address.
+        daddr: Destination address.
+        subnet: Known subnet, or empty when not learned yet.
+        resolver: Known DNS server, if any.
+        expected: Outside direction, or empty when neither is reportable.
+    """
+    module_factory = ModuleFactory()
+    flow_alert_utils = module_factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = None
+    db.get_local_network.return_value = subnet
+    db.is_official_dns_server.side_effect = lambda ip: ip == resolver
+    flow = SimpleNamespace(
+        saddr=saddr, daddr=daddr, interface="eth0", proto="tcp",
+        sport=40000, dport=53 if resolver else 80,
+    )
+
+    assert flow_alert_utils.different_localnet_context(db, flow) == (subnet, expected)
+    db.get_local_network.assert_called_once_with("eth0")
+    if not resolver:
+        db.get_network_state.assert_called_once_with("eth0")
+
+
+@pytest.mark.parametrize(
     "timestamp, expected_outside, expected_old_dns",
     [
         (150.0, False, True),

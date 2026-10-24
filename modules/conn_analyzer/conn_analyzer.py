@@ -13,11 +13,8 @@ import validators
 from modules.conn_analyzer.set_evidence import SetEvidenceHelper
 from modules.flow_alerts.utils import (
     SPECIAL_IPV4,
-    get_ip_to_check,
+    different_localnet_context,
     is_interface_timeout_reached as has_interface_timeout_reached,
-    is_ip_allowed_outside_localnet,
-    is_ip_outside_local_network,
-    is_official_dns_server,
     should_check_different_localnet,
     should_ignore_dns_or_dhcpv6_flow,
     network_state_for_flow,
@@ -28,7 +25,6 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
-
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
@@ -882,36 +878,25 @@ class ConnAnalyzer(IAsyncModule):
         """
         return should_check_different_localnet(flow, skip_dns_flows=True)
 
-    def check_different_localnet_usage(self, twid, flow, what_to_check=""):
-        """
-        alerts when a connection to a private ip that
-        doesn't belong to our local network is found
+    def check_different_localnet_usage(self, twid: str, flow: Any) -> None:
+        """Report one finding when private addresses use another subnet.
 
-        for example:
-            If we are on 192.168.1.0/24 then detect anything
-            coming from/to 10.0.0.0/8
-
-        :param what_to_check: can be 'srcip' or 'dstip'
-        PS: most changes here should be in
-        dns.py::check_different_localnet_usage() so remember to update both:D
+        Parameters:
+            twid: Detection time window.
+            flow: Connection whose source and destination are checked together.
         """
         if not self.should_check_diff_localnet(flow):
             return
 
-        if is_official_dns_server(self.db, flow, what_to_check):
-            return
-
-        ip_to_check = get_ip_to_check(flow, what_to_check)
-        if is_ip_allowed_outside_localnet(ip_to_check):
-            return
-
-        if not is_ip_outside_local_network(self.db, flow, ip_to_check):
+        local_network, outside = different_localnet_context(self.db, flow)
+        if not outside:
             return
 
         self.set_evidence.different_localnet_usage(
             twid,
             flow,
-            ip_outside_localnet=what_to_check,
+            ip_outside_localnet=outside,
+            local_network=local_network,
         )
 
     def check_connection_to_local_ip(self, twid, flow):
@@ -1190,12 +1175,7 @@ class ConnAnalyzer(IAsyncModule):
                 profileid, twid, flow
             )
             self.check_conn_to_port_0(profileid, twid, flow)
-            self.check_different_localnet_usage(
-                twid, flow, what_to_check="dstip"
-            )
-            self.check_different_localnet_usage(
-                twid, flow, what_to_check="srcip"
-            )
+            self.check_different_localnet_usage(twid, flow)
             self.create_task(
                 self.check_connection_without_dns_resolution,
                 profileid,

@@ -1333,7 +1333,7 @@ def test_is_well_known_org(
 
 
 @pytest.mark.parametrize(
-    "saddr, daddr, dport, proto, what_to_check, expected_calls",
+    "saddr, daddr, dport, proto, expected_calls",
     [
         (  # Test case 1: Different local network usage (dstip),
             # evidence should be set
@@ -1341,7 +1341,6 @@ def test_is_well_known_org(
             "10.0.0.1",
             80,
             "tcp",
-            "dstip",
             1,
         ),
         (  # Test case 2: Same local network usage, no evidence
@@ -1349,7 +1348,6 @@ def test_is_well_known_org(
             "192.168.1.2",
             80,
             "tcp",
-            "dstip",
             0,
         ),
         (  # Test case 3: Different local network usage (srcip),
@@ -1358,7 +1356,6 @@ def test_is_well_known_org(
             "192.168.1.2",
             80,
             "tcp",
-            "srcip",
             1,
         ),
         (  # Test case 4:  Public IP used, no evidence
@@ -1366,7 +1363,6 @@ def test_is_well_known_org(
             "192.168.1.2",
             80,
             "tcp",
-            "srcip",
             0,
         ),
         (  # Test case 5: Different IPv6 local network usage (dstip)
@@ -1374,7 +1370,6 @@ def test_is_well_known_org(
             "fd00:2::20",
             80,
             "tcp",
-            "dstip",
             1,
         ),
         (  # Test case 6: Same IPv6 local network usage, no evidence
@@ -1382,13 +1377,12 @@ def test_is_well_known_org(
             "fd00:1::20",
             80,
             "tcp",
-            "dstip",
             0,
         ),
     ],
 )
 def test_check_different_localnet_usage(
-    saddr, daddr, dport, proto, what_to_check, expected_calls
+    saddr, daddr, dport, proto, expected_calls
 ):
     """
     Tests the check_different_localnet_usage function
@@ -1421,21 +1415,20 @@ def test_check_different_localnet_usage(
     conn.check_different_localnet_usage(
         twid,
         flow,
-        what_to_check=what_to_check,
     )
     call_count = conn.set_evidence.different_localnet_usage.call_count
     assert call_count == expected_calls
 
 
 @pytest.mark.parametrize(
-    "what_to_check, sport, dport",
+    "saddr, daddr, sport, dport",
     [
-        ("dstip", "40000", "53"),
-        ("srcip", "53", "40000"),
+        ("fd00:1::10", "fd00:2::53", "40000", "53"),
+        ("fd00:2::53", "fd00:1::10", "53", "40000"),
     ],
 )
 def test_check_different_localnet_usage_ignores_official_dns_server(
-    what_to_check, sport, dport
+    saddr, daddr, sport, dport
 ):
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.set_evidence.different_localnet_usage = Mock()
@@ -1444,8 +1437,8 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
-        saddr="fd00:2::53",
-        daddr="fd00:3::53",
+        saddr=saddr,
+        daddr=daddr,
         dur=1,
         proto="tcp",
         appproto="",
@@ -1464,7 +1457,6 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
     conn.check_different_localnet_usage(
         twid,
         flow,
-        what_to_check=what_to_check,
     )
 
     conn.set_evidence.different_localnet_usage.assert_not_called()

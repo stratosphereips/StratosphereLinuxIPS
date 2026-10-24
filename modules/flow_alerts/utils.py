@@ -7,6 +7,17 @@ from datetime import datetime
 from slips_files.common.ips import SPECIAL_IPV4_ADDRESSES
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.structures.evidence import (
+    Attacker,
+    Direction,
+    Evidence,
+    EvidenceType,
+    IoCType,
+    ProfileID,
+    ThreatLevel,
+    TimeWindow,
+    Victim,
+)
 
 DHCPV6_PORTS = {"546", "547"}
 SPECIAL_IPV4 = SPECIAL_IPV4_ADDRESSES
@@ -165,22 +176,15 @@ def should_check_different_localnet(
     )
 
 
-def is_ip_outside_local_network(
-    db: DBManager,
-    flow: Any,
-    ip_to_check: str,
-) -> bool:
-    """
-    Check whether an IP is outside the flow interface local network.
+def local_network_for_flow(db: DBManager, flow: Any) -> str:
+    """Read the local subnet that applied when a flow was captured.
 
     Parameters:
-    db: Database manager used to load the interface local network.
-    flow: Flow-like object containing the interface name.
-    ip_to_check: IP address to compare with the local network.
+        db: Database holding live network history or the recording's subnet.
+        flow: Flow with an interface and optional capture time.
 
-    Return:
-    bool: True when the IP version matches the local network and the IP is
-    outside that network.
+    Returns:
+        Local subnet, or an empty string when it is unknown.
     """
     state = db.get_network_state(getattr(flow, "interface", ""))
     if isinstance(state, dict):
@@ -190,7 +194,25 @@ def is_ip_outside_local_network(
         own_local_network = db.get_local_network(
             getattr(flow, "interface", "")
         )
-    if not own_local_network:
+    return own_local_network or ""
+
+
+def is_ip_outside_local_network(
+    db: DBManager,
+    flow: Any,
+    ip_to_check: str,
+) -> bool:
+    """Check an address against the subnet active at capture time.
+
+    Parameters:
+        db: Database holding the interface subnet.
+        flow: Flow with an interface and optional capture time.
+        ip_to_check: Address to compare with that subnet.
+
+    Returns:
+        True for an address of the same IP version outside a known subnet.
+    """
+    if not (own_local_network := local_network_for_flow(db, flow)):
         return False
 
     ip_obj = ipaddress.ip_address(ip_to_check)
@@ -201,6 +223,92 @@ def is_ip_outside_local_network(
         return False
 
     return ip_obj not in own_local_network_obj
+
+
+def different_localnet_context(db: DBManager, flow: Any) -> tuple[str, str]:
+    """Compare both ends of one flow with the same local subnet.
+
+    Parameters:
+        db: Database holding network settings and detected DNS servers.
+        flow: Eligible private-address connection.
+
+    Returns:
+        Subnet and outside direction (srcip, dstip, both, or empty).
+    """
+    local_network = local_network_for_flow(db, flow)
+    if not local_network:
+        return "", ""
+    network = ipaddress.ip_network(local_network, strict=False)
+    outside = []
+    for direction in ("srcip", "dstip"):
+        ip = get_ip_to_check(flow, direction)
+        ip_obj = ipaddress.ip_address(ip)
+        if (
+            ip_obj.version != network.version
+            or is_ip_allowed_outside_localnet(ip)
+            or ip_obj in network
+            or is_official_dns_server(db, flow, direction)
+        ):
+            continue
+        outside.append(direction)
+    direction = "both" if len(outside) == 2 else next(iter(outside), "")
+    return local_network, direction
+
+
+def different_localnet_evidence(
+    twid: str, flow: Any, ip_outside_localnet: str, local_network: str
+) -> Evidence:
+    """Build one subnet finding describing all affected flow addresses.
+
+    Parameters:
+        twid: Detection time window.
+        flow: Connection with its original addresses and transport fields.
+        ip_outside_localnet: Outside direction: srcip, dstip, or both.
+        local_network: Subnet used by the detector for this flow.
+
+    Returns:
+        Evidence attributed to the source, with one consistent threat level.
+    """
+    outside_description = {
+        "srcip": "the private source address is",
+        "dstip": "the private destination address is",
+        "both": "both private addresses are",
+    }[ip_outside_localnet]
+    proto = flow.proto.lower()
+    article = "An" if proto in {"arp", "icmp", "icmp6", "icmpv6"} else "A"
+    description = (
+        f"{article} {proto.upper()} connection from {flow.saddr} to {flow.daddr}: "
+        f"{outside_description} outside the local network {local_network}."
+    )
+    if proto in {"tcp", "udp"}:
+        description += f" Destination port: {flow.dport}/{proto.upper()}."
+    elif proto in {"icmp", "icmp6", "icmpv6"}:
+        description += f" ICMP type: {flow.sport}; code: {flow.dport}."
+
+    return Evidence(
+        evidence_type=EvidenceType.DIFFERENT_LOCALNET,
+        attacker=Attacker(
+            direction=Direction.SRC, ioc_type=IoCType.IP, value=flow.saddr
+        ),
+        victim=Victim(
+            direction=Direction.DST, ioc_type=IoCType.IP, value=flow.daddr
+        ),
+        threat_level=(
+            ThreatLevel.HIGH
+            if ip_outside_localnet == "dstip"
+            else ThreatLevel.LOW
+        ),
+        description=description,
+        profile=ProfileID(ip=flow.saddr),
+        timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+        uid=[flow.uid],
+        timestamp=flow.starttime,
+        interface=flow.interface,
+        proto=flow.proto,
+        confidence=1.0,
+        src_port=flow.sport,
+        dst_port=flow.dport,
+    )
 
 
 def is_interface_timeout_reached(

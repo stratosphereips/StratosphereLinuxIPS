@@ -55,6 +55,7 @@ async def test_parsed_dns_reconstructs_in_analyzer_and_timeout_queue(bindings: l
     assert asdict(queued) == asdict(flow)
     assert queued.mdns_bindings == (bindings or [])
     dns.check_high_entropy_dns_answers.assert_called_once_with("timewindow1", queued)
+    dns.check_different_localnet_usage.assert_called_once_with("timewindow1", queued)
     assert dns.flowalerts.create_task.call_args.args[-1] == queued
 
 
@@ -252,14 +253,14 @@ def test_dns_misconfiguration_detection_tracks_private_ipv6_dns_server():
 
 
 @pytest.mark.parametrize(
-    "what_to_check, expected_calls",
+    "saddr, daddr, expected_calls",
     [
-        ("dstip", 0),
-        ("srcip", 0),
+        ("fd00:2::53", "fd00:3::53", 0),
+        ("fd00:1::10", "fd00:3::53", 0),
     ],
 )
 def test_check_different_localnet_usage_ignores_official_dns_server(
-    what_to_check, expected_calls
+    saddr, daddr, expected_calls
 ):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.set_evidence.different_localnet_usage = Mock()
@@ -268,8 +269,8 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
     flow = DNS(
         starttime="1726568479.5997488",
         uid="1234",
-        saddr="fd00:2::53",
-        daddr="fd00:3::53",
+        saddr=saddr,
+        daddr=daddr,
         dport="53",
         sport="53",
         proto="udp",
@@ -281,7 +282,7 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
         TTLs="",
     )
 
-    dns.check_different_localnet_usage(twid, flow, what_to_check=what_to_check)
+    dns.check_different_localnet_usage(twid, flow)
 
     assert (
         dns.set_evidence.different_localnet_usage.call_count == expected_calls

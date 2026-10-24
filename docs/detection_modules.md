@@ -163,6 +163,37 @@ tr:nth-child(even) {
 
 </table>
 
+## Connections outside the local subnet
+
+`conn_analyzer` checks whether a connection involves private IP addresses outside
+the monitored subnet. DNS queries on UDP port 53 are checked by `flow_alerts`
+instead, so the same connection is not reported by both analyzers. Known DNS
+servers and special addresses such as multicast, loopback, and link-local
+addresses keep their existing exemptions.
+
+Slips creates one `DIFFERENT_LOCALNET` finding per analyzed flow, describing
+which addresses are outside:
+
+- Source only: **low** severity.
+- Destination only: **high** severity.
+- Both source and destination: **low** severity. Neither address belongs to
+  the monitored subnet, so the flow alone does not show a monitored computer
+  making a suspicious connection to another private network.
+
+For example, with local subnet `192.168.0.0/16`, an ICMP flow from `10.0.2.2`
+to `10.0.2.15` produces one low-severity finding naming both addresses. ICMP
+type and code are identified as such, rather than being called TCP/UDP ports.
+The connection source owns the finding; its original flow ID and destination
+are preserved.
+
+For live capture, the comparison and its description use the subnet that was
+active at the flow's capture time. For recorded input, Slips uses a private
+network from `parameters.client_ips`, when configured; otherwise it learns a
+private range from the first eligible source address. A recording can contain
+traffic from more than one private network, so this finding alone does not
+prove an attack. The fix applies to newly analyzed flows; rerun a recording
+into a new output directory to replace previously generated duplicate results.
+
 ## Bruteforcing Module
 
 The `Bruteforcing` module is responsible for SSH bruteforcing detection.

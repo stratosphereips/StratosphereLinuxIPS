@@ -185,9 +185,9 @@ def test_multiple_ssh_versions(
             Direction.SRC,
             Direction.DST,
             ThreatLevel.LOW,
-            "A connection from a private IP (192.168.0.1) on port 80/udp "
-            "outside of the used local network 192.168.0.0/16."
-            " To IP: 10.0.0.1 ",
+            "A UDP connection from 192.168.0.1 to 10.0.0.1: the private "
+            "source address is outside the local network 192.168.0.0/16. "
+            "Destination port: 80/UDP.",
         ),
         # # Testcase 2: dst IP outside localnet, using ARP
         (
@@ -198,9 +198,8 @@ def test_multiple_ssh_versions(
             Direction.SRC,
             Direction.DST,
             ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.1) on port 0/arp "
-            "outside of the used "
-            "local network 192.168.0.0/16. From IP: 192.168.0.1 using ARP",
+            "An ARP connection from 192.168.0.1 to 192.168.1.1: the private "
+            "destination address is outside the local network 192.168.0.0/16.",
         ),
         # Testcase 3: dst IP outside localnet, using port
         (
@@ -211,9 +210,9 @@ def test_multiple_ssh_versions(
             Direction.SRC,
             Direction.DST,
             ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.2) on port 443/tcp"
-            " outside of the used local network 192.168.0.0/16."
-            " From IP: 192.168.0.1 on destination port: 443/TCP",
+            "A TCP connection from 192.168.0.1 to 192.168.1.2: the private "
+            "destination address is outside the local network 192.168.0.0/16. "
+            "Destination port: 443/TCP.",
         ),
     ],
 )

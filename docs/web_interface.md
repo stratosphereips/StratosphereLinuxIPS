@@ -1082,6 +1082,15 @@ Responses include bounded page metadata and selected ranges. Overview and identi
 
 `DIFFERENT_LOCALNET` describes a connection involving a private address outside the monitored subnet. The source that initiated the connection owns the evidence profile; the destination remains the destination even when it is the outside address. For example, a connection from `192.168.1.163` to `172.17.0.1:6668` is attributed to `192.168.1.163`, not to an attack by `172.17.0.1`. The address `172.17.0.1` commonly belongs to a Docker bridge, but the address and port alone do not establish which process initiated the connection. This correction applies to new detections; stored alerts retain their original attribution and can be reviewed through the usual workflow.
 
+Each flow produces one subnet finding, even when both private addresses are
+outside. Both-outside findings have low severity and name both addresses;
+source-only findings are low and destination-only findings are high. This is
+decided in the detector before storing evidence, so host scores and exported
+results also receive one finding. Existing stored duplicates remain unchanged;
+rerun recorded input into a new output directory for corrected results. See
+[connections outside the local subnet](detection_modules.md#connections-outside-the-local-subnet)
+for the subnet selection and severity rules.
+
 ### Optional browser regression check
 
 `tests/unit/zeek_scripts/test_mdns_identity.py` replays isolated packets through
