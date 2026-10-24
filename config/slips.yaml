@@ -731,53 +731,58 @@ brute_force_detector:
 
 #############################
 anomaly_detection_services:
-  # Learn which computers normally connect to each answering TCP/UDP port,
-  # at what hours, and for how long. Enable this to report unusual connections.
+  # Turn on learning and warnings for new local services, unfamiliar clients,
+  # unusual connection hours and lengths. A service is one computer's TCP/UDP port.
   enabled: false
   # auto: learn normal connections, then report unusual ones.
   # train: only learn; use this to teach Slips about legitimate changes.
-  # detect: check connections against saved learning without changing it.
+  # detect: check connections using saved learning; do not accept new habits.
   mode: auto
   # Local timezone for learning usual connection hours, e.g. Europe/Prague.
-  # Set this to your network's timezone so local working hours are interpreted correctly.
+  # Use your network's timezone so working hours are understood correctly.
+  # Changing it clears learned connection hours, but preserves known clients and lengths.
   timezone: UTC
   # Hours learning each local host's usual answering ports, and each service's normal clients.
   # Per-service learning starts at the first reply; host learning starts at first activity.
-  # The capture computer starts at capture startup even when quiet. Checks use flow timestamps.
-  # 168 = 7 days; 0.0167 is about 1 minute. Client/time/length checks also need the next two limits.
+  # The capture computer starts at capture startup even when quiet. Uses connection start times.
+  # 168 = 7 days; 0.0167 is about 1 minute. Client/time/length checks also need
+  # min_training_connections and min_training_days, so time alone does not finish their training.
   training_hours: 168
   # Report a local port first seen answering after its host's training window, even if
   # that host had no incoming connections during training. Unanswered probes do not count.
+  # Such a port stays unusual until accepted with mode: train. false disables this check.
   detect_new_services: true
   # Maximum local computers whose answering ports are remembered. Bounds memory use;
   # hosts beyond this limit are skipped, rather than judged from incomplete learning.
   max_hosts: 1024
-  # Maximum newly active service findings for one host in each UTC traffic-time hour.
-  # Bounds warning floods when many ports appear at once; client checks have their own limit.
+  # Maximum new-service warnings for one host per UTC hour, using connection start times.
+  # Limits warning floods across all its ports; other checks use max_alerts_per_service_hour.
   max_new_services_per_host_hour: 10
   # Successful connections needed before client/time/length findings for one service.
   # More connections give Slips more examples; failed attempts cannot teach normality.
   min_training_connections: 30
   # Different UTC dates with successful connections needed for per-service findings.
   # This prevents one busy day from being treated as several days of learning.
+  # This, min_training_connections and training_hours must all pass; new-port checks need only hours.
   min_training_days: 3
-  # Different local dates with connections needed before reporting unusual HOURS.
+  # Different local dates with learned connections needed before reporting unusual hours.
   # This gives Slips time to learn when people normally connect; empty days do not count.
   time_min_days: 14
   # For weekday checks, require connections on this many different weekday dates.
   # For weekend checks, require weekend dates instead, so weekday habits do not judge weekends.
   time_min_matching_days: 3
-  # Report a connection time only when its learned half-hour frequency is below this.
+  # Report an unusual hour only when its learned half-hour frequency is below this limit.
   # Higher values report more times as unusual; this is not the chance of an attack.
   time_probability_threshold: 0.01
-  # How consistent the usual connection hours must be before checking unusual hours (0-1).
-  # Higher values need a clearer routine. 0 also checks irregular routines; useful for tests.
+  # How much learned activity must gather around usual hours before checking unusual hours (0-1).
+  # Higher values need a clearer routine, avoiding warnings for irregular hours. 0 checks any routine.
   time_min_concentration: 0.35
-  # Normally completed TCP connections needed to learn usual connection lengths.
-  # Slips waits for these examples before reporting unusually short or long connections.
+  # Normally completed TCP connections needed before checking their length in seconds.
+  # More examples give a better idea of usual lengths; UDP and unfinished TCP do not count.
   duration_min_samples: 50
-  # Maximum number of learned connection lengths kept for each client and service.
-  # More examples use more memory and retain older habits; must be at least duration_min_samples.
+  # Maximum learned TCP connection lengths kept per client and for the whole service.
+  # More use more memory and retain older habits; fewer replace old examples sooner.
+  # Must be at least duration_min_samples, so enough examples can be kept to start checking.
   duration_samples: 128
   # How far a connection length must differ, relative to the variation in learned lengths.
   # Higher values require a larger difference. This is not a number of seconds or a length ratio.
@@ -788,85 +793,125 @@ anomaly_detection_services:
   # Also require this many seconds of difference from the learned lower/upper end.
   # Avoids reporting tiny absolute changes; all three length checks must pass.
   duration_min_difference_seconds: 30
-  # Keep learning from normal connections by already-known clients after initial training.
-  # Allows habits to change; false freezes learning after training. Does not add new clients.
+  # Keep learning from successful, usual connections by known clients after initial training.
+  # Lets habits change gradually; false stops this learning. mode: train can still accept changes.
+  # This does not add unfamiliar clients after training or accept newly active ports.
   adapt_known_clients: true
-  # Days of past connection TIMES kept to learn usual hours.
-  # Limits memory and lets old schedules be forgotten; does not expire known clients.
+  # Days of learned connection times kept for the usual-hours check.
+  # Limits memory and forgets old schedules; does not delete known clients or learned lengths.
   history_days: 56
-  # Forget a service or client after this many days without activity in connection timestamps.
-  # Removes stale records; a returning computer may need to be learned again.
+  # Forget inactive hosts, answering ports and clients after this many days of connection time.
+  # Removes old learning to limit memory and disk use; returning hosts need fresh training.
+  # Host activity does not keep every port active: an unused port can expire on an active host.
   retention_days: 90
-  # Maximum services to learn, where a service is one computer's TCP or UDP port.
-  # Limits memory; additional services are skipped when this limit is reached.
+  # Maximum services with learned clients, and separately the total ports remembered across hosts.
+  # Each list has this cap to limit memory. Extra service records are skipped when full.
+  # An incomplete host port list stops new-port warnings, so missing learning cannot cause false alarms.
   max_services: 1024
   # Maximum client-to-service records across all services; limits memory.
   # A computer connecting to two services uses two records.
+  # An incomplete client list stops unfamiliar-client warnings for the affected service.
   max_clients: 4096
   # Maximum clients remembered for one service; prevents one busy port using all memory.
   # If a client list is incomplete, Slips stops reporting unfamiliar clients for that service.
   max_clients_per_service: 64
   # Seconds of connection timestamps to wait before repeating the same warning
   # for a client/service and combination of reasons. Reduces repeated evidence; 0 disables this wait.
+  # For new-service warnings, the wait is per host/port, across all clients.
   alert_cooldown_seconds: 3600
-  # Maximum evidence records for one service per UTC hour of connection timestamps.
-  # Limits warning floods even when many different clients or reasons are involved.
+  # Maximum client/hour/length evidence records for one service per UTC hour of connection time.
+  # Limits warning floods across clients. New ports use max_new_services_per_host_hour instead.
   max_alerts_per_service_hour: 10
   # Real seconds between saving what Slips has learned to disk.
   # Shorter intervals reduce loss after a crash but cause more disk writes.
+  # Normal shutdown also saves learning; this interval does not delay connection checks.
   flush_interval_seconds: 30
 
 #############################
 anomaly_detection_https:
-  # Number of initial hours used to train the baseline model assuming benign traffic.
-  # If set to 0, detection starts immediately and baseline is learned online.
+  # Hours of observed HTTPS activity per host used to learn normal behavior before warning.
+  # Counts closed clock-hour groups with traffic, not empty hours or real time spent running.
+  # Use whole numbers. 0 skips this training wait; numerical checks still need min_baseline_points.
   training_hours: 2
-  # Training fit technique: welford or ewma.
+  # How to learn normal averages and variation during training:
+  # welford gives every training example equal weight; ewma favors recent examples.
+  # Choose ewma if normal behavior changes during training and recent examples should matter more.
   training_fit_method: welford
-  # Training adaptation strength:
-  # 1.0 = Welford benign fit (strongest, equal-weight fit),
-  # <1.0 = EWMA-style training with this alpha (used when training_fit_method=ewma).
+  # Weight of new measurements when training_fit_method is ewma (0.001-1).
+  # Higher values change learned averages faster; lower values remember older examples longer.
+  # Ignored with welford. 1 uses the newest value for the average; it does not select welford.
   training_alpha: 1
 
-  # Thresholds for anomaly detection in hourly and per-flow checks.
+  # How different an hourly HTTPS count or data volume must be from learned behavior to warn.
+  # Higher values give fewer warnings; this measures difference relative to usual variation.
+  # Used when training has not supplied a learned limit; see empirical_threshold_quantile.
   hourly_zscore_threshold: 3.0
+  # How different one connection's byte count to a known server must be to warn.
+  # Higher values give fewer byte-count warnings; new-server warnings are separate.
+  # Used when no limit was learned for that server; it is not seconds or bytes.
   flow_zscore_threshold: 3.5
 
-  # If hourly anomaly score is lower than this, treat it as drift and adapt.
+  # Largest combined anomaly score treated as a small change when choosing how fast to learn.
+  # Higher values allow larger changes to use drift_alpha rather than suspicious_alpha.
+  # max_small_flow_anomalies must also pass; this does not decide whether to produce evidence.
+  # With ADWIN off, individual-connection updates use the anomaly count alone.
   adaptation_score_threshold: 2.0
 
-  # Adaptation speed for baseline updates.
+  # Weight of new measurements in routine average/variation updates after training (0.001-1).
+  # Higher values follow changes faster. With ADWIN enabled, used whenever it finds no lasting change,
+  # even if an individual measurement was unusual; without ADWIN, used for normal connections.
   baseline_alpha: 0.5
+  # Weight for average/variation updates when a change is classified as small (0.001-1).
+  # Lower values accept new habits more slowly; used only after ADWIN reports a change when enabled.
   drift_alpha: 0.05
+  # Weight for average/variation updates when a change is classified as suspicious (0-1).
+  # Keep small to slow acceptance of suspicious behavior. 0 skips these updates.
+  # With ADWIN enabled, used only after it reports a lasting change.
   suspicious_alpha: 0.005
 
-  # Minimum baseline history required before z-score checks are applied.
+  # Previous measurements needed before checking numerical differences: hours for hourly checks,
+  # connections to that server for byte-count checks. More examples reduce early false alarms.
+  # This does not delay direct warnings about a new server or a new server TLS fingerprint.
   min_baseline_points: 6
 
-  # Max flow anomalies in an hour still considered "small drift".
+  # Maximum unusual connections in an hour allowed when treating a change as small.
+  # For individual connections, also limits the number of unusual reasons treated as small.
+  # Higher values allow more anomalies before choosing the slower suspicious_alpha updates.
   max_small_flow_anomalies: 1
 
-  # Optional ADWIN-based drift trigger (river).
-  # If true, drift/suspicious update is decided only after ADWIN signals drift.
-  # If false, Slips uses the previous threshold-only drift logic.
+  # Use ADWIN, which compares older and newer measurements to find a lasting behavior change.
+  # true: choose drift_alpha/suspicious_alpha only after that signal; otherwise use baseline_alpha.
+  # false, or missing river package: choose updates directly from anomaly scores/counts.
+  # This changes how Slips learns after training, not whether anomaly checks run.
   use_adwin_drift: true
+  # How easily ADWIN accepts a difference between older and newer measurements as a change (0.000001-1).
+  # Higher values report changes more readily; lower values require stronger evidence of change.
   adwin_delta: 0.01
+  # Check for a lasting change every this many measurements; 1 checks each measurement.
+  # Higher values reduce checking work but can delay recognizing changed habits.
+  # A measurement is one hourly value or one connection value, depending on the check.
   adwin_clock: 1
+  # Minimum measurements ADWIN must collect before checking for a lasting change.
+  # Higher values wait for more examples and reduce decisions from very little data.
+  # This counts measurements, not seconds, and is separate from training_hours.
   adwin_grace_period: 5
+  # Minimum measurements in each older/newer group that ADWIN compares.
+  # Higher values need more support for a change; lower values react sooner but can mistake noise for change.
   adwin_min_window_length: 5
+  # Where to place learned warning limits among differences seen during training.
+  # 0.995 uses the 99.5th percentile. Higher values generally give fewer warnings.
+  # With fewer than 10 training examples for a check, its fixed zscore threshold is used instead.
   empirical_threshold_quantile: 0.995
 
-
-  # JA3 statistical fallback gate used only when training_hours = 0.
-  # If there is no benign training period, ja3_changes is not scored
-  # until this minimum hourly value is reached.
+  # Used only with training_hours: 0. JA3 is a fingerprint of how client software starts TLS.
+  # Minimum hourly total of new client fingerprints across a host's server connections before
+  # checking that total for anomalies. Higher values avoid warnings from just a few changes.
+  # Despite this key's name, the limit is on the host's hourly total, not each server separately.
   ja3_min_variants_per_server: 3
 
-  # Operational logging verbosity:
-  # 0: disabled
-  # 1: important events only (detections, drift, training fit, stop/start)
-  # 2: + hourly summaries (recommended)
-  # 3: + per-flow arrivals and model update details
+  # Detail in this module's log: 0 none; 1 warnings, learning changes and start/stop;
+  # 2 also hourly summaries; 3 also every connection and learning update.
+  # Lower values reduce log volume and disk writes without disabling detection.
   log_verbosity: 3
 
 #############################

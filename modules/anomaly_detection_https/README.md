@@ -368,7 +368,14 @@ Empirical threshold calibration (when `training_hours > 0`):
 
 ## Configuration reference
 
-Configuration section:
+The [configuration guide](../../docs/https_anomaly_detection.md#configuration-keys)
+explains every parameter, its units, when it applies, and why you would change
+it. The main configuration and your custom configuration contain comments next
+to their values.
+
+This example uses the parser's defaults for omitted keys. The shipped
+`config/slips.yaml` explicitly sets `training_hours: 2` and `baseline_alpha: 0.5`
+instead of the `24` and `0.1` below.
 
 ```yaml
 anomaly_detection_https:
@@ -391,48 +398,6 @@ anomaly_detection_https:
   empirical_threshold_quantile: 0.995
   ja3_min_variants_per_server: 3
 ```
-
-Parameter meaning:
-
-- `training_hours`:
-  number of per-host hours used for benign-only baseline.
-  If set to `0`, baseline learning starts online from the first seen traffic.
-- `training_fit_method`:
-  training fit technique, `welford` or `ewma`.
-- `training_alpha`:
-  training fit strength.
-  used when `training_fit_method=ewma`.
-- `hourly_zscore_threshold`:
-  trigger threshold for aggregated hourly features.
-- `flow_zscore_threshold`:
-  trigger threshold for bytes-to-known-server deviations.
-- `adaptation_score_threshold`:
-  upper bound on `hourly_score` for classifying a closed hour as small/drift-like.
-- `baseline_alpha`:
-  default EWMA update speed in post-training normal (non-anomalous) updates.
-- `drift_alpha`:
-  update speed when an anomaly is classified as small/drift-like.
-- `suspicious_alpha`:
-  update speed when an anomaly is classified as suspicious; keeps adaptation conservative.
-- `min_baseline_points`:
-  minimum history count before z-score checks are trusted.
-- `max_small_flow_anomalies`:
-  threshold used in both paths:
-  max anomalous flows per hour still considered drift-like, and
-  max anomaly reasons per flow still considered small.
-- `use_adwin_drift`:
-  default is `true`. if `river` is installed, ADWIN triggers drift transitions.
-  if disabled, pre-ADWIN threshold-only drift logic is used.
-- `adwin_delta`, `adwin_clock`, `adwin_grace_period`, `adwin_min_window_length`:
-  ADWIN hyperparameters used when `use_adwin_drift=true`.
-- `empirical_threshold_quantile`:
-  percentile of benign-training robust z-scores used to calibrate per-feature thresholds.
-  active when `training_hours > 0`; fallback is default thresholds otherwise.
-- `ja3_min_variants_per_server`:
-  fallback gate used only when `training_hours = 0`:
-  `ja3_changes` is not scored as anomalous unless hourly value is at least
-  this threshold.
-
 
 ## Operational log
 

@@ -52,12 +52,16 @@ Each host has independent models.
 
 ### Training phase (`training_hours > 0`)
 
-For the first configured benign hours, the module does **fit-only** (Welford online moments):
+For the configured number of observed hours, the module learns from traffic
+assumed to be normal. It learns separately for each host. An hour counts when
+Slips closes a clock-hour group containing HTTPS activity, usually when a later
+hour's record arrives. Empty hours between records do not count. Use whole
+numbers for `training_hours`; this setting does not support a one-minute wait.
+
+During training:
 
 - no detection decisions are emitted from hourly z-score rules before training ends,
-- baseline mean/variance are learned strongly from this period.
-
-Training fit strength is configurable with `training_alpha`:
+- normal averages and variation are learned using `training_fit_method`.
 
 Training fit technique is selected by `training_fit_method`:
 
@@ -69,13 +73,23 @@ When `training_fit_method = ewma`, `training_alpha` controls strength:
 - higher `training_alpha` = faster adaptation,
 - lower `training_alpha` = slower adaptation.
 
+`training_alpha` is ignored with `welford`. With `ewma`, a value of `1` uses
+the newest value for the learned average; it does not give all examples equal
+weight or switch to Welford training.
+
 ### No explicit training (`training_hours = 0`)
 
 Detection starts immediately using online adaptation.
 
 Special fallback only for `ja3_changes`:
 
-- if hourly `ja3_changes < ja3_min_variants_per_server`, that hourly signal is ignored until enough activity exists.
+- if hourly `ja3_changes < ja3_min_variants_per_server`, that hourly count is
+  not checked. The count combines newly observed client TLS fingerprints
+  across the host's servers, despite the setting's `per_server` name.
+
+Skipping the training wait does not remove `min_baseline_points`: numerical
+checks still need previous measurements. Direct warnings about a new server
+or a new server TLS fingerprint do not need that measurement count.
 
 ## Scoring
 
@@ -102,7 +116,7 @@ Thresholds:
 
 Calibration rule:
 
-- per signal, collect robust z-scores on confirmed benign training data,
+- per measurement type, collect difference scores from traffic assumed normal during training,
 - set threshold to high benign quantile (`empirical_threshold_quantile`, default 0.995),
 - fallback to defaults if training data is insufficient.
 
@@ -114,7 +128,7 @@ Update event semantics:
 
 - `training_fit`:
   initial benign baseline fit while `trained_hours < training_hours`;
-  uses training fit method (Welford-style), not EWMA alpha.
+  uses `training_fit_method`; only `ewma` uses `training_alpha`.
 - `baseline_update`:
   normal post-training adaptation; uses EWMA with `baseline_alpha`.
   In ADWIN mode, this is used when ADWIN does not signal drift.
@@ -127,13 +141,13 @@ Update event semantics:
 
 When `use_adwin_drift=false`:
 
-1. `training_fit`  
-   During benign training: Welford fit (no EWMA alpha).
+1. `training_fit`
+   During initial training: learn using `training_fit_method`.
 
-2. `drift_update`  
+2. `drift_update`
    If anomaly score is small (`hourly_score <= adaptation_score_threshold`) and flow anomaly count is small (`<= max_small_flow_anomalies`), update with `drift_alpha`.
 
-3. `suspicious_update`  
+3. `suspicious_update`
    Otherwise update with `suspicious_alpha` (much smaller), to limit poisoning.
 
 For normal non-anomalous periods outside training, per-feature EWMA uses `baseline_alpha`.
@@ -146,7 +160,7 @@ If `use_adwin_drift=true` and `river` is installed, ADWIN is the only drift trig
 - **Flow path**: ADWIN receives each raw per-flow signal stream.
 - ADWIN drift detected -> classify as `drift_update` or `suspicious_update` using existing thresholds.
 - No ADWIN drift -> use `baseline_update` (`baseline_alpha`), even if anomalies exist.
-- During benign training, ADWIN is still warmed with benign scores to reduce cold-start noise after training.
+- During training, ADWIN also receives the raw measurements so it has previous examples when training ends.
 
 Why raw signals:
 
@@ -206,39 +220,70 @@ Examples of reasons:
 
 ## Configuration keys
 
-Section: `anomaly_detection_https` in `config/slips.yaml`.
+Use section `anomaly_detection_https` in the configuration passed with `-c`.
+The main configuration, `config/slips.yaml`, explains every setting beside its
+value. This module learns HTTPS behavior; the separate
+[service detector](service_anomaly_detection.md) learns answering ports,
+clients, usual hours and connection lengths.
 
-Main keys:
+Here, **learning** means remembering normal measurements to compare with later
+traffic. A **difference score** measures how far a measurement is from what
+was learned, relative to the usual variation. It is not bytes, seconds or the
+probability of an attack. **ADWIN** compares older and newer measurements to
+decide whether behavior has changed over time. A **TLS fingerprint** describes
+how software sets up an encrypted connection; JA3 describes the client and
+JA3S the server.
 
-- `training_hours`
-- `training_fit_method`
-- `training_alpha`
-- `hourly_zscore_threshold`
-- `flow_zscore_threshold`
-- `adaptation_score_threshold`
-- `baseline_alpha`
-- `drift_alpha`
-- `suspicious_alpha`
-- `min_baseline_points`
-- `max_small_flow_anomalies`
-- `ja3_min_variants_per_server`
-- `use_adwin_drift`
-- `adwin_delta`
-- `adwin_clock`
-- `adwin_grace_period`
-- `adwin_min_window_length`
-- `empirical_threshold_quantile`
-- `log_verbosity`
+The values below are those shipped in `config/slips.yaml`. If a custom file
+omits `training_hours`, the parser uses `24`, rather than the shipped `2`;
+if it omits `baseline_alpha`, the parser uses `0.1`, rather than `0.5`.
+Other listed values match the parser's defaults. Restart Slips to apply changed
+values.
 
-Defaults (from parser/config):
+### Initial learning and warnings
 
-- `training_alpha: 1.0`
-- `training_fit_method: welford`
-- `use_adwin_drift: true`
-- `adwin_delta: 0.01`
-- `adwin_clock: 1`
-- `adwin_grace_period: 5`
-- `adwin_min_window_length: 5`
+| Setting | Shipped value | What it does and why |
+| --- | --- | --- |
+| `training_hours` | `2` | Number of clock-hour groups with HTTPS activity to learn for each host before producing warnings. Empty hours do not count. More observed hours provide more examples of normal behavior. Use whole numbers; `0` skips this wait but not the measurement count below. |
+| `training_fit_method` | `welford` | How averages and variation are learned during training. `welford` gives every example equal weight. `ewma` favors newer examples, which is useful when recent behavior should matter more. |
+| `training_alpha` | `1` | Weight given to new measurements during `ewma` training, from `0.001` to `1`. Higher values change learned averages faster; lower values remember older examples longer. Ignored with `welford`. `1` uses the newest value for the average. |
+| `hourly_zscore_threshold` | `3.0` | Difference score required to warn about an unusual hourly HTTPS count or byte volume when no limit was learned from training. Raising it produces fewer warnings. A learned limit takes precedence. |
+| `flow_zscore_threshold` | `3.5` | Difference score required to warn about one connection's byte count to a known server when no limit was learned for that server. Raising it produces fewer byte-count warnings. Direct new-server warnings are separate. |
+| `min_baseline_points` | `6` | Previous measurements needed before checking numerical differences: hourly values for hourly checks, or connections to a particular server for its byte-count check. More examples reduce early false alarms. This does not delay direct new-server or new-server-fingerprint warnings after training. |
+| `empirical_threshold_quantile` | `0.995` | Where to put warning limits among the difference scores seen during training: `0.995` means the 99.5th percentile. Higher values generally produce fewer warnings. A check with fewer than ten training examples uses its fixed threshold instead. This does not guarantee a particular false-alarm rate. |
+| `ja3_min_variants_per_server` | `3` | Used only when `training_hours: 0`. Minimum hourly total of newly observed client TLS fingerprints before checking that count for anomalies. Each new client fingerprint for a particular server contributes to the host's total. Despite the name, this is a host-wide total across servers. Higher values avoid checking very small counts; this does not suppress direct server-fingerprint warnings. |
+
+### How learning follows changes after training
+
+These settings choose how fast learned averages and variation change. Higher
+weights give newer measurements more influence. They do not change whether an
+unusual connection produces evidence. With ADWIN enabled, `drift_alpha` and
+`suspicious_alpha` are considered only after ADWIN reports a lasting change;
+otherwise Slips uses `baseline_alpha`, even if a measurement was unusual.
+
+| Setting | Shipped value | What it does and why |
+| --- | --- | --- |
+| `adaptation_score_threshold` | `2.0` | Largest combined difference score treated as a small change when choosing an update weight. Raising it allows larger changes to use `drift_alpha` rather than `suspicious_alpha`. The anomaly-count limit below must also pass. With ADWIN disabled, the individual-connection path chooses its weight from the number of unusual reasons alone. |
+| `baseline_alpha` | `0.5` | Weight of new measurements in routine average/variation updates, from `0.001` to `1`. Higher values follow recent behavior faster. With ADWIN, used when it reports no lasting change. Without ADWIN, used for connections with no unusual reasons; hourly updates use the small/suspicious-change choices below. |
+| `drift_alpha` | `0.05` | Weight of new measurements when a change is classified as small, from `0.001` to `1`. A lower value follows changed habits more slowly. |
+| `suspicious_alpha` | `0.005` | Weight of new measurements when a change is classified as suspicious, from `0` to `1`. A small value slows changes to learned averages; `0` skips those updates. This reduces how quickly suspicious traffic changes the comparison, rather than discarding the original traffic or its evidence. |
+| `max_small_flow_anomalies` | `1` | Maximum unusual connections in an hour allowed for a small-change update. For an individual connection, the same limit applies to its number of unusual reasons. Raising it allows more anomalies before choosing `suspicious_alpha`. |
+
+### Recognizing a lasting change and controlling log volume
+
+ADWIN works on separate streams of measurements. An hourly stream gets one
+measurement when an observed hour closes; a connection stream gets one per
+applicable connection. The next three count settings refer to these
+measurements, rather than seconds or the total number of network packets.
+
+| Setting | Shipped value | What it does and why |
+| --- | --- | --- |
+| `use_adwin_drift` | `true` | Use ADWIN to decide when behavior has changed enough to consider the small/suspicious update weights. `false`, or an unavailable `river` package, chooses updates directly from anomaly scores and counts. Anomaly checks still run either way. |
+| `adwin_delta` | `0.01` | How readily ADWIN accepts a difference between older and newer measurements as a change. Higher values report changes more readily; lower values require stronger support. This adjusts change recognition, rather than the warning thresholds above. |
+| `adwin_clock` | `1` | Check for a lasting change every this many measurements. `1` checks each measurement. Higher values reduce checking work but can delay recognizing a change. |
+| `adwin_grace_period` | `5` | Minimum measurements collected before ADWIN checks for changes. Higher values wait for more examples, reducing decisions based on very little data. This is separate from the initial `training_hours` wait. |
+| `adwin_min_window_length` | `5` | Minimum measurements in each older/newer group ADWIN compares. Larger groups need more support for a change; smaller groups react sooner but can mistake random variation for a change. |
+| `log_verbosity` | `3` | Amount written to the module log: `0` none; `1` warnings, learning changes and start/stop; `2` also hourly summaries; `3` also every connection and learning update. Lower values reduce log volume and disk writes without disabling detection. |
 
 Reference:
 

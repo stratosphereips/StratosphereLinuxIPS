@@ -49,6 +49,10 @@ HTTPS detector; enabling one does not enable the other.
 
 All settings below belong under `anomaly_detection_services` in
 `config/slips.yaml`, or in the custom configuration for your run.
+Each setting is explained next to its value in the main configuration. When
+using a custom file such as `config/slips-sebas.yaml`, edit that file; changes
+to the main configuration do not replace values in your custom file. An omitted
+service-detector setting uses the default listed below.
 
 ### Turn the module on and choose how it learns
 
@@ -216,9 +220,9 @@ examples of normal behavior.
 
 | Setting | Default | What it does and why |
 | --- | --- | --- |
-| `alert_cooldown_seconds` | `3600` | Wait this many seconds of connection timestamps before repeating evidence for the same client, service and combination of reasons. This reduces repeated warnings. `0` removes this wait. The module remembers the most recent 16 such combinations per service. |
+| `alert_cooldown_seconds` | `3600` | Wait this many seconds of connection timestamps before repeating evidence for the same client, service and combination of reasons. The module remembers the most recent 16 such combinations per service. For a newly active service, the wait applies to that host and port across all clients. This reduces repeated warnings; `0` removes the wait. |
 | `max_alerts_per_service_hour` | `10` | Maximum evidence records for one service per UTC clock hour in connection timestamps. This limits floods of warnings even when many different clients connect. The limit is per service, across all its clients. |
-| `flush_interval_seconds` | `30` | Real seconds between saving learned information to disk. A shorter interval loses less learning after a crash but writes to disk more often. Slips also saves on a normal shutdown; an abrupt stop can lose changes since the last save. |
+| `flush_interval_seconds` | `30` | Real seconds between saving learned information to disk. A shorter interval loses less learning after a crash but writes to disk more often. Slips also saves on a normal shutdown; an abrupt stop can lose changes since the last save. Connections are checked as they arrive, without waiting for this interval. |
 
 These warning limits do not remove the original connection records. The module
 creates one `ANOMALOUS_FLOW` evidence record per reported connection, explaining
