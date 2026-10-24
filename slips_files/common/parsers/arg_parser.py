@@ -249,6 +249,11 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help="Kill all unused redis servers",
         )
+        from managers.process_manager.instance_control import (
+            add_instance_arguments,
+        )
+
+        add_instance_arguments(self)
         self.add_argument(
             "-m",
             "--multiinstance",

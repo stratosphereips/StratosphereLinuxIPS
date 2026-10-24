@@ -1,0 +1,313 @@
+"""Verify scoped discovery and graceful shutdown without touching live runs."""
+
+import argparse
+import builtins
+import json
+import os
+from pathlib import Path
+import runpy
+import signal
+import subprocess
+import sys
+import time
+from unittest.mock import Mock, patch
+
+import psutil
+import pytest
+
+from managers.process_manager import instance_control as control
+from slips_files.common.parsers.arg_parser import ArgumentParser
+from tests.module_factory import ModuleFactory
+
+
+def candidate(pid: int, entrypoint: Path, *arguments: str) -> Mock:
+    """Create a process double whose main script has a verifiable path.
+
+    Parameters:
+        pid: Process identifier.
+        entrypoint: Executed script.
+        arguments: Capture arguments following the script.
+
+    Returns:
+        Process double with stable identity and no children.
+    """
+    process = Mock(pid=pid)
+    process.cmdline.return_value = ["python3", str(entrypoint), *arguments]
+    process.cwd.return_value = str(Path.cwd())
+    process.create_time.return_value = 100.0
+    process.status.return_value = psutil.STATUS_RUNNING
+    process.is_running.return_value = True
+    process.children.return_value = []
+    return process
+
+
+@pytest.mark.parametrize(
+    "command, expected",
+    [
+        ([], None),
+        (["slips.py", "-i", "eth0"], 0),
+        (["python3", "./slips.py", "-c", "config/slips.yaml"], 1),
+        (["venv/bin/Python", "-u", "./slips.py"], 2),
+        (["python3.11", "-X", "dev", "-B", "slips.py"], 4),
+        (["python", "-Wignore", "--", "slips.py"], 3),
+        (["python", "--check-hash-based-pycs", "always", "slips.py"], 3),
+        (["python", "-c", "slips.py"], None),
+        (["python", "-cpass", "slips.py"], None),
+        (["python", "-uc", "slips.py"], None),
+        (["python", "-m", "slips.py"], None),
+        (["python", "-mmodule", "slips.py"], None),
+        (["python", "other.py", "slips.py"], None),
+        (["echo", "slips.py"], None),
+        (["python", "-", "slips.py"], None),
+        (["python", "-X"], None),
+    ],
+)
+def test_script_position(command: list[str], expected: int | None) -> None:
+    """Distinguish a real entry point from an argument or Python code string.
+
+    Parameters:
+        command: Candidate argument vector.
+        expected: Script position, or None for non-captures.
+    """
+    _factory = ModuleFactory()
+    assert control.script_position(command) == expected
+
+
+@pytest.mark.parametrize(
+    "arguments, names, expected",
+    [
+        (("-i", "eth0"), ("-i", "--interface"), "eth0"),
+        (("--interface=en0",), ("-i", "--interface"), "en0"),
+        (("-ooutput/test",), ("-o", "--output"), "output/test"),
+        (("-i",), ("-i", "--interface"), "—"),
+        (("-f", "capture.pcap"), ("-i", "--interface"), "—"),
+    ],
+)
+def test_argument_value(arguments: tuple[str, ...], names: tuple[str, ...], expected: str) -> None:
+    """Display launch values without loading a configuration.
+
+    Parameters:
+        arguments: Existing launch arguments.
+        names: Recognized spellings.
+        expected: Displayed value.
+    """
+    _factory = ModuleFactory()
+    assert control.argument_value(arguments, *names) == expected
+
+
+@pytest.mark.parametrize("case", ["capture", "relative", "other_checkout", "self", "zombie", "denied", "management", "legacy_stop"])
+def test_inspect_instance_scope(tmp_path: Path, case: str) -> None:
+    """Reject other programs, stale processes and management invocations.
+
+    Parameters:
+        tmp_path: Isolated script location.
+        case: Candidate process identity.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    process = candidate(41001, entrypoint, "-i", "eth0")
+    if case == "relative":
+        process.cmdline.return_value[1] = "./slips.py"
+        process.cwd.return_value = str(tmp_path)
+    elif case == "other_checkout":
+        process.cmdline.return_value[1] = str(tmp_path / "other" / "slips.py")
+    elif case == "self":
+        process.pid = os.getpid()
+    elif case == "zombie":
+        process.status.return_value = psutil.STATUS_ZOMBIE
+    elif case == "denied":
+        process.cmdline.side_effect = psutil.AccessDenied(process.pid)
+    elif case in {"management", "legacy_stop"}:
+        process.cmdline.return_value.append("--stop=all" if case == "management" else "-S")
+    actual = control.inspect_instance(process, entrypoint)
+    if case in {"capture", "relative"}:
+        assert actual == control.RunningInstance(41001, 100.0, ("-i", "eth0"))
+    else:
+        assert actual is None
+
+
+def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    """List only verified main processes and display their input and output.
+
+    Parameters:
+        tmp_path: Isolated entry point.
+        capsys: Captured listing output.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    first = candidate(41002, entrypoint, "-D", "-f", "test.pcap", "-o", "output/test")
+    second = candidate(41001, entrypoint, "-i", "eth0")
+    other = candidate(41003, tmp_path / "other.py")
+    with patch.object(control.psutil, "process_iter", return_value=[first, other, second]):
+        instances = control.list_instances(entrypoint)
+    assert [instance.pid for instance in instances] == [41001, 41002]
+    control.print_instances(instances)
+    listing = capsys.readouterr().out
+    assert "eth0" in listing and "test.pcap" in listing
+    assert "daemon" in listing and "output/test" in listing
+    assert "41003" not in listing
+    control.print_instances([])
+    assert "No accessible running" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("case, expected", [("normal", 0), ("gone", 0), ("reused", 1), ("denied", 1), ("slow", 1)])
+def test_stop_revalidates_and_waits(tmp_path: Path, case: str, expected: int) -> None:
+    """Never signal a reused PID or force-kill a slow capture or its workers.
+
+    Parameters:
+        tmp_path: Isolated entry point.
+        case: Process state at stop time.
+        expected: Exit status.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    process = candidate(41001, entrypoint, "-i", "eth0")
+    child = Mock(pid=41002)
+    process.children.return_value = [child]
+    instance = control.inspect_instance(process, entrypoint)
+    if case == "reused":
+        process.create_time.return_value += 1
+    if case == "denied":
+        process.children.side_effect = psutil.AccessDenied(process.pid)
+    with patch.object(control.psutil, "Process", return_value=process) as constructor, patch.object(
+        control.psutil, "wait_procs", return_value=([], [child] if case == "slow" else [])
+    ) as wait:
+        if case == "gone":
+            constructor.side_effect = psutil.NoSuchProcess(process.pid)
+        assert control.stop_instances([instance], entrypoint, timeout=0.1) == expected
+    if case in {"normal", "slow"}:
+        process.send_signal.assert_called_once_with(signal.SIGTERM)
+        assert {item.pid for item in wait.call_args.args[0]} == {41001, 41002}
+        assert wait.call_args.kwargs["timeout"] == 0.1
+    else:
+        process.send_signal.assert_not_called()
+        wait.assert_not_called()
+    process.kill.assert_not_called()
+    child.kill.assert_not_called()
+    child.send_signal.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "arguments, count, selected, expected",
+    [
+        (["--list-instances"], 2, [], 0),
+        (["--stop"], 0, [], 0),
+        (["--stop"], 1, [41001], 0),
+        (["--stop"], 2, [], 1),
+        (["--stop", "41002"], 2, [41002], 0),
+        (["--stop=all"], 2, [41001, 41002], 0),
+        (["--stop", "41003"], 2, [], 1),
+        (["--stop", "41003"], 0, [], 1),
+    ],
+)
+def test_management_selection(arguments: list[str], count: int, selected: list[int], expected: int) -> None:
+    """Require an explicit choice when more than one analysis is running.
+
+    Parameters:
+        arguments: Management command.
+        count: Number of discovered captures.
+        selected: Expected main PIDs to stop.
+        expected: Exit status.
+    """
+    _factory = ModuleFactory()
+    instances = [control.RunningInstance(41001 + index, 100.0, ()) for index in range(count)]
+    with patch.object(control, "list_instances", return_value=instances), patch.object(control, "stop_instances", return_value=0) as stop:
+        assert control.handle_instance_command(arguments) == expected
+    if selected:
+        assert [instance.pid for instance in stop.call_args.args[0]] == selected
+    else:
+        stop.assert_not_called()
+
+
+@pytest.mark.parametrize("arguments", [["--stop", "0"], ["--stop", "-1"], ["--stop", "abc"], ["--stop", "--list-instances"], ["--stop", "-i", "eth0"]])
+def test_management_rejects_invalid_commands(arguments: list[str]) -> None:
+    """Reject ambiguous options before discovery or any stop request.
+
+    Parameters:
+        arguments: Invalid management options.
+    """
+    _factory = ModuleFactory()
+    with patch.object(control, "list_instances") as discover, patch.object(control, "stop_instances") as stop:
+        with pytest.raises(SystemExit) as error:
+            control.handle_instance_command(arguments)
+    assert error.value.code == 2
+    discover.assert_not_called()
+    stop.assert_not_called()
+
+
+def test_management_help_and_capture_passthrough() -> None:
+    """Expose the same controls in help while leaving ordinary capture alone."""
+    _factory = ModuleFactory()
+    parser = argparse.ArgumentParser()
+    control.add_instance_arguments(parser)
+    assert parser.parse_args(["--stop"]).stop == "auto"
+    with patch.object(sys, "argv", ["slips.py", "--list-instances"]):
+        assert ArgumentParser(add_help=False).parse_arguments().list_instances
+    with patch.object(control, "list_instances") as discover:
+        assert control.handle_instance_command(["-i", "eth0"]) is None
+        with pytest.raises(SystemExit) as error:
+            control.handle_instance_command(["--stop", "--help"])
+    assert error.value.code == 0
+    discover.assert_not_called()
+
+
+def test_entrypoint_management_does_not_import_capture() -> None:
+    """Run the actual entry point without initializing Main, config or Redis."""
+    _factory = ModuleFactory()
+    original_import = builtins.__import__
+    with patch.object(sys, "argv", ["slips.py", "--list-instances"]), patch.object(
+        control, "list_instances", return_value=[]
+    ), patch("builtins.__import__", wraps=original_import) as imports:
+        with pytest.raises(SystemExit) as error:
+            runpy.run_path("slips.py", run_name="__main__")
+    assert error.value.code == 0
+    assert not any(call.args[0] in {"slips.main", "slips.daemon", "slips_files.common.parsers.config_parser"} for call in imports.call_args_list)
+
+
+def test_native_shutdown_waits_for_checkpoint_and_worker(tmp_path: Path) -> None:
+    """Stop an owned native fixture after its worker exits and state is saved.
+
+    Parameters:
+        tmp_path: Private fixture scripts and checkpoint markers.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    marker = tmp_path / "ready.json"
+    saved = tmp_path / "saved"
+    entrypoint.write_text('''"""Isolated Slips-shaped process for shutdown tests."""
+import json
+from pathlib import Path
+import signal
+import subprocess
+import sys
+child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+def stop(number: int, frame: object) -> None:
+    """Save fixture state after its child has stopped."""
+    child.terminate()
+    child.wait(timeout=5)
+    Path(sys.argv[2]).write_text("saved")
+    raise SystemExit(0)
+signal.signal(signal.SIGTERM, stop)
+Path(sys.argv[1]).write_text(json.dumps({"child": child.pid}))
+while True:
+    signal.pause()
+''')
+    process = subprocess.Popen([sys.executable, str(entrypoint), str(marker), str(saved)])
+    child_pid = None
+    try:
+        deadline = time.monotonic() + 10
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        child_pid = json.loads(marker.read_text())["child"]
+        instance = control.inspect_instance(psutil.Process(process.pid), entrypoint)
+        assert instance is not None
+        assert control.stop_instances([instance], entrypoint, timeout=5) == 0
+        assert saved.read_text() == "saved"
+        assert process.wait(timeout=5) == 0
+        assert not psutil.pid_exists(child_pid)
+    finally:
+        if process.poll() is None:
+            process.terminate()
+            process.wait(timeout=5)
+        if child_pid and psutil.pid_exists(child_pid):
+            psutil.Process(child_pid).terminate()

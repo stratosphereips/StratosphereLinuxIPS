@@ -26,8 +26,7 @@ import sys
 import time
 import warnings
 
-from slips.main import Main
-from slips.daemon import Daemon
+from managers.process_manager.instance_control import handle_instance_command
 
 
 # Ignore warnings on CPU from tensorflow
@@ -42,6 +41,13 @@ warnings.filterwarnings("ignore")
 if __name__ == "__main__":
     if sys.version_info[0] < 3:
         sys.exit("Slips can only run on python3+ .. Stopping.")
+
+    status = handle_instance_command(sys.argv[1:])
+    if status is not None:
+        sys.exit(status)
+
+    from slips.main import Main
+    from slips.daemon import Daemon
 
     slips = Main()
 

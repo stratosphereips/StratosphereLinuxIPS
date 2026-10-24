@@ -133,6 +133,48 @@ To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
 
 Only one instance of the daemon can run at a time.
 
+### Find and stop running instances
+
+Use these commands from the Slips repository directory, with the same Python
+environment used to run Slips:
+
+```bash
+./slips.py --list-instances
+./slips.py --stop
+./slips.py --stop 12345
+./slips.py --stop all
+```
+
+`--list-instances` shows accessible running Slips main processes from this
+checkout, with their PID, launch mode, interface or input file, and output
+directory. It finds normal foreground runs, shell background runs (`&` or
+`nohup`), service launches, and `-D` daemons. It excludes worker processes,
+other checkouts, stale PIDs and the management command itself.
+
+`--stop` stops the only running instance. If several are running, it lists
+them and asks you to select a PID with `--stop PID`; it does not choose one.
+`--stop all` explicitly stops all accessible instances from this checkout,
+including foreground and PCAP analyses. These management options run on their
+own; do not combine them with capture options such as `-i`, `-f` or `-c`.
+
+Stopping sends SIGTERM to the selected main process, which performs Slips'
+normal shutdown: finish cleanup, save learned information, stop its workers
+and close its web interface. The command waits up to 45 seconds for the main
+process and its observed workers. It reports any remaining PIDs and returns
+a nonzero exit status rather than force-killing them. Review that run's
+`errors.log` if shutdown does not finish. An analysis stopped this way is
+interrupted; unread traffic in a PCAP is not analyzed.
+
+Listing and stopping do not start a capture, load a configuration, create logs
+or connect to Redis. They do not flush Redis or delete saved capture history.
+Existing retention and shutdown settings still apply inside the running Slips
+process. Unlike these commands, `-k`/`--killall` manages unused Redis servers;
+`-S`/`--stopdaemon` remains available for the single `-D` daemon.
+
+On macOS, for example, use `.venv-macos/bin/python slips.py --list-instances`
+and `.venv-macos/bin/python slips.py --stop`. You do not need to remember a PID
+when only one instance is running.
+
 **Interactive** : For viewing output, logs and alerts in your terminal.
 
 This is the default mode, It doesn't require any flags.
@@ -1009,6 +1051,8 @@ this file can be used for training Slips RNN module.
 - ```-D``` or  ```--daemon``` Run slips in daemon mode
 - ```-S``` or  ```--stopdaemon``` Stop slips daemon
 - ```-k``` or  ```--killall``` Kill all unused redis servers
+- `--list-instances` List accessible running Slips instances from this checkout.
+- `--stop [PID|all]` Gracefully stop the sole running instance, a selected PID, or all instances from this checkout.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
 - ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory; start with a clean Redis database 0.
