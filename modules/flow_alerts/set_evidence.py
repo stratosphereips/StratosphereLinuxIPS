@@ -215,7 +215,7 @@ class SetEvidenceHelper:
         ip_outside_localnet: str,
         local_network: str | None = None,
     ) -> None:
-        """Save source-high and destination-low findings for a subnet mismatch.
+        """Save high source and informational destination subnet findings.
 
         Parameters:
             twid: Detection time window.

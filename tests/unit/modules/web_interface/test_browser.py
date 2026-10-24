@@ -23,7 +23,7 @@ from slips_files.common.slips_utils import utils
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
-    """Show the high source and low destination as separate host records.
+    """Show high source and informational destination findings separately.
 
     Parameters:
         theme: Browser color theme.
@@ -41,6 +41,7 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
             "timestamp": 147.026993, "threat_level": str(evidence.threat_level),
             "module": Modules.CONN_ANALYZER.value, "alert_ids": [],
             "twid": "timewindow1", "flow_count": 1})
+    assert [record["threat_level"] for record in records] == ["high", "info"]
     playwright = pytest.importorskip("playwright.sync_api")
     assets = Path("modules/web_interface")
     errors: list[str] = []
@@ -91,6 +92,7 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
             assert record["victim"]["value"] in cards.nth(1).inner_text()
             assert record["description"].split(". ")[0] == detail.locator("h2").inner_text()
             assert "ICMP type: 11; code: 0" in detail.inner_text()
+            assert record["threat_level"] in detail.locator(".evidence-detail-stats").inner_text()
         assert errors == []
         browser.close()
 

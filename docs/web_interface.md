@@ -1082,14 +1082,14 @@ Responses include bounded page metadata and selected ranges. Overview and identi
 
 `DIFFERENT_LOCALNET` describes a connection involving a private address outside
 the monitored subnet. For A connecting to B, Slips stores a **high** finding on
-A's profile with source direction, and a **low** finding on B's profile with
+A's profile with source direction, and an **info** finding on B's profile with
 destination direction. These are two perspectives on the same flow, linked as
 related evidence. Each host gets one finding for that flow, never both severities.
 Connections to the same IP are ignored.
 
 For example, `192.168.1.163` connecting to `172.17.0.1:6668` creates a high finding
-for the connecting host `192.168.1.163` and a low finding for the receiving host
-`172.17.0.1`. The low finding does not say that `172.17.0.1` initiated the
+for the connecting host `192.168.1.163` and an informational finding for the receiving host
+`172.17.0.1`. The informational finding does not say that `172.17.0.1` initiated the
 connection. Investigation labels identify the connecting and receiving hosts,
 while triggering flows retain their original source-to-destination order.
 

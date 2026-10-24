@@ -205,7 +205,7 @@ def test_different_localnet_usage(
     assert len(findings) == 2
     for evidence, host, direction, other, other_direction, level in (
         (findings[0], saddr, Direction.SRC, daddr, Direction.DST, ThreatLevel.HIGH),
-        (findings[1], daddr, Direction.DST, saddr, Direction.SRC, ThreatLevel.LOW),
+        (findings[1], daddr, Direction.DST, saddr, Direction.SRC, ThreatLevel.INFO),
     ):
         assert evidence.evidence_type == EvidenceType.DIFFERENT_LOCALNET
         assert evidence.profile.ip == evidence.attacker.value == host

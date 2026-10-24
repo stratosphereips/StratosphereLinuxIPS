@@ -69,7 +69,7 @@ def test_one_finding_per_host_across_connection_and_dns_analyzers(
     proto: str,
     dport: int,
 ) -> None:
-    """Keep source-high and destination-low findings on separate profiles.
+    """Keep high source and informational destination findings separate.
 
     Parameters:
         saddr: Source address.
@@ -110,7 +110,7 @@ def test_one_finding_per_host_across_connection_and_dns_analyzers(
     assert source.attacker.direction == Direction.SRC
     assert source.victim.value == daddr
     assert source.victim.direction == Direction.DST
-    assert destination.threat_level == ThreatLevel.LOW
+    assert destination.threat_level == ThreatLevel.INFO
     assert destination.profile.ip == destination.attacker.value == daddr
     assert destination.attacker.direction == Direction.DST
     assert destination.victim.value == saddr
@@ -198,7 +198,7 @@ async def test_recorded_icmp_flow_produces_one_finding_per_host_in_main() -> (
     assert len(findings) == 2
     assert [(item.profile.ip, item.threat_level) for item in findings] == [
         ("10.0.2.2", ThreatLevel.HIGH),
-        ("10.0.2.15", ThreatLevel.LOW),
+        ("10.0.2.15", ThreatLevel.INFO),
     ]
     for evidence in findings:
         assert evidence.uid == ["C6VlUE4fyYvUJHu3ei"]
@@ -249,9 +249,9 @@ def test_recorded_connections_store_one_severity_per_host_and_flow(
         assert len(rows) == 4
         assert {row[:3] for row in rows} == {
             ("C6VlUE4fyYvUJHu3ei", "10.0.2.2", "high"),
-            ("C6VlUE4fyYvUJHu3ei", "10.0.2.15", "low"),
+            ("C6VlUE4fyYvUJHu3ei", "10.0.2.15", "info"),
             ("C6ce9q3xECAsonga21", "192.168.1.5", "high"),
-            ("C6ce9q3xECAsonga21", "10.0.2.2", "low"),
+            ("C6ce9q3xECAsonga21", "10.0.2.2", "info"),
         }
         assert len({row[:2] for row in rows}) == len(rows)
         for uid, host, level, raw in rows:
@@ -281,7 +281,7 @@ def test_recorded_connections_store_one_severity_per_host_and_flow(
             )
         for host, level, direction in (
             ("10.0.2.2", "high", "SRC"),
-            ("10.0.2.15", "low", "DST"),
+            ("10.0.2.15", "info", "DST"),
         ):
             page = reader.evidence(
                 {
@@ -349,7 +349,7 @@ def test_delayed_flow_description_uses_the_original_subnet(
         assert "10.0.2.0/24" not in evidence.description
     assert [item.threat_level for item in findings] == [
         ThreatLevel.HIGH,
-        ThreatLevel.LOW,
+        ThreatLevel.INFO,
     ]
     module.db.get_local_network.assert_not_called()
 
@@ -445,7 +445,7 @@ def test_host_threat_updates_follow_the_source_and_destination_profiles() -> (
         call.args for call in manager.update_threat_level.call_args_list
     ] == [
         ("profile_10.0.2.2", "high", 1.0),
-        ("profile_10.0.2.15", "low", 1.0),
+        ("profile_10.0.2.15", "info", 1.0),
     ]
     stored = [
         call.args[0] for call in manager.sqlite.add_evidence.call_args_list

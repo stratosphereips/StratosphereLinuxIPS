@@ -258,7 +258,7 @@ def different_localnet_context(db: DBManager, flow: Any) -> tuple[str, str]:
 def different_localnet_findings(
     twid: str, flow: Any, ip_outside_localnet: str, local_network: str
 ) -> tuple[Evidence, ...]:
-    """Build a source-high and destination-low finding for a subnet mismatch.
+    """Build high source and informational destination subnet findings.
 
     Parameters:
         twid: Detection time window.
@@ -301,7 +301,7 @@ def different_localnet_findings(
             Direction.DST,
             flow.saddr,
             Direction.SRC,
-            ThreatLevel.LOW,
+            ThreatLevel.INFO,
             f"{flow.daddr} received a connection from {flow.saddr}",
         ),
     ):

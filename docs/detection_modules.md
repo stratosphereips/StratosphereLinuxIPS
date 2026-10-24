@@ -175,7 +175,8 @@ When a flow from A to B involves a private address outside the monitored subnet,
 Slips creates two related `DIFFERENT_LOCALNET` findings, one for each host:
 
 - **A, the source: high severity.** A initiated the connection.
-- **B, the destination: low severity.** B received the connection.
+- **B, the destination: info severity.** B received the connection; receiving
+  it alone does not add threat points to B's score.
 
 Each finding belongs to its own host profile, and both reference the original
 flow ID. A host gets one severity for this flow, never both. Connections from
@@ -183,7 +184,7 @@ an IP to itself are ignored. Severity follows the host's role regardless of
 whether the source, destination, or both addresses are outside the subnet.
 
 For example, with local subnet `192.168.0.0/16`, an ICMP flow from `10.0.2.2`
-to `10.0.2.15` produces a high-severity finding for `10.0.2.2` and a low-severity
+to `10.0.2.15` produces a high-severity finding for `10.0.2.2` and an informational
 finding for `10.0.2.15`. Both descriptions explain that both private addresses
 are outside the selected subnet. ICMP
 type and code are identified as such, rather than being called TCP/UDP ports.
