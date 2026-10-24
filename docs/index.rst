@@ -64,6 +64,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    web_interface
    architecture
    detection_modules
+   cc_detection_strategy
    brute_force_detector
    llm_module
    alert_summary_module

@@ -311,6 +311,11 @@ The path of the file can be modified by changing the ```RiskIQ_credentials_path`
 
 ## RNN C&C Detection Module
 
+See the [C2 detection audit and proposed redesign](cc_detection_strategy.md)
+for measured results on `dataset/test-cc`, current implementation issues, and
+the proposed use of continuous flow measurements. That document is a proposal;
+the description below covers the existing letter-based module.
+
 This module is used to detect command and control channels in a network by analyzing the features of the network flows and representing them as Stratosphere Behavioral Letters(Stratoletters). This is achieved through the use of a recurrent neural network, which is trained on these letters to identify and classify potential C&C traffic.
 
 ### Strato letters
