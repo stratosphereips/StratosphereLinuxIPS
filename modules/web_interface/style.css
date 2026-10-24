@@ -853,6 +853,16 @@ body.hosts-active main { max-width: none; padding: 0; }
   .host-right-column { display: none; }
   #host-detail-view > #host-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+.host-workspace-grid.has-evidence { grid-template-columns: minmax(170px, 14%) minmax(240px, var(--host-evidence-list-width, 32%)) 8px minmax(320px, 1fr); }
+.host-workspace-grid.has-evidence > .host-right-column { display: none; }
+.host-evidence-pane { min-width: 0; min-height: 0; overflow: hidden; container: host-evidence / inline-size; }
+.host-evidence-pane[hidden] { display: none; }
+.host-evidence-pane #evidence-detail.active { min-height: 0; height: 100%; overflow: auto; padding: .45rem .6rem 1rem; }
+@container host-evidence (max-width: 900px) { .host-evidence-pane .evidence-detail-columns { grid-template-columns: minmax(0, 1fr); } .host-evidence-pane .evidence-detail-banner { flex-direction: column; } .host-evidence-pane .evidence-detail-stats { min-width: 0; } }
+@media (max-width: 1180px) {
+  .host-workspace-grid.has-evidence { grid-template-columns: minmax(240px, var(--host-evidence-list-width, 42%)) 8px minmax(320px, 1fr); overflow-x: auto; }
+  .host-workspace-grid.has-evidence > .host-left-column { display: none; }
+}
 body.evidence-active main { max-width: none; padding: 0; }
 #evidence.active { display: flex; height: var(--evidence-panel-height, calc(100dvh - 120px)); min-height: 380px; overflow: hidden; flex-direction: column; }
 .evidence-toolbar { display: flex; min-height: 51px; align-items: center; gap: .45rem; padding: .35rem .55rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
@@ -941,9 +951,9 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-record-actions button { padding: .3rem .45rem; font-size: .69rem; }
 @media (max-width: 1250px) { .evidence-toolbar { overflow-x: auto; } .evidence-workspace { min-width: 1050px; } #evidence.active { overflow-x: auto; } }
 body.evidence-detail-active main { max-width: none; padding: 0; }
-body.evidence-detail-active .drawer:not(.alert-over-evidence), body.evidence-detail-active .backdrop:not(.alert-over-evidence) { display: none; }
-body.evidence-detail-active .drawer.alert-over-evidence { display: flex; }
-body.evidence-detail-active .backdrop.alert-over-evidence { display: block; }
+body:is(.evidence-detail-active, .host-evidence-active) .drawer:not(.alert-over-evidence), body:is(.evidence-detail-active, .host-evidence-active) .backdrop:not(.alert-over-evidence) { display: none; }
+body:is(.evidence-detail-active, .host-evidence-active) .drawer.alert-over-evidence { display: flex; }
+body:is(.evidence-detail-active, .host-evidence-active) .backdrop.alert-over-evidence { display: block; }
 body.evidence-detail-active main > .panel:not(#evidence-detail) { display: none; }
 #evidence-detail[hidden] { display: none; }
 #evidence-detail.active { min-height: calc(100dvh - 119px); padding: .55rem .7rem 2rem; background: #0a1119; font-size: .76rem; }

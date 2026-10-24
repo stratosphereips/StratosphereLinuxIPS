@@ -342,6 +342,130 @@ def test_blocking_only_whitelist_editor_in_chrome() -> None:
         browser.close()
 
 
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1600, 1000, 768])
+def test_host_evidence_opens_beside_table_in_chrome(theme: str, width: int) -> None:
+    """Keep host evidence beside its table through navigation and refresh.
+
+    Parameters:
+        theme: Browser color theme.
+        width: Desktop or narrow host workspace width.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    host = {"ip": "192.0.2.10", "scope": "local", "all_ips": ["192.0.2.10"],
+            "alert_count": 0, "evidence_count": 2, "alert_score": 0,
+            "alert_threshold": 0.25, "load": {"flows": 2}}
+    records = [{"id": f"host-evidence-{index}", "profile_ip": host["ip"],
+                "evidence_type": "UNKNOWN_PORT", "threat_level": "low",
+                "description": f"Unknown port {23423 + index}", "confidence": 1,
+                "timestamp": 1792830000 + index, "module": Modules.CONN_ANALYZER.value,
+                "flow_count": 1, "alert_ids": [], "twid": "timewindow1"}
+               for index in range(2)]
+
+    def route_request(route: Any) -> None:
+        """Serve real assets and isolated host evidence with a triggering flow.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/evidence":
+            route.fulfill(json={"items": records, "total": 2, "page_size": 2})
+        elif path.startswith("/api/evidence/") and path.endswith("/flows"):
+            route.fulfill(json={"items": [{"uid": "host-flow", "network_flow": {
+                "uid": "host-flow", "flow": {"uid": "host-flow", "type_": "conn",
+                "saddr": "192.0.2.20", "daddr": host["ip"], "sport": 50000,
+                "dport": 23423, "proto": "tcp", "state": "SF", "dur": 12}}}],
+                "linked_uid_count": 1})
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        elif path.startswith("/api/hosts/"):
+            route.fulfill(json={**host, "ip": path.rsplit("/", 1)[-1]})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": width, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""async ({host, theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); clearError(); state.activeTab = 'hosts'; state.host = host;
+            state.whitelists = {evidence_types:[]}; state.hostActivity = 'evidence';
+            document.body.classList.add('hosts-active');
+            document.body.classList.remove('overview-active');
+            document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'hosts'));
+            byId('hosts-list-view').hidden = true; byId('host-detail-view').hidden = false;
+            byId('host-alerts-panel').hidden = true; byId('host-evidence-panel').hidden = false;
+            renderHostCards(host); updateHostViewportHeight(); await loadHostEvidence();
+        }""", {"host": host, "theme": theme})
+        rows = page.locator("#host-evidence-table tbody tr[data-clickable]")
+        rows.first.click()
+        page.wait_for_function("() => state.evidenceDetail.record?.id === 'host-evidence-0' && !state.requests.has('evidenceFlows')")
+        inspector = page.locator("#host-evidence-pane #evidence-detail")
+        assert inspector.is_visible()
+        assert rows.first.is_visible()
+        assert page.locator("#host-title").is_visible()
+        assert not page.evaluate("document.body.classList.contains('evidence-detail-active')")
+        assert inspector.bounding_box()["x"] > page.locator(".host-center-column").bounding_box()["x"]
+        assert inspector.bounding_box()["x"] + inspector.bounding_box()["width"] <= width
+        assert inspector.locator(".flow-card").count() == 1
+        assert "1 of 1 linked flows loaded" in inspector.inner_text()
+        inspector.get_by_role("button", name="next ↓").click()
+        page.wait_for_function("() => state.evidenceDetail.record?.id === 'host-evidence-1' && !state.requests.has('evidenceFlows')")
+        page.evaluate("() => loadHostEvidence()")
+        assert inspector.is_visible()
+        assert "Record 2 of 2" in inspector.inner_text()
+        page.evaluate("""async (record) => {
+            await openAlert({alert_id:'host-alert',ip_alerted:record.profile_ip,
+                evidence:[record],evidence_count:1,alert_time:record.timestamp});
+        }""", records[0])
+        drawer = page.locator("#drawer")
+        assert drawer.is_visible()
+        drawer.locator(".investigation-card").first.click()
+        page.wait_for_function("() => state.evidenceDetail.record?.id === 'host-evidence-0' && !state.requests.has('evidenceFlows')")
+        assert inspector.is_visible()
+        assert drawer.is_hidden()
+        page.keyboard.press("Escape")
+        assert drawer.is_visible()
+        assert page.evaluate("state.evidenceDetail.record.id") == "host-evidence-1"
+        page.keyboard.press("Escape")
+        assert drawer.is_hidden()
+        assert inspector.is_visible()
+        divider = page.locator("#host-evidence-divider")
+        divider.focus()
+        before = inspector.bounding_box()["width"]
+        divider.press("ArrowRight")
+        assert inspector.bounding_box()["width"] < before
+        page.keyboard.press("Escape")
+        assert inspector.count() == 0
+        assert page.locator("#evidence-detail").is_hidden()
+        assert rows.first.is_visible()
+        rows.first.focus()
+        rows.first.press("Enter")
+        page.wait_for_function("() => state.evidenceDetail.inHostPane")
+        inspector.get_by_role("button", name="Close evidence details", exact=True).click()
+        assert not page.evaluate("state.evidenceDetail.inHostPane")
+        rows.first.click()
+        page.wait_for_function("() => state.evidenceDetail.inHostPane")
+        page.evaluate("() => closeHost()")
+        assert page.locator("#host-evidence-pane").is_hidden()
+        assert page.locator("#hosts-list-view").is_visible()
+        assert errors == []
+        browser.close()
+
+
 @pytest.mark.parametrize("activity", ["alerts", "evidence", "flows"])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_tab_counts_survive_polling_in_chrome(activity: str, theme: str) -> None:

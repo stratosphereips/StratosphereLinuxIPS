@@ -63,7 +63,7 @@ const state = {
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
-  evidenceDetail: { record: null, records: [], generation: 0, history: [], inAlertPane: false },
+  evidenceDetail: { record: null, records: [], generation: 0, history: [], inAlertPane: false, inHostPane: false },
   runIdentity: null,
   reviewAvailable: false,
   networkOnly: false,
@@ -126,7 +126,8 @@ function saveViewPreferences() {
   });
   const paneWidths = {};
   [["alerts-workspace", ["--alerts-host-width", "--alerts-list-width", "--alerts-detail-width"]],
-    ["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width"]]]
+    ["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width"]],
+    ["host-workspace", ["--host-evidence-list-width"]]]
     .forEach(([id, names]) => {
       const element = byId(id);
       paneWidths[id] = Object.fromEntries(names.map((name) => [name, element.style.getPropertyValue(name)]));
@@ -181,9 +182,9 @@ function restoreViewPreferences() {
     }
   });
   Object.entries(saved.paneWidths || {}).forEach(([id, widths]) => {
-    if (!["alerts-workspace", "evidence-workspace"].includes(id) || !byId(id)) return;
+    if (!["alerts-workspace", "evidence-workspace", "host-workspace"].includes(id) || !byId(id)) return;
     Object.entries(widths || {}).forEach(([name, width]) => {
-      if (/^--(?:alerts|evidence)-[a-z-]+-width$/.test(name) && /^\d+(?:\.\d+)?(?:px|%)$/.test(width)) {
+      if (/^--(?:alerts|evidence|host)-[a-z-]+-width$/.test(name) && /^\d+(?:\.\d+)?(?:px|%)$/.test(width)) {
         if (id === "evidence-workspace" && name === "--evidence-left-width"
             && width.endsWith("%") && Number.parseFloat(width) < 20) return;
         byId(id).style.setProperty(name, width);
@@ -2791,6 +2792,13 @@ function updateEvidenceViewportHeight() {
  * @param {number} desiredWidth Requested pane width in pixels.
  */
 function resizeEvidencePane(kind, desiredWidth) {
+  if (kind === "host") {
+    const listWidth = document.querySelector(".host-center-column").getBoundingClientRect().width;
+    const detailWidth = byId("host-evidence-pane").getBoundingClientRect().width;
+    byId("host-workspace").style.setProperty("--host-evidence-list-width",
+      `${Math.round(Math.max(240, Math.min(desiredWidth, listWidth + detailWidth - 320)))}px`);
+    return;
+  }
   const workspace = byId("evidence-workspace");
   const width = workspace.getBoundingClientRect().width;
   const hasDetail = workspace.classList.contains("has-detail");
@@ -2804,10 +2812,11 @@ function resizeEvidencePane(kind, desiredWidth) {
   }
 }
 
-/** Enable pointer and keyboard resizing for Evidence's three panes. */
+/** Enable pointer and keyboard resizing for evidence lists and details. */
 function initEvidencePaneResize() {
   [["evidence-group-divider", "group", ".evidence-left"],
-    ["evidence-detail-divider", "records", "#evidence-right"]]
+    ["evidence-detail-divider", "records", "#evidence-right"],
+    ["host-evidence-divider", "host", ".host-center-column"]]
     .forEach(([id, kind, selector]) => {
       const divider = byId(id);
       divider.addEventListener("pointerdown", (event) => {
@@ -5534,7 +5543,7 @@ function flowCard(group, position = 1, total = 1, title = null) {
   return card;
 }
 
-/** Return from a full-page evidence investigation to its previous view.
+/** Close an evidence investigation or restore its previous record.
  * @param {boolean} restoreFocus Whether to focus the opening control.
  * @param {boolean} closeAll Whether to discard nested evidence navigation.
  */
@@ -5575,9 +5584,16 @@ function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
       state.alertsWorkspace.alert ? 2 : 1 :
       state.alertsWorkspace.alert ? 3 : state.alertsWorkspace.host ? 2 : 1);
   }
+  if (state.evidenceDetail.inHostPane) {
+    document.querySelector("main").append(byId("evidence-detail"));
+    byId("host-workspace").classList.remove("has-evidence");
+    byId("host-evidence-divider").hidden = true;
+    byId("host-evidence-pane").hidden = true;
+    state.evidenceDetail.inHostPane = false;
+  }
   byId("drawer").classList.remove("alert-over-evidence");
   byId("drawer-backdrop").classList.remove("alert-over-evidence");
-  document.body.classList.remove("evidence-detail-active");
+  document.body.classList.remove("evidence-detail-active", "host-evidence-active");
   byId("evidence-detail").hidden = true;
   byId("evidence-detail").classList.remove("active");
   byId("evidence-detail-content").replaceChildren();
@@ -5653,6 +5669,8 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   const page = byId("evidence-detail");
   const content = byId("evidence-detail-content");
   const inPane = !inAlertPane && state.activeTab === "evidence" && (detail.inPane || !cameFromDrawer);
+  const inHostPane = !inAlertPane && state.activeTab === "hosts" && Boolean(state.host)
+    && (detail.inHostPane || !cameFromDrawer);
   if (inPane) {
     const workspace = byId("evidence-workspace");
     workspace.classList.add("has-detail");
@@ -5663,20 +5681,28 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     setAlertPaneCount(state.alertsWorkspace.grouping === "individual" ? 3 : 4);
     byId("alerts-evidence-pane").append(page);
   }
+  if (inHostPane) {
+    byId("host-workspace").classList.add("has-evidence");
+    byId("host-evidence-divider").hidden = false;
+    byId("host-evidence-pane").hidden = false;
+    byId("host-evidence-pane").append(page);
+  }
   detail.inPane = inPane;
   detail.inAlertPane = inAlertPane;
+  detail.inHostPane = inHostPane;
   page.hidden = false;
   page.classList.add("active");
-  document.body.classList.toggle("evidence-detail-active", !inPane && !inAlertPane);
+  document.body.classList.toggle("evidence-detail-active", !inPane && !inAlertPane && !inHostPane);
+  document.body.classList.toggle("host-evidence-active", inHostPane);
   content.replaceChildren();
-  if (inPane || inAlertPane) page.scrollTop = 0;
+  if (inPane || inAlertPane || inHostPane) page.scrollTop = 0;
   else window.scrollTo(0, 0);
 
   const toolbar = document.createElement("div");
   toolbar.className = "evidence-detail-toolbar";
   const breadcrumb = document.createElement("div");
   breadcrumb.className = "evidence-detail-breadcrumb";
-  const back = text("button", inAlertPane || cameFromDrawer ? "← Back to alert" : inPane ? "← Close record" : "← Back to evidence", "evidence-detail-link");
+  const back = text("button", inAlertPane || cameFromDrawer ? "← Back to alert" : inPane || inHostPane ? "← Close record" : "← Back to evidence", "evidence-detail-link");
   back.type = "button";
   back.addEventListener("click", closeEvidenceDetail);
   breadcrumb.append(back, text("span", "›"),
@@ -6398,6 +6424,7 @@ function renderHostCards(host) {
 
 /** Show the selected host's alerts, evidence, or flows and load that page. */
 function showHostActivity(name) {
+  if (name !== "evidence" && state.evidenceDetail.inHostPane) closeEvidenceDetail(false, true);
   state.hostActivity = name;
   byId("host-activity-filter-notice").hidden = true;
   ["alerts", "evidence", "flows"].forEach((item) => {
@@ -6680,7 +6707,7 @@ async function loadHostEvidence() {
       description.title = row.description || "";
       return description;
     },
-  ], openEvidence);
+  ], (record) => openEvidence(record, groupedRows));
   addHostTableGroups("evidence", "host-evidence-table", groupedRows);
   applySortIndicators("host-evidence");
   pager("host-evidence", "host-evidence-pager", loadHostEvidence);
@@ -6999,6 +7026,7 @@ async function showUnprofiledHost(ip) {
 }
 
 async function openHost(ip, summary = null) {
+  if (state.evidenceDetail.inHostPane && state.host?.ip !== ip) closeEvidenceDetail(false, true);
   if (summary) {
     ["range", "from", "to"].forEach((name) => {
       byId(`host-${name}`).value = byId(`hosts-${name}`).value;
@@ -7108,6 +7136,7 @@ async function refreshHostWorkspace() {
 }
 
 function closeHost() {
+  if (state.evidenceDetail.inHostPane) closeEvidenceDetail(false, true);
   state.host = null;
   state.requests.get("hostAlerts")?.abort();
   state.requests.get("hostFlows")?.abort();

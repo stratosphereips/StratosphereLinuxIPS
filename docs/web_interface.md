@@ -101,6 +101,13 @@ third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
 
+In **Hosts**, clicking a row in a host's **Evidence** table opens the same
+investigation in a resizable pane on the right. The host and its evidence table
+remain visible. The pane includes triggering flows, review, whitelist, JSON and
+previous/next navigation through that host's current evidence page. Close it
+with **Close record**, **×**, or **Escape** to return to the full host layout.
+Selecting another host or leaving its Evidence activity closes the pane.
+
 The review panel also offers permanent deletion. For an alert, choose alert
 only, alert plus evidence, or alert plus evidence and linked flows. For one
 evidence record, choose evidence only or evidence and linked flows. A deletion

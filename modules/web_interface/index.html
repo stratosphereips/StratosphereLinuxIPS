@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261014-device-view">
+  <link rel="stylesheet" href="/style.css?v=20261024-host-evidence-pane">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -296,7 +296,7 @@
         </article>
         <p id="host-network-scope-note" class="surface muted" role="status" hidden></p>
         <div id="host-summary" class="summary-grid"></div>
-        <div class="host-workspace-grid">
+        <div id="host-workspace" class="host-workspace-grid">
           <div class="host-left-column">
             <article class="surface"><div class="host-card-head"><h3>Identity</h3></div><div id="host-identity"></div><details class="host-extra"><summary>DNS and threat intelligence</summary><div id="host-dns-details"></div><pre id="host-ti"></pre></details></article>
             <article class="surface"><h3>mDNS names</h3><div id="host-mdns-names"></div></article>
@@ -314,6 +314,8 @@
             <div class="host-mini-charts"><article class="surface"><figure><figcaption>Flows / min</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article><article class="surface"><figure><figcaption>Bytes / min</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article></div>
           </div>
           <div class="host-right-column"><article class="surface"><h3>Top peers</h3><div id="host-peers" class="bar-chart"></div></article><article class="surface"><h3>Protocols</h3><div id="host-protocols" class="bar-chart"></div></article><p id="host-traffic-status" class="muted">Traffic and peers match the exact profile IP only.</p></div>
+          <div id="host-evidence-divider" class="evidence-pane-divider" role="separator" aria-label="Resize host evidence table and details" aria-orientation="vertical" tabindex="0" hidden></div>
+          <aside id="host-evidence-pane" class="host-evidence-pane" aria-label="Selected host evidence" hidden></aside>
         </div>
       </div>
     </section>
@@ -336,6 +338,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261014-device-view"></script>
+  <script src="/app.js?v=20261024-host-evidence-pane"></script>
 </body>
 </html>
