@@ -18,6 +18,9 @@ class Settings:
     mode: str = "auto"
     timezone: str = "UTC"
     training_hours: float = 168.0
+    detect_new_services: bool = True
+    max_hosts: int = 1024
+    max_new_services_per_host_hour: int = 10
     min_training_connections: int = 30
     min_training_days: int = 3
     time_min_days: int = 14
@@ -84,6 +87,8 @@ class Settings:
             )
         ZoneInfo(self.timezone)
         bounds = {
+            "max_hosts": (1, 16384),
+            "max_new_services_per_host_hour": (1, 100),
             "max_services": (1, 16384),
             "max_clients": (1, 16384),
             "max_clients_per_service": (1, 512),

@@ -11,11 +11,16 @@ SSH on computer A's TCP port 22 is one service. If computer B usually connects
 to it, Slips can later report computer C trying to connect, B connecting at an
 unusual hour, or B making a connection that lasts much longer than usual.
 
+It also reports a **newly active service**: a local port first seen answering
+after that computer's training window. This check works even when the computer
+received no connections during training. It describes what Slips observed;
+it cannot tell when the operating system actually opened the port.
+
 **Training means learning what is normal from the connections Slips observes.**
 Slips saves this information and uses it to check later connections. In the
-code, this saved information is called a model. There are three separate things
-to remember: the usual clients, the usual connection hours, and the usual
-connection lengths.
+code, this saved information is called a model. Slips remembers answering ports
+for each host, and separately the usual clients, connection hours and connection
+lengths for each service.
 
 The module checks each connection when its Zeek record arrives. It currently
 uses TCP and UDP connection records, rather than application-specific details
@@ -37,8 +42,9 @@ anomaly_detection_services:
 ```
 
 The default is `enabled: false`. Restart Slips after changing the configuration.
-Each service learns separately: connections to one port do not satisfy the
-training requirements for another port. This module is separate from the
+Client, hour and connection-length checks learn separately for each service:
+connections to one port do not train another port. The new-service check learns
+the set of answering ports for the computer as a whole. This module is separate from the
 HTTPS detector; enabling one does not enable the other.
 
 All settings below belong under `anomaly_detection_services` in
@@ -58,19 +64,19 @@ All settings below belong under `anomaly_detection_services` in
 - `train`: learn successful connections without producing evidence of unusual
   behavior. Use this to teach Slips about legitimate new clients or changed
   habits, then return to `auto` or `detect`.
-- `detect`: check connections using what was previously learned. Do not add
-  clients or change the learned connection hours or lengths. A new service
-  without enough saved learning cannot produce findings in this mode.
+- `detect`: check connections using saved learning. Do not accept new ports or
+  clients as normal, or change the learned connection hours or lengths. A trained
+  host can report a new answering port even without a client list for that port.
 
-### How much to learn before reporting anything
+### How much to learn for client, hour and length checks
 
 | Setting | Default | What it does and why |
 | --- | --- | --- |
-| `training_hours` | `168` (7 days) | Hours used to learn normal connections for each service before reporting unusual ones. Slips measures the time between the first connection that showed the service answering and the connection being checked. Waiting longer gives it a chance to see normal changes over several days. Fractional hours are allowed; `0.0167` is about one minute. |
-| `min_training_connections` | `30` | Successful connections Slips must learn for that service before reporting anything. This provides actual examples to learn from; waiting seven days without connections is not enough. Failed attempts do not count. |
-| `min_training_days` | `3` | Different UTC calendar dates on which Slips must learn successful connections to that service. This prevents thirty connections in one busy minute from representing several days of normal activity. |
+| `training_hours` | `168` (7 days) | Hours spent learning before checking for changes. For each service's client, hour and length checks, time starts at its first observed reply. For the new-service check, time starts when the host is first observed; the capture computer starts at capture startup. Longer windows allow more normal services and clients to appear. Fractional hours are allowed; `0.0167` is about one minute. |
+| `min_training_connections` | `30` | Successful connections Slips must learn for that service before checking unfamiliar clients, unusual hours or connection lengths. These checks need actual examples, while the new-service check does not. Failed attempts do not count. |
+| `min_training_days` | `3` | Different UTC calendar dates with learned successful connections required for the per-service checks. This prevents thirty connections in one busy minute from representing several days of normal activity. It does not delay new-service findings. |
 
-**All three requirements must pass.** Lowering `training_hours` alone does not
+**All three requirements must pass for the per-service checks.** Lowering `training_hours` alone does not
 remove the connection-count or observed-day requirements. Setting it to `0`
 removes only the elapsed-time wait.
 
@@ -85,6 +91,48 @@ learning from records explicitly labeled malicious, malware or attack. A TCP
 connection can teach a normal client once it is established, even if it has not
 finished yet; UDP needs packets in both directions. Failed attempts cannot
 teach Slips that a new client is normal.
+
+### When to report a newly active service
+
+| Setting | Default | What it does and why |
+| --- | --- | --- |
+| `detect_new_services` | `true` | Report a local TCP or UDP port first seen answering after the host's `training_hours` window. This catches services that had no training connections at all. The module itself must also be enabled. Set this to `false` to keep only the client, hour and connection-length checks. |
+| `max_hosts` | `1024` | Maximum local computers whose answering ports are remembered. This bounds memory; additional hosts are skipped rather than judged from missing learning. |
+| `max_new_services_per_host_hour` | `10` | Maximum new-service evidence records for one computer per UTC hour of connection timestamps, across all its ports. This prevents a burst of new ports from flooding evidence. The usual per-service limit still applies to client, hour and length findings. |
+
+For example, set `training_hours: 0.0167`, leave Cherry without inbound
+connections for at least 61 seconds, then connect from the Pi to a previously
+unseen answering port. That first answered flow can produce `ANOMALOUS_FLOW`
+evidence explaining **newly active service**, even with
+`min_training_connections: 5`. Those five connections are required for the
+per-service checks, not this host-wide check.
+
+The capture computer starts its clock from capture startup on the current
+network, even when it is quiet. Other local computers start when first observed
+in an eligible unicast TCP/UDP flow, including outbound activity. An unanswered
+probe cannot prove that an otherwise unseen destination exists or has an open
+port. Remote Internet servers are excluded from this check. For recorded input,
+private hosts start at their first eligible connection timestamp; no real-time
+wait is needed.
+
+TCP needs an observed establishment or SYN/SYN-ACK; UDP needs packets in both
+directions. A refusal or silent probe does not count. A flow that started during
+training stays part of training even if its Zeek record arrives later. Close a
+test connection so Zeek can deliver its connection record.
+
+Newly active ports stay unusual until accepted using `mode: train`; they do
+not teach Slips a normal client list automatically. Repeated warnings use
+`alert_cooldown_seconds` and the host-wide hourly limit above. Changing back to
+`auto` or `detect` preserves the ports accepted during explicit training.
+
+Hosts are kept separately for each network and verified local device identity.
+IP changes or temporary missing MAC information do not alone make a remembered
+port new. Switching networks or replacing a device starts separate learning.
+Learning and warning counters survive a restart. Elapsed timestamp gaps do not
+prove that capture was continuous; review findings after outages or long gaps.
+Existing per-port learning is preserved when upgrading, so a port already learned
+by the old detector is not reclassified as new. For a fresh test, choose an
+unused port or an isolated test directory; do not delete live learning.
 
 ### When to report an unusual hour
 
@@ -150,8 +198,8 @@ short and long connections.
 | --- | --- | --- |
 | `adapt_known_clients` | `true` | After initial training, keep learning from successful connections by known clients when no unusual behavior was found. This lets normal habits change gradually. `false` stops this automatic learning; `mode: train` still learns. Unfamiliar clients are not added automatically after training. |
 | `history_days` | `56` | Days of past connection times kept to learn usual hours. Older times are forgotten so routines can change and memory stays limited. This setting does not delete the list of known clients or the saved connection lengths. |
-| `retention_days` | `90` | Forget a service or client after this many days without relevant activity, measured using connection timestamps. Answered connections keep a service active; successful connections keep a known client active. This removes stale records. A returning service needs fresh training; a forgotten client may be reported as unfamiliar. |
-| `max_services` | `1024` | Maximum number of services to remember. This limits memory. When full, Slips skips additional services instead of dropping an active service it already knows. |
+| `retention_days` | `90` | Forget a service, client or host after this many inactive days, measured using connection timestamps. Answered connections keep a port active; successful connections keep a known client active. Observed host traffic keeps its inventory active; the capture computer also has a quiet-host refresh. Inactive ports expire even on an active host. A returning host needs fresh training; a forgotten port or client may be reported as unfamiliar. |
+| `max_services` | `1024` | Maximum service/client baselines, and separately the maximum total ports in the local-host inventory. Each list has this cap. This bounds memory. Full client-model storage skips extra services. A host whose port list is incomplete stops producing new-service findings, rather than misclassifying forgotten ports. |
 | `max_clients` | `4096` | Maximum number of client-to-service records across all services. One computer connecting to two services uses two records. This limits total memory spent remembering clients. |
 | `max_clients_per_service` | `64` | Maximum clients remembered for one service. This prevents one busy port from using all the available client records. |
 
@@ -190,6 +238,7 @@ anomaly_detection_services:
   mode: auto
   timezone: UTC
   training_hours: 0.0167  # Learn for about one minute of connection timestamps.
+  detect_new_services: true
   min_training_connections: 10
   min_training_days: 1
   time_min_days: 1
@@ -206,6 +255,11 @@ service does not answer B. If A's ten TCP connections finished normally, they
 also allow Slips to check later connection lengths. The normal difference
 limits still apply. Ten connections to ten different services do not satisfy
 the ten-example requirement for one service.
+
+For the quiet-host case, use the same settings, wait at least 61 seconds after
+capture startup without inbound connections to the capture computer, and then
+connect to a new answering port. No ten-connection prerequisite applies to this
+new-service check. Use a port Slips has not learned previously.
 
 To test unusual hours, replay connections at a regular hour followed by one at
 a distant hour on the same date. Recorded timestamps let Slips process this
@@ -257,7 +311,9 @@ module reports an error rather than silently deleting it.
 This is a separate SQLite database from the flow and detection-history
 databases. If it is busy, saving is postponed rather than waiting and slowing
 capture. Service/client counts, saved times, saved lengths and temporary
-lookups all have limits. The module runs in its own process, adds no Redis
+lookups all have limits. Host inventories and ports use the same single-writer
+checkpoint transaction, including clocks for hosts with no answering ports.
+The module runs in its own process, adds no Redis
 keys, and does not scan all past flows. Checking each new connection still
 uses some CPU; measure its cost on the computer that will run the capture.
 

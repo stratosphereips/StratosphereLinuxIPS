@@ -658,7 +658,8 @@ browser.
 
 Findings from the optional [service anomaly detector](service_anomaly_detection.md)
 appear as `ANOMALOUS_FLOW` evidence from `anomaly_detection_services`. Their
-descriptions explain which computer connected, why the hour is unusual, or why
+descriptions explain a newly active local service after host training, which
+unfamiliar computer connected, why the hour is unusual, or why
 a completed connection was unusually short or long. Linked flow details retain
 the original Zeek UID. Alert creation
 continues to use the normal Slips score threshold.

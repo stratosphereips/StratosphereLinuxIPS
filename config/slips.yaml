@@ -741,14 +741,24 @@ anomaly_detection_services:
   # Local timezone for learning usual connection hours, e.g. Europe/Prague.
   # Set this to your network's timezone so local working hours are interpreted correctly.
   timezone: UTC
-  # Hours spent learning normal connections for EACH service before reporting anything.
-  # Measured from connection timestamps, not how long Slips has been running.
-  # 168 = 7 days; 0.0167 is about 1 minute. The next two requirements must also pass.
+  # Hours learning each local host's usual answering ports, and each service's normal clients.
+  # Per-service learning starts at the first reply; host learning starts at first activity.
+  # The capture computer starts at capture startup even when quiet. Checks use flow timestamps.
+  # 168 = 7 days; 0.0167 is about 1 minute. Client/time/length checks also need the next two limits.
   training_hours: 168
-  # Successful connections needed to learn a service's normal clients before reporting.
+  # Report a local port first seen answering after its host's training window, even if
+  # that host had no incoming connections during training. Unanswered probes do not count.
+  detect_new_services: true
+  # Maximum local computers whose answering ports are remembered. Bounds memory use;
+  # hosts beyond this limit are skipped, rather than judged from incomplete learning.
+  max_hosts: 1024
+  # Maximum newly active service findings for one host in each UTC traffic-time hour.
+  # Bounds warning floods when many ports appear at once; client checks have their own limit.
+  max_new_services_per_host_hour: 10
+  # Successful connections needed before client/time/length findings for one service.
   # More connections give Slips more examples; failed attempts cannot teach normality.
   min_training_connections: 30
-  # Different UTC dates with successful connections needed before reporting.
+  # Different UTC dates with successful connections needed for per-service findings.
   # This prevents one busy day from being treated as several days of learning.
   min_training_days: 3
   # Different local dates with connections needed before reporting unusual HOURS.

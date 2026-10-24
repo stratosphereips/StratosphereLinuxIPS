@@ -81,6 +81,7 @@ class ModuleFactory:
                 conf=conf, ppid=12345, bloom_filters_manager=Mock(),
             )
         module.print = Mock()
+        module._capture_started = 0.0
         return module
 
     def create_module_process_obj(

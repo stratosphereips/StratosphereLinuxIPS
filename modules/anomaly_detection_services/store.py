@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .baseline import ServiceBaseline, ServiceDetector
 from .models import Settings
+from .hosts import HostInventory, HostServices
 
 
 class BaselineStore:
@@ -46,6 +47,13 @@ class BaselineStore:
             self.connection.execute(
                 "CREATE INDEX IF NOT EXISTS service_age ON services(updated)"
             )
+            self.connection.execute(
+                "CREATE TABLE IF NOT EXISTS host_services ("
+                "key TEXT PRIMARY KEY, updated REAL NOT NULL, data TEXT NOT NULL)"
+            )
+            self.connection.execute(
+                "CREATE INDEX IF NOT EXISTS host_service_age ON host_services(updated)"
+            )
             self.connection.execute("PRAGMA user_version=1")
             self.connection.commit()
         except BaseException:
@@ -67,13 +75,34 @@ class BaselineStore:
             for key, data in rows
         }
 
-    def save(self, detector: ServiceDetector) -> None:
+    def load_hosts(self) -> dict[str, HostServices]:
+        """Read a bounded number of independently trained local hosts.
+
+        Returns:
+            Saved host clocks, ports and warning counters.
+        """
+        return {
+            key: HostServices.from_dict(json.loads(data), self.settings)
+            for key, data in self.connection.execute(
+                "SELECT key,data FROM host_services ORDER BY updated DESC LIMIT ?",
+                (self.settings.max_hosts,),
+            )
+        }
+
+    def save(
+        self, detector: ServiceDetector, hosts: HostInventory | None = None
+    ) -> None:
         """Commit dirty models and expire old records in one transaction.
 
         Parameters:
             detector: Incremental model state with pending changes.
+            hosts: Optional bounded local-host service inventory.
         """
-        if not detector.dirty and not detector.deleted:
+        if (
+            not detector.dirty
+            and not detector.deleted
+            and not (hosts and (hosts.dirty or hosts.deleted))
+        ):
             return
         rows = [
             (
@@ -107,8 +136,42 @@ class BaselineStore:
                 "(SELECT key FROM services ORDER BY updated DESC LIMIT ?)",
                 (self.settings.max_services,),
             )
+            if hosts is not None:
+                self.connection.executemany(
+                    "INSERT INTO host_services VALUES (?, ?, ?) ON CONFLICT(key) "
+                    "DO UPDATE SET updated=excluded.updated,data=excluded.data",
+                    (
+                        (
+                            key,
+                            hosts.hosts[key].last_seen,
+                            json.dumps(
+                                hosts.hosts[key].to_dict(),
+                                allow_nan=False,
+                                separators=(",", ":"),
+                            ),
+                        )
+                        for key in hosts.dirty
+                        if key in hosts.hosts
+                    ),
+                )
+                self.connection.executemany(
+                    "DELETE FROM host_services WHERE key=?",
+                    ((key,) for key in hosts.deleted),
+                )
+                self.connection.execute(
+                    "DELETE FROM host_services WHERE updated < ?",
+                    (hosts.watermark - self.settings.retention_days * 86400,),
+                )
+                self.connection.execute(
+                    "DELETE FROM host_services WHERE key NOT IN "
+                    "(SELECT key FROM host_services ORDER BY updated DESC LIMIT ?)",
+                    (self.settings.max_hosts,),
+                )
         detector.dirty.clear()
         detector.deleted.clear()
+        if hosts is not None:
+            hosts.dirty.clear()
+            hosts.deleted.clear()
 
     def close(self) -> None:
         """Release database and writer-lock descriptors."""

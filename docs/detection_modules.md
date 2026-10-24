@@ -75,7 +75,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>Service Anomaly Detection</td>
-    <td>Learns which computers normally connect to a service, at what hours, and for how long; reports unusual connections after learning.</td>
+    <td>Reports newly answering local ports after host training, and learns which computers normally connect to a service, at what hours, and for how long.</td>
     <td>✅</td>
   </tr>
   <tr>
