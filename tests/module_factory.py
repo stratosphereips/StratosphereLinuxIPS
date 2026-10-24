@@ -47,6 +47,27 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_beaconing_obj(self, output_dir: str = "output/unit_beaconing", **settings: object) -> object:
+        """Create the numeric detector without Redis or checkpoint files.
+
+        Parameters:
+            output_dir: Isolated test output directory.
+            settings: Detector settings overrides.
+
+        Returns:
+            Module with real numeric analysis and mocked external services.
+        """
+        from modules.beaconing.beaconing import Beaconing
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: settings.get(key, default)
+        db = Mock()
+        db.get_input_type.return_value = InputType.INTERFACE
+        db.get_network_state.return_value = {"gateway_mac": "aa:bb:cc:dd:ee:ff", "local_network": "192.168.1.0/24", "changed_at": 0}
+        with patch(MODULE_DB_MANAGER, return_value=db):
+            module = Beaconing(logger=Mock(), output_dir=output_dir, redis_port=6379, termination_event=Mock(), slips_args=SimpleNamespace(interface=["eth0"], growing=False), conf=conf, ppid=12345, bloom_filters_manager=Mock())
+        module.print = Mock()
+        return module
+
     def create_service_anomaly_obj(
         self, output_dir: str = "output/unit_service_anomaly", **settings: object
     ) -> "AnomalyDetectionServices":

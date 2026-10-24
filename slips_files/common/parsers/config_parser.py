@@ -658,6 +658,17 @@ class ConfigParser(object):
             permanent_dir = "permanent"
         return os.path.normpath(permanent_dir)
 
+    def beaconing_enabled(self) -> bool:
+        """Check the numeric recurring connection detector feature flag.
+
+        Returns:
+            Whether the module is enabled in this configuration.
+        """
+        return (
+            self.read_configuration(Modules.BEACONING.value, "enabled", True)
+            is True
+        )
+
     def service_anomaly_enabled(self) -> bool:
         """Check the service anomaly feature flag.
 

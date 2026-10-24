@@ -364,3 +364,19 @@ def test_service_anomaly_is_enabled_only_explicitly(value: object, expected: boo
     parser = object.__new__(ConfigParser)
     with patch.object(parser, "read_configuration", return_value=value):
         assert parser.service_anomaly_enabled() is expected
+
+
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("true", False), (None, False)])
+def test_beaconing_feature_flag_is_boolean(value: object, expected: bool) -> None:
+    """Require a real boolean when enabling the numeric detector.
+
+    Parameters:
+        value: Feature flag to evaluate.
+        expected: Whether the detector is enabled.
+    """
+    factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    with patch.object(parser, "read_configuration", return_value=value) as read:
+        assert parser.beaconing_enabled() is expected
+        assert read.call_args.args == ("beaconing", "enabled", True)
+    assert factory is not None

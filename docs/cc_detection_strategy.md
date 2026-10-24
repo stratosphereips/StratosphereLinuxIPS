@@ -1,6 +1,8 @@
 # C2 detection: audit and proposed redesign
 
-This is a design proposal, not a description of a new deployed detector.
+This page records the original audit and design proposal. The implementation,
+configuration and measured limitations are now described in
+[numeric beaconing detection](beaconing.md).
 The audit used branch revision `f21589a7f` on 24 October 2026. The two
 `dataset/test-cc` captures are controlled simulations, as confirmed by their
 author. No malware was executed, no network capture was started, and the

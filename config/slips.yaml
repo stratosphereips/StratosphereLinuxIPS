@@ -272,6 +272,8 @@ modules:
   # ml_linear_model, ml_online_model
   disable:
     - template
+    # Numeric beaconing replaces the legacy RNN by default. Remove to compare both.
+    - rnn_cc_detection
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
@@ -728,6 +730,65 @@ brute_force_detector:
   # Minimum number of SSH attempts from one source to one destination
   # before Slips considers it brute forcing.
   ssh_attempt_threshold: 9
+
+#############################
+beaconing:
+  # Analyze numeric connection timing and sizes. Restart Slips to change this.
+  # Disable rnn_cc_detection in modules.disable to avoid running two C2 detectors and TensorFlow.
+  enabled: true
+
+  # Connections needed in a channel before judging repetition. More reduces
+  # accidental patterns but takes longer to detect slow beacons. Range: 6-512.
+  min_connections: 12
+  # Recent connections kept per client/server/port/protocol. Older ones are
+  # replaced, so changed behavior eventually replaces the old pattern. Range: 12-512.
+  window_connections: 128
+  # Seconds the observations must span. Prevents a brief burst of requests from
+  # appearing to be a sustained beacon; lower for short tests. Range: 0-31536000.
+  min_span_seconds: 30.0
+  # Shortest repeating interval to examine, in seconds. Smaller values include
+  # faster request loops and can find more ordinary application traffic. Range: 0.001-86400.
+  min_period_seconds: 0.1
+  # Longest repeating interval, in seconds. Daily callbacks need many days of
+  # observations; increase retention_hours to cover those observations. Range: 0.001-604800.
+  max_period_seconds: 86400.0
+  # Allowed timing error as a fraction of one interval: 0.25 permits +/-25%.
+  # Larger values tolerate more irregular timing but also match more benign traffic.
+  # Range: 0.01-0.45. Applies to start times, delays after replies, and burst starts.
+  jitter_tolerance: 0.25
+  # Fraction of intervals that must follow the recurring pattern. 0.8 requires
+  # 80%. Lower values tolerate interruptions but produce more chance matches.
+  # Range: 0.6-1. At least half must still be single, directly observed cycles.
+  min_support: 0.8
+  # Missing callbacks allowed between observed connections. 2 allows gaps of
+  # two or three intervals; larger gaps count against support. Range: 0-4.
+  max_missed: 2
+  # New connections required between checks. More reduces CPU work but delays
+  # discovering a new or changed pattern. Range: 1-128.
+  evaluate_every: 4
+  # Minimum seconds between checks of one channel. Limits repeated work on fast
+  # streams; offline analysis uses packet time. Range: 0-3600.
+  evaluate_interval_seconds: 5.0
+  # Maximum retained channels. At capacity, older channels are evicted and Slips
+  # logs a warning. More retains more endpoints but uses more memory. Range: 16-16384.
+  max_channels: 2048
+  # Hours of packet history retained across time windows and restarts of this
+  # output directory. Expired windows are removed at checkpoint. Range: 1-8760.
+  # Must cover max_period_seconds; twelve daily connections need at least 264 hours.
+  retention_hours: 72.0
+  # Seconds between findings of the same category for one channel. Limits repeated
+  # evidence; a suspected-C2 finding can still follow a periodicity finding. Range: 1-2592000.
+  alert_cooldown_seconds: 3600.0
+  # Seconds between saving changed windows to this run's private SQLite file.
+  # More reduces disk work but loses more recent observations after a crash. Range: 5-300.
+  flush_interval_seconds: 30.0
+  # Reviewed numeric classifier for resemblance to C2 examples. Empty string
+  # disables classification while retaining strong-periodicity findings. No pickle is loaded.
+  model_file: modules/beaconing/model.json
+  # Minimum pattern score for a LOW suspected-C2 finding, never a malware probability.
+  # Slips also enforces the model's validation threshold and trained protocols.
+  # Raising this reduces findings but misses more C2 examples. Range: 0.5-1.
+  c2_score_threshold: 0.5
 
 #############################
 anomaly_detection_services:
@@ -1204,6 +1265,8 @@ EvidenceSignals:
   # they are emitted by anomaly-detection modules. You can also override
   # additional evidence types here.
   overrides:
+    PERIODIC_CONNECTION: DAMP
+    SUSPECTED_C2_CHANNEL: DAMP
     ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
     UNSOLICITED_ARP: DAMP

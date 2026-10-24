@@ -2168,3 +2168,18 @@ def test_get_ipv6_from_profile(hmget_return_value, expected_ipv6):
 
     handler.r.hmget.assert_called_once_with(profileid, "IPv6")
     assert ipv6 == expected_ipv6
+
+
+@pytest.mark.parametrize("length,published", [(2, False), (3, True), (1500, True)])
+def test_prediction_publication_is_bounded(length: int, published: bool) -> None:
+    """Keep prediction messages short while preserving progress past 500 symbols."""
+    handler = ModuleFactory().create_profile_handler_obj()
+    from dataclasses import make_dataclass
+    flow = make_dataclass("PredictionFlow", [("uid", str)])("test-uid")
+    handler.publish = MagicMock()
+    handler.publish_new_letter("a" * length, "profile_192.168.1.2", "timewindow1", "8.8.8.8-443-tcp", flow)
+    assert handler.publish.called == published
+    if published:
+        payload = json.loads(handler.publish.call_args.args[1])
+        assert len(payload["new_symbol"]) <= 500
+        assert payload["sequence_length"] == length
