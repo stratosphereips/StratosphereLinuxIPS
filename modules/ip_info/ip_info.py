@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from multiprocessing.synchronize import SEM_VALUE_MAX
 from typing import (
     Union,
     Optional,
@@ -19,7 +20,7 @@ from contextlib import redirect_stdout, redirect_stderr
 import subprocess
 import netifaces
 import asyncio
-import multiprocessing
+from queue import Queue
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache, partial
@@ -27,7 +28,7 @@ from functools import lru_cache, partial
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
-from slips_files.common.ips import BROADCAST_MAC, NULL_MAC
+from slips_files.common.mac import classify_mac
 from slips_files.common.style import green
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
@@ -54,8 +55,8 @@ class IPInfo(IAsyncModule):
 
     def init(self):
         """This will be called when initializing this module"""
-        # 30MBs max size of this queue to avoid growing forever in mem
-        self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
+        # MAC lookups stay in this process, so they need no shared semaphore.
+        self.pending_mac_queries = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         self.lookup_executor = ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="ip-info"
         )
@@ -289,7 +290,9 @@ class IPInfo(IAsyncModule):
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
-    async def get_vendor_async(self, mac_addr: str, profileid: str) -> dict:
+    async def get_vendor_async(
+        self, mac_addr: str, profileid: str
+    ) -> dict | bool:
         """
         Resolve MAC vendor information without blocking the event loop.
 
@@ -302,7 +305,14 @@ class IPInfo(IAsyncModule):
             # here is irrelevant (might be the gateway's)
             return False
 
-        if BROADCAST_MAC in mac_addr.lower() or NULL_MAC in mac_addr.lower():
+        address_type = classify_mac(mac_addr)
+        if address_type == "locally_administered":
+            return {
+                "MAC": mac_addr,
+                "Vendor": "Unknown",
+                "mac_address_type": address_type,
+            }
+        if address_type != "universally_administered":
             return False
 
         # don't look for the vendor again if we already have it for this
@@ -346,10 +356,45 @@ class IPInfo(IAsyncModule):
         self.domain_validity_cache[domain] = True
         return True
 
+    @staticmethod
+    def _local_lookup_source_ips() -> list[str]:
+        """Read current local IPs before a system WHOIS command starts.
+
+        Returns:
+            Non-loopback IPv4 and IPv6 interface addresses.
+        """
+        local_ips: set[str] = set()
+        for interface in netifaces.interfaces():
+            try:
+                addresses = netifaces.ifaddresses(interface)
+            except ValueError:
+                continue
+            for family in (netifaces.AF_INET, netifaces.AF_INET6):
+                for address in addresses.get(family, []):
+                    try:
+                        ip = ipaddress.ip_address(
+                            address["addr"].split("%", 1)[0]
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if not ip.is_loopback:
+                        local_ips.add(str(ip))
+        return sorted(local_ips)
+
     def query_whois(self, domain: str):
         if self._is_negative_cache_hit(self.failed_whois_lookups, domain):
             return None
         try:
+            try:
+                self.db.record_slips_own_service_port(
+                    self.db.main_pid,
+                    "tcp",
+                    43,
+                    self._local_lookup_source_ips(),
+                )
+            except Exception:
+                # A failed traffic mark must not disable domain enrichment.
+                pass
             with (
                 open("/dev/null", "w") as f,
                 redirect_stdout(f),
@@ -420,14 +465,19 @@ class IPInfo(IAsyncModule):
         if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
+    async def gather_tasks_and_shutdown_gracefully(self) -> None:
+        """Stop the optional MAC database retry before draining lookups."""
+        reader = getattr(self, "reading_mac_db_task", None)
+        if isinstance(reader, asyncio.Task) and not reader.done():
+            reader.cancel()
+            await asyncio.gather(reader, return_exceptions=True)
+        await super().gather_tasks_and_shutdown_gracefully()
+
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
             self.country_db.close()
-        if hasattr(self, "pending_mac_queries"):
-            self.pending_mac_queries.close()
-            self.pending_mac_queries.join_thread()
         if hasattr(self, "lookup_executor"):
             self.lookup_executor.shutdown(wait=True, cancel_futures=True)
         if hasattr(self, "domain_validity_cache"):
@@ -457,8 +507,9 @@ class IPInfo(IAsyncModule):
         for interface in interfaces:
             try:
                 gw_ip = utils.get_gateway_for_iface(interface)
-                gw_ips.update({interface: gw_ip})
-            except KeyError:
+                ipaddress.ip_address(gw_ip)
+                gw_ips[interface] = gw_ip
+            except (KeyError, TypeError, ValueError):
                 pass
         return gw_ips
 
@@ -478,10 +529,9 @@ class IPInfo(IAsyncModule):
         # dict.
         return self.db.get_wifi_interface()
 
-    def _get_mac_using_ip_neigh(self, gw_ip) -> str | None:
+    def _get_mac_using_ip_neigh(self, gw_ip: str | None) -> str | None:
         try:
-            if not ipaddress.ip_address(gw_ip):
-                return
+            ipaddress.ip_address(gw_ip)
 
             ip_output = subprocess.run(
                 ["ip", "neigh", "show", gw_ip],
@@ -491,7 +541,13 @@ class IPInfo(IAsyncModule):
             ).stdout
             mac = ip_output.split()[-2]
             return mac
-        except (subprocess.CalledProcessError, IndexError, FileNotFoundError):
+        except (
+            subprocess.CalledProcessError,
+            IndexError,
+            FileNotFoundError,
+            TypeError,
+            ValueError,
+        ):
             return
 
     def _get_mac_using_arp_cache(self, gw_ip) -> str | None:
@@ -511,6 +567,11 @@ class IPInfo(IAsyncModule):
 
         gw_macs = {}
         for interface, gw_ip in gw_ips.items():
+            try:
+                ipaddress.ip_address(gw_ip)
+            except (TypeError, ValueError):
+                continue
+
             # we keep a cache of the macs and their IPs
             # In case of a zeek dir or a pcap,
             # check if we have the mac of this ip already saved in the db.

@@ -14,13 +14,17 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
 from .exec_iptables_cmd import (
     LEGACY_SLIPS_COMMENT,
+    delete_slips_rules_for_ip,
     exec_iptables_command,
     format_slips_rule_comment,
     sync_slips_rule_comment,
 )
 from modules.blocking.unblocker import Unblocker
 from modules.blocking.recovery import RecoveryMixin
-
+from modules.blocking.macos_pf import MacOSPF
+from slips_files.core.helpers.whitelist.blocking_whitelist import (
+    BlockingWhitelist,
+)
 
 OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
 
@@ -34,14 +38,20 @@ class Blocking(IModule, RecoveryMixin):
     description = "Block malicious IPs connecting to this device"
     authors = ["Sebastian Garcia, Alya Gomaa"]
 
-    def init(self):
-        if platform.system() == "Darwin":
-            self.print("Mac OS blocking is not supported yet.")
-            sys.exit()
-
-        self.firewall = self._determine_linux_firewall()
+    def init(self) -> None:
+        self.blocking_whitelist = BlockingWhitelist(self)
+        self._applied_exemptions: set[str] = set()
         self.sudo = utils.get_sudo_according_to_env()
-        self._init_chains_in_firewall()
+        self.firewall = (
+            "pf"
+            if platform.system() == "Darwin"
+            else self._determine_linux_firewall()
+        )
+        self.pf = (
+            MacOSPF(self.sudo, self.db) if self.firewall == "pf" else None
+        )
+        if self.firewall == "iptables":
+            self._init_chains_in_firewall()
         self.blocking_log_path = self.get_module_specific_output_path(
             "blocking.log"
         )
@@ -292,10 +302,21 @@ class Blocking(IModule, RecoveryMixin):
         returns true if the ip is successfully blocked
         """
 
-        if self.firewall != "iptables":
+        if not isinstance(
+            ip_to_block, str
+        ) or self.blocking_whitelist.is_exempt(ip_to_block):
             return False
 
-        if not isinstance(ip_to_block, str):
+        if self.firewall == "pf":
+            if not self.pf.block(ip_to_block, flags):
+                self.print(
+                    f"Unable to install PF block for {ip_to_block}.", 0, 1
+                )
+                return False
+            self._store_blocked_ip_ts_in_db(ip_to_block, flags)
+            self.log(f"Blocked {ip_to_block} with macOS PF.")
+            return True
+        if self.firewall != "iptables":
             return False
 
         if self._is_ip_already_blocked(ip_to_block):
@@ -321,11 +342,38 @@ class Blocking(IModule, RecoveryMixin):
         if self.unblocker.unblocker_thread.is_alive():
             self.print("Problem shutting down unblocker thread.")
 
-    def pre_main(self):
-        self._recover_firewall_rules()
+    def pre_main(self) -> None:
+        if self.firewall == "pf":
+            if not self.pf.restore():
+                self.print("Unable to restore macOS PF blocks.", 0, 1)
+        self._sync_blocking_whitelist()
+        if self.firewall != "pf":
+            self._recover_firewall_rules()
         self.unblocker = Unblocker(
-            self.db, self.sudo, self.should_stop, self.logger, self.log
+            self.db,
+            self.sudo,
+            self.should_stop,
+            self.logger,
+            self.log,
+            pf=self.pf,
         )
+
+    def _sync_blocking_whitelist(self) -> None:
+        """Remove existing blocks when a blocking-only file rule is added."""
+        exempt_ips = self.blocking_whitelist.addresses()
+        for ip in exempt_ips - self._applied_exemptions:
+            removed = (
+                self.pf.unblock(ip)
+                if self.firewall == "pf"
+                else delete_slips_rules_for_ip(self.sudo, ip, {})
+            )
+            if not removed:
+                raise RuntimeError(f"Unable to remove exempt IP block: {ip}")
+            self.db.del_blocked_ip(ip)
+            self.db.del_firewall_block_state(ip)
+            if hasattr(self, "unblocker"):
+                self.unblocker.del_request(ip)
+        self._applied_exemptions = set(exempt_ips)
 
     def _get_timewindow_to_block_in(self, evidence_tw: int | None) -> int:
         """
@@ -345,7 +393,8 @@ class Blocking(IModule, RecoveryMixin):
             return current_twid
         return max(current_twid, int(evidence_tw))
 
-    def main(self):
+    def main(self) -> None:
+        self._sync_blocking_whitelist()
         if msg := self.get_msg("new_blocking"):
             # message['data'] in the new_blocking channel is a dictionary that contains
             # the ip and the blocking options
@@ -368,6 +417,8 @@ class Blocking(IModule, RecoveryMixin):
 
             data = json.loads(msg["data"])
             ip = data.get("ip")
+            if self.blocking_whitelist.is_exempt(ip):
+                return
             evidence_tw: int | None = data.get("tw")
             tw = self._get_timewindow_to_block_in(evidence_tw)
             block = data.get("block")

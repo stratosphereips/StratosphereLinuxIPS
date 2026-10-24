@@ -70,6 +70,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    regex_generator_module
    t_cell_module
    https_anomaly_detection
+   service_anomaly_detection
    flow_alerts
    features
    training

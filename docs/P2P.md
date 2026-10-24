@@ -1,5 +1,11 @@
 # P2P
 
+A peer must not report a reputation score or blame about its own known IP.
+Slips rejects incoming self reports before storing evidence or passing blame
+to the trust model, and does not answer peer queries about its own IP. When a
+peer's IP has not yet been learned, the receiver cannot establish that the
+report is a self report from the peer ID alone.
+
 The P2P module makes Slips be a peer in a peer to peer network of computers in the local network. The peers are only in the local network and they communicate using multicast packets. The P2P module is a highly complex system of data sharing, reports on malicious computers, asking about IoC to the peers and a complex trust model that is designed to resiste adversarial peers in the network. Adversarial peers are malicious peers that lie about the data being shared (like saying that a computer is maliciuos when is not, or that an attacker is benign).
 
 This module was designed and partially implemented in a [Master Thesis](https://dspace.cvut.cz/handle/10467/90252) on CTU FEL by [Dita Hollmannova](https://www.linkedin.com/in/dita-hollmannova/). The goal was to enable Slips instances in a local network to share detections and collectively improve blocking decisions. While the thesis succeeded in creating a framework and a trust model, the project is far from stable. The final implementation in Slips was finished by Alya Gomaa.
@@ -32,40 +38,24 @@ docker run -it --rm --net=host --cap-add=NET_ADMIN stratosphereips/slips
 For the p2p to be able to listen on the network interfaces
 and receive packets you should use ```--cap-add=NET_ADMIN```
 
-## Installation:
+## Installation
 
-1. download and install go:
+Install Go before building Pigeon. On macOS, you can use `brew install go`.
+The pinned `p2p4slips/go.mod` requires Go 1.25.7 and requests the Go 1.26.8
+toolchain; Go may download that toolchain during the first build.
 
-- Go 1.21 or newer is needed; (`install/install.sh` installs Go for you when the system one is too old).
-
-```
-apt install golang
-```
-
-or by hand
+From the Slips repository root, check out the pinned submodule revision and
+build its binary:
 
 ```
-curl https://go.dev/dl/go1.26.8.linux-amd64.tar.gz --output go.tar.gz
-rm -rf /usr/local/go && tar -C /usr/local -xzf go.tar.gz
-export PATH=$PATH:/usr/local/go/bin
+git submodule update --init p2p4slips
+go -C p2p4slips build -buildvcs=false
 ```
 
-2. build the pigeon:
+Rebuild after updating the submodule, then restart Slips to run the new binary.
+`git submodule update` changes the source files but does not replace a compiled
+`p2p4slips/p2p4slips` binary.
 
-- if you installed slips with the submodules using
-```
-git clone --recurse-submodules --remote-submodules https://github.com/stratosphereips/StratosphereLinuxIPS -j4
-```
-
-then you should only build the pigeon using:
-```cd p2p4slips && go build -buildvcs=false```
-- If you installed Slips without the submodules then you should download and build the pigeon using:
-
-```
-git submodule init && git submodule update && cd p2p4slips && go build -buildvcs=false
-```
-
-The p2p binary should now be in ```p2p4slips/``` dir and slips will be able to find it.
 
 ***NOTE***
 
@@ -96,6 +86,88 @@ discovery (port scan) evidence, and alert scoring/blocking each check a
 flow's 5-tuple against that set (via the ```is_p2p_related_flow``` DB
 function) and skip it if it matches. Other ports and connections from the
 same peer IP continue through normal analysis.
+
+The P2P module refreshes the local authenticated-connection records every
+minute while Pigeon still lists the exact tuple, so a quiet connection does
+not appear offline just because no connect event was repeated. A received
+peer message also marks its authenticated sender active for 15 minutes. A
+disconnect removes the connection immediately; the active list is cleared
+when the P2P module starts and stops.
+
+## Scores, trust, and blames
+
+Slips and Pigeon exchange a maliciousness score from 0 (benign) to 1
+(malicious), with confidence from 0 to 1. The thesis uses a signed local
+peer-behavior score instead: +1 means benign and -1 means malicious. Before
+computing peer trust, Slips converts its local maliciousness score `m` to
+`1 - 2m`. With Pigeon's reliability `r`, local confidence `c`, and the thesis
+reliability weight of 0.7, peer trust is
+`(0.7r + (1 - 2m)c) / 2`. A higher local maliciousness score therefore
+reduces trust. The wire format and stored peer reports remain on the existing
+0-to-1 maliciousness scale.
+
+These values are model scores, not calibrated probabilities. The P2P web
+table labels the report value as maliciousness: 1 is fully malicious and 0
+is a benign assessment. Informational observations assert neither benign
+nor malicious behavior. They do not update the local assessment used for
+peer trust, including when a profile or time window is created. On upgrade,
+historical local zero-score rows are retained as informational records and
+excluded from trust calculations. A stored flow's default `benign` label is
+not a benign assessment used by P2P.
+
+The thesis formula's calculated trust ranges from -0.5 to 0.85 with a
+reliability weight of 0.7. Even a benign assessment with confidence 1 and
+reliability 1 produces trust 0.85. Without a local benign or malicious
+assessment, reliability 1 produces trust 0.35.
+
+Only locally produced detections update the local score used to evaluate a
+reporter. A peer's report is retained as evidence, but cannot raise its own
+reporter's local score or be sent back as a first-hand assessment. After an
+upgrade, earlier local-score rows are treated as unknown because they may
+contain peer-derived findings; new local detections replace those rows.
+Cached network opinions and Redis peer-trust values are invalidated so the
+corrected model can recalculate them from retained reports and reliability.
+
+### Reliability when changing networks
+
+Pigeon measures reliability only while its peer belongs to the current
+local network. The live capture interface must still have the host IP
+recorded by Slips; the peer's address must be in one of that interface's
+subnets. The gateway MAC and subnet identify the network, so another Wi-Fi
+network with the same private address range does not count as the same
+network. An authenticated connection establishes a peer's membership.
+
+Failures while disconnected, on another network, or without an identifiable
+gateway do not change reliability. Measurement resumes after an
+authenticated connection on the current network. Being offline remains a
+connectivity state; it is not automatically a reliability failure.
+Measured zero reliability is sent explicitly, while a peer with no measured
+interactions does not overwrite its previously stored reliability.
+
+Peer interaction history and the last confirmed network are retained in
+`pigeon.peerstore.json` inside the permanent P2P runtime directory. Pigeon
+restarts when the monitored gateway or subnet changes, including when the
+host retains the same IP address. Network settings are refreshed every
+five seconds; an interface that has already lost its recorded IP pauses
+ratings immediately.
+
+A report shares an assessment. A blame is the same assessment plus a request
+to consider blocking. Slips stores it as a report, then compares the weighted
+network opinion with its own local opinion. The current policy forwards a
+block request when their equally weighted sum reaches 0.5. A blame alone does
+not bypass that check, although one sufficiently strong report can reach the
+threshold. Local blames send the current local score and confidence.
+
+An IP's [blocking-only whitelist rule](usage.md#blocking-whitelist) also
+prevents firewall blocking and ARP poisoning requested through P2P. Peer
+reports, detections and alerts remain available; the exemption applies to the
+target IP at enforcement time.
+
+At startup, the P2P trust database migrates older peer address records to
+keep the newest endpoint for each peer. This lets existing installations use
+authenticated endpoint updates without resetting their trust history. If
+SQLite is temporarily locked during report compaction, P2P retries the
+compaction later and keeps the peer online.
 
 P2P is only available when running slips in you local network using an interface. (with -i <interface>)
 
@@ -146,6 +218,16 @@ Slips interacts with other slips peers for the following purposes:
 
 If slips finds that an IP is malicious given enough evidence, it blocks it and tells other peers that this IP is malicious and they need to block it. this is called sending a blame report.
 
+When a locally generated alert crosses the detection threshold, Slips sends a
+blame for the alerted IP. It never blames one of its own addresses or repeats
+an alert derived from a peer report. Positive local evidence is shared as a
+reputation report even when another peer's opinion is cached; repeated reports
+for the same IP and severity are limited to one every five minutes.
+
+The P2P dashboard counts received report and blame messages from the selected
+time window's message telemetry. The trust database compacts raw reports after
+30 seconds, so its remaining raw rows are not a reliable message counter.
+
 ### Receiving Blames
 
 When slips receives a blame report from the network,
@@ -165,18 +247,200 @@ The network then replies with a score and confidence for the IP. The higher the 
 
 Once we get the score of the IP, we store it in the database,
 and we alert if the score of this IP is more than 0 (threat level=info).
+New peer-network alerts use only replies received for that lookup. The alert
+description lists each peer that replied, with its latest known IP address,
+for example `peer-id (192.0.2.10)`. This list is not a list of all connected
+peers. Old reports and disconnected peers remain in the trust database for
+history, but do not contribute to a new lookup's score or reporter list.
+The web interface labels older alerts that used all-time reporter lists as
+historical. Multicast, unspecified, loopback, and limited broadcast IPs are
+not sent for peer reputation checks or shared as malicious IP reports; this
+includes the mDNS multicast address `224.0.0.251`.
 
 The persistent local P2P runtime directory is stored under the directory configured by ```parameters.permanent_dir``` in ```config/slips.yaml```. By default, this is ```permanent/p2p_trust_runtime/```.
+
+The persistent trust database creates indexes for report, peer, and
+reputation lookups at startup. This keeps opinion checks from scanning the
+entire database as its report history grows. On an existing large database,
+the indexes are built once during startup; subsequent starts reuse them.
+
+The trust database stores only the latest Slips local reputation score and
+confidence for each IP. The score reflects the highest local threat level
+in the current run. Older snapshots were not used for opinion lookups;
+they only made `trustdb.db` grow continuously. On startup, existing databases
+are migrated by retaining the row with the newest timestamp for each IP, then
+the database is vacuumed and its WAL is checkpointed. Older scores are kept
+as legacy data but excluded from new trust decisions because they may contain
+peer-derived findings. Do not
+delete `permanent/p2p_trust_runtime/trustdb.db` to reclaim space: Slips performs
+the migration without resetting peer reports or reputation.
+
+Slips compacts stored IP reports in batches of up to 1,000 rows every five
+seconds. New reports stay raw for at least 30 seconds so the current lookup
+can identify its replies. For each reported IP, peer ID, and reporter IP at report time, it
+keeps the report count and score/confidence totals. The trust calculation
+still uses each peer's current reliability and the reporter IP's current
+reputation, so new peer information continues to affect past reports. Reports
+whose peer IP cannot yet be resolved stay in the raw table and continue to be
+considered normally. Aggregation preserves the opinion formula; only ordinary
+floating-point rounding at machine precision can differ. After the existing
+backlog is processed, Slips attempts one vacuum to reclaim disk space. Keep
+the database; deleting it would discard the peer reports and trust history.
+Back it up before the first run with compaction if you need a recoverable
+original copy.
 
 
 ### Answering the network's request about an IP
 
-When asked about an ip, slips shares the score of it and the confidence with the requesting peer. the scores are generated by slips and saved in the database.
+Slips answers with a recent, local malicious observation. Informational,
+peer-derived, rejected and conflicting observations cannot be used as local
+confirmation. If none remains, Slips does not send an assessment. This is
+unknown behavior, not a benign verdict. Reports and blames include optional
+evidence type, module, detection time, method, and a detector code fingerprint.
+Older peers can still exchange the original score/confidence messages.
+
+### Report accuracy and analyst feedback
+
+Agreement between identical detectors is not independent verification. Slips
+groups related error sources conservatively: for example, DNS detectors share
+one dependency group and threat-intelligence lookups share another. Different
+Slips versions do not establish independence. Ordinary agreement between local
+and remote heuristics earns no trust credit. Automatic validation requires
+matching local evidence of the same type within one hour, a different dependency
+group, and a local signature, integrity or honeypot method with confidence at
+least 0.9 and maliciousness at least 0.8. Peer-derived findings cannot provide
+this confirmation. These checks reduce correlated errors; they cannot prove
+that a detection or an authenticated peer is correct.
+During blame evaluation, a peer assessment from the local detection's dependency
+group is excluded from the additional network contribution unless independently
+validated or reviewed. Identical local and remote rules therefore do not supply
+two confirmations to cross the block threshold.
+
+The existing web **Review this alert/evidence** controls also provide validation:
+
+- **True positive** confirms a malicious detection.
+- **False positive** and **Expected behavior** reject it for P2P learning.
+- **In review**, **Inconclusive**, **Unreviewed**, and an alert's **Resolved**
+  status without a verdict provide no correctness assessment.
+- Conflicting alert/evidence verdicts suspend credit. Editing or clearing a
+  verdict recalculates its contribution. Deleting a review withdraws it; deleting
+  evidence also withdraws its associated feedback. Shared evidence preserved
+  during alert deletion retains its own review.
+
+A TP alert containing several evidence types does not certify every component
+detector. Review individual evidence to identify which detections were correct.
+This restriction affects P2P learning; the existing `human_review` flow export
+continues to include the user's alert verdict without changing Slips's original
+flow label.
+
+Feedback is saved atomically with the web review in the run's SQLite outbox.
+The web applies it immediately when possible; otherwise the P2P process retries.
+Existing saved reviews are imported incrementally, without scanning flow data.
+Applied revisions invalidate cached network opinions even when the web and P2P
+processes are separate. Data is kept in
+`<parameters.permanent_dir>/p2p_trust_runtime/report_validation.sqlite` and
+survives Slips restarts. Analyst notes stay in the review database and are never
+sent to peers.
+
+The thesis's base trust and signed-score conversion remain unchanged. An
+additional report-accuracy adjustment is specific to the authenticated peer,
+evidence type and detector fingerprint. One validated target IP in one recorded
+network can contribute only once during the ledger's lifetime, across detector
+versions and repeated reports; correcting its verdict changes that contribution
+without renewing its age. Each TP contributes +0.05 and each FP −0.10, with a
+30-day half-life and a total adjustment limited to [−0.30, +0.20]. Effective
+report trust remains within [−0.5, 0.85]. Positive credit cannot override a strong
+local malicious assessment of the reporter. The P2P table shows report accuracy
+separately from base trust and communication reliability; hover for each type
+and detector version's adjustment.
+
+The once-per-host restriction limits positive rewards. A later rejected report
+still incurs a penalty, even if that peer previously reported the same host
+correctly. Negative cases are deduplicated per target, evidence type and code
+version, and are also reversible; earning a positive reward does not make later
+false reports exempt from review.
+
+Reviewed detector confidence is discounted by `(TP + 1) / (TP + FP + 1)`, using
+distinct target IPs in the current network. Repeated reviews about the same
+target do not multiply the count. A detector without feedback starts at weight
+1. This weight is a conservative heuristic, not a calibrated probability. Legacy
+reviews without a detector fingerprint can supply negative feedback, but cannot
+certify a new implementation. Default `benign` labels on stored flows provide
+neither positive nor negative training examples.
+
+For the additional corroboration path, Slips counts at most one blame per
+authenticated peer and dependency group. Support is the sum of
+`max(0, effective_trust) × adjusted_confidence × maliciousness`; support at least
+0.85 can forward a blame to the existing blocking pipeline. Multiple peers
+repeating the same detector cannot increase this support. Legacy reports remain
+usable in the existing opinion calculation, but cannot earn detector-specific
+credit or establish independent corroboration. Fresh reports and blames are
+scoped to the receiver's network, so reused private IPs on another network do
+not share their decision history.
+
+### How peer reports affect alerts
+
+Incoming `P2P_REPORT` evidence records preserve the reported IP, peer, severity,
+and confidence for inspection, but do not increase the host's accumulated threat
+score or trigger an alert by themselves. When Slips observes a flow involving an
+IP judged malicious by the peer network, it records one
+`MALICIOUS_IP_FROM_P2P_NETWORK` finding for that flow. Both categories stay
+visible as evidence but do not change Slips's own score for the reported IP.
+This keeps the network's opinion separate from the local score used to judge
+reporters and to answer other peers.
+
+A report also carries the original evidence type, a short detection description,
+and the protocol and ports when the sender has them. For example, the web shows
+**Unknown port — From P2P**, followed by what the peer detected. The sending
+peer, reported IP, score, confidence, detection time and detector remain
+available. The reporting peer is not automatically the victim of the detection.
+A score of zero means the peer considers the reported IP benign.
+
+The P2P tab shows the reported detection before the report/request message
+details. Selecting a report shows its detection descriptions first, then the
+peer information and complete packet JSON. In Hosts and Evidence, received
+findings appear under their original types with a **From P2P** label. A group
+containing local and received findings says **Includes P2P**. A packet containing
+several detections creates a separate evidence record for each detection; the P2P
+activity table still shows the one packet and all its supplied detections.
+
+Descriptions are limited to 1,024 characters per detection, with at most 16
+detections per packet. Raw flows, packet contents and analyst review notes are
+not included. A receiver accepts reports from older senders that supply only
+the previous fields. When a type or description is absent, the web says it was
+not supplied. It does not infer an attack from the reputation score.
+
+Internally, received evidence keeps its `P2P_REPORT` type in the original JSON
+so it cannot become a local observation, raise the local score or be shared
+back as a new local detection. The indexed database type used for web grouping
+and filtering holds the reported detection type. Opening an existing active
+database updates these index fields once where the original type was saved;
+it preserves evidence IDs and original JSON. Web refreshes do not repeatedly
+parse all report history to find these types.
+
+The evidence-type selector in the whitelist editor keeps `P2P_REPORT` for
+received findings, preserving the existing rule behavior for peer reports.
+Showing **Unknown port — From P2P** does not turn that report into a local
+unknown-port observation.
+
+Restart receiving Slips to load the new handling and reload the web page.
+Sending peers also need the updated code and a restart to send descriptions
+and port details. Older saved reports can show only the information retained:
+they show **Type unavailable** when the type was not saved or the original
+packet has expired. A retained packet without a type says **Type not supplied**.
+
+The DNS high-entropy TXT detector ignores `.local` mDNS service discovery
+answers. Pigeon advertises encoded peer addresses through these local TXT
+records, and their entropy alone is not evidence of DNS tunneling.
 
 ## Logs
 
 Slips contains a minimal log file for reports received by other peers and peer updates in
 ```output/p2p_reports.log```
+
+Routine received reports, peer requests, and P2P message details are written to
+Slips log files without filling the main terminal. Invalid peer messages and
+other P2P errors remain visible in the terminal.
 
 For a more detailed p2p logs, for example (peer ping pongs, peer lists, errors, etc.)
 you can enable p2p.log in slips.yaml by setting ```create_p2p_logfile``` to ```yes```
@@ -186,12 +450,12 @@ Slips rotates the p2p.log every 1 day by default, and keeps the logs of 1 past d
 
 When the local web interface is enabled, its **P2P** tab shows live peer
 connectivity, local identity, bounded message activity, reports received in the
-current run, and persistent peer trust and reliability evolution.
+current time window, and persistent peer trust and reliability evolution.
 
 
 ## Limitations
 
-For now, slips only supports requests and blames about IPs.
+For now, Slips only supports requests, reports, and blames about IPs.
 
 Domains, URLs, or hashes are not supported, but can easily be added in the future.
 

@@ -26,6 +26,45 @@ from slips_files.core.structures.risk_weights import (
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("already_blocked", [False, True])
+def test_exempt_host_alerts_are_logged_without_blocking(already_blocked: bool) -> None:
+    """Keep repeated alerts visible, including after a previous block.
+
+    Parameters:
+        already_blocked: Whether this timewindow already recorded a block.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.blocking_whitelist = Mock(is_exempt=Mock(return_value=True))
+    worker.blocking_modules_supported = True
+    worker.our_ips = []
+    worker.notify = None
+    worker.db.is_blocked_profile_and_tw.return_value = already_blocked
+    worker.escalate_risk_level = Mock(side_effect=lambda alert: alert)
+    worker.send_to_exporting_module = Mock()
+    worker.log_alert = Mock()
+    worker.formatter.format_evidence_for_printing = Mock(return_value="alert")
+    alert = Alert(
+        profile=ProfileID("192.168.1.138"),
+        timewindow=TimeWindow(1),
+        last_evidence=Mock(),
+        accumulated_threat_level=12.2,
+        last_flow_datetime="2026/10/23 14:00:00.000000+0000",
+    )
+    evidence = {"test": Mock(spec=Evidence)}
+
+    worker.handle_new_alert(alert, evidence)
+    worker.handle_new_alert(alert, evidence)
+
+    assert worker.db.set_alert.call_count == 2
+    assert worker.send_to_exporting_module.call_count == 2
+    assert worker.log_alert.call_args_list == [
+        ((alert,), {"blocked": False}),
+        ((alert,), {"blocked": False}),
+    ]
+    worker.db.publish.assert_not_called()
+    worker.db.mark_profile_and_timewindow_as_blocked.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "profileid, our_ips, expected_result, expected_publish_call_count",
     [
@@ -498,18 +537,32 @@ def test_disabled_evidence_message_is_deleted_without_processing() -> None:
     worker.db.mark_evidence_as_processed.assert_not_called()
 
 
-def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
-    """Verify zero-weight evidence never becomes an alert threshold trigger."""
+@pytest.mark.parametrize(
+    "evidence_type, threat_level",
+    [
+        (EvidenceType.HTTP_TRAFFIC, ThreatLevel.INFO),
+        (EvidenceType.P2P_REPORT, ThreatLevel.CRITICAL),
+    ],
+)
+def test_non_scoring_evidence_cannot_open_alert_from_existing_score(
+    evidence_type: EvidenceType, threat_level: ThreatLevel
+) -> None:
+    """Prevent informational and raw P2P reports from opening alerts.
+
+    Parameters:
+        evidence_type: Signal being processed.
+        threat_level: Stored severity of the signal.
+    """
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     evidence = Evidence(
-        evidence_type=EvidenceType.HTTP_TRAFFIC,
+        evidence_type=evidence_type,
         description="Unencrypted HTTP traffic",
         attacker=Attacker(
             direction=Direction.SRC,
             ioc_type=IoCType.IP,
             value="10.0.66.100",
         ),
-        threat_level=ThreatLevel.INFO,
+        threat_level=threat_level,
         confidence=1.0,
         profile=ProfileID("10.0.66.100"),
         timewindow=TimeWindow(1),
@@ -538,6 +591,54 @@ def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
 
     worker.get_evidence_for_tw.assert_not_called()
     worker.handle_new_alert.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "evidence_type, should_score",
+    [
+        (EvidenceType.P2P_REPORT, False),
+        (EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK, True),
+    ],
+)
+def test_received_p2p_report_does_not_add_to_host_score(
+    evidence_type: EvidenceType, should_score: bool
+) -> None:
+    """Score an observed P2P finding once, without scoring its raw report.
+
+    Parameters:
+        evidence_type: P2P signal being processed.
+        should_score: Whether the signal contributes to the host score.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = Evidence(
+        evidence_type=evidence_type,
+        description="Peer reported a malicious IP",
+        attacker=Attacker(
+            direction=Direction.SRC,
+            ioc_type=IoCType.IP,
+            value="10.0.66.100",
+        ),
+        threat_level=ThreatLevel.CRITICAL,
+        confidence=1.0,
+        profile=ProfileID("10.0.66.100"),
+        timewindow=TimeWindow(1),
+        uid=["uid-p2p"],
+        timestamp="2023/02/16 17:46:13.000000+0000",
+    )
+    worker.db.get_accumulated_threat_level.return_value = 0.4
+    worker.db.update_accumulated_threat_level.return_value = 1.4
+    worker.is_filtered_evidence = Mock(return_value=False)
+
+    score = worker.get_accumulated_threat_level(
+        str(evidence.profile), str(evidence.timewindow), evidence
+    )
+
+    if should_score:
+        assert score == 1.4
+        worker.db.update_accumulated_threat_level.assert_called_once()
+    else:
+        assert score == 0.4
+        worker.db.update_accumulated_threat_level.assert_not_called()
 
 
 def test_escalate_risk_level_stores_current_weight_for_first_alert() -> None:
@@ -698,6 +799,7 @@ def test_send_to_exporting_module():
     "sys_argv, running_non_stop, expected_result",
     [
         (["-i", "-p"], True, True),
+        (["-i", "--blocking"], True, True),
         (["-i", "-im"], False, False),
         ([], False, False),
     ],

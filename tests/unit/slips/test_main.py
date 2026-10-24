@@ -354,12 +354,14 @@ def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
 
     with (
         patch.object(main, "was_running_zeek", return_value=True),
-        patch(f"{main.__class__.__module__}.copy_tree") as mock_copy_tree,
+        patch("shutil.copytree") as mock_copy_tree,
         patch("builtins.print"),
     ):
         main.store_zeek_dir_copy()
 
-    mock_copy_tree.assert_called_once_with("zeek_dir", "output/zeek_files")
+    mock_copy_tree.assert_called_once_with(
+        "zeek_dir", "output/zeek_files", dirs_exist_ok=True
+    )
 
 
 # TODO should be moved to utils unit tests after the PR is merged
@@ -484,6 +486,29 @@ def test_prepare_output_dir_with_o_flag_deletes_files_preserve_slips(
     remaining = list(os.listdir(test_dir))
     assert "slips_output.txt" in remaining
     assert len(remaining) == 1
+
+
+def test_prepare_output_dir_keeps_history(tmp_path: Path) -> None:
+    """Keep previous SQLite data when history mode is requested.
+
+    Parameters:
+        tmp_path: Temporary path provided by pytest.
+    """
+    main = ModuleFactory().create_main_obj()
+    main.args = MagicMock()
+    main.args.output = str(tmp_path / "previous_run")
+    main.args.is_slips_started_by_an_update = False
+    output_dir = Path(main.args.output)
+    (output_dir / "databases").mkdir(parents=True)
+    old_detection_db = output_dir / "databases" / "flows.sqlite"
+    old_detection_db.write_text("previous run")
+    main.args.keep_history = True
+    main.redis_man.validate_keep_history = Mock()
+
+    main.prepare_output_dir()
+
+    assert old_detection_db.read_text() == "previous run"
+    main.redis_man.validate_keep_history.assert_called_once_with()
 
 
 def test_prepare_output_dir_with_o_flag_creates_dir(

@@ -106,3 +106,23 @@ def test_process_rotation_message_deletes_unsupported_files_immediately():
 
     mock_remove.assert_called_once_with(old_file)
     assert input_process.zeek_utils.rotated_files_to_delete == []
+
+
+def test_process_rotation_message_never_deletes_whitelist():
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    remover = ZeekFileRemover(input_process, input_process.zeek_utils)
+
+    with patch(
+        "slips_files.core.input.zeek.utils.zeek_file_remover.os.remove"
+    ) as mock_remove:
+        remover.process_rotation_message(
+            {
+                "old_file": "config/sebas-whitelist.conf",
+                "new_file": "config/tmp123.conf",
+            }
+        )
+
+    mock_remove.assert_not_called()
+    assert input_process.zeek_utils.rotated_files_to_delete == []

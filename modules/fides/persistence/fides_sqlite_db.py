@@ -4,7 +4,6 @@ Programmers notes:
 Python has None, SQLite has NULL, conversion is automatic in both ways.
 """
 
-import os
 import sqlite3
 from pathlib import Path
 from typing import List, Any, Optional
@@ -15,7 +14,7 @@ from ..model.peer_trust_data import PeerTrustData
 from ..model.recommendation_history import RecommendationHistoryRecord
 from ..model.service_history import ServiceHistoryRecord
 from ..model.threat_intelligence import SlipsThreatIntelligence
-from ..model.aliases import *
+from ..model.aliases import OrganisationId, PeerId, Target
 import threading
 
 
@@ -310,6 +309,35 @@ class FidesSQLiteDB:
             peer_list.append(peer_info)
 
         return peer_list
+
+    def get_peers_by_minimal_service_trust(
+        self, minimal_service_trust: float
+    ) -> List[PeerInfo]:
+        """Find stored peers whose service trust meets the minimum.
+
+        Parameters:
+            minimal_service_trust: Lowest accepted service trust.
+
+        Returns:
+            Matching peers with their IPs and organisations.
+        """
+        rows = self.__execute_query(
+            """
+            SELECT pi.peerID, pi.ip
+            FROM PeerTrustData ptd
+            JOIN PeerInfo pi ON ptd.peerID = pi.peerID
+            WHERE ptd.service_trust >= ?;
+            """,
+            [minimal_service_trust],
+        )
+        return [
+            PeerInfo(
+                id=peer_id,
+                organisations=self.get_peer_organisations(peer_id),
+                ip=ip,
+            )
+            for peer_id, ip in rows
+        ]
 
     def get_peer_trust_data(self, peer_id: str) -> PeerTrustData:
         # Fetch PeerTrustData along with PeerInfo

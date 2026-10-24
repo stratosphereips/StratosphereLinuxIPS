@@ -89,6 +89,33 @@ class SlipsTrustDatabase(TrustDatabase):
 
         return out
 
+    def get_peers_with_geq_service_trust(
+        self, minimal_service_trust: float
+    ) -> List[PeerInfo]:
+        """Return peers whose service trust meets the minimum.
+
+        Parameters:
+            minimal_service_trust: Lowest accepted service trust.
+
+        Returns:
+            Matching peers from the live list or durable database.
+        """
+        connected_peers = self.get_connected_peers()
+        if not connected_peers:
+            return self.sqldb.get_peers_by_minimal_service_trust(
+                minimal_service_trust
+            )
+
+        peers = []
+        for peer in connected_peers:
+            trust = self.get_peer_trust_data(peer.id)
+            if (
+                trust is not None
+                and trust.service_trust >= minimal_service_trust
+            ):
+                peers.append(peer)
+        return peers
+
     def store_peer_trust_data(self, trust_data: PeerTrustData):
         """
         Stores trust data for given peer - overwrites any data if existed.

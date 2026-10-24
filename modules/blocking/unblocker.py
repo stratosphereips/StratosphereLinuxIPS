@@ -7,6 +7,7 @@ from slips_files.common.printer import Printer
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import TimeWindow
 from modules.blocking.exec_iptables_cmd import delete_slips_rules_for_ip
+from modules.blocking.macos_pf import MacOSPF
 
 
 class Unblocker(IUnblocker):
@@ -18,7 +19,15 @@ class Unblocker(IUnblocker):
 
     name = "iptables_unblocker"
 
-    def __init__(self, db, sudo, should_stop: Callable, logger, log: Callable):
+    def __init__(
+        self,
+        db,
+        sudo,
+        should_stop: Callable,
+        logger,
+        log: Callable,
+        pf: MacOSPF | None = None,
+    ):
         IUnblocker.__init__(self, db)
         # this is the blocking module's should_stop method
         # the goal is to stop the threads started by this module when the
@@ -28,6 +37,7 @@ class Unblocker(IUnblocker):
         self.logger = logger
         self.printer = Printer(self.logger, self.name)
         self.sudo = sudo
+        self.pf = pf
         # this log method is used to log unblocking requests to blocking.log
         self.log = log
         self.requests_lock = Lock()
@@ -282,7 +292,12 @@ class Unblocker(IUnblocker):
         flags: Dict[str, str],
     ):
         """Unblocks an ip based on the given flags"""
-        if delete_slips_rules_for_ip(self.sudo, ip_to_unblock, flags):
+        removed = (
+            self.pf.unblock(ip_to_unblock)
+            if self.pf is not None
+            else delete_slips_rules_for_ip(self.sudo, ip_to_unblock, flags)
+        )
+        if removed:
             cur_timewindow = self.db.get_timewindow(
                 time.time(), f"profile_{ip_to_unblock}"
             )

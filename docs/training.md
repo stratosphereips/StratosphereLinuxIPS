@@ -23,6 +23,13 @@ trained as Benign. Other values, including `unknown`, are skipped by training.
 The `detailedlabel` field is retained as metadata; it is not the training
 target.
 
+To teach Slips which computers normally connect to a service, when they connect,
+and how long their connections last, see
+[Service anomaly detection](service_anomaly_detection.md). That module learns
+from successful connections without requiring benign labels. It skips learning
+from records explicitly labeled malicious, malware or attack. Its guide explains
+`train`, `auto` and `detect`; the ML training steps below apply to different modules.
+
 ## Reproducible training workflow
 
 1. Choose one module and set only that module's `mode: train`.

@@ -10,6 +10,32 @@ from slips_files.common.input_type import InputType
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize(
+    "value,expected", [(30, 30), (7, 7), ("60", 60), (0, 30), ("invalid", 30)]
+)
+def test_detection_archive_retention_is_configurable(
+    value: object, expected: int
+) -> None:
+    """Validate the configured monthly archive age and invalid-value fallback.
+
+    Parameters:
+        value: Configured archive retention.
+        expected: Validated number of days.
+    """
+    _factory = ModuleFactory()
+    parser = ConfigParser.__new__(ConfigParser)
+    parser.config = {"detection_history": {"archive_retention_days": value}}
+    assert (
+        parser.detection_history_policy()["archive_retention_days"] == expected
+    )
+    assert (
+        parser.detection_history_policy({"archive_retention_days": value})[
+            "archive_retention_days"
+        ]
+        == expected
+    )
+
+
 def test_evidence_signal_default_falls_back_to_pamp():
     parser = ConfigParser.__new__(ConfigParser)
     parser.config = {"EvidenceSignals": {"default_signal": "invalid"}}
@@ -280,3 +306,61 @@ def test_local_p2p_connection_settings(setting: str, value, expected) -> None:
     }
 
     assert readers[setting]() == expected
+
+
+@pytest.mark.parametrize(
+    "settings,expected",
+    [
+        ({}, (True, 24, 30, 500, 60)),
+        (
+            {"enabled": False, "ordinary_hours": 72, "linked_days": 1},
+            (False, 72, 3, 500, 60),
+        ),
+        (
+            {"batch_size": 9000, "interval_seconds": "bad"},
+            (True, 24, 30, 500, 60),
+        ),
+    ],
+)
+def test_flow_retention_policy_bounds_settings(
+    settings: dict, expected: tuple[bool, int, int, int, int]
+) -> None:
+    """Reject unsafe settings and keep linked flows at least as long.
+
+    Parameters:
+        settings: User flow retention YAML values.
+        expected: Sanitized enable, ages, batch size, and interval.
+    """
+    _module_factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    parser.config = {"flow_retention": settings}
+
+    policy = parser.flow_retention_policy()
+
+    assert policy["size_min_age_minutes"] == 60
+
+    assert (
+        tuple(
+            policy[key]
+            for key in (
+                "enabled",
+                "ordinary_hours",
+                "linked_days",
+                "batch_size",
+                "interval_seconds",
+            )
+        )
+        == expected
+    )
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("false", False), (None, False)])
+def test_service_anomaly_is_enabled_only_explicitly(value: object, expected: bool) -> None:
+    """Keep the new detector opt-in, including older custom configurations.
+
+    Parameters:
+        value: Configured feature value or missing-section default.
+        expected: Whether the optional module should start.
+    """
+    _factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    with patch.object(parser, "read_configuration", return_value=value):
+        assert parser.service_anomaly_enabled() is expected

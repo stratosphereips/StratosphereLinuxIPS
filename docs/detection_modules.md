@@ -69,9 +69,14 @@ tr:nth-child(even) {
     <td>✅</td>
   </tr>
   <tr>
-    <td>HTTPS</td>
-    <td>training&test of RandomForest to detect malicious https flows</td>
-    <td>⏳</td>
+    <td>HTTPS Anomaly Detection</td>
+    <td>Learns hourly TLS behavior and per-server flow deviations.</td>
+    <td>✅</td>
+  </tr>
+  <tr>
+    <td>Service Anomaly Detection</td>
+    <td>Learns which computers normally connect to a service, at what hours, and for how long; reports unusual connections after learning.</td>
+    <td>✅</td>
   </tr>
   <tr>
     <td>Port Scan Detector</td>
@@ -158,6 +163,42 @@ tr:nth-child(even) {
 
 </table>
 
+## Connections outside the local subnet
+
+`conn_analyzer` checks whether a connection involves private IP addresses outside
+the monitored subnet. DNS queries on UDP port 53 are checked by `flow_alerts`
+instead, so the same connection is not reported by both analyzers. Known DNS
+servers and special addresses such as multicast, loopback, and link-local
+addresses keep their existing exemptions.
+
+When a flow from A to B involves a private address outside the monitored subnet,
+Slips creates two related `DIFFERENT_LOCALNET` findings, one for each host:
+
+- **A, the source: high severity.** A initiated the connection.
+- **B, the destination: info severity.** B received the connection; receiving
+  it alone does not add threat points to B's score.
+
+Each finding belongs to its own host profile, and both reference the original
+flow ID. A host gets one severity for this flow, never both. Connections from
+an IP to itself are ignored. Severity follows the host's role regardless of
+whether the source, destination, or both addresses are outside the subnet.
+
+For example, with local subnet `192.168.0.0/16`, an ICMP flow from `10.0.2.2`
+to `10.0.2.15` produces a high-severity finding for `10.0.2.2` and an informational
+finding for `10.0.2.15`. Both descriptions explain that both private addresses
+are outside the selected subnet. ICMP
+type and code are identified as such, rather than being called TCP/UDP ports.
+Descriptions distinguish initiating a connection from receiving it. The stored
+source and destination directions are also preserved for scoring and exports.
+
+For live capture, the comparison and its description use the subnet that was
+active at the flow's capture time. For recorded input, Slips uses a private
+network from `parameters.client_ips`, when configured; otherwise it learns a
+private range from the first eligible source address. A recording can contain
+traffic from more than one private network, so this finding alone does not
+prove an attack. The fix applies to newly analyzed flows; rerun a recording
+into a new output directory to replace previously generated duplicate results.
+
 ## Bruteforcing Module
 
 The `Bruteforcing` module is responsible for SSH bruteforcing detection.
@@ -227,6 +268,14 @@ context.
 
 For the full state machine, formulas, DB schema, and configuration, see
 [T Cell Module](t_cell_module.md).
+
+## Service anomaly detection
+
+This optional module learns which computers normally connect to each service,
+when they connect, and how long completed TCP connections last. It then reports
+unusual connections, including attempts by unfamiliar clients. See
+[Service anomaly detection](service_anomaly_detection.md) for configuration,
+training, short tests, examples, and explanations of every setting.
 
 ## HTTPS Anomaly Detection Module
 
@@ -819,6 +868,11 @@ Available keywords for Apple: ('macos', 'ios', 'apple', 'os x', 'mac', 'macintos
 Available keywords for Microsoft: ('microsoft', 'windows', 'nt')
 
 Available keywords for Android: ('android', 'google')
+
+OS keywords must match complete words: `nt` inside `Macintosh` is not Windows
+NT. The evidence preserves the OS and browser names' capitalization, including
+`OS X`. Compatible macOS Chrome and HeadlessChrome observations do not generate
+an incompatibility solely because their OS family is `Macintosh`.
 
 ### Multiple user agents
 

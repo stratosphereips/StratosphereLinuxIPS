@@ -140,6 +140,10 @@ Slips considers an IP belongs to an org if:
 
 Otherwise, Slips triggers and "unknown port" evidence.
 
+Unknown-port and connection-to-private-IP evidence are skipped when either
+endpoint is multicast, the IPv4 limited-broadcast address, or the monitored
+interface's subnet-directed broadcast address.
+
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
 The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
@@ -212,11 +216,17 @@ The `flow_alerts` module still detects successful SSH sessions, but SSH password
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
-To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
+Slips counts distinct failed DNS names per source IP and time window. Retries,
+case changes, trailing dots, and a `.lan` search-suffix variant of the same
+public name count once. Local service-discovery names, reverse lookups,
+`.local`, and reserved `.invalid` names do not contribute to this DGA signal.
 
-Then we alert when there is 10 or more NXDOMAINs.
-
-Every 10,15,20 ..etc slips generates an evidence.
+Evidence starts at 10 distinct failed names and recurs for every five new
+distinct names (15, 20, and so on). Existing evidence remains in run history;
+the corrected counting applies to new DNS traffic after restarting Slips.
+DNS resolvers that block domains by returning NXDOMAIN can still contribute
+distinct names to this signal. Review the linked DNS flows and local resolver
+policy before treating a DGA evidence record as an infection.
 
 ## Connection to multiple ports
 
@@ -355,7 +365,9 @@ Here's how it works
 
 ## Connection to private IPs
 
-Slips detects when a private IP is connected to another private IP with threat level info.
+Slips detects when a private IP is connected to another private IP with threat level info. ICMP traffic does not produce `CONNECTION_TO_PRIVATE_IP` evidence.
+Broadcast and multicast traffic is excluded, as is UDP mDNS on source or
+destination port 5353, including unicast mDNS replies.
 
 But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.
@@ -401,7 +413,9 @@ address, such as a link-local address.
 
 ## High entropy DNS TXT answers
 
-Slips check every DNS answer with TXT record for high entropy
+Slips checks DNS TXT answers for high entropy. Reverse DNS `.arpa` TXT
+answers use a higher Shannon entropy threshold of 5.8 because ordinary
+device and service metadata often contains long encoded values.
 strings.
 Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
 and alerted by slips.

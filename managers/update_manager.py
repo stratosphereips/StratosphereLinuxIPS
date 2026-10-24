@@ -24,6 +24,7 @@ from git import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.common.slips_own_traffic import SlipsTrafficTracker
 from slips_files.core.database.database_manager import DBManager
 
 
@@ -191,12 +192,18 @@ class UpdateManager:
             self.cached_update_info = {}
             return self.cached_update_info
 
+        tracker = SlipsTrafficTracker()
+        tracker.install()
         try:
-            with request.urlopen(update_json_link, timeout=5) as response:
-                update_text = response.read().decode("utf-8")
-        except (OSError, UnicodeDecodeError, error.URLError):
-            self.cached_update_info = {}
-            return self.cached_update_info
+            tracker.attach(self.db)
+            try:
+                with request.urlopen(update_json_link, timeout=5) as response:
+                    update_text = response.read().decode("utf-8")
+            except (OSError, UnicodeDecodeError, error.URLError):
+                self.cached_update_info = {}
+                return self.cached_update_info
+        finally:
+            tracker.stop()
 
         sanitized_update_text = re.sub(r",(\s*[}\]])", r"\1", update_text)
         try:

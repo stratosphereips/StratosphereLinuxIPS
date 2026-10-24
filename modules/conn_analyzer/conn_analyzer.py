@@ -6,20 +6,18 @@ import contextlib
 import ipaddress
 import json
 import time
-from multiprocessing import Lock
+from threading import Lock
 from typing import Tuple, List, Dict, Any
 import validators
 
 from modules.conn_analyzer.set_evidence import SetEvidenceHelper
 from modules.flow_alerts.utils import (
     SPECIAL_IPV4,
-    get_ip_to_check,
+    different_localnet_context,
     is_interface_timeout_reached as has_interface_timeout_reached,
-    is_ip_allowed_outside_localnet,
-    is_ip_outside_local_network,
-    is_official_dns_server,
     should_check_different_localnet,
     should_ignore_dns_or_dhcpv6_flow,
+    network_state_for_flow,
 )
 from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -27,7 +25,6 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
-
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
@@ -56,7 +53,9 @@ class ConnAnalyzer(IAsyncModule):
         self.conn_without_dns_interface_wait_time = 30
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
-        self.our_ips: List[str] = utils.get_own_ips(ret="List")
+        self.our_ips: List[str] = utils.get_own_ips(
+            ret="List", include_public=False
+        )
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
         # to avoid duplicate evidence
@@ -142,8 +141,8 @@ class ConnAnalyzer(IAsyncModule):
         1. we have its info in ports_used_by_specific_orgs.csv
 
         - and considers the IP belongs to an org if any of the below:
-        1. both saddr and daddr have the Mac vendor fo this org e.g. apple
-        2. both saddr and daddr belong to the range specified in the
+        1. both saddr and daddr have the MAC vendor for this org e.g. Apple
+        2. daddr belongs to the range specified in the
         ports_used_by_specific_orgs.csv
         3. if the SNI, hostname, rDNS, ASN of this ip belong to this org
         4. match the IPs to orgs that slips has info about (apple, fb,
@@ -184,7 +183,7 @@ class ConnAnalyzer(IAsyncModule):
             org_name = org_name.lower()
             if (
                 org_name in src_mac_vendor.lower()
-                or org_name in dst_mac_vendor.lower()
+                and org_name in dst_mac_vendor.lower()
             ):
                 return True
 
@@ -210,6 +209,9 @@ class ConnAnalyzer(IAsyncModule):
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
+        if self.is_broadcast_or_multicast_flow(flow):
+            return
+
         if not flow.dport:
             return
 
@@ -234,6 +236,9 @@ class ConnAnalyzer(IAsyncModule):
         if self.port_belongs_to_an_org(flow.daddr, portproto, profileid):
             return False
 
+        if self.is_local_apple_peer_flow(flow):
+            return False
+
         if (
             "icmp" not in proto
             and not self.db.is_p2p_related_flow(
@@ -244,6 +249,104 @@ class ConnAnalyzer(IAsyncModule):
             # we don't have info about this port
             self.set_evidence.unknown_port(twid, flow)
             return True
+
+    def is_broadcast_or_multicast_flow(self, flow: Any) -> bool:
+        """Check whether either endpoint is multicast or broadcast traffic.
+
+        Parameters:
+            flow: Connection flow with source, destination, and interface.
+
+        Returns:
+            True when an endpoint is multicast or a known IPv4 broadcast.
+        """
+        addresses = []
+        for value in (flow.saddr, flow.daddr):
+            try:
+                address = ipaddress.ip_address(value)
+            except ValueError:
+                continue
+            if address.is_multicast:
+                return True
+            if isinstance(address, ipaddress.IPv4Address):
+                if address == ipaddress.IPv4Address("255.255.255.255"):
+                    return True
+                addresses.append(address)
+
+        if not addresses:
+            return False
+        interface = str(getattr(flow, "interface", "") or "")
+        if not interface:
+            return False
+        now = time.monotonic()
+        network_cache = getattr(self, "_broadcast_network_cache", {})
+        cached = network_cache.get(interface)
+        if not cached or now - cached[0] >= 5:
+            local_network = self.db.get_local_network(interface)
+            try:
+                parsed_network = ipaddress.ip_network(
+                    local_network, strict=False
+                )
+            except (TypeError, ValueError):
+                parsed_network = None
+            cached = (now, parsed_network)
+            network_cache[interface] = cached
+            self._broadcast_network_cache = network_cache
+        local_network = cached[1]
+        if isinstance(local_network, ipaddress.IPv4Network):
+            if local_network.prefixlen < 31 and any(
+                address == local_network.broadcast_address
+                for address in addresses
+            ):
+                return True
+        return False
+
+    def is_local_apple_peer_flow(self, flow: Any) -> bool:
+        """Recognize direct high-port UDP traffic between local Apple devices.
+
+        Parameters:
+            flow: Connection with IPs, ports, MACs, and capture interface.
+
+        Returns:
+            True only when both direct MACs identify Apple devices on the
+            monitored local network.
+        """
+        if str(flow.proto).lower() != "udp":
+            return False
+        try:
+            port = int(flow.dport)
+        except (TypeError, ValueError):
+            return False
+        if not 49152 <= port <= 65535:
+            return False
+
+        src_mac = str(getattr(flow, "smac", "") or "").lower()
+        dst_mac = str(getattr(flow, "dmac", "") or "").lower()
+        if not src_mac or not dst_mac or src_mac == dst_mac:
+            return False
+
+        state = network_state_for_flow(self.db, flow)
+        if not state or flow.saddr != state.get("host_ip"):
+            return False
+        try:
+            network = ipaddress.ip_network(
+                state["local_network"], strict=False
+            )
+            if (
+                ipaddress.ip_address(flow.saddr) not in network
+                or ipaddress.ip_address(flow.daddr) not in network
+            ):
+                return False
+        except (KeyError, ValueError):
+            return False
+        if dst_mac == str(state.get("gateway_mac") or "").lower():
+            return False
+
+        try:
+            src_vendor = utils.get_mac_vendor_from_mac_addr(src_mac) or ""
+            dst_vendor = utils.get_mac_vendor_from_mac_addr(dst_mac) or ""
+        except OSError:
+            return False
+        return "apple" in src_vendor.lower() and "apple" in dst_vendor.lower()
 
     def is_telnet(self, flow) -> bool:
         try:
@@ -570,7 +673,11 @@ class ConnAnalyzer(IAsyncModule):
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
-            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
+            or (
+                self.is_running_non_stop
+                and flow.saddr not in self.our_ips
+                and flow.saddr != self.db.get_host_ip(flow.interface)
+            )
         )
 
     def check_if_resolution_was_made_by_different_version(
@@ -771,43 +878,46 @@ class ConnAnalyzer(IAsyncModule):
         """
         return should_check_different_localnet(flow, skip_dns_flows=True)
 
-    def check_different_localnet_usage(self, twid, flow, what_to_check=""):
-        """
-        alerts when a connection to a private ip that
-        doesn't belong to our local network is found
+    def check_different_localnet_usage(self, twid: str, flow: Any) -> None:
+        """Report each host's role when private addresses use another subnet.
 
-        for example:
-            If we are on 192.168.1.0/24 then detect anything
-            coming from/to 10.0.0.0/8
-
-        :param what_to_check: can be 'srcip' or 'dstip'
-        PS: most changes here should be in
-        dns.py::check_different_localnet_usage() so remember to update both:D
+        Parameters:
+            twid: Detection time window.
+            flow: Connection whose source and destination are checked together.
         """
         if not self.should_check_diff_localnet(flow):
             return
 
-        if is_official_dns_server(self.db, flow, what_to_check):
-            return
-
-        ip_to_check = get_ip_to_check(flow, what_to_check)
-        if is_ip_allowed_outside_localnet(ip_to_check):
-            return
-
-        if not is_ip_outside_local_network(self.db, flow, ip_to_check):
+        local_network, outside = different_localnet_context(self.db, flow)
+        if not outside:
             return
 
         self.set_evidence.different_localnet_usage(
             twid,
             flow,
-            ip_outside_localnet=what_to_check,
+            ip_outside_localnet=outside,
+            local_network=local_network,
         )
 
     def check_connection_to_local_ip(self, twid, flow):
         """
-        Alerts when there's a connection from a private IP to
-        another private IP except for expected DNS and DHCP service traffic.
+        Alerts when there's a connection from a private IP to another
+        private IP except for expected discovery, DNS, and DHCP traffic.
         """
+
+        if flow.proto.lower() in {"icmp", "icmp6", "icmpv6"}:
+            return
+
+        if self.is_broadcast_or_multicast_flow(flow):
+            return
+
+        # mDNS can be sent to a unicast address as well as to its multicast
+        # group. Neither form is an individual private-IP connection alert.
+        if str(flow.proto).lower() == "udp" and "5353" in {
+            str(flow.sport),
+            str(flow.dport),
+        }:
+            return
 
         def is_dhcp_conn(flow):
             # Bootstrap protocol server. Used by DHCP servers to communicate
@@ -1065,12 +1175,7 @@ class ConnAnalyzer(IAsyncModule):
                 profileid, twid, flow
             )
             self.check_conn_to_port_0(profileid, twid, flow)
-            self.check_different_localnet_usage(
-                twid, flow, what_to_check="dstip"
-            )
-            self.check_different_localnet_usage(
-                twid, flow, what_to_check="srcip"
-            )
+            self.check_different_localnet_usage(twid, flow)
             self.create_task(
                 self.check_connection_without_dns_resolution,
                 profileid,

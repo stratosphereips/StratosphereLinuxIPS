@@ -3,6 +3,7 @@
 from typing import Any, List
 from uuid import uuid4
 from datetime import datetime
+from modules.flow_alerts.utils import different_localnet_findings
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -23,76 +24,27 @@ class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
 
-    def different_localnet_usage(self, twid, flow, ip_outside_localnet=""):
-        """
-        :param ip_outside_localnet: was the
-        'srcip' outside the localnet or the 'dstip'?
-        """
-        # the attacker here is the IP found to be
-        # private and outside the localnet
-        if ip_outside_localnet == "srcip":
-            attacker = Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
-            )
-            victim = Victim(
-                direction=Direction.DST,
-                ioc_type=IoCType.IP,
-                value=flow.daddr,
-            )
-            threat_level = ThreatLevel.LOW
-            description = (
-                f"A connection from a private IP ({flow.saddr}) on port "
-                f"{flow.dport}/{flow.proto} "
-                f"outside of the used local network "
-                f"{self.db.get_local_network(flow.interface)}. To IP:"
-                f" {flow.daddr} "
-            )
-        else:
-            attacker = Attacker(
-                direction=Direction.DST,
-                ioc_type=IoCType.IP,
-                value=flow.daddr,
-            )
-            victim = Victim(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
-            )
-            threat_level = ThreatLevel.HIGH
-            description = (
-                f"A connection to a private IP ({flow.daddr}) on port"
-                f" {flow.dport}/{flow.proto} "
-                f"outside of the used local network "
-                f"{self.db.get_local_network(flow.interface)}. "
-                f"From IP: {flow.saddr} "
-            )
-            proto = flow.proto.lower()
-            description += (
-                "using ARP"
-                if "arp" in proto
-                else f"on destination port: {flow.dport}/{flow.proto.upper()}"
-            )
+    def different_localnet_usage(
+        self,
+        twid: str,
+        flow: Any,
+        ip_outside_localnet: str,
+        local_network: str | None = None,
+    ) -> None:
+        """Save high source and informational destination subnet findings.
 
-        confidence = 1.0
-
-        twid_number = int(twid.replace("timewindow", ""))
-        evidence = Evidence(
-            evidence_type=EvidenceType.DIFFERENT_LOCALNET,
-            attacker=attacker,
-            threat_level=threat_level,
-            description=description,
-            victim=victim,
-            profile=ProfileID(ip=attacker.value),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[flow.uid],
-            timestamp=flow.starttime,
-            confidence=confidence,
-            src_port=flow.sport,
-            dst_port=flow.dport,
-        )
-        self.db.set_evidence(evidence)
+        Parameters:
+            twid: Detection time window.
+            flow: Connection with distinct source and destination hosts.
+            ip_outside_localnet: Outside direction: srcip, dstip, or both.
+            local_network: Subnet used by the check, or the current subnet.
+        """
+        if local_network is None:
+            local_network = self.db.get_local_network(flow.interface)
+        for evidence in different_localnet_findings(
+            twid, flow, ip_outside_localnet, local_network
+        ):
+            self.db.set_evidence(evidence)
 
     def device_changing_ips(self, twid, flow, old_ip: str):
         confidence = 0.8

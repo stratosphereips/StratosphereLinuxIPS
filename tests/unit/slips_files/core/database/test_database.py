@@ -7,6 +7,9 @@ from unittest.mock import (
 )
 from pathlib import Path
 from typing import Any
+from types import SimpleNamespace
+from uuid import uuid4
+import sys
 
 import redis
 import json
@@ -16,6 +19,7 @@ import pytest
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.structures.risk_weights import RiskWeight
 from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
@@ -33,6 +37,69 @@ def ensure_redis_options(monkeypatch: Any) -> None:
         None.
     """
     monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
+    monkeypatch.setattr(RedisDB, "instances", {}, raising=False)
+
+
+def test_keep_history_flushes_active_redis_state(monkeypatch: Any) -> None:
+    """Clear active Redis data even when config disables normal flushing.
+
+    Parameters:
+        monkeypatch: Restores RedisDB class settings and argv.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379, flush_db=False)
+    assert db.rdb is not None
+    monkeypatch.setattr(RedisDB, "args", SimpleNamespace(keep_history=True))
+    monkeypatch.setattr(RedisDB, "config_flush_db", False)
+    monkeypatch.setattr(RedisDB, "flush_db", True)
+    monkeypatch.setattr(sys, "argv", ["slips.py"])
+
+    assert RedisDB._should_flush_db() is True
+
+
+def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
+    """Bound self-generated flow marks and separate retained Redis runs."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_connection(123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43)
+
+    key = "slips:own_connection:123:" "tcp|192.0.2.10|51234|198.51.100.43|43"
+    source_key = "slips:own_sources:123"
+    pipe = db.r.pipeline.return_value
+    pipe.set.assert_called_once_with(key, "1", ex=3600)
+    pipe.sadd.assert_called_once_with(source_key, "192.0.2.10")
+    pipe.expire.assert_called_once_with(source_key, 3600)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    db.r.exists.return_value = 1
+    assert db.is_slips_own_source_ip(123, "192.0.2.10")
+    assert db.is_slips_own_connection(
+        123, "TCP", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+    db.r.exists.assert_called_once_with(key)
+
+
+def test_slips_own_service_port_window_expires() -> None:
+    """Bound external WHOIS traffic marks to a short run-specific window."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_service_port(123, "tcp", 43, ["192.0.2.10", "2001:db8::10"])
+
+    key = "slips:own_service_port:123:tcp:43"
+    pipe = db.r.pipeline.return_value
+    pipe.sadd.assert_called_once_with(key, "192.0.2.10", "2001:db8::10")
+    pipe.expire.assert_called_once_with(key, 10)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    assert db.is_slips_own_service_port(123, "TCP", "43", "192.0.2.10")
+    db.r.sismember.assert_called_once_with(key, "192.0.2.10")
 
 
 # random values for testing
@@ -59,6 +126,35 @@ flow = Conn(
     dmac="",
     interface="eth0",
 )
+
+
+@pytest.mark.parametrize("method_name", ["add_flow", "add_altflow"])
+def test_flow_writes_do_not_profile_hosts_inline(method_name: str) -> None:
+    """Keep durable host profiling out of the flow ingestion path.
+
+    Parameters:
+        method_name: Flow or alternate-flow write to exercise.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.sqlite = factory.logger
+    db.rdb = Mock()
+    db.host_profiles = Mock()
+
+    result = getattr(db, method_name)(flow, profileid, twid)
+
+    if method_name == "add_flow":
+        db.sqlite.add_flow.assert_called_once_with(
+            flow, profileid, twid, label="benign"
+        )
+        db.rdb.add_flow.assert_called_once_with(
+            flow, profileid=profileid, twid=twid, label="benign"
+        )
+        assert result is db.rdb.add_flow.return_value
+    else:
+        db.sqlite.add_altflow.assert_called_once_with(flow, profileid, twid)
+        assert result is db.sqlite.add_altflow.return_value
+    db.host_profiles.observe_flow.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -145,6 +241,7 @@ def test_set_evidence_records_the_producing_module() -> None:
     db.rdb.belongs_to_run = Mock(return_value=True)
     db._get_evidence_interface = Mock(return_value="eth0")
     db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
     db.sqlite = Mock()
     db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
     db.update_threat_level = Mock()
@@ -159,8 +256,153 @@ def test_set_evidence_records_the_producing_module() -> None:
 
     assert db.set_evidence(evidence) is True
     assert evidence.source_module == "conn_analyzer"
-    db.rdb.set_evidence.assert_called_once_with(evidence)
+    db.rdb.set_evidence.assert_called_once_with(evidence, notify=False)
     db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.rdb.publish_evidence_added.assert_called_once_with(evidence)
+
+
+def test_set_evidence_publishes_after_sqlite_commit() -> None:
+    """A fast whitelist consumer must always find the durable evidence row."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
+    db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="en0")
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=EvidenceType.ARP_SCAN,
+        source_module="arp",
+        uid=["arp-flow"],
+        attacker=Mock(profile="profile_192.168.1.185"),
+        threat_level="low",
+        confidence=0.8,
+    )
+    persisted = False
+
+    def persist(_evidence: object) -> None:
+        """Record when the SQLite insert has completed.
+
+        Parameters:
+            _evidence: Evidence being written.
+        """
+        nonlocal persisted
+        persisted = True
+
+    def consume(_evidence: object) -> None:
+        """Simulate a subscriber processing the event immediately.
+
+        Parameters:
+            _evidence: Evidence being consumed.
+        """
+        assert persisted, "evidence was published before its SQLite row"
+
+    db.sqlite.add_evidence.side_effect = persist
+    db.rdb.publish_evidence_added.side_effect = consume
+
+    assert db.set_evidence(evidence) is True
+    db.rdb.set_evidence.assert_called_once_with(evidence, notify=False)
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.rdb.publish_evidence_added.assert_called_once_with(evidence)
+
+
+@pytest.mark.parametrize(
+    "evidence_type",
+    [EvidenceType.P2P_REPORT, EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK],
+)
+def test_peer_evidence_does_not_change_local_reputation(
+    evidence_type: EvidenceType,
+) -> None:
+    """A peer's finding cannot become Slips's own score for trust decisions.
+
+    Parameters:
+        evidence_type: Peer-derived evidence category.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
+    db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="en0")
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=evidence_type,
+        source_module="p2p_trust",
+        uid=[],
+        attacker=Mock(profile="profile_192.0.2.10"),
+        threat_level="critical",
+        confidence=1.0,
+    )
+
+    assert db.set_evidence(evidence) is True
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.update_threat_level.assert_not_called()
+
+
+@pytest.mark.parametrize("has_peer_evidence", [False, True])
+def test_alert_promotes_only_local_evidence_to_local_reputation(
+    has_peer_evidence: bool,
+) -> None:
+    """Mixed or peer-only alerts retain the actual first-hand local score.
+
+    Parameters:
+        has_peer_evidence: Whether the alert includes a peer-derived finding.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.sqlite = Mock()
+    db.rdb.set_alert = Mock()
+    db.rdb.get_flows_causing_evidence = Mock(return_value=[])
+    db.set_flow_label = Mock()
+    db.update_threat_level = Mock()
+    alert = Mock(profile="profile_192.0.2.10")
+    evidence_type = (
+        EvidenceType.P2P_REPORT if has_peer_evidence else EvidenceType.ARP_SCAN
+    )
+
+    db.set_alert(alert, {"evidence-1": Mock(evidence_type=evidence_type)})
+
+    if has_peer_evidence:
+        db.update_threat_level.assert_not_called()
+    else:
+        db.update_threat_level.assert_called_once_with(
+            "profile_192.0.2.10", "critical", 1
+        )
+
+
+def test_local_reputation_uses_slips_current_score() -> None:
+    """Share the same accumulated local threat value held by Slips."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.trust_db = Mock()
+    db.rdb.update_threat_level = Mock(return_value=None)
+    db.rdb.get_ip_info = Mock(return_value=0.8)
+
+    db.update_threat_level("profile_192.0.2.10", "low", 0.6)
+
+    db.trust_db.insert_slips_score.assert_called_once_with(
+        "192.0.2.10", 0.8, 0.6
+    )
+
+
+@pytest.mark.parametrize("previous_score", [0, 0.8])
+def test_informational_observation_preserves_peer_assessment(
+    previous_score: float,
+) -> None:
+    """Informational observations cannot assert benignness or alter trust.
+
+    Parameters:
+        previous_score: Redis's historical score before the observation.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.trust_db = Mock()
+    db.rdb.update_threat_level = Mock()
+    db.rdb.get_ip_info = Mock(return_value=previous_score)
+
+    db.update_threat_level("profile_192.0.2.10", "info", 1)
+
+    db.rdb.update_threat_level.assert_called_once()
+    db.trust_db.insert_slips_score.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -367,9 +609,7 @@ def test_add_mac_addr_with_ipv6_association():
         call(profile_ipv4, mac_addr),  # call with the ipv4 profileid
         call(profile_ipv6, mac_addr),  # call with the ipv6 profileid
     ]
-    db.rdb.update_mac_of_profile.assert_has_calls(
-        expected_calls, any_order=True
-    )
+    db.rdb.update_mac_of_profile.assert_has_calls(expected_calls, any_order=True)
 
 
 def test_get_the_other_ip_version():
@@ -445,6 +685,68 @@ def test_store_official_dns_server():
     assert db.is_official_dns_server("not-an-ip") is False
 
 
+def test_replace_network_state_clears_old_network_settings() -> None:
+    """A Wi-Fi switch replaces the subnet, gateway, host IP, and DNS."""
+    db = ModuleFactory().create_db_manager_obj(6395, flush_db=True)
+    first = {
+        "host_ip": "192.168.1.20",
+        "local_network": "192.168.1.0/24",
+        "gateway_ip": "192.168.1.1",
+        "gateway_mac": "aa:bb:cc:dd:ee:ff",
+        "dns_servers": ["192.168.1.53"],
+        "version": 1,
+    }
+    second = {
+        "host_ip": "10.0.0.25",
+        "local_network": "10.0.0.0/24",
+        "gateway_ip": "10.0.0.1",
+        "gateway_mac": "11:22:33:44:55:66",
+        "dns_servers": ["10.0.0.53"],
+        "version": 2,
+    }
+
+    db.replace_network_state("wlan0", first)
+    db.store_official_dns_server("192.168.1.54")
+    db.replace_network_state("wlan0", second)
+
+    assert db.get_network_state("wlan0") == second
+    assert db.get_host_ip("wlan0") == "10.0.0.25"
+    assert db.get_local_network("wlan0") == "10.0.0.0/24"
+    assert db.get_gateway_ip("wlan0") == "10.0.0.1"
+    assert db.get_gateway_mac("wlan0") == "11:22:33:44:55:66"
+    assert db.is_official_dns_server("10.0.0.53") is True
+    assert db.is_official_dns_server("192.168.1.53") is False
+    assert db.is_official_dns_server("192.168.1.54") is False
+
+    db.replace_network_state(
+        "wlan0",
+        {
+            **second,
+            "host_ip": "",
+            "local_network": "",
+            "gateway_ip": "",
+            "gateway_mac": "",
+            "dns_servers": [],
+            "version": 3,
+        },
+    )
+    assert db.get_host_ip("wlan0") is None
+    assert db.get_local_network("wlan0") is None
+    assert db.get_gateway_ip("wlan0") is None
+    assert db.is_official_dns_server("10.0.0.53") is False
+
+
+def test_gateway_fields_survive_separate_discovery() -> None:
+    """Preserve both gateway IP and MAC found by different modules."""
+    db = ModuleFactory().create_db_manager_obj(6396, flush_db=True)
+
+    db.set_default_gateway("IP", "10.0.0.1", "eth0")
+    db.set_default_gateway("MAC", "aa:bb:cc:dd:ee:ff", "eth0")
+
+    assert db.get_gateway_ip("eth0") == "10.0.0.1"
+    assert db.get_gateway_mac("eth0") == "aa:bb:cc:dd:ee:ff"
+
+
 def test_current_timewindow_wrappers_delegate_to_redis_db():
     """Test current-timewindow getters and increment delegation."""
     db = ModuleFactory().create_db_manager_obj(6385, flush_db=True)
@@ -456,15 +758,11 @@ def test_current_timewindow_wrappers_delegate_to_redis_db():
         patch.object(type(db.rdb), "_set_max_seen_risk_weight") as mock_set,
     ):
         assert db.get_current_timewindow() == "7"
-        redis_mock.get.assert_called_once_with(
-            db.rdb.constants.CURRENT_TIMEWINDOW
-        )
+        redis_mock.get.assert_called_once_with(db.rdb.constants.CURRENT_TIMEWINDOW)
 
         db.incr_current_timewindow()
 
-        redis_mock.incr.assert_called_once_with(
-            db.rdb.constants.CURRENT_TIMEWINDOW
-        )
+        redis_mock.incr.assert_called_once_with(db.rdb.constants.CURRENT_TIMEWINDOW)
         mock_set.assert_called_once_with(None, RiskWeight.LOW)
 
 
@@ -473,15 +771,21 @@ def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
     with patch.object(DBManager, "get_used_redis_port", return_value=6390):
         db = ModuleFactory().create_db_manager_obj(6390, flush_db=True)
 
-    db.store_tranco_whitelisted_domains(
-        ["example.com", "google.com", "github.com"],
-        limit=2,
-    )
+    key = f"{db.rdb.constants.TRANCO_WHITELISTED_DOMAINS}:test:{uuid4().hex}"
+    with patch.object(db.rdb.constants, "TRANCO_WHITELISTED_DOMAINS", key):
+        try:
+            db.store_tranco_whitelisted_domains(
+                ["example.com", "google.com", "github.com"],
+                limit=2,
+            )
+            db.rdb.rcache.expire(key, 60)
 
-    assert db.get_tranco_top_domains() == ["example.com", "google.com"]
-    assert db.get_tranco_top_domains(limit=1) == ["example.com"]
-    assert db.is_whitelisted_tranco_domain("google.com") is True
-    assert db.is_whitelisted_tranco_domain("github.com") is False
+            assert db.get_tranco_top_domains() == ["example.com", "google.com"]
+            assert db.get_tranco_top_domains(limit=1) == ["example.com"]
+            assert db.is_whitelisted_tranco_domain("google.com") is True
+            assert db.is_whitelisted_tranco_domain("github.com") is False
+        finally:
+            db.rdb.rcache.delete(key)
 
 
 def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
@@ -489,20 +793,123 @@ def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
     with patch.object(DBManager, "get_used_redis_port", return_value=6391):
         db = ModuleFactory().create_db_manager_obj(6391, flush_db=True)
 
-    key = db.rdb.constants.TRANCO_WHITELISTED_DOMAINS
-    db.rdb.rcache.set(key, "legacy-cache-value")
+    key = f"{db.rdb.constants.TRANCO_WHITELISTED_DOMAINS}:test:{uuid4().hex}"
+    with patch.object(db.rdb.constants, "TRANCO_WHITELISTED_DOMAINS", key):
+        try:
+            db.rdb.rcache.set(key, "legacy-cache-value", ex=60)
 
-    assert db.is_whitelisted_tranco_domain("example.com") is False
-    assert db.rdb.rcache.type(key) in ("none", b"none")
+            assert db.is_whitelisted_tranco_domain("example.com") is False
+            assert db.rdb.rcache.type(key) in ("none", b"none")
+        finally:
+            db.rdb.rcache.delete(key)
 
 
-def test_setup_config_file_uses_isolated_path_and_preserves_save(
-    tmp_path, monkeypatch
-):
+@pytest.mark.parametrize("owner", [None, "output/a-slips-run"])
+def test_factory_refuses_a_redis_run_owner(owner: str | None) -> None:
+    """Refuse an owned database before its constructor can write test values.
+
+    Parameters:
+        owner: Existing Slips run identity or a Redis instance reserved for tests.
+    """
+    factory = ModuleFactory()
+    client = Mock()
+    client.hget.return_value = owner
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", return_value=client), patch("slips_files.core.database.database_manager.DBManager") as constructor:
+        if owner:
+            with pytest.raises(RuntimeError, match="Refusing unit-test writes"):
+                factory.create_db_manager_obj(6379)
+            constructor.assert_not_called()
+        else:
+            factory._assert_redis_has_no_run_owner(6379)
+        client.close.assert_called_once()
+
+
+def test_factory_allows_an_unused_redis_port() -> None:
+    """Allow a new isolated server without treating refused connections as ownership."""
+    factory = ModuleFactory()
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=False), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password") as connect:
+        factory._assert_redis_has_no_run_owner(65000)
+    connect.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError])
+def test_factory_refuses_unverified_redis_ownership(failure: type[Exception]) -> None:
+    """Fail closed if an existing server's run ownership cannot be checked.
+
+    Parameters:
+        failure: Connection loss or timeout while checking the occupied port.
+    """
+    factory = ModuleFactory()
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", side_effect=failure("connection lost")):
+        with pytest.raises(RuntimeError, match="Cannot verify ownership"):
+            factory._assert_redis_has_no_run_owner(65000)
+
+
+@pytest.mark.parametrize("redis_port", [6379, 32768, 32850])
+@pytest.mark.parametrize("output_name", ["first-run", "second-run"])
+def test_setup_config_file_owns_port_specific_pidfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    redis_port: int, output_name: str,
+) -> None:
+    """Override a template PID path with a writable path for this run and port.
+
+    Parameters:
+        tmp_path: Isolated configuration and output directory.
+        monkeypatch: Restore Redis class settings after the test.
+        redis_port: Default, alternate, or database-loading port.
+        output_name: Separate output directories must not share PID files.
+    """
+    _module_factory = ModuleFactory()
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\npidfile redis-default.pid\nsave ""\n')
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
+    monkeypatch.setattr(RedisDB, "_conf_file", "", raising=False)
+    monkeypatch.setattr(RedisDB, "output_dir", output_name, raising=False)
+    monkeypatch.setattr(RedisDB, "redis_port", redis_port, raising=False)
+    monkeypatch.setattr(RedisDB, "args", SimpleNamespace(save=False), raising=False)
+    monkeypatch.setattr("slips_files.core.database.redis_db.database.ensure_redis_password", lambda: "fixture")
+    monkeypatch.setattr("slips_files.core.database.redis_db.database.get_redis_auth_conf_path", lambda: str(tmp_path / "redis-auth.conf"))
+
+    RedisDB._setup_config_file()
+
+    expected = tmp_path / output_name / "redis" / f"redis-server-port-{redis_port}.pid"
+    assert RedisDB._get_pid_file_path() == str(expected)
+    assert RedisDB._get_pid_file_path(32850) == str(expected.with_name("redis-server-port-32850.pid"))
+    assert RedisDB._options["pidfile"] == str(expected)
+    assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
+    expected.write_text("12345\n")
+    assert expected.read_text() == "12345\n"
+
+
+def test_load_redis_database_keeps_a_separate_pidfile(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The restore server must not overwrite another Redis server's PID file.
+
+    Parameters:
+        tmp_path: Isolated backup and Redis output directory.
+        monkeypatch: Restore Redis class settings after the test.
+    """
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.sudo = ""
+    db.print = Mock()
+    backup = tmp_path / "dump.rdb"
+    backup.write_bytes(b"test")
+    monkeypatch.setattr(RedisDB, "output_dir", str(tmp_path), raising=False)
+    monkeypatch.setattr(RedisDB, "_conf_file", "", raising=False)
+    monkeypatch.setattr(RedisDB, "_options", {"pidfile": "cache.pid"}, raising=False)
+    with patch("slips_files.core.database.redis_db.database.subprocess.run", return_value=SimpleNamespace(stdout=b"Redis RDB dump")), patch("os.system", return_value=0):
+        assert db.load(str(backup)) is True
+    expected = tmp_path / "redis" / "redis-server-port-32850.pid"
+    assert RedisDB._options["pidfile"] == str(expected)
+    assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
+
+
+def test_setup_config_file_uses_isolated_path_and_preserves_save(tmp_path, monkeypatch):
+    template = tmp_path / "redis.conf.template"
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
     monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
@@ -511,9 +918,7 @@ def test_setup_config_file_uses_isolated_path_and_preserves_save(
 
     RedisDB._setup_config_file()
 
-    expected_conf = (
-        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
-    )
+    expected_conf = tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     assert RedisDB._conf_file == str(expected_conf)
 
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
@@ -531,9 +936,7 @@ def test_setup_config_file_enables_autosave_when_save_enabled(
 ) -> None:
     """Test Redis autosave options are set when save is enabled."""
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
     monkeypatch.setattr(RedisDB, "output_dir", tmp_path, raising=False)
@@ -542,9 +945,7 @@ def test_setup_config_file_enables_autosave_when_save_enabled(
 
     RedisDB._setup_config_file()
 
-    expected_conf = (
-        tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
-    )
+    expected_conf = tmp_path / "redis" / f"redis-server-port-{RedisDB.redis_port}.conf"
     conf_contents = expected_conf.read_text(encoding="utf-8").splitlines()
 
     assert "save 30 500" in conf_contents
@@ -558,17 +959,21 @@ def test_setup_config_file_uses_absolute_redis_paths(
 ) -> None:
     """Test generated Redis configs use absolute paths for dir and logfile."""
     template = tmp_path / "redis.conf.template"
-    template.write_text(
-        'daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8"
-    )
+    template.write_text('daemonize yes\nsave ""\nappendonly no\n', encoding="utf-8")
 
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(RedisDB, "_conf_file_template", str(template))
-    monkeypatch.setattr(
-        RedisDB, "output_dir", "relative-output", raising=False
-    )
+    monkeypatch.setattr(RedisDB, "output_dir", "relative-output", raising=False)
     monkeypatch.setattr(RedisDB, "redis_port", 6379, raising=False)
     monkeypatch.setattr(RedisDB, "args", Mock(save=False), raising=False)
+    monkeypatch.setattr(
+        "slips_files.core.database.redis_db.database.ensure_redis_password",
+        lambda: "test-password",
+    )
+    monkeypatch.setattr(
+        "slips_files.core.database.redis_db.database.get_redis_auth_conf_path",
+        lambda: str(tmp_path / "redis_auth.conf"),
+    )
 
     RedisDB._setup_config_file()
 
@@ -576,9 +981,7 @@ def test_setup_config_file_uses_absolute_redis_paths(
         tmp_path / "relative-output" / "redis" / "redis-server-port-6379.log"
     )
     expected_dir = tmp_path / "relative-output" / "databases"
-    conf_contents = (
-        Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
-    )
+    conf_contents = Path(RedisDB._conf_file).read_text(encoding="utf-8").splitlines()
 
     assert f"logfile {expected_logfile}" in conf_contents
     assert f"dir {expected_dir}" in conf_contents
@@ -633,9 +1036,7 @@ def test_save_copies_dump_from_configured_redis_dir(tmp_path: Path) -> None:
         str(backup_file.parent / "dump.rdb")
     )
     db.r.save.assert_called_once()
-    assert (backup_file.parent / "dump.rdb").read_text(
-        encoding="utf-8"
-    ) == "redis dump"
+    assert (backup_file.parent / "dump.rdb").read_text(encoding="utf-8") == "redis dump"
     assert not redis_dump.exists()
     db.print.assert_not_called()
 
@@ -724,3 +1125,68 @@ def test_init_p2p_trust_db_uses_permanent_dir(tmp_path, monkeypatch):
         "persistent_state", "p2p_trust_runtime", "trustdb.db"
     )
     assert os.path.isdir(os.path.join("persistent_state", "p2p_trust_runtime"))
+
+
+def test_backup_db_moves_wal_sidecars(tmp_path: Path) -> None:
+    """Keep the WAL and shared-memory files with a backed-up trust DB.
+
+    Parameters:
+        tmp_path: Temporary directory for SQLite files.
+    """
+    db = ModuleFactory().create_db_manager_obj(6386)
+    db_path = tmp_path / "trustdb.db"
+    for suffix in ("", "-wal", "-shm"):
+        (tmp_path / f"trustdb.db{suffix}").write_bytes(b"old")
+
+    DBManager.backup_db(db, str(db_path))
+
+    assert not db_path.exists()
+    assert not (tmp_path / "trustdb.db-wal").exists()
+    assert not (tmp_path / "trustdb.db-shm").exists()
+    backups = list(tmp_path.glob("trustdb.db.*.bak"))
+    assert len(backups) == 1
+    for suffix in ("", "-wal", "-shm"):
+        assert (tmp_path / f"{backups[0].name}{suffix}").read_bytes() == b"old"
+
+
+def test_init_p2p_trust_db_backs_up_malformed_db_once(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Skip the write check after a malformed trust DB was moved aside.
+
+    Parameters:
+        tmp_path: Temporary directory for the trust database.
+        monkeypatch: Replaces the permanent directory and database probes.
+    """
+    db = ModuleFactory().create_db_manager_obj(6386)
+    monkeypatch.setattr(
+        "slips_files.core.database.database_manager.get_this_filepath_inside_permanent_dir",
+        lambda filename: str(tmp_path / filename),
+    )
+    db_path = tmp_path / "p2p_trust_runtime" / "trustdb.db"
+    db_path.parent.mkdir()
+    db_path.write_bytes(b"malformed")
+    db.is_db_malformed = Mock(return_value=True)
+    db.has_write_access_to_sqlite = Mock(return_value=False)
+    db.backup_db = Mock(side_effect=lambda path: os.remove(path))
+
+    assert DBManager.init_p2p_trust_db(db) == str(db_path)
+    db.backup_db.assert_called_once_with(str(db_path))
+    db.has_write_access_to_sqlite.assert_not_called()
+
+
+@pytest.mark.parametrize("add_version", [True, False])
+def test_publish_preserves_external_protocol_version(
+    add_version: bool,
+) -> None:
+    """Allow protocol adapters to preserve their external wire version.
+
+    Parameters:
+        add_version: Whether publishing should add Slips's version metadata.
+    """
+    db = ModuleFactory().create_redis_publisher_obj()
+    payload = json.dumps({"type": "tl2nl_alert", "version": 1, "data": {}})
+    db.publish("iris_internal", payload, add_version=add_version)
+    sent = json.loads(db.r.publish.call_args.args[1])
+    expected = Path("VERSION").read_text().strip() if add_version else 1
+    assert sent["version"] == expected

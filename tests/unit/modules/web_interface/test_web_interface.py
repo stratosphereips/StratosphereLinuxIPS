@@ -6,6 +6,7 @@ from unittest.mock import Mock, mock_open, patch
 import pytest
 
 from tests.module_factory import ModuleFactory
+from modules.web_interface.history import HistoryCollector, connect_history
 
 
 @pytest.mark.parametrize(
@@ -13,7 +14,7 @@ from tests.module_factory import ModuleFactory
     [
         ("index.html", 'id="drawer-resize"'),
         ("index.html", 'id="drawer-back"'),
-        ("index.html", 'id="alerts-view"'),
+        ("index.html", 'id="alerts-workspace"'),
         ("index.html", 'id="evidence-view"'),
         ("index.html", 'value="grouped" selected'),
         ("index.html", 'id="host-evidence-table"'),
@@ -22,7 +23,7 @@ from tests.module_factory import ModuleFactory
         ("app.js", "function bindView(name, loader)"),
         ("app.js", "function renderDnsDetails(dns)"),
         ("app.js", "function protocolFlowCard(record)"),
-        ("app.js", "Related protocol flows"),
+        ("app.js", "Alternative protocol flow:"),
         ("app.js", "Query type"),
         ("app.js", "View complete ${label} record (JSON)"),
         ("app.js", "async function inspectHost(ip)"),
@@ -53,6 +54,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
     module.parent_output_dir = "output/current_run"
     module.redis_port = 32768
     module.conf.web_interface_bind = "localhost"
+    module.conf.permanent_dir = Mock(return_value="permanent")
     module.args.interface = None
     module.args.access_point = None
     process = Mock(pid=1234)
@@ -75,6 +77,10 @@ def test_pre_main_starts_server_for_current_run() -> None:
         ),
         patch("builtins.open", mock_open()),
         patch(
+            "modules.web_interface.web_interface.redis_auth_kwargs",
+            return_value={"password": "test"},
+        ),
+        patch(
             "modules.web_interface.web_interface.subprocess.Popen",
             return_value=process,
         ) as popen,
@@ -84,6 +90,9 @@ def test_pre_main_starts_server_for_current_run() -> None:
     assert result is False
     command = popen.call_args.args[0]
     assert command[command.index("--bind-address") + 1] == "127.0.0.1"
+    assert command[command.index("--host-profiles-path") + 1] == (
+        "permanent/host_profiles/hosts.sqlite"
+    )
     assert command[-3:] == [
         "32768",
         "--output-dir",
@@ -175,6 +184,95 @@ def test_main_reports_stopped_server() -> None:
     assert "exit code 7" in module.print.call_args.args[0]
 
 
+def test_main_moves_interface_listener_after_ip_change() -> None:
+    """Keep the dashboard reachable after the monitored interface moves."""
+    module = ModuleFactory().create_web_interface_obj()
+    module.bind_mode = "interface"
+    module.bound_address = "192.168.1.20"
+    module.conf.web_interface_port = 55000
+    module.server_process = Mock(pid=1234)
+    module.server_process.poll.return_value = None
+
+    with (
+        patch("modules.web_interface.web_interface.time.sleep"),
+        patch.object(module, "_bind_address", return_value="10.0.0.25"),
+        patch.object(module, "_stop_owned_server", return_value=True) as stop,
+        patch.object(module, "_start_server") as start,
+    ):
+        result = module.main()
+
+    assert result is False
+    stop.assert_called_once_with()
+    start.assert_called_once_with("10.0.0.25", 55000)
+    assert "10.0.0.25" in module.print.call_args.args[0]
+
+
+def test_stop_owned_server_before_rebinding() -> None:
+    """Stop only the server child started by this launcher."""
+    module = ModuleFactory().create_web_interface_obj()
+    module.server_process = Mock()
+    module.server_process.poll.return_value = None
+
+    assert module._stop_owned_server() is True
+    module.server_process.terminate.assert_called_once_with()
+    module.server_process.wait.assert_called_once_with(timeout=3)
+
+
+def test_listener_pid_falls_back_to_per_process_connections() -> None:
+    """Find a macOS listener when the system-wide result omits its PID."""
+    module_factory = ModuleFactory()
+    module = module_factory.create_web_interface_obj()
+    system_connection = Mock(
+        status="LISTEN",
+        laddr=Mock(port=55000),
+        pid=None,
+    )
+    process_connection = Mock(
+        status="LISTEN",
+        laddr=Mock(port=55000),
+    )
+    process = Mock(pid=1234)
+    process.net_connections.return_value = [process_connection]
+
+    with (
+        patch(
+            "modules.web_interface.web_interface.psutil.net_connections",
+            return_value=[system_connection],
+        ),
+        patch(
+            "modules.web_interface.web_interface.psutil.process_iter",
+            return_value=[process],
+        ),
+    ):
+        result = module._listener_pid(55000)
+
+    assert result == 1234
+    process.net_connections.assert_called_once_with(kind="tcp")
+
+
+def test_listener_pid_handles_denied_system_connection_list() -> None:
+    """Use process inspection when macOS denies the global socket list."""
+    module_factory = ModuleFactory()
+    module = module_factory.create_web_interface_obj()
+    connection = Mock(status="LISTEN", laddr=Mock(port=55000))
+    process = Mock(pid=1234)
+    process.net_connections.return_value = [connection]
+
+    with (
+        patch(
+            "modules.web_interface.web_interface.psutil.net_connections",
+            side_effect=PermissionError,
+        ),
+        patch(
+            "modules.web_interface.web_interface.psutil.process_iter",
+            return_value=[process],
+        ),
+    ):
+        result = module._listener_pid(55000)
+
+    assert result == 1234
+
+
 @pytest.mark.parametrize(
     "owned_server, expected",
     [
@@ -232,3 +330,42 @@ def test_shutdown_marks_retained_page_backend_disconnected() -> None:
 
     module.history_collector.collect_once.assert_called_once_with()
     module.history_collector.mark_backend_disconnected.assert_called_once_with()
+
+
+@pytest.mark.parametrize("last_snapshot_age", [1, 59])
+def test_short_capture_retains_hosts_at_shutdown(
+    tmp_path: Path, last_snapshot_age: int
+) -> None:
+    """Keep hosts discovered after an initially empty inventory snapshot.
+
+    Parameters:
+        tmp_path: Isolated output and identity store.
+        last_snapshot_age: Seconds since the last periodic host snapshot.
+    """
+    module = ModuleFactory().create_web_interface_obj()
+    client = Mock()
+    client.zrange.return_value = ["profile_192.0.2.10"]
+    identities = Mock()
+    identities.execute.return_value = [{"host_name": "pcap-host"}, "{}", []]
+    scores = Mock()
+    scores.execute.return_value = [0]
+    client.pipeline.side_effect = [identities, scores]
+    client.hget.return_value = "0.32"
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999,
+        host_profiles_path=tmp_path / "hosts.sqlite",
+    )
+    collector._last_host_snapshot = 100 - last_snapshot_age
+    collector.collect_once = Mock()
+    collector.mark_backend_disconnected = Mock()
+    module.history_collector = collector
+
+    with patch("modules.web_interface.history.time.time", return_value=100):
+        module.shutdown_gracefully()
+
+    with connect_history(collector.history_path, read_only=True) as connection:
+        row = connection.execute(
+            "SELECT ip, data FROM host_snapshots"
+        ).fetchone()
+    assert row["ip"] == "192.0.2.10"
+    assert '"hostname": "pcap-host"' in row["data"]

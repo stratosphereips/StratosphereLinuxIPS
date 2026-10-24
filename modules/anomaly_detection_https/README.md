@@ -14,6 +14,11 @@ The implementation lives in:
 
 - `modules/anomaly_detection_https/anomaly_detection_https.py`
 
+Quantiles and median/MAD statistics are implemented in
+`slips_files/common/anomaly_detection.py` and shared with the service anomaly
+detector. The HTTPS training state, drift detection and feature models remain
+specific to this module.
+
 
 ## Why this design
 
