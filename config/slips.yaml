@@ -735,13 +735,19 @@ anomaly_detection_services:
   # auto: train each service then detect; train: fit only; detect: use saved models.
   mode: auto
   timezone: UTC
+  # Elapsed flow time in hours (168 = 7 days); fractions allow short tests.
   training_hours: 168
+  # All three training requirements must pass, independently for each service.
   min_training_connections: 30
   min_training_days: 3
+  # Timing needs this many observed local days, independently of training_hours.
   time_min_days: 14
+  # Minimum observed days in the applicable weekday/weekend category.
   time_min_matching_days: 3
   time_probability_threshold: 0.01
+  # 0 disables the regular-schedule gate; use only for short functional tests.
   time_min_concentration: 0.35
+  # Completed TCP samples required before checking session lengths.
   duration_min_samples: 50
   duration_samples: 128
   duration_zscore: 4.5

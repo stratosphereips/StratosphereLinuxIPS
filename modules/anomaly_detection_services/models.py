@@ -103,7 +103,7 @@ class Settings:
             "duration_min_difference_seconds": (0, 31536000),
             "duration_zscore": (1, 100),
             "time_probability_threshold": (0.000001, 0.1),
-            "time_min_concentration": (0.1, 1),
+            "time_min_concentration": (0, 1),
         }
         for name, (minimum, maximum) in bounds.items():
             if not minimum <= getattr(self, name) <= maximum:

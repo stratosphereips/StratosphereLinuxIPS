@@ -5,9 +5,13 @@ import json
 from collections import OrderedDict
 from dataclasses import dataclass, field
 from datetime import datetime
-from statistics import median
 from typing import Any
 from zoneinfo import ZoneInfo
+
+from slips_files.common.anomaly_detection import (
+    quantile,
+    robust_location_scale,
+)
 
 from .models import Observation, Settings
 
@@ -147,14 +151,11 @@ class ClientBaseline:
         if len(self.durations) < settings.duration_min_samples:
             return None
         samples = sorted(self.durations)
-        center = median(samples)
-        sigma = max(
-            0.25, 1.4826 * median(abs(value - center) for value in samples)
-        )
+        center, sigma = robust_location_scale(samples, min_scale=0.25)
         value = math.log1p(duration)
         zscore = abs(value - center) / sigma
-        low = math.expm1(samples[int((len(samples) - 1) * 0.01)])
-        high = math.expm1(samples[math.ceil((len(samples) - 1) * 0.99)])
+        low = math.expm1(quantile(samples, 0.01, "lower", presorted=True))
+        high = math.expm1(quantile(samples, 0.99, "higher", presorted=True))
         reference = high if duration > high else low
         long = duration > high * settings.duration_ratio
         short = duration * settings.duration_ratio < low

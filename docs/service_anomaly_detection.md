@@ -10,6 +10,12 @@ adapters and additional behavior signals can be added later. The first adapter
 accepts Zeek `conn` records for unicast TCP and UDP. Application-specific DNS,
 HTTP, SSH and TLS semantics are not modeled by this module yet.
 
+Both detectors use `slips_files/common/anomaly_detection.py` for empirical
+quantiles and median/MAD center and scale estimates. HTTPS keeps its EWMA,
+drift and threshold calibration; this module keeps its client, clock and
+duration models. Future protocol detectors can reuse the statistical methods
+without inheriting TLS-specific features or a shared training state.
+
 ## Enable and train
 
 Add this section to the custom YAML configuration used for your capture:
@@ -26,6 +32,23 @@ anomaly_detection_services:
 
 The shipped default is `enabled: false`. Restart Slips after enabling it or
 changing its settings. Enabling this module does not enable the HTTPS detector.
+
+All warmup requirements are in `config/slips.yaml` and can be overridden in
+your custom configuration:
+
+| Setting | Default | Requirement |
+| --- | --- | --- |
+| `training_hours` | `168` (7 days) | Elapsed flow time per service; fractional hours are allowed. |
+| `min_training_connections` | `30` | Accepted connections per service. |
+| `min_training_days` | `3` | Distinct UTC observation days per service. |
+| `time_min_days` | `14` | Distinct local observation days for a timing model. |
+| `time_min_matching_days` | `3` | Observed local weekdays or weekends matching the scored flow. |
+| `duration_min_samples` | `50` | Completed TCP connections for a duration model. |
+
+The first three requirements must all pass before any findings are emitted.
+Timing and duration have their own additional requirements. Days count observed
+dates, not idle time since startup. Restarting preserves the baseline and its
+original training start; changing a threshold does not start training again.
 
 - `auto` learns each service, then detects anomalies. A service needs the
   configured elapsed traffic time, accepted-connection count and number of
@@ -48,6 +71,47 @@ the baseline until an explicit training period accepts it. Normal connections
 from known clients adapt gradually by updating the bounded observation history;
 connections with anomaly reasons do not update those fitted distributions.
 Set `adapt_known_clients: false` to freeze automatic post-training adaptation.
+
+## Short functional tests
+
+Use these overrides in a separate test run:
+
+```yaml
+anomaly_detection_services:
+  enabled: true
+  mode: auto
+  timezone: UTC
+  training_hours: 0.0167  # About one minute of flow timestamps.
+  min_training_connections: 10
+  min_training_days: 1
+  time_min_days: 1
+  time_min_matching_days: 1
+  time_probability_threshold: 0.03
+  time_min_concentration: 0
+  duration_min_samples: 10
+  alert_cooldown_seconds: 0
+```
+
+Ten accepted connections from client A can establish a service in one minute
+of flow time. A subsequent new client B, including an unanswered attempt, can
+then produce evidence. Ten completed TCP connections also enable duration
+checks; their normal ratio, deviation and absolute-distance thresholds still
+apply. These are per-service requirements; ten unrelated services do not count
+as ten samples for one service.
+
+For a timing test, replay connections at a regular hour and then one at a
+distant hour on the same date. PCAP replay uses recorded timestamps, so an
+hour or several weeks of traffic can be processed without waiting that long
+on the wall clock. The test settings above disable the schedule-concentration
+gate and relax the rarity/support requirements to make a one-day clock test
+possible. They cannot establish a reliable human schedule. Keep the shipped
+defaults for ordinary operation and evaluate timing with representative
+multi-day traffic before deployment.
+
+Finite PCAP runs already isolate their models from live capture. For a separate
+live test, use a separate `parameters.permanent_dir` as well as the normal
+isolated Redis/output settings; a second process cannot share the live baseline
+writer. Returning to normal settings does not erase a weak test-trained model.
 
 ## What constitutes a service
 

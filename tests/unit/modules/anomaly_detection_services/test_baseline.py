@@ -1,11 +1,79 @@
 """Exercise learning, uncertainty, bounded state and anomaly explanations."""
 
-from modules.anomaly_detection_services.models import Observation
 from copy import deepcopy
+from pathlib import Path
+
+import pytest
+import yaml
+
+from modules.anomaly_detection_services.models import Observation
 from tests.module_factory import ModuleFactory
 from tests.unit.modules.anomaly_detection_services.test_models import flow
 
-import pytest
+
+@pytest.mark.parametrize(
+    "kind,offset,changes,client",
+    [
+        (
+            "new_client",
+            61,
+            {"saddr": "192.0.2.11", "state": "S0", "history": "S", "dpkts": 0},
+            "client-b",
+        ),
+        ("unusual_duration", 61, {"dur": 3600}, "client-a"),
+        ("unusual_time", 10 * 3600, {}, "client-a"),
+    ],
+)
+def test_documented_fast_profile_detects_within_one_observed_day(
+    kind: str, offset: float, changes: dict, client: str
+) -> None:
+    """Exercise the actual documented YAML without waiting for calendar days.
+
+    Parameters:
+        kind: Expected anomaly reason.
+        offset: Seconds of recorded time after the first training flow.
+        changes: Fields producing the selected anomaly.
+        client: Identity used to score the new observation.
+    """
+    factory = ModuleFactory()
+    guide = Path("docs/service_anomaly_detection.md").read_text()
+    section = guide.split("## Short functional tests", 1)[1]
+    snippet = section.split("```yaml", 1)[1].split("```", 1)[0]
+    settings = yaml.safe_load(snippet)["anomaly_detection_services"]
+    assert settings.pop("enabled") is True
+    module = factory.create_service_anomaly_obj(**settings)
+    start = flow()["starttime"]
+    for index in range(10):
+        if index == 9:
+            assert not module.detector.services["service"].ready(
+                start + 61, module.settings
+            )
+        observation = Observation.from_zeek(
+            flow(uid=f"quick-{index}", starttime=start + index * 5)
+        )
+        assert (
+            module.detector.process(observation, "service", "client-a") == []
+        )
+    service = module.detector.services["service"]
+    assert not service.ready(start + 59, module.settings)
+    assert service.ready(start + 61, module.settings)
+    early = Observation.from_zeek(
+        flow(
+            uid="early-b",
+            starttime=start + 59,
+            state="S0",
+            history="S",
+            dpkts=0,
+        )
+    )
+    assert module.detector.process(early, "service", "client-b") == []
+    observation = Observation.from_zeek(
+        flow(uid="quick-anomaly", starttime=start + offset, **changes)
+    )
+    reasons = module.detector.process(observation, "service", client)
+    assert [reason["kind"] for reason in reasons] == [kind]
+    assert len(service.training_days) == 1
+    assert service.summary.count == 10
 
 
 def train(

@@ -122,6 +122,8 @@ def test_observation_eligibility(
         ("max_clients", 1.5),
         ("duration_ratio", 0),
         ("time_probability_threshold", 0),
+        ("time_min_concentration", -0.1),
+        ("time_min_concentration", 1.1),
     ],
 )
 def test_invalid_configuration_is_rejected(name: str, value: object) -> None:
