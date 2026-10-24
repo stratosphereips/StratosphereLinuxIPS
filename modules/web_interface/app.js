@@ -653,12 +653,110 @@ const whitelistHandling = (record) => {
  * @returns {Node|string} Reporter IDs, or an unavailable marker.
  */
 function reportingPeers(record) {
+  if (isPeerReport(record)) {
+    const label = text("span", evidenceReporter(record));
+    label.title = record.peer_report?.peer_id || "";
+    return label;
+  }
   if (record.evidence_type !== "MALICIOUS_IP_FROM_P2P_NETWORK") return "—";
   const peers = record.reporting_peers || [];
   if (!peers.length) return "Unavailable";
   const label = text("code", peers.map(shortPeerId).join(", "));
   label.title = peers.join(", ");
   return label;
+}
+
+/** Identify a received evidence report or a retained report message.
+ * @param {object} record Evidence, activity message, or evidence group.
+ * @returns {boolean} Whether this is a peer report rather than a local detection.
+ */
+function isPeerReport(record) {
+  return record.record_type === "P2P_REPORT" || record.evidence_type === "P2P_REPORT"
+    || Boolean(record.peer_report?.peer_id)
+    || ["report", "blame"].includes(record.message_type);
+}
+
+/** Read all detection details actually supplied in one peer packet.
+ * @param {object} record Evidence or P2P activity record.
+ * @returns {object[]} Reported detections, bounded to the wire limit.
+ */
+function peerDetections(record) {
+  const values = record.reported_detections || record.peer_report?.provenance
+    || record.message?.evaluation?.provenance || record.evaluation?.provenance || [];
+  return Array.isArray(values) ? values.slice(0, 16).filter((item) =>
+    item && typeof item === "object" && typeof item.evidence_type === "string")
+    .map((item) => ({ ...item,
+      evidence_type: item.evidence_type.slice(0, 160),
+      description: typeof item.description === "string" ? item.description.slice(0, 1024) : "",
+      module: typeof item.module === "string" ? item.module.slice(0, 160) : "",
+      proto: typeof item.proto === "string" ? item.proto.slice(0, 16) : "",
+      observed_at: typeof item.observed_at === "number" && Number.isFinite(item.observed_at) ? item.observed_at : null,
+      src_port: Number.isInteger(item.src_port) && item.src_port > 0 && item.src_port <= 65535 ? item.src_port : undefined,
+      dst_port: Number.isInteger(item.dst_port) && item.dst_port > 0 && item.dst_port <= 65535 ? item.dst_port : undefined,
+    })) : [];
+}
+
+/** Put the reported detection type before the report's transport label.
+ * @param {object} record Evidence, group, or P2P message.
+ * @returns {string} Detection names, or an explicit missing-type label.
+ */
+function evidenceTypeLabel(record) {
+  const types = [...new Set(peerDetections(record).map((item) => item.evidence_type))];
+  if (types.length) return types.map(alertTypeName).join(" + ");
+  if (record.archived_report || record.evidence_type === "P2P_REPORT") return "Type unavailable";
+  if (["report", "blame"].includes(record.message_type)) return "Type not supplied";
+  if (record.evidence_type && String(record.module || "").split(",").includes("p2p_trust")) return alertTypeName(record.evidence_type);
+  return record.evidence_type || record.message_type || "All types";
+}
+
+/** Display a detection name with a separate, explicit P2P origin badge.
+ * @param {object} record Evidence, group, or P2P message.
+ * @returns {HTMLElement} Type label and origin, suitable for tables and cards.
+ */
+function evidenceTypeCell(record) {
+  const cell = document.createElement("span");
+  cell.append(text("span", evidenceTypeLabel(record), "type-chip"));
+  const modules = String(record.module || "").split(",");
+  if (isPeerReport(record) || modules.includes("p2p_trust")) {
+    const badge = text("small", modules.length > 1 ? "Includes P2P" : "From P2P", "info-pill p2p-origin");
+    badge.title = "Reported by another Slips. This label does not mean it was detected locally.";
+    cell.append(badge);
+  }
+  return cell;
+}
+
+/** Show detection content before the sender, trust, and raw packet details.
+ * @param {object} record Evidence or P2P activity record.
+ * @returns {HTMLElement} Readable detection details without inventing missing data.
+ */
+function peerDetectionPanel(record) {
+  const panel = document.createElement("div");
+  panel.className = "peer-detection-details";
+  const detections = peerDetections(record);
+  if (!detections.length) {
+    const missing = record.archived_report || record.evidence_type === "P2P_REPORT"
+      ? "The original detection type and description are not available in this saved report."
+      : "This report did not supply an evidence type or detection description.";
+    panel.append(text("p", missing, "muted"));
+    return panel;
+  }
+  detections.forEach((item) => {
+    const card = document.createElement("section");
+    card.className = "surface p2p-reported-detection";
+    card.append(text("h3", alertTypeName(item.evidence_type)),
+      text("p", item.description || "The peer supplied the type but no detection description."));
+    const facts = document.createElement("dl");
+    facts.className = "p2p-message-facts";
+    const values = [["Reported type", item.evidence_type], ["Reported detector", item.module]];
+    if (item.observed_at) values.push(["Detected by peer at", formatTime(item.observed_at)]);
+    if (item.proto) values.push(["Reported protocol", item.proto.toUpperCase()]);
+    if (item.src_port !== undefined) values.push(["Reported source port", String(item.src_port)]);
+    if (item.dst_port !== undefined) values.push(["Reported destination port", String(item.dst_port)]);
+    values.filter(([, value]) => value).forEach(([key, value]) => facts.append(text("dt", key), text("dd", value)));
+    card.append(facts);
+    panel.append(card);
+  });
+  return panel;
 }
 /** Keep peer IDs distinguishable while fitting them in tables and plots.
  * @param {string} value Full peer ID.
@@ -2832,7 +2930,7 @@ function renderEvidenceTable(payload) {
     (row) => row.profile_ip ? deviceIdentity(row, "profile_ip") : "All hosts",
     (row) => {
       const cell = document.createElement("span");
-      cell.append(text("code", row.evidence_type || "All types"));
+      cell.append(evidenceTypeCell(row));
       if (row.module) cell.append(text("small", ` ${row.module}`, "muted"));
       if (mode === "individual" && row.review_status && row.review_status !== "unreviewed") {
         cell.append(text("small", ` · ${row.review_status.replaceAll("_", " ")}`, "review-state"));
@@ -3032,6 +3130,8 @@ async function loadEvidenceGroupRecords(reset = true) {
  * @returns {string} Recorded peer address and ID, when available.
  */
 function evidenceReporter(record) {
+  const peer = record.peer_report;
+  if (peer?.peer_id) return `${peer.peer_ip ? `${peer.peer_ip} · ` : ""}${peer.peer_id}`;
   const description = String(record.description || "");
   const received = description.match(/Received from P2P peer (.+?): reputation report/i);
   if (received) return received[1];
@@ -3054,7 +3154,7 @@ function renderEvidenceGroup() {
   const head = document.createElement("div");
   head.className = "evidence-right-head";
   const label = document.createElement("div");
-  label.append(text("span", group.evidence_type || "All types", "type-chip"),
+  label.append(evidenceTypeCell(group),
     text("small", `${group.module || "Module unknown"} · ${compact(group.evidence_count)} records · ${formatTime(group.timestamp)}`, "muted"));
   const close = text("button", "×");
   close.type = "button";
@@ -3063,16 +3163,12 @@ function renderEvidenceGroup() {
   close.addEventListener("click", clearEvidenceSelection);
   head.append(label, close);
   summary.append(head);
-  const p2pReports = group.evidence_type === "P2P_REPORT";
-  const peerCount = new Set(workspace.records.map(evidenceReporter)).size;
-  const title = p2pReports && group.profile_ip && workspace.records.length
-      && workspace.total <= workspace.records.length
-    ? `${peerCount} peer${peerCount === 1 ? "" : "s"} reported ${group.profile_ip} as malicious`
-    : group.profile_ip && group.evidence_type
-      ? `${group.evidence_type} · ${group.profile_ip}`
-      : group.profile_ip || group.evidence_type || "Evidence group";
+  const p2pReports = isPeerReport(group) || group.module === "p2p_trust";
+  const title = group.profile_ip && group.evidence_type
+    ? `${evidenceTypeLabel(group)} · ${group.profile_ip}`
+    : group.profile_ip || evidenceTypeLabel(group) || "Evidence group";
   summary.append(text("h3", title));
-  if (p2pReports) summary.append(text("p", `Reputation reports received from Slips P2P peers. A report identifies its sender and subject; it does not by itself describe an attack or prove a local connection to that peer.${numeric(group.alert_score) === 0 ? " These reports have not increased the local score." : ""}`));
+  if (p2pReports) summary.append(text("p", "These detections were reported by other Slips. Select a record to see what the peer detected and who sent it. Received reports do not increase the local host score."));
   else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
   summary.append(investigationStats([
     [state.deviceView ? "Device" : "Host", group.profile_ip ? deviceIdentity(group, "profile_ip") : "All hosts"],
@@ -3096,7 +3192,7 @@ function renderEvidenceGroup() {
     button.dataset.evidenceId = record.id;
     button.classList.toggle("selected", record.id === workspace.record?.id);
     button.append(text("span", evidenceClock(record.timestamp)),
-      text("span", p2pReports ? `maliciousness · confidence ${numeric(record.confidence).toFixed(2)}` : record.description || record.evidence_type),
+      text("span", isPeerReport(record) ? `${evidenceTypeLabel(record)} · ${peerDetections(record)[0]?.description || record.description || "Description not supplied"}` : record.description || record.evidence_type),
       text("span", `${record.twid || "—"}${record.review_status && record.review_status !== "unreviewed" ? ` · ${record.review_status.replaceAll("_", " ")}` : ""}`),
       text("span", `${compact(record.flow_count)} flow${numeric(record.flow_count) === 1 ? "" : "s"}`));
     button.addEventListener("click", () => selectEvidenceRecord(record).catch(() => {}));
@@ -4222,7 +4318,7 @@ function p2pMessageRows(payload) {
       archived_report: true,
     });
   }
-  return activity;
+  return activity.map((row) => ({ ...row, detection_type: evidenceTypeLabel(row) }));
 }
 
 /** Keep today's P2P table timestamps compact while retaining older dates.
@@ -4283,7 +4379,7 @@ function renderP2PMessages() {
   renderTable("p2p-activity-table", shown, [
     (row) => formatP2PTime(row.timestamp),
     (row) => row.direction,
-    (row) => row.message_type,
+    (row) => ["report", "blame"].includes(row.message_type) ? evidenceTypeCell(row) : row.message_type,
     (row) => p2pPeerIdentity(row.peer),
     (row) => hostOrText(row.target),
     (row) => row.score === null || row.score === undefined ? "—" : numeric(row.score).toFixed(3),
@@ -4350,13 +4446,14 @@ function renderP2PMessageDetail(record) {
   const heading = document.createElement("div");
   heading.className = "p2p-detail-heading";
   const title = document.createElement("div");
-  title.append(text("h3", `Message · ${formatTime(record.timestamp)}`),
+  title.append(text("h3", ["report", "blame"].includes(record.message_type) ? evidenceTypeLabel(record) : `Message · ${formatTime(record.timestamp)}`),
     text("strong", `${record.message_type} · ${record.direction}`));
   const copy = text("button", "Copy JSON", "secondary");
   copy.type = "button";
   copy.addEventListener("click", () => copyP2PText(JSON.stringify(p2pMessageContent(record), null, 2), "Message JSON"));
   heading.append(title, copy);
   panel.append(heading);
+  if (["report", "blame"].includes(record.message_type)) panel.append(peerDetectionPanel(record));
   const peerAddress = state.p2p?.peers?.find((peer) => peer.peer_id === record.peer)?.ip;
   const facts = [
     ["Time", formatTime(record.timestamp)],
@@ -5019,7 +5116,7 @@ function evidenceCard(record, contextRecords = null, inAlertPane = false) {
   const heading = document.createElement("div");
   heading.className = "investigation-card-head";
   heading.append(
-    text("span", record.evidence_type || "Unknown evidence", "type-chip"),
+    evidenceTypeCell(record),
     threat(level),
   );
   button.append(heading, hostDescription(record, "investigation-description"));
@@ -5498,6 +5595,7 @@ function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
  * @returns {string} Concise description for the page banner.
  */
 function evidenceDetailHeadline(record, groups = []) {
+  if (isPeerReport(record)) return `${evidenceTypeLabel(record)} · reported via P2P`;
   if (record.evidence_type === "UNKNOWN_PORT") {
     const flow = groups[0]?.network_flow?.flow;
     const source = flowValue(flow, "saddr");
@@ -5582,7 +5680,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   back.type = "button";
   back.addEventListener("click", closeEvidenceDetail);
   breadcrumb.append(back, text("span", "›"),
-    text("span", `${record.profile_ip || "Unknown host"} · ${record.evidence_type || "Evidence"}`),
+    text("span", `${record.profile_ip || "Unknown host"} · ${evidenceTypeLabel(record)}`),
     text("span", "›"), text("code", record.id || ""));
   const controls = document.createElement("div");
   controls.className = "evidence-detail-controls";
@@ -5608,7 +5706,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   const bannerCopy = document.createElement("div");
   const meta = document.createElement("div");
   meta.className = "evidence-detail-meta";
-  meta.append(text("span", record.evidence_type || "EVIDENCE", "type-chip"),
+  meta.append(evidenceTypeCell(record),
     text("span", record.module || "Unknown module"),
     text("span", formatTime(record.timestamp)),
     text("span", record.twid || record.timewindow?.number || "—"),
@@ -5651,7 +5749,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   recordHead.append(recordActions);
   recordCard.append(recordHead,
     detailRow("Evidence ID", text("code", record.id || "—")),
-    detailRow("Detected", formatTime(record.timestamp)),
+    detailRow(isPeerReport(record) ? "Received" : "Detected", formatTime(record.timestamp)),
     detailRow("Profile host", hostLink(record.profile_ip)),
     detailRow("Network", networkContext(record)),
     detailRow("Time window", record.twid || record.timewindow?.number || "—"),
@@ -5664,7 +5762,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
     recordCard.append(detailRow("Reporting peers", reportingPeers(record)));
   }
-  if (record.attacker) recordCard.append(evidenceEntity("Attacker / source", record.attacker));
+  if (record.attacker) recordCard.append(evidenceEntity(isPeerReport(record) ? "Reported host" : "Attacker / source", record.attacker));
   if (record.victim) recordCard.append(evidenceEntity("Victim / destination", record.victim));
   if (alertCount) {
     const links = document.createElement("div");
@@ -5679,7 +5777,8 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     });
     recordCard.append(detailRow("Alerts", links));
   } else recordCard.append(detailRow("Alerts", "None"));
-  const whitelistSection = whitelistEditor("evidence-detail", record);
+  const whitelistSection = whitelistEditor("evidence-detail", isPeerReport(record)
+    ? { ...record, evidence_type: "P2P_REPORT" } : record);
   side.append(recordCard, reviewEditor("evidence", record), whitelistSection);
   const json = document.createElement("section");
   json.className = "surface evidence-detail-json";
@@ -5708,6 +5807,15 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
       notice.append(list);
     } else notice.append(text("p", "The matching entity is unavailable in the retained evidence data.", "muted"));
     flowSection.prepend(notice);
+  }
+  if (isPeerReport(record)) {
+    flowHeading.querySelector("h3").textContent = "Reported detection";
+    flowHeading.querySelector("p").textContent = "The peer sent detection details, without its flow records.";
+    flowList.replaceChildren(peerDetectionPanel(record));
+    recordCard.append(detailRow("Received from", evidenceReporter(record)),
+      detailRow("Report kind", record.peer_report?.message_type || "report"),
+      detailRow("Peer maliciousness", record.peer_report?.score ?? "Not supplied"));
+    return;
   }
   const portScan = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(String(record.evidence_type).toUpperCase());
   if (portScan) flowHeading.querySelector("p").textContent = "Port-scan evidence links at most 20 flows; each includes related protocol records.";
@@ -6353,7 +6461,7 @@ function hostActivityGroupValue(kind, row) {
   if (group === "type") {
     const types = alertEvidenceTypes(row);
     return kind === "alerts" ? types.length ? types.map((item) => item.type).join(" + ") : "Unknown type"
-      : row.evidence_type || "Unknown type";
+      : peerDetections(row)[0]?.evidence_type || row.evidence_type || "Unknown type";
   }
   if (group === "module") {
     if (kind === "evidence") return row.module || "Unknown module";
@@ -6555,7 +6663,7 @@ async function loadHostEvidence() {
   renderTable("host-evidence-table", groupedRows, [
     (row) => formatTime(row.timestamp),
     (row) => threat(row.threat_level),
-    (row) => text("code", row.evidence_type),
+    (row) => evidenceTypeCell(row),
     (row) => reportingPeers(row),
     (row) => text("code", row.module || "—"),
     (row) => whitelistHandling(row),

@@ -124,7 +124,65 @@ def initialize_detection_history(connection: sqlite3.Connection) -> None:
             f"CREATE TRIGGER IF NOT EXISTS summary_links_{operation.lower()} AFTER {operation} ON alert_evidence "
             f"BEGIN {dirty_links} END"
         )
+    migrate_peer_report_types(connection)
     connection.commit()
+
+
+def migrate_peer_report_types(connection: sqlite3.Connection) -> int:
+    """Classify saved peer reports once, leaving their original JSON intact.
+
+    Parameters:
+        connection: Writable detection database protected by its writer lock.
+
+    Returns:
+        Number of indexed report types updated for display and search.
+    """
+    from slips_files.common.p2p_reports import evidence_display_type
+    from modules.supported_module_names import Modules
+
+    marker = "peer_report_display_types_v1"
+    if connection.execute(
+        "SELECT 1 FROM history_state WHERE key=?", (marker,)
+    ).fetchone():
+        return 0
+    connection.execute(
+        "CREATE TEMP TABLE peer_type_upgrade(id TEXT PRIMARY KEY)"
+    )
+    changed = 0
+    try:
+        connection.execute(
+            "INSERT INTO peer_type_upgrade SELECT evidence_id FROM evidence "
+            "WHERE evidence_type='P2P_REPORT'"
+        )
+        while rows := connection.execute(
+            "SELECT pending.id,e.data FROM peer_type_upgrade pending "
+            "JOIN evidence e ON e.evidence_id=pending.id ORDER BY pending.id LIMIT 256"
+        ).fetchall():
+            updates = []
+            for identifier, data in rows:
+                try:
+                    record = json.loads(data)
+                except (TypeError, ValueError):
+                    continue
+                if not isinstance(record, dict):
+                    continue
+                kind = evidence_display_type(
+                    "P2P_REPORT", record.get("peer_report")
+                )
+                if kind != "P2P_REPORT":
+                    updates.append((kind, Modules.P2P_TRUST.value, identifier))
+            connection.executemany(
+                "UPDATE evidence SET evidence_type=?,source_module=? WHERE evidence_id=?",
+                updates,
+            )
+            changed += len(updates)
+            connection.execute(
+                "DELETE FROM peer_type_upgrade WHERE id<=?", (rows[-1][0],)
+            )
+    finally:
+        connection.execute("DROP TABLE peer_type_upgrade")
+    connection.execute("INSERT INTO history_state VALUES (?, '1')", (marker,))
+    return changed
 
 
 class DetectionHistory:

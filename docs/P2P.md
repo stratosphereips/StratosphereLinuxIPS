@@ -389,11 +389,45 @@ visible as evidence but do not change Slips's own score for the reported IP.
 This keeps the network's opinion separate from the local score used to judge
 reporters and to answer other peers.
 
-A received report identifies the sending peer and the IP it rated, with a
-maliciousness score and confidence. It does not identify an attack victim or
-describe traffic between the two IPs. Evidence descriptions state these roles
-explicitly; a score of zero is an opinion that the IP is benign, while higher
-scores indicate greater suspected maliciousness.
+A report also carries the original evidence type, a short detection description,
+and the protocol and ports when the sender has them. For example, the web shows
+**Unknown port — From P2P**, followed by what the peer detected. The sending
+peer, reported IP, score, confidence, detection time and detector remain
+available. The reporting peer is not automatically the victim of the detection.
+A score of zero means the peer considers the reported IP benign.
+
+The P2P tab shows the reported detection before the report/request message
+details. Selecting a report shows its detection descriptions first, then the
+peer information and complete packet JSON. In Hosts and Evidence, received
+findings appear under their original types with a **From P2P** label. A group
+containing local and received findings says **Includes P2P**. A packet containing
+several detections creates a separate evidence record for each detection; the P2P
+activity table still shows the one packet and all its supplied detections.
+
+Descriptions are limited to 1,024 characters per detection, with at most 16
+detections per packet. Raw flows, packet contents and analyst review notes are
+not included. A receiver accepts reports from older senders that supply only
+the previous fields. When a type or description is absent, the web says it was
+not supplied. It does not infer an attack from the reputation score.
+
+Internally, received evidence keeps its `P2P_REPORT` type in the original JSON
+so it cannot become a local observation, raise the local score or be shared
+back as a new local detection. The indexed database type used for web grouping
+and filtering holds the reported detection type. Opening an existing active
+database updates these index fields once where the original type was saved;
+it preserves evidence IDs and original JSON. Web refreshes do not repeatedly
+parse all report history to find these types.
+
+The evidence-type selector in the whitelist editor keeps `P2P_REPORT` for
+received findings, preserving the existing rule behavior for peer reports.
+Showing **Unknown port — From P2P** does not turn that report into a local
+unknown-port observation.
+
+Restart receiving Slips to load the new handling and reload the web page.
+Sending peers also need the updated code and a restart to send descriptions
+and port details. Older saved reports can show only the information retained:
+they show **Type unavailable** when the type was not saved or the original
+packet has expired. A retained packet without a type says **Type not supplied**.
 
 The DNS high-entropy TXT detector ignores `.local` mDNS service discovery
 answers. Pigeon advertises encoded peer addresses through these local TXT

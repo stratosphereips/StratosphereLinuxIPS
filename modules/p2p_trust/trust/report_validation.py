@@ -213,7 +213,7 @@ def provenance_for_evidence(
     module = str(record.get("source_module", ""))
     if module not in {item.value for item in Modules}:
         return {}
-    return {
+    provenance = {
         "evidence_type": kind,
         "module": module,
         "rule_version": detector_version(module, version),
@@ -222,6 +222,21 @@ def provenance_for_evidence(
         "observed_at": record.get("observed_at", 0),
         "evidence_id": str(record.get("id", "")),
     }
+    description = record.get("description")
+    if isinstance(description, str) and description:
+        provenance["description"] = " ".join(description.split())[:1024]
+    proto = str(record.get("proto") or "").lower()
+    if proto in {"tcp", "udp", "icmp", "icmp6", "arp"}:
+        provenance["proto"] = proto
+    for key in ("src_port", "dst_port"):
+        value = record.get(key)
+        if (
+            isinstance(value, int)
+            and not isinstance(value, bool)
+            and 0 < value <= 65535
+        ):
+            provenance[key] = value
+    return provenance
 
 
 def validate_provenance(value: Any) -> list[dict[str, Any]]:
@@ -277,6 +292,38 @@ def validate_provenance(value: Any) -> list[dict[str, Any]]:
         ):
             raise ValueError("Invalid observation time")
         fields["observed_at"] = observed
+        description = item.get("description", "")
+        if (
+            not isinstance(description, str)
+            or len(description) > 1024
+            or any(ord(char) < 32 for char in description)
+        ):
+            raise ValueError("Invalid reported detection description")
+        if description:
+            fields["description"] = description
+        proto = item.get("proto", "")
+        if not isinstance(proto, str) or proto not in {
+            "",
+            "tcp",
+            "udp",
+            "icmp",
+            "icmp6",
+            "arp",
+        }:
+            raise ValueError("Invalid reported detection protocol")
+        if proto:
+            fields["proto"] = proto
+        for key in ("src_port", "dst_port"):
+            if key not in item:
+                continue
+            port = item[key]
+            if (
+                not isinstance(port, int)
+                or isinstance(port, bool)
+                or not 0 < port <= 65535
+            ):
+                raise ValueError("Invalid reported detection port")
+            fields[key] = port
         fields["family"] = dependency_family(
             fields["evidence_type"], fields["module"]
         )

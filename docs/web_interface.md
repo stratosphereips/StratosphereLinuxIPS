@@ -788,6 +788,23 @@ Evidence also includes records that did not cross the alert threshold. Individua
 
 The module column is provenance recorded by the Slips module that submitted the evidence, not a web-interface guess based on evidence type. New evidence stores this `source_module` in Redis, `flows.sqlite`, and the evidence `Note` in `alerts.json`. Runs created before this field existed retain the legacy type-based module label.
 
+Received P2P findings lead with their original evidence type, such as
+**Unknown port**, and carry a separate **From P2P** marker in Hosts and Evidence.
+Type grouping and filtering use that reported type. Mixed local/P2P groups say
+**Includes P2P**. Selecting a received finding shows the peer's detection
+description, time, detector and supplied protocol/ports before the sender's
+report information. It does not try to load the peer's flows from the local
+capture. The original report and its peer ID, score and confidence remain
+available in the record details.
+
+In the P2P activity table, **Detection / message** shows the actual detection
+types for reports and blames. The selected report shows readable detection
+details above the peer facts and full packet JSON. Older reports that lack a
+type or description explicitly say that it was not supplied. Senders need the
+updated code to include the added description and port fields; old reports
+cannot gain information that was never transmitted. See [P2P](P2P.md) for
+report storage and compatibility.
+
 When Evidence Handler finds a whitelisted attacker or victim, the evidence is
 retained for investigation but deliberately excluded from the host score and
 from alert formation. These rows show **Whitelisted** under **Score handling**,

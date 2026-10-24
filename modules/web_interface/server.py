@@ -76,6 +76,10 @@ from slips_files.core.database.redis_db.redis_auth import (
 
 
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.p2p_reports import (
+    evidence_display_type,
+    reported_detections,
+)
 from slips_files.common.web_auth import (
     SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
@@ -1107,7 +1111,7 @@ class RunDataReader:
                     continue
                 if rule.get("evidence_type") and rule[
                     "evidence_type"
-                ] != record.get("evidence_type"):
+                ] != record.get("record_type", record.get("evidence_type")):
                     continue
                 rule_value = str(rule.get("value") or "")
                 value_matches = value == rule_value
@@ -1214,6 +1218,33 @@ class RunDataReader:
                     description,
                     count=1,
                 )
+
+    @staticmethod
+    def _annotate_peer_detection(item: Dict[str, Any]) -> None:
+        """Lead with a reported finding while retaining the peer envelope.
+
+        Parameters:
+            item: Individual evidence API record, updated in place.
+        """
+        peer = item.get("peer_report")
+        if not isinstance(peer, dict):
+            peer = {}
+        if item.get(
+            "record_type", item.get("evidence_type")
+        ) != "P2P_REPORT" and not peer.get("peer_id"):
+            return
+        item["record_type"] = "P2P_REPORT"
+        item["origin"] = "p2p"
+        item["reported_detections"] = reported_detections(peer)
+        item["reported_evidence_types"] = list(
+            dict.fromkeys(
+                detection["evidence_type"]
+                for detection in item["reported_detections"]
+            )
+        )
+        item["evidence_type"] = evidence_display_type("P2P_REPORT", peer)
+        if peer.get("peer_id"):
+            item["reporting_peers"] = [str(peer["peer_id"])]
 
     @staticmethod
     def _clarify_legacy_p2p_report(item: Dict[str, Any]) -> None:
@@ -2715,6 +2746,7 @@ class RunDataReader:
                     evidence.get("timestamp")
                 )
                 self._clarify_legacy_p2p_report(evidence)
+                self._annotate_peer_detection(evidence)
                 records.append(evidence)
         records.sort(
             key=lambda item: float(item.get("timestamp") or 0),
@@ -2729,6 +2761,8 @@ class RunDataReader:
         record = self._loads(row["data"], {})
         if not isinstance(record, dict):
             record = {}
+        if record.get("evidence_type") == "P2P_REPORT":
+            record["record_type"] = "P2P_REPORT"
         evidence_id = str(row["evidence_id"])
         alert_ids = [
             str(item["alert_id"])
@@ -2800,6 +2834,7 @@ class RunDataReader:
                 )
         record.setdefault("review_status", "unreviewed")
         self._clarify_legacy_p2p_report(record)
+        self._annotate_peer_detection(record)
         return record
 
     @staticmethod

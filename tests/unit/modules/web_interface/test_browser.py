@@ -19,6 +19,189 @@ from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
 
 
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
+    theme: str,
+) -> None:
+    """Show the actual finding first and retain the peer packet in every view.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    requests: list[str] = []
+    detection = {
+        "evidence_type": "UNKNOWN_PORT",
+        "module": "conn_analyzer",
+        "rule_version": "rule-1",
+        "description": "Connection to unknown TCP port 8123",
+        "proto": "tcp",
+        "src_port": 45000,
+        "dst_port": 8123,
+        "observed_at": 1792830000,
+    }
+    record = {
+        "id": "peer-evidence",
+        "evidence_type": "P2P_REPORT",
+        "profile_ip": "192.0.2.10",
+        "timestamp": 1792830001,
+        "description": "Peer report",
+        "module": "p2p_trust",
+        "threat_level": "low",
+        "confidence": 0.8,
+        "flow_count": 0,
+        "alert_ids": [],
+        "twid": "timewindow1",
+        "peer_report": {
+            "peer_id": "peer-A",
+            "peer_ip": "192.0.2.2",
+            "message_type": "report",
+            "score": 0.2,
+            "confidence": 0.8,
+            "provenance": [detection],
+        },
+    }
+    RunDataReader._annotate_peer_detection(record)
+    activity = {
+        "timestamp": 1792830001,
+        "message_type": "report",
+        "direction": "received",
+        "peer": "peer-A",
+        "target": "192.0.2.10",
+        "score": 0.2,
+        "confidence": 0.8,
+        "message": {
+            "key": "192.0.2.10",
+            "evaluation": {
+                "score": 0.2,
+                "confidence": 0.8,
+                "provenance": [
+                    detection,
+                    {
+                        **detection,
+                        "evidence_type": "LONG_CONNECTION",
+                        "description": "Connection lasted one hour",
+                    },
+                ],
+            },
+        },
+    }
+
+    def route_request(route: Any) -> None:
+        """Use real assets and isolated API records without a running capture.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        requests.append(path)
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(
+                path=str(assets / ("index.html" if path == "/" else path[1:]))
+            )
+        elif path == "/api/evidence":
+            route.fulfill(
+                json={
+                    "items": [record],
+                    "total": 1,
+                    "page_size": 1,
+                    "next_cursor": None,
+                }
+            )
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate(
+            """async ({record,activity,theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.activeTab='evidence'; state.deviceView=false;
+            state.whitelists={evidence_types:[]}; state.pages.evidence.items=[record];
+            byId('evidence-view').value='individual'; renderEvidenceTable({items:[record]});
+            await openEvidence(record);
+            window.peerTestRecord=record; window.peerTestActivity=activity;
+        }""",
+            {"record": record, "activity": activity, "theme": theme},
+        )
+        evidence_type = (
+            page.locator("#evidence-table tbody tr")
+            .first.locator("td")
+            .nth(2)
+            .inner_text()
+        )
+        assert (
+            evidence_type.startswith("Unknown port")
+            and "From P2P" in evidence_type
+        )
+        detail = page.locator("#evidence-detail-content")
+        assert "Unknown port" in detail.locator("h2").inner_text()
+        assert "Connection to unknown TCP port 8123" in detail.inner_text()
+        assert (
+            "peer-A" in detail.inner_text()
+            and "192.0.2.2" in detail.inner_text()
+        )
+        assert not any(path.endswith("/flows") for path in requests)
+        page.evaluate("""async () => {
+            state.host={ip:'192.0.2.10',evidence_count:1}; state.activeTab='hosts';
+            await loadHostEvidence();
+        }""")
+        host_type = (
+            page.locator("#host-evidence-table tbody tr")
+            .first.locator("td")
+            .nth(2)
+            .inner_text()
+        )
+        assert host_type.startswith("Unknown port") and "From P2P" in host_type
+        page.evaluate("""() => {
+            state.p2p={activity:[window.peerTestActivity], peers:[{peer_id:'peer-A',ip:'192.0.2.2'}]};
+            renderP2PMessages(); openP2PMessage(window.peerTestActivity);
+        }""")
+        p2p_type = (
+            page.locator("#p2p-activity-table tbody tr")
+            .first.locator("td")
+            .nth(2)
+            .inner_text()
+        )
+        assert "Unknown port" in p2p_type and "Long connection" in p2p_type
+        message = page.locator("#p2p-message-detail")
+        assert "Connection to unknown TCP port 8123" in message.inner_text()
+        assert "Connection lasted one hour" in message.inner_text()
+        assert "peer-A" in message.inner_text()
+        assert (
+            page.evaluate("p2pMessageContent(window.peerTestActivity)")
+            == activity["message"]
+        )
+        assert (
+            page.evaluate(
+                "evidenceTypeLabel({message_type:'report',message:{evaluation:{score:0}}})"
+            )
+            == "Type not supplied"
+        )
+        assert page.evaluate("evidenceTypeCell({evidence_type:'UNKNOWN_PORT',module:'conn_analyzer,p2p_trust'}).textContent").endswith("Includes P2P")
+        assert page.evaluate("evidenceTypeLabel({message_type:'report',archived_report:true})") == "Type unavailable"
+        assert page.evaluate("""() => {
+            const panel=peerDetectionPanel({message:{evaluation:{provenance:[{evidence_type:'UNKNOWN_PORT',proto:17,
+                description:'<img src=x onerror=alert(1)>',dst_port:false}]}}});
+            return !panel.querySelector('img') && panel.textContent.includes('<img');
+        }""")
+        assert errors == []
+        browser.close()
+
+
 def test_blocking_only_whitelist_editor_in_chrome() -> None:
     """Save a blocking-only IP rule while keeping detection options explicit."""
     _factory = ModuleFactory()

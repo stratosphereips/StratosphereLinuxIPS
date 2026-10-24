@@ -26,6 +26,7 @@ from modules.p2p_trust.trust.report_validation import (
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.common.p2p_reports import reported_detections
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -671,8 +672,12 @@ class GoDirector:
                 profileid_of_attacker,
             ]
             if provenance:
-                arguments.extend([provenance, message_type])
-            self.set_evidence_p2p_report(*arguments)
+                for detection in provenance:
+                    self.set_evidence_p2p_report(
+                        *arguments, [detection], message_type
+                    )
+            else:
+                self.set_evidence_p2p_report(*arguments)
         return True
 
     def set_evidence_p2p_report(
@@ -712,6 +717,16 @@ class GoDirector:
             f"about IP {ip}; maliciousness score {score}, confidence "
             f"{confidence}. No victim or attack details were provided."
         )
+        detections = reported_detections({"provenance": provenance or []})
+        if detections:
+            details = "; ".join(
+                f"{item['evidence_type']}: {item.get('description') or 'Description not supplied'}"
+                for item in detections
+            )
+            description = (
+                f"{details}. Reported via P2P by {reporter_label} about IP {ip}; "
+                f"maliciousness score {score}, confidence {confidence}."
+            )
 
         # get the tw of this report time
         if twid := self.db.get_tw_of_ts(profileid_of_attacker, timestamp):
@@ -736,6 +751,7 @@ class GoDirector:
             timestamp=timestamp,
             peer_report={
                 "peer_id": reporter,
+                "peer_ip": reporter_ip or "",
                 "score": score,
                 "confidence": confidence,
                 "provenance": provenance or [],
