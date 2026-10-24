@@ -608,7 +608,7 @@ class DNS(IFlowalertsAnalyzer):
         return self.db.is_official_dns_server(ip_to_check)
 
     def check_different_localnet_usage(self, twid: str, flow: Any) -> None:
-        """Report one subnet finding for a DNS query on UDP port 53.
+        """Report both hosts' subnet roles for a DNS query on UDP port 53.
 
         Parameters:
             twid: Detection time window.

@@ -879,7 +879,7 @@ class ConnAnalyzer(IAsyncModule):
         return should_check_different_localnet(flow, skip_dns_flows=True)
 
     def check_different_localnet_usage(self, twid: str, flow: Any) -> None:
-        """Report one finding when private addresses use another subnet.
+        """Report each host's role when private addresses use another subnet.
 
         Parameters:
             twid: Detection time window.

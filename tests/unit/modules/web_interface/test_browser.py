@@ -17,6 +17,82 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 from tests.unit.modules.web_interface.test_server import _network_scope_reader
 from modules.web_interface.history import connect_history
+from modules.supported_module_names import Modules
+from slips_files.common.slips_utils import utils
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
+    """Show the high source and low destination as separate host records.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_conn_analyzer_set_evidence_helper()
+    helper.different_localnet_usage("timewindow1", SimpleNamespace(
+        saddr="10.0.2.2", daddr="10.0.2.15", proto="icmp", sport=11, dport=0,
+        interface="default", starttime=147.026993, uid="subnet-flow",
+    ), "both", "192.168.0.0/16")
+    records = []
+    for call in helper.db.set_evidence.call_args_list:
+        evidence = call.args[0]
+        records.append({**utils.to_dict(evidence), "profile_ip": evidence.profile.ip,
+            "timestamp": 147.026993, "threat_level": str(evidence.threat_level),
+            "module": Modules.CONN_ANALYZER.value, "alert_ids": [],
+            "twid": "timewindow1", "flow_count": 1})
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve assets and isolated flow results.
+
+        Parameters:
+            route: Browser request intercepted for this test.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path.endswith("/flows"):
+            route.fulfill(json={"items": [], "linked_uid_count": 1})
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""({theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.activeTab='evidence'; state.deviceView=false;
+            state.whitelists={evidence_types:[]};
+        }""", {"theme": theme})
+        for record, own_label, other_label in (
+            (records[0], "Connecting host / source", "Receiving host / destination"),
+            (records[1], "Receiving host / destination", "Connecting host / source"),
+        ):
+            page.evaluate("async (record) => { await openEvidence(record); }", record)
+            detail = page.locator("#evidence-detail-content")
+            cards = detail.locator(".evidence-detail-record .entity-card")
+            assert cards.count() == 2
+            assert own_label in cards.nth(0).inner_text()
+            assert record["profile_ip"] in cards.nth(0).inner_text()
+            assert f'Direction: {record["attacker"]["direction"]}' in cards.nth(0).inner_text()
+            assert other_label in cards.nth(1).inner_text()
+            assert record["victim"]["value"] in cards.nth(1).inner_text()
+            assert record["description"].split(". ")[0] == detail.locator("h2").inner_text()
+            assert "ICMP type: 11; code: 0" in detail.inner_text()
+        assert errors == []
+        browser.close()
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])

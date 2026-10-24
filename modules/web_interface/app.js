@@ -5762,8 +5762,13 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
     recordCard.append(detailRow("Reporting peers", reportingPeers(record)));
   }
-  if (record.attacker) recordCard.append(evidenceEntity(isPeerReport(record) ? "Reported host" : "Attacker / source", record.attacker));
-  if (record.victim) recordCard.append(evidenceEntity("Victim / destination", record.victim));
+  const subnetRoles = record.evidence_type === "DIFFERENT_LOCALNET" ? {
+    SRC: "Connecting host / source", DST: "Receiving host / destination",
+  } : {};
+  if (record.attacker) recordCard.append(evidenceEntity(isPeerReport(record) ? "Reported host"
+    : subnetRoles[record.attacker.direction] || "Attacker / source", record.attacker));
+  if (record.victim) recordCard.append(evidenceEntity(subnetRoles[record.victim.direction]
+    || "Victim / destination", record.victim));
   if (alertCount) {
     const links = document.createElement("div");
     links.className = "evidence-detail-alert-links";

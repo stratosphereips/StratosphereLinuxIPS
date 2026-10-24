@@ -171,20 +171,24 @@ instead, so the same connection is not reported by both analyzers. Known DNS
 servers and special addresses such as multicast, loopback, and link-local
 addresses keep their existing exemptions.
 
-Slips creates one `DIFFERENT_LOCALNET` finding per analyzed flow, describing
-which addresses are outside:
+When a flow from A to B involves a private address outside the monitored subnet,
+Slips creates two related `DIFFERENT_LOCALNET` findings, one for each host:
 
-- Source only: **low** severity.
-- Destination only: **high** severity.
-- Both source and destination: **low** severity. Neither address belongs to
-  the monitored subnet, so the flow alone does not show a monitored computer
-  making a suspicious connection to another private network.
+- **A, the source: high severity.** A initiated the connection.
+- **B, the destination: low severity.** B received the connection.
+
+Each finding belongs to its own host profile, and both reference the original
+flow ID. A host gets one severity for this flow, never both. Connections from
+an IP to itself are ignored. Severity follows the host's role regardless of
+whether the source, destination, or both addresses are outside the subnet.
 
 For example, with local subnet `192.168.0.0/16`, an ICMP flow from `10.0.2.2`
-to `10.0.2.15` produces one low-severity finding naming both addresses. ICMP
+to `10.0.2.15` produces a high-severity finding for `10.0.2.2` and a low-severity
+finding for `10.0.2.15`. Both descriptions explain that both private addresses
+are outside the selected subnet. ICMP
 type and code are identified as such, rather than being called TCP/UDP ports.
-The connection source owns the finding; its original flow ID and destination
-are preserved.
+Descriptions distinguish initiating a connection from receiving it. The stored
+source and destination directions are also preserved for scoring and exports.
 
 For live capture, the comparison and its description use the subnet that was
 active at the flow's capture time. For recorded input, Slips uses a private

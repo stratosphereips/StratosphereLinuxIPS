@@ -255,10 +255,10 @@ def different_localnet_context(db: DBManager, flow: Any) -> tuple[str, str]:
     return local_network, direction
 
 
-def different_localnet_evidence(
+def different_localnet_findings(
     twid: str, flow: Any, ip_outside_localnet: str, local_network: str
-) -> Evidence:
-    """Build one subnet finding describing all affected flow addresses.
+) -> tuple[Evidence, ...]:
+    """Build a source-high and destination-low finding for a subnet mismatch.
 
     Parameters:
         twid: Detection time window.
@@ -267,48 +267,72 @@ def different_localnet_evidence(
         local_network: Subnet used by the detector for this flow.
 
     Returns:
-        Evidence attributed to the source, with one consistent threat level.
+        One finding per endpoint, or none for a connection to the same IP.
     """
+    if ipaddress.ip_address(flow.saddr) == ipaddress.ip_address(flow.daddr):
+        return ()
     outside_description = {
         "srcip": "the private source address is",
         "dstip": "the private destination address is",
         "both": "both private addresses are",
     }[ip_outside_localnet]
     proto = flow.proto.lower()
-    article = "An" if proto in {"arp", "icmp", "icmp6", "icmpv6"} else "A"
-    description = (
-        f"{article} {proto.upper()} connection from {flow.saddr} to {flow.daddr}: "
+    context = (
+        f" using {proto.upper()}: "
         f"{outside_description} outside the local network {local_network}."
     )
     if proto in {"tcp", "udp"}:
-        description += f" Destination port: {flow.dport}/{proto.upper()}."
+        context += f" Destination port: {flow.dport}/{proto.upper()}."
     elif proto in {"icmp", "icmp6", "icmpv6"}:
-        description += f" ICMP type: {flow.sport}; code: {flow.dport}."
+        context += f" ICMP type: {flow.sport}; code: {flow.dport}."
 
-    return Evidence(
-        evidence_type=EvidenceType.DIFFERENT_LOCALNET,
-        attacker=Attacker(
-            direction=Direction.SRC, ioc_type=IoCType.IP, value=flow.saddr
+    findings = []
+    for host, direction, other, other_direction, level, description in (
+        (
+            flow.saddr,
+            Direction.SRC,
+            flow.daddr,
+            Direction.DST,
+            ThreatLevel.HIGH,
+            f"{flow.saddr} initiated a connection to {flow.daddr}",
         ),
-        victim=Victim(
-            direction=Direction.DST, ioc_type=IoCType.IP, value=flow.daddr
+        (
+            flow.daddr,
+            Direction.DST,
+            flow.saddr,
+            Direction.SRC,
+            ThreatLevel.LOW,
+            f"{flow.daddr} received a connection from {flow.saddr}",
         ),
-        threat_level=(
-            ThreatLevel.HIGH
-            if ip_outside_localnet == "dstip"
-            else ThreatLevel.LOW
-        ),
-        description=description,
-        profile=ProfileID(ip=flow.saddr),
-        timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
-        uid=[flow.uid],
-        timestamp=flow.starttime,
-        interface=flow.interface,
-        proto=flow.proto,
-        confidence=1.0,
-        src_port=flow.sport,
-        dst_port=flow.dport,
-    )
+    ):
+        findings.append(
+            Evidence(
+                evidence_type=EvidenceType.DIFFERENT_LOCALNET,
+                attacker=Attacker(
+                    direction=direction, ioc_type=IoCType.IP, value=host
+                ),
+                victim=Victim(
+                    direction=other_direction, ioc_type=IoCType.IP, value=other
+                ),
+                threat_level=level,
+                description=description + context,
+                profile=ProfileID(ip=host),
+                timewindow=TimeWindow(
+                    number=int(twid.replace("timewindow", ""))
+                ),
+                uid=[flow.uid],
+                timestamp=flow.starttime,
+                interface=flow.interface,
+                proto=flow.proto,
+                confidence=1.0,
+                src_port=flow.sport,
+                dst_port=flow.dport,
+            )
+        )
+    source, destination = findings
+    source.rel_id = [destination.id]
+    destination.rel_id = [source.id]
+    return source, destination
 
 
 def is_interface_timeout_reached(

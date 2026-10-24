@@ -1080,13 +1080,21 @@ Responses include bounded page metadata and selected ranges. Overview and identi
 
 ### Connection attribution
 
-`DIFFERENT_LOCALNET` describes a connection involving a private address outside the monitored subnet. The source that initiated the connection owns the evidence profile; the destination remains the destination even when it is the outside address. For example, a connection from `192.168.1.163` to `172.17.0.1:6668` is attributed to `192.168.1.163`, not to an attack by `172.17.0.1`. The address `172.17.0.1` commonly belongs to a Docker bridge, but the address and port alone do not establish which process initiated the connection. This correction applies to new detections; stored alerts retain their original attribution and can be reviewed through the usual workflow.
+`DIFFERENT_LOCALNET` describes a connection involving a private address outside
+the monitored subnet. For A connecting to B, Slips stores a **high** finding on
+A's profile with source direction, and a **low** finding on B's profile with
+destination direction. These are two perspectives on the same flow, linked as
+related evidence. Each host gets one finding for that flow, never both severities.
+Connections to the same IP are ignored.
 
-Each flow produces one subnet finding, even when both private addresses are
-outside. Both-outside findings have low severity and name both addresses;
-source-only findings are low and destination-only findings are high. This is
-decided in the detector before storing evidence, so host scores and exported
-results also receive one finding. Existing stored duplicates remain unchanged;
+For example, `192.168.1.163` connecting to `172.17.0.1:6668` creates a high finding
+for the connecting host `192.168.1.163` and a low finding for the receiving host
+`172.17.0.1`. The low finding does not say that `172.17.0.1` initiated the
+connection. Investigation labels identify the connecting and receiving hosts,
+while triggering flows retain their original source-to-destination order.
+
+Ownership and severity are set in the detector before storage, so host scores
+and exported records use the same roles. Existing stored results remain unchanged;
 rerun recorded input into a new output directory for corrected results. See
 [connections outside the local subnet](detection_modules.md#connections-outside-the-local-subnet)
 for the subnet selection and severity rules.

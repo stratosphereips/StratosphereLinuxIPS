@@ -3,7 +3,7 @@
 from typing import Any, List
 from uuid import uuid4
 from datetime import datetime
-from modules.flow_alerts.utils import different_localnet_evidence
+from modules.flow_alerts.utils import different_localnet_findings
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
@@ -31,21 +31,20 @@ class SetEvidenceHelper:
         ip_outside_localnet: str,
         local_network: str | None = None,
     ) -> None:
-        """Save one finding for the flow's private addresses outside its subnet.
+        """Save source-high and destination-low findings for a subnet mismatch.
 
         Parameters:
             twid: Detection time window.
-            flow: Connection whose initiating source owns the finding.
+            flow: Connection with distinct source and destination hosts.
             ip_outside_localnet: Outside direction: srcip, dstip, or both.
             local_network: Subnet used by the check, or the current subnet.
         """
         if local_network is None:
             local_network = self.db.get_local_network(flow.interface)
-        self.db.set_evidence(
-            different_localnet_evidence(
-                twid, flow, ip_outside_localnet, local_network
-            )
-        )
+        for evidence in different_localnet_findings(
+            twid, flow, ip_outside_localnet, local_network
+        ):
+            self.db.set_evidence(evidence)
 
     def device_changing_ips(self, twid, flow, old_ip: str):
         confidence = 0.8
