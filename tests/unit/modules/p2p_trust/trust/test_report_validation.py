@@ -473,6 +473,37 @@ def test_peer_provenance_is_bounded_and_validated(
     assert factory is not None
 
 
+@pytest.mark.parametrize("proto", ["icmp", "icmp6", "icmpv6"])
+@pytest.mark.parametrize("legacy", [False, True])
+def test_peer_icmp_reports_preserve_type_and_zero_code(proto: str, legacy: bool) -> None:
+    """Send type/code as ICMP metadata and accept older port-encoded reports.
+
+    Parameters:
+        proto: Local ICMP transport name.
+        legacy: Whether to emulate an older sender's port fields.
+    """
+    _factory = ModuleFactory()
+    record = {"evidence_type": "DIFFERENT_LOCALNET", "source_module": Modules.CONN_ANALYZER.value,
+              "threat_level": "high", "id": "local-icmp", "observed_at": time.time(),
+              "proto": proto, "src_port": 11, "dst_port": 0,
+              "description": f"A connection on port 0/{proto} outside the network"}
+    wire = provenance_for_evidence(record, "version")
+    assert "src_port" not in wire and "dst_port" not in wire
+    assert wire["icmp_type"] == 11 and wire["icmp_code"] == 0
+    if legacy:
+        wire.pop("icmp_type")
+        wire.pop("icmp_code")
+        wire["src_port"] = 11
+    received = validate_provenance([wire])[0]
+    assert received["icmp_type"] == 11
+    assert received["icmp_code"] == (None if legacy else 0)
+    assert not received["src_port"] and not received["dst_port"]
+    assert "port" not in received["description"]
+    invalid = {**wire, "icmp_code": 256}
+    with pytest.raises(ValueError, match="ICMP type/code"):
+        validate_provenance([invalid])
+
+
 def test_shared_dependency_is_derived_locally_and_info_ignored() -> None:
     factory = ModuleFactory()
     item = report()["provenance"][0]

@@ -677,6 +677,24 @@ function isPeerReport(record) {
     || ["report", "blame"].includes(record.message_type);
 }
 
+/** Identify ICMP, whose Zeek port fields contain message type and code.
+ * @param {string|number} protocol Transport name or IP protocol number.
+ * @returns {boolean} Whether the fields must be displayed as type/code.
+ */
+function isIcmpProtocol(protocol) {
+  return ["icmp", "icmp6", "icmpv6", "1", "58"].includes(String(protocol).toLowerCase());
+}
+
+/** Describe transport fields without presenting ICMP values as ports.
+ * @param {object} row Indexed flow or evidence record.
+ * @returns {string} Ports for TCP/UDP, or ICMP type and code.
+ */
+function transportFields(row) {
+  return isIcmpProtocol(row.proto)
+    ? `type ${row.icmp_type ?? row.src_port ?? "—"} · code ${row.icmp_code ?? row.dst_port ?? "—"}`
+    : `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`;
+}
+
 /** Read all detection details actually supplied in one peer packet.
  * @param {object} record Evidence or P2P activity record.
  * @returns {object[]} Reported detections, bounded to the wire limit.
@@ -692,8 +710,10 @@ function peerDetections(record) {
       module: typeof item.module === "string" ? item.module.slice(0, 160) : "",
       proto: typeof item.proto === "string" ? item.proto.slice(0, 16) : "",
       observed_at: typeof item.observed_at === "number" && Number.isFinite(item.observed_at) ? item.observed_at : null,
-      src_port: Number.isInteger(item.src_port) && item.src_port > 0 && item.src_port <= 65535 ? item.src_port : undefined,
-      dst_port: Number.isInteger(item.dst_port) && item.dst_port > 0 && item.dst_port <= 65535 ? item.dst_port : undefined,
+      src_port: Number.isInteger(item.src_port) && item.src_port >= 0 && item.src_port <= 65535 ? item.src_port : undefined,
+      dst_port: Number.isInteger(item.dst_port) && item.dst_port >= 0 && item.dst_port <= 65535 ? item.dst_port : undefined,
+      icmp_type: Number.isInteger(item.icmp_type) && item.icmp_type >= 0 && item.icmp_type <= 255 ? item.icmp_type : undefined,
+      icmp_code: Number.isInteger(item.icmp_code) && item.icmp_code >= 0 && item.icmp_code <= 255 ? item.icmp_code : undefined,
     })) : [];
 }
 
@@ -751,8 +771,13 @@ function peerDetectionPanel(record) {
     const values = [["Reported type", item.evidence_type], ["Reported detector", item.module]];
     if (item.observed_at) values.push(["Detected by peer at", formatTime(item.observed_at)]);
     if (item.proto) values.push(["Reported protocol", item.proto.toUpperCase()]);
-    if (item.src_port !== undefined) values.push(["Reported source port", String(item.src_port)]);
-    if (item.dst_port !== undefined) values.push(["Reported destination port", String(item.dst_port)]);
+    if (isIcmpProtocol(item.proto)) {
+      if (item.icmp_type !== undefined || item.src_port !== undefined) values.push(["Reported ICMP type", String(item.icmp_type ?? item.src_port)]);
+      if (item.icmp_code !== undefined || item.dst_port !== undefined) values.push(["Reported ICMP code", String(item.icmp_code ?? item.dst_port)]);
+    } else {
+      if (item.src_port !== undefined) values.push(["Reported source port", String(item.src_port)]);
+      if (item.dst_port !== undefined) values.push(["Reported destination port", String(item.dst_port)]);
+    }
     values.filter(([, value]) => value).forEach(([key, value]) => facts.append(text("dt", key), text("dd", value)));
     card.append(facts);
     panel.append(card);
@@ -876,6 +901,7 @@ function applyRunIdentity(identity) {
     state.filteredBadgeCounts.evidence = null;
     state.filteredBadgeCounts.hosts = null;
     state.metadata = null;
+    byId("logs-history-source").value = "current";
     state.metrics = [];
     state.configuration = null;
     state.alertsWorkspace.rangeTouched = false;
@@ -1897,7 +1923,7 @@ function openLog(record) {
   const line = document.createElement("div");
   line.className = "log-console-line";
   line.append(
-    text("span", formatTime(record.event_time), "log-console-time"),
+    text("span", new Date(record.event_time * 1000).toLocaleString(), "log-console-time"),
     text("span", `[${record.module || "unknown"}]`, "log-console-module"),
     text("strong", severity, `log-console-level ${severity}`),
   );
@@ -1927,8 +1953,12 @@ function renderLogs(payload) {
   })));
   byId("logs-badge").textContent = compact(payload.total);
   byId("logs-count").textContent = `${errors.length} shown · ${compact(payload.total)} total`;
+  byId("logs-scope-note").textContent = payload.scope === "history"
+    ? "All retained runs in this output directory"
+    : payload.run_started_at ? `This run started ${new Date(payload.run_started_at * 1000).toLocaleString()}`
+      : "Run start unavailable; select All retained runs to browse saved errors.";
   renderTable("logs-table", errors, [
-    (row) => formatTime(row.event_time),
+    (row) => new Date(row.event_time * 1000).toLocaleString(),
     (row) => text("span", logSeverity(row), `log-level ${logSeverity(row)}`),
     (row) => text("code", row.module, "log-module"),
     (row) => {
@@ -2126,7 +2156,8 @@ async function loadMetadata() {
 /** Load and render parsed runtime messages in their dedicated tab. */
 async function loadLogs() {
   const sort = state.localSorts["logs-table"];
-  const params = new URLSearchParams({ sort: sort.key, order: sort.order });
+  const params = new URLSearchParams({ sort: sort.key, order: sort.order,
+    scope: byId("logs-history-source").value });
   const payload = await api("logs", `/api/logs?${params}`);
   if (!payload) return;
   state.logs = payload;
@@ -3739,24 +3770,26 @@ function whitelistSuggestions(record, groups = []) {
     }
   };
   if (record?.profile_ip) add(record.profile_ip, "both", "Profile host IP");
-  addSide(null, record?.src_port, "src", "Evidence source");
-  addSide(null, record?.dst_port, "dst", "Evidence destination");
+  const icmpEvidence = isIcmpProtocol(record?.proto);
+  addSide(null, icmpEvidence ? null : record?.src_port, "src", "Evidence source");
+  addSide(null, icmpEvidence ? null : record?.dst_port, "dst", "Evidence destination");
   for (const role of ["attacker", "victim"]) {
     const entity = record?.[role];
     if (String(entity?.ioc_type || "").toUpperCase() !== "IP") continue;
     const direction = String(entity.direction || "").toLowerCase().includes("src")
       ? "src" : String(entity.direction || "").toLowerCase().includes("dst") ? "dst" : "both";
-    const port = direction === "src" ? record.src_port
+    const port = icmpEvidence ? null : direction === "src" ? record.src_port
       : direction === "dst" ? record.dst_port : null;
     addSide(entity.value, port, direction, role);
   }
   groups.forEach((group) => {
     [group.network_flow, ...(group.protocol_flows || [])].filter(Boolean).forEach((row) => {
       const flow = row.flow && typeof row.flow === "object" ? row.flow : row;
+      const icmp = isIcmpProtocol(flowValue(flow, "proto", "protocol"));
       addSide(flowValue(flow, "saddr", "src_ip", "id.orig_h"),
-        flowValue(flow, "sport", "src_port", "id.orig_p"), "src", "Flow source");
+        icmp ? null : flowValue(flow, "sport", "src_port", "id.orig_p"), "src", "Flow source");
       addSide(flowValue(flow, "daddr", "dst_ip", "id.resp_h"),
-        flowValue(flow, "dport", "dst_port", "id.resp_p"), "dst", "Flow destination");
+        icmp ? null : flowValue(flow, "dport", "dst_port", "id.resp_p"), "dst", "Flow destination");
       if (flow.uri && String(flow.uri).startsWith("/")) {
         add(String(flow.uri), "both", "Request URI", "uri");
       }
@@ -5441,6 +5474,7 @@ function flowCard(group, position = 1, total = 1, title = null) {
     const dstIp = flowValue(flow, "daddr", "dst_ip", "id.resp_h");
     const srcPort = flowValue(flow, "sport", "src_port", "id.orig_p");
     const dstPort = flowValue(flow, "dport", "dst_port", "id.resp_p");
+    const icmp = isIcmpProtocol(flowValue(flow, "proto", "protocol"));
     const packets = flowValue(flow, "pkts", "packets")
       ?? numeric(flowValue(flow, "spkts")) + numeric(flowValue(flow, "dpkts"));
     const bytes = flowValue(flow, "bytes")
@@ -5450,11 +5484,11 @@ function flowCard(group, position = 1, total = 1, title = null) {
     const source = document.createElement("div");
     source.className = "flow-endpoint";
     source.append(text("small", "Source host"), hostLink(srcIp));
-    if (srcPort !== null) source.append(text("div", "Port " + srcPort, "port-label"));
+    if (srcPort !== null) source.append(text("div", (icmp ? "ICMP type " : "Port ") + srcPort, "port-label"));
     const destination = document.createElement("div");
     destination.className = "flow-endpoint";
     destination.append(text("small", "Destination host"), hostLink(dstIp));
-    if (dstPort !== null) destination.append(text("div", "Port " + dstPort, "port-label"));
+    if (dstPort !== null) destination.append(text("div", (icmp ? "ICMP code " : "Port ") + dstPort, "port-label"));
     path.append(source, text("span", "→", "flow-arrow"), destination);
     metrics = document.createElement("div");
     metrics.className = "flow-metrics";
@@ -5783,8 +5817,10 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     detailRow("Method", record.method || "—"),
     detailRow("Signal", record.evidence_signal || "—"),
     detailRow("Protocol", record.proto || "—"),
-    detailRow("Source port", record.src_port ?? "—"),
-    detailRow("Destination port", record.dst_port ?? "—"));
+    detailRow(isIcmpProtocol(record.proto) ? "ICMP type" : "Source port",
+      isIcmpProtocol(record.proto) ? record.icmp_type ?? record.src_port ?? "—" : record.src_port ?? "—"),
+    detailRow(isIcmpProtocol(record.proto) ? "ICMP code" : "Destination port",
+      isIcmpProtocol(record.proto) ? record.icmp_code ?? record.dst_port ?? "—" : record.dst_port ?? "—"));
   if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
     recordCard.append(detailRow("Reporting peers", reportingPeers(record)));
   }
@@ -6746,7 +6782,7 @@ async function loadHostFlows() {
  */
 async function openHostFlow(row) {
   const title = [row.app_proto, row.proto].filter(Boolean).join(" · ").toUpperCase();
-  openDrawer("FLOW", `${title || "Flow"} · ${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`);
+  openDrawer("FLOW", `${title || "Flow"} · ${transportFields(row)}`);
   const container = document.createElement("section");
   container.className = "host-flow-inspector";
   const context = document.createElement("div");
@@ -6817,7 +6853,7 @@ function renderHostFlows() {
   const rows = groupHostPageRows("flows", sortLocalRows("host-flows-table", page.items.map((row) => ({
     ...row,
     protocol: [row.proto, row.app_proto].filter(Boolean).join(" / "),
-    ports: `${row.src_port ?? "—"} → ${row.dst_port ?? "—"}`,
+    ports: transportFields(row),
   }))));
   renderTable("host-flows-table", rows, [
     (row) => formatTime(row.event_time),
@@ -7244,14 +7280,36 @@ async function pollBackendStatus() {
   }
 }
 
-/** Refresh archive choices and expose cleanup progress without opening history files. */
+/** Label an archive by its detection dates in the browser's local timezone.
+ * @param {object} item Archive catalogue entry with timestamp bounds.
+ * @returns {string} Date range and a secondary segment number.
+ */
+function archiveChoiceLabel(item) {
+  const part = Number(/-(\d+)\.sqlite$/.exec(item.id)?.[1]);
+  const start = typeof item.start_time === "number" ? new Date(item.start_time * 1000) : null;
+  const end = typeof item.end_time === "number" ? new Date(item.end_time * 1000) : null;
+  let dates = "Detection dates unavailable";
+  if (start && end && Number.isFinite(start.getTime()) && Number.isFinite(end.getTime())) {
+    const options = { year: "numeric", month: "short", day: "numeric" };
+    const first = start.toLocaleDateString(undefined, options);
+    const last = end.toLocaleDateString(undefined, options);
+    dates = first === last ? `${first}, ${start.toLocaleTimeString()}–${end.toLocaleTimeString()}` : `${first} – ${last}`;
+  }
+  return `Archive · ${dates}${part ? ` · part ${part}` : ""}`;
+}
+
+/** Refresh archive date ranges and expose cleanup progress. */
 async function loadArchiveCatalog() {
   state.archivesCheckedAt = Date.now();
   const payload = await api("archiveCatalog", "/api/archives", false, true);
   if (!payload || payload.not_found) return;
   const select = byId("history-source");
   select.replaceChildren(new Option("Active detection history", ""));
-  (payload.items || []).forEach((item) => select.add(new Option(`Archive · ${item.label}`, item.id)));
+  (payload.items || []).forEach((item) => {
+    const option = new Option(archiveChoiceLabel(item), item.id);
+    option.title = `${item.id} · ${formatBytes(item.size_bytes)} · dates in your local timezone`;
+    select.add(option);
+  });
   byId("history-source-label").hidden = !payload.items?.length;
   if ([...select.options].some((option) => option.value === state.archiveSource)) select.value = state.archiveSource;
   else if (state.archiveSource) {
@@ -7538,6 +7596,7 @@ byId("p2p-load-more").addEventListener("click", () => {
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
 bindLocalTableSort("p2p-peers-table", renderP2PPeers);
 bindLocalTableSort("logs-table", () => loadLogs().catch(() => {}));
+byId("logs-history-source").addEventListener("change", () => loadLogs().catch(() => {}));
 bindLocalTableSort("whitelists-table", renderWhitelists);
 bindLocalTableSort("firewall-table", () => loadFirewall().catch(() => {}));
 bindLocalTableSort("firewall-history-table", () => {

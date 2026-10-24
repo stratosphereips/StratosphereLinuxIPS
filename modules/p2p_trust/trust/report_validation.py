@@ -13,7 +13,11 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 from modules.supported_module_names import Modules
-from slips_files.core.structures.evidence import EvidenceType
+from slips_files.core.structures.evidence import (
+    EvidenceType,
+    is_icmp_protocol,
+    normalize_icmp_evidence,
+)
 from slips_files.common.slips_utils import utils
 
 DEFINITIVE = {"true_positive", "false_positive", "expected_behavior"}
@@ -222,10 +226,14 @@ def provenance_for_evidence(
         "observed_at": record.get("observed_at", 0),
         "evidence_id": str(record.get("id", "")),
     }
+    record = dict(record)
+    normalize_icmp_evidence(record)
     description = record.get("description")
     if isinstance(description, str) and description:
         provenance["description"] = " ".join(description.split())[:1024]
     proto = str(record.get("proto") or "").lower()
+    if proto == "icmpv6":
+        proto = "icmp6"
     if proto in {"tcp", "udp", "icmp", "icmp6", "arp"}:
         provenance["proto"] = proto
     for key in ("src_port", "dst_port"):
@@ -236,6 +244,15 @@ def provenance_for_evidence(
             and 0 < value <= 65535
         ):
             provenance[key] = value
+    if is_icmp_protocol(proto):
+        for key in ("icmp_type", "icmp_code"):
+            value = record.get(key)
+            if (
+                isinstance(value, int)
+                and not isinstance(value, bool)
+                and 0 <= value <= 255
+            ):
+                provenance[key] = value
     return provenance
 
 
@@ -324,6 +341,19 @@ def validate_provenance(value: Any) -> list[dict[str, Any]]:
             ):
                 raise ValueError("Invalid reported detection port")
             fields[key] = port
+        for key in ("icmp_type", "icmp_code"):
+            if key not in item:
+                continue
+            value = item[key]
+            if (
+                not is_icmp_protocol(proto)
+                or not isinstance(value, int)
+                or isinstance(value, bool)
+                or not 0 <= value <= 255
+            ):
+                raise ValueError("Invalid reported ICMP type/code")
+            fields[key] = value
+        normalize_icmp_evidence(fields)
         fields["family"] = dependency_family(
             fields["evidence_type"], fields["module"]
         )

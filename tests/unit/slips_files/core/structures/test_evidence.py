@@ -6,6 +6,8 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
     validate_timestamp,
+    is_icmp_protocol,
+    normalize_icmp_evidence,
 )
 from slips_files.core.structures.evidence import (
     Attacker,
@@ -20,6 +22,76 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
 )
 from slips_files.core.structures.risk_weights import RiskWeight
+
+
+@pytest.mark.parametrize("proto, expected", [
+    (Proto.ICMP, True), (Proto.ICMP6, True), (Proto.ICMPV6, True),
+    ("ICMP", True), ("icmp6", True), ("icmpv6", True), (1, True), (58, True),
+    (Proto.TCP, False), ("udp", False), (None, False),
+])
+def test_icmp_protocol_names(proto: object, expected: bool) -> None:
+    """Recognize ICMP names and protocol numbers without changing TCP/UDP.
+
+    Parameters:
+        proto: Serialized or typed transport.
+        expected: Whether it carries ICMP type/code.
+    """
+    _factory = ModuleFactory()
+    assert is_icmp_protocol(proto) is expected
+
+
+@pytest.mark.parametrize("proto", [Proto.ICMP, Proto.ICMP6, Proto.ICMPV6])
+@pytest.mark.parametrize("explicit", [False, True])
+def test_icmp_evidence_round_trip(proto: Proto, explicit: bool) -> None:
+    """Preserve type/code including zero, without publishing fictional ports.
+
+    Parameters:
+        proto: Supported ICMP transport.
+        explicit: Whether the producer already supplied dedicated fields.
+    """
+    factory = ModuleFactory()
+    evidence = Evidence(
+        evidence_type=EvidenceType.DIFFERENT_LOCALNET,
+        description=f"A connection on port 0/{proto.value} outside the network",
+        attacker=factory.create_attacker_obj(value="10.0.2.2", direction=Direction.SRC, ioc_type=IoCType.IP),
+        threat_level=ThreatLevel.HIGH, profile=ProfileID("10.0.2.2"),
+        timewindow=TimeWindow(1), uid=["icmp-flow"], timestamp="2026/10/24 12:00:00.000000+0000",
+        proto=proto, src_port=11, dst_port=0,
+        **({"icmp_type": 0, "icmp_code": 3} if explicit else {}),
+    )
+    restored = dict_to_evidence(utils.to_dict(evidence))
+    for item in (evidence, restored):
+        assert item.src_port is None and item.dst_port is None
+        assert (item.icmp_type, item.icmp_code) == ((0, 3) if explicit else (11, 0))
+        assert "port" not in item.description
+        assert "Port:" not in str(item)
+        assert "ICMP Type:" in str(item)
+
+
+@pytest.mark.parametrize("proto, phrase", [("icmp", "on port 0/icmp"),
+    ("icmp6", "on destination port: 0/ICMP6"), ("tcp", "on port 443/tcp")])
+def test_legacy_icmp_evidence_display(proto: str, phrase: str) -> None:
+    """Correct saved ICMP wording while preserving TCP ports.
+
+    Parameters:
+        proto: Saved protocol name.
+        phrase: Older detector description.
+    """
+    _factory = ModuleFactory()
+    record = {"proto": proto, "src_port": 11, "dst_port": 0,
+              "description": f"A connection {phrase} outside the network"}
+    original = dict(record)
+    normalize_icmp_evidence(record)
+    if proto == "tcp":
+        assert record == original
+    else:
+        assert record["icmp_type"] == 11 and record["icmp_code"] == 0
+        assert record["src_port"] is None and record["dst_port"] is None
+        assert "port" not in record["description"].lower()
+        assert "ICMP" in record["description"]
+        once = dict(record)
+        normalize_icmp_evidence(record)
+        assert record == once
 
 
 @pytest.mark.parametrize(
@@ -261,7 +333,11 @@ def test_evidence_to_dict(
     assert set(evidence_dict["uid"]) == set(uid)
     assert evidence_dict["timestamp"] == timestamp
     assert evidence_dict["proto"] == proto.name
-    assert evidence_dict["dst_port"] == port
+    if is_icmp_protocol(proto):
+        assert evidence_dict["dst_port"] is None
+        assert evidence_dict["icmp_code"] == port
+    else:
+        assert evidence_dict["dst_port"] == port
     assert evidence_dict["id"] == id
     assert evidence_dict["confidence"] == confidence
     assert evidence_dict["evidence_signal"] == EvidenceSignal.PAMP.name

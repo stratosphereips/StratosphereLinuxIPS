@@ -324,6 +324,16 @@ last 24 hours. Each record is committed to its archive before its active copy
 is removed. Interrupted copies resume from saved checkpoints. Raw flows keep
 their independent `flow_retention` policy and are not duplicated in archives.
 
+Archiving keeps the database used by normal web searches small enough for
+continuous capture. Archives store older findings, not complete run backups:
+several starts using `--keep-history` may contribute to one file. The filename's
+month is the copy month, and its number identifies a storage segment. In the
+web's **Detection history** selector, choose the dates of the detections you
+want to investigate. Labels show the actual earliest and latest detection
+dates in each segment, in your local timezone, with a part number to distinguish
+overlapping ranges. See [Detection history](web_interface.md#long-running-behavior) for browsing,
+retention and the separate current-run/historical error-log view.
+
 Maintenance tries the connection and shared writer locks without waiting.
 If capture or another writer is busy, it rolls back only the unfinished
 transaction and resumes at the next configured interval. Cleanup, rollups,

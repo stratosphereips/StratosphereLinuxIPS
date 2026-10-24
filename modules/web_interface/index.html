@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261024-host-evidence-pane">
+  <link rel="stylesheet" href="/style.css?v=20261024-history-icmp">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -67,7 +67,7 @@
 
     <section id="logs" class="panel" aria-labelledby="logs-title">
       <div class="section-heading"><div><p class="eyebrow">RUNTIME</p><h2 id="logs-title">Logs</h2></div><button class="secondary refresh-list" data-target="logs">Refresh</button></div>
-      <div class="toolbar"><span id="logs-count" class="result-count"></span></div>
+      <div class="toolbar"><label class="network-filter">Log history <select id="logs-history-source" aria-label="Log history source"><option value="current">This run</option><option value="history">All retained runs</option></select></label><span id="logs-count" class="result-count"></span><span id="logs-scope-note" class="muted"></span></div>
       <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th data-sort="event_time">Time</th><th data-sort="level">Level</th><th data-sort="module">Module</th><th data-sort="message">Message</th></tr></thead><tbody></tbody></table></div></div>
     </section>
 
@@ -309,7 +309,7 @@
               <div id="host-activity-filter-notice" class="host-activity-filter-notice" role="status" hidden></div>
               <div id="host-alerts-panel" class="host-activity-content" role="tabpanel"><h3 id="host-alerts-title">Alerts for this host</h3><div id="host-alerts" class="host-alert-list"></div><div class="host-activity-foot"><span id="host-alert-count"></span><div id="host-alerts-pager" class="pager"></div></div></div>
               <div id="host-evidence-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap host-evidence-wrap"><table id="host-evidence-table"><thead><tr><th data-sort="time">Time</th><th data-sort="threat">Threat</th><th data-sort="type">Type</th><th data-sort="reporters">Reporting peers</th><th data-sort="module">Module</th><th data-sort="handling">Score handling</th><th data-sort="confidence">Confidence</th><th data-sort="flows">Flows</th><th data-sort="alert">Alerts</th><th data-sort="description">Description</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-evidence-count"></span><div id="host-evidence-pager" class="pager"></div></div><h3 id="host-evidence-title" hidden>Related evidence</h3></div>
-              <div id="host-flows-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap"><table id="host-flows-table"><thead><tr><th data-sort="event_time">Time</th><th data-sort="direction">Direction</th><th data-sort="peer">Peer</th><th data-sort="protocol">Protocol</th><th data-sort="ports">Ports</th><th data-sort="state">State</th><th data-sort="packets">Packets</th><th data-sort="bytes">Bytes</th><th data-sort="duration">Duration</th><th data-sort="label">Label</th><th data-sort="threat">Linked threat</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-flow-count"></span><div id="host-flows-pager" class="pager"></div></div></div>
+              <div id="host-flows-panel" class="host-activity-content" role="tabpanel" hidden><div class="table-wrap"><table id="host-flows-table"><thead><tr><th data-sort="event_time">Time</th><th data-sort="direction">Direction</th><th data-sort="peer">Peer</th><th data-sort="protocol">Protocol</th><th data-sort="ports">Ports / ICMP</th><th data-sort="state">State</th><th data-sort="packets">Packets</th><th data-sort="bytes">Bytes</th><th data-sort="duration">Duration</th><th data-sort="label">Label</th><th data-sort="threat">Linked threat</th></tr></thead><tbody></tbody></table></div><div class="host-activity-foot"><span id="host-flow-count"></span><div id="host-flows-pager" class="pager"></div></div></div>
             </article>
             <div class="host-mini-charts"><article class="surface"><figure><figcaption>Flows / min</figcaption><svg id="host-flow-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article><article class="surface"><figure><figcaption>Bytes / min</figcaption><svg id="host-byte-chart" class="line-chart" viewBox="0 0 600 180"></svg></figure></article></div>
           </div>
@@ -338,6 +338,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261024-host-evidence-pane"></script>
+  <script src="/app.js?v=20261024-history-icmp"></script>
 </body>
 </html>

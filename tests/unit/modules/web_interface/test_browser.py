@@ -56,7 +56,10 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
         if path in {"/", "/app.js", "/style.css"}:
             route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
         elif path.endswith("/flows"):
-            route.fulfill(json={"items": [], "linked_uid_count": 1})
+            route.fulfill(json={"items": [{"uid": "subnet-flow", "network_flow": {
+                "uid": "subnet-flow", "table": "flows", "flow": {
+                    "saddr": "10.0.2.2", "daddr": "10.0.2.15", "proto": "icmp", "sport": 11, "dport": 0,
+                }}, "protocol_flows": []}], "linked_uid_count": 1})
         elif path == "/api/host-names":
             route.fulfill(json={"names": {}})
         else:
@@ -92,7 +95,13 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
             assert record["victim"]["value"] in cards.nth(1).inner_text()
             assert record["description"].split(". ")[0] == detail.locator("h2").inner_text()
             assert "ICMP type: 11; code: 0" in detail.inner_text()
+            assert "Source port" not in detail.inner_text()
+            assert "Destination port" not in detail.inner_text()
+            assert detail.locator(".flow-path").inner_text().count("Port ") == 0
+            assert "ICMP type 11" in detail.locator(".flow-path").inner_text()
+            assert "ICMP code 0" in detail.locator(".flow-path").inner_text()
             assert record["threat_level"] in detail.locator(".evidence-detail-stats").inner_text()
+            assert page.evaluate("(record) => [...whitelistSuggestions(record, [{network_flow:{flow:{proto:'icmp',saddr:'10.0.2.2',daddr:'10.0.2.15',sport:11,dport:0}}}])].map(([key]) => key)", record) == [record["profile_ip"], record["victim"]["value"]]
         assert errors == []
         browser.close()
 
@@ -560,6 +569,60 @@ def test_host_tab_counts_survive_polling_in_chrome(activity: str, theme: str) ->
         browser.close()
 
 
+def test_log_history_selection_is_explicit_in_chrome() -> None:
+    """Default to this run and request older errors only after selection."""
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    requests: list[str] = []
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve local assets and scoped log fixtures.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/logs":
+            requests.append(route.request.url)
+            scope = parse_qs(urlparse(route.request.url).query)["scope"][0]
+            route.fulfill(json={"scope": scope, "run_started_at": 1792835627,
+                "items": [{"event_time": 1792835628, "module": "Profiler",
+                           "message": "current error", "line": "current raw"}]
+                         + ([{"event_time": 100, "module": "OldModule", "message": "old error", "line": "old raw"}] if scope == "history" else []),
+                "total": 2 if scope == "history" else 1})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is not available: {error}")
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.locator('[data-tab="logs"]').click()
+        page.wait_for_function("() => state.logs?.total === 1")
+        assert "old error" not in page.locator("#logs-table").inner_text()
+        assert "This run started" in page.locator("#logs-scope-note").inner_text()
+        page.locator("#logs-history-source").select_option("history")
+        page.wait_for_function("() => state.logs?.total === 2")
+        assert "old error" in page.locator("#logs-table").inner_text()
+        page.locator("#logs-history-source").select_option("current")
+        page.wait_for_function("() => state.logs?.total === 1")
+        assert "old error" not in page.locator("#logs-table").inner_text()
+        assert [parse_qs(urlparse(url).query)["scope"][0] for url in requests][-3:] == ["current", "history", "current"]
+        page.evaluate("() => {state.runIdentity = 'old'; byId('logs-history-source').value = 'history'; applyRunIdentity({output_dir:'new',server_pid:42});}")
+        assert page.locator("#logs-history-source").input_value() == "current"
+        assert errors == []
+        browser.close()
+
+
 def test_archive_selection_is_scoped_and_read_only_in_chrome() -> None:
     """Send archive queries and restore active controls when leaving an archive."""
     _factory = ModuleFactory()
@@ -586,6 +649,9 @@ def test_archive_selection_is_scoped_and_read_only_in_chrome() -> None:
                         {
                             "id": "detections-2026-09-0001.sqlite",
                             "label": "2026-09-0001",
+                            "start_time": 1790208000,
+                            "end_time": 1790294400,
+                            "size_bytes": 4096,
                         }
                     ]
                 }
@@ -606,6 +672,11 @@ def test_archive_selection_is_scoped_and_read_only_in_chrome() -> None:
         page.route("**/*", route_request)
         page.goto("http://slips.test/")
         page.evaluate("() => loadArchiveCatalog()")
+        page.wait_for_function("() => document.querySelector('#history-source').options.length === 2")
+        label = page.locator('#history-source option').nth(1).inner_text()
+        assert "2026" in label and "part 1" in label
+        assert "0001" not in label
+        assert "Sep" in label
         page.locator('[data-tab="evidence"]').click()
         page.locator("#history-source").select_option(
             "detections-2026-09-0001.sqlite"

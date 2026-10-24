@@ -182,6 +182,8 @@ def test_archive_context_resolves_other_segments_and_active_evidence(
     reader.redis.hgetall.return_value = {}
     files = reader.archives()["items"]
     assert len(files) == 2
+    assert {(item["start_time"], item["end_time"]) for item in files} == {(1.0, 1.0), (2.0, 2.0)}
+    assert all("1970-01-01" in item["label"] for item in files)
     archived = reader.with_archive(files[0]["id"], context=True)
     with archived._connect_sqlite() as connection:
         items = archived._alert_evidence(connection, {"alert_id": "alert"})
@@ -194,6 +196,39 @@ def test_archive_context_resolves_other_segments_and_active_evidence(
     assert (
         len(archived.flow_details("retained-uid", {})["protocol_flows"]) == 1
     )
+    db.close()
+
+
+@pytest.mark.parametrize("proto", ["icmp", "icmp6"])
+def test_saved_icmp_evidence_is_corrected_without_rewriting_history(tmp_path: Path, proto: str) -> None:
+    """Correct both Redis and SQLite evidence while preserving the saved record.
+
+    Parameters:
+        tmp_path: Isolated detection database.
+        proto: Legacy protocol name.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    description = f"A connection from a private IP (10.0.2.2) on port 0/{proto} outside of the used local network 192.168.0.0/16"
+    saved = {"id": "legacy-icmp", "evidence_type": "DIFFERENT_LOCALNET", "proto": proto,
+             "src_port": 11, "dst_port": 0, "description": description}
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time,description,data) VALUES (?,?,?,?)",
+               ("legacy-icmp", 100, description, json.dumps(saved)))
+    db.conn.row_factory = sqlite3.Row
+    reader = object.__new__(RunDataReader)
+    row = db.conn.execute("SELECT * FROM evidence").fetchone()
+    durable = reader._durable_evidence_row(db.conn, row)
+    reader.redis = Mock()
+    reader.redis.scan_iter.side_effect = [[], ["profile_10.0.2.2_timewindow1_evidence"]]
+    reader.redis.hgetall.return_value = {"legacy-icmp": json.dumps(saved)}
+    compatibility = reader._redis_evidence()[0]
+    for result in (durable, compatibility):
+        assert "on port" not in result["description"]
+        assert "using ICMP" in result["description"]
+        assert result["icmp_type"] == 11 and result["icmp_code"] == 0
+        assert result["src_port"] is None and result["dst_port"] is None
+    assert db.conn.execute("SELECT description FROM evidence").fetchone()[0] == description
+    assert saved["src_port"] == 11
     db.close()
 
 
@@ -963,14 +998,23 @@ def test_observed_legacy_host_can_be_marked_without_prior_permanent_profile(tmp_
 
 @pytest.mark.parametrize("helper_name", ["create_set_evidence_helper", "create_conn_analyzer_set_evidence_helper"])
 def test_different_localnet_evidence_profiles_the_connection_source(helper_name: str) -> None:
-    """An outgoing connection to Docker's gateway belongs to the initiating host."""
+    """Keep source and receiving-host findings in their respective profiles.
+
+    Parameters:
+        helper_name: Analyzer evidence helper factory.
+    """
     factory = ModuleFactory()
     helper = getattr(factory, helper_name)()
     helper.db.get_local_network.return_value = "192.168.1.0/24"
     flow = SimpleNamespace(saddr="192.168.1.163", daddr="172.17.0.1", sport=54321,
                            dport=6668, proto="tcp", uid="docker-flow", starttime=100, interface="en0")
     helper.different_localnet_usage("timewindow1", flow, "dstip")
-    evidence = helper.db.set_evidence.call_args.args[0]
+    findings = {call.args[0].profile.ip: call.args[0]
+                for call in helper.db.set_evidence.call_args_list}
+    assert len(findings) == 2
+    evidence = findings[flow.saddr]
+    assert str(evidence.threat_level) == "high"
+    assert str(findings[flow.daddr].threat_level) == "info"
     assert evidence.profile.ip == flow.saddr
     assert evidence.interface == flow.interface
     assert evidence.proto == flow.proto
@@ -1234,11 +1278,61 @@ def test_logs_sort_all_retained_rows_before_bounding_page(tmp_path: Path) -> Non
             + [(0.0, "aaa", "oldest", "oldest")],
         )
 
-    result = reader.logs({"sort": ["module"], "order": ["asc"]})
+    result = reader.logs({"sort": ["module"], "order": ["asc"], "scope": ["history"]})
 
     assert result["total"] == 102
     assert len(result["items"]) == 100
     assert result["items"][0]["module"] == "aaa"
+
+
+@pytest.mark.parametrize("scope,start,end,metadata_start,expected", [
+    ("current", "100", "", "", [140, 120, 100]),
+    ("current", "100", "130", "", [120, 100]),
+    ("current", "130", "", "", [140]),
+    ("current", "", "", "100", [140, 120, 100]),
+    ("current", "", "", "", []),
+    ("current", "nan", "", "", []),
+    ("history", "100", "130", "", [140, 120, 100, 90]),
+])
+def test_logs_scope_uses_run_wall_clock(
+    tmp_path: Path, scope: str, start: str, end: str,
+    metadata_start: str, expected: list[int],
+) -> None:
+    """Keep older errors out of this run while retaining explicit history.
+
+    Parameters:
+        tmp_path: Isolated output directory.
+        scope: Current run or all retained runs.
+        start: Redis wall-clock process start.
+        end: Optional completed-run end.
+        metadata_start: Fallback start from info.txt.
+        expected: Event timestamps visible in descending order.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"analysis_start": start, "analysis_end": end,
+                                       "input_type": "pcap", "file_start": "1"}
+    if metadata_start:
+        (tmp_path / "metadata").mkdir()
+        (tmp_path / "metadata" / "info.txt").write_text(f"Slips start date: {metadata_start}\n")
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as history:
+        history.executemany("INSERT INTO error_events(event_time,module,message,line) VALUES (?,'Profiler','error','raw')",
+                            [(stamp,) for stamp in (90, 100, 120, 140)])
+    result = reader.logs({"scope": [scope]})
+    assert [item["event_time"] for item in result["items"]] == expected
+    assert result["total"] == len(expected)
+    assert result["scope"] == scope
+    if scope == "current" and expected:
+        with connect_history(reader.history_path) as history:
+            where, parameters, _, _ = reader._log_scope()
+            plan = history.execute("EXPLAIN QUERY PLAN SELECT * FROM error_events" + where, parameters).fetchall()
+        assert any("error_time_idx" in str(tuple(row)) for row in plan)
+    with pytest.raises(ValueError, match="Unknown log history scope"):
+        reader.logs({"scope": ["invalid"]})
 
 
 @pytest.mark.parametrize(
@@ -2491,7 +2585,7 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
             )
         }
         if key == "network_states"
-        else {}
+        else {"analysis_start": "100"} if key == "analysis" else {}
     )
     redis_values = {
         "number_of_alerts": "0",
@@ -2512,6 +2606,11 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
         }
     )
     initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as history:
+        history.executemany(
+            "INSERT INTO error_events(event_time,module,message,line) VALUES (?,?,?,?)",
+            [(90, "OldModule", "old", "old"), (110, "Profiler", "current", "current")],
+        )
     with sqlite3.connect(reader.sqlite_path) as connection:
         connection.execute("CREATE TABLE alerts (alert_id TEXT)")
         connection.execute("CREATE TABLE evidence (evidence_id TEXT)")
@@ -2524,7 +2623,9 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     assert "computer_name" in result
     assert result["evidence_details_loaded"] is False
     reader._redis_evidence.assert_not_called()
-    reader._module_rows.assert_called_once_with(None, {}, False)
+    assert result["counts"]["module_errors"] == 1
+    assert [item["module"] for item in result["recent_errors"]] == ["Profiler"]
+    reader._module_rows.assert_called_once_with(None, {"Profiler": 1}, False)
 
 
 @pytest.mark.parametrize(
@@ -3129,7 +3230,7 @@ def test_metadata_and_logs_endpoints_are_bounded(tmp_path: Path) -> None:
     metadata_dir = tmp_path / "metadata"
     metadata_dir.mkdir()
     (metadata_dir / "info.txt").write_text(
-        "Slips version: 1.2.3\nBranch: local-web-page\n",
+        "Slips version: 1.2.3\nBranch: local-web-page\nSlips start date: 50\n",
         encoding="utf-8",
     )
     initialize_history(reader.history_path)
@@ -3141,6 +3242,8 @@ def test_metadata_and_logs_endpoints_are_bounded(tmp_path: Path) -> None:
         )
 
     metadata = reader.metadata()
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
     logs = reader.logs()
 
     assert metadata["items"]["Slips version"] == "1.2.3"
@@ -3173,7 +3276,7 @@ def test_logs_show_the_final_exception_in_traceback_summary(
             ),
         )
 
-    item = reader.logs()["items"][0]
+    item = reader.logs({"scope": ["history"]})["items"][0]
     assert (
         "RecursionError: maximum recursion depth exceeded" in item["message"]
     )

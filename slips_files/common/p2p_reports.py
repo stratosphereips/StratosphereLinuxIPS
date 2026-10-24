@@ -2,7 +2,10 @@
 
 from typing import Any
 
-from slips_files.core.structures.evidence import EvidenceType
+from slips_files.core.structures.evidence import (
+    EvidenceType,
+    normalize_icmp_evidence,
+)
 
 
 def reported_detections(peer_report: Any) -> list[dict[str, Any]]:
@@ -28,7 +31,9 @@ def reported_detections(peer_report: Any) -> list[dict[str, Any]]:
             continue
         if kind in {"P2P_REPORT", "MALICIOUS_IP_FROM_P2P_NETWORK"}:
             continue
-        result.append({**item, "evidence_type": kind})
+        detection = {**item, "evidence_type": kind}
+        normalize_icmp_evidence(detection)
+        result.append(detection)
     return result
 
 

@@ -18,7 +18,7 @@ import sqlite3
 import tempfile
 import time
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 from collections import Counter, defaultdict
 from contextlib import AbstractContextManager, ExitStack, nullcontext
 from http import HTTPStatus, cookies
@@ -45,7 +45,10 @@ from slips_files.core.database.sqlite_db.detection_history import (
     ARCHIVE_GLOB,
     ARCHIVE_NAME,
 )
-from slips_files.core.structures.evidence import EvidenceType
+from slips_files.core.structures.evidence import (
+    EvidenceType,
+    normalize_icmp_evidence,
+)
 from modules.supported_module_names import Modules
 from modules.p2p_trust.trust.base_model import (
     RELIABILITY_WEIGHT,
@@ -1875,15 +1878,50 @@ class RunDataReader:
                     ready = archive.execute(
                         "SELECT value FROM archive_metadata WHERE key='ready'"
                     ).fetchone()
+                    bounds = []
+                    if ready and ready[0] == "1":
+                        for table, column in (
+                            ("evidence", "evidence_time"),
+                            ("alerts", "alert_time"),
+                        ):
+                            if not self._table_exists(archive, table):
+                                continue
+                            for direction in ("ASC", "DESC"):
+                                row = archive.execute(
+                                    f"SELECT {column} FROM {table} WHERE {column} IS NOT NULL "
+                                    f"ORDER BY {column} {direction} LIMIT 1"
+                                ).fetchone()
+                                if row:
+                                    try:
+                                        value = float(row[0])
+                                        datetime.fromtimestamp(
+                                            value, timezone.utc
+                                        )
+                                    except (
+                                        TypeError,
+                                        ValueError,
+                                        OverflowError,
+                                        OSError,
+                                    ):
+                                        continue
+                                    bounds.append(value)
+                    stat = path.stat()
             except (OSError, sqlite3.Error):
                 continue
             if ready and ready[0] == "1":
                 items.append(
                     {
                         "id": path.name,
-                        "label": path.stem.removeprefix("detections-"),
-                        "size_bytes": path.stat().st_size,
-                        "updated_at": path.stat().st_mtime,
+                        "label": (
+                            f"{datetime.fromtimestamp(min(bounds), timezone.utc):%Y-%m-%d} → "
+                            f"{datetime.fromtimestamp(max(bounds), timezone.utc):%Y-%m-%d} UTC"
+                            if bounds
+                            else "Detection dates unavailable"
+                        ),
+                        "start_time": min(bounds) if bounds else None,
+                        "end_time": max(bounds) if bounds else None,
+                        "size_bytes": stat.st_size,
+                        "updated_at": stat.st_mtime,
                     }
                 )
         maintenance = {}
@@ -2747,6 +2785,7 @@ class RunDataReader:
                 )
                 self._clarify_legacy_p2p_report(evidence)
                 self._annotate_peer_detection(evidence)
+                normalize_icmp_evidence(evidence)
                 records.append(evidence)
         records.sort(
             key=lambda item: float(item.get("timestamp") or 0),
@@ -2835,6 +2874,7 @@ class RunDataReader:
         record.setdefault("review_status", "unreviewed")
         self._clarify_legacy_p2p_report(record)
         self._annotate_peer_detection(record)
+        normalize_icmp_evidence(record)
         return record
 
     @staticmethod
@@ -7993,18 +8033,55 @@ class RunDataReader:
         """
         return {"items": self._run_metadata(), "updated_at": time.time()}
 
+    def _log_scope(
+        self, scope: str = "current", analysis: Optional[Dict[str, Any]] = None
+    ) -> tuple[str, tuple, float, float]:
+        """Limit runtime errors to this process's wall-clock lifetime.
+
+        Parameters:
+            scope: Current run or explicitly requested retained history.
+            analysis: Already fetched run facts, when available.
+
+        Returns:
+            SQL condition, bound values, run start and optional end timestamps.
+        """
+        if scope not in {"current", "history"}:
+            raise ValueError("Unknown log history scope")
+        if scope == "history":
+            return "", (), 0.0, 0.0
+        if analysis is None:
+            analysis = self.redis.hgetall("analysis")
+        start = self._event_timestamp(analysis.get("analysis_start"))
+        if not math.isfinite(start) or start <= 0:
+            start = self._event_timestamp(
+                self._run_metadata().get("Slips start date")
+            )
+        end = self._event_timestamp(analysis.get("analysis_end"))
+        if not math.isfinite(start) or start <= 0:
+            return " WHERE 0", (), 0.0, 0.0
+        if math.isfinite(end) and end >= start:
+            return (
+                " WHERE event_time >= ? AND event_time <= ?",
+                (start, end),
+                start,
+                end,
+            )
+        return " WHERE event_time >= ?", (start,), start, 0.0
+
     def logs(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
         """Return sortable parsed runtime messages.
 
         Parameters:
-            query: Optional sort key and direction.
+            query: Optional sort key, direction and current/history scope.
 
         Returns:
             Total parsed message count and one bounded sorted page.
         """
         query = query or {}
+        scope = query.get("scope", ["current"])[0]
+        where, parameters, start, end = self._log_scope(scope)
         with connect_history(self.history_path, read_only=True) as history:
 
             def log_level(message: str, line: str) -> str:
@@ -8044,15 +8121,17 @@ class RunDataReader:
             )
             total = int(
                 history.execute(
-                    "SELECT COUNT(*) AS count FROM error_events"
+                    "SELECT COUNT(*) AS count FROM error_events" + where,
+                    parameters,
                 ).fetchone()["count"]
             )
             items = [
                 dict(row)
                 for row in history.execute(
                     "SELECT event_time, module, message, line "
-                    f"FROM error_events ORDER BY {sort_expression} {direction}, id {direction} "
-                    "LIMIT 100"
+                    f"FROM error_events{where} ORDER BY {sort_expression} {direction}, id {direction} "
+                    "LIMIT 100",
+                    parameters,
                 ).fetchall()
             ]
         for item in items:
@@ -8066,7 +8145,14 @@ class RunDataReader:
                 ):
                     item["message"] = f"{item['message']} — {cause[:240]}"
                     break
-        return {"items": items, "total": total, "updated_at": time.time()}
+        return {
+            "items": items,
+            "total": total,
+            "scope": scope,
+            "run_started_at": start,
+            "run_ended_at": end,
+            "updated_at": time.time(),
+        }
 
     @staticmethod
     def _interface_addresses(interface_names: str) -> Dict[str, List[str]]:
@@ -8480,8 +8566,12 @@ class RunDataReader:
             else durable_evidence or redis_evidence_count
         )
         with connect_history(self.history_path, read_only=True) as history:
+            log_where, log_parameters, _, _ = self._log_scope(
+                analysis=analysis
+            )
             error_rows = history.execute(
-                "SELECT module, COUNT(*) AS count FROM error_events GROUP BY module"
+                f"SELECT module, COUNT(*) AS count FROM error_events INDEXED BY error_time_idx{log_where} GROUP BY module",
+                log_parameters,
             ).fetchall()
             error_counts = {
                 str(row["module"]): int(row["count"]) for row in error_rows
@@ -8490,8 +8580,9 @@ class RunDataReader:
                 dict(row)
                 for row in history.execute(
                     "SELECT event_time, module, message, line "
-                    "FROM error_events ORDER BY event_time DESC, id DESC "
-                    "LIMIT 20"
+                    f"FROM error_events{log_where} ORDER BY event_time DESC, id DESC "
+                    "LIMIT 20",
+                    log_parameters,
                 ).fetchall()
             ]
             host_count = int(

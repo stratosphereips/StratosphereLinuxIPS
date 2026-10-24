@@ -48,3 +48,17 @@ def test_report_types_are_known_bounded_and_leave_local_evidence_unchanged() -> 
         evidence_display_type("DNS_WITHOUT_CONNECTION", metadata)
         == "DNS_WITHOUT_CONNECTION"
     )
+
+
+def test_saved_peer_icmp_details_keep_type_and_code_without_ports() -> None:
+    """Correct a legacy peer description without changing its raw packet."""
+    _factory = ModuleFactory()
+    original = {"evidence_type": "DIFFERENT_LOCALNET", "proto": "icmp",
+                "description": "A connection on port 0/icmp outside the network",
+                "src_port": 11, "dst_port": 0}
+    detection = reported_detections({"provenance": [original]})[0]
+    assert detection["icmp_type"] == 11 and detection["icmp_code"] == 0
+    assert detection["src_port"] is None and detection["dst_port"] is None
+    assert "port" not in detection["description"]
+    assert original["src_port"] == 11 and original["dst_port"] == 0
+    assert "on port 0/icmp" in original["description"]

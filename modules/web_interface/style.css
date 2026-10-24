@@ -1199,6 +1199,8 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .topbar-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 1rem; flex: none; max-width: 100%; }
 .network-filter { display: inline-flex; align-items: center; gap: .4rem; padding: .38rem .6rem; border: 1px solid var(--line); border-radius: 7px; background: var(--surface-2); color: var(--text); font-size: .75rem; font-weight: 700; white-space: nowrap; cursor: pointer; }
 .network-filter[hidden] { display: none; }
+#history-source-label { min-width: 0; max-width: 100%; }
+#history-source { min-width: 0; width: 26rem; max-width: 45vw; text-overflow: ellipsis; }
 .network-filter input { flex: none; min-width: 0; padding: 0; accent-color: var(--accent); margin: 0; }
 .network-filter:has(input:disabled) { opacity: .6; cursor: wait; }
 .theme-toggle { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; min-width: 5.2rem; padding: .38rem .55rem; font-size: .75rem; font-weight: 700; white-space: nowrap; }

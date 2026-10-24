@@ -391,6 +391,13 @@ monthly SQLite archives before removal from the active database. A saved
 checkpoint makes interrupted transfers restartable. Raw flow JSON is governed
 by `flow_retention` and is not duplicated in detection archives.
 
+This keeps everyday searches working on a smaller database while preserving
+older findings for investigation. An archive is a piece of detection history,
+not a backup of a finished Slips run. Reusing an output directory with
+`--keep-history` can put detections from several starts in the same archive.
+The filename's month is when Slips copied the records; its final number just
+distinguishes storage segments. It does not describe when the traffic happened.
+
 Archives live in `databases/archives/detections-YYYY-MM-NNNN.sqlite`, rotate
 into segments targeting 256 MiB, and expire 30 days after their last write.
 `detection_history.archive_retention_days` configures this one-month policy.
@@ -400,6 +407,10 @@ Copying pauses when less than 1 GiB of disk space is free. Imported captures
 are preserved. See [Usage](usage.md) for the complete configuration example.
 
 Use the header's **Detection history** selector to open an archive explicitly.
+Each choice shows the earliest and latest detection dates inside that file,
+in your browser's local timezone. Single-day archives also show their start
+and end times. A secondary **part** number distinguishes overlapping ranges.
+These dates describe the stored evidence and alerts, not a run's start or end.
 Archive detection queries are read-only, use the selected file, and do not
 filter by the current live network. Related evidence and retained raw flows
 can be read from other retained databases. Expired details cannot be restored.
@@ -510,6 +521,12 @@ alert timeline before paging.
 
 ### Evidence
 
+ICMP evidence and triggering flows show **ICMP type** and **ICMP code**, never
+source or destination ports. Zeek puts these values in its `sport` and `dport`
+fields, so those original field names remain visible in raw flow JSON. New
+evidence stores explicit `icmp_type`/`icmp_code` fields. Older saved evidence
+is corrected when displayed without changing the original stored record.
+
 The Evidence tab keeps the group or record table on the left and a group summary and full-height record list beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence selected inside Alerts opens in the fourth Alerts pane; evidence opened from a host retains the full investigation view.
 
 With a record open, the default widths are approximately **25% groups, 25%
@@ -548,14 +565,26 @@ Metadata keeps the run version, branch, and commit beside the monitored device's
 
 ### Logs
 
-The Logs tab shows a bounded page of runtime events parsed from the run's
-`errors.log`. Select any row to open a console-style investigation panel with
+The Logs tab opens with **Log history → This run**. It shows only errors between
+this Slips process's start and its recorded end, if it has finished. Restarting
+with the same output directory does not make old errors look current. The
+Overview and module error counts use the same boundary. Error times are wall-clock
+times, including when Slips is analyzing an old capture.
+
+Select **All retained runs** to browse older imported errors in that output
+directory. This is separate from the detection archive selector: detection
+archives contain findings, not runtime errors. Imported errors remain in the
+web history database until its retention cleanup removes them; selecting
+history does not reread rotated text logs. If the run start cannot be found,
+the current view stays empty and explains how to open retained history.
+
+Events are parsed incrementally from `errors.log`. Select any row to open a console-style investigation panel with
 the complete timestamp, module, presentation severity, and raw multiline source
 block. Traceback rows also show the final exception when one is available.
 Colors highlight severity, paths, and IP addresses
 without rewriting the stored log. Keyboard users can open a selected row with
 Enter.
-Click any table heading to sort all retained events by time, displayed level,
+Click any table heading to sort events in the selected log history by time, displayed level,
 module, or message before the bounded page is selected.
 
 ### Firewall
