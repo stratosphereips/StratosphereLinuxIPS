@@ -75,7 +75,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>Service Anomaly Detection</td>
-    <td>Optional training-based detection of unfamiliar service clients, unusual access times and completed TCP durations.</td>
+    <td>Learns which computers normally connect to a service, at what hours, and for how long; reports unusual connections after learning.</td>
     <td>✅</td>
   </tr>
   <tr>
@@ -233,11 +233,15 @@ context.
 For the full state machine, formulas, DB schema, and configuration, see
 [T Cell Module](t_cell_module.md).
 
-## HTTPS Anomaly Detection Module
+## Service anomaly detection
 
-For service/client novelty, access times and completed connection durations,
-see [Service anomaly detection](service_anomaly_detection.md). It is a separate
-optional module that consumes connection records across TCP and UDP services.
+This optional module learns which computers normally connect to each service,
+when they connect, and how long completed TCP connections last. It then reports
+unusual connections, including attempts by unfamiliar clients. See
+[Service anomaly detection](service_anomaly_detection.md) for configuration,
+training, short tests, examples, and explanations of every setting.
+
+## HTTPS Anomaly Detection Module
 
 For the full technical description of the HTTPS anomaly detector (features, training, adaptation, z-score logic, evidence format, and configuration), see:
 

@@ -731,36 +731,79 @@ brute_force_detector:
 
 #############################
 anomaly_detection_services:
+  # Learn which computers normally connect to each answering TCP/UDP port,
+  # at what hours, and for how long. Enable this to report unusual connections.
   enabled: false
-  # auto: train each service then detect; train: fit only; detect: use saved models.
+  # auto: learn normal connections, then report unusual ones.
+  # train: only learn; use this to teach Slips about legitimate changes.
+  # detect: check connections against saved learning without changing it.
   mode: auto
+  # Local timezone for learning usual connection hours, e.g. Europe/Prague.
+  # Set this to your network's timezone so local working hours are interpreted correctly.
   timezone: UTC
-  # Elapsed flow time in hours (168 = 7 days); fractions allow short tests.
+  # Hours spent learning normal connections for EACH service before reporting anything.
+  # Measured from connection timestamps, not how long Slips has been running.
+  # 168 = 7 days; 0.0167 is about 1 minute. The next two requirements must also pass.
   training_hours: 168
-  # All three training requirements must pass, independently for each service.
+  # Successful connections needed to learn a service's normal clients before reporting.
+  # More connections give Slips more examples; failed attempts cannot teach normality.
   min_training_connections: 30
+  # Different UTC dates with successful connections needed before reporting.
+  # This prevents one busy day from being treated as several days of learning.
   min_training_days: 3
-  # Timing needs this many observed local days, independently of training_hours.
+  # Different local dates with connections needed before reporting unusual HOURS.
+  # This gives Slips time to learn when people normally connect; empty days do not count.
   time_min_days: 14
-  # Minimum observed days in the applicable weekday/weekend category.
+  # For weekday checks, require connections on this many different weekday dates.
+  # For weekend checks, require weekend dates instead, so weekday habits do not judge weekends.
   time_min_matching_days: 3
+  # Report a connection time only when its learned half-hour frequency is below this.
+  # Higher values report more times as unusual; this is not the chance of an attack.
   time_probability_threshold: 0.01
-  # 0 disables the regular-schedule gate; use only for short functional tests.
+  # How consistent the usual connection hours must be before checking unusual hours (0-1).
+  # Higher values need a clearer routine. 0 also checks irregular routines; useful for tests.
   time_min_concentration: 0.35
-  # Completed TCP samples required before checking session lengths.
+  # Normally completed TCP connections needed to learn usual connection lengths.
+  # Slips waits for these examples before reporting unusually short or long connections.
   duration_min_samples: 50
+  # Maximum number of learned connection lengths kept for each client and service.
+  # More examples use more memory and retain older habits; must be at least duration_min_samples.
   duration_samples: 128
+  # How far a connection length must differ, relative to the variation in learned lengths.
+  # Higher values require a larger difference. This is not a number of seconds or a length ratio.
   duration_zscore: 4.5
+  # Extra length check: exceed the learned upper end times this value,
+  # or fall below the lower end divided by it. Avoids reporting small length changes.
   duration_ratio: 3
+  # Also require this many seconds of difference from the learned lower/upper end.
+  # Avoids reporting tiny absolute changes; all three length checks must pass.
   duration_min_difference_seconds: 30
+  # Keep learning from normal connections by already-known clients after initial training.
+  # Allows habits to change; false freezes learning after training. Does not add new clients.
   adapt_known_clients: true
+  # Days of past connection TIMES kept to learn usual hours.
+  # Limits memory and lets old schedules be forgotten; does not expire known clients.
   history_days: 56
+  # Forget a service or client after this many days without activity in connection timestamps.
+  # Removes stale records; a returning computer may need to be learned again.
   retention_days: 90
+  # Maximum services to learn, where a service is one computer's TCP or UDP port.
+  # Limits memory; additional services are skipped when this limit is reached.
   max_services: 1024
+  # Maximum client-to-service records across all services; limits memory.
+  # A computer connecting to two services uses two records.
   max_clients: 4096
+  # Maximum clients remembered for one service; prevents one busy port using all memory.
+  # If a client list is incomplete, Slips stops reporting unfamiliar clients for that service.
   max_clients_per_service: 64
+  # Seconds of connection timestamps to wait before repeating the same warning
+  # for a client/service and combination of reasons. Reduces repeated evidence; 0 disables this wait.
   alert_cooldown_seconds: 3600
+  # Maximum evidence records for one service per UTC hour of connection timestamps.
+  # Limits warning floods even when many different clients or reasons are involved.
   max_alerts_per_service_hour: 10
+  # Real seconds between saving what Slips has learned to disk.
+  # Shorter intervals reduce loss after a crash but cause more disk writes.
   flush_interval_seconds: 30
 
 #############################

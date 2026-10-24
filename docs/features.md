@@ -613,13 +613,14 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 ### Service anomaly detection
 
-The optional `anomaly_detection_services` module learns responding TCP/UDP
-services and their usual clients. After training, it detects unfamiliar clients
-(including failed attempts), unusual access times and unusually short or long
-completed TCP connections. Client/time/duration models persist independently of
-flow retention and have configurable limits. See
-[Service anomaly detection](service_anomaly_detection.md) for configuration,
-training, timing uncertainty, duration eligibility and evidence behavior.
+The optional `anomaly_detection_services` module learns which computers
+normally connect to a service, at what hours, and for how long. It then reports
+unfamiliar clients (including failed attempts), unusual connection hours, and
+unusually short or long completed TCP connections. Slips saves what it learns
+so it can remember normal behavior after a restart, even if old flow records
+have been removed. Settings limit how much it remembers. See
+[Service anomaly detection](service_anomaly_detection.md) for every setting's
+purpose, training requirements, examples, and limits of these checks.
 
 ### Blocking Module
 

@@ -1,20 +1,26 @@
 # Service anomaly detection
 
-`anomaly_detection_services` learns who normally accesses a responding service,
-when they access it, and how long completed connections usually last. It works
-when Zeek connection records arrive; it does not require early packet events.
+`anomaly_detection_services` learns which computers normally connect to a
+service, what hours they connect, and how long their connections last. After
+learning, it reports connections that differ from what it has seen before.
+An unusual connection is a reason to investigate, not proof of an attack.
 
-The module is separate from `anomaly_detection_https`. Its normalized
-observations and baseline engine are independent of TLS, so protocol-specific
-adapters and additional behavior signals can be added later. The first adapter
-accepts Zeek `conn` records for unicast TCP and UDP. Application-specific DNS,
-HTTP, SSH and TLS semantics are not modeled by this module yet.
+A **service** is one computer's TCP or UDP port that Slips has seen answer a
+connection. A **client** is the computer that starts the connection. For example,
+SSH on computer A's TCP port 22 is one service. If computer B usually connects
+to it, Slips can later report computer C trying to connect, B connecting at an
+unusual hour, or B making a connection that lasts much longer than usual.
 
-Both detectors use `slips_files/common/anomaly_detection.py` for empirical
-quantiles and median/MAD center and scale estimates. HTTPS keeps its EWMA,
-drift and threshold calibration; this module keeps its client, clock and
-duration models. Future protocol detectors can reuse the statistical methods
-without inheriting TLS-specific features or a shared training state.
+**Training means learning what is normal from the connections Slips observes.**
+Slips saves this information and uses it to check later connections. In the
+code, this saved information is called a model. There are three separate things
+to remember: the usual clients, the usual connection hours, and the usual
+connection lengths.
+
+The module checks each connection when its Zeek record arrives. It currently
+uses TCP and UDP connection records, rather than application-specific details
+such as SSH logins or HTTP requests. Length checks currently apply only to
+normally completed TCP connections.
 
 ## Enable and train
 
@@ -30,47 +36,149 @@ anomaly_detection_services:
   min_training_days: 3
 ```
 
-The shipped default is `enabled: false`. Restart Slips after enabling it or
-changing its settings. Enabling this module does not enable the HTTPS detector.
+The default is `enabled: false`. Restart Slips after changing the configuration.
+Each service learns separately: connections to one port do not satisfy the
+training requirements for another port. This module is separate from the
+HTTPS detector; enabling one does not enable the other.
 
-All warmup requirements are in `config/slips.yaml` and can be overridden in
-your custom configuration:
+All settings below belong under `anomaly_detection_services` in
+`config/slips.yaml`, or in the custom configuration for your run.
 
-| Setting | Default | Requirement |
+### Turn the module on and choose how it learns
+
+| Setting | Default | What it does and why |
 | --- | --- | --- |
-| `training_hours` | `168` (7 days) | Elapsed flow time per service; fractional hours are allowed. |
-| `min_training_connections` | `30` | Accepted connections per service. |
-| `min_training_days` | `3` | Distinct UTC observation days per service. |
-| `time_min_days` | `14` | Distinct local observation days for a timing model. |
-| `time_min_matching_days` | `3` | Observed local weekdays or weekends matching the scored flow. |
-| `duration_min_samples` | `50` | Completed TCP connections for a duration model. |
+| `enabled` | `false` | Turns this detector on. Set it to `true` when you want Slips to start learning connections and checking them for changes. |
+| `mode` | `auto` | Chooses whether Slips learns, checks connections, or does both. The three choices are explained below so you can decide when to accept changes as normal. |
+| `timezone` | `UTC` | The local timezone used to learn usual connection hours and distinguish weekdays from weekends. For example, `Europe/Prague` makes 09:00 mean 09:00 in Prague, including summer/winter clock changes. |
 
-The first three requirements must all pass before any findings are emitted.
-Timing and duration have their own additional requirements. Days count observed
-dates, not idle time since startup. Restarting preserves the baseline and its
-original training start; changing a threshold does not start training again.
+- `auto`: first learn normal connections for each service, then report unusual
+  ones. After initial training, normal connections from known clients can
+  continue teaching Slips if `adapt_known_clients` is enabled.
+- `train`: learn successful connections without producing evidence of unusual
+  behavior. Use this to teach Slips about legitimate new clients or changed
+  habits, then return to `auto` or `detect`.
+- `detect`: check connections using what was previously learned. Do not add
+  clients or change the learned connection hours or lengths. A new service
+  without enough saved learning cannot produce findings in this mode.
 
-- `auto` learns each service, then detects anomalies. A service needs the
-  configured elapsed traffic time, accepted-connection count and number of
-  distinct observation days. The default is seven days, 30 connections and
-  three distinct days. New services start their own training period.
-- `train` fits accepted connections without generating anomaly evidence. Use
-  this mode only during traffic you intend to accept as normal, including when
-  adding legitimate clients to an existing model. Then return to `auto` or
-  `detect`.
-- `detect` evaluates existing trained services without fitting their client,
-  timing or duration distributions. It still checkpoints activity timestamps
-  and rate limits. Unknown or insufficiently trained services remain unscored.
+### How much to learn before reporting anything
 
-Only accepted connections teach normal client relationships. Repeated failed
-attempts cannot enroll a client. Explicit malicious/malware/attack input labels
-also prevent fitting, while existing models can still detect those records.
-Unlabeled training traffic is assumed representative and benign. Once trained,
-a new client remains outside
-the baseline until an explicit training period accepts it. Normal connections
-from known clients adapt gradually by updating the bounded observation history;
-connections with anomaly reasons do not update those fitted distributions.
-Set `adapt_known_clients: false` to freeze automatic post-training adaptation.
+| Setting | Default | What it does and why |
+| --- | --- | --- |
+| `training_hours` | `168` (7 days) | Hours used to learn normal connections for each service before reporting unusual ones. Slips measures the time between the first connection that showed the service answering and the connection being checked. Waiting longer gives it a chance to see normal changes over several days. Fractional hours are allowed; `0.0167` is about one minute. |
+| `min_training_connections` | `30` | Successful connections Slips must learn for that service before reporting anything. This provides actual examples to learn from; waiting seven days without connections is not enough. Failed attempts do not count. |
+| `min_training_days` | `3` | Different UTC calendar dates on which Slips must learn successful connections to that service. This prevents thirty connections in one busy minute from representing several days of normal activity. |
+
+**All three requirements must pass.** Lowering `training_hours` alone does not
+remove the connection-count or observed-day requirements. Setting it to `0`
+removes only the elapsed-time wait.
+
+These hours come from **connection timestamps**, not how long Slips has been
+running. When analyzing a PCAP, seven recorded days can be processed without
+waiting seven real days. Gaps between connections count toward elapsed hours,
+but days with no learned connections do not count toward `min_training_days`.
+Restarting resumes saved learning; it does not restart the training clock.
+
+During training, Slips assumes the connections it learns are normal. It skips
+learning from records explicitly labeled malicious, malware or attack. A TCP
+connection can teach a normal client once it is established, even if it has not
+finished yet; UDP needs packets in both directions. Failed attempts cannot
+teach Slips that a new client is normal.
+
+### When to report an unusual hour
+
+Slips remembers connection times in half-hour intervals, separately for
+weekdays and weekends. It keeps a record for each known client and a combined
+record for the service. A client without its own history can be checked using
+the service's history; the evidence description tells you when that happens.
+
+| Setting | Default | What it does and why |
+| --- | --- | --- |
+| `time_min_days` | `14` | Different local calendar dates with learned connections required before checking whether an hour is unusual. This gives Slips several days of examples of when connections normally happen. Days without connections do not count. |
+| `time_min_matching_days` | `3` | Different weekday dates with learned connections required to check a weekday connection, or weekend dates to check a weekend connection. This prevents Slips from calling Saturday activity unusual just because it has only learned Monday-to-Friday habits. |
+| `time_probability_threshold` | `0.01` | Slips gives each half-hour a value based on how often it appeared in learned connection times, with some allowance for nearby hours. It reports an unusual hour only below this limit. Raising the limit reports more hours as unusual; lowering it reports fewer. This value is not the probability of an attack. |
+| `time_min_concentration` | `0.35` | How strongly learned connection times must gather around particular hours before Slips checks for unusual hours. The range is `0` to `1`. Higher values require a clearer daily routine, reducing warnings for people with irregular hours. `0` removes this requirement, which is useful for short tests. |
+
+The initial service training requirements must also pass. Fourteen dates with
+connections do not automatically establish a reliable schedule: those
+connections might occur at all hours. Slips avoids reporting an unusual hour
+unless the learned hours are consistent enough for `time_min_concentration`.
+
+A burst of connections counts once per half-hour on each date, so a busy minute
+cannot establish a daily habit. Neighboring half-hours share some allowance,
+including across midnight, so a small shift in connection time is less likely
+to cause a warning. Several usual connection times can coexist.
+
+Only dates within `history_days`, up to the connection's start date, contribute
+to this check. Missing traffic does not prove that a person was inactive.
+Holidays, occasional late work and capture gaps can still cause false alarms;
+check the results against later normal traffic, including weekends. Changing
+`timezone` clears the learned connection hours so Slips can learn them again;
+it preserves learned clients and connection lengths.
+
+### When to report an unusually short or long connection
+
+Here, length means **seconds from the start to the end of a TCP connection** as
+reported by Zeek. It does not mean how long someone was logged in to an
+application. Slips learns lengths only from normally completed TCP connections
+(Zeek state `SF`) with an observed reply. Failed attempts, unfinished TCP
+connections and UDP records do not teach or trigger this check.
+
+| Setting | Default | What it does and why |
+| --- | --- | --- |
+| `duration_min_samples` | `50` | Completed TCP connections whose lengths must be learned before checking for unusual lengths. This avoids deciding what is normal from only one or two examples. It must be at least `10` and no greater than `duration_samples`. |
+| `duration_samples` | `128` | Maximum number of learned connection lengths kept for each client and for the service as a whole. More examples use more memory and keep older habits longer; fewer adapt to changes sooner. The allowed range is `10` to `512`. |
+| `duration_zscore` | `4.5` | How far a connection length must differ from learned lengths, measured relative to how much those lengths normally vary. Higher values require a larger departure and produce fewer findings. The number is neither seconds nor a length multiplier. This check gives less weight to a few extreme past lengths. |
+| `duration_ratio` | `3` | A long connection must exceed the upper end of the learned length range multiplied by this number. A short one must be below the lower end divided by it. This avoids reporting small proportional changes and allows both short and long connections to be normal. |
+| `duration_min_difference_seconds` | `30` | Minimum difference in seconds beyond the applicable lower or upper end of the learned range. This avoids reporting tiny absolute changes, such as fractions of a second, even when their ratio is large. |
+
+The three difference checks must **all** pass, in addition to the training and
+sample requirements. For example, if the learned upper end is 120 seconds,
+`duration_ratio: 3` requires a long connection to exceed 360 seconds. It must
+also pass the other two checks. Raising any of the three limits makes length
+findings less frequent.
+
+The learned lower and upper ends come from near the shortest and longest past
+lengths (the 1st and 99th percentiles). Slips keeps both ends instead of treating
+one average as the only normal length. This lets a service normally have both
+short and long connections.
+
+### Keep learning and limit memory use
+
+| Setting | Default | What it does and why |
+| --- | --- | --- |
+| `adapt_known_clients` | `true` | After initial training, keep learning from successful connections by known clients when no unusual behavior was found. This lets normal habits change gradually. `false` stops this automatic learning; `mode: train` still learns. Unfamiliar clients are not added automatically after training. |
+| `history_days` | `56` | Days of past connection times kept to learn usual hours. Older times are forgotten so routines can change and memory stays limited. This setting does not delete the list of known clients or the saved connection lengths. |
+| `retention_days` | `90` | Forget a service or client after this many days without relevant activity, measured using connection timestamps. Answered connections keep a service active; successful connections keep a known client active. This removes stale records. A returning service needs fresh training; a forgotten client may be reported as unfamiliar. |
+| `max_services` | `1024` | Maximum number of services to remember. This limits memory. When full, Slips skips additional services instead of dropping an active service it already knows. |
+| `max_clients` | `4096` | Maximum number of client-to-service records across all services. One computer connecting to two services uses two records. This limits total memory spent remembering clients. |
+| `max_clients_per_service` | `64` | Maximum clients remembered for one service. This prevents one busy port from using all the available client records. |
+
+If either client limit prevents Slips from remembering everyone for a service,
+it stops reporting unfamiliar clients for that service. Otherwise, a missing
+entry could falsely make a known client appear new. Checks for unusual hours
+and lengths can still work. Slips logs a warning when these limits are reached.
+
+The three minimum observed-day settings must each be between `1` and
+`history_days`. Lower limits let checks start sooner but give Slips fewer
+examples of normal behavior.
+
+### Limit repeated warnings and save learning to disk
+
+| Setting | Default | What it does and why |
+| --- | --- | --- |
+| `alert_cooldown_seconds` | `3600` | Wait this many seconds of connection timestamps before repeating evidence for the same client, service and combination of reasons. This reduces repeated warnings. `0` removes this wait. The module remembers the most recent 16 such combinations per service. |
+| `max_alerts_per_service_hour` | `10` | Maximum evidence records for one service per UTC clock hour in connection timestamps. This limits floods of warnings even when many different clients connect. The limit is per service, across all its clients. |
+| `flush_interval_seconds` | `30` | Real seconds between saving learned information to disk. A shorter interval loses less learning after a crash but writes to disk more often. Slips also saves on a normal shutdown; an abrupt stop can lose changes since the last save. |
+
+These warning limits do not remove the original connection records. The module
+creates one `ANOMALOUS_FLOW` evidence record per reported connection, explaining
+all the unusual things found. It includes the original connection identifier
+(Zeek UID), client, server, ports and timestamp. Evidence has low severity;
+Slips' normal rules decide whether enough evidence exists to create an alert
+or take a prevention action. A whitelist `blocking` rule can keep evidence
+while preventing firewall blocking or ARP poisoning for the listed computer.
 
 ## Short functional tests
 
@@ -81,7 +189,7 @@ anomaly_detection_services:
   enabled: true
   mode: auto
   timezone: UTC
-  training_hours: 0.0167  # About one minute of flow timestamps.
+  training_hours: 0.0167  # Learn for about one minute of connection timestamps.
   min_training_connections: 10
   min_training_days: 1
   time_min_days: 1
@@ -92,152 +200,76 @@ anomaly_detection_services:
   alert_cooldown_seconds: 0
 ```
 
-Ten accepted connections from client A can establish a service in one minute
-of flow time. A subsequent new client B, including an unanswered attempt, can
-then produce evidence. Ten completed TCP connections also enable duration
-checks; their normal ratio, deviation and absolute-distance thresholds still
-apply. These are per-service requirements; ten unrelated services do not count
-as ten samples for one service.
+Learn ten successful connections from client A to one service, spanning about
+one minute. A later attempt by client B can then produce evidence, even if the
+service does not answer B. If A's ten TCP connections finished normally, they
+also allow Slips to check later connection lengths. The normal difference
+limits still apply. Ten connections to ten different services do not satisfy
+the ten-example requirement for one service.
 
-For a timing test, replay connections at a regular hour and then one at a
-distant hour on the same date. PCAP replay uses recorded timestamps, so an
-hour or several weeks of traffic can be processed without waiting that long
-on the wall clock. The test settings above disable the schedule-concentration
-gate and relax the rarity/support requirements to make a one-day clock test
-possible. They cannot establish a reliable human schedule. Keep the shipped
-defaults for ordinary operation and evaluate timing with representative
-multi-day traffic before deployment.
+To test unusual hours, replay connections at a regular hour followed by one at
+a distant hour on the same date. Recorded timestamps let Slips process this
+without waiting for the real clock to reach that hour. These short settings
+make it possible to test that the checks work; they do not provide enough
+history to learn a person's usual schedule. Use the default learning periods
+for normal operation and assess the results with representative traffic.
 
-Finite PCAP runs already isolate their models from live capture. For a separate
-live test, use a separate `parameters.permanent_dir` as well as the normal
-isolated Redis/output settings; a second process cannot share the live baseline
-writer. Returning to normal settings does not erase a weak test-trained model.
+Finite PCAP runs keep their learned information separate from live capture.
+For a separate live test, use a separate `parameters.permanent_dir` along with
+the usual separate Redis/output settings. Returning to normal settings does
+not erase information learned in a test.
 
-## What constitutes a service
+## Which connections and computers are remembered
 
-Models are keyed by network, server identity, transport and destination port.
-A successful TCP establishment or an observed originator SYN and responder
-SYN-ACK can establish a responding service. A TCP refusal/reset alone cannot.
-UDP requires packets in both directions. Later unfamiliar attempts to an
-already trained service are eligible even when unanswered or rejected.
+A successful TCP establishment or an observed SYN followed by SYN-ACK can show
+that a port answers. A refusal/reset alone cannot. UDP needs packets in both
+directions. Once a service has finished initial training, unfamiliar attempts
+can be reported even when unanswered or rejected. Multicast, broadcast, ICMP, self-connections,
+invalid ports and TCP records with an unclear connection direction are ignored.
+Directed IPv4 broadcasts are also ignored when Slips knows the monitored subnet.
 
-Multicast, broadcast, ICMP, self-connections, invalid ports and ambiguous
-midstream TCP records are excluded. Directed IPv4 broadcasts are excluded when
-the monitored subnet is known. Missing replies cannot establish a new service.
+Slips remembers services separately for each network, computer, transport
+(TCP/UDP) and port. The router's MAC address and subnet distinguish networks,
+including two networks with the same private IP range. A verified local MAC
+address can identify a computer across IP changes; a router's MAC address is
+never used as the identity of a computer behind that router. Slips uses the
+network recorded at the connection's time when connections finish after a
+network change.
 
-A verified gateway MAC and subnet distinguish networks, including two networks
-using the same private range. A trustworthy local endpoint MAC can identify a
-device across IP changes. Routed hosts never inherit the gateway's MAC.
-Packet-time network history is used for flows that complete after roaming.
-Without network identity, the scope is isolated to the current run; without
-local MAC proof, the endpoint is identified by its IP in that scope. When an
-address is still associated with a retained known client, uncertain MAC
-disappearance or discovery does not alone justify a new-client finding.
-Changed server identity can require fresh service training.
+Without enough information to identify the network, learning belongs only to
+the current run. Without a verified local MAC address, Slips identifies the
+computer by its IP on that network. If a known computer temporarily loses its
+MAC information, or Slips learns its MAC after first knowing only its IP, that
+change alone does not justify calling it a new client. A genuinely different
+server can need a new training period.
 
-## Unusual connection times
+## Where learning is saved and its effect on capture
 
-The model learns half-hour activity slots across distinct local calendar days,
-with separate weekday and weekend distributions. Each client contributes at
-most once per slot per day, so a busy burst does not establish a daily routine.
-A circular triangular smoother spans neighboring slots, including midnight.
-Multiple normal activity periods can coexist. Broad, irregular distributions
-produce no timing finding unless their concentration passes the configured gate.
-
-Timing uses observation days up to the connection's start date within
-`history_days`. Old schedules after a long capture gap and later calendar days
-cannot supply timing confidence for an earlier flow. It needs `time_min_days`
-distinct observed days (14 by default) and
-`time_min_matching_days` observations in the applicable weekday/weekend category
-(three by default). Missing coverage is not treated as observed inactivity;
-insufficient day categories are unscored. This conservative activity model does
-not infer a person's working schedule, holidays or service uptime from silence.
-Confidence in a schedule depends on observations, not the number of flows in
-one burst. Initial training time alone does not satisfy the timing requirements.
-
-`time_probability_threshold: 0.01` gates the smoothed slot frequency, and
-`time_min_concentration: 0.35` requires a sufficiently regular schedule. These
-values are scores of learned activity, not probabilities of maliciousness.
-A known client uses its own model; an unfamiliar/uncertain client can use the
-service-wide model, with that fallback identified in the evidence description.
-
-Timestamps are stored as UTC epoch values and converted using the configured
-IANA timezone. Daylight-saving transitions use that timezone's rules. Changing
-the timezone preserves client and duration baselines but clears clock bins so
-timing can be learned again. Assess false-positive rates on later benign data,
-including weekends, occasional late work and periods with capture gaps.
-
-## Unusual session lengths
-
-The first version compares duration only for normally completed TCP flows
-(`SF`), with an observed response. Failed attempts, incomplete connections and
-UDP timeout-grouped flows do not train or trigger this dimension. The measured
-quantity is Zeek connection duration, not an application's login/session time.
-
-Models retain up to `duration_samples: 128` log-transformed durations per client
-and service. Scoring requires `duration_min_samples: 50`. A short or long
-finding must pass all three conservative checks:
-
-- robust deviation above `duration_zscore: 4.5`, using median/MAD and a scale floor;
-- a factor of `duration_ratio: 3` beyond the learned 1st/99th percentile bounds;
-- at least `duration_min_difference_seconds: 30` beyond the applicable bound.
-
-The tail check retains legitimate short and long modes instead of comparing
-every session with one average. During ordinary adaptation the bounded sample
-updates only from accepted, known-client connections without anomaly reasons.
-Long-lived/incomplete flows need a future protocol-specific treatment before
-their durations can be interpreted reliably.
-
-## Evidence and response
-
-The module emits one `ANOMALOUS_FLOW` evidence per anomalous connection, combining
-client, time and duration reasons. Evidence keeps the source client as attacker
-and profile, the server as victim, transport/ports, the original UID and flow
-timestamp. The description distinguishes attempts from answered connections,
-client models from service fallbacks, and shows the learned duration range or
-timing support. Evidence is low severity, with confidence capped at 0.65.
-
-Slips' normal scoring, whitelist, alert and prevention policies still apply.
-An anomaly is not a maliciousness verdict, and one evidence need not cross the
-global alert threshold. Existing `ANOMALOUS_FLOW` suppression affects both this
-module and the HTTPS detector; disabling this module is independent. A whitelist
-`blocking` rule preserves evidence while exempting the target from enforcement.
-
-Repeated client/service/reason combinations have a 3,600-second cooldown by
-default. Each service emits at most `max_alerts_per_service_hour: 10` findings
-per traffic hour. Suppression counters survive normal restarts. Additional
-attempts are still recorded as ordinary flows subject to normal flow retention.
-
-## Persistence and resource limits
-
-Live interfaces and growing captures use
+Live interfaces and growing captures save learned information in
 `<parameters.permanent_dir>/anomaly_detection_services/baseline.sqlite`.
-Finite analyses use their own
-`output/<run>/anomaly_detection_services/baseline.sqlite`, so a PCAP does not
-modify a live model. An unidentified network deliberately gets a run-specific
-scope. Only one process can own a baseline database at a time. A new run creates
-an empty database. An unreadable, corrupt or unsupported existing model causes
-an error instead of being reset automatically.
+Finite analyses save it in their own
+`output/<run>/anomaly_detection_services/baseline.sqlite`, so analyzing a PCAP
+does not change what the live capture has learned. Slips resumes an existing
+file and creates an empty one only when none exists. Only one Slips process can
+write each file. If a saved file is corrupt or its format is unsupported, the
+module reports an error rather than silently deleting it.
 
-Models are checkpointed every `flush_interval_seconds: 30` and on graceful
-shutdown. Abrupt termination can lose observations since the last checkpoint.
-This is a separate SQLite database, outside the flow/detection writer. Busy
-checkpoints defer and retry with bounded warnings; they do not wait on capture.
+This is a separate SQLite database from the flow and detection-history
+databases. If it is busy, saving is postponed rather than waiting and slowing
+capture. Service/client counts, saved times, saved lengths and temporary
+lookups all have limits. The module runs in its own process, adds no Redis
+keys, and does not scan all past flows. Checking each new connection still
+uses some CPU; measure its cost on the computer that will run the capture.
 
-Defaults cap state at `max_services: 1024`, `max_clients: 4096` total, and
-`max_clients_per_service: 64`. Each schedule retains `history_days: 56` days,
-each duration sample has its configured cap, and duplicate/rate/identity caches
-are bounded. Inactive services and clients expire after `retention_days: 90`.
-Client novelty means absence from this retained baseline, not proof of never
-having connected before.
+## Code shared with the HTTPS detector
 
-At a service/client capacity limit, the module warns and does not evict an
-active known model to admit arbitrary new identities. A partial client set is
-marked incomplete and cannot produce new-client findings. Time and duration
-checks can still operate. Review limits and use a fresh, deliberately trained
-baseline after backing up the old model if complete membership must be rebuilt.
+Both modules use `slips_files/common/anomaly_detection.py`:
 
-Flow handling uses an existing subscription, bounded cached lookups and small
-models; it adds no Redis keys, history scans or scientific-computing dependencies.
-It runs in its own Slips process. Enabling it still has a per-flow processing
-cost; tune limits and measure on the intended capture workload.
+- `quantile()` finds a value at a chosen position among sorted past values,
+  such as the lower or upper end of usual connection lengths.
+- `robust_location_scale()` finds a middle value and how much nearby values
+  vary, while limiting the effect of a few extreme observations.
+
+They share these calculations. Each module keeps its own learned information
+and decides which behavior to check. Adding another protocol does not require
+copying these common calculations or adopting HTTPS-specific rules.
