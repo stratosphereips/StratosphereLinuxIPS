@@ -868,7 +868,7 @@ anomaly_detection_services:
   # Maximum services with learned clients, and separately the total ports remembered across hosts.
   # Each list has this cap to limit memory. Extra service records are skipped when full.
   # An incomplete host port list stops new-port warnings, so missing learning cannot cause false alarms.
-  max_services: 1024
+  max_services: 4096
   # Maximum client-to-service records across all services; limits memory.
   # A computer connecting to two services uses two records.
   # An incomplete client list stops unfamiliar-client warnings for the affected service.
