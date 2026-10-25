@@ -2325,3 +2325,59 @@ def test_pcap_host_evidence_does_not_inherit_other_host_filters(
         assert not errors
         assert factory is not None
         browser.close()
+
+
+@pytest.mark.parametrize('theme', ['light', 'dark'])
+def test_score_missing_zero_and_historical_crossing_are_distinct(theme: str) -> None:
+    """Show missing values honestly and retain peak versus current scores.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip('playwright.sync_api')
+    assets = Path('modules/web_interface')
+    errors = []
+
+    def route_request(route: Any) -> None:
+        """Serve static assets without an active detector.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {'/', '/app.js', '/style.css'}:
+            route.fulfill(path=str(assets / ('index.html' if path == '/' else path[1:])))
+        else:
+            route.fulfill(status=503, json={'error':'Isolated fixture'})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel='chrome', headless=True)
+        page = browser.new_page()
+        page.on('pageerror', lambda error: errors.append(str(error)))
+        page.route('**/*', route_request)
+        page.goto('http://slips.test/')
+        page.wait_for_function('() => state.requests.size === 0')
+        page.evaluate("""theme => {
+            document.documentElement.dataset.theme = theme;
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+        }""", theme)
+        values = page.evaluate("""() => [null,undefined,'',NaN,0,.32,1.28].map(value => {
+            const element=slipsScore({alert_score:value,alert_threshold:1.2});
+            return {label:element.textContent, title:element.title};
+        })""")
+        assert [v['label'] for v in values[:4]] == ['Unavailable'] * 4
+        assert [v['label'] for v in values[4:]] == ['0 / 1.2', '0.32 / 1.2', '1.28 / 1.2']
+        assert all('Missing does not mean zero' in v['title'] for v in values[:4])
+        page.evaluate("""() => renderHostScoreHistory({timeline:[
+            {ts:100,score:1.28,peak_score:1.28,threshold:1.2},
+            {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true}],
+            evidence_total:82,scored_evidence:82,mode:'ATL',peak_score:1.28,threshold:1.2,reset_count:1})""")
+        assert 'peak 1.280 / 1.200' in page.locator('#host-score-history-status').inner_text()
+        page.evaluate("""() => renderHostScoreHistory({timeline:[
+            {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true}],
+            evidence_total:82,scored_evidence:0,mode:'ATL',peak_score:0,threshold:1.2,reset_count:0})""")
+        assert page.locator('#host-score-chart .chart-point').count() == 3
+        assert page.locator('#host-score-chart .chart-line').first.get_attribute('d').count('L') == 0
+        assert errors == []
+        browser.close()

@@ -817,6 +817,19 @@ A time-window change is labeled separately from a same-window drop after an
 alert resets the accumulator. The host range selector also controls this
 plot.
 
+Evidence Handler now saves the exact ATL and RATL values it calculated for each
+processed evidence directly into SQLite. It keeps the captured values when an
+alert resets the live accumulator. This adds one indexed update per evidence,
+not per flow, and does not depend on the web collector's once-per-minute log
+recovery. A short PCAP run therefore retains its score history before it ends.
+Older missing snapshots can be recovered from `alerts/alerts.json`; recovery
+fills missing values without replacing canonical evidence or existing scores.
+
+For a finite PCAP or Zeek-directory analysis, the current remainder stays on the
+capture's clock. It is not appended at today's date, which would compress an old
+capture's history into the edge of a multi-year chart. A lone current reading is
+shown as a point, rather than an invented flat history line.
+
 Evidence creation and evidence scoring are separate pipeline stages. The plot
 therefore reports how many durable evidence records have a persisted score
 sample. A host can have many evidence records and a current score of zero when
@@ -830,6 +843,20 @@ never replaced with scores calculated by the web interface.
 Alerts come from durable SQLite. The default view groups alerts by host. **All alerts** shows individual alerts, bounded to 100 rows per page. Each row shows the exact Slips score at threshold crossing and the configured threshold. Grouping by host shows alert count, evidence-link count, latest alert time, highest threat, peak threshold-crossing score, and labels. Selecting a host aggregate shows its newest individual alerts; selecting an individual alert shows related evidence and the counts of every linked detection type.
 
 Alert and Evidence rows show the saved network name where the detection occurred. For live interface capture, the web interface uses the monitored interface's recorded network state at the detection time, including recent network changes. This identifies local detections between host sightings and IPv6 link-local traffic on the captured interface. For older detections, it matches the host and timestamp against permanent host-profile observations, so an address reused on separate networks is attributed to the right network. Detections without a matching network record are labeled **Unknown network (not recorded)**; grouped records that span known network changes show **Multiple networks**.
+
+**Current host score** is the remaining accumulator after any alert resets.
+**Host score then**, in evidence details, is the accumulated host score captured
+when that evidence was processed; it is not the evidence's individual
+contribution. A missing snapshot is shown as **Unavailable**, never as zero.
+A saved zero remains zero. Hourly summaries preserve this distinction too; older
+summaries that collapsed missing values to zero are invalidated and rebuilt
+through the existing bounded maintenance queue.
+
+For example, a Low ARP finding with confidence 0.8 contributes `0.2 × 0.8 = 0.16`.
+With threshold 1.2, eight contributions reach 1.28 and generate an alert, after
+which the accumulator resets. If 82 findings produce ten groups of eight, the
+two remaining findings leave a current score of 0.32. The saved alert score of
+1.28 and current score of 0.32 describe different moments.
 
 Evidence also includes records that did not cross the alert threshold. Individual rows show the exact accumulated score Slips recorded when the evidence was processed; grouped rows show the highest recorded score in the group. The default table is **Group by host and type**, bounded to 100 rows per page, and shows evidence, triggering-flow, alert-link, and whitelist-exclusion counts. **Individual evidence** remains available from the display selector. Selecting an aggregate shows its newest individual evidence. Selecting an individual record groups each triggering UID into one primary **flow** (the conn.log-style connection) and a separate **Related protocol flows** section containing alternative-flow records such as DNS, HTTP, TLS, SSH, DHCP, files, and notices. Each available connection and protocol flow shows when it was observed, using the browser's local time for wall-clock timestamps.
 

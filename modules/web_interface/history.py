@@ -1140,9 +1140,10 @@ class HistoryCollector:
                 "accumulated_ratl, risk_weight) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(alert_id) DO UPDATE SET "
-                "accumulated_threat_level = excluded.accumulated_threat_level, "
-                "accumulated_ratl = excluded.accumulated_ratl, "
-                "risk_weight = excluded.risk_weight",
+                "accumulated_threat_level = COALESCE(alerts.accumulated_threat_level, "
+                "excluded.accumulated_threat_level), "
+                "accumulated_ratl = COALESCE(alerts.accumulated_ratl, excluded.accumulated_ratl), "
+                "risk_weight = COALESCE(alerts.risk_weight, excluded.risk_weight)",
                 (
                     record_id,
                     self._event_timestamp(record.get("CreateTime")),
@@ -1179,11 +1180,11 @@ class HistoryCollector:
             "source_module, accumulated_threat_level, accumulated_ratl) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(evidence_id) DO UPDATE SET "
-            "data = excluded.data, "
             "source_module = COALESCE(NULLIF(excluded.source_module, ''), "
             "evidence.source_module), "
-            "accumulated_threat_level = excluded.accumulated_threat_level, "
-            "accumulated_ratl = excluded.accumulated_ratl",
+            "accumulated_threat_level = COALESCE(evidence.accumulated_threat_level, "
+            "excluded.accumulated_threat_level), "
+            "accumulated_ratl = COALESCE(evidence.accumulated_ratl, excluded.accumulated_ratl)",
             (
                 record_id,
                 self._event_timestamp(record.get("StartTime")),

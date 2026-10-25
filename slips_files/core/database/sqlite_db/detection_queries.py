@@ -3,6 +3,8 @@
 import math
 import sqlite3
 
+from .detection_history import NULLABLE_SCORE_SUMMARIES
+
 
 def detection_total(connection: sqlite3.Connection, table: str) -> int:
     """Read a maintained count, falling back for databases predating counters.
@@ -59,6 +61,14 @@ def hourly_evidence_source(
         "SELECT value FROM history_state WHERE key='summary_complete'"
     ).fetchone()
     if row is None or row[0] != "1":
+        return None
+    if (
+        connection.execute(
+            "SELECT 1 FROM history_state WHERE key=?",
+            (NULLABLE_SCORE_SUMMARIES,),
+        ).fetchone()
+        is None
+    ):
         return None
     lower = math.ceil((start or 0) / 3600) * 3600
     upper = math.floor(end / 3600) * 3600

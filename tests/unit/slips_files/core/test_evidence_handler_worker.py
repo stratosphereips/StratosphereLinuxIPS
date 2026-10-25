@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 from datetime import datetime
+from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -1009,3 +1010,50 @@ def test_mixed_p2p_and_unrelated_evidence_is_not_filtered() -> None:
     ]
 
     assert worker.is_filtered_evidence(evidence, []) is False
+
+
+def test_evidence_score_preserves_snapshot_when_alert_resets_accumulator(tmp_path: Path) -> None:
+    """Retain the triggering score even after the alert resets the live total.
+
+    Parameters:
+        tmp_path: Isolated SQLite database.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    from types import SimpleNamespace
+    from slips_files.core.database.sqlite_db.database import SQLiteDB
+    database = SQLiteDB(Mock(), str(tmp_path), 12345)
+    database.execute("INSERT INTO evidence(evidence_id) VALUES ('trigger')")
+    worker._score_evidence = Mock(return_value=(1.28, .4096, RiskWeight.LOW))
+    worker.db.set_evidence_score.side_effect = database.set_evidence_score
+    observed = []
+
+    def alert_and_reset(*args: object) -> None:
+        """Reset Redis before the captured values are persisted.
+
+        Parameters:
+            args: Alert-generation inputs.
+        """
+        observed.append(database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='trigger'").fetchone())
+        worker.db.get_accumulated_threat_level.return_value = 0
+
+    worker._generate_alert_if_threshold_crossed = Mock(side_effect=alert_and_reset)
+    scores = worker._score_evidence_and_maybe_alert(SimpleNamespace(id='trigger'), 'profile_1.2.3.4', 'timewindow1')
+    assert observed == [(None, None)]
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='trigger'").fetchone() == (1.28,.4096)
+    assert scores == (1.28, .4096)
+    assert worker.db.get_accumulated_threat_level() == 0
+    database.close()
+
+
+def test_score_storage_failure_does_not_prevent_alert_generation() -> None:
+    """Keep detection working if a score snapshot cannot be written."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    import sqlite3
+    from types import SimpleNamespace
+    worker._score_evidence = Mock(return_value=(1.28, .4096, RiskWeight.LOW))
+    worker.db.set_evidence_score.side_effect = sqlite3.OperationalError('database is locked')
+    worker._generate_alert_if_threshold_crossed = Mock()
+    worker.print = Mock()
+    assert worker._score_evidence_and_maybe_alert(SimpleNamespace(id='trigger'), 'profile_1.2.3.4', 'timewindow1') == (1.28, .4096)
+    worker._generate_alert_if_threshold_crossed.assert_called_once()
+    assert 'Unable to persist evidence score' in worker.print.call_args.args[0]

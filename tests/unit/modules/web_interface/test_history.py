@@ -790,3 +790,26 @@ def test_collector_records_heartbeat_and_clean_disconnect(tmp_path) -> None:
         "backend_heartbeat_at": "100.0",
         "backend_disconnected_at": "101.0",
     }
+
+
+def test_score_recovery_preserves_canonical_data_and_existing_scores(tmp_path: Path) -> None:
+    """Fill old missing scores without replacing evidence or erasing real zero.
+
+    Parameters:
+        tmp_path: Isolated older run directory.
+    """
+    factory = ModuleFactory()
+    from slips_files.core.database.sqlite_db.database import SQLiteDB
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    database.execute("INSERT INTO evidence(evidence_id,data) VALUES ('missing','{\"canonical\":true}')")
+    database.execute("INSERT INTO evidence(evidence_id,data,accumulated_threat_level,accumulated_ratl) VALUES ('zero','{}',0,0)")
+    collector = HistoryCollector(str(tmp_path), tmp_path / 'history.sqlite', Mock(), 12345)
+    for identifier in ('missing', 'zero'):
+        record = {'ID': identifier, 'Status': 'Event', 'StartTime': '2026-10-25T10:00:00Z',
+                  'Source': [{'IP': '1.2.3.4'}], 'Note': json.dumps({'accumulated_threat_level':1.28,
+                  'risk_accumulated_threat_level':.4096, 'timewindow':1})}
+        collector._backfill_alert_record(database.conn, record)
+    database.conn.commit()
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl,data FROM evidence WHERE evidence_id='missing'").fetchone() == (1.28,.4096,'{"canonical":true}')
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='zero'").fetchone() == (0,0)
+    database.close()

@@ -897,3 +897,22 @@ def test_get_whitelisted_evidence_ids_in_tw_scopes_by_ip_and_twid(
         db.get_whitelisted_evidence_ids_in_tw("10.0.0.3", "timewindow1")
         == set()
     )
+
+
+@pytest.mark.parametrize("score", [0.0, 1.28])
+def test_processed_evidence_score_is_persisted_without_replacing_record(tmp_path: Path, score: float) -> None:
+    """Keep genuine zero scores, canonical data and deleted-record boundaries.
+
+    Parameters:
+        tmp_path: Isolated detector database.
+        score: Exact raw accumulator returned by Evidence Handler.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    database.execute("INSERT INTO evidence(evidence_id,data) VALUES ('scored','{\"canonical\":true}')")
+    database.set_evidence_score('scored', score, score * .32)
+    database.set_evidence_score('deleted', score, score * .32)
+    row = database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl,data FROM evidence WHERE evidence_id='scored'").fetchone()
+    assert row == (score, score * .32, '{"canonical":true}')
+    assert database.conn.execute("SELECT COUNT(*) FROM evidence").fetchone()[0] == 1
+    database.close()

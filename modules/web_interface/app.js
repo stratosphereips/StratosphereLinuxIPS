@@ -605,9 +605,11 @@ const slipsScore = (record) => {
   }
   const score = Number(record.alert_score);
   const threshold = Number(record.alert_threshold);
-  if (!Number.isFinite(score) || !Number.isFinite(threshold)) {
-    const unavailable = text("span", "Pending", "slips-score unavailable");
-    unavailable.title = "Waiting for Slips to persist this detector score.";
+  if (record.alert_score === null || record.alert_score === undefined || record.alert_score === ""
+      || record.alert_threshold === null || record.alert_threshold === undefined || record.alert_threshold === ""
+      || !Number.isFinite(score) || !Number.isFinite(threshold)) {
+    const unavailable = text("span", "Unavailable", "slips-score unavailable");
+    unavailable.title = "No saved detector score is available for this record. Missing does not mean zero.";
     return unavailable;
   }
   const ratio = threshold > 0 ? score / threshold : 0;
@@ -5765,7 +5767,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   bannerStats.className = "evidence-detail-stats";
   bannerStats.append(investigationStats([
     ["Threat", threat(record.threat_level)],
-    ["Host score", slipsScore(record)],
+    ["Host score then", slipsScore(record)],
     ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`],
   ]));
   const alertCount = record.alert_ids?.length || 0;
@@ -6919,7 +6921,7 @@ async function loadHostSummary() {
 /** Render score history and explain how much evidence has a persisted score. */
 function renderHostScoreHistory(payload) {
   let points = Array.isArray(payload.timeline) ? payload.timeline : [];
-  if (points.length === 1) {
+  if (points.length === 1 && !points[0].current) {
     points = [{ ...points[0], ts: numeric(points[0].ts) - 1 }, points[0]];
   }
   renderLineChart("host-score-chart", points, [

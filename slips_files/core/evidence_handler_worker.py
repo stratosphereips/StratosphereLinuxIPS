@@ -6,6 +6,7 @@
 import json
 import os
 import queue
+import sqlite3
 import sys
 from multiprocessing import Queue
 from typing import Dict, List, Optional, Tuple
@@ -634,6 +635,19 @@ class EvidenceHandlerWorker(IModule):
             risk_accumulated_threat_level,
             current_risk_weight,
         )
+        # Persist the captured values, even if alert generation reset Redis.
+        try:
+            self.db.set_evidence_score(
+                evidence.id,
+                accumulated_threat_level,
+                risk_accumulated_threat_level,
+            )
+        except (sqlite3.Error, OSError) as error:
+            self.print(
+                f"Unable to persist evidence score {evidence.id}: {error}",
+                0,
+                1,
+            )
         return accumulated_threat_level, risk_accumulated_threat_level
 
     def _score_evidence(

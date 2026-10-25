@@ -1013,6 +1013,9 @@ class DBManager:
     def mark_evidence_as_processed(self, *args, **kwargs):
         return self.rdb.mark_evidence_as_processed(*args, **kwargs)
 
+    def set_evidence_score(self, *args: Any, **kwargs: Any) -> None:
+        return self.sqlite.set_evidence_score(*args, **kwargs)
+
     def is_evidence_processed(self, *args, **kwargs):
         return self.rdb.is_evidence_processed(*args, **kwargs)
 

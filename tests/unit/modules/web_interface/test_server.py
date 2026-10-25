@@ -7764,3 +7764,51 @@ def test_run_config_cache_detects_snapshot_edits(tmp_path: Path) -> None:
         snapshot.write_text("parameters: {permanent_dir: changed}\n")
         assert reader._run_config()[0]["parameters"]["permanent_dir"] == "changed"
         assert load.call_count == 2
+
+
+@pytest.mark.parametrize('group', ['', 'host_type', 'type'])
+def test_missing_evidence_scores_remain_null_in_individual_and_group_views(tmp_path: Path, group: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Return missing values as null while preserving explicitly saved zero.
+
+    Parameters:
+        tmp_path: Isolated API databases.
+        group: Individual or grouped evidence layout.
+        monkeypatch: Freeze the fixture clock.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    reader.score_mode = 'atl'
+    monkeypatch.setattr('modules.web_interface.server.time.time', lambda: 2_000_000_000.)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("ALTER TABLE evidence ADD COLUMN accumulated_threat_level REAL")
+        connection.execute("UPDATE evidence SET accumulated_threat_level=NULL,accumulated_ratl=NULL")
+    page = reader.evidence({'range':['all'], 'group':[group]})
+    assert page['items']
+    assert all(item['alert_score'] is None for item in page['items'])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("UPDATE evidence SET accumulated_threat_level=0,accumulated_ratl=0")
+    page = reader.evidence({'range':['all'], 'group':[group]})
+    assert all(item['alert_score'] == 0 for item in page['items'])
+
+
+def test_pcap_score_history_keeps_current_remainder_on_capture_clock(tmp_path: Path) -> None:
+    """Avoid stretching an old PCAP's score chart to today's wall-clock time.
+
+    Parameters:
+        tmp_path: Isolated finite-input database.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / 'flows.sqlite'
+    reader.score_mode = 'atl'
+    reader.alert_threshold = 1.2
+    reader._live_host = Mock(return_value={'live':True})
+    reader._attach_current_host_scores = Mock(side_effect=lambda rows: rows[0].update(alert_score=.32, alert_score_twid='timewindow1'))
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute('CREATE TABLE evidence(evidence_id TEXT,evidence_time REAL,profile_ip TEXT,timewindow TEXT,accumulated_threat_level REAL)')
+        connection.execute("INSERT INTO evidence VALUES ('trigger',1668887061,'1.2.3.4','timewindow1',1.28)")
+    history = reader.score_history('1.2.3.4',{'range':['all']})
+    assert history['peak_score'] == 1.28
+    assert history['timeline'][-1]['score'] == .32
+    assert history['timeline'][-1]['ts'] == pytest.approx(1668887061.001, rel=0, abs=.0001)
+    assert history['timeline'][-1]['current'] is True

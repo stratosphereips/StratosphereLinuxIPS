@@ -1041,6 +1041,29 @@ class SQLiteDB(ISQLite):
                     self.conn.rollback()
                     raise
 
+    def set_evidence_score(
+        self,
+        evidence_id: str,
+        accumulated_threat_level: float,
+        accumulated_ratl: float,
+    ) -> None:
+        """Persist the host score returned while processing one evidence.
+
+        Parameters:
+            evidence_id: Existing evidence to annotate, never recreate.
+            accumulated_threat_level: Raw accumulator before any alert reset.
+            accumulated_ratl: Risk-adjusted accumulator at the same instant.
+        """
+        self._execute_detection_transaction(
+            [
+                (
+                    "UPDATE evidence SET accumulated_threat_level = ?, "
+                    "accumulated_ratl = ? WHERE evidence_id = ?",
+                    (accumulated_threat_level, accumulated_ratl, evidence_id),
+                ),
+            ]
+        )
+
     def add_evidence(self, evidence: Evidence) -> None:
         """
         Persist evidence and its triggering flow identifiers.

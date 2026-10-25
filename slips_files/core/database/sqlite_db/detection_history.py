@@ -42,6 +42,7 @@ SUMMARY_COLUMNS = (
     "hour,profile_ip,evidence_type,threat_level,source_module,whitelisted,"
     "record_count,first_time,last_time,max_atl,max_ratl,alert_count"
 )
+NULLABLE_SCORE_SUMMARIES = "nullable_score_summaries_v1"
 
 
 def initialize_detection_history(connection: sqlite3.Connection) -> None:
@@ -125,6 +126,18 @@ def initialize_detection_history(connection: sqlite3.Connection) -> None:
             f"BEGIN {dirty_links} END"
         )
     migrate_peer_report_types(connection)
+    if not connection.execute(
+        "SELECT 1 FROM history_state WHERE key=?", (NULLABLE_SCORE_SUMMARIES,)
+    ).fetchone():
+        connection.execute(
+            "INSERT INTO history_dirty_hours(hour) "
+            "SELECT DISTINCT hour FROM evidence_hourly WHERE max_atl=0 OR max_ratl=0 "
+            "ON CONFLICT(hour) DO UPDATE SET generation=generation+1"
+        )
+        connection.execute(
+            "INSERT INTO history_state VALUES (?, '1')",
+            (NULLABLE_SCORE_SUMMARIES,),
+        )
     connection.commit()
 
 
@@ -304,8 +317,8 @@ class DetectionHistory:
                 f"INSERT INTO evidence_hourly({SUMMARY_COLUMNS}) VALUES (?,?,?,?,?,?,1,?,?,?,?,?) "
                 "ON CONFLICT DO UPDATE SET "
                 "record_count=record_count+1,first_time=MIN(first_time,excluded.first_time),"
-                "last_time=MAX(last_time,excluded.last_time),max_atl=MAX(COALESCE(max_atl,0),COALESCE(excluded.max_atl,0)),"
-                "max_ratl=MAX(COALESCE(max_ratl,0),COALESCE(excluded.max_ratl,0)),alert_count=alert_count+excluded.alert_count",
+                "last_time=MAX(last_time,excluded.last_time),max_atl=COALESCE(MAX(max_atl,excluded.max_atl),max_atl,excluded.max_atl),"
+                "max_ratl=COALESCE(MAX(max_ratl,excluded.max_ratl),max_ratl,excluded.max_ratl),alert_count=alert_count+excluded.alert_count",
                 (
                     hour,
                     ip,

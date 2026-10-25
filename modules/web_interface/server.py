@@ -1380,9 +1380,7 @@ class RunDataReader:
             if getattr(self, "score_mode", "ratl") == "ratl"
             else "accumulated_threat_level"
         )
-        return (
-            f"COALESCE({column_name}, 0)" if column_name in columns else "NULL"
-        )
+        return column_name if column_name in columns else "NULL"
 
     def _attach_current_host_scores(self, items: List[Dict[str, Any]]) -> None:
         """
@@ -2856,7 +2854,7 @@ class RunDataReader:
                     if "accumulated_ratl" in row.keys()
                     else None
                 ),
-                "when this evidence was recorded",
+                "when this evidence was processed",
             )
         )
         if self._table_exists(connection, "evidence_reviews"):
@@ -7732,8 +7730,13 @@ class RunDataReader:
 
         current_host = self._live_host(ip)
         current_wall_time = time.time()
-        current_in_range = (start is None or current_wall_time >= start) and (
-            range_name != "custom" or end is None or current_wall_time <= end
+        current_reference = (
+            latest
+            if getattr(self, "score_mode", "ratl") == "atl" and latest
+            else current_wall_time
+        )
+        current_in_range = (start is None or current_reference >= start) and (
+            range_name != "custom" or end is None or current_reference <= end
         )
         if self._query_value(query, "network") == "current":
             current_in_range = current_in_range and self._host_activity_times(
@@ -7743,7 +7746,7 @@ class RunDataReader:
             self._attach_current_host_scores([current_host])
             current_score = current_host.get("alert_score")
             if current_score is not None:
-                current_ts = max(latest, current_wall_time)
+                current_ts = max(latest, current_reference)
                 if timeline and current_ts <= float(timeline[-1]["ts"]):
                     current_ts = float(timeline[-1]["ts"]) + 0.001
                 timeline.append(

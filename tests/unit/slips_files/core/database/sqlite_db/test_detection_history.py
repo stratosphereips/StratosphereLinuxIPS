@@ -559,3 +559,52 @@ def test_hourly_summary_handles_partial_hours_and_invalidates_updates(
     )
     assert detection_total(db.conn, "evidence") == 3
     db.close()
+
+
+@pytest.mark.parametrize('score', [None, 0., 1.28])
+def test_hourly_scores_preserve_missing_and_real_zero(tmp_path: Path, score: float | None) -> None:
+    """Keep null snapshots distinct from genuine zero in materialized summaries.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        score: Saved score, including a missing value.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    for index in range(2):
+        db.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,source_module,threat_level,accumulated_threat_level,accumulated_ratl) VALUES (?,3700,'1.2.3.4','ARP_SCAN','arp','low',?,?)",(str(index),score,score))
+    history = DetectionHistory(db.conn,str(tmp_path))
+    for _ in range(20):
+        if not history.summary_step(10):
+            break
+    assert db.conn.execute('SELECT max_atl,max_ratl FROM evidence_hourly').fetchone() == (score,score)
+    assert hourly_evidence_source(db.conn,3600,7200) is not None
+    db.close()
+
+
+def test_legacy_zero_summaries_are_rebuilt_from_nullable_snapshots(tmp_path: Path) -> None:
+    """Invalidate old fabricated zeros once, then rebuild under the work budget.
+
+    Parameters:
+        tmp_path: Isolated older database.
+    """
+    factory = ModuleFactory()
+    from slips_files.core.database.sqlite_db.detection_history import NULLABLE_SCORE_SUMMARIES, initialize_detection_history
+    db = SQLiteDB(factory.logger,str(tmp_path),12345)
+    for index in range(2):
+        db.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,source_module,threat_level) VALUES (?,3700,'1.2.3.4','ARP_SCAN','arp','low')",(str(index),))
+    history = DetectionHistory(db.conn,str(tmp_path))
+    for _ in range(20):
+        if not history.summary_step(10):
+            break
+    db.execute('UPDATE evidence_hourly SET max_atl=0,max_ratl=0')
+    db.execute('DELETE FROM history_state WHERE key=?',(NULLABLE_SCORE_SUMMARIES,))
+    assert hourly_evidence_source(db.conn,3600,7200) is None
+    initialize_detection_history(db.conn)
+    assert hourly_evidence_source(db.conn,3600,7200) is None
+    for _ in range(20):
+        if not history.summary_step(10):
+            break
+    assert db.conn.execute('SELECT max_atl,max_ratl FROM evidence_hourly').fetchone() == (None,None)
+    assert hourly_evidence_source(db.conn,3600,7200) is not None
+    db.close()
