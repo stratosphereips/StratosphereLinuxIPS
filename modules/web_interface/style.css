@@ -528,6 +528,12 @@ body.configuration-active main { max-width: none; padding: .75rem 1rem 2rem; }
 .config-table-heading span, .config-table-heading small { overflow: hidden; color: var(--muted); font-size: .7rem; text-overflow: ellipsis; white-space: nowrap; }
 .config-table-heading small { flex: none; }
 .config-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.config-score-explanation { margin: .6rem .8rem .9rem; padding: .65rem .8rem; border-left: 3px solid var(--accent); color: var(--text); overflow-wrap: anywhere; }
+.config-score-explanation h4 { margin: .7rem 0 .35rem; font-size: .82rem; }
+.config-score-explanation h4:first-child { margin-top: 0; }
+.config-score-explanation p { margin: .35rem 0 .65rem; color: var(--muted); font-size: .76rem; line-height: 1.5; }
+.config-score-equation { display: block; margin: .35rem 0; font-size: .78rem; white-space: normal; }
+.config-score-explanation .config-score-example { color: var(--text); }
 .config-table th { padding: .42rem .75rem; border-top: 1px solid #1b2b38; border-bottom: 1px solid #1b2b38; color: #718697; text-align: left; text-transform: uppercase; font-size: .65rem; letter-spacing: .05em; }
 .config-table th:nth-child(1) { width: 27%; }
 .config-table th:nth-child(2) { width: 18%; }

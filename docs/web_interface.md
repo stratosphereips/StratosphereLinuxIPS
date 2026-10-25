@@ -694,6 +694,29 @@ comparison can change after an update even though the captured value does not.
 View YAML opens the captured structure with secret values redacted.
 Each configuration table heading sorts the settings in its selected section. Secret values remain redacted during sorting.
 
+The **Detection** section also explains how these settings work together:
+
+- Each eligible evidence contributes **threat value × confidence**. Threat values
+  are info 0, low 0.2, medium 0.5, high 0.8 and critical 1. Confidence is 0–1.
+- **ATL** is the sum of those contributions for one host and time window since
+  the previous alert. Whitelisted evidence, received P2P reports and evidence
+  already included in an alert are excluded. After an alert, the total resets;
+  the alert retains its triggering score.
+- For live capture, **RATL = ATL × active risk weight**, and an alert is created
+  when **RATL ≥ risk_accumulated_threat_level**. The low/medium/high weights are
+  shared risk levels that increase after alerts; they are separate from an
+  individual evidence's threat level. The highest reached weight applies across
+  hosts. A higher multiplier or lower threshold makes Slips more sensitive.
+- For PCAP/log analysis, an alert is created when
+  **ATL ≥ evidence_detection_threshold × time_window_width / 60**.
+  The window width is in seconds. This comparison does not use the risk weight.
+- **popup_alerts** controls desktop notifications, without changing detection.
+
+The explanation shows captured weights and thresholds, plus calculated examples
+when the required numeric values are present. Missing values are explicitly
+marked rather than replaced with today's defaults. These are the run's captured
+YAML values; startup overrides may change effective runtime settings.
+
 This is the configuration supplied to the run, not the current repository
 file. A setting omitted from the snapshot can still use a built-in default in
 Slips. Values whose names indicate API keys, passwords, private keys, secrets,

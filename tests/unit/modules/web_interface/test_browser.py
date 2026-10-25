@@ -2560,3 +2560,100 @@ def test_source_destination_port_whitelist_editor_in_chrome(source: str, encoded
         assert not selects.nth(1).is_disabled()
         assert errors == []
         browser.close()
+
+
+@pytest.mark.parametrize("theme,width", [("light", 1600), ("dark", 1600), ("light", 768), ("dark", 768)])
+def test_configuration_explains_alert_equations_in_chrome(tmp_path: Path, theme: str, width: int) -> None:
+    """Show both scoring modes with captured values and no invented defaults.
+
+    Parameters:
+        tmp_path: Isolated captured run configuration.
+        theme: Interface color theme.
+        width: Desktop or narrow viewport width.
+    """
+    _factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    (metadata / "run.yaml").write_text(
+        "parameters:\n  time_window_width: 120\n  analysis_direction: all\n"
+        "detection:\n  evidence_detection_threshold: 0.6\n"
+        "  risk_accumulated_threat_level: 1.2\n  low_risk_weight: 0.4\n"
+        "  medium_risk_weight: 0.8\n  high_risk_weight: 1.6\n  popup_alerts: false\n"
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    payload = reader.configuration()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve real assets without accessing a live capture.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": width, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""({payload, theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); clearError(); state.activeTab = 'configuration';
+            document.body.classList.remove('overview-active');
+            document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === 'configuration'));
+            state.configuration = payload; state.configurationSection = 'detection';
+            state.configurationFilter = 'all'; state.configurationSort = {key:null, order:'asc'};
+            byId('configuration-search').value = ''; renderConfiguration();
+        }""", {"payload": payload, "theme": theme})
+        note = page.get_by_role("region", name="How evidence becomes an alert")
+        assert note.is_visible()
+        content = note.inner_text()
+        assert "Evidence contribution = threat value × confidence" in content
+        assert "Live score (RATL) = ATL × active risk weight" in content
+        assert "RATL ≥ risk_accumulated_threat_level" in content
+        assert "ATL ≥ evidence_detection_threshold × time_window_width / 60" in content
+        assert "1.2 / 0.4 = 3" in content
+        assert "0.6 × 120 / 60 = 1.2" in content
+        assert "separate from evidence threat levels" in content
+        assert "resets to zero" in content
+        assert "popup_alerts" in content
+        table = page.locator(".config-table")
+        assert "not just medium-threat evidence" in table.inner_text()
+        bounds = note.bounding_box()
+        assert bounds and bounds["x"] >= 0 and bounds["x"] + bounds["width"] <= width
+        if theme == "light" and width == 1600:
+            page.screenshot(path="output/configuration-score-equations/configuration.png", full_page=True)
+        page.evaluate("""() => {
+            const detection = state.configuration.sections.find(s => s.key === 'detection');
+            detection.settings.find(s => s.key === 'risk_accumulated_threat_level').value = 2.4;
+            byId('configuration-search').value = 'risk_accumulated_threat_level'; renderConfiguration();
+        }""")
+        assert "2.4 / 0.4 = 6" in note.inner_text()
+        assert table.locator("tbody tr").count() == 1
+        page.evaluate("""() => {
+            byId('configuration-search').value = '';
+            state.configuration.sections.forEach(s => {
+                s.settings = s.settings.filter(item => !['low_risk_weight', 'time_window_width'].includes(item.key));
+            });
+            renderConfiguration();
+        }""")
+        assert "low_risk_weight = not captured" in note.inner_text()
+        assert "time_window_width = not captured" in note.inner_text()
+        assert note.locator(".config-score-example").count() == 0
+        page.locator(".config-nav-item", has_text="Parameters").click()
+        assert note.count() == 0
+        assert errors == []
+        browser.close()

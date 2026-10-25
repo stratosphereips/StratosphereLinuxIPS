@@ -3379,6 +3379,49 @@ function renderConfigurationSummary(sections) {
   }));
 }
 
+/** Explain alert equations using values captured with this run.
+ * @param {Array<object>} sections Captured configuration sections.
+ * @returns {HTMLElement} Plain-language score formulas and worked example.
+ */
+function detectionScoreExplanation(sections) {
+  const setting = (section, key) => sections.find((item) => item.key === section)
+    ?.settings?.find((item) => item.key === key)?.value;
+  const captured = (section, key) => {
+    const value = setting(section, key);
+    return value === null || value === undefined || value === "" ? "not captured" : String(value);
+  };
+  const note = document.createElement("section");
+  note.className = "config-score-explanation";
+  note.setAttribute("aria-label", "How evidence becomes an alert");
+  note.append(text("h4", "How evidence becomes an alert"),
+    text("code", "Evidence contribution = threat value × confidence", "config-score-equation"),
+    text("p", "Threat values: info = 0, low = 0.2, medium = 0.5, high = 0.8, critical = 1. Confidence uses 0–1: 80% means 0.8. For example, high threat at 80% confidence contributes 0.8 × 0.8 = 0.64."),
+    text("code", "Host total (ATL) = sum of eligible evidence contributions", "config-score-equation"),
+    text("p", "Add evidence for one host in one time window, since its previous alert. Whitelisted evidence, received P2P reports and evidence already used in an alert do not add to this total. After an alert, the host total resets to zero; the alert keeps the score that triggered it."),
+    text("h4", "Live capture"),
+    text("code", "Live score (RATL) = ATL × active risk weight", "config-score-equation"),
+    text("code", "Alert when RATL ≥ risk_accumulated_threat_level", "config-score-equation"),
+    text("p", `Captured risk weights: low_risk_weight = ${captured("detection", "low_risk_weight")}, medium_risk_weight = ${captured("detection", "medium_risk_weight")}, high_risk_weight = ${captured("detection", "high_risk_weight")}. Captured live alert threshold: ${captured("detection", "risk_accumulated_threat_level")}.`),
+    text("p", "Risk starts low and rises toward medium and high after alerts. Slips shares the highest reached risk weight across hosts, so an alert on one host can increase sensitivity for others. These risk levels are separate from evidence threat levels. A larger weight, or a lower alert threshold, makes alerts easier to reach."),
+    text("h4", "PCAP and log analysis"),
+    text("code", "Alert when ATL ≥ evidence_detection_threshold × time_window_width / 60", "config-score-equation"),
+    text("p", `time_window_width is in seconds; dividing by 60 converts it to minutes. Captured evidence_detection_threshold = ${captured("detection", "evidence_detection_threshold")}; time_window_width = ${captured("parameters", "time_window_width")}. This mode compares ATL directly, without the risk multiplier.`));
+  const low = setting("detection", "low_risk_weight");
+  const threshold = setting("detection", "risk_accumulated_threat_level");
+  if (typeof low === "number" && Number.isFinite(low) && low > 0
+      && typeof threshold === "number" && Number.isFinite(threshold)) {
+    note.append(text("p", `With the captured low risk weight, a live alert needs ATL ≥ ${threshold} / ${low} = ${Number((threshold / low).toFixed(6))}.`, "config-score-example"));
+  }
+  const rate = setting("detection", "evidence_detection_threshold");
+  const width = setting("parameters", "time_window_width");
+  if (typeof rate === "number" && Number.isFinite(rate)
+      && typeof width === "number" && Number.isFinite(width) && width > 0) {
+    note.append(text("p", `For this captured file-analysis configuration, the alert threshold is ${rate} × ${width} / 60 = ${Number((rate * width / 60).toFixed(6))}.`, "config-score-example"));
+  }
+  note.append(text("p", "popup_alerts only controls desktop notifications after an alert is created; it does not change the score or threshold. Values above come from the run's YAML snapshot. Missing values are marked “not captured”; Slips may use built-in defaults or startup overrides."));
+  return note;
+}
+
 /** Render the selected section as compact, explained settings with defaults. */
 function renderConfiguration() {
   const payload = state.configuration;
@@ -3507,7 +3550,9 @@ function renderConfiguration() {
   });
   table.append(body);
   wrap.append(table);
-  panel.append(heading, wrap);
+  panel.append(heading);
+  if (selected.key === "detection") panel.append(detectionScoreExplanation(payload.sections || []));
+  panel.append(wrap);
   container.append(panel);
   byId("configuration-count").textContent =
     `Showing ${settings.length} of ${payload.total} captured settings · Secrets show as “configured” and are never displayed. Settings absent from the snapshot may use built-in defaults.`;

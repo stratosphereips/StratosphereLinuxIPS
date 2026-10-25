@@ -367,31 +367,43 @@ class RunDataReader:
         explicit = {
             "parameters.time_window_width": (
                 "How long evidence is accumulated together before Slips starts "
-                "a new analysis time window."
+                "a new analysis time window, in seconds. For PCAP/log analysis, "
+                "alert threshold = evidence_detection_threshold × this value / 60."
             ),
             "parameters.analysis_direction": (
                 "Whether Slips analyses only outbound activity or traffic in "
                 "both directions."
             ),
             "detection.evidence_detection_threshold": (
-                "Base accumulated-threat threshold used to form alerts in "
-                "finite analyses."
+                "PCAP/log alert threshold per minute: alert when the sum of "
+                "threat value × confidence reaches this value × "
+                "time_window_width / 60. Lower means more sensitive. "
+                "Not used as the live-capture threshold."
             ),
             "detection.risk_accumulated_threat_level": (
-                "Risk-adjusted score a live host must reach before Slips forms "
-                "an alert."
+                "Live alert threshold: alert when the host's accumulated "
+                "threat value × confidence, multiplied by the active risk "
+                "weight, reaches this value. Lower means more sensitive."
             ),
             "detection.popup_alerts": (
-                "Show a desktop notification when Slips raises an alert."
+                "Show a desktop notification when Slips raises an alert. "
+                "Does not change detection scores or alert thresholds."
             ),
             "detection.low_risk_weight": (
-                "Multiplier applied to low-threat evidence in the host score."
+                "Starting risk multiplier for the live host score: "
+                "RATL = ATL × active risk weight. Applies to all eligible "
+                "evidence, regardless of its threat level. Larger means "
+                "more sensitive."
             ),
             "detection.medium_risk_weight": (
-                "Multiplier applied to medium-threat evidence in the host score."
+                "Risk multiplier used after alerts raise the shared risk "
+                "level to medium. Multiplies the whole host total (ATL), "
+                "not just medium-threat evidence. Larger means more sensitive."
             ),
             "detection.high_risk_weight": (
-                "Multiplier applied to high-threat evidence in the host score."
+                "Risk multiplier used after further alerts raise the shared "
+                "risk level to high. Multiplies the whole host total (ATL), "
+                "not just high-threat evidence. Larger means more sensitive."
             ),
             "whitelists.local_whitelist_path": (
                 "Whitelist file captured with this run and parsed into the "
