@@ -472,8 +472,13 @@ class AnomalyDetectionServices(IModule):
         try:
             self.store.save(self.detector, self.host_inventory)
         except sqlite3.OperationalError as error:
-            code = getattr(error, "sqlite_errorcode", 0) & 0xFF
-            if code != sqlite3.SQLITE_BUSY:
+            code = getattr(error, "sqlite_errorcode", None)
+            busy = code is not None and code & 255 == 5
+            if not busy and not (
+                code is None
+                and str(error).lower()
+                in {"database is locked", "database is busy"}
+            ):
                 raise
             if now >= self._next_warning:
                 self.print(

@@ -67,19 +67,27 @@ def test_network_change_packet_time_and_broadcast() -> None:
     assert module._scope(broadcast, flow) is None
 
 
-def test_checkpoint_busy_preserves_dirty_and_shutdown_closes() -> None:
+@pytest.mark.parametrize("code", [None, 5, 517])
+@pytest.mark.parametrize("factory", ["create_beaconing_obj", "create_service_anomaly_obj"])
+def test_checkpoint_busy_preserves_dirty_and_shutdown_closes(code: int | None, factory: str) -> None:
     """Checkpoint busy preserves dirty and shutdown closes.
+
+    Parameters:
+        code: SQLite busy code, absent on Python 3.10.
+        factory: Detector constructor to check.
     """
-    module = ModuleFactory().create_beaconing_obj()
+    module = getattr(ModuleFactory(), factory)()
     import sqlite3
-    error = sqlite3.OperationalError("busy")
-    error.sqlite_errorcode = sqlite3.SQLITE_BUSY
+    error = sqlite3.OperationalError("database is locked")
+    if code is not None:
+        error.sqlite_errorcode = code
     module.store = Mock()
+    store = module.store
     module.store.save.side_effect = error
     module._checkpoint(force=True)
     assert module.print.called
     module.shutdown_gracefully()
-    module.store.close.assert_called_once()
+    store.close.assert_called_once()
 
 
 def test_pre_main_and_subscribe(tmp_path: Path) -> None:

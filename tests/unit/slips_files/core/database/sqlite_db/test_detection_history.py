@@ -53,7 +53,7 @@ def test_maintenance_writer_contention_leaves_connection_reusable(
         assert time.monotonic() - started < 0.1
         assert status["deferred"] is True
         assert status["phase"] == "cleanup"
-        assert status["sqlite_errorcode"] == sqlite3.SQLITE_BUSY
+        assert status["sqlite_errorcode"] == getattr(sqlite3, "SQLITE_BUSY", None)
         assert not db.conn.in_transaction
         assert db.conn.execute("PRAGMA busy_timeout").fetchone() == (timeout_ms,)
     finally:
@@ -143,7 +143,7 @@ def test_maintenance_defers_busy_phases_and_resumes(
             assert time.monotonic() - started < 0.3
         assert status["deferred"] is True
         assert status["phase"] == phase
-        assert status["sqlite_errorcode"] == sqlite3.SQLITE_BUSY
+        assert status["sqlite_errorcode"] == getattr(sqlite3, "SQLITE_BUSY", None)
         assert not db.conn.in_transaction
     finally:
         competing_writer.rollback()
@@ -199,9 +199,8 @@ def test_maintenance_never_queues_behind_capture_locks(
 
 @pytest.mark.parametrize(
     "code,deferred,raises",
-    [(sqlite3.SQLITE_BUSY, True, False), (sqlite3.SQLITE_BUSY_SNAPSHOT, True, False),
-     (sqlite3.SQLITE_INTERRUPT, False, False), (sqlite3.SQLITE_LOCKED, False, True),
-     (sqlite3.SQLITE_ERROR, False, True)],
+    [(5, True, False), (517, True, False),
+     (9, False, False), (6, False, True), (1, False, True)],
 )
 def test_maintenance_interruption_classification(code: int, deferred: bool, raises: bool) -> None:
     """Preserve genuine errors while recognizing extended busy codes.

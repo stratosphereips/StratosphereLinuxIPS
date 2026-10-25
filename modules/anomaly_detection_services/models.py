@@ -35,7 +35,7 @@ class Settings:
     adapt_known_clients: bool = True
     history_days: int = 56
     retention_days: int = 90
-    max_services: int = 1024
+    max_services: int = 4096
     max_clients: int = 4096
     max_clients_per_service: int = 64
     alert_cooldown_seconds: float = 3600.0

@@ -105,7 +105,8 @@ into the bounded window without losing the original timestamp precision.
 A private checkpoint lives in `<output>/beaconing/channels.sqlite`. It uses WAL,
 nonblocking writes, an exclusive writer lock and an age index. Only changed
 windows are saved periodically, outside the per-flow path. Busy writes retain
-pending changes for a later retry. Checkpoints expire old records and cap the
+pending changes for a later retry, including on Python 3.10 systems such as
+older Raspberry Pi installations. Checkpoints expire old records and cap the
 number of saved channels. There are no new Redis keys or periodic database-wide
 flow scans. Offline analyses begin with fresh detector state; live runs restore
 recent state in that output directory, including evidence cooldowns.

@@ -280,9 +280,13 @@ class Beaconing(IModule):
         try:
             self.store.save(self.detector)
         except sqlite3.OperationalError as error:
-            if (
-                getattr(error, "sqlite_errorcode", 0) & 255
-            ) != sqlite3.SQLITE_BUSY:
+            code = getattr(error, "sqlite_errorcode", None)
+            busy = code is not None and code & 255 == 5
+            if not busy and not (
+                code is None
+                and str(error).lower()
+                in {"database is locked", "database is busy"}
+            ):
                 raise
             if now >= self.next_warning:
                 self.print(

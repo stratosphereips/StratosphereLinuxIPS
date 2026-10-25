@@ -314,7 +314,8 @@ module reports an error rather than silently deleting it.
 
 This is a separate SQLite database from the flow and detection-history
 databases. If it is busy, saving is postponed rather than waiting and slowing
-capture. Service/client counts, saved times, saved lengths and temporary
+capture. This retry also works on Python 3.10, which does not report SQLite
+error numbers. Service/client counts, saved times, saved lengths and temporary
 lookups all have limits. Host inventories and ports use the same single-writer
 checkpoint transaction, including clocks for hosts with no answering ports.
 The module runs in its own process, adds no Redis
