@@ -111,6 +111,13 @@ number of saved channels. There are no new Redis keys or periodic database-wide
 flow scans. Offline analyses begin with fresh detector state; live runs restore
 recent state in that output directory, including evidence cooldowns.
 
+For TCP records with Zeek history, handshake evidence must support the recorded
+client/server roles. Traffic first seen during an ongoing session is skipped
+instead of building a channel toward a temporary client port. Zeek-flipped
+flows remain eligible when their packet history supports the final direction;
+the raw records are preserved. See
+[TCP direction handling](flow_alerts.md#tcp-direction-when-capture-starts-during-an-existing-connection).
+
 Live channels include the interface, gateway MAC, subnet and observed client MAC
 when available. Delayed flows use recorded network history. A phone hotspot and
 a Wi-Fi network do not share a private-IP baseline. Without a known gateway,

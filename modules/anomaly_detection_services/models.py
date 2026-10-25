@@ -9,6 +9,10 @@ from zoneinfo import ZoneInfo
 
 from modules.supported_module_names import Modules
 from slips_files.common.mac import classify_mac
+from slips_files.common.flow_direction import (
+    tcp_initiator_is_known,
+    zeek_history_in_final_direction,
+)
 
 
 @dataclass
@@ -186,7 +190,11 @@ class Observation:
             if not isinstance(uid, str) or not 0 < len(uid) <= 256:
                 return None
             state = str(flow.get("state", ""))
-            history = str(flow.get("history", ""))
+            if not tcp_initiator_is_known(proto, flow.get("history")):
+                return None
+            history = zeek_history_in_final_direction(
+                str(flow.get("history", ""))
+            )
             reply = int(flow.get("dpkts", 0) or 0) > 0
             if proto == "tcp":
                 established = state in {"SF", "S1", "S2", "S3", "RSTO"}

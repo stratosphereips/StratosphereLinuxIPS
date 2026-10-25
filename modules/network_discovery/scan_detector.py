@@ -6,6 +6,8 @@ from collections import Counter, OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
+from slips_files.common.flow_direction import zeek_history_in_final_direction
+
 from .scan_settings import ScanSettings
 
 
@@ -91,7 +93,7 @@ class ScanFlow:
                 history = flow.get("state_hist", "")
                 if history == state:
                     history = ""
-            history = str(history or "")
+            history = zeek_history_in_final_direction(str(history or ""))
             kind = "background"
             if proto == "udp":
                 if directional_counts:
@@ -102,9 +104,6 @@ class ScanFlow:
                         if summary_state == "Established"
                         else "unknown"
                     )
-            elif "^" in history:
-                # Direction uncertainty cannot identify an outgoing probe.
-                kind = "background"
             elif "S" in history:
                 if "h" in history or state in {"SF", "S1", "S2", "S3", "RSTO"}:
                     kind = (
@@ -126,7 +125,11 @@ class ScanFlow:
             elif not history and summary_state == "Established":
                 kind = "success"
             elif sent or received or "D" in history or "d" in history:
-                kind = "success" if sent and received else "background"
+                kind = (
+                    "success"
+                    if sent and received and "h" in history
+                    else "background"
+                )
             elif (
                 history
                 and set(history) <= {"A", "F"}

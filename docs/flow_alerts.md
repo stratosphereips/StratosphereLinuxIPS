@@ -37,6 +37,34 @@ The detection techniques are:
 - Tor exit nodes
 The details of each detection follows.
 
+## TCP direction when capture starts during an existing connection
+
+Zeek can first see packets after a TCP connection has already started. Its
+recorded source then does not necessarily identify the computer that opened
+the connection. A state such as `SF` alone does not prove who connected.
+
+For example, a client may already be connected to Matterhorn on TCP port 902.
+If capture first sees a reply, Zeek may record Matterhorn:902 as the source and
+the client's temporary port 59148 as the destination. History `AdDTafF` contains
+no handshake. Slips must not report that as Matterhorn connecting to an unknown
+service on port 59148.
+
+When Zeek packet history is present, checks that assign client/server roles
+require a source SYN (`S`) or a destination SYN-ACK (`h`). This applies to
+unknown ports, reconnection attempts, connections without DNS, private-network
+connection checks, connections to multiple ports, and non-HTTPS on port 443.
+Ongoing traffic is still stored, and byte-volume and connection-length checks
+still run. Slips does not guess direction from which port number is smaller.
+Inputs without a Zeek history field keep their existing behavior; an empty
+Zeek history cannot confirm an initiator.
+
+The `^` marker means Zeek already flipped its recorded endpoints. Slips keeps
+those endpoints, ports, counters, UID and raw history unchanged. Flags before
+each marker are interpreted in the roles used at that moment, then related to
+the final endpoints. For example, `H^S` supports the final source as client;
+`S^` does not. A marker alone is not a reason to reverse or discard a flow.
+See Zeek's [connection direction documentation](https://docs.zeek.org/en/master/advanced/devel/conn.html#flipping-connections).
+
 
 ## Long Connections
 Detect connections that are long, except the multicast connections.

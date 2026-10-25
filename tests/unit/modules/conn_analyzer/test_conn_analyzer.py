@@ -5,6 +5,7 @@
 from dataclasses import asdict
 from typing import Any
 from slips_files.core.flows.zeek import Conn
+from slips_files.core.input_profilers.zeek import ZeekJSON
 from tests.module_factory import ModuleFactory
 import json
 from unittest.mock import (
@@ -24,6 +25,52 @@ timestamp = 1635765895.037696
 saddr = "192.168.1.1"
 daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
+
+
+@pytest.mark.parametrize("history,expected", [
+    ("AdDTafF", False),
+    ("^AdDTafF", False),
+    ("S^", False),
+    ("ShA^Dd", False),
+    ("ShADadFf", True),
+    ("^ShADadFf", True),
+    ("H^SADadFf", True),
+    ("Hs^ADdFf", True),
+])
+def test_unknown_port_requires_supported_initiator(history: str, expected: bool) -> None:
+    """Do not treat an ongoing SSH response as a new incoming connection.
+
+    Parameters:
+        history: Packet flags, including role changes before the final record.
+        expected: Whether the final source has evidence of initiating TCP.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    raw = {
+        "ts": 1792947092.783236, "uid": "midstream-ssh",
+        "id.orig_h": "147.32.80.37", "id.orig_p": 902,
+        "id.resp_h": "192.168.1.163", "id.resp_p": 59148,
+        "proto": "tcp", "duration": 1.781255, "orig_bytes": 5824,
+        "resp_bytes": 10295264, "conn_state": "SF", "history": history,
+        "orig_pkts": 1638, "resp_pkts": 7418,
+    }
+    flow, error = ZeekJSON(factory.logger).process_line(
+        {"type": "conn.log", "interface": "en0", "data": raw}
+    )
+    assert error == ""
+    conn.db.is_a_port_scanner.return_value = False
+    conn.db.get_port_info.return_value = None
+    conn.db.is_ftp_port.return_value = False
+    conn.db.is_p2p_related_flow.return_value = False
+    conn.port_belongs_to_an_org = Mock(return_value=False)
+    conn.is_local_apple_peer_flow = Mock(return_value=False)
+    conn.set_evidence.unknown_port = Mock()
+    assert conn.check_unknown_port(f"profile_{flow.saddr}", twid, flow) is expected
+    assert conn.set_evidence.unknown_port.call_count == int(expected)
+    assert (flow.saddr, flow.sport, flow.daddr, flow.dport) == (
+        raw["id.orig_h"], raw["id.orig_p"], raw["id.resp_h"], raw["id.resp_p"]
+    )
+    assert (flow.history, flow.sbytes, flow.dbytes) == (history, 5824, 10295264)
 
 
 @pytest.mark.parametrize(
@@ -195,7 +242,7 @@ def test_check_unknown_port_true_case(mocker):
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="ShADadFf",
     )
     conn.db.is_a_port_scanner = Mock(return_value=False)
     flow.interpreted_state = "Established"
@@ -470,7 +517,7 @@ def test_check_multiple_telnet_reconnection_attempts(
             smac="",
             dmac="",
             state=origstate,
-            history="",
+            history="Sr",
         )
         flow.interpreted_state = interpreted_state
         conn.check_multiple_telnet_reconnection_attempts(profileid, twid, flow)
@@ -542,7 +589,7 @@ def test_check_multiple_reconnection_attempts(
             smac="",
             dmac="",
             state=origstate,
-            history="",
+            history="Sr",
         )
         flow.interpreted_state = "Established"
         conn.check_multiple_reconnection_attempts(profileid, twid, flow)
@@ -825,7 +872,7 @@ def test_should_ignore_conn_without_dns(
         smac="",
         dmac="",
         state="",
-        history="",
+        history="ShADadFf",
         type_=flow_type,
     )
 
@@ -1410,7 +1457,7 @@ def test_check_different_localnet_usage(
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="ShADadFf",
     )
     conn.check_different_localnet_usage(
         twid,
@@ -1520,7 +1567,7 @@ def test_check_connection_to_local_ip(
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="ShADadFf",
     )
     conn.check_connection_to_local_ip(twid, flow)
     assert conn.set_evidence.conn_to_private_ip.call_count == expected_calls

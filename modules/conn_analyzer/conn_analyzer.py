@@ -24,6 +24,7 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
+from slips_files.common.flow_direction import tcp_initiator_is_known
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 NOT_ESTAB = "Not Established"
@@ -209,6 +210,11 @@ class ConnAnalyzer(IAsyncModule):
         Checks dports that are not in our
         slips_files/ports_info/services.csv
         """
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return False
+
         if self.is_broadcast_or_multicast_flow(flow):
             return
 
@@ -361,6 +367,10 @@ class ConnAnalyzer(IAsyncModule):
     def check_multiple_telnet_reconnection_attempts(
         self, profileid, twid, flow
     ):
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if flow.interpreted_state != NOT_ESTAB:
             return
 
@@ -401,6 +411,10 @@ class ConnAnalyzer(IAsyncModule):
         Alerts when 5+ reconnection attempts from the same source IP to
         the same destination IP occurs
         """
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if flow.state != "REJ":
             return
 
@@ -659,6 +673,9 @@ class ConnAnalyzer(IAsyncModule):
         """
         return (
             flow.type_ != "conn"
+            or not tcp_initiator_is_known(
+                flow.proto, getattr(flow, "history", None)
+            )
             or flow.appproto in ("dns", "icmp")
             or utils.is_ignored_ip(flow.daddr)
             or self.db.is_dhcp_server(flow.daddr)
@@ -783,6 +800,10 @@ class ConnAnalyzer(IAsyncModule):
         )
 
     def detect_connection_to_multiple_ports(self, profileid, twid, flow):
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if flow.proto != "tcp" or flow.interpreted_state != ESTAB:
             return
 
@@ -885,6 +906,10 @@ class ConnAnalyzer(IAsyncModule):
             twid: Detection time window.
             flow: Connection whose source and destination are checked together.
         """
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if not self.should_check_diff_localnet(flow):
             return
 
@@ -904,6 +929,11 @@ class ConnAnalyzer(IAsyncModule):
         Alerts when there's a connection from a private IP to another
         private IP except for expected discovery, DNS, and DHCP traffic.
         """
+
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
 
         if flow.proto.lower() in {"icmp", "icmp6", "icmpv6"}:
             return
@@ -1034,6 +1064,10 @@ class ConnAnalyzer(IAsyncModule):
         """
         if not self.is_tcp_established_443_non_empty_flow(flow):
             # we're not interested in that flow
+            return False
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
             return False
 
         # key for looking up matching ssl flows in ssl_recognized_flows

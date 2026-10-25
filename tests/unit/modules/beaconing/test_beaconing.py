@@ -23,6 +23,28 @@ def payload(index: int) -> dict:
     return {"profileid": "profile_192.168.1.2", "twid": f"timewindow{1 + index // 10}", "flow": {"type_": "conn", "uid": f"uid-{index}", "starttime": 1700000000 + index * 60, "dur": 0.2, "saddr": "192.168.1.2", "daddr": "8.8.8.8", "dport": 443, "proto": "tcp", "state": "SF", "sbytes": 386, "dbytes": 115, "spkts": 5, "dpkts": 5}}
 
 
+@pytest.mark.parametrize("history,accepted", [
+    ("AdDTafF", False), ("^AdDTafF", False), ("ShA^Dd", False),
+    ("ShADadFf", True), ("^ShADadFf", True), ("H^SADadFf", True),
+])
+def test_tcp_direction_does_not_invent_beacon_clients(history: str, accepted: bool) -> None:
+    """Keep ongoing sessions out of endpoint learning without losing valid flips.
+
+    Parameters:
+        history: Zeek packet history in observation order.
+        accepted: Whether the final source has supported client direction.
+    """
+    module = ModuleFactory().create_beaconing_obj()
+    flow = {**payload(0)["flow"], "history": history}
+    observation = Observation.from_flow(flow)
+    assert (observation is not None) is accepted
+    if observation:
+        assert (observation.src, observation.dst, observation.port) == (
+            flow["saddr"], flow["daddr"], flow["dport"]
+        )
+    assert module.detector.channels == {}
+
+
 @pytest.mark.parametrize("malicious", [False, True])
 def test_evidence_direction_and_provenance(malicious: bool) -> None:
     """Evidence direction and provenance.

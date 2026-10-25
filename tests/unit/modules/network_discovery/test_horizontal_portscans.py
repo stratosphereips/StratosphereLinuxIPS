@@ -45,7 +45,7 @@ def send(module: object, flow: dict, window: int = 0) -> None:
     ("SH", "DTF", 8, 0, 63, 0, 3.2),
     ("SH", "Fa", 1, 1, 0, 0, 0.01),
     ("OTH", "Dd", 8, 8, 500, 600, 30),
-    ("S0", "^S", 1, 0, 0, 0, 0),
+    ("S0", "S^", 1, 0, 0, 0, 0),
 ])
 def test_leftover_sessions_are_not_syn_scans(state: object, history: object, spkts: object, dpkts: object, sbytes: object, dbytes: object, duration: object) -> None:
     """Verify leftover sessions are not syn scans.
@@ -69,6 +69,7 @@ def test_leftover_sessions_are_not_syn_scans(state: object, history: object, spk
 
 @pytest.mark.parametrize("state,history,expected", [
     ("S0", "S", ThreatLevel.HIGH),
+    ("S0", "^S", ThreatLevel.HIGH),
     ("REJ", "Sr", ThreatLevel.HIGH),
     ("SF", "ShAFf", ThreatLevel.MEDIUM),
     ("OTH", "A", ThreatLevel.MEDIUM),

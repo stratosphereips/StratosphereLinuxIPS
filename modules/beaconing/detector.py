@@ -9,6 +9,7 @@ from statistics import median
 from typing import Any
 
 from slips_files.common.anomaly_detection import robust_location_scale
+from slips_files.common.flow_direction import tcp_initiator_is_known
 from .settings import Settings
 
 
@@ -45,6 +46,10 @@ class Observation:
             if flow.get("type_") != "conn" or str(
                 flow.get("proto", "")
             ).lower() not in {"tcp", "udp"}:
+                return None
+            if not tcp_initiator_is_known(
+                str(flow["proto"]), flow.get("history")
+            ):
                 return None
             addresses = [
                 ipaddress.ip_address(flow[k]) for k in ("saddr", "daddr")

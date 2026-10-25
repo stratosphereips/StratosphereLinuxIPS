@@ -47,6 +47,14 @@ connections to one port do not train another port. The new-service check learns
 the set of answering ports for the computer as a whole. This module is separate from the
 HTTPS detector; enabling one does not enable the other.
 
+TCP connections must include handshake evidence supporting the recorded client
+and server. Traffic first observed during an existing connection is not used to
+learn a new service or client, or to raise client/time/length anomalies. In
+particular, a server reply recorded as the first packet must not teach Slips
+that a temporary client port is an open service. Zeek's `^` marker is handled
+without reversing endpoints a second time; see
+[TCP direction handling](flow_alerts.md#tcp-direction-when-capture-starts-during-an-existing-connection).
+
 All settings below belong under `anomaly_detection_services` in
 `config/slips.yaml`, or in the custom configuration for your run.
 Each setting is explained next to its value in the main configuration. When

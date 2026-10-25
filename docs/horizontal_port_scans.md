@@ -39,7 +39,7 @@ The current event's time window identifies where the evidence is stored.
 | Unanswered UDP flows | Separate check requiring the failed-target share and concentrated coverage; produces Medium evidence. UDP does not use a TCP handshake. Scattered unanswered QUIC traffic does not by itself pass this check. |
 | Failed-flow summary without actual packet history | Can produce Low evidence at the target threshold and failed-target share. It cannot establish that a new SYN was observed. |
 | Closing packets, resets or one-way application data without a new SYN, outside the small ACK/FIN rule above | Do not contribute to the new SYN-attempt counter. |
-| Flow whose direction Zeek reversed (`^` in history) | Excluded from TCP probe counts because the outgoing direction is uncertain. |
+| Flow whose direction Zeek reversed (`^` in history) | Keep Zeek's final endpoints and interpret flags across each flip. A confirmed final-source SYN can count; traffic without one does not enter SYN probe counts. |
 
 For failed-probe checks, the default required share is 80%: failed-probe targets
 divided by all distinct recent targets in the same source/port group.
@@ -54,8 +54,9 @@ addresses across a /24. Sharing a CDN subnet alone is insufficient.
 
 A destination used successfully on that port within the previous hour is familiar.
 Failed reconnections to it do not count as new targets until that memory expires.
-Successful use means a completed TCP handshake with ordinary use, observed payload
-in both directions, or a reply to UDP traffic. A short empty connection is kept
+Successful use means TCP handshake evidence with ordinary use, or a reply to
+UDP traffic. Payload alone cannot establish which TCP endpoint was the client.
+A short empty connection is kept
 as a possible connect scan instead. A successful retry removes an outstanding
 failed target. Delayed older failures cannot undo a later recorded success.
 For Argus, NetFlow and other inputs without Zeek packet history, the profiler's
