@@ -917,8 +917,14 @@ The detection techniques are:
 
 #### ARP Scans
 
-Slips considers an IP performing an ARP scan if it sends 5
-or more non-gratuitous ARP to different destination addresses in 30 seconds or less.
+Slips examines bursts of distinct ARP targets using a rolling 30-second window.
+Five targets make a candidate, not an automatic scan. It considers prior
+successful communication by the requesting device and the pattern and size of
+the search. Familiar-neighbour refreshes do not produce scan evidence merely
+because there are many requests. Large ambiguous searches are informational
+`ARP_DISCOVERY` findings, which do not contribute to alerts.
+See [ARP scan detection](arp_scans.md) for the decision rules, persistent history,
+configuration, examples and visibility limitations.
 
 #### ARP to a destination IP outside of local network
 

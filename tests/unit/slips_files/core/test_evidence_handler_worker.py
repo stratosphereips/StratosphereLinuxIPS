@@ -542,6 +542,7 @@ def test_disabled_evidence_message_is_deleted_without_processing() -> None:
     "evidence_type, threat_level",
     [
         (EvidenceType.HTTP_TRAFFIC, ThreatLevel.INFO),
+        (EvidenceType.ARP_DISCOVERY, ThreatLevel.INFO),
         (EvidenceType.P2P_REPORT, ThreatLevel.CRITICAL),
     ],
 )

@@ -47,6 +47,20 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_arp_scan_detector(self, **settings: object) -> object:
+        """Create isolated ARP scan state with optional setting overrides.
+
+        Parameters:
+            settings: ARPScanSettings fields to override.
+
+        Returns:
+            Pure in-memory detector without databases or worker processes.
+        """
+        from modules.arp.scan_detector import ARPScanDetector
+        from modules.arp.scan_settings import ARPScanSettings
+
+        return ARPScanDetector(ARPScanSettings(**settings))
+
     def create_beaconing_obj(self, output_dir: str = "output/unit_beaconing", **settings: object) -> object:
         """Create the numeric detector without Redis or checkpoint files.
 
@@ -625,15 +639,12 @@ class ModuleFactory:
     def create_arp_obj(self, mock_db):
         from modules.arp.arp import ARP
 
-        with patch(
-            "modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()
-        ):
-            arp = ARP(
+        arp = ARP(
                 logger=self.logger,
                 output_dir="dummy_output_dir",
                 redis_port=6379,
                 termination_event=Mock(),
-                slips_args=Mock(),
+                slips_args=SimpleNamespace(interface=["eth0"], growing=False, blocking=False),
                 conf=Mock(),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),

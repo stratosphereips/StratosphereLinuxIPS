@@ -4017,9 +4017,12 @@ function whitelistEditor(kind, record = null, host = null) {
   function updateDestinationPort() {
     const supported = state.whitelists?.supports_dst_port_rules === true;
     const uri = ruleType.value === "uri";
-    const available = supported && !uri && ignored.value === "alerts";
-    dstPortLabel.hidden = uri;
-    dstPortHint.hidden = uri;
+    const portless = record && (isIcmpProtocol(record.proto)
+      || String(record.proto || "").toLowerCase() === "arp"
+      || /^ARP_/.test(String(record.evidence_type || "").toUpperCase()));
+    const available = supported && !uri && !portless && ignored.value === "alerts";
+    dstPortLabel.hidden = uri || portless;
+    dstPortHint.hidden = uri || portless;
     dstPort.disabled = !available;
     direction.disabled = ignored.value === "blocking" || (available && Boolean(dstPort.value));
     if (available && dstPort.value) {
@@ -5972,7 +5975,10 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   }
   const portScan = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(String(record.evidence_type).toUpperCase());
   if (portScan) flowHeading.querySelector("p").textContent = "Port-scan evidence links at most 20 flows; each includes related protocol records.";
-  if (String(record.evidence_type).toUpperCase() === "ARP_SCAN") {
+  const arpDecision = record.detection_details?.arp_scan;
+  if (arpDecision?.version === 1) {
+    flowList.before(text("p", `ARP discovery assessment: ${arpDecision.targets} distinct targets in ${arpDecision.window_seconds} seconds; ${arpDecision.familiar_targets} familiar and ${arpDecision.unfamiliar_targets} unfamiliar to this source before the burst. Observed replies: ${arpDecision.replied_targets}; observed two-way application traffic: ${arpDecision.used_targets}. Missing replies or traffic are unknown. ${arpDecision.truncated ? "The configured target limit was reached; these counts cover retained targets only." : "One representative request is linked per target; retries count once."}`, "muted"));
+  } else if (String(record.evidence_type).toUpperCase() === "ARP_SCAN") {
     const count = numeric(record.flow_count);
     flowList.before(text("p", `ARP scan rule: at least 5 requests to 5 distinct destination IPs within 30 seconds. ${count < 5 ? `This legacy evidence retains only ${count} linked ARP records because its ARP records had no unique UIDs; it was not detected from one packet.` : `This evidence retains ${count} linked ARP records.`}`, count < 5 ? "flow-missing" : "muted"));
   }

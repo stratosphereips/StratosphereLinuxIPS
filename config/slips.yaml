@@ -734,6 +734,68 @@ brute_force_detector:
   ssh_attempt_threshold: 9
 
 #############################
+arp:
+  # Seconds of ARP requests considered together, using packet timestamps.
+  # Each target expires separately, so old questions cannot inflate a new burst.
+  scan_window_seconds: 30
+
+  # Distinct target IPs needed before examining a burst. Retries count once.
+  # Reaching this count alone does not generate evidence.
+  scan_min_targets: 5
+
+  # Minimum targets without prior successful communication from this device.
+  # An ordered search needs this many unfamiliar targets to suggest a scan.
+  # With no prior source contacts, this many targets must also be unobserved on the network.
+  scan_min_unfamiliar_targets: 10
+
+  # Required share of unfamiliar targets: 0.8 means at least 80%.
+  # This prevents a few new neighbours among many familiar ones causing alerts.
+  scan_min_unfamiliar_ratio: 0.8
+
+  # This many unfamiliar targets can suggest a scan even in random order.
+  # A burst this large without enough scan indicators is informational
+  # ARP_DISCOVERY evidence instead; it adds nothing to the alert score.
+  scan_broad_targets: 32
+
+  # Required share of successive distinct requests to adjacent IPs (either direction).
+  # 0.7 means 70%; this supports smaller ordered sweeps. It is not required for large scans.
+  scan_ordered_ratio: 0.7
+
+  # Brief wait after a burst becomes a candidate, allowing observed replies
+  # and arriving connection records to add context. Missing records are unknown.
+  scan_context_wait_seconds: 3
+
+  # Minimum seconds between findings of the same source device/address/network.
+  # A scan can still be reported during an earlier informational discovery cooldown.
+  scan_alert_cooldown_seconds: 300
+
+  # Two successful TCP/UDP contacts must be separated by at least these seconds
+  # before a neighbour is familiar. Both directions must carry application bytes;
+  # ARP requests/replies and empty connection probes never establish familiarity.
+  scan_familiar_min_interval_seconds: 300
+
+  # Expire source-to-neighbour history after this many days without successful use.
+  # Live history survives restarts and is separated by gateway, subnet and source MAC.
+  scan_familiar_retention_days: 30
+
+  # Seconds between private history checkpoints. No disk writes occur per packet.
+  # A clean stop saves immediately; a crash can lose this many seconds of learning.
+  scan_checkpoint_seconds: 120
+
+  # Maximum source device/address/network groups in memory. Oldest-used groups
+  # are discarded at capacity; a warning explains when context has been lost.
+  scan_max_sources: 256
+
+  # Maximum target IPs and representative request UIDs kept per source group.
+  # At capacity, discard oldest-used targets and mark evidence counts as partial.
+  scan_max_targets: 512
+
+  # Maximum successful source-to-neighbour records, and separate sender/UID caches.
+  # Old contacts are discarded at capacity; increasing this preserves more history
+  # on large networks but uses more memory and checkpoint space.
+  scan_max_relationships: 8192
+
+#############################
 network_discovery:
   # Detect horizontal scans using distinct destination IPs on the same port.
   # Detection starts immediately; 443 and the first minutes are not exempt.
@@ -1275,7 +1337,7 @@ DisabledAlerts:
   # All the following detections are turned on by default
   # Turn them off by adding any of the following detections to the
   # disabled_detections list
-  # ARP_SCAN, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
+  # ARP_SCAN, ARP_DISCOVERY, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
   # YOUNG_DOMAIN, MULTIPLE_SSH_VERSIONS, DIFFERENT_LOCALNET,
   # DEVICE_CHANGING_IP, NON_HTTP_PORT_80_CONNECTION, NON_SSL_PORT_443_CONNECTION
   # WEIRD_HTTP_METHOD, INCOMPATIBLE_CN, DGA_NXDOMAINS, DNS_WITHOUT_CONNECTION,

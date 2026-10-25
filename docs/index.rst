@@ -65,6 +65,7 @@ This documentation gives an overview how Slips works, how to use it and how to h
    architecture
    detection_modules
    horizontal_port_scans
+   arp_scans
    beaconing
    cc_detection_strategy
    brute_force_detector

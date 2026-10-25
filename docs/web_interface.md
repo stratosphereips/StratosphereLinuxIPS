@@ -555,6 +555,13 @@ The evidence inspector initially loads **20 triggering flow UIDs**. **Load more 
 
 The evidence page places the detection summary, threat, score, and confidence above the triggering flows. Each flow shows its endpoints and metrics, with tabs for the connection and every related protocol record. Additional stored values appear in a compact table, omitting fields already shown above; empty fields can be revealed and the complete original JSON stays available. The side column retains the evidence ID, timestamps, network, source module, attacker and victim, P2P reporting peers, alert links, and the evidence-specific whitelist editor. The editor offers quick values from the linked flows, including request URIs. Excluded evidence still explains its matching whitelist rule. Flow recovery and missing-flow explanations remain visible when raw records have expired or lack usable UIDs.
 
+New ARP findings show the saved target counts, prior source-specific contacts,
+observed replies and observed application traffic. `ARP_DISCOVERY` is
+informational and does not add to alert scores. The pane uses the thresholds
+and counts saved with the finding; older `ARP_SCAN` records retain their legacy
+rule explanation. See [ARP scan detection](arp_scans.md) for the distinction
+between familiar-neighbour refreshes, broad discovery and possible scans.
+
 ARP protocol cards put **Destination IP** first in a highlighted field, followed
 by **Source IP**, operation, and hardware addresses. Both IPs open the host
 workspace. They remain visible when only the ARP protocol record was retained;

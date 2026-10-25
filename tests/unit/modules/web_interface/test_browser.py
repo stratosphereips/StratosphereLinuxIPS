@@ -95,8 +95,9 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
             assert record["victim"]["value"] in cards.nth(1).inner_text()
             assert record["description"].split(". ")[0] == detail.locator("h2").inner_text()
             assert "ICMP type: 11; code: 0" in detail.inner_text()
-            assert "Source port" not in detail.inner_text()
-            assert "Destination port" not in detail.inner_text()
+            assert "Source port" not in detail.locator(".evidence-detail-record").inner_text()
+            assert "Destination port" not in detail.locator(".evidence-detail-record").inner_text()
+            assert detail.locator(".whitelist-dst-port").evaluate("el => el.closest('label').hidden")
             assert detail.locator(".flow-path").inner_text().count("Port ") == 0
             assert "ICMP type 11" in detail.locator(".flow-path").inner_text()
             assert "ICMP code 0" in detail.locator(".flow-path").inner_text()
@@ -2655,5 +2656,72 @@ def test_configuration_explains_alert_equations_in_chrome(tmp_path: Path, theme:
         assert note.locator(".config-score-example").count() == 0
         page.locator(".config-nav-item", has_text="Parameters").click()
         assert note.count() == 0
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("familiar,theme", [(False, "light"), (False, "dark"), (True, "light"), (True, "dark")])
+def test_arp_investigation_explains_actual_decision(familiar: bool, theme: str) -> None:
+    """Show saved ARP counts and actual rule instead of the old five-target claim.
+
+    Parameters:
+        familiar: Broad familiar discovery rather than an unfamiliar scan.
+        theme: Interface theme.
+    """
+    arp = ModuleFactory().create_arp_obj()
+    from tests.unit.modules.arp.test_scan_detector import train, burst
+    if familiar:
+        train(arp.scan_detector, list(range(1, 41)))
+    finding = burst(arp.scan_detector, list(range(1, 41)))[0]
+    arp.set_evidence_arp_scan(finding)
+    evidence = arp.db.set_evidence.call_args.args[0]
+    record = {**utils.to_dict(evidence), "profile_ip": evidence.profile.ip, "timestamp": 1000,
+              "threat_level": str(evidence.threat_level), "module": Modules.ARP.value,
+              "alert_ids": [], "twid": "timewindow1", "flow_count": 40}
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve local assets and no live capture data.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path.endswith("/flows"):
+            route.fulfill(json={"items": [], "linked_uid_count": 40})
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""({theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.activeTab='evidence'; state.deviceView=false;
+            state.whitelists={evidence_types:[]};
+        }""", {"theme": theme})
+        page.evaluate("async record => { await openEvidence(record); }", record)
+        detail = page.locator("#evidence-detail-content")
+        content = detail.inner_text()
+        assert "ARP discovery assessment: 40 distinct targets in 30 seconds" in content
+        assert f"{40 if familiar else 0} familiar and {0 if familiar else 40} unfamiliar" in content
+        assert "at least 5 requests" not in content
+        assert "Missing replies or traffic are unknown" in content
+        assert ("ARP_DISCOVERY" if familiar else "ARP_SCAN") in content
+        assert ("info" if familiar else "low") in detail.locator(".evidence-detail-stats").inner_text()
+        assert detail.locator(".whitelist-dst-port").evaluate("el => el.closest('label').hidden")
         assert errors == []
         browser.close()

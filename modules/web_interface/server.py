@@ -51,6 +51,7 @@ from slips_files.core.structures.evidence import (
     is_icmp_protocol,
 )
 from modules.supported_module_names import Modules
+from modules.arp.scan_settings import ARP_SCAN_EXPLANATIONS
 from modules.p2p_trust.trust.base_model import (
     RELIABILITY_WEIGHT,
     local_maliciousness_to_thesis_score,
@@ -201,6 +202,7 @@ TI_FIELDS = (
 )
 
 CONFIG_SECTION_DESCRIPTIONS = {
+    Modules.ARP.value: "ARP neighbour discovery, scan decisions and source-specific contact history.",
     "update": "How this Slips installation checks for and selects software updates.",
     "output": "Names and destinations of files produced by this analysis.",
     "parameters": "Core capture, profiling, time-window, and processing behaviour.",
@@ -426,6 +428,8 @@ class RunDataReader:
             "web_interface.port": "TCP port used by the web server.",
         }
         full_path = f"{section}.{path}"
+        if section == Modules.ARP.value and path in ARP_SCAN_EXPLANATIONS:
+            return ARP_SCAN_EXPLANATIONS[path]
         if full_path in explicit:
             return explicit[full_path]
         lowered = name.lower()
