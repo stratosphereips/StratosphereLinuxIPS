@@ -53,7 +53,9 @@ profile independently; the device list shows the highest member score.
 
 The browser also remembers pane filters, search terms, review filters, time
 ranges, grouping, table sort and direction, optional host columns, and resized
-pane widths after Slips restarts. These view choices stay in browser storage.
+pane widths for Evidence and Hosts after Slips restarts. Alerts starts with an
+equal list/details split each time you enter its tab. These view choices stay
+in browser storage.
 Restart a running Slips server after updating its Python code.
 
 Searches reuse the existing evidence covering index to reject out-of-range
@@ -486,6 +488,13 @@ CPU, resident memory, and processed flows per second are sampled from the comple
 Flow totals use exact profiler counter deltas rather than assuming every sample is exactly one second apart. Existing web history databases are upgraded in place when the module starts.
 
 ### Alerts
+
+Alerts opens with **50% for the alert lists and 50% for the right details pane**,
+excluding the divider widths. With multiple lists open, they share the left
+half; the rightmost investigation gets the other half. Entering the Alerts tab,
+reloading the page, or opening a different pane layout restores that split.
+You can resize the panes during a visit; automatic refreshes keep your chosen
+widths. Old saved Alerts widths no longer override the opening layout.
 
 Alerts opens with an **Alerts grouped by host** pane and an empty selection pane. The first divider is resizable immediately. Choose a host to open its **Alerts for this host** timeline, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record. Alert rows summarize all linked evidence types and their counts. Selecting an evidence card opens its investigation in a resizable fourth pane beside the alert. **All alerts** shows the individual alert list directly and opens alert and evidence details beside it. Dividers can be dragged or adjusted with the left and right arrow keys. Closing evidence returns to the same alert; closing an alert returns to its list.
 

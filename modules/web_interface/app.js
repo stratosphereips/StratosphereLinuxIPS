@@ -125,8 +125,7 @@ function saveViewPreferences() {
     columns[input.dataset.hostColumn] = input.checked;
   });
   const paneWidths = {};
-  [["alerts-workspace", ["--alerts-host-width", "--alerts-list-width", "--alerts-detail-width"]],
-    ["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width"]],
+  [["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width"]],
     ["host-workspace", ["--host-evidence-list-width"]]]
     .forEach(([id, names]) => {
       const element = byId(id);
@@ -182,7 +181,7 @@ function restoreViewPreferences() {
     }
   });
   Object.entries(saved.paneWidths || {}).forEach(([id, widths]) => {
-    if (!["alerts-workspace", "evidence-workspace", "host-workspace"].includes(id) || !byId(id)) return;
+    if (!["evidence-workspace", "host-workspace"].includes(id) || !byId(id)) return;
     Object.entries(widths || {}).forEach(([name, width]) => {
       if (/^--(?:alerts|evidence|host)-[a-z-]+-width$/.test(name) && /^\d+(?:\.\d+)?(?:px|%)$/.test(width)) {
         if (id === "evidence-workspace" && name === "--evidence-left-width"
@@ -2288,10 +2287,18 @@ function updateAlertViewportHeight() {
   byId("alerts").style.setProperty("--alerts-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
+/** Restore the Alerts list/details split when opening a tab or pane layout. */
+function resetAlertPaneWidths() {
+  ["--alerts-host-width", "--alerts-list-width", "--alerts-detail-width"]
+    .forEach((name) => byId("alerts-workspace").style.removeProperty(name));
+}
+
 /** Reveal the alert panes reached by the current selection. */
 function setAlertPaneCount(count) {
   const workspace = byId("alerts-workspace");
   const individual = state.alertsWorkspace.grouping === "individual";
+  if (workspace.dataset.panes !== String(count)
+      || workspace.classList.contains("individual") !== individual) resetAlertPaneWidths();
   workspace.classList.toggle("individual", individual);
   workspace.dataset.panes = String(count);
   byId("alerts-host-divider").hidden = false;
@@ -2302,23 +2309,6 @@ function setAlertPaneCount(count) {
   const evidenceVisible = individual ? count >= 3 : count >= 4;
   byId("alerts-evidence-divider").hidden = !evidenceVisible;
   byId("alerts-evidence-pane").hidden = !evidenceVisible;
-  if (!individual && count === 4) {
-    const total = workspace.getBoundingClientRect().width;
-    /** Convert a saved pane width to pixels, falling back to its default. */
-    const savedWidth = (name, fallback) => {
-      const value = workspace.style.getPropertyValue(name);
-      return value.endsWith("%") ? total * parseFloat(value) / 100
-        : parseFloat(value) || fallback;
-    };
-    const host = Math.max(44, Math.min(savedWidth("--alerts-host-width", total * .18), total - 540));
-    const list = Math.max(44, Math.min(savedWidth("--alerts-list-width", total * .18), total - host - 488));
-    const detail = Math.max(44, Math.min(savedWidth("--alerts-detail-width", total * .22), total - host - list - 444));
-    workspace.style.setProperty("--alerts-host-width", `${Math.round(host)}px`);
-    workspace.style.setProperty("--alerts-list-width", `${Math.round(list)}px`);
-    workspace.style.setProperty("--alerts-detail-width", `${Math.round(detail)}px`);
-  } else if (workspace.style.getPropertyValue("--alerts-host-width")) {
-    resizeAlertPane("host", document.querySelector(".alerts-host-pane").getBoundingClientRect().width);
-  }
 }
 
 /** Render exact and inclusive severity filters for alert hosts. */
@@ -7457,6 +7447,7 @@ function scheduleBackendStatusPoll() {
 }
 
 function switchTab(name) {
+  if (name === "alerts" && state.activeTab !== "alerts") resetAlertPaneWidths();
   closeEvidenceDetail(false, true);
   state.activeTab = name;
   document.body.classList.toggle("overview-active", name === "overview");
