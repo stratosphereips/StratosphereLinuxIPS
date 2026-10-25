@@ -106,8 +106,7 @@ const VIEW_CONTROL_IDS = [
   "evidence-scored-only", "evidence-link", "evidence-range", "evidence-from",
   "evidence-to", "hosts-search", "hosts-threat", "hosts-scope", "hosts-review",
   "hosts-alerts-only", "hosts-range", "hosts-from", "hosts-to",
-  "host-range", "host-from", "host-to", "host-alert-search",
-  "host-evidence-search", "host-flow-search", "host-flow-limit",
+  "host-range", "host-from", "host-to", "host-flow-limit",
   "p2p-range", "p2p-message-filter", "configuration-search",
   "whitelists-search", "whitelists-type", "firewall-search", "arp-poisoning-search",
   "device-view",
@@ -141,7 +140,6 @@ function saveViewPreferences() {
     hostActivity: state.hostActivity,
     hostActivityPreferred: state.hostActivityPreferred,
     hostActivityGroups: state.hostActivityGroups,
-    hostActivityThreats: state.hostActivityThreats,
     p2pSelectedPeer: state.p2pSelectedPeer,
     configurationSection: state.configurationSection,
     configurationFilter: state.configurationFilter,
@@ -198,7 +196,6 @@ function restoreViewPreferences() {
   state.alertsWorkspace.itemOrder = saved.alertItemOrder === "asc" ? "asc" : "desc";
   state.evidenceWorkspace.typeFilter = String(saved.evidenceType || "");
   state.hostActivityGroups = { ...state.hostActivityGroups, ...saved.hostActivityGroups };
-  state.hostActivityThreats = { ...state.hostActivityThreats, ...saved.hostActivityThreats };
   if (["alerts", "evidence", "flows"].includes(saved.hostActivity)) state.hostActivity = saved.hostActivity;
   state.hostActivityPreferred = saved.hostActivityPreferred === true;
   state.configurationSection = String(saved.configurationSection || "detection");
@@ -884,6 +881,7 @@ function applyRunIdentity(identity) {
     closeEvidenceDetail(false, true);
     closeDrawer();
     closeHost();
+    resetHostActivityFilters();
     Object.keys(state.pages).forEach((name) => resetPage(name));
     Object.assign(state.evidenceWorkspace, {
       group: null, record: null, records: [], next: null, total: 0,
@@ -6448,6 +6446,28 @@ function renderHostCards(host) {
     : "No cached threat-intelligence data.";
 }
 
+/** Start a host investigation without another host's narrowing filters. */
+function resetHostActivityFilters() {
+  state.hostActivityThreats = { alerts: "", evidence: "", flows: "" };
+  ["host-alert-search", "host-evidence-search", "host-flow-search", "host-activity-threat"]
+    .forEach((id) => { byId(id).value = ""; });
+  byId("host-activity-filter-notice").hidden = true;
+}
+
+/** Show both matching and available records when a host activity is filtered.
+ * @param {string} kind Alerts or evidence activity.
+ * @param {number} total Matching records in the selected range.
+ */
+function renderHostActivityCount(kind, total) {
+  const search = byId(`host-${kind === "alerts" ? "alert" : "evidence"}-search`).value.trim();
+  const filtered = Boolean(search || state.hostActivityThreats[kind]);
+  const savedTotal = Number(state.host?.[kind === "alerts" ? "alert_count" : "evidence_count"]);
+  const available = Number.isFinite(savedTotal) ? Math.max(total, savedTotal) : total;
+  const count = byId(`host-${kind}-tab-count`);
+  count.textContent = filtered ? `${compact(total)} / ${compact(available)}` : compact(total);
+  count.title = filtered ? `${total} matching ${kind} of ${available} in this range` : "";
+}
+
 /** Show the selected host's alerts, evidence, or flows and load that page. */
 function showHostActivity(name) {
   if (name !== "evidence" && state.evidenceDetail.inHostPane) closeEvidenceDetail(false, true);
@@ -6632,8 +6652,10 @@ async function loadHostAlerts() {
   page.items = alerts;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  byId("host-alerts-tab-count").textContent = showingEarlier
-    ? `${compact(payload.total)} earlier` : compact(payload.total);
+  if (showingEarlier) {
+    byId("host-alerts-tab-count").textContent = `${compact(payload.total)} earlier`;
+    byId("host-alerts-tab-count").title = "";
+  } else renderHostActivityCount("alerts", payload.total);
   byId("host-alerts-title").textContent = showingEarlier
     ? "Earlier alerts for this host" : "Alerts for this host";
   byId("host-alert-count").textContent = showingEarlier
@@ -6711,7 +6733,7 @@ async function loadHostEvidence() {
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  byId("host-evidence-tab-count").textContent = compact(payload.total);
+  renderHostActivityCount("evidence", payload.total);
   renderHostActivityFilterNotice("evidence", payload.total);
   byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
   byId("host-evidence-count").textContent =
@@ -7052,6 +7074,7 @@ async function showUnprofiledHost(ip) {
 }
 
 async function openHost(ip, summary = null) {
+  resetHostActivityFilters();
   if (state.evidenceDetail.inHostPane && state.host?.ip !== ip) closeEvidenceDetail(false, true);
   if (summary) {
     ["range", "from", "to"].forEach((name) => {
@@ -7114,6 +7137,7 @@ async function openHost(ip, summary = null) {
   ["host-alert-count", "host-evidence-count", "host-flow-count",
     "host-alerts-tab-count", "host-evidence-tab-count", "host-flows-tab-count"].forEach((id) => {
     byId(id).textContent = "";
+    byId(id).title = "";
   });
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;

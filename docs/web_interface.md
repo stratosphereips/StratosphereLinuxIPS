@@ -55,7 +55,8 @@ The browser also remembers pane filters, search terms, review filters, time
 ranges, grouping, table sort and direction, optional host columns, and resized
 pane widths for Evidence and Hosts after Slips restarts. Alerts starts with an
 equal list/details split each time you enter its tab. These view choices stay
-in browser storage.
+in browser storage. Host-specific activity searches and threat selections apply
+only while inspecting the current host; opening or reopening a host clears them.
 Restart a running Slips server after updating its Python code.
 
 Searches reuse the existing evidence covering index to reject out-of-range
@@ -985,9 +986,14 @@ and IPv6 address in full. It uses the available width and wraps addresses,
 identity details, and controls onto additional lines when needed. The address
 list updates when the host refreshes, including newly learned IPv6 addresses.
 
-Saved activity search, threat filters, grouping, and sorting remain available
-when opening another host. An explicit notice shows active search and threat
-filters, the matching count, and the number of records in the selected range.
+Opening or reopening a host starts its activity tables with all threat levels and no
+activity search. These narrowing filters are not restored from browser storage
+or carried into another host or a new analysis. Filters you choose while
+inspecting the current host remain active through refreshes and activity-tab
+switches. Grouping and sorting remain saved. An explicit notice shows active
+search and threat filters, the matching count, and the number of records in the
+selected range. A filtered Alerts or Evidence tab shows matching/available
+counts, such as **0 / 93**, instead of suggesting that the host has no evidence.
 **Clear activity filters** clears that activity tab's search and threat filter
 while retaining grouping and sorting. A medium-threat evidence record can
 exist without an alert: an alert requires the accumulated Slips score to

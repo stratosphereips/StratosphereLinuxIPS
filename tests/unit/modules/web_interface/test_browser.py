@@ -1554,7 +1554,7 @@ def test_compact_mac_markers_across_views_in_chrome(theme: str) -> None:
 def test_host_findings_range_and_saved_filters_in_chrome(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Opening a device preserves the inventory scope and explains hidden evidence.
+    """Opening a device keeps its range and clears other hosts' narrowing filters.
 
     Parameters:
         tmp_path: Isolated retained evidence and history databases.
@@ -1637,11 +1637,17 @@ def test_host_findings_range_and_saved_filters_in_chrome(
         assert "0.49" in row.inner_text()
         assert "medium" in row.inner_text()
         row.click()
-        page.wait_for_function("state.host?.ip === '192.168.1.249' && state.pages['host-evidence'].total === 0")
+        page.wait_for_function("state.host?.ip === '192.168.1.249' && state.pages['host-evidence'].total === 1")
+        assert page.locator("#host-activity-threat").input_value() == ""
+        assert page.locator("#host-evidence-search").input_value() == ""
         assert page.locator("#host-range").input_value() == "all"
         assert page.evaluate("state.host.evidence_count") == 1
         assert "Peak 0.49" in page.locator("#host-score-pill").inner_text()
         notice = page.locator("#host-activity-filter-notice")
+        assert not notice.is_visible()
+        page.locator("#host-activity-threat").select_option("high_or_more")
+        page.wait_for_function("state.pages['host-evidence'].total === 0")
+        assert page.locator("#host-evidence-tab-count").text_content() == "0 / 1"
         assert "0 matching evidence · 1 in this range" in notice.inner_text()
         assert "High+" in notice.inner_text()
         notice.get_by_role("button", name="Clear activity filters", exact=True).click()
@@ -2181,4 +2187,141 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
                                        "direction": "both", "ignore": "alerts", "evidence_type": ""}]
         print(f"Chrome grouped device record: {elapsed:.1f} ms; 20/1051 flows initially; protocol tabs, JSON, more, close/reopen passed")
         print("Chrome host editor: persisted review mark, labels, note, MAC and contextual whitelist passed")
+        browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_pcap_host_evidence_does_not_inherit_other_host_filters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, theme: str,
+) -> None:
+    """Show all 93 low ARP findings despite saved or previously selected filters.
+
+    Parameters:
+        tmp_path: Isolated evidence and history databases.
+        monkeypatch: Fix the capture clock for stable range queries.
+        theme: Browser color theme.
+    """
+    factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    original_all = reader.redis.hgetall.side_effect
+    original_get = reader.redis.hget.side_effect
+    reader.redis.hgetall.side_effect = lambda key: (
+        {"input_type": "pcap", "input": "dataset/test14-arp-scan.pcap"}
+        if key == "analysis" else original_all(key)
+    )
+    reader.redis.hget.side_effect = lambda key, field: (
+        "pcap" if (key, field) == ("analysis", "input_type") else original_get(key, field)
+    )
+    first, second = "1.2.3.4", "5.6.7.8"
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?, ?, ?)",
+            [(ip, now, json.dumps({"ip": ip, "scope": "public"})) for ip in (first, second)],
+        )
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executemany(
+            "INSERT INTO evidence(evidence_id,evidence_time,profile_ip,timewindow,threat_level,"
+            "evidence_type,source_module,description,confidence,data,accumulated_ratl) "
+            "VALUES (?, ?, ?, 'timewindow1', 'low', 'ARP_SCAN', 'arp', 'ARP scan', 1, '{}', 0.14)",
+            [(f"pcap-arp-{i}", now - 100 - i, first) for i in range(93)] + [("second-host", now - 10, second)],
+        )
+    assert reader.evidence({"profile": [first], "range": ["all"]})["total"] == 93
+    assert reader.evidence({"profile": [first], "range": ["all"], "threat": ["medium"]})["total"] == 0
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    requests: list[dict[str, list[str]]] = []
+
+    def route_request(route: Any) -> None:
+        """Run the real evidence and host APIs against isolated PCAP records.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        url = urlparse(route.request.url)
+        query = parse_qs(url.query)
+        if url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/api/evidence":
+            requests.append(query)
+            route.fulfill(json=reader.evidence(query))
+        elif url.path == "/api/hosts":
+            route.fulfill(json=reader.hosts(query))
+        elif url.path.startswith("/api/hosts/"):
+            ip, *resource = unquote(url.path).removeprefix("/api/hosts/").split("/")
+            method = {"traffic-summary": reader.traffic_summary, "score-history": reader.score_history}.get(
+                resource[0] if resource else "", reader.host)
+            route.fulfill(json=method(ip, query))
+        elif url.path == "/api/alerts":
+            route.fulfill(json=reader.alerts(query))
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        elif url.path == "/api/whitelists":
+            route.fulfill(json={"rules": [], "counts": {}, "evidence_types": []})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.add_init_script("""localStorage.setItem('slips-view-preferences-v1', JSON.stringify({
+            hostActivityThreats:{alerts:'high',evidence:'medium',flows:'medium'},
+            controls:{'host-evidence-search':'unrelated old host','host-alert-search':'old','host-flow-search':'old'}
+        }));""")
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof openHost === 'function'")
+        page.evaluate("""async ({ip,theme}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.activeTab='hosts'; state.deviceView=false;
+            state.networkOnly=false; state.hideExcluded=true;
+            state.hostActivity='evidence'; state.hostActivityPreferred=true;
+            byId('host-range').value='all';
+            document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active',p.id==='hosts'));
+            await openHost(ip);
+        }""", {"ip": first, "theme": theme})
+        assert page.evaluate("state.host.evidence_count") == 93
+        assert page.evaluate("state.pages['host-evidence'].total") == 93
+        assert page.locator("#host-evidence-table tbody tr").count() == 93
+        assert page.locator("#host-evidence-tab-count").text_content() == "93"
+        assert page.locator("#host-activity-threat").input_value() == ""
+        assert page.locator("#host-evidence-search").input_value() == ""
+        assert all(not query.get("threat") and not query.get("search") for query in requests if query.get("profile") == [first])
+        page.locator("#host-activity-threat").select_option("medium")
+        page.wait_for_function("state.pages['host-evidence'].total === 0")
+        assert page.locator("#host-evidence-tab-count").text_content() == "0 / 93"
+        assert "0 matching evidence · 93 in this range" in page.locator("#host-activity-filter-notice").inner_text()
+        page.evaluate("async () => { await refreshHostWorkspace(); await showHostActivity('flows'); await showHostActivity('evidence'); }")
+        assert page.locator("#host-activity-threat").input_value() == "medium"
+        assert page.locator("#host-evidence-tab-count").text_content() == "0 / 93"
+        page.evaluate("async ip => await openHost(ip)", first)
+        assert page.locator("#host-activity-threat").input_value() == ""
+        assert page.evaluate("state.pages['host-evidence'].total") == 93
+        page.locator("#host-activity-threat").select_option("medium")
+        page.wait_for_function("state.pages['host-evidence'].total === 0")
+        page.locator("#host-evidence-search").fill("not in the next host")
+        page.evaluate("async ip => await openHost(ip)", second)
+        assert page.locator("#host-activity-threat").input_value() == ""
+        assert page.locator("#host-evidence-search").input_value() == ""
+        assert page.evaluate("state.pages['host-evidence'].total") == 1
+        page.evaluate("async ip => await openHost(ip)", first)
+        assert page.evaluate("state.pages['host-evidence'].total") == 93
+        page.evaluate("""async () => {
+            state.hostActivityThreats.evidence='medium'; byId('host-evidence-search').value='old run';
+            state.runIdentity='old-output:111'; applyRunIdentity({output_dir:'new-pcap',server_pid:222});
+        }""")
+        assert page.evaluate("state.hostActivityThreats.evidence") == ""
+        assert page.locator("#host-evidence-search").input_value() == ""
+        page.evaluate("saveViewPreferences()")
+        saved = page.evaluate("JSON.parse(localStorage.getItem(VIEW_PREFERENCES_KEY))")
+        assert "hostActivityThreats" not in saved
+        assert "host-evidence-search" not in saved["controls"]
+        assert not errors
+        assert factory is not None
         browser.close()
