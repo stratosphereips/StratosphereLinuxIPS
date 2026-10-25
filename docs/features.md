@@ -1103,15 +1103,12 @@ This avoids generating one port scan alert per flow in a long scan.
 
 #### Horizontal port scans
 
-Slips checks both TCP and UDP connections for horizontal port scans.
-
-Slips considers an IP performing a horizontal port scan if it contacted more than 3
-destination IPs on a specific port with not established connections.
-
-
-Slips reports evidence of a horizontal portscan based on a log scale.
-meaning every 10, 100, 1000 ports scanned will generate an evidence.
-This avoids generating one port scan alert per flow in a long scan.
+Slips checks TCP and UDP probing in bounded fast and slow rolling periods.
+New SYN attempts, short empty connections to open services, small ACK/FIN probes
+and unanswered UDP traffic have separate rules. Closing old connections does not
+count as a new SYN scan. Recent successful use provides temporary reconnection
+context, and ambiguous failures have lower confidence.
+See [Horizontal port scans](horizontal_port_scans.md) for settings and limitations.
 
 
 #### PING Sweeps

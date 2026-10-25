@@ -45,7 +45,7 @@ class ScanDetectionsHandler:
     <tot_pkts_sent_to_all_ports>
 
 
-    ..horizontal portscans detections ..
+    ..legacy horizontal indexes (read compatibility; no longer populated) ..
     hash: profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port>
     <tot_pkts>
     zset profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips:timestamps  [ip, ip, .. ]
@@ -563,10 +563,6 @@ class ScanDetectionsHandler:
         ):
             pipe = self._store_vertical_portscan_info(
                 pipe, profileid, twid, proto, target_ip, flow
-            )
-
-            pipe = self._store_horizontal_portscan_info(
-                pipe, profileid, twid, proto, flow
             )
 
         if self._is_info_needed_by_the_conn_to_multiple_ports_detector(

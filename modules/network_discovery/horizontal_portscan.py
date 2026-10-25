@@ -1,9 +1,11 @@
-# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
-# SPDX-License-Identifier: GPL-2.0-only
+"""Explain horizontal scan candidates without treating old sessions as probes."""
 
-from slips_files.core.structures.flow_attributes import Protocol
+import json
+import time
+import ipaddress
+from collections import OrderedDict
+from typing import Any
 
-from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -15,169 +17,194 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
-from slips_files.core.structures.flow_attributes import State
+
+from .scan_detector import ScanDetector, ScanFlow
+from .scan_settings import ScanSettings
 
 
 class HorizontalPortscan:
-    """
-    Horizontal scanning sends requests to the same port
-    on different hosts.
-    """
+    """Consume each original-direction flow once using bounded rolling state."""
 
-    def __init__(self, db):
+    def __init__(
+        self,
+        db: Any,
+        settings: ScanSettings | None = None,
+        live: bool = False,
+        interfaces: tuple[str, ...] = (),
+    ) -> None:
+        """Initialize detection without opening databases or creating threads.
+
+        Parameters:
+            db: Existing Slips database facade.
+            settings: Validated scan thresholds, or built-in defaults.
+            live: Whether gateway identity is available from live capture.
+            interfaces: Capture interfaces used to resolve the default name.
+        """
         self.db = db
-        # to keep track of the max dports reported per timewindow
-        self.cached_thresholds_per_tw = {}
-        # The minimum amount of scanned dstips to trigger an evidence
-        # is increased exponentially every evidence, and is reset each timewindow
-        self.minimum_dstips_to_set_evidence = 5
+        self.settings = settings or ScanSettings()
+        self.settings.validate()
+        self.detector = ScanDetector(self.settings)
+        self.live = live
+        self.interfaces = interfaces
+        self.networks: OrderedDict[str, tuple[float, dict]] = OrderedDict()
 
-    def check_if_enough_dstips_to_trigger_an_evidence(
-        self, profileid: ProfileID, twid: TimeWindow, dport, dstips: int
-    ) -> bool:
+    def scope(self, flow: ScanFlow) -> str | None:
+        """Separate networks and exclude observed IPv4 subnet broadcasts.
+
+        Parameters:
+            flow: Validated flow with packet timestamp and interface.
+
+        Returns:
+            Network/interface scope, or None for subnet broadcast traffic.
         """
-        checks if the dstips used so far are enough to trigger a new
-        evidence
-
-        Returns True only when log10(dstips) exceeds the logarithmic
-        bucket of the last reported evidence.
-
-        The goal is to never get an evidence that's
-         1 or 2 ports more than the previous one so we dont
-         have so many portscan evidence
-        """
-        if not dport:
-            return False
-
-        twid_identifier = f"{profileid}_{twid}:dport:{dport}"
-
-        last_threshold = self.cached_thresholds_per_tw.get(twid_identifier, 0)
-        current_threshold = utils.log10(dstips)
-
-        if current_threshold > last_threshold:
-            # keep track of the reported evidence's log(pkts)
-            self.cached_thresholds_per_tw[twid_identifier] = current_threshold
-            return True
-        return False
-
-    def set_evidence_horizontal_portscan(self, evidence: dict):
-        threat_level = ThreatLevel.HIGH
-        confidence = utils.calculate_confidence(evidence["pkts_sent"])
-        srcip = evidence["profileid"].split("_")[-1]
-
-        attacker = Attacker(
-            direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
+        interface = flow.interface
+        if interface == "default" and len(self.interfaces) == 1:
+            interface = self.interfaces[0]
+        if not self.live:
+            return interface
+        now = time.monotonic()
+        cached = self.networks.get(interface)
+        if cached is None or now >= cached[0]:
+            state = self.db.get_network_state(interface)
+            state = state if isinstance(state, dict) else {}
+            self.networks[interface] = (now + 5, state)
+            self.networks.move_to_end(interface)
+            if len(self.networks) > 16:
+                self.networks.popitem(last=False)
+        else:
+            state = cached[1]
+        if flow.start < float(state.get("changed_at") or 0):
+            state = max(
+                (
+                    s
+                    for s in state.get("history", [])
+                    if isinstance(s, dict)
+                    and float(s.get("changed_at") or 0) <= flow.start
+                ),
+                key=lambda s: float(s.get("changed_at") or 0),
+                default={},
+            )
+        try:
+            network = ipaddress.ip_network(
+                state.get("local_network", ""), strict=False
+            )
+            if (
+                network.version == 4
+                and network.prefixlen < 31
+                and any(
+                    ipaddress.ip_address(ip)
+                    in {network.broadcast_address, network.network_address}
+                    for ip in (flow.src, flow.dst)
+                )
+            ):
+                return None
+        except ValueError:
+            pass
+        return json.dumps(
+            [
+                interface,
+                state.get("gateway_mac", ""),
+                state.get("local_network", ""),
+            ]
         )
+
+    def check(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        raw: dict[str, Any],
+        summary_state: str = "",
+    ) -> None:
+        """Analyze a source profile's flow and emit evidence after P2P exclusions.
+
+        Parameters:
+            profileid: Profile receiving the event.
+            twid: Current evidence attribution window, not the scan period.
+            raw: Original connection summary, already included in the event.
+            summary_state: Coarse profiler state for inputs without packet history.
+        """
+        if not isinstance(raw, dict) or profileid.ip != raw.get("saddr"):
+            return
+        flow = ScanFlow.from_flow(raw, summary_state)
+        if flow is None:
+            return
+        scope = self.scope(flow)
+        if scope is None:
+            return
+        result = self.detector.process(flow, scope)
+        if result is None:
+            return
+        group, finding = result
+        # Check actual tuples in one round trip only when a candidate exists.
+        probes = [t.probe for t in group.targets.values() if t.probe]
+        excluded = self.db.is_p2p_related_flow_batch(
+            [(p.src, p.sport, p.dst, p.port, p.proto) for p in probes]
+        )
+        dropped = False
+        for probe, is_p2p in zip(probes, excluded):
+            if is_p2p:
+                self.detector.forget(group, probe.dst)
+                dropped = True
+        if dropped:
+            finding = self.detector.candidate(group, scope, flow.src)
+            if finding is None:
+                return
+        self.set_evidence_horizontal_portscan(
+            {
+                "protocol": flow.proto,
+                "profileid": str(profileid),
+                "twid": str(twid),
+                "uids": [p.uid for p in finding.flows[:20]],
+                "dport": flow.port,
+                "pkts_sent": sum(p.packets for p in finding.flows),
+                "first_timestamp": max(p.start for p in finding.flows),
+                "amount_of_dips": len(finding.flows),
+                "threat": finding.threat,
+                "confidence": finding.confidence,
+                "reason": finding.reason,
+                "window": finding.window,
+                "failure_ratio": finding.failure_ratio,
+            }
+        )
+        self.detector.reported(group, finding)
+        if finding.threat in {"medium", "high"}:
+            self.db.mark_ip_as_port_scanner(profileid.ip, str(twid))
+
+    def set_evidence_horizontal_portscan(
+        self, evidence: dict[str, Any]
+    ) -> None:
+        """Store an explained finding with confidence independent of packet count.
+
+        Parameters:
+            evidence: Target counts, contributing UIDs and assessed uncertainty.
+        """
+        srcip = evidence["profileid"].split("_", 1)[-1]
         portproto = f"{evidence['dport']}/{evidence['protocol']}"
         port_info = self.db.get_port_info(portproto) or ""
         description = (
             f"Horizontal port scan to port {port_info} {portproto}. "
-            f"From {srcip} to {evidence['amount_of_dips']} "
-            f"unique destination IPs. "
-            f"Total packets sent: {evidence['pkts_sent']}. "
-            f"Confidence: {confidence}. by Slips"
+            f"From {srcip} to {evidence['amount_of_dips']} unique destination IPs "
+            f"within {evidence['window']:g} seconds. {evidence['reason']}. "
+            f"Target fraction: {evidence['failure_ratio']:.0%}. "
+            f"Packets in contributing flows: {evidence['pkts_sent']}. "
+            f"Confidence: {evidence['confidence']:g}."
         )
-
-        str_twid = evidence["twid"]
-        evidence = Evidence(
-            evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
-            attacker=attacker,
-            threat_level=threat_level,
-            confidence=confidence,
-            description=description,
-            profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(
-                number=int(str_twid.replace("timewindow", ""))
-            ),
-            uid=evidence["uids"],
-            timestamp=evidence["first_timestamp"],  # TODO use last_timestamp
-            proto=Proto(evidence["protocol"].lower()),
-            dst_port=evidence["dport"],
-        )
-
-        self.db.set_evidence(evidence)
-
-    def should_set_evidence(
-        self,
-        amount_of_dstips: int,
-        profileid: ProfileID,
-        twid: TimeWindow,
-        dport,
-    ) -> bool:
-        return (
-            amount_of_dstips > self.minimum_dstips_to_set_evidence
-            and self.check_if_enough_dstips_to_trigger_an_evidence(
-                profileid, twid, dport, amount_of_dstips
+        self.db.set_evidence(
+            Evidence(
+                evidence_type=EvidenceType.HORIZONTAL_PORT_SCAN,
+                attacker=Attacker(
+                    direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
+                ),
+                threat_level=ThreatLevel[evidence["threat"].upper()],
+                confidence=evidence["confidence"],
+                description=description,
+                profile=ProfileID(ip=srcip),
+                timewindow=TimeWindow(
+                    number=int(evidence["twid"].replace("timewindow", ""))
+                ),
+                uid=evidence["uids"],
+                timestamp=evidence["first_timestamp"],
+                proto=Proto(evidence["protocol"].lower()),
+                dst_port=evidence["dport"],
             )
         )
-
-    def check(self, profileid: ProfileID, twid: TimeWindow):
-        if not utils.are_detection_modules_interested_in_this_ip(profileid.ip):
-            return False
-
-        # if you're portscaning a port that is open it's gonna be established
-        # the amount of open ports we find is gonna be so small
-        # theoretically this is incorrect bc we'll be ignoring
-        # established evidence,
-        # but usually open ports are very few compared to the whole range
-        # so, practically using not established only this is correct to
-        # avoid FP
-        for protocol in (Protocol.TCP, Protocol.UDP):
-            # For each port, see if the amount is over the threshold
-            for (
-                dport,
-                total_pkts,
-            ) in self.db.get_dstports_of_not_established_flows(
-                profileid, twid, protocol
-            ):
-                dport, total_pkts = int(dport), int(total_pkts)
-                amount_of_dstips: int = (
-                    self.db.get_total_dstips_for_not_estab_flows_on_port(
-                        profileid, twid, protocol, dport
-                    )
-                )
-                amount_of_dstips = int(amount_of_dstips)
-
-                if amount_of_dstips > self.minimum_dstips_to_set_evidence:
-                    # to be able to avoid setting "unknown port" evidence for each
-                    # scanned port from this attacker
-                    self.db.mark_ip_as_port_scanner(profileid.ip, str(twid))
-
-                if self.should_set_evidence(
-                    amount_of_dstips, profileid, twid, dport
-                ):
-                    first_timestamp = self.db.get_attack_starttime(
-                        profileid, twid, protocol, dport
-                    )
-                    uids = self.db.get_uids_for_horizontal_portscan(
-                        profileid, twid, protocol, dport
-                    )
-                    # ok why are we excluding p2p related flows here
-                    # instead of excluding them early before storing them
-                    # in the db? because the latter would require checking
-                    # of p2p related flows in the hot path (the hot path is
-                    # the path the flow takes from the minute it arrives to
-                    # slips until its distributed to the modules)
-                    # any heavy checking in this hot path causes severe
-                    # latency in slips, it should be as fast as possible
-                    # and has minimum checks as possible.
-                    p2p_uids = utils.p2p_related_uids(uids, self.db)
-                    uids = [uid for uid in uids if uid not in p2p_uids]
-                    if not uids:
-                        # every contributing flow is Slips's own
-                        # P2P traffic, not an actual scan
-                        continue
-                    evidence = {
-                        "protocol": protocol.name.lower(),
-                        "profileid": str(profileid),
-                        "twid": str(twid),
-                        "uids": uids,
-                        "dport": dport,
-                        "pkts_sent": total_pkts,
-                        "first_timestamp": first_timestamp,
-                        "state": State.NOT_EST.name.lower(),
-                        "amount_of_dips": amount_of_dstips,
-                    }
-
-                    self.set_evidence_horizontal_portscan(evidence)
-        return

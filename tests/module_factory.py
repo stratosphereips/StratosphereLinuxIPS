@@ -1232,12 +1232,25 @@ class ModuleFactory:
         return flow_handler
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_horizontal_portscan_obj(self, mock_db):
+    def create_horizontal_portscan_obj(self, mock_db: Mock, **options: object) -> object:
+        """Create scan analysis with a mocked database and real limits.
+
+        Parameters:
+            mock_db: Database supplied by the patch decorator.
+            options: Horizontal scan settings overrides.
+
+        Returns:
+            Detector wrapper without database connections.
+        """
         from modules.network_discovery.horizontal_portscan import (
             HorizontalPortscan,
         )
 
-        horizontal_ps = HorizontalPortscan(mock_db)
+        from modules.network_discovery.scan_settings import ScanSettings
+
+        mock_db.is_p2p_related_flow_batch.side_effect = lambda flows: [False] * len(flows)
+        mock_db.get_port_info.return_value = ""
+        horizontal_ps = HorizontalPortscan(mock_db, ScanSettings(**options))
         return horizontal_ps
 
     @patch(DB_MANAGER, name="mock_db")
@@ -1376,13 +1389,15 @@ class ModuleFactory:
             NetworkDiscovery,
         )
 
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: default
         network_discovery = NetworkDiscovery(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
+            slips_args=SimpleNamespace(interface=[], growing=False),
+            conf=conf,
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )

@@ -999,14 +999,13 @@ of vertical port scan.
 
 ### Horizontal port scans
 
-Slips detects TCP and UDP horizontal port scans. It considers an IP performing a horizontal port scan if it contacted 6 or more destination IPs on the same port with not established connections.
-
-Slips reports evidence of a horizontal portscan based on a log scale.
-meaning every 10, 100, 1000 ports scanned will generate an evidence.
-This avoids generating one port scan alert per flow in a long scan.
-
-To minimize false positives, Slips ignores the broadcast IP 255.255.255.255 if it's the source or the
-destination of horizontal port scans, and ignores all resolved IPs if they're the destination of port scans.
+Slips checks distinct targets in separate fast and slow rolling periods, independent
+of Slips time windows. It uses packet history to separate new TCP attempts from
+leftover connection traffic, and checks open-service, ACK/FIN and UDP probing
+separately. Recent successful use helps identify reconnections. Confidence depends
+on the observed pattern rather than packet count; there is no startup or port-443
+exemption. See [Horizontal port scans](horizontal_port_scans.md) for packet rules,
+configuration, performance bounds and limitations.
 
 
 ### PING Sweeps

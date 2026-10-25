@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import time
 from typing import List
 
 from slips_files.common.flow_classifier import FlowClassifier
@@ -8,6 +9,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
+from modules.network_discovery.scan_settings import ScanSettings
+from modules.supported_module_names import Modules
+from slips_files.common.input_type import InputType
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -26,13 +30,26 @@ class NetworkDiscovery(IModule):
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = "network_discovery"
+    name = Modules.NETWORK_DISCOVERY.value
     description = "Detects Horizonal, Vertical, and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
-    def init(self):
-        self.horizontal_ps = HorizontalPortscan(self.db)
+    def init(self) -> None:
+        """Initialize bounded horizontal analysis and the existing scan checks."""
+        self.horizontal_ps = HorizontalPortscan(
+            self.db,
+            ScanSettings.from_config(self.conf),
+            live=self.db.get_input_type() == InputType.INTERFACE
+            or bool(self.args.growing),
+            interfaces=(
+                (self.args.interface,)
+                if isinstance(self.args.interface, str)
+                else tuple(self.args.interface or [])
+            ),
+        )
         self.vertical_ps = VerticalPortscan(self.db)
+        self.horizontal_capacity_reported = 0
+        self.horizontal_next_warning = 0.0
         # To make sure each evidence has more pkts than the last one
         self.cached_thresholds_per_tw = {}
         self.separator = "_"
@@ -175,7 +192,6 @@ class NetworkDiscovery(IModule):
 
         for cache_dict in (
             self.cached_thresholds_per_tw,
-            self.horizontal_ps.cached_thresholds_per_tw,
             self.vertical_ps.cached_thresholds_per_tw,
         ):
             new_cache = {}
@@ -190,7 +206,8 @@ class NetworkDiscovery(IModule):
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
-    def main(self):
+    def main(self) -> None:
+        """Consume scan events and report bounded-context capacity pressure."""
         if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
@@ -208,26 +225,26 @@ class NetworkDiscovery(IModule):
                 return
 
             twid = TimeWindow(number=int(twid.replace("timewindow", "")))
-            # For port scan detection, we will measure different things:
-
-            # 1. Vertical port scan:
-            # (single IP being scanned for multiple ports)
-            # - 1 srcip sends not established flows to > 3 dst ports in the
-            # same dst ip. Any number of packets
-            # 2. Horizontal port scan:
-            #  (scan against a group of IPs for a single port)
-            # - 1 srcip sends not established flows to the same dst ports in
-            # > 3 dst ip.
-            # 3. Too many connections???:
-            # - 1 srcip sends not established flows to the same dst ports,
-            # > 3 pkts, to the same dst ip
-            # 4. Slow port scan. Same as the others but distributed in
-            # multiple time windows
-
-            # Remember that in slips all these port scans can happen
-            # for traffic going IN to an IP or going OUT from the IP.
-
-            self.horizontal_ps.check(profileid, twid)
+            self.horizontal_ps.check(
+                profileid,
+                twid,
+                msg.get("flow"),
+                msg.get("interpreted_state", ""),
+            )
+            evictions = self.horizontal_ps.detector.capacity_evictions
+            if evictions > self.horizontal_capacity_reported:
+                now = time.monotonic()
+                if now >= self.horizontal_next_warning:
+                    self.print(
+                        f"Horizontal scan context reached its memory limit: "
+                        f"{evictions} group/target evictions so far. "
+                        "Older context was forgotten; see network_discovery "
+                        "horizontal_max_groups and horizontal_max_targets.",
+                        1,
+                        0,
+                    )
+                    self.horizontal_capacity_reported = evictions
+                    self.horizontal_next_warning = now + 60
             self.vertical_ps.check(profileid, twid)
 
         if msg := self.get_msg("new_notice"):

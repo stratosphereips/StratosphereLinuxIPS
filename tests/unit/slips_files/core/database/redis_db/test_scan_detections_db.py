@@ -196,3 +196,24 @@ def test_get_final_state_from_flags(flags, packet_count, expected_state):
 
     final_state = handler.get_final_state_from_flags(flags, packet_count)
     assert final_state == expected_state
+
+
+def test_horizontal_detection_no_longer_writes_per_window_totals() -> None:
+    """Keep vertical indexes while removing horizontal hot-path Redis writes."""
+    handler = ModuleFactory().create_scan_detections_db()
+    from types import SimpleNamespace
+    pipe = MagicMock()
+    handler.tw_width = 3600
+    handler.get_final_state_from_flags = Mock(return_value="Not Established")
+    handler._convert_str_to_proto = Mock(return_value=Protocol.TCP)
+    handler._store_vertical_portscan_info = Mock(return_value=pipe)
+    handler._store_horizontal_portscan_info = Mock()
+    handler._is_info_needed_by_the_conn_to_multiple_ports_detector = Mock(return_value=False)
+    flow = SimpleNamespace(state="S0", pkts=1, proto="tcp")
+    result = handler._store_flow_info_if_needed_by_detection_modules(
+        ProfileID(ip="192.168.1.2"), TimeWindow(number=0), flow,
+        Role.CLIENT, "10.0.0.1", pipe,
+    )
+    assert result is pipe
+    handler._store_vertical_portscan_info.assert_called_once()
+    handler._store_horizontal_portscan_info.assert_not_called()

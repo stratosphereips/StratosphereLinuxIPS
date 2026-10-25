@@ -732,6 +732,55 @@ brute_force_detector:
   ssh_attempt_threshold: 9
 
 #############################
+network_discovery:
+  # Detect horizontal scans using distinct destination IPs on the same port.
+  # Detection starts immediately; 443 and the first minutes are not exempt.
+  # See docs/horizontal_port_scans.md for packet rules and limitations.
+
+  # Seconds covered by the fast scan check, independent of Slips time windows.
+  # A short period catches bursts without adding unrelated failures all hour.
+  horizontal_fast_window_seconds: 60
+
+  # Distinct new targets needed inside the fast period. Retries count once.
+  # Higher values reduce sensitivity to small scans and reconnection bursts.
+  horizontal_fast_min_targets: 10
+
+  # Seconds covered by the separate slow scan check. This catches attempts
+  # spread over time, including across Slips time-window boundaries.
+  horizontal_slow_window_seconds: 1800
+
+  # Distinct new targets needed inside the slow period. A larger count than
+  # the fast check avoids treating occasional failed connections as a scan.
+  horizontal_slow_min_targets: 25
+
+  # Minimum share of recent distinct targets with failed probes. Successful traffic lowers this share. Does not gate the separate
+  # check for short connections to open services without application data.
+  horizontal_min_failure_ratio: 0.8
+
+  # Remember successful use of a destination on this port for these seconds.
+  # Failed reconnections to it are excluded from NEW-target scan counts until
+  # this expires. This is bounded, in-memory context, not a permanent whitelist.
+  horizontal_success_history_seconds: 3600
+
+  # Minimum seconds between findings of the same probe kind/source/port.
+  # A stronger threat level can be reported immediately during this cooldown.
+  horizontal_alert_cooldown_seconds: 300
+
+  # Minimum seconds between full checks of a source/port group. New targets
+  # also trigger a check each minimum target count, so a fast burst need not
+  # wait for a later flow. Set 0 to check every flow, at higher CPU cost.
+  horizontal_evaluation_interval_seconds: 1
+
+  # Maximum network/source/protocol/port groups held in memory. At capacity,
+  # discard the least recently used group; its old context is then forgotten.
+  horizontal_max_groups: 256
+
+  # Maximum destination IPs remembered per group, including successful ones.
+  # Must cover both target thresholds. The oldest used target is discarded
+  # at capacity. More targets improve coverage but use more memory and CPU.
+  horizontal_max_targets: 256
+
+#############################
 beaconing:
   # Analyze numeric connection timing and sizes. Restart Slips to change this.
   # Disable rnn_cc_detection in modules.disable to avoid running two C2 detectors and TensorFlow.
