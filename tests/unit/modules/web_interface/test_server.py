@@ -1670,10 +1670,6 @@ def test_primary_tables_render_real_slips_score_column(tab: str) -> None:
         assert "async function loadLegacyScoreHistory(params)" in app_source
         assert "compatibility_limited: total > records.length" in app_source
         assert 'params.set("profile", ip)' in app_source
-        assert (
-            "row.src_ip === ip || row.dst_ip === ip"
-            in app_source
-        )
         assert "if (!payload || state.host?.ip !== ip) return;" in app_source
         assert (
             "host.exact_aggregates = state.deviceView || staleAliases.length === 0"
@@ -4662,6 +4658,41 @@ def test_host_evidence_search_covers_displayed_columns(
 
     assert result["total"] == 1
     assert result["items"][0]["evidence_type"] == "UNKNOWN_PORT"
+
+
+@pytest.mark.parametrize("device", [False, True])
+def test_host_flow_pages_match_device_traffic_scope(tmp_path: Path, device: bool, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Keep traffic totals, plot data and paged flows on the same address set.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        device: Combine verified aliases when the selected IP has no traffic.
+        monkeypatch: Use the isolated capture's live clock.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    ip = "192.168.12.1"
+    query = {"range": ["all"], "network": ["current"], "limit": ["1"]}
+    if device:
+        query["device"] = ["1"]
+    page = reader.flows_for_host(ip, query)
+    traffic = reader.traffic_summary(ip, query)
+    load = reader._host_load(ip, query)
+    assert page["host_ips"] == traffic["host_ips"]
+    assert page["total"] == load["flows"] == (2 if device else 0)
+    assert sum(point["inbound_flows"] + point["outbound_flows"]
+        for point in traffic["timeline"]) == page["total"]
+    assert sum(point["inbound_bytes"] + point["outbound_bytes"]
+        for point in traffic["timeline"]) == load["bytes"] == (60 if device else 0)
+    if device:
+        assert set(page["host_ips"]) == {"192.168.1.20", "fe80::20"}
+        assert len(page["items"]) == 1
+        second = reader.flows_for_host(ip, {**query, "cursor": [page["next_cursor"]]})
+        assert {page["items"][0]["uid"], second["items"][0]["uid"]} == {
+            "current-v4", "current-v6"
+        }
+        assert second["next_cursor"] is None
 
 
 def test_host_flows_exclude_mac_alias_addresses(tmp_path) -> None:

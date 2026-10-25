@@ -865,6 +865,100 @@ def test_host_network_summary_requires_matching_device_evidence_in_chrome(theme:
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("scope", ["device", "device-legacy-summary", "profile", "legacy-aliases"])
+def test_host_device_flows_match_cards_and_charts(tmp_path: Path, theme: str, scope: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Show verified alias flows without admitting unrelated rows in IP view.
+
+    Parameters:
+        tmp_path: Isolated run and history databases.
+        theme: Browser color theme.
+        scope: Device, exact profile, or an old backend leaking alias rows.
+        monkeypatch: Use the isolated capture's live clock.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    ip = "192.168.12.1"
+    query = {"range": ["all"], "network": ["current"]}
+    if scope.startswith("device"):
+        query["device"] = ["1"]
+    host = {"ip": ip, "all_ips": reader._host_ips(ip, query),
+        "device_ips": reader._host_ips(ip, query), "scope": "local",
+        "hostname": "pirogue.local", "mac": "02:00:00:00:00:20",
+        "load": reader._host_load(ip, query), "alert_score": 0,
+        "alert_threshold": 5, "alert_count": 0, "evidence_count": 0,
+        "permanent_profiles": [], "seen_on_current_network": True}
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve shipped assets and real flow/traffic APIs on isolated data.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        url = urlparse(route.request.url)
+        params = parse_qs(url.query)
+        if url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path.endswith(("/flows", "/traffic-summary")):
+            if scope == "legacy-aliases":
+                params["device"] = ["1"]
+            method = reader.flows_for_host if url.path.endswith("/flows") else reader.traffic_summary
+            payload = method(ip, params)
+            if scope == "device-legacy-summary" and url.path.endswith("/traffic-summary"):
+                payload.pop("host_ips", None)
+            route.fulfill(json=payload)
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": 1600, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""async ({host, theme, scope}) => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.activeTab='hosts'; state.deviceView=scope.startsWith('device');
+            state.deviceViewSupported=true; state.networkOnly=true; state.networkFilterSupported=true;
+            state.host=host; state.hostActivity='flows'; state.hideExcluded=false;
+            state.hostActivityThreats.flows=''; state.hostActivityGroups.flows='';
+            byId('host-range').value='all'; byId('host-flow-search').value='';
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='hosts'));
+            byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+            resetPage('hostFlows'); renderHostCards(host);
+            await Promise.all([loadHostFlows(), loadHostSummary()]); clearError();
+        }""", {"host": host, "theme": theme, "scope": scope})
+        expected = "2" if scope.startswith("device") else "0"
+        assert page.locator("#host-summary .summary-card").nth(2).locator("strong").inner_text() == expected
+        assert page.locator("#host-flows-tab-count").inner_text() == expected
+        assert page.evaluate("state.pages.hostFlows.items.length") == int(expected)
+        if scope.startswith("device"):
+            assert page.evaluate("state.pages.hostFlows.items.map(row => row.uid).sort()") == ["current-v4", "current-v6"]
+            assert "device view · 2 addresses" in page.locator("#host-flow-count").inner_text()
+            assert "discarded" not in page.locator("#host-flow-count").inner_text()
+            assert "No matching records" not in page.locator("#host-flows-table").inner_text()
+            assert page.locator("#host-flow-chart .chart-line").count() == 2
+            assert page.locator("#host-byte-chart .chart-line").count() == 2
+            assert "2 verified device addresses" in page.locator("#host-traffic-status").inner_text()
+        elif scope == "legacy-aliases":
+            assert "2 rows outside the selected profile discarded" in page.locator("#host-flow-count").inner_text()
+            assert "withheld" in page.locator("#host-traffic-status").inner_text()
+        else:
+            assert "exact profile IP only" in page.locator("#host-flow-count").inner_text()
+        assert errors == []
+        browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
     """Keep device addresses, identity and controls visible as aliases change.
 

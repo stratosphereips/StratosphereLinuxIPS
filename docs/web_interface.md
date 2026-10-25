@@ -1001,6 +1001,14 @@ zero results. Counts clear when opening another host so its labels cannot
 inherit the previous host's totals. Keeping the labels stable adds no API
 requests or polling work.
 
+In Device view, the flow table uses the same server-verified address set as the
+traffic cards and plots. A device selected through an old IPv4 address can have
+all its current traffic on another IPv4 address or on IPv6; those flows remain
+visible, with their original addresses and direction. The table footer states
+the number of addresses in its device scope. Single-IP view continues to show
+only flows involving the selected IP. Grouping adds no extra flow query or
+polling work; filtering still happens before server-side pagination.
+
 Opening a host or device from the inventory copies its selected time range,
 including custom start and end times, into the detail workspace. The Alerts
 and Evidence summary cards, peak score, highest evidence threat, score plot,

@@ -7622,6 +7622,7 @@ class RunDataReader:
             "peers": [dict(row) for row in peers],
             "range": range_name,
             "bucket_seconds": bucket if first else 0,
+            "host_ips": ips,
         }
 
     def score_history(

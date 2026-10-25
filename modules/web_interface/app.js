@@ -6766,6 +6766,7 @@ async function loadHostEvidence() {
 async function loadHostFlows() {
   if (!state.host) return;
   const ip = state.host.ip;
+  const deviceView = state.deviceView;
   const page = state.pages.hostFlows;
   const params = hostRangeParams();
   params.set("limit", byId("host-flow-limit").value);
@@ -6776,17 +6777,20 @@ async function loadHostFlows() {
   if (page.cursors[page.index]) params.set("cursor", page.cursors[page.index]);
   const path = `/api/hosts/${escapePath(ip)}/flows?${params}`;
   const payload = await api("hostFlows", path);
-  if (!payload || state.host?.ip !== ip) return;
-  const exactItems = payload.items.filter((row) =>
-    row.src_ip === ip || row.dst_ip === ip);
-  const discarded = payload.items.length - exactItems.length;
-  page.items = exactItems;
-  page.total = discarded ? exactItems.length : payload.total;
+  if (!payload || state.host?.ip !== ip || state.deviceView !== deviceView) return;
+  const hostIps = new Set(deviceView && Array.isArray(payload.host_ips)
+    ? payload.host_ips : [ip]);
+  const scopedItems = payload.items.filter((row) =>
+    hostIps.has(row.src_ip) || hostIps.has(row.dst_ip));
+  const discarded = payload.items.length - scopedItems.length;
+  page.items = scopedItems;
+  page.total = discarded ? scopedItems.length : payload.total;
   page.next = payload.next_cursor;
   byId("host-flows-tab-count").textContent = compact(page.total);
   byId("host-flow-count").textContent =
-    `${exactItems.length} shown · exact profile IP only` +
-    (discarded ? ` · ${discarded} stale MAC-alias rows discarded` :
+    `${scopedItems.length} shown · ` +
+    (deviceView ? `device view · ${hostIps.size} addresses` : "exact profile IP only") +
+    (discarded ? ` · ${discarded} rows outside the selected ${deviceView ? "device" : "profile"} discarded` :
       ` · ${compact(payload.total)} flows match this range`);
   renderHostFlows();
 }
@@ -6894,8 +6898,9 @@ async function loadHostSummary() {
   const payload = await api("hostSummary",
     `/api/hosts/${escapePath(state.host.ip)}/traffic-summary?${params}`);
   if (!payload) return;
-  const includesAliases = Array.isArray(payload.host_ips)
-    && payload.host_ips.some((address) => address !== state.host.ip);
+  const hostIps = Array.isArray(payload.host_ips) ? payload.host_ips
+    : state.deviceView && Array.isArray(state.host.all_ips) ? state.host.all_ips : [state.host.ip];
+  const includesAliases = hostIps.some((address) => address !== state.host.ip);
   const status = byId("host-traffic-status");
   if (includesAliases && !state.deviceView) {
     status.textContent = "Traffic aggregates withheld because the running backend grouped unrelated addresses through a shared next-hop MAC. Historical rows below are filtered to the exact profile IP.";
@@ -6906,7 +6911,7 @@ async function loadHostSummary() {
     return;
   }
   status.textContent = state.deviceView && includesAliases
-    ? `Traffic and peers combine ${payload.host_ips.length} MAC-matched local addresses.`
+    ? `Traffic and peers combine ${hostIps.length} verified device addresses.`
     : "Traffic and peers match the exact profile IP only.";
   renderLineChart("host-flow-chart", payload.timeline, [
     { key: "inbound_flows" }, { key: "outbound_flows", className: "secondary-line" },
