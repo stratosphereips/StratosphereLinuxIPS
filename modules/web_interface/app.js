@@ -3534,6 +3534,10 @@ async function loadConfiguration() {
  * @returns {Promise<object>} The saved rule returned by the server.
  */
 async function saveWhitelistRule(change) {
+  if ((change.dst_port || String(change.value || "").includes("->"))
+      && !state.whitelists?.supports_dst_port_rules) {
+    throw new Error("Restart Slips with the updated code to use destination-port rules.");
+  }
   const response = await fetch("/api/whitelists", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -3874,6 +3878,17 @@ function whitelistEditor(kind, record = null, host = null) {
     direction.append(option);
   });
   directionLabel.append(direction);
+  const dstPortLabel = document.createElement("label");
+  dstPortLabel.append(text("span", "Destination port (optional)"));
+  const dstPort = document.createElement("input");
+  dstPort.className = "whitelist-dst-port";
+  dstPort.type = "number";
+  dstPort.min = "1";
+  dstPort.max = "65535";
+  dstPort.step = "1";
+  dstPort.placeholder = "Any destination port";
+  dstPortLabel.append(dstPort);
+  const dstPortHint = text("p", "", "muted whitelist-dst-port-hint");
   if (host) {
     value.value = host.ip;
     direction.value = "both";
@@ -3885,6 +3900,7 @@ function whitelistEditor(kind, record = null, host = null) {
       ruleType.dispatchEvent(new Event("change"));
       direction.value = selected.dataset.direction;
     }
+    updateDestinationPort();
   });
   const ignoreLabel = document.createElement("label");
   ignoreLabel.append(text("span", "Suppress"));
@@ -3915,6 +3931,7 @@ function whitelistEditor(kind, record = null, host = null) {
   evidenceType.addEventListener("change", () => {
     if (evidenceType.value) ignored.value = "alerts";
     ignored.disabled = Boolean(evidenceType.value);
+    updateDestinationPort();
   });
   ignored.disabled = Boolean(evidenceType.value);
   ignored.addEventListener("change", () => {
@@ -3925,7 +3942,9 @@ function whitelistEditor(kind, record = null, host = null) {
     }
     direction.disabled = blocking;
     evidenceType.disabled = blocking;
+    if (ignored.value !== "alerts") dstPort.value = "";
     value.placeholder = blocking ? "192.168.1.10" : "192.168.1.10:443 or *:443";
+    updateDestinationPort();
   });
   typeLabel.append(evidenceType);
   ruleType.addEventListener("change", () => {
@@ -3945,8 +3964,29 @@ function whitelistEditor(kind, record = null, host = null) {
       ignored.disabled = false;
       direction.disabled = false;
       evidenceType.disabled = false;
+      dstPort.value = "";
     }
+    updateDestinationPort();
   });
+  /** Keep destination-port conditions source-only and unavailable on older backends. */
+  function updateDestinationPort() {
+    const supported = state.whitelists?.supports_dst_port_rules === true;
+    const uri = ruleType.value === "uri";
+    const available = supported && !uri && ignored.value === "alerts";
+    dstPortLabel.hidden = uri;
+    dstPortHint.hidden = uri;
+    dstPort.disabled = !available;
+    direction.disabled = ignored.value === "blocking" || (available && Boolean(dstPort.value));
+    if (available && dstPort.value) {
+      direction.value = "src";
+      value.placeholder = "192.168.1.10";
+    }
+    dstPortHint.textContent = supported
+      ? "Destination port limits evidence/alert exceptions to connections FROM this source IP TO that port. Enter a source IP without :port; leave the field empty for any destination port."
+      : "Restart Slips with the updated code to enable destination-port conditions.";
+  }
+  dstPort.addEventListener("input", updateDestinationPort);
+  section.addEventListener("whitelist-capabilities", updateDestinationPort);
   const save = text("button", "Add rule", "secondary");
   save.type = "submit";
   const feedback = text("p", "Rules take effect for future traffic and detections while Slips is running.", "muted whitelist-feedback");
@@ -3963,20 +4003,27 @@ function whitelistEditor(kind, record = null, host = null) {
     form.append(deviceLabel);
     section.append(text("p", "This saves a separate rule for each listed address. New addresses require their own rule.", "muted"));
   }
-  form.append(ruleTypeLabel, valueLabel, list, directionLabel, ignoreLabel, typeLabel, save);
-  section.append(form, feedback);
+  form.append(ruleTypeLabel, valueLabel, list, directionLabel, dstPortLabel, ignoreLabel, typeLabel, save);
+  section.append(form, dstPortHint, feedback);
+  updateDestinationPort();
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     save.disabled = true;
     feedback.textContent = "Saving rule…";
     try {
+      if (dstPort.value && dstPort.disabled) {
+        throw new Error("Destination-port conditions are unavailable; restart Slips with the updated code.");
+      }
       const values = allAddresses.checked ? deviceAddresses : [value.value];
       const saved = [];
       for (const address of values) {
+        const port = dstPort.disabled ? "" : dstPort.value;
+        const source = address.includes(":") && !address.startsWith("[") ? `[${address}]` : address;
         const result = await saveWhitelistRule({
           action: "add", rule_type: allAddresses.checked ? "ip" : ruleType.value,
-          value: address, direction: direction.value,
+          value: port ? `${source}->*:${port}` : address, direction: direction.value,
           ignore: ignored.value, evidence_type: evidenceType.value,
+          ...(port ? { dst_port: port } : {}),
         });
         saved.push(result.value);
         feedback.textContent = `${saved.join(", ")} saved to the configured whitelist file.`;
@@ -4010,6 +4057,7 @@ function renderWhitelists() {
     (row) => row.type === "Request URI" ? "Request" : row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
     (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "blocking" ? "Blocking only (keep alerts)" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
     (row) => row.evidence_type || "All",
+    (row) => row.dst_port || "Any",
     (row) => row.effect,
     (row) => row.source,
     (row) => {
@@ -4040,6 +4088,9 @@ async function loadWhitelists() {
   const payload = await api("whitelists", "/api/whitelists");
   if (!payload) return;
   state.whitelists = payload;
+  document.querySelectorAll(".whitelist-editor").forEach((editor) => {
+    editor.dispatchEvent(new Event("whitelist-capabilities"));
+  });
   document.querySelectorAll(".whitelist-evidence-type").forEach((select) => {
     const selected = select.value;
     select.replaceChildren();

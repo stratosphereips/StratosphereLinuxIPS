@@ -14,6 +14,56 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import EvidenceType
 
 
+def split_ip_destination_port(value: str) -> tuple[str, str]:
+    """Read a source-IP-to-destination-port rule without changing older values.
+
+    Parameters:
+        value: IP whitelist value, optionally written as source->*:port.
+
+    Returns:
+        Source IP and destination port, or the original value and an empty port.
+        Invalid connection rules raise ValueError.
+    """
+    if "->" not in value:
+        return value, ""
+    source, separator, port = value.partition("->*:")
+    if not separator or not port.isdecimal() or not 1 <= int(port) <= 65535:
+        raise ValueError("Use source-IP->*:port with a port from 1 to 65535")
+    if str(int(port)) != port:
+        raise ValueError(
+            "Destination port must be a whole number without leading zeros"
+        )
+    if source.startswith("[") and source.endswith("]"):
+        source = source[1:-1]
+    if "%" in source:
+        raise ValueError("Source IP must not include an interface zone")
+    return str(ipaddress.ip_address(source)), port
+
+
+def format_ip_destination_port(source_ip: str, dst_port: int | str) -> str:
+    """Build a canonical rule for one source IP and one destination port.
+
+    Parameters:
+        source_ip: Individual source IPv4 or IPv6 address.
+        dst_port: Destination port, from 1 to 65535.
+
+    Returns:
+        Source->*:port value; invalid addresses or ports raise ValueError.
+    """
+    address = ipaddress.ip_address(source_ip)
+    port = str(dst_port)
+    if (
+        not port.isdecimal()
+        or not 1 <= int(port) <= 65535
+        or "%" in str(address)
+    ):
+        raise ValueError(
+            "Use an individual source IP and a destination port from 1 to 65535"
+        )
+    source = f"[{address}]" if address.version == 6 else str(address)
+    return f"{source}->*:{int(port)}"
+
+
 def web_whitelist_path(local_path: str) -> Path:
     """Locate web-managed rules beside the configured local whitelist.
 
@@ -186,17 +236,27 @@ class WhitelistParser:
             )
         except KeyError:
             return False
-        if entry_to_remove["data"] not in cache:
+        key = entry_to_remove["data"]
+        if entry_to_remove.get("type") == "ip":
+            try:
+                source, port = split_ip_destination_port(key)
+            except ValueError:
+                return False
+            if port:
+                key = format_ip_destination_port(source, port)
+            if entry_to_remove.get("evidence_type"):
+                key += f"|{entry_to_remove['evidence_type']}"
+        if key not in cache:
             return False
 
         # we do have it stored in the cache, we should remove it
-        cached_entry: Dict[str, str] = cache[entry_to_remove["data"]]
+        cached_entry: Dict[str, str] = cache[key]
         if (
             cached_entry["from"] == entry_to_remove["from"]
             and cached_entry["what_to_ignore"]
             == entry_to_remove["what_to_ignore"]
         ):
-            cache.pop(entry_to_remove["data"])
+            cache.pop(key)
         return True
 
     def update_whitelisted_domains(self, domain: str, info: Dict[str, str]):
@@ -247,9 +307,32 @@ class WhitelistParser:
     def update_whitelisted_ips(self, ip: str, info: Dict[str, str]) -> None:
         """Store an IP rule, optionally scoped to a port.
 
-        :param ip: IPv4, IPv6, IPv4:port, [IPv6]:port, or *:port.
+        :param ip: IP, same-side IP:port, *:port, or source-IP->*:destination-port.
         :param info: Direction and ignore type for the rule.
         """
+        try:
+            source, dst_port = split_ip_destination_port(ip)
+        except ValueError:
+            return
+        if dst_port:
+            if (
+                info.get("from") != "src"
+                or info.get("what_to_ignore") != "alerts"
+            ):
+                self.manager.printer.print(
+                    "Source-to-destination-port rules require src,alerts.",
+                    1,
+                    0,
+                )
+                return
+            value = format_ip_destination_port(source, dst_port)
+            key = (
+                f"{value}|{info['evidence_type']}"
+                if info.get("evidence_type")
+                else value
+            )
+            self.whitelisted_ips[key] = {**info, "dst_port": dst_port}
+            return
         if validators.ipv6(ip) or validators.ipv4(ip):
             key = (
                 f"{ip}|{info['evidence_type']}"

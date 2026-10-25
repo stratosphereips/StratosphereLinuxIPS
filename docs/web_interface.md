@@ -736,6 +736,26 @@ Choose an **Evidence type** to limit an IP rule to one detection, for example
 `192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
 only that evidence type; they do not hide its flows or other detections.
 
+To combine a source IP, destination port and evidence type, enter the source IP
+without a port, fill **Destination port (optional)**, keep **Future evidence and alerts**,
+and choose the **Evidence type**. Filling the destination port selects
+**Source** automatically. For example, source `192.168.1.163`, destination port
+`902`, and type `UNKNOWN_PORT` saves:
+
+```csv
+ip,192.168.1.163->*:902,src,alerts,UNKNOWN_PORT
+```
+
+Only evidence matching all three conditions is excluded from alert scoring;
+flows remain available. The destination IP and source port can be anything.
+Other whitelist rules still apply independently. Leave the destination port
+empty for an unrestricted destination port, or select **All evidence types**
+to omit that condition. IPv6 sources are supported. ICMP has no ports and cannot
+match this condition. The table shows the **Destination port** and a **Remove**
+action for each web-added rule, so different ports can be managed separately.
+Restart Slips once after upgrading to load this feature. Until the updated
+backend is running, the new field stays disabled with a restart explanation.
+
 Choose **Blocking only (keep alerts)** to preserve flow analysis, evidence,
 scores and alerts while preventing firewall blocking and ARP poisoning of an
 individual IP. Select **All evidence types** first if using a scoped evidence

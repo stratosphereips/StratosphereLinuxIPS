@@ -13,6 +13,128 @@ from slips_files.core.structures.evidence import (
     Attacker,
     Victim,
 )
+from slips_files.core.helpers.whitelist.whitelist_parser import (
+    format_ip_destination_port,
+    split_ip_destination_port,
+)
+
+
+@pytest.mark.parametrize("value,source,port", [
+    ("192.0.2.10->*:902", "192.0.2.10", "902"),
+    ("[2001:db8::10]->*:902", "2001:db8::10", "902"),
+    ("2001:0DB8::10->*:65535", "2001:db8::10", "65535"),
+    ("192.0.2.10:902", "192.0.2.10:902", ""),
+    ("*:902", "*:902", ""),
+])
+def test_source_destination_port_value(value: str, source: str, port: str) -> None:
+    """Read explicit destination conditions without changing old endpoint rules.
+
+    Parameters:
+        value: File rule value.
+        source: Parsed source or unchanged legacy value.
+        port: Parsed destination port, if present.
+    """
+    _factory = ModuleFactory()
+    assert split_ip_destination_port(value) == (source, port)
+    if port:
+        expected_source = f"[{source}]" if ":" in source else source
+        assert format_ip_destination_port(source, port) == f"{expected_source}->*:{port}"
+
+
+@pytest.mark.parametrize("value,side,ignored", [
+    ("192.0.2.10->*:0", "src", "alerts"),
+    ("192.0.2.10->*:65536", "src", "alerts"),
+    ("192.0.2.10->*:0902", "src", "alerts"),
+    ("192.0.2.10->*:902.5", "src", "alerts"),
+    ("192.0.2.10->192.0.2.20:902", "src", "alerts"),
+    ("*->*:902", "src", "alerts"),
+    ("192.0.2.0/24->*:902", "src", "alerts"),
+    ("192.0.2.10:50000->*:902", "src", "alerts"),
+    ("[fe80::1%eth0]->*:902", "src", "alerts"),
+    ("192.0.2.10->*:902", "dst", "alerts"),
+    ("192.0.2.10->*:902", "both", "alerts"),
+    ("192.0.2.10->*:902", "src", "flows"),
+    ("192.0.2.10->*:902", "src", "both"),
+    ("192.0.2.10->*:902", "both", "blocking"),
+])
+def test_invalid_source_destination_rule_is_not_broadened(value: str, side: str, ignored: str) -> None:
+    """Reject invalid restrictions instead of saving a broader source exception.
+
+    Parameters:
+        value: Invalid value or value used with an unsupported mode.
+        side: Rule direction.
+        ignored: Suppression mode.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(whitelist.parser.parse_line(f"ip,{value},{side},{ignored}"))
+    assert whitelist.parser.whitelisted_ips == {}
+
+
+@pytest.mark.parametrize("src_ip,src_port,dst_port,kind,proto,expected", [
+    ("192.0.2.10", 50000, 902, EvidenceType.UNKNOWN_PORT, "tcp", True),
+    ("192.0.2.10", 50001, "902", EvidenceType.UNKNOWN_PORT, "tcp", True),
+    ("192.0.2.10", 902, 80, EvidenceType.UNKNOWN_PORT, "tcp", False),
+    ("192.0.2.11", 50000, 902, EvidenceType.UNKNOWN_PORT, "tcp", False),
+    ("192.0.2.10", 50000, 902, EvidenceType.CONNECTION_TO_PRIVATE_IP, "tcp", False),
+    ("192.0.2.10", 50000, None, EvidenceType.UNKNOWN_PORT, "tcp", False),
+    ("192.0.2.10", 50000, 902, EvidenceType.UNKNOWN_PORT, "icmp", False),
+    ("192.0.2.10", 50000, 902, EvidenceType.UNKNOWN_PORT, "udp", True),
+    ("2001:db8::10", 50000, 902, EvidenceType.UNKNOWN_PORT, "tcp", True),
+])
+def test_source_ip_destination_port_and_evidence_must_all_match(
+    src_ip: str, src_port: int, dst_port: int | str | None, kind: EvidenceType,
+    proto: str, expected: bool,
+) -> None:
+    """Apply an AND condition to evidence while retaining all flows.
+
+    Parameters:
+        src_ip: Actual connection source.
+        src_port: Actual source port, independent of the rule's destination port.
+        dst_port: Actual destination port.
+        kind: Detection type under test.
+        proto: Transport; ICMP has no ports.
+        expected: Whether this evidence should be suppressed.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    source = "2001:db8::10" if ":" in src_ip else "192.0.2.10"
+    rule = format_ip_destination_port(source, 902)
+    whitelist.parser.call_handler(whitelist.parser.parse_line(f"ip,{rule},src,alerts,UNKNOWN_PORT"))
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, _: json.dumps(rules[key]) if key in rules else None
+    whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(return_value=False)
+    whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
+    evidence = Mock(
+        attacker=Attacker(ioc_type=IoCType.IP, value=src_ip, direction=Direction.SRC),
+        victim=Victim(ioc_type=IoCType.IP, value="192.0.2.20", direction=Direction.DST),
+        evidence_type=kind, src_port=src_port, dst_port=dst_port, proto=proto,
+    )
+    assert whitelist.is_whitelisted_evidence(evidence) is expected
+    assert not whitelist._flow_contains_whitelisted_ip(SimpleNamespace(
+        saddr=src_ip, daddr="192.0.2.20", sport=src_port, dport=dst_port, type_="conn"
+    ))
+
+
+def test_destination_port_rules_coexist_and_comments_remove_only_one(tmp_path: Path) -> None:
+    """Keep separate destination ports and broad evidence types through reloads.
+
+    Parameters:
+        tmp_path: Isolated personal whitelist.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    path = tmp_path / "personal.conf"
+    path.write_text(
+        "ip,192.0.2.10->*:902,src,alerts,UNKNOWN_PORT\n"
+        "ip,192.0.2.10->*:903,src,alerts,UNKNOWN_PORT\n"
+        "ip,192.0.2.10,src,alerts,ARP_SCAN\n"
+        "#ip,192.0.2.10->*:902,src,alerts,UNKNOWN_PORT\n"
+    )
+    whitelist.parser.local_whitelist_path = str(path)
+    assert whitelist.parser.parse()
+    assert set(whitelist.parser.whitelisted_ips) == {
+        "192.0.2.10->*:903|UNKNOWN_PORT", "192.0.2.10|ARP_SCAN"
+    }
 
 
 @pytest.mark.parametrize("comment", ["# My personal whitelist", "# note, with, several, commas", "#", "   # Name of my tablet"])

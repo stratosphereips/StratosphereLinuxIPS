@@ -2475,3 +2475,88 @@ def test_score_missing_zero_and_historical_crossing_are_distinct(theme: str) -> 
         assert page.locator('#host-score-chart .chart-line').first.get_attribute('d').count('L') == 0
         assert errors == []
         browser.close()
+
+
+@pytest.mark.parametrize("source,encoded", [
+    ("192.0.2.10", "192.0.2.10->*:902"),
+    ("2001:db8::10", "[2001:db8::10]->*:902"),
+])
+def test_source_destination_port_whitelist_editor_in_chrome(source: str, encoded: str) -> None:
+    """Save all three conditions and prevent a broader rule on old backends.
+
+    Parameters:
+        source: Source address entered by the user.
+        encoded: Narrow file-compatible rule submitted to the backend.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve assets in isolation.
+
+        Parameters:
+            route: Browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""source => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            state.whitelists = {evidence_types:['UNKNOWN_PORT']}; state.deviceView = false;
+            const editor = whitelistEditor('port-test', null, {ip:source});
+            editor.id = 'port-test'; document.body.append(editor);
+        }""", source)
+        editor = page.locator("#port-test")
+        port = editor.locator(".whitelist-dst-port")
+        assert port.is_disabled()
+        assert "restart" in editor.locator(".whitelist-dst-port-hint").inner_text().lower()
+        blocked = page.evaluate("""async value => {
+            try { await saveWhitelistRule({value, dst_port:'902'}); return false; }
+            catch (error) { return error.message.includes('Restart'); }
+        }""", encoded)
+        assert blocked
+        page.evaluate("""() => {
+            state.whitelists.supports_dst_port_rules = true;
+            document.querySelector('#port-test').dispatchEvent(new Event('whitelist-capabilities'));
+            saveWhitelistRule = async change => {window.savedWhitelist = change; return change;};
+        }""")
+        assert not port.is_disabled()
+        port.fill("902")
+        selects = editor.locator("select")
+        assert selects.nth(1).input_value() == "src"
+        assert selects.nth(1).is_disabled()
+        selects.nth(3).select_option("UNKNOWN_PORT")
+        editor.get_by_role("button", name="Add rule", exact=True).click()
+        page.wait_for_function("() => window.savedWhitelist")
+        assert page.evaluate("window.savedWhitelist") == {
+            "action": "add", "rule_type": "ip", "value": encoded, "direction": "src",
+            "ignore": "alerts", "evidence_type": "UNKNOWN_PORT", "dst_port": "902",
+        }
+        page.evaluate("""value => {
+            state.whitelists = {rules:[{type:'IP address', value, direction:'src', ignore:'alerts',
+                evidence_type:'UNKNOWN_PORT', dst_port:'902', effect:'Destination port 902', source:'Added from web'}], total:1};
+            renderWhitelists();
+        }""", encoded)
+        assert "902" in page.locator("#whitelists-table tbody tr").inner_text()
+        selects.nth(3).select_option("")
+        selects.nth(2).select_option("flows")
+        assert port.is_disabled()
+        assert port.input_value() == ""
+        assert not selects.nth(1).is_disabled()
+        assert errors == []
+        browser.close()

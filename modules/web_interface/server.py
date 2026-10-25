@@ -48,6 +48,7 @@ from slips_files.core.database.sqlite_db.detection_history import (
 from slips_files.core.structures.evidence import (
     EvidenceType,
     normalize_icmp_evidence,
+    is_icmp_protocol,
 )
 from modules.supported_module_names import Modules
 from modules.p2p_trust.trust.base_model import (
@@ -63,6 +64,8 @@ from slips_files.core.helpers.whitelist.whitelist_parser import (
     backup_local_whitelist,
     ensure_local_whitelist,
     web_whitelist_path,
+    format_ip_destination_port,
+    split_ip_destination_port,
 )
 
 from modules.web_interface.history import (
@@ -582,7 +585,7 @@ class RunDataReader:
 
     @staticmethod
     def _whitelist_effect(
-        direction: str, ignored: str, rule_type: str = "ip"
+        direction: str, ignored: str, rule_type: str = "ip", dst_port: str = ""
     ) -> str:
         """
         Describe one parsed whitelist rule's suppression semantics.
@@ -590,6 +593,8 @@ class RunDataReader:
         Parameters:
             direction: Source, destination, or both sides of activity.
             ignored: Alerts, flows, or both record classes.
+            rule_type: IP or request URI rule.
+            dst_port: Optional destination port required by a source-IP rule.
 
         Returns:
             Human-readable rule effect.
@@ -611,6 +616,8 @@ class RunDataReader:
                 "Prevents firewall blocking and ARP poisoning of this IP; "
                 "keeps flows, evidence and alerts."
             )
+        if dst_port:
+            return f"Suppresses {target} from this source IP only when the destination port is {dst_port}."
         return f"Suppresses {target} when this value appears on the {side}."
 
     def _runtime_whitelist_rules(self) -> List[Dict[str, Any]]:
@@ -631,6 +638,7 @@ class RunDataReader:
                     direction = str(details.get("from", "both"))
                     ignored = str(details.get("what_to_ignore", "alerts"))
                     evidence_type = str(details.get("evidence_type") or "")
+                    dst_port = str(details.get("dst_port") or "")
                     visible_value = (
                         str(value)
                         if label == "Request URI"
@@ -643,10 +651,12 @@ class RunDataReader:
                             "direction": direction,
                             "ignore": ignored,
                             "evidence_type": evidence_type,
+                            "dst_port": dst_port,
                             "effect": self._whitelist_effect(
                                 direction,
                                 ignored,
                                 "uri" if label == "Request URI" else "ip",
+                                dst_port,
                             ),
                             "source": "Parsed runtime rule",
                         }
@@ -718,6 +728,14 @@ class RunDataReader:
                     continue
                 type_name, value, direction, ignored = parts[:4]
                 evidence_type = parts[4] if len(parts) > 4 else ""
+                try:
+                    _, dst_port = (
+                        split_ip_destination_port(value)
+                        if type_name.lower() == "ip"
+                        else (value, "")
+                    )
+                except ValueError:
+                    continue
                 label = {
                     "ip": "IP address",
                     "domain": "Domain",
@@ -732,8 +750,9 @@ class RunDataReader:
                         "direction": direction,
                         "ignore": ignored,
                         "evidence_type": evidence_type,
+                        "dst_port": dst_port,
                         "effect": self._whitelist_effect(
-                            direction, ignored, type_name.lower()
+                            direction, ignored, type_name.lower(), dst_port
                         ),
                         "source": "Captured local file",
                     }
@@ -780,11 +799,12 @@ class RunDataReader:
             "total": len(rules),
             "rules": rules,
             "evidence_types": [item.name for item in EvidenceType],
+            "supports_dst_port_rules": True,
         }
 
     @staticmethod
     def _normalize_whitelist_ip(value: Any) -> str:
-        """Validate one IP, IP:port, or port-only whitelist value.
+        """Validate an IP, endpoint, port-only, or source-to-destination-port value.
 
         Parameters:
             value: Untrusted value from the browser.
@@ -797,6 +817,9 @@ class RunDataReader:
         candidate = value.strip()
         if not candidate or "%" in candidate:
             raise ValueError("Invalid IP address or port")
+        if "->" in candidate:
+            source, dst_port = split_ip_destination_port(candidate)
+            return format_ip_destination_port(source, dst_port)
         if candidate.startswith("["):
             address, separator, port = candidate[1:].partition("]:")
             if not separator:
@@ -852,6 +875,7 @@ class RunDataReader:
         ignored: Any,
         evidence_type: Any = None,
         rule_type: Any = "ip",
+        dst_port: Any = None,
     ) -> Dict[str, Any]:
         """Persist a web-managed IP or request URI rule and update the run.
 
@@ -862,6 +886,7 @@ class RunDataReader:
             ignored: Flows, evidence and alerts, or both.
             evidence_type: Optional evidence type for alert-only rules.
             rule_type: IP or URI rule.
+            dst_port: Optional destination-port condition for source-IP alert rules.
 
         Returns:
             The saved rule and whether it was added or removed.
@@ -905,6 +930,31 @@ class RunDataReader:
             if rule_type == "uri"
             else self._normalize_whitelist_ip(value)
         )
+        source, encoded_port = (
+            split_ip_destination_port(normalized)
+            if rule_type == "ip"
+            else (normalized, "")
+        )
+        if dst_port not in (None, ""):
+            if isinstance(dst_port, bool) or not isinstance(
+                dst_port, (str, int)
+            ):
+                raise ValueError(
+                    "Destination port must be a whole number from 1 to 65535"
+                )
+            normalized = format_ip_destination_port(source, dst_port)
+            _, requested_port = split_ip_destination_port(normalized)
+            if encoded_port and encoded_port != requested_port:
+                raise ValueError(
+                    "Destination port conflicts with the rule value"
+                )
+            encoded_port = requested_port
+        if encoded_port and (
+            rule_type != "ip" or direction != "src" or ignored != "alerts"
+        ):
+            raise ValueError(
+                "Destination-port conditions require a source IP and alert suppression"
+            )
         if ignored == "blocking":
             try:
                 ipaddress.ip_address(normalized)
@@ -1026,6 +1076,11 @@ class RunDataReader:
                                 if evidence_type
                                 else {}
                             ),
+                            **(
+                                {"dst_port": encoded_port}
+                                if encoded_port
+                                else {}
+                            ),
                         }
                     ),
                 )
@@ -1045,6 +1100,7 @@ class RunDataReader:
             "ignore": ignored,
             "evidence_type": evidence_type,
             "rule_type": rule_type,
+            **({"dst_port": encoded_port} if encoded_port else {}),
         }
 
     @staticmethod
@@ -1119,7 +1175,30 @@ class RunDataReader:
                 ] != record.get("record_type", record.get("evidence_type")):
                     continue
                 rule_value = str(rule.get("value") or "")
-                value_matches = value == rule_value
+                if type_name == "IP address" and "->" in rule_value:
+                    try:
+                        source, destination_port = split_ip_destination_port(
+                            rule_value
+                        )
+                        connection_matches = format_ip_destination_port(
+                            value, record.get("dst_port")
+                        ) == format_ip_destination_port(
+                            source, destination_port
+                        )
+                    except ValueError:
+                        continue
+                    entity = record.get(role, {})
+                    if (
+                        is_icmp_protocol(record.get("proto"))
+                        or not connection_matches
+                        or str(entity.get("ioc_type") or "").upper() != "IP"
+                        or str(entity.get("value")) != value
+                        or not self._direction_matches(direction, "src")
+                    ):
+                        continue
+                    value_matches = True
+                else:
+                    value_matches = value == rule_value
                 if type_name == "IP address" and port is not None:
                     address = f"[{value}]" if ":" in value else value
                     value_matches = value_matches or rule_value in {
@@ -10551,7 +10630,14 @@ class RequestHandler(BaseHTTPRequestHandler):
                     if len(arguments) == 4:
                         arguments += (None,)
                     arguments += ("uri",)
-                saved = self.server.reader.save_whitelist_rule(*arguments)
+                options = (
+                    {"dst_port": payload["dst_port"]}
+                    if payload.get("dst_port") not in (None, "")
+                    else {}
+                )
+                saved = self.server.reader.save_whitelist_rule(
+                    *arguments, **options
+                )
             elif path in {"/api/alert-review", "/api/evidence-review"}:
                 saved = self.server.reader.save_review(
                     "alert" if path == "/api/alert-review" else "evidence",

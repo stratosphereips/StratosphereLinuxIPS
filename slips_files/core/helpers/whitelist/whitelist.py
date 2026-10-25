@@ -31,6 +31,7 @@ from slips_files.core.structures.evidence import (
     Attacker,
     Victim,
     IoCType,
+    is_icmp_protocol,
 )
 
 
@@ -332,6 +333,14 @@ class Whitelist:
         )
 
         for ip in self.extract_ips_from_entity(entity):
+            destination = (
+                {"dst_port": evidence.dst_port}
+                if entity.direction in (Direction.SRC, Direction.SRC.name)
+                and entity.ioc_type in (IoCType.IP, IoCType.IP.name)
+                and ip == entity.value
+                and not is_icmp_protocol(getattr(evidence, "proto", None))
+                else {}
+            )
             if self.ip_analyzer.is_whitelisted(
                 ip,
                 entity.direction,
@@ -343,6 +352,7 @@ class Whitelist:
                     else None
                 ),
                 evidence.evidence_type.name,
+                **destination,
             ):
                 return True
 

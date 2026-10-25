@@ -624,6 +624,31 @@ option writes the same rule into the configured whitelist file.
 
 ### Alerts Whitelist
 
+To suppress one evidence type only when a specific source IP connects to a
+specific **destination port**, add this line to your copied whitelist file:
+
+```csv
+ip,192.168.1.163->*:902,src,alerts,UNKNOWN_PORT
+```
+
+All three conditions must match: the source is `192.168.1.163`, the destination
+port is `902`, and the evidence type is `UNKNOWN_PORT`. `*` means any destination
+IP. The source port can be anything. Other sources, destination ports and evidence
+types remain eligible for alerts. The rule keeps flow processing enabled and
+excludes matching future evidence from alert scoring; it does not remove old
+evidence or alerts. Existing broader whitelist rules still apply independently.
+
+Use `[2001:db8::10]->*:902` for an IPv6 source. The source must be one IP,
+and the destination port must be an integer from 1 to 65535. This syntax requires
+`src,alerts`; ICMP cannot match because it has no ports. Omit the fifth column
+to apply to every evidence type for that source and destination port. The source
+must be recorded directly in the evidence, rather than inferred from a domain.
+
+This differs from `ip,192.168.1.163:902,src,alerts,UNKNOWN_PORT`, which matches
+**source port** 902. Restart Slips once after upgrading to load the new code.
+After that, edits use the normal whitelist refresh; the web editor also supports
+the destination-port condition.
+
 If you whitelist some piece of data not to generate alerts, the process is the following:
 
 - If you whitelisted an IP

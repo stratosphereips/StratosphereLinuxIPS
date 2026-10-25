@@ -2198,8 +2198,13 @@ def test_web_whitelist_rejects_invalid_alert_scope(
         )
 
 
-def test_local_web_request_can_add_whitelist_rule() -> None:
-    """Route a local JSON request to the whitelist writer."""
+@pytest.mark.parametrize("dst_port", [None, 902])
+def test_local_web_request_can_add_whitelist_rule(dst_port: int | None) -> None:
+    """Route legacy and destination-port requests to the whitelist writer.
+
+    Parameters:
+        dst_port: Optional new condition in the JSON request.
+    """
     _module_factory = ModuleFactory()
     reader = Mock()
     reader.save_whitelist_rule.return_value = {
@@ -2219,6 +2224,7 @@ def test_local_web_request_can_add_whitelist_rule() -> None:
                 "value": "192.0.2.4:443",
                 "direction": "dst",
                 "ignore": "alerts",
+                **({"dst_port": dst_port} if dst_port is not None else {}),
             }
         ).encode(),
         headers={
@@ -2232,7 +2238,8 @@ def test_local_web_request_can_add_whitelist_rule() -> None:
             assert response.status == 200
             assert json.load(response)["value"] == "192.0.2.4:443"
         reader.save_whitelist_rule.assert_called_once_with(
-            "add", "192.0.2.4:443", "dst", "alerts"
+            "add", "192.0.2.4:443", "dst", "alerts",
+            **({"dst_port": dst_port} if dst_port is not None else {}),
         )
     finally:
         server.shutdown()
@@ -7843,3 +7850,145 @@ def test_pcap_score_history_keeps_current_remainder_on_capture_clock(tmp_path: P
     assert history['timeline'][-1]['score'] == .32
     assert history['timeline'][-1]['ts'] == pytest.approx(1668887061.001, rel=0, abs=.0001)
     assert history['timeline'][-1]['current'] is True
+
+
+@pytest.mark.parametrize("source,value", [
+    ("192.0.2.10", "192.0.2.10->*:902"),
+    ("2001:db8::10", "[2001:db8::10]->*:902"),
+])
+def test_web_destination_port_rule_round_trip(tmp_path: Path, source: str, value: str) -> None:
+    """Save, list, reload and remove narrow rules without changing other ports.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+        source: Source address entered in the editor.
+        value: Canonical value expected in the file and table.
+    """
+    factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    configured = tmp_path / "personal.conf"
+    configured.write_text(f"ip,{source},src,alerts,ARP_SCAN\n")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {configured}\n"
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.cache = Mock()
+    hashes: dict = {}
+    reader.redis.hset.side_effect = lambda name, key, data: hashes.setdefault(name, {}).__setitem__(key, data)
+    reader.redis.hgetall.side_effect = lambda name: hashes.get(name, {})
+    reader.redis.hexists.side_effect = lambda name, key: key in hashes.get(name, {})
+    reader.redis.hdel.side_effect = lambda name, key: hashes.get(name, {}).pop(key, None)
+    reader.response_metadata = Mock(return_value={"backend_status": {"connected": True}})
+    saved = reader.save_whitelist_rule("add", source, "src", "alerts", "UNKNOWN_PORT", dst_port=902)
+    assert saved["value"] == value
+    assert saved["dst_port"] == "902"
+    reader.save_whitelist_rule("add", source, "src", "alerts", "UNKNOWN_PORT", dst_port=903)
+    payload = reader.whitelists()
+    assert payload["supports_dst_port_rules"]
+    rule = next(row for row in payload["rules"] if row["value"] == value)
+    assert rule["managed"]
+    assert rule["dst_port"] == "902"
+    assert "destination port is 902" in rule["effect"]
+    whitelist = factory.create_whitelist_obj()
+    whitelist.parser.local_whitelist_path = str(configured)
+    assert whitelist.parser.parse()
+    assert whitelist.parser.whitelisted_ips[f"{value}|UNKNOWN_PORT"]["dst_port"] == "902"
+    reader.save_whitelist_rule("remove", value, "src", "alerts", "UNKNOWN_PORT")
+    assert f"ip,{value}," not in configured.read_text()
+    assert f"ip,{source},src,alerts,ARP_SCAN" in configured.read_text()
+    remaining = reader._runtime_whitelist_rules()
+    assert len(remaining) == 1
+    assert remaining[0]["dst_port"] == "903"
+
+
+@pytest.mark.parametrize("value,port,direction,ignored,kind", [
+    ("192.0.2.10", 0, "src", "alerts", "ip"),
+    ("192.0.2.10", 65536, "src", "alerts", "ip"),
+    ("192.0.2.10", True, "src", "alerts", "ip"),
+    ("192.0.2.10", 902.5, "src", "alerts", "ip"),
+    ("192.0.2.10", "abc", "src", "alerts", "ip"),
+    ("192.0.2.10:50000", 902, "src", "alerts", "ip"),
+    ("*:50000", 902, "src", "alerts", "ip"),
+    ("192.0.2.0/24", 902, "src", "alerts", "ip"),
+    ("192.0.2.10", 902, "dst", "alerts", "ip"),
+    ("192.0.2.10", 902, "both", "alerts", "ip"),
+    ("192.0.2.10", 902, "src", "flows", "ip"),
+    ("192.0.2.10", 902, "src", "both", "ip"),
+    ("192.0.2.10", 902, "both", "blocking", "ip"),
+    ("/example", 902, "both", "flows", "uri"),
+    ("192.0.2.10->*:903", 902, "src", "alerts", "ip"),
+])
+def test_web_rejects_invalid_destination_port_condition(
+    value: str, port: object, direction: str, ignored: str, kind: str,
+) -> None:
+    """Reject unsafe combinations before accessing the whitelist file.
+
+    Parameters:
+        value: Submitted source or URI.
+        port: Invalid destination port or incompatible condition.
+        direction: Selected endpoint side.
+        ignored: Selected suppression mode.
+        kind: Selected rule type.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    with pytest.raises(ValueError):
+        reader.save_whitelist_rule("add", value, direction, ignored, rule_type=kind, dst_port=port)
+
+
+@pytest.mark.parametrize("source,side,port,kind,proto,indicator,expected", [
+    ("192.0.2.10", "SRC", 902, "UNKNOWN_PORT", "tcp", "IP", True),
+    ("192.0.2.11", "SRC", 902, "UNKNOWN_PORT", "tcp", "IP", False),
+    ("192.0.2.10", "DST", 902, "UNKNOWN_PORT", "tcp", "IP", False),
+    ("192.0.2.10", "SRC", 903, "UNKNOWN_PORT", "tcp", "IP", False),
+    ("192.0.2.10", "SRC", 902, "ARP_SCAN", "tcp", "IP", False),
+    ("192.0.2.10", "SRC", 902, "UNKNOWN_PORT", "icmp", "IP", False),
+    ("example.com", "SRC", 902, "UNKNOWN_PORT", "tcp", "DOMAIN", False),
+])
+def test_web_explains_only_matching_destination_port_rules(
+    source: str, side: str, port: int, kind: str, proto: str, indicator: str, expected: bool,
+) -> None:
+    """Keep the displayed whitelist reason consistent with the detection matcher.
+
+    Parameters:
+        source: Evidence entity address or domain.
+        side: Entity direction.
+        port: Destination port.
+        kind: Evidence type.
+        proto: Evidence protocol.
+        indicator: Direct IP or indirectly resolved domain.
+        expected: Whether this rule should be displayed as matching.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    rule = {"type": "IP address", "value": "192.0.2.10->*:902", "direction": "src",
+            "ignore": "alerts", "evidence_type": "UNKNOWN_PORT", "dst_port": "902"}
+    record = {"attacker": {"value": source, "direction": side, "ioc_type": indicator,
+                           "DNS_resolution": ["192.0.2.10"] if indicator == "DOMAIN" else []},
+              "dst_port": port, "evidence_type": kind, "proto": proto}
+    assert bool(reader._whitelist_matches_for_record(record, [rule])) is expected
+
+
+def test_offline_whitelist_lists_destination_port(tmp_path: Path) -> None:
+    """Explain the same destination condition when only a captured file remains.
+
+    Parameters:
+        tmp_path: Isolated captured metadata directory.
+    """
+    _factory = ModuleFactory()
+    snapshot = tmp_path / "whitelist.conf"
+    snapshot.write_text("ip,192.0.2.10->*:902,src,alerts,UNKNOWN_PORT\n")
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {}
+    reader._metadata_snapshot = Mock(return_value=snapshot)
+    rules = reader._runtime_whitelist_rules()
+    assert len(rules) == 1
+    assert rules[0]["dst_port"] == "902"
+    assert rules[0]["evidence_type"] == "UNKNOWN_PORT"
+    assert "destination port is 902" in rules[0]["effect"]

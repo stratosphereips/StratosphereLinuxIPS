@@ -12,6 +12,9 @@ from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
     Direction,
 )
+from slips_files.core.helpers.whitelist.whitelist_parser import (
+    format_ip_destination_port,
+)
 
 
 class IPAnalyzer(IWhitelistAnalyzer):
@@ -62,6 +65,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         what_to_ignore: str,
         port: int | str | None = None,
         evidence_type: str | None = None,
+        dst_port: int | str | None = None,
     ) -> bool:
         """
         checks the given IP in the whitelisted IPs read from whitelist.conf
@@ -70,6 +74,7 @@ class IPAnalyzer(IWhitelistAnalyzer):
         :param what_to_ignore: can be 'flows' or 'alerts'
         :param port: Port on the same side as the IP, if available.
         :param evidence_type: Restrict matching to this evidence type.
+        :param dst_port: Destination port of a direct source-IP evidence entity.
         """
         if not self.enable_local_whitelist:
             return False
@@ -86,6 +91,16 @@ class IPAnalyzer(IWhitelistAnalyzer):
                 address = f"[{ip}]" if ":" in ip else ip
                 candidates.append(f"{address}:{port_number}")
                 candidates.append(f"*:{port_number}")
+
+        if what_to_ignore == "alerts" and direction in (
+            Direction.SRC,
+            Direction.SRC.name,
+        ):
+            if dst_port is not None:
+                try:
+                    candidates.append(format_ip_destination_port(ip, dst_port))
+                except ValueError:
+                    pass
 
         if evidence_type:
             candidates = [
