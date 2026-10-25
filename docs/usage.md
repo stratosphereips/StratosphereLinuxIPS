@@ -227,6 +227,14 @@ PCAP run its own output, persistent data directory, and web port. Copy your
 active configuration to `permanent/pcap-analysis/slips.yaml`, then change
 these settings in the copy:
 
+This is an independent configuration file. Later changes to `config/slips.yaml`
+or your live configuration do not update this copy. When enabling a new module,
+copy its explained section into the PCAP configuration too. For numeric C2
+analysis, include the `beaconing` section and its evidence-signal overrides, and
+put `rnn_cc_detection` in `modules.disable` if using the numeric replacement.
+The web Configuration tab shows the file saved when that run started; changes
+appear in a newly started analysis, not in the saved configuration of an old run.
+
 ```yaml
 parameters:
   permanent_dir: permanent/pcap-analysis

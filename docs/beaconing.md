@@ -37,6 +37,12 @@ the timing detector, set `model_file: ''`. Restart the relevant Slips instance
 after changing module settings. The website shows each finding under its source
 host and identifies `beaconing` as its source module.
 
+If you run with `-c permanent/pcap-analysis/slips.yaml`, add this section to that
+file too. Copies made before this module was added do not gain new sections
+automatically. Without an explicit section, this module uses its built-in
+defaults, but the web Configuration tab only lists the startup YAML snapshot.
+A missing section there therefore does not mean the detector was disabled.
+
 There is no period during which all observed traffic is declared benign. A
 channel needs at least 12 connections spanning 30 seconds before its first check.
 For a slow beacon, collecting those connections takes longer. A one-minute test
