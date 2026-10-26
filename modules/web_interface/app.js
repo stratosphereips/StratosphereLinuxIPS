@@ -745,6 +745,39 @@ function peerConnection(detection, record) {
     dst_port: Number(match[1]), reconstructed: true };
 }
 
+/** Explain the connection roles before naming the peer delivering the report.
+ * @param {object} record Received P2P evidence.
+ * @returns {HTMLElement} Readable endpoints and a separate reporting-peer line.
+ */
+function peerEvidenceDescription(record) {
+  const detections = peerDetections(record);
+  const connection = peerConnection(detections[0] || {}, record);
+  const summary = text("div", "", "evidence-detail-description peer-evidence-summary");
+  const endpoints = text("p", "");
+  if (connection.src_ip || connection.dst_ip) {
+    endpoints.className = "peer-evidence-endpoints";
+    [["Source", connection.src_ip, connection.src_port],
+      ["Destination", connection.dst_ip, connection.dst_port]].forEach(([role, ip, port]) => {
+      const endpoint = text("span", "");
+      endpoint.append(text("strong", `${role}: `), ip ? hostLink(ip) : text("span", "Not supplied"));
+      if (Number.isInteger(port) && !isIcmpProtocol(connection.proto)) endpoint.append(text("span", ` · port ${port}`));
+      endpoints.append(endpoint);
+    });
+  } else {
+    const subject = peerAddress(record.profile_ip || record.attacker?.value);
+    endpoints.append(text("strong", "Reported host: "), subject ? hostLink(subject) : text("span", "Not supplied"),
+      text("span", ". The peer did not supply connection endpoints."));
+  }
+  const reporter = text("p", "Reported by ");
+  const peer = record.peer_report || {};
+  const peerIp = peerAddress(peer.peer_ip);
+  reporter.append(peerIp ? hostLink(peerIp) : text("span", peer.peer_id ? shortPeerId(peer.peer_id) : "an unidentified peer"),
+    text("span", " via P2P to this Slips."));
+  summary.append(endpoints, reporter);
+  if (detections.length > 1) summary.append(text("p", `First of ${detections.length} reported findings; all findings are shown below.`));
+  return summary;
+}
+
 /** Render one named role in a connection or report-delivery diagram.
  * @param {string} role Meaning of this endpoint.
  * @param {string} ip Literal IP, when supplied.
@@ -5865,7 +5898,18 @@ function closeEvidenceDetail(restoreFocus = true, closeAll = false) {
  * @returns {string} Concise description for the page banner.
  */
 function evidenceDetailHeadline(record, groups = []) {
-  if (isPeerReport(record)) return `${evidenceTypeLabel(record)} · reported via P2P`;
+  if (isPeerReport(record)) {
+    const detection = peerDetections(record)[0];
+    const connection = peerConnection(detection || {}, record);
+    if (connection.src_ip && connection.dst_ip) {
+      if (detection.evidence_type === "UNKNOWN_PORT" && connection.dst_port !== undefined && !isIcmpProtocol(connection.proto)) {
+        const protocol = connection.proto ? `/${connection.proto.toUpperCase()}` : "";
+        return `${connection.src_ip} connected to unknown port ${connection.dst_port}${protocol} on ${connection.dst_ip}`;
+      }
+      return `${evidenceTypeLabel(record)}: ${connection.src_ip} → ${connection.dst_ip}`;
+    }
+    return `${evidenceTypeLabel(record)} · report about ${peerAddress(record.profile_ip || record.attacker?.value) || "an unspecified host"}`;
+  }
   if (record.evidence_type === "UNKNOWN_PORT") {
     const flow = groups[0]?.network_flow?.flow;
     const source = flowValue(flow, "saddr");
@@ -5993,7 +6037,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     networkContext(record));
   const headline = text("h2", evidenceDetailHeadline(record));
   const description = isPeerReport(record)
-    ? text("p", "A peer reported this finding. The connection and report delivery are shown separately below.", "evidence-detail-description")
+    ? peerEvidenceDescription(record)
     : hostDescription(record, "evidence-detail-description");
   bannerCopy.append(meta, headline, description);
   const bannerStats = document.createElement("div");

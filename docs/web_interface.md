@@ -946,6 +946,14 @@ report information. It does not try to load the peer's flows from the local
 capture. The original report and its peer ID, score and confidence remain
 available in the record details.
 
+The P2P evidence headline starts with the reported source, destination and
+service when these are known. For example: **192.168.1.163 connected to unknown
+port 55000/TCP on 192.168.1.170**. The lines below label **Source**,
+**Destination**, and **Reported by** separately, with clickable IPs and host
+names. The reporting peer is the Slips sending the finding; it is not
+necessarily either connection endpoint. Missing endpoints are labeled as not
+supplied; a report's subject is not assumed to be its source.
+
 P2P details separate **Network activity reported** (source → destination) from
 **Report delivery** (reporting Slips ⇢ receiving Slips). Both diagrams use
 explicit role labels and show supplied IPs and ports, with clickable host names.

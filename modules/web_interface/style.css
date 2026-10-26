@@ -994,6 +994,10 @@ body.evidence-detail-active main > .panel:not(#evidence-detail) { display: none;
 .evidence-detail-meta > span + span:not(.type-chip)::before { margin-right: .35rem; color: #546777; content: "·"; }
 .evidence-detail-banner h2 { margin: .38rem 0 .3rem; color: var(--text); font-size: 1rem; line-height: 1.3; }
 .evidence-detail-description { display: block; max-width: 95ch; color: var(--muted); line-height: 1.4; }
+.peer-evidence-summary p { margin: .35rem 0 0; }
+.peer-evidence-endpoints { display: flex; flex-wrap: wrap; gap: .35rem 1.25rem; }
+.peer-evidence-endpoints > span { min-width: 0; overflow-wrap: anywhere; }
+.peer-evidence-endpoints strong { color: var(--text); }
 .evidence-detail-stats { display: grid; min-width: 285px; align-content: space-between; gap: .4rem; }
 .evidence-detail-stats .investigation-summary { grid-template-columns: repeat(3, minmax(86px, 1fr)); gap: .35rem; margin: 0; }
 .evidence-detail-stats .investigation-stat { padding: .35rem .5rem; border-color: #273341; background: #101821; }

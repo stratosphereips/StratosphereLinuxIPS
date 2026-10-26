@@ -319,7 +319,12 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             and "From P2P" in evidence_type
         )
         detail = page.locator("#evidence-detail-content")
-        assert "Unknown port" in detail.locator("h2").inner_text()
+        assert detail.locator("h2").inner_text() == "192.0.2.10 connected to unknown port 8123/TCP on 192.0.2.20"
+        summary = detail.locator(".peer-evidence-summary")
+        assert summary.locator(".peer-evidence-endpoints > span").nth(0).inner_text().startswith("Source: 192.0.2.10")
+        assert summary.locator(".peer-evidence-endpoints > span").nth(1).inner_text().startswith("Destination: 192.0.2.20")
+        assert "Reported by 192.0.2.2" in summary.inner_text()
+        assert summary.locator("button").count() == 3
         assert "Connection to unknown TCP port 8123" in detail.inner_text()
         assert (
             "peer-A" in detail.inner_text()
@@ -398,6 +403,45 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
                 "src_port": 6668, "dst_port": 6668,
             }]}}
         legacy.pop("reported_detections", None)
+        screenshot_record = {**legacy, "profile_ip": "192.168.1.163", "peer_report": {
+            **legacy["peer_report"], "peer_ip": "192.168.1.170", "provenance": [{
+                "evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer",
+                "description": "Connection to unknown destination port 55000/TCP destination IP 192.168.1.170.",
+                "src_port": 59146, "dst_port": 55000,
+            }]}}
+        page.evaluate("""async record => {
+            state.hostNames.set('192.168.1.163',{name:'Cherry',checkedAt:Date.now()});
+            state.hostNames.set('192.168.1.170',{name:'rpi-slips',checkedAt:Date.now()});
+            await openEvidence(record);
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', ['evidence','evidence-detail'].includes(panel.id)));
+        }""", screenshot_record)
+        banner = detail.locator(".evidence-detail-banner")
+        assert banner.locator("h2").inner_text() == "192.168.1.163 connected to unknown port 55000/TCP on 192.168.1.170"
+        assert "Cherry" in banner.locator(".peer-evidence-endpoints > span").nth(0).inner_text()
+        assert "Reported by 192.168.1.170" in banner.text_content()
+        artifact = Path("output/p2p-report-roles")
+        artifact.mkdir(parents=True, exist_ok=True)
+        banner.screenshot(path=str(artifact / f"headline-{theme}.png"))
+        for width in (320, 900):
+            page.set_viewport_size({"width": width + 60, "height": 1100})
+            banner.evaluate("(banner,width) => banner.style.width=width+'px'", width)
+            assert banner.locator(".peer-evidence-summary").evaluate("summary => summary.scrollWidth <= summary.clientWidth")
+        page.set_viewport_size({"width": 1600, "height": 1100})
+        for detection, expected in [
+            ({"evidence_type":"ARP_SCAN","module":"arp","description":"ARP scan"}, "ARP scan · report about 192.168.1.163"),
+            ({"evidence_type":"UNKNOWN_PORT","module":"conn_analyzer","description":"No endpoints supplied"}, "Unknown port · report about 192.168.1.163"),
+            ({"evidence_type":"UNKNOWN_PORT","src_ip":"192.168.1.170","dst_ip":"192.168.1.163","dst_port":22}, "192.168.1.170 connected to unknown port 22 on 192.168.1.163"),
+            ({"evidence_type":"UNKNOWN_PORT","dst_ip":"192.168.1.170","dst_port":55000}, "Unknown port · report about 192.168.1.163"),
+            ({"evidence_type":"LONG_CONNECTION","src_ip":"2001:db8::1","dst_ip":"2001:db8::2","proto":"icmp","src_port":8,"dst_port":0}, "Long connection: 2001:db8::1 → 2001:db8::2"),
+        ]:
+            variant = {**screenshot_record, "peer_report": {**screenshot_record["peer_report"], "provenance": [detection]}}
+            assert page.evaluate("record => evidenceDetailHeadline(record)", variant) == expected
+            if detection.get("proto") == "icmp":
+                assert " · port " not in page.evaluate("record => peerEvidenceDescription(record).textContent", variant).lower()
+            if not detection.get("src_ip"):
+                assert "Source: 192.168.1.163" not in page.evaluate("record => peerEvidenceDescription(record).textContent", variant)
+        no_details = {**screenshot_record, "peer_report": {"peer_id": "peer-A"}}
+        assert "Reported host: 192.168.1.163" in page.evaluate("record => peerEvidenceDescription(record).textContent", no_details)
         page.evaluate("""record => {
             document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', ['evidence','evidence-detail'].includes(panel.id)));
             byId('evidence-detail-content').replaceChildren(peerDetectionPanel(record));
