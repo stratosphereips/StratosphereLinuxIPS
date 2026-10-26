@@ -1388,6 +1388,60 @@ def test_check_device_changing_ips(
 
 
 @pytest.mark.parametrize(
+    "source,mac,old_ips,gateway_ip,gateway_mac,expected_old",
+    [
+        ("172.18.0.1", "b6:49:9f:96:b2:d4", ["147.32.82.228"], None, None, None),
+        ("172.18.0.1", "b6:49:9f:96:b2:d4", ["172.18.0.9"], "172.18.0.1", "b6:49:9f:96:b2:d4", None),
+        ("172.18.0.8", "b6:49:9f:96:b2:d4", ["172.18.0.9"], "172.18.0.1", "b6:49:9f:96:b2:d4", None),
+        ("172.18.0.8", "ca:ef:de:b4:f3:fc", ["147.32.82.228", "172.18.0.9"], "172.18.0.1", "b6:49:9f:96:b2:d4", "172.18.0.9"),
+        ("172.18.0.8", "ca:ef:de:b4:f3:fc", ["172.18.0.8"], None, None, None),
+        ("172.18.0.8", "ff:ff:ff:ff:ff:ff", ["172.18.0.9"], None, None, None),
+    ],
+)
+def test_device_ip_change_rejects_routed_mac_ownership(
+    source: str, mac: str, old_ips: list[str], gateway_ip: str | None,
+    gateway_mac: str | None, expected_old: str | None,
+) -> None:
+    """Ignore router hops and old public associations, retaining local changes."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.was_ip_seen_in_connlog_before.return_value = False
+    conn.db.get_ip_of_mac.return_value = json.dumps(old_ips)
+    conn.db.get_network_state.return_value = None
+    conn.db.get_gateway_ip.return_value = gateway_ip
+    conn.db.get_gateway_mac.return_value = gateway_mac
+    conn.set_evidence.device_changing_ips = Mock()
+    flow = SimpleNamespace(type_="conn", saddr=source, smac=mac, interface="eth0", starttime=1793026866.0)
+
+    conn.check_device_changing_ips("timewindow2", flow)
+
+    if expected_old:
+        conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow2", flow, expected_old)
+    else:
+        conn.set_evidence.device_changing_ips.assert_not_called()
+
+
+def test_device_ip_change_uses_gateway_at_flow_time() -> None:
+    """A delayed flow must use its previous network's gateway."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.was_ip_seen_in_connlog_before.return_value = False
+    conn.db.get_ip_of_mac.return_value = json.dumps(["172.18.0.9"])
+    conn.db.get_network_state.return_value = {
+        "changed_at": 200.0, "gateway_mac": "00:11:22:33:44:55",
+        "gateway_ip": "192.168.1.1", "history": [{
+            "changed_at": 100.0, "gateway_mac": "b6:49:9f:96:b2:d4",
+            "gateway_ip": "172.18.0.1",
+        }],
+    }
+    conn.set_evidence.device_changing_ips = Mock()
+    flow = SimpleNamespace(type_="conn", saddr="172.18.0.8", smac="b6:49:9f:96:b2:d4", interface="eth0", starttime=150.0)
+
+    conn.check_device_changing_ips("timewindow2", flow)
+
+    conn.set_evidence.device_changing_ips.assert_not_called()
+    conn.db.get_gateway_mac.assert_not_called()
+
+
+@pytest.mark.parametrize(
     "ip, ip_info, is_ip_asn_in_org_asn, "
     "is_domain_in_org, is_ip_in_org, expected_result",
     [

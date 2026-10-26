@@ -83,11 +83,16 @@ the entropy threshold can be changed in slips.yaml by changing the value of ```e
 
 ### Devices changing IPs
 
-Slips stores the MAC of each new IP it sees in conn.log.
+For a private IPv4 source first seen in conn.log, Slips checks whether its
+unicast MAC was previously associated with a different private IPv4 address.
+If so, it reports "Device changing IPs". Link-local and special addresses are
+excluded.
 
-Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
-
-If so, it alerts "Device changing IPs".
+Public IPs and the capture interface's gateway are excluded from this check.
+For routed traffic, the Ethernet MAC belongs to the local router, not the
+remote IP. Slips must not treat that MAC as proof that a remote host changed
+its address. Public IPs are not saved as device MAC owners; old public entries
+are also ignored by this detector.
 
 
 ## GRE tunnels

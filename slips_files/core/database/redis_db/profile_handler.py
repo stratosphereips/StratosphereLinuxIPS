@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import ipaddress
 import sys
 import time
 import traceback
@@ -19,10 +20,8 @@ import redis
 import validators
 
 from slips_files.common.slips_utils import utils
+from slips_files.common.mac import classify_mac
 from slips_files.core.structures.flow_attributes import Role
-
-
-from slips_files.common.ips import IPV4_ANY
 
 
 class ProfileHandler:
@@ -815,14 +814,29 @@ class ProfileHandler:
         self.set_profileid_field(profileid, self.constants.MAC, mac)
 
     def _should_associate_this_mac_with_this_ip(
-        self, ip, mac, interface
+        self, ip: str, mac: str, interface: str
     ) -> bool:
+        """Reject routed and group addresses as device MAC ownership.
+
+        Parameters:
+            ip: Candidate endpoint address.
+            mac: Ethernet address observed in the flow.
+            interface: Capture interface used to identify its gateway.
+
+        Returns:
+            Whether this endpoint can be stored as a local device.
+        """
+        try:
+            address = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
         return not (
-            ip == IPV4_ANY
-            or not mac
-            # sometimes we create profiles with the mac address.
-            # don't save that in MAC hash
-            or validators.mac_address(ip)
+            address.is_global
+            or address.is_unspecified
+            or address.is_multicast
+            or address.is_loopback
+            or classify_mac(mac)
+            not in {"locally_administered", "universally_administered"}
             or self._is_gw_mac(mac, interface)
             # we're trying to assign the gw mac to
             # an ip that isn't the gateway's
@@ -846,13 +860,12 @@ class ProfileHandler:
         """
         incoming_ip: str = profileid.split("_")[1]
 
+        # A routed public endpoint can reveal the router, not MAC ownership.
+        self._determine_gw_mac(incoming_ip, mac_addr, interface)
         if not self._should_associate_this_mac_with_this_ip(
             incoming_ip, mac_addr, interface
         ):
             return False
-
-        # see if this is the gw mac
-        self._determine_gw_mac(incoming_ip, mac_addr, interface)
 
         # get the ips that belong to this mac
         cached_ips: Optional[List] = self.r.hmget(

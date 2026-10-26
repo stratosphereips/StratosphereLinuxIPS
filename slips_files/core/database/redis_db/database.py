@@ -54,6 +54,7 @@ from typing import (
 )
 
 from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.common.mac import classify_mac
 from slips_files.core.structures.risk_weights import RiskWeight
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -1519,39 +1520,50 @@ class RedisDB(
         )
 
     def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
-        """
-        Detects the MAC of the gateway if 1 mac is seen
-        assigned to 1 public destination IP
-        :param ip: dst ip that should be associated with the given MAC info
+        """Check the gateway stored by any worker for this interface.
+
+        Parameters:
+            mac_addr: Candidate Ethernet address.
+            interface: Capture interface.
+
+        Returns:
+            Whether this interface's known gateway has that address.
         """
 
         if not validators.mac_address(mac_addr):
             return False
 
-        if self._gateway_MAC_found:
-            # gateway MAC already set using this function
-            return self.get_gateway_mac(interface) == mac_addr
+        return (
+            str(self.get_gateway_mac(interface) or "").lower()
+            == mac_addr.lower()
+        )
 
-    def _determine_gw_mac(self, ip, mac, interface: str):
+    def _determine_gw_mac(self, ip: str, mac: str, interface: str) -> bool:
+        """Infer a missing gateway from an Ethernet hop to a public IP.
+
+        Parameters:
+            ip: Endpoint address observed through the hop.
+            mac: Observed unicast Ethernet address.
+            interface: Capture interface receiving the gateway information.
+
+        Returns:
+            Whether a previously unknown gateway MAC was stored.
         """
-        sets the gw mac if the given ip is public and is assigned a mc
-        """
-        if self._gateway_MAC_found:
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except ValueError:
             return False
-        # since we don't have a mac gw in the db, see if
-        # this given mac is the gw mac
-        ip_obj = ipaddress.ip_address(ip)
-        if not utils.is_private_ip(ip_obj):
-            # now we're given a public ip and a MAC that's supposedly
-            # belongs to it
-            # we are sure this is the gw mac
-            # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac, interface)
-
-            # mark the gw mac as found so we don't look for it again
-            self._gateway_MAC_found = True
-            return True
-        return False
+        if (
+            not ip_obj.is_global
+            or ip_obj.is_multicast
+            or classify_mac(mac)
+            not in {"locally_administered", "universally_administered"}
+            or self.get_gateway_mac(interface)
+        ):
+            return False
+        self.set_default_gateway(self.constants.MAC, mac, interface)
+        self._gateway_MAC_found = True
+        return True
 
     def get_ip_of_mac(self, mac_addr: str):
         """

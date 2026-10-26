@@ -591,17 +591,20 @@ class ConnAnalyzer(IAsyncModule):
         # its ok to change ips from a link local ip to another private ip
         return ip in SPECIAL_IPV4 or ipaddress.ip_address(ip).is_link_local
 
-    def check_device_changing_ips(self, twid, flow):
-        """
-        Every time we have a flow for a new ip
-            (an ip that we're seeing for the first time)
-        we check if the MAC of this srcip was associated with another ip
-        this check is only done once for each private source ip slips sees
+    def check_device_changing_ips(self, twid: str, flow: Any) -> None:
+        """Check whether a new private source uses another private host's MAC.
+
+        Parameters:
+            twid: Detection time window.
+            flow: Connection containing source IP and Ethernet addresses.
         """
         if "conn" not in flow.type_:
             return
 
-        if not flow.smac:
+        if classify_mac(flow.smac) not in {
+            "locally_administered",
+            "universally_administered",
+        }:
             return
 
         saddr_obj = ipaddress.ip_address(flow.saddr)
@@ -614,11 +617,25 @@ class ConnAnalyzer(IAsyncModule):
             return
 
         if self.db.was_ip_seen_in_connlog_before(flow.saddr):
-            # we should only check once for the first
-            # time we're seeing this flow
             return
-
         self.db.mark_srcip_as_seen_in_connlog(flow.saddr)
+
+        state = network_state_for_flow(self.db, flow)
+        gateway_mac = (
+            state.get("gateway_mac")
+            if state
+            else self.db.get_gateway_mac(flow.interface)
+        )
+        gateway_ip = (
+            state.get("gateway_ip")
+            if state
+            else self.db.get_gateway_ip(flow.interface)
+        )
+        if (
+            flow.smac.lower() == str(gateway_mac or "").lower()
+            or flow.saddr == gateway_ip
+        ):
+            return
 
         if old_ip_list := self.db.get_ip_of_mac(flow.smac):
             # old_ip is a list that may contain the ipv6 of this MAC
@@ -626,8 +643,10 @@ class ConnAnalyzer(IAsyncModule):
             # has the given saddr and MAC
             # so this would be fp. so, make sure we're checking the ipv4 only
             for ip in json.loads(old_ip_list):
-                if validators.ipv4(ip) and not self._is_it_ok_for_ip_to_change(
-                    ip
+                if (
+                    validators.ipv4(ip)
+                    and utils.is_private_ip(ip)
+                    and not self._is_it_ok_for_ip_to_change(ip)
                 ):
                     # found an ipv4 associated previously with the flow's smac
                     # is it the same as the flow's srcip?
