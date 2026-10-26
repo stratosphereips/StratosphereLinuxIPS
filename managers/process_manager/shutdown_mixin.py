@@ -41,6 +41,14 @@ class ShutdownMixin:
 
     INTERRUPT_SHUTDOWN_GRACE_SECONDS = 30
 
+    def cleanup_failed_startup(self) -> None:
+        """Stop and reap this run's workers after an incomplete startup."""
+        self.children = multiprocessing.active_children()
+        self._remember_shutdown_processes()
+        self._finish_owned_processes()
+        for process in self.children:
+            process.join(1)
+
     def _notify_shutdown_event(self, event: object, deadline: float) -> bool:
         """Signal workers without letting a damaged shared lock block main.
 
@@ -807,76 +815,72 @@ class ShutdownMixin:
 
             graceful_shutdown = True
             shutdown_reason = ""
-            if self.main.mode == "daemonized":
-                self.kill_daemon_children()
-                profiles_len: int = self.main.db.get_profiles_len()
-                self.main.daemon.print(f"Total analyzed IPs: {profiles_len}.")
-                self.main.daemon.delete_pidfile()
-            else:
-                flows_count: int = self.main.db.get_flows_count()
-                print(
-                    f"Total flows read (without altflows): {flows_count}",
-                    log_to_logfiles_only=True,
-                )
+            flows_count: int = self.main.db.get_flows_count()
+            print(
+                f"Total flows read (without altflows): {flows_count}",
+                log_to_logfiles_only=True,
+            )
 
-                to_kill_first, to_kill_last = self.get_hitlist_in_order()
-                stop_notified = self._notify_shutdown_event(
-                    self.termination_event, deadline
-                )
+            to_kill_first, to_kill_last = self.get_hitlist_in_order()
+            stop_notified = self._notify_shutdown_event(
+                self.termination_event, deadline
+            )
 
-                try:
-                    if self.core_module_failure or not stop_notified:
-                        # dont wait for failed core modules to stop
-                        self.kill_all_children(force=True)
-                        shutdown_reason = (
-                            "Core module failure."
-                            if self.core_module_failure
-                            else "Worker stop notification failed."
+            try:
+                if self.core_module_failure or not stop_notified:
+                    # dont wait for failed core modules to stop
+                    self.kill_all_children(force=True)
+                    shutdown_reason = (
+                        "Core module failure."
+                        if self.core_module_failure
+                        else "Worker stop notification failed."
+                    )
+                    graceful_shutdown = False
+                    normal_completion = False
+                    self.force_shutdown_requested = True
+                else:
+                    # Wait timeout_seconds for all the processes to finish
+                    while time.monotonic() < deadline:
+                        self._remember_shutdown_processes()
+                        (
+                            to_kill_first,
+                            to_kill_last,
+                        ) = self.shutdown_interactive(
+                            to_kill_first,
+                            to_kill_last,
+                            deadline,
                         )
-                        graceful_shutdown = False
-                        normal_completion = False
-                        self.force_shutdown_requested = True
-                    else:
-                        # Wait timeout_seconds for all the processes to finish
-                        while time.monotonic() < deadline:
-                            self._remember_shutdown_processes()
-                            (
-                                to_kill_first,
-                                to_kill_last,
-                            ) = self.shutdown_interactive(
-                                to_kill_first,
-                                to_kill_last,
-                                deadline,
-                            )
-                            if not to_kill_first and not to_kill_last:
-                                break
-                except KeyboardInterrupt:
-                    # either the user wants to kill the remaining modules
-                    # (pressed ctrl +c again)
-                    # or slips was stuck looping for too long that the OS
-                    # sent an automatic sigint to kill slips
-                    # pass to kill the remaining modules
-                    shutdown_reason = (
-                        "User pressed ctr+c or Slips was killed by the OS"
-                    )
-                    graceful_shutdown = False
-                    normal_completion = False
-                    self.shutdown_signal_received = True
-                    self.force_shutdown_requested = True
-                if time.monotonic() >= deadline:
-                    # getting here means we're killing them bc of the timeout
-                    # not getting here means we're killing them bc of double
-                    # ctr+c OR they terminated successfully
-                    shutdown_reason = (
-                        f"Killing modules that did not stop within "
-                        f"{timeout:g} seconds."
-                    )
-                    print(shutdown_reason)
-                    graceful_shutdown = False
-                    normal_completion = False
-                    self.force_shutdown_requested = True
+                        if not to_kill_first and not to_kill_last:
+                            break
+            except KeyboardInterrupt:
+                # either the user wants to kill the remaining modules
+                # (pressed ctrl +c again)
+                # or slips was stuck looping for too long that the OS
+                # sent an automatic sigint to kill slips
+                # pass to kill the remaining modules
+                shutdown_reason = (
+                    "User pressed ctr+c or Slips was killed by the OS"
+                )
+                graceful_shutdown = False
+                normal_completion = False
+                self.shutdown_signal_received = True
+                self.force_shutdown_requested = True
+            if time.monotonic() >= deadline:
+                # getting here means we're killing them bc of the timeout
+                # not getting here means we're killing them bc of double
+                # ctr+c OR they terminated successfully
+                shutdown_reason = (
+                    f"Killing modules that did not stop within "
+                    f"{timeout:g} seconds."
+                )
+                print(shutdown_reason)
+                graceful_shutdown = False
+                normal_completion = False
+                self.force_shutdown_requested = True
 
-                self.kill_all_children(force=not graceful_shutdown)
+            self.kill_all_children(force=not graceful_shutdown)
+            if self.main.mode == "daemonized":
+                self.main.daemon.delete_pidfile()
 
             analysis_time, end_date = self.get_analysis_time()
             self.main.metadata_man.set_analysis_end_date(end_date)

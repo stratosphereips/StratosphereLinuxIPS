@@ -260,14 +260,22 @@ def handle_instance_command(arguments: list[str]) -> int | None:
     Returns:
         Management exit status, or None for a normal Slips invocation.
     """
-    if not any(
+    daemon_stop = any(arg in {"-S", "--stopdaemon"} for arg in arguments)
+    if not daemon_stop and not any(
         arg in {"--list-instances", "--stop"} or arg.startswith("--stop=")
         for arg in arguments
     ):
         return None
     parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
     add_instance_arguments(parser)
+    if daemon_stop:
+        parser.add_argument("-S", "--stopdaemon", action="store_true")
+        parser.add_argument("-c", "--config", help=argparse.SUPPRESS)
     options = parser.parse_args(arguments)
+    if daemon_stop and (options.list_instances or options.stop is not None):
+        parser.error("choose --stopdaemon, --list-instances or --stop")
+    if daemon_stop:
+        options.stop = "auto"
     if options.list_instances and options.stop is not None:
         parser.error("choose --list-instances or --stop")
     if options.stop not in {None, "auto", "all"}:
@@ -275,6 +283,12 @@ def handle_instance_command(arguments: list[str]) -> int | None:
             parser.error("--stop expects a positive PID or all")
     entrypoint = Path(__file__).resolve().parents[2] / "slips.py"
     instances = list_instances(entrypoint)
+    if daemon_stop:
+        instances = [
+            instance
+            for instance in instances
+            if {"-D", "--daemon"}.intersection(instance.arguments)
+        ]
     print_instances(instances)
     if options.list_instances:
         return 0

@@ -219,7 +219,7 @@ def test_management_selection(arguments: list[str], count: int, selected: list[i
         stop.assert_not_called()
 
 
-@pytest.mark.parametrize("arguments", [["--stop", "0"], ["--stop", "-1"], ["--stop", "abc"], ["--stop", "--list-instances"], ["--stop", "-i", "eth0"]])
+@pytest.mark.parametrize("arguments", [["--stop", "0"], ["--stop", "-1"], ["--stop", "abc"], ["--stop", "--list-instances"], ["--stop", "-i", "eth0"], ["-S", "--stop"], ["-S", "--list-instances"], ["-S", "-i", "eth0"]])
 def test_management_rejects_invalid_commands(arguments: list[str]) -> None:
     """Reject ambiguous options before discovery or any stop request.
 
@@ -251,17 +251,39 @@ def test_management_help_and_capture_passthrough() -> None:
     discover.assert_not_called()
 
 
-def test_entrypoint_management_does_not_import_capture() -> None:
-    """Run the actual entry point without initializing Main, config or Redis."""
+@pytest.mark.parametrize("arguments", [["--list-instances"], ["-S"], ["--stopdaemon"], ["-S", "-c", "config/not-read.yaml"]])
+def test_entrypoint_management_does_not_import_capture(arguments: list[str]) -> None:
+    """Run the actual entry point without initializing Main, config or Redis.
+
+    Parameters:
+        arguments: Lightweight management options to execute.
+    """
     _factory = ModuleFactory()
     original_import = builtins.__import__
-    with patch.object(sys, "argv", ["slips.py", "--list-instances"]), patch.object(
+    with patch.object(sys, "argv", ["slips.py", *arguments]), patch.object(
         control, "list_instances", return_value=[]
     ), patch("builtins.__import__", wraps=original_import) as imports:
         with pytest.raises(SystemExit) as error:
             runpy.run_path("slips.py", run_name="__main__")
     assert error.value.code == 0
     assert not any(call.args[0] in {"slips.main", "slips.daemon", "slips_files.common.parsers.config_parser"} for call in imports.call_args_list)
+
+
+@pytest.mark.parametrize("flag", ["-S", "--stopdaemon"])
+def test_daemon_stop_leaves_foreground_and_pcap_instances_running(flag: str) -> None:
+    """Select only the daemon before configuration or history initialization.
+
+    Parameters:
+        flag: Short or long daemon-stop option.
+    """
+    factory = ModuleFactory()
+    instances = [control.RunningInstance(41001, 1, ("-i", "eth0")),
+                 control.RunningInstance(41002, 2, ("-f", "file.pcap")),
+                 control.RunningInstance(41003, 3, ("-D", "-i", "en0"))]
+    with patch.object(control, "list_instances", return_value=instances), patch.object(control, "stop_instances", return_value=0) as stop:
+        assert control.handle_instance_command([flag]) == 0
+    assert stop.call_args.args[0] == [instances[2]]
+    assert factory is not None
 
 
 def test_native_shutdown_waits_for_checkpoint_and_worker(tmp_path: Path) -> None:

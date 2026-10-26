@@ -104,34 +104,41 @@ separately. Configuration of the **config/slips.yaml** is described [here](#modi
 
 Slips has 2 modes, interactive and daemonized.
 
-**Daemonized** : Slips runs as a daemon in the background. which means all output, logs and alerts are written in files and nothing is displayed in the terminal.
+**Interactive mode** keeps Slips attached to the terminal; Ctrl-C starts its
+shutdown. **Daemon mode** (`-D`) detaches Slips so the terminal returns while
+capture continues in the background.
 
-In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
-```logsfile``` files specified in ```config/slips.yaml```
+```bash
+./slips.py -i en0 -w -o output/live --keep-history -D
+./slips.py --list-instances
+./slips.py --stop
+```
 
-by default, these are the paths used
+Daemon logs use the selected output directory, just like an interactive run.
+The `output.stdout`, `output.stderr` and `output.logs` configuration values
+choose their names; the defaults are `slips.log`, `errors.log` and `slips.log`.
+Starting a daemon does not truncate existing logs. `--keep-history` preserves
+previous detection data under the usual retention policy.
 
-stdout = /var/log/slips/slips.log
-stderr = /var/log/slips/error.log
-logsfile = /var/log/slips/slips.log
+The PID file is `slips_daemon.lock` inside `parameters.permanent_dir`, which
+is `permanent/slips_daemon.lock` by default. This permits ordinary-user startup
+on macOS and Linux without access to a system lock directory. The file records
+the daemon PID, not captured traffic. Do not run with sudo solely to create it;
+live capture still needs the normal interface-capture permissions.
 
-NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```,
-create /var/log/slips as root and slips will use it by default.
+The launcher waits up to 30 seconds for startup feedback. It prints the daemon
+PID and log path when core workers start. If startup takes longer but the daemon
+is alive, it reports that startup is continuing and returns the terminal;
+`--list-instances` can already find the daemon. An early startup failure is
+reported in the terminal with a nonzero exit code and its error-log path.
 
-If slips can't write there, slips will store the logs in the ```Slips/output/<some_dir>``` dir by default.
-
-NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the output_dir specified in `config/slips.yaml`
-
-
-This is not the default mode, to use it, run slips with -D
-
-
-```./slips.py -i wlp3s0 -D```
-
-To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
-
-Only one instance of the daemon can run at a time.
+Only one daemon is supported at a time. `-S` / `--stopdaemon` selects the daemon
+from this checkout and uses the same verified shutdown mechanism as `--stop PID`.
+It runs before capture initialization, without reading Redis or requiring the
+original configuration. It gives the running coordinator time to save state
+and stop its workers and owned Zeek instances. `-S -c your-config.yaml` remains
+accepted for compatibility; selecting the daemon does not depend on that file.
+`--stop` also handles foreground, shell-background and service launches.
 
 ### Find and stop running instances
 
@@ -1027,13 +1034,13 @@ Below is a table showing each level of both.
 
 #### Using errors.log and running.log
 
-Slips also logs all errors to output/errors.log (interactive mode), and /var/log/slips/error.log (daemonized mode)
-whether you're using -e or not.
+Slips logs errors to `errors.log` in the selected output directory in both
+interactive and daemon mode, whether or not `-e` is used.
 See [Daemonized vs interactive](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#daemonized-vs-interactive-mode)
 for more information about the 2 modes
 
-General slips logs are created in /var/log/slips/running.log in case of daemonized mode and ...#TODO in case of
-interactive mode
+General Slips messages are written to `slips.log` in that directory. The
+`output` configuration section can change these filenames.
 
 ## Reading Input from stdin
 

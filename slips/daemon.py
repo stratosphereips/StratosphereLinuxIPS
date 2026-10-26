@@ -1,18 +1,23 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import os
+import json
+import select
 import sys
 import time
-from signal import SIGKILL, SIGTERM
+from signal import SIGTERM
+from pathlib import Path
 from typing import Tuple, Optional
 from exclusiveprocess import (
     Lock,
     CannotAcquireLock,
 )
+import psutil
 
-from slips_files.common.parsers.config_parser import ConfigParser
-from slips_files.common.printer import Printer
-from slips_files.core.database.database_manager import DBManager
+from managers.process_manager.instance_control import (
+    inspect_instance,
+    stop_instances,
+)
 
 
 class Daemon:
@@ -26,10 +31,11 @@ class Daemon:
         self.slips.set_mode("daemonized", daemon=self)
         # this is a conf file used to store the pid of the daemon and
         # is deleted when the daemon stops
-        self.pidfile_dir = "/var/lock"
+        self.pidfile_dir = self.slips.conf.permanent_dir()
         self.daemon_start_lock = "slips_daemon_start"
         self.daemon_stop_lock = "slips_daemon_stop"
         self.pidfile = os.path.join(self.pidfile_dir, "slips_daemon.lock")
+        self._startup_write_fd: Optional[int] = None
         self.read_configuration()
         if not self.slips.args.stopdaemon:
             self.prepare_output_dir()
@@ -39,8 +45,9 @@ class Daemon:
         # Get the pid from pidfile
         try:
             with open(self.pidfile) as pidfile:
-                return int(pidfile.read().strip())
-        except (IOError, FileNotFoundError):
+                pid = int(pidfile.read().strip())
+                return pid if pid > 0 else None
+        except (IOError, ValueError):
             return None
 
     def is_pid_running(self, pid: Optional[int] = None) -> bool:
@@ -71,22 +78,14 @@ class Daemon:
             f.write(f"{text}\n")
 
     def create_std_streams(self):
-        """Create standard steam files and dirs and clear them"""
+        """Create daemon log streams without truncating saved run history."""
         if self.slips.args.is_slips_started_by_an_update:
             return
 
-        std_streams = [self.stderr, self.stdout, self.logsfile]
+        std_streams = dict.fromkeys([self.stderr, self.stdout, self.logsfile])
         for file in std_streams:
-            # we don't want to clear the stdout or the logsfile when we stop
-            # the daemon using -S
-            if "-S" in sys.argv and file != self.stderr:
-                continue
-            # create the file if it doesn't exist or clear it if it exists
-            try:
-                open(file, "w").close()
-            except (FileNotFoundError, NotADirectoryError):
-                os.mkdir(os.path.dirname(file))
-                open(file, "w").close()
+            os.makedirs(os.path.dirname(file) or ".", exist_ok=True)
+            open(file, "a").close()
 
     def prepare_std_streams(self, output_dir):
         """
@@ -97,7 +96,7 @@ class Daemon:
         self.logsfile = os.path.join(output_dir, self.logsfile)
 
     def read_configuration(self):
-        conf = ConfigParser()
+        conf = self.slips.conf
         self.logsfile = conf.logs_file()
         self.stdout = conf.stdout()
         self.stderr = conf.stderr()
@@ -105,28 +104,7 @@ class Daemon:
         self.stdin = "/dev/null"
 
     def prepare_output_dir(self):
-        if "-o" in sys.argv:
-            self.prepare_std_streams(self.slips.args.output)
-        else:
-            # if we have acess to '/var/log/slips/' store the logfiles there,
-            # if not , store it in the output/ dir
-            try:
-                output_dir = "/var/log/slips/"
-                try:
-                    os.mkdir(output_dir)
-                except FileExistsError:
-                    pass
-                # see if we have write permission to that dir or not
-                tmpfile = os.path.join(output_dir, "tmp")
-                open(tmpfile, "w").close()
-                os.remove(tmpfile)
-
-                # we have permission, append the path to each logfile
-                self.prepare_std_streams(output_dir)
-                #  set it as the default output dir
-                self.slips.args.output = output_dir
-            except PermissionError:
-                self.prepare_std_streams(self.slips.args.output)
+        self.prepare_std_streams(self.slips.args.output)
 
         self.create_std_streams()
 
@@ -156,6 +134,95 @@ class Daemon:
             # if an error happened it will be written in logsfile
             self.print("Either Daemon stopped normally or an error occurred.")
 
+    def _report_startup(self, status: str, message: str) -> None:
+        """Send bounded startup status to the original terminal process.
+
+        Parameters:
+            status: Starting, ready, or error status.
+            message: PID or short failure description for the terminal.
+        """
+        if self._startup_write_fd is None:
+            return
+        try:
+            os.write(
+                self._startup_write_fd,
+                (
+                    json.dumps({"status": status, "message": message[:2000]})
+                    + "\n"
+                ).encode(),
+            )
+        except BrokenPipeError:
+            pass
+        finally:
+            if status != "starting":
+                os.close(self._startup_write_fd)
+                self._startup_write_fd = None
+
+    def notify_started(self) -> None:
+        """Tell the terminal that the daemon has started its core workers."""
+        self._report_startup("ready", str(os.getpid()))
+
+    def _wait_for_startup(self, descriptor: int) -> int:
+        """Wait for startup feedback without mistaking a fork for success.
+
+        Parameters:
+            descriptor: Read end of the daemon startup pipe.
+
+        Returns:
+            Terminal command exit status; a live slow startup returns zero.
+        """
+        deadline = time.monotonic() + 30
+        pending = b""
+        pid = None
+        try:
+            while time.monotonic() < deadline:
+                ready, _, _ = select.select(
+                    [descriptor], [], [], max(0, deadline - time.monotonic())
+                )
+                if not ready:
+                    break
+                chunk = os.read(descriptor, 4096)
+                if not chunk:
+                    print(
+                        f"Slips daemon exited before startup completed. See {self.stderr}",
+                        file=sys.stderr,
+                        flush=True,
+                    )
+                    return 1
+                pending += chunk
+                while b"\n" in pending:
+                    line, pending = pending.split(b"\n", 1)
+                    result = json.loads(line)
+                    if result["status"] == "starting":
+                        pid = int(result["message"])
+                    elif result["status"] == "ready":
+                        print(
+                            f"Slips daemon started. [PID {result['message']}] Logs: {self.logsfile}",
+                            flush=True,
+                        )
+                        return 0
+                    else:
+                        print(
+                            f"Slips daemon startup failed: {result['message']}. See {self.stderr}",
+                            file=sys.stderr,
+                            flush=True,
+                        )
+                        return 1
+            if pid and self.is_pid_running(pid):
+                print(
+                    f"Slips daemon PID {pid} is still starting. Check {self.logsfile} and {self.stderr}.",
+                    flush=True,
+                )
+                return 0
+            print(
+                f"Slips daemon exited before startup completed. See {self.stderr}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+        finally:
+            os.close(descriptor)
+
     def daemonize(self):
         """
         Does the Unix double-fork to create a daemon
@@ -163,15 +230,26 @@ class Daemon:
         # double fork explaination
         # https://stackoverflow.com/questions/881388/what-is-the-reason-for-performing-a-double-fork-when-creating-a-daemon
 
+        sys.stdout.flush()
+        sys.stderr.flush()
+        read_fd, self._startup_write_fd = os.pipe()
         try:
             self.pid = os.fork()
             if self.pid > 0:
-                # exit first parent
-                sys.exit(0)
+                os.close(self._startup_write_fd)
+                self._startup_write_fd = None
+                status = self._wait_for_startup(read_fd)
+                # Python finalizers would unlink semaphore names still needed
+                # by spawn workers in the surviving daemon.
+                os._exit(status)
         except OSError as e:
+            os.close(read_fd)
+            os.close(self._startup_write_fd)
+            self._startup_write_fd = None
             sys.stderr.write(f"Fork #1 failed: {e.errno} {e.strerror}\n")
             self.print(f"Fork #1 failed: {e.errno} {e.strerror}\n")
             sys.exit(1)
+        os.close(read_fd)
 
         # os.chdir("/")
         # dissociate the daemon from its controlling terminal.
@@ -190,9 +268,9 @@ class Daemon:
         try:
             self.pid = os.fork()
             if self.pid > 0:
-                # exit from second parent (aka first child)
-                sys.exit(0)
+                os._exit(0)
         except OSError as e:
+            self._report_startup("error", f"Second fork failed: {e}")
             sys.stderr.write(f"Fork #2 failed: {e.errno} {e.strerror}\n")
             self.print(f"Fork #2 failed: {e.errno} {e.strerror}\n")
             sys.exit(1)
@@ -213,14 +291,14 @@ class Daemon:
 
         # write the pid of the daemon to a file so we can
         # check if it's already opened before re-opening
-        if not os.path.exists(self.pidfile_dir):
-            os.mkdir(self.pidfile_dir)
+        os.makedirs(self.pidfile_dir, mode=0o700, exist_ok=True)
 
         # remember that we are writing this pid to a file
         # because the parent and the first fork, already exited, so this pid is the daemon pid which is slips.py pid
         self.pid = str(os.getpid())
         with open(self.pidfile, "w+") as pidfile:
             pidfile.write(self.pid)
+        self._report_startup("starting", self.pid)
 
         # Register a function to be executed if sys.exit()
         # is called or the main module’s execution completes
@@ -251,14 +329,28 @@ class Daemon:
                 # Starts the daemon
                 self.daemonize()
                 self.slips.pid = os.getpid()
+                self.slips.proc_man.adopt_daemon_ipc()
 
                 # any code run after daemonizing will be run inside
                 # the daemon and have the same PID as slips.py
                 self.print(f"Slips Daemon is running. [PID {self.pid}]\n")
                 self.slips.start()
+                self._report_startup(
+                    "error", "Daemon stopped before startup completed"
+                )
         except CannotAcquireLock:
             # another instance of slips daemon is running
             return
+        except BaseException as error:
+            self._report_startup("error", f"{type(error).__name__}: {error}")
+            self.slips.proc_man.cleanup_failed_startup()
+            raise
+        finally:
+            if (
+                self.pid == str(os.getpid())
+                and self.read_pidfile() == os.getpid()
+            ):
+                self.delete_pidfile()
 
     def get_last_opened_daemon_info(self) -> Optional[Tuple[str]]:
         """
@@ -324,108 +416,54 @@ class Daemon:
             pass
         return True
 
-    def stop(self):
-        """Stops the daemon"""
-        # WARNING: this function shouldn't call shutdown_gracefully().
-        # it should send a signal to the opened daemon via
-        # killdaemon(), and the
-        # opened daemon should call shutdown gracefully
+    def stop(self) -> dict[str, object]:
+        """Stop the verified daemon through the shared instance controller.
+
+        Returns:
+            Whether the daemon and its observed workers stopped, or an error.
+        """
         try:
             with Lock(name=self.daemon_stop_lock):
-
                 if not self._is_running():
                     return {
                         "stopped": False,
                         "error": "Daemon is not running.",
                     }
-
-                self._kill_self()
-
-                info: Tuple[str] = self.get_last_opened_daemon_info()
-                if not info:
+                if int(self.pid) == os.getpid():
+                    self.slips.proc_man.cleanup_failed_startup()
+                    self.delete_pidfile()
+                    return {"stopped": True, "error": None}
+                entrypoint = Path(__file__).parent.parent / "slips.py"
+                process = psutil.Process(int(self.pid))
+                instance = inspect_instance(process, entrypoint)
+                if instance is None or not {"-D", "--daemon"}.intersection(
+                    instance.arguments
+                ):
                     return {
                         "stopped": False,
-                        "error": "Can't get the info of the last opened "
-                        "Slips daemon.",
+                        "error": "The PID file does not identify this checkout's Slips daemon.",
                     }
-
-                port, output_dir, self.pid = info
-
-                self.stderr = "errors.log"
-                self.stdout = "slips.log"
-                self.logsfile = "slips.log"
-                self.prepare_std_streams(output_dir)
-
-                self.logger = self.slips.proc_man.start_output_process(
-                    self.stderr, self.logsfile, stdout=self.stdout
-                )
-                self.slips.printer = Printer(self.logger, self.name)
-
-                self.db = DBManager(
-                    self.logger,
-                    output_dir,
-                    int(port),
-                    self.slips.conf,
-                    self.slips.pid,
-                    start_sqlite=False,
-                    flush_db=False,
-                )
-                self.db.set_slips_mode("daemonized")
-                self.slips.set_mode("daemonized", daemon=self)
-
-                self.slips.input_information = self.db.get_input_file()
-                self.slips.args = self.slips.conf.get_args()
-                self.slips.db = self.db
-                self.slips.proc_man.slips_logfile = self.logsfile
-
-                deadline = time.time() + 15
-                while time.time() < deadline:
-                    remaining_children = [
-                        pid
-                        for module_name, pid in self.db.get_pids().items()
-                        if "thread" not in module_name.lower()
-                        and self.is_pid_running(pid)
-                    ]
-                    if (
-                        not self.is_pid_running(self.pid)
-                        and not remaining_children
-                    ):
-                        break
-                    time.sleep(1)
-
-                remaining_children = [
-                    pid
-                    for module_name, pid in self.db.get_pids().items()
-                    if "thread" not in module_name.lower()
-                    and self.is_pid_running(pid)
-                ]
-                if remaining_children:
-                    self.slips.proc_man.kill_daemon_children()
-
-                if self.is_pid_running(self.pid):
-                    try:
-                        os.kill(int(self.pid), SIGKILL)
-                    except ProcessLookupError:
-                        pass
-
-                if os.path.exists(self.pidfile):
+                stopped = stop_instances([instance], entrypoint) == 0
+                if stopped and self.read_pidfile() == instance.pid:
                     self.delete_pidfile()
-
-                stopped = False
-                deadline = time.time() + 5
-                while time.time() < deadline:
-                    stopped = not self.is_pid_running(self.pid) and not any(
-                        self.is_pid_running(pid)
-                        for module_name, pid in self.db.get_pids().items()
-                        if "thread" not in module_name.lower()
-                    )
-                    if stopped:
-                        break
-                    time.sleep(0.1)
                 return {
                     "stopped": stopped,
-                    "error": None if stopped else "Daemon shutdown timed out.",
+                    "error": (
+                        None
+                        if stopped
+                        else "Daemon shutdown did not finish; check errors.log."
+                    ),
                 }
+        except psutil.NoSuchProcess:
+            self.delete_pidfile()
+            return {"stopped": False, "error": "Daemon is not running."}
+        except psutil.AccessDenied:
+            return {
+                "stopped": False,
+                "error": "Permission denied for this daemon.",
+            }
         except CannotAcquireLock:
-            # another instance of slips daemon is running
-            pass
+            return {
+                "stopped": False,
+                "error": "Another daemon stop command is already running.",
+            }

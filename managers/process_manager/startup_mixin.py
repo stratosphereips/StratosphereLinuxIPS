@@ -3,7 +3,10 @@
 # StartupMixin groups construction and startup of core processes and shared
 # runtime helpers used by ProcessManager.
 import threading
+import os
 import sys
+from multiprocessing import util
+from multiprocessing.synchronize import SemLock
 from multiprocessing import Process
 from multiprocessing.reduction import DupFd
 from typing import Optional
@@ -24,11 +27,19 @@ from slips_files.core.profiler import Profiler
 class StartupMixin:
     """Provide helpers that construct and start child processes."""
 
+    def adopt_daemon_ipc(self) -> None:
+        """Make the surviving daemon own cleanup of its inherited semaphores."""
+        for finalizer in list(util._finalizer_registry.values()):
+            if finalizer._callback is SemLock._cleanup:
+                finalizer._pid = os.getpid()
+
     def declare_that_slips_is_done_starting_all_children(self) -> None:
         """
         Mark that all required child processes have started.
         """
         self.all_children_started = True
+        if self.main.mode == "daemonized":
+            self.main.daemon.notify_started()
 
     def start_slips_update_manager(self) -> UpdateManager:
         """

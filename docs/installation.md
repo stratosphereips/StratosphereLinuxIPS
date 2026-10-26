@@ -103,8 +103,11 @@ example, after granting capture access, run from the repository root:
 python slips.py -i en0 -w -o output/macos-live
 ```
 
-Choose the interface appropriate to your machine. Daemon mode, Intel Macs and
-other optional integrations have not been validated by these checks. The Linux
+Choose the interface appropriate to your machine. Daemon startup, instance
+listing and stop have also been verified on Apple Silicon. The daemon's PID
+file uses the configured permanent directory, and startup failures are reported
+to the terminal; see [daemon mode](usage.md#daemonized-vs-interactive-mode).
+Intel Macs and other optional integrations have not been validated by these checks. The Linux
 access-point workflow remains Linux-specific. On macOS, active
 blocking uses the Slips-owned `com.apple/slips` Packet Filter anchor and
 requires running Slips with root privileges.

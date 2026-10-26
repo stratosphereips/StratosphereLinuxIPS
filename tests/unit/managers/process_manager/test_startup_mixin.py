@@ -1,6 +1,10 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import Mock, patch
+import os
+from multiprocessing import util
+from multiprocessing.synchronize import SemLock
+from types import SimpleNamespace
 
 import pytest
 
@@ -13,6 +17,31 @@ def test_process_manager_includes_startup_mixin() -> None:
     process_manager = ModuleFactory().create_process_manager_obj()
 
     assert isinstance(process_manager, StartupMixin)
+
+
+def test_daemon_adopts_only_inherited_semaphore_finalizers() -> None:
+    """Clean inherited semaphore names without changing unrelated callbacks."""
+    manager = ModuleFactory().create_process_manager_obj()
+    semaphore = SimpleNamespace(_callback=SemLock._cleanup, _pid=-1)
+    unrelated = SimpleNamespace(_callback=lambda: None, _pid=-1)
+    with patch.dict(util._finalizer_registry, {("daemon-test", 1): semaphore, ("daemon-test", 2): unrelated}):
+        manager.adopt_daemon_ipc()
+    assert semaphore._pid == os.getpid()
+    assert unrelated._pid == -1
+
+
+@pytest.mark.parametrize("mode", ["normal", "daemonized"])
+def test_startup_notifies_terminal_only_for_daemon(mode: str) -> None:
+    """Send readiness after core process startup only to the daemon launcher.
+
+    Parameters:
+        mode: Foreground or daemon capture mode.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    manager.main.mode = mode
+    manager.declare_that_slips_is_done_starting_all_children()
+    assert manager.all_children_started
+    assert manager.main.daemon.notify_started.call_count == int(mode == "daemonized")
 
 
 @pytest.mark.parametrize(
