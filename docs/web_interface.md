@@ -193,8 +193,15 @@ retrieve it with `cat permanent/redis_auth.conf`. Submitting it on the
 login page issues a signed session cookie valid for one year. The browser
 retains it when Slips or the browser closes. Sessions remain valid across
 Slips runs using the same persistent web password record, and changing that
-password invalidates existing sessions. After this upgrade, log in once to
-replace the previous run-scoped cookie.
+password invalidates existing sessions.
+
+Each set of persistent web credentials has its own cookie name. This matters
+when you open a local Slips page and remote Slips pages through SSH tunnels:
+browser cookies are shared by hostname, including across different `localhost`
+ports. Logging into one installation must not overwrite another installation's
+session. Runs that copy the same web credentials can share a login, and server
+restarts keep that login valid. Older cookies remain accepted during an upgrade;
+logging in again creates the separated cookie. No password change is needed.
 
 `require_password: false` disables this password. Only use it for local
 testing/CI - never on a machine reachable beyond localhost, and especially

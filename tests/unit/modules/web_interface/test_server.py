@@ -1,6 +1,7 @@
 from collections import Counter
 import argparse
 from http import HTTPStatus
+from http.cookies import SimpleCookie
 from io import BytesIO
 import json
 import re
@@ -30,6 +31,7 @@ from modules.web_interface.server import (
     ipv4_address,
 )
 from slips_files.common.web_auth import SESSION_COOKIE_NAME, issue_token
+from slips_files.common import web_auth
 from slips_files.common.slips_utils import utils
 from slips_files.common.mac import classify_mac
 from slips_files.common.sqlite_flock import SQLiteFlock
@@ -1249,6 +1251,79 @@ def _authenticated_request(url: str) -> Request:
     return Request(
         url, headers={"Cookie": f"{SESSION_COOKIE_NAME}={issue_token()}"}
     )
+
+
+@pytest.mark.parametrize("case,expected", [
+    ("scoped", True), ("legacy", True), ("both", True),
+    ("invalid-scoped", False), ("none", False),
+])
+def test_web_server_uses_its_own_session_cookie(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, case: str, expected: bool,
+) -> None:
+    """Authenticate this server despite unrelated localhost session cookies.
+
+    Parameters:
+        tmp_path: Private credential file.
+        monkeypatch: Isolate the web signing credentials.
+        case: Cookies supplied by the browser.
+        expected: Whether the request is authenticated.
+    """
+    _factory = ModuleFactory()
+    auth = tmp_path / "web-auth.json"
+    auth.write_text(json.dumps({"hash": "ab" * 32}))
+    monkeypatch.setattr(web_auth, "get_web_auth_path", lambda: str(auth))
+    monkeypatch.setattr(web_auth, "ensure_web_password_matches_redis_password", Mock())
+    name = web_auth.session_cookie_name()
+    token = issue_token()
+    values = {name: token}
+    if case == "legacy":
+        values = {SESSION_COOKIE_NAME: token}
+    elif case == "both":
+        values[SESSION_COOKIE_NAME] = "other-computer-session"
+    elif case == "invalid-scoped":
+        values = {name: "invalid", SESSION_COOKIE_NAME: token}
+    elif case == "none":
+        values = {}
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.headers = {"Cookie": "; ".join(f"{key}={value}" for key, value in values.items())}
+    assert handler._session_ok() is expected
+
+
+def test_web_login_issues_a_scoped_persistent_cookie(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Publish an installation-specific cookie with the existing protections.
+
+    Parameters:
+        tmp_path: Private credential file.
+        monkeypatch: Isolate credentials and submitted password verification.
+    """
+    _factory = ModuleFactory()
+    auth = tmp_path / "web-auth.json"
+    auth.write_text(json.dumps({"hash": "ab" * 32}))
+    monkeypatch.setattr(web_auth, "get_web_auth_path", lambda: str(auth))
+    monkeypatch.setattr(web_auth, "ensure_web_password_matches_redis_password", Mock())
+    monkeypatch.setattr("modules.web_interface.server.ensure_web_password_matches_redis_password", Mock())
+    monkeypatch.setattr("modules.web_interface.server.is_locked_out", Mock(return_value=False))
+    verifier = Mock(return_value=True)
+    monkeypatch.setattr("modules.web_interface.server.verify_web_password", verifier)
+    body = b"password=test-password"
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.path = "/login"
+    handler.client_address = ("127.0.0.1", 12345)
+    handler.headers = {"Content-Length": str(len(body))}
+    handler.rfile = BytesIO(body)
+    handler._send_html = Mock()
+    handler.do_POST()
+    verifier.assert_called_once_with("test-password")
+    headers = handler._send_html.call_args.kwargs["headers"]
+    cookie = SimpleCookie(headers["Set-Cookie"])
+    assert list(cookie) == [web_auth.session_cookie_name()]
+    morsel = cookie[web_auth.session_cookie_name()]
+    assert morsel["httponly"] and morsel["samesite"] == "Strict"
+    assert morsel["path"] == "/"
+    assert int(morsel["max-age"]) == web_auth.SESSION_TTL_SECONDS
+    assert web_auth.validate_session_cookies({morsel.key: morsel.value})
 
 
 def test_every_static_web_table_header_has_a_sort_key() -> None:

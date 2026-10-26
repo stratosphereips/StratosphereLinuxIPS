@@ -11,6 +11,7 @@ This is deliberately not a full user-accounts system: Slips is a
 single-user tool, so one shared password behind a signed, persistent
 session cookie is the right amount of protection.
 """
+from collections.abc import Mapping
 import hmac
 import json
 import os
@@ -74,6 +75,35 @@ def validate_token(token: Optional[str]) -> bool:
         return False
     expected = hmac.new(key, expiry_str.encode(), sha256).hexdigest()
     return hmac.compare_digest(mac, expected)
+
+
+def session_cookie_name() -> str:
+    """Keep independent Slips logins separate on a shared browser hostname.
+
+    Returns:
+        Stable cookie name for these persistent web credentials.
+    """
+    identity = sha256(_session_signing_key()).hexdigest()[:16]
+    return f"{SESSION_COOKIE_NAME}_{identity}"
+
+
+def validate_session_cookies(values: Mapping[str, str]) -> bool:
+    """Validate this installation's cookie, accepting older sessions on upgrade.
+
+    Parameters:
+        values: Cookie names and values supplied by the browser.
+
+    Returns:
+        Whether this installation's session is valid. A present scoped cookie
+        takes priority over the legacy shared name.
+    """
+    try:
+        name = session_cookie_name()
+    except (OSError, RuntimeError, ValueError, KeyError, TypeError):
+        return False
+    if name in values:
+        return validate_token(values[name])
+    return validate_token(values.get(SESSION_COOKIE_NAME))
 
 
 def is_locked_out(client_ip: str) -> bool:

@@ -26,14 +26,14 @@ from slips_files.core.database.redis_db.redis_auth import (
     verify_web_password,
 )
 from slips_files.common.web_auth import (
-    SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
     is_locked_out,
     issue_token,
     login_page_html,
     record_failed_login,
     record_successful_login,
-    validate_token,
+    session_cookie_name,
+    validate_session_cookies,
 )
 from .database.database import db, db_obj
 from .database.signals import message_sent
@@ -86,7 +86,7 @@ def _require_login():
         return None
     if _is_unauthenticated_path(request.path):
         return None
-    if validate_token(request.cookies.get(SESSION_COOKIE_NAME)):
+    if validate_session_cookies(request.cookies):
         return None
     if request.path.startswith(
         ("/redis", "/db/", "/info", "/analysis/", "/general/")
@@ -118,7 +118,7 @@ def login():
     record_successful_login(client_ip)
     resp = make_response(redirect("/"))
     resp.set_cookie(
-        SESSION_COOKIE_NAME,
+        session_cookie_name(),
         issue_token(),
         httponly=True,
         samesite="Strict",

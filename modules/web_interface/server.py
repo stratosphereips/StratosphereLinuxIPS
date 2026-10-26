@@ -88,14 +88,14 @@ from slips_files.common.p2p_reports import (
     reported_detections,
 )
 from slips_files.common.web_auth import (
-    SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
     is_locked_out,
     issue_token,
     login_page_html,
     record_failed_login,
     record_successful_login,
-    validate_token,
+    session_cookie_name,
+    validate_session_cookies,
 )
 
 LOOPBACK_ADDRESS = "127.0.0.1"
@@ -10382,9 +10382,13 @@ class RequestHandler(BaseHTTPRequestHandler):
         if not header:
             return False
         jar = cookies.SimpleCookie()
-        jar.load(header)
-        morsel = jar.get(SESSION_COOKIE_NAME)
-        return bool(morsel) and validate_token(morsel.value)
+        try:
+            jar.load(header)
+        except cookies.CookieError:
+            return False
+        return validate_session_cookies(
+            {name: morsel.value for name, morsel in jar.items()}
+        )
 
     def _send_asset(self, filename: str | Path, content_type: str) -> None:
         """Send one allow-listed interface asset.
@@ -10641,7 +10645,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
         record_successful_login(client_ip)
         cookie_header = (
-            f"{SESSION_COOKIE_NAME}={issue_token()}; HttpOnly; "
+            f"{session_cookie_name()}={issue_token()}; HttpOnly; "
             f"SameSite=Strict; Max-Age={SESSION_TTL_SECONDS}; Path=/"
         )
         self._send_html(
