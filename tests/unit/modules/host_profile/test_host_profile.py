@@ -6,9 +6,37 @@ import time
 from pathlib import Path
 from unittest.mock import Mock, patch
 
+import pytest
+
 from modules.host_profile.host_profile import HostProfile
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("ip,fields,requested", [
+    ("8.8.8.8", {}, True),
+    ("8.8.8.8", {"reverse_dns": "dns.google"}, False),
+    ("8.8.8.8", {"reverse_dns_lookup": {"retry_after": 2000}}, False),
+    ("8.8.8.8", {"reverse_dns_lookup": {"retry_after": 999}}, True),
+    ("192.168.1.20", {}, True),
+    ("ff02::fb", {}, False),
+    ("255.255.255.255", {}, False),
+    ("0.0.0.0", {}, False),
+])
+def test_host_profile_requests_missing_endpoint_names(ip: str, fields: dict, requested: bool) -> None:
+    """Enrich destination-only hosts without repeating recent failed lookups.
+
+    Parameters:
+        ip: Observed endpoint.
+        fields: Cached name and lookup result.
+        requested: Whether an asynchronous lookup should be requested.
+    """
+    factory = ModuleFactory()
+    module = HostProfile.__new__(HostProfile)
+    module.db = factory.logger
+    with patch("modules.host_profile.host_profile.time.time", return_value=1000):
+        module._request_ip_enrichment(ip, fields)
+    assert module.db.set_new_ip.call_count == int(requested)
 
 
 def test_host_profile_idle_wait_does_not_touch_multiprocessing_event() -> None:
@@ -140,6 +168,7 @@ def test_host_profile_enriches_ips_in_small_redis_batches() -> None:
         None,
         None,
         json.dumps({"source": ["feed-one"]}),
+        None,
     ]
 
     module._enrich_hosts()
@@ -157,7 +186,7 @@ def test_host_profile_enriches_ips_in_small_redis_batches() -> None:
     assert module._pending_ips == set()
 
     module._enriched_at["8.8.8.8"] = time.monotonic() - 301
-    module.db.rdb.rcache.pipeline.return_value.execute.return_value[-1] = (
+    module.db.rdb.rcache.pipeline.return_value.execute.return_value[-2] = (
         json.dumps({"source": ["feed-two"]})
     )
     module._enrich_hosts()
@@ -169,3 +198,20 @@ def test_host_profile_enriches_ips_in_small_redis_batches() -> None:
     module._enriched_at["8.8.8.8"] = time.monotonic() - 301
     module._enrich_hosts()
     assert module.store.observe_ip_info.call_count == 2
+
+
+def test_destination_only_host_requests_enrichment_from_background_batch() -> None:
+    """Request a name when flow endpoints exist without profiling metadata."""
+    factory = ModuleFactory()
+    module = HostProfile.__new__(HostProfile)
+    module.parent_output_dir = "output/test"
+    module.init()
+    module.store = Mock()
+    module.db = factory.logger
+    module.db.rdb.r.pipeline.return_value.execute.return_value = [None]
+    module.db.rdb.rcache.pipeline.return_value.execute.return_value = [None] * len(module.IP_INFO_FIELDS)
+    module._remember_ips([(1, {"daddr": "8.8.8.8"})])
+    module._enrich_hosts()
+    module.db.set_new_ip.assert_called_once_with("8.8.8.8")
+    module._enrich_hosts()
+    module.db.set_new_ip.assert_called_once_with("8.8.8.8")

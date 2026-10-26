@@ -28,6 +28,7 @@ def test_mark_process_as_done_processing(monkeypatch):
 def test_flow_retention_runs_in_bounded_background_pass() -> None:
     """Keep SQLite deletion outside the profiler's flow processing path."""
     profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = "eth0"
     profiler.flow_retention_policy = {
         "enabled": True,
         "ordinary_hours": 24,
@@ -54,6 +55,15 @@ def test_flow_retention_runs_in_bounded_background_pass() -> None:
     profiler.db.remove_flow_index_uids.assert_called_once_with(["old-flow"])
 
 
+def test_offline_analysis_never_starts_retention_work() -> None:
+    """Preserve old PCAP flows even if maintenance is invoked directly."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = False
+    profiler._run_flow_retention()
+    profiler.db.maintain_flow_retention.assert_not_called()
+    profiler.db.maintain_detection_history.assert_not_called()
+
+
 @pytest.mark.parametrize("persistent", [False, True])
 def test_deferred_history_does_not_interrupt_flow_retention(persistent: bool) -> None:
     """Keep capture cleanup running and report only persistent contention.
@@ -62,6 +72,7 @@ def test_deferred_history_does_not_interrupt_flow_retention(persistent: bool) ->
         persistent: Whether every pass remains busy beyond a minute.
     """
     profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = "eth0"
     profiler.flow_retention_policy = {
         "enabled": True, "ordinary_hours": 24, "linked_days": 30,
         "interval_seconds": 10, "batch_size": 500, "max_size_mb": 512,

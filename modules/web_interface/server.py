@@ -193,6 +193,7 @@ TI_FIELDS = (
     "geocountry",
     "asn",
     "reverse_dns",
+    "reverse_dns_lookup",
     "threat_level",
     "score",
     "confidence",
@@ -4760,6 +4761,30 @@ class RunDataReader:
             self.redis.hget("flows_causing_evidence", evidence_id)
         )
 
+    @staticmethod
+    def _needs_connection_record(group: Dict[str, Any]) -> bool:
+        """Check for a missing connection without treating ARP as a connection.
+
+        Parameters:
+            group: Connection and protocol records sharing a UID.
+
+        Returns:
+            True if a connection row is missing and may be recoverable.
+        """
+        if group.get("network_flow"):
+            return False
+        protocols = group.get("protocol_flows") or []
+        return not protocols or any(
+            str(
+                record.get("flow_type")
+                or record.get("flow", {}).get("type_")
+                or record.get("flow", {}).get("type")
+                or ""
+            ).lower()
+            != "arp"
+            for record in protocols
+        )
+
     def _recover_zeek_flows(self, grouped: Dict[str, Dict[str, Any]]) -> int:
         """Recover pruned flow details from bounded Zeek JSON logs.
 
@@ -4886,6 +4911,11 @@ class RunDataReader:
                     record["flow"] = self._loads(record.get("flow"), {})
                     record["table"] = "altflows"
                     result["protocol_flows"].append(record)
+        if self._needs_connection_record(result):
+            self._recover_zeek_flows({uid: result})
+            result["protocol_flow_total"] = max(
+                result["protocol_flow_total"], len(result["protocol_flows"])
+            )
         return result
 
     def flows_for_evidence(
@@ -4997,11 +5027,13 @@ class RunDataReader:
                     else:
                         item["protocol_flows"].append(record)
         recovered_flow_count = 0
-        if any(
-            not group["network_flow"] and not group["protocol_flows"]
-            for group in grouped.values()
-        ):
-            recovered_flow_count = self._recover_zeek_flows(grouped)
+        incomplete = {
+            uid: group
+            for uid, group in grouped.items()
+            if self._needs_connection_record(group)
+        }
+        if incomplete:
+            recovered_flow_count = self._recover_zeek_flows(incomplete)
         items = [
             grouped[uid]
             for uid in bounded_uids

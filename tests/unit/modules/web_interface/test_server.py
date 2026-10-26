@@ -3616,6 +3616,40 @@ def test_flows_for_evidence_recovers_pruned_dga_from_zeek(
     assert archived["protocol_flow_total"] == 1
 
 
+@pytest.mark.parametrize("protocol,needs_connection", [("arp", False), ("dns", True)])
+def test_protocol_only_flows_recover_connections_when_expected(
+    tmp_path: Path, protocol: str, needs_connection: bool,
+) -> None:
+    """Recover a missing conn row even when its protocol row already exists.
+
+    Parameters:
+        tmp_path: Isolated offline analysis.
+        protocol: Protocol recorded separately by Zeek.
+        needs_connection: Whether a conn row is expected for this protocol.
+    """
+    _module_factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript("CREATE TABLE flows(uid TEXT, flow TEXT);"
+            "CREATE TABLE altflows(uid TEXT, flow TEXT, flow_type TEXT);"
+            "CREATE TABLE evidence_flows(evidence_id TEXT, uid TEXT);")
+        connection.execute("INSERT INTO altflows VALUES ('uid', '{}', ?)", (protocol,))
+        connection.execute("INSERT INTO evidence_flows VALUES ('evidence', 'uid')")
+    logs = tmp_path / "zeek_files"
+    logs.mkdir()
+    (logs / "conn.log").write_text(json.dumps({"uid": "uid", "ts": 100, "service": protocol}) + "\n")
+    group = reader.flow_details("uid", {})
+    assert reader._needs_connection_record({"protocol_flows": group["protocol_flows"]}) is needs_connection
+    assert bool(group["network_flow"]) is needs_connection
+    assert group["protocol_flow_total"] == 1
+    evidence = reader.flows_for_evidence("evidence")
+    assert bool(evidence["items"][0]["network_flow"]) is needs_connection
+    assert evidence["recovered_flow_count"] == int(needs_connection)
+
+
 def test_api_routes_evidence_flow_ids() -> None:
     _module_factory = ModuleFactory()
     handler = RequestHandler.__new__(RequestHandler)

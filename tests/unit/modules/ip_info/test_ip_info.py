@@ -10,6 +10,7 @@ from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
 from unittest.mock import (
+    ANY,
     AsyncMock,
     Mock,
     patch,
@@ -300,7 +301,7 @@ def test_get_rdns_valid_ip():
         mock_gethostbyaddr.assert_called_once_with(ip_address)
         mock_inet_pton.assert_called_once()
         ip_info.db.set_ip_info.assert_called_once_with(
-            ip_address, expected_rdns
+            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
         )
 
 
@@ -328,6 +329,62 @@ def test_get_rdns_negative_cache_skips_second_lookup():
         assert ip_info.get_rdns(ip_address) is False
 
         mock_gethostbyaddr.assert_called_once_with(ip_address)
+
+
+@pytest.mark.parametrize("error,status,delay", [
+    (socket.herror(1, "Unknown host"), "no_record", 86400),
+    (socket.herror(2, "Try again"), "error", 300),
+    (socket.gaierror(socket.EAI_AGAIN, "Temporary failure"), "error", 300),
+    (OSError("Resolver unavailable"), "error", 300),
+])
+def test_rdns_records_lookup_outcome(error: OSError, status: str, delay: int) -> None:
+    """Distinguish an absent reverse name from a temporary resolver failure.
+
+    Parameters:
+        error: Resolver result to simulate.
+        status: Expected stored outcome.
+        delay: Minimum time before another background attempt.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    with patch("socket.gethostbyaddr", side_effect=error), patch(
+        "modules.ip_info.ip_info.time.time", return_value=1000
+    ):
+        assert ip_info.get_rdns("8.8.8.8") is False
+    ip_info.db.set_ip_info.assert_called_once_with("8.8.8.8", {
+        "reverse_dns_lookup": {"status": status, "checked_at": 1000, "retry_after": 1000 + delay}
+    })
+
+
+def test_rdns_negative_result_survives_module_restart() -> None:
+    """Reuse saved negative results instead of repeating DNS on every run."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_ip_info.return_value = {"status": "no_record", "retry_after": 2000}
+    with patch("socket.gethostbyaddr") as lookup, patch(
+        "modules.ip_info.ip_info.time.time", return_value=1000
+    ):
+        assert ip_info.get_rdns("8.8.8.8") is False
+    lookup.assert_not_called()
+
+
+async def test_rdns_is_not_skipped_when_asn_lookup_fails() -> None:
+    """Resolve the name before an unrelated remote ASN lookup can fail."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_rdns_info.return_value = None
+    ip_info.get_rdns_async = AsyncMock()
+    ip_info.asn.get_asn_async = AsyncMock(side_effect=OSError("ASN offline"))
+    with pytest.raises(OSError):
+        await ip_info.handle_new_ip_async("8.8.8.8")
+    ip_info.get_rdns_async.assert_awaited_once_with("8.8.8.8")
+    assert ip_info.pending_ip_lookups == set()
+
+
+async def test_duplicate_ip_enrichment_is_coalesced() -> None:
+    """Keep repeated source and destination requests to one active lookup."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.pending_ip_lookups.add("8.8.8.8")
+    ip_info.get_rdns_async = AsyncMock()
+    await ip_info.handle_new_ip_async("8.8.8.8")
+    ip_info.get_rdns_async.assert_not_awaited()
 
 
 def test_get_rdns_no_reverse_dns():
@@ -370,7 +427,7 @@ def test_get_rdns_localhost():
         mock_gethostbyaddr.assert_called_once_with(ip_address)
         mock_inet_pton.assert_called_once()
         ip_info.db.set_ip_info.assert_called_once_with(
-            ip_address, expected_rdns
+            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
         )
 
 

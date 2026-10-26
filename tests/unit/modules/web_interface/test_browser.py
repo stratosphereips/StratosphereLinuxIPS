@@ -21,6 +21,57 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("protocol", ["arp", "dns"])
+def test_protocol_only_cards_and_reverse_dns_outcomes(protocol: str) -> None:
+    """Explain natural ARP records and distinguish reverse DNS outcomes.
+
+    Parameters:
+        protocol: Standalone protocol record shown in the investigation pane.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+
+    def route_request(route: Any) -> None:
+        """Serve assets and empty API data for an isolated browser.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated test"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        page = browser.new_page()
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof flowCard === 'function'")
+        card = page.evaluate("""protocol => {
+            const card = flowCard({uid:'arp-or-dns', network_flow:null,
+                protocol_flows:[{flow_type:protocol, flow:{type_:protocol, uid:'arp-or-dns'}}]});
+            return {message:card.textContent, warnings:card.querySelectorAll('.flow-missing').length};
+        }""", protocol)
+        if protocol == "arp":
+            assert card["warnings"] == 0
+            assert "does not create a conn.log" in card["message"]
+            assert "Related ARP" not in card["message"]
+        else:
+            assert card["warnings"] == 1
+        assert "primary flow row is unavailable" not in card["message"]
+        for status, expected in [
+            ("no_record", "Lookup returned no reverse DNS name"),
+            ("error", "Lookup failed; Slips will retry"),
+            ("", "No lookup result recorded yet"),
+        ]:
+            assert page.evaluate("status => reverseDnsDetails({ti:{reverse_dns_lookup:{status}}}).textContent", status) == expected
+        assert page.evaluate("reverseDnsDetails({ti:{reverse_dns:'dns.google'}}).textContent") == "dns.google"
+        browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
     """Show high source and informational destination findings separately.

@@ -4941,6 +4941,26 @@ function contextName(record) {
   return element;
 }
 
+/** Explain the latest cached reverse lookup without doing network work.
+ * @param {object} host Selected host and its cached IP information.
+ * @returns {HTMLElement} Name or lookup outcome with its last-check time.
+ */
+function reverseDnsDetails(host) {
+  const info = host.ti || {};
+  const lookup = info.reverse_dns_lookup || {};
+  const labels = {
+    no_record: "Lookup returned no reverse DNS name",
+    error: "Lookup failed; Slips will retry",
+    resolved: "Name was found; cached name has expired",
+  };
+  const value = info.reverse_dns || labels[lookup.status] || "No lookup result recorded yet";
+  const element = text("span", Array.isArray(value) ? value.join(", ") : value);
+  element.title = lookup.checked_at
+    ? `System resolver lookup: ${formatTime(lookup.checked_at)}. This is a current lookup, not a DNS answer captured in the traffic.`
+    : "Reverse DNS is looked up in the background. An empty result does not mean the host has no name.";
+  return element;
+}
+
 /** Show the saved network where a detection occurred. */
 function networkContext(record) {
   const label = record.network_label || "Unknown network (not recorded)";
@@ -5536,6 +5556,8 @@ function flowCard(group, position = 1, total = 1, title = null) {
   }
   const record = group.network_flow;
   const related = Array.isArray(group.protocol_flows) ? group.protocol_flows : [];
+  const arpOnly = !record && related.length > 0
+    && related.every((protocol) => protocolType(protocol) === "arp");
   const flow = record?.flow && typeof record.flow === "object" ? record.flow : {};
   const timestamp = flowValue(flow, "starttime", "ts") ?? record?.event_time;
   const observed = timestamp === null || timestamp === undefined || timestamp === ""
@@ -5546,7 +5568,9 @@ function flowCard(group, position = 1, total = 1, title = null) {
   heading.className = "flow-card-head";
   const uid = group.uid || record?.uid || flow.uid || "Unknown UID";
   heading.append(text("strong", title || `Triggering flow · ${position} of ${total}`));
-  if (related.length) heading.append(text("span", `${related.length} related protocol ${related.length === 1 ? "flow" : "flows"}`, "flow-related-count"));
+  if (related.length) heading.append(text("span", arpOnly
+    ? `${related.length} ARP ${related.length === 1 ? "record" : "records"}`
+    : `${related.length} related protocol ${related.length === 1 ? "flow" : "flows"}`, "flow-related-count"));
   const flowActions = document.createElement("div");
   flowActions.className = "evidence-flow-actions";
   flowActions.append(text("code", `UID ${uid}`));
@@ -5599,8 +5623,10 @@ function flowCard(group, position = 1, total = 1, title = null) {
   } else {
     card.append(text(
       "p",
-      "The primary flow row is unavailable, but related protocol flows were retained.",
-      "flow-missing",
+      arpOnly
+        ? "ARP packets are recorded separately. Zeek does not create a conn.log connection record for ARP."
+        : "No connection record is available for this UID. The available protocol records are shown below.",
+      arpOnly ? "muted" : "flow-missing",
     ));
   }
   const tabs = document.createElement("div");
@@ -5624,7 +5650,7 @@ function flowCard(group, position = 1, total = 1, title = null) {
   }
   related.forEach((protocol, index) => {
     const type = protocolType(protocol);
-    entries.push([`Related ${type.toUpperCase()} · ${index + 1}`, () => {
+    entries.push([`${arpOnly ? "" : "Related "}${type.toUpperCase()} · ${index + 1}`, () => {
       const panel = document.createElement("div");
       const displayed = ["uid", "starttime", "ts", "type", "type_",
         ...(PROTOCOL_FIELDS[type] || []).flatMap(([, names]) => names)];
@@ -6523,6 +6549,7 @@ function renderHostCards(host) {
       ...((networkScoped ? scopedProfiles.length : host.permanent_profiles?.length) || host.annotation_profile?.network_id
         ? [detailRow("Edit identification", annotationEntry)] : []),
       detailRow("Hostname", host.hostname || "Unknown"),
+      detailRow("Reverse DNS", reverseDnsDetails(host)),
       detailRow("MAC", macIdentity(host.mac)),
       detailRow("Vendor", host.mac_vendor || "Unknown"),
       detailRow("DNS", host.dns?.domains?.[0] || "No A/AAAA record"),

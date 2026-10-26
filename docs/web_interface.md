@@ -260,6 +260,30 @@ be expanded. Open groups stay open as live data refreshes. Private and
 unknown geolocation labels are omitted from the country group, including
 labels stored by older runs.
 
+Reverse DNS lookups cover both source and destination addresses, including
+remote hosts that have no profiling record of their own. The host-profile
+worker requests missing names in batches of up to 16; the IP information
+module resolves them through its existing four-worker pool. No DNS lookup runs
+inside a web request or the profiler's flow-processing path. The host Identity
+card shows the reverse name, an unsuccessful lookup, or that no lookup result
+has been recorded yet. Hover over the result to see when it was checked.
+An unsuccessful result is different from an unattempted lookup: some IP owners
+publish no reverse name. Temporary errors are eligible for another attempt
+after five minutes; a public IP with no reverse name is eligible after one day.
+Cached outcomes survive module restarts, and background retries happen when
+the host-profile worker next revisits the address. Names and other saved clues
+remain available through the permanent host database. These lookups describe
+the current resolver's answer, even when analyzing an old PCAP; captured DNS
+answers are shown separately.
+
+ARP packets are complete records in the `altflows` table. Zeek does not create
+a `conn.log` connection row for ARP, so their investigation cards show ARP
+records without a missing-connection warning. This applies to offline and live
+analyses. For protocols that do have a connection row, the web also attempts
+recovery from retained Zeek JSON logs when the protocol row exists but the
+connection row is missing. Imported PCAPs and fixed log analyses are never
+pruned by the live-interface flow-retention worker, regardless of their age.
+
 **Network observations** separates verified device identity from an IP address
 mentioned in a capture. When the selected device has a MAC, the summary lists
 networks with a matching local MAC binding and uses that binding's observation

@@ -149,6 +149,8 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
 
     def _run_flow_retention(self) -> None:
         """Prune small flow batches away from the profiler hot path."""
+        if not self.args.interface:
+            return
         policy = self.flow_retention_policy
         interval = int(policy["interval_seconds"])
         ordinary_age = int(policy["ordinary_hours"]) * 3600

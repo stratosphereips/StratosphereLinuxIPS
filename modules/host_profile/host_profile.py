@@ -30,6 +30,7 @@ class HostProfile(IModule):
         "geocountry",
         "SNI",
         "threatintelligence",
+        "reverse_dns_lookup",
     )
 
     def init(self) -> None:
@@ -167,6 +168,7 @@ class HostProfile(IModule):
                     fields[field] = json.loads(value)
                 except (TypeError, ValueError):
                     fields[field] = value
+            self._request_ip_enrichment(ip, fields)
             signature = hash(
                 (str(hostnames[index]), *(str(value) for value in raw_values))
             )
@@ -182,6 +184,30 @@ class HostProfile(IModule):
         if len(self._enriched_at) > self.CACHE_LIMIT:
             self._enriched_at.clear()
             self._enrichment_signatures.clear()
+
+    def _request_ip_enrichment(self, ip: str, fields: dict[str, Any]) -> None:
+        """Request missing names for destination-only hosts and retry failures.
+
+        Parameters:
+            ip: Observed source or destination address.
+            fields: Cached enrichment, including the previous lookup result.
+        """
+        address = ipaddress.ip_address(ip)
+        if (
+            address.is_multicast
+            or address.is_unspecified
+            or address.is_reserved
+        ):
+            return
+        if fields.get("reverse_dns"):
+            return
+        previous = fields.get("reverse_dns_lookup")
+        if (
+            isinstance(previous, dict)
+            and previous.get("retry_after", 0) > time.time()
+        ):
+            return
+        self.db.set_new_ip(ip)
 
     def process_batch(self) -> int:
         """Persist and checkpoint one bounded batch outside the profiler.
