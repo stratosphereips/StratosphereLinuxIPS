@@ -715,6 +715,108 @@ function peerDetections(record) {
     })) : [];
 }
 
+/** Validate an address supplied by a peer before using it in a host link.
+ * @param {unknown} value Address to check.
+ * @returns {string} Literal IP address, or an empty string.
+ */
+function peerAddress(value) {
+  if (typeof value !== "string" || value.length > 45 || !/^[\da-f:.]+$/i.test(value)) return "";
+  try {
+    const host = new URL(`http://${value.includes(":") ? `[${value}]` : value}`).hostname.replace(/^\[|\]$/g, "");
+    return host.toLowerCase() === value.toLowerCase() ? value : "";
+  } catch (_) { return ""; }
+}
+
+/** Read connection endpoints, with a labeled fallback for older unknown-port reports.
+ * @param {object} detection Finding supplied by a peer.
+ * @param {object} record Evidence or P2P activity carrying the finding.
+ * @returns {object} Endpoints, transport fields and whether text reconstruction was needed.
+ */
+function peerConnection(detection, record) {
+  const connection = { ...detection, src_ip: peerAddress(detection.src_ip), dst_ip: peerAddress(detection.dst_ip), reconstructed: false };
+  if (connection.src_ip || connection.dst_ip) return connection;
+  if (detection.evidence_type !== "UNKNOWN_PORT" || detection.module !== "conn_analyzer") return connection;
+  const match = detection.description.match(/^Connection to unknown destination port (\d+)\/(TCP|UDP) destination IP ([\da-f:.]+)\.$/i);
+  if (!match) return connection;
+  const source = peerAddress(record.profile_ip || record.target || record.message?.key);
+  const destination = peerAddress(match[3]);
+  if (!source || !destination || Number(match[1]) < 1 || Number(match[1]) > 65535) return connection;
+  return { ...connection, src_ip: source, dst_ip: destination, proto: match[2].toLowerCase(),
+    dst_port: Number(match[1]), reconstructed: true };
+}
+
+/** Render one named role in a connection or report-delivery diagram.
+ * @param {string} role Meaning of this endpoint.
+ * @param {string} ip Literal IP, when supplied.
+ * @param {string} fallback Label when an IP was not supplied.
+ * @param {string} detail Optional port or peer identity.
+ * @returns {HTMLElement} Accessible host node.
+ */
+function peerRoleNode(role, ip, fallback, detail = "") {
+  const node = document.createElement("div");
+  node.className = "peer-role-node";
+  node.append(text("small", role), ip ? hostLink(ip) : text("strong", fallback));
+  if (detail) node.append(text("span", detail, "muted"));
+  return node;
+}
+
+/** Keep the reported network activity separate from the message carrying it.
+ * @param {object} detection Finding supplied by a peer.
+ * @param {object} record Evidence or P2P activity carrying the finding.
+ * @returns {HTMLElement} Connection diagram with explicit missing-data labels.
+ */
+function peerConnectionDiagram(detection, record) {
+  const connection = peerConnection(detection, record);
+  const figure = document.createElement("figure");
+  figure.className = "peer-relationship peer-connection";
+  figure.append(text("figcaption", "Network activity reported"));
+  const row = document.createElement("div");
+  row.className = "peer-role-row";
+  const arrow = document.createElement("div");
+  arrow.className = "peer-role-arrow";
+  arrow.append(text("span", "→"), text("small", connection.proto ? connection.proto.toUpperCase() : "Protocol not supplied"));
+  const port = (value) => Number.isInteger(value) && !isIcmpProtocol(connection.proto) ? `Port ${value}` : "";
+  row.append(peerRoleNode("Source", connection.src_ip, "Source not supplied", port(connection.src_port)), arrow,
+    peerRoleNode("Destination", connection.dst_ip, "Destination not supplied", port(connection.dst_port)));
+  figure.append(row);
+  if (connection.reconstructed) figure.append(text("p", "Older report: this detector flags the connecting host. Its saved description identifies the destination and protocol; the peer did not send flow records.", "muted peer-context-note"));
+  if (detection.evidence_type === "UNKNOWN_PORT") figure.append(text("p", "Unknown port means the reporting detector did not recognize the destination service. This finding alone does not establish an attack.", "peer-context-note"));
+  return figure;
+}
+
+/** Explain who delivered a P2P finding and which host it concerns.
+ * @param {object} record Evidence or sent/received P2P activity.
+ * @returns {HTMLElement} Report-delivery diagram, distinct from network activity.
+ */
+function peerDeliveryDiagram(record) {
+  const peerId = record.peer_report?.peer_id || record.peer || "";
+  const peerIp = peerAddress(record.peer_report?.peer_ip || record.peer_ip
+    || state.p2p?.peers?.find((peer) => peer.peer_id === peerId)?.ip);
+  const sent = record.direction === "sent";
+  const local = state.computerName ? `This Slips · ${state.computerName}` : "This Slips";
+  const figure = document.createElement("figure");
+  figure.className = "surface peer-relationship peer-delivery";
+  figure.append(text("figcaption", "Report delivery"));
+  const row = document.createElement("div");
+  row.className = "peer-role-row";
+  const sender = sent ? peerRoleNode("Reporting Slips", "", local) : peerRoleNode("Reporting Slips", peerIp, "Peer IP not supplied", shortPeerId(peerId));
+  const receiver = sent ? peerRoleNode("Report receiver", peerIp, peerId === "*" ? "All peers" : "Peer IP not supplied", shortPeerId(peerId)) : peerRoleNode("Report receiver", "", local);
+  const arrow = document.createElement("div");
+  arrow.className = "peer-role-arrow";
+  arrow.append(text("span", "⇢"), text("small", "P2P report"));
+  row.append(sender, arrow, receiver);
+  figure.append(row);
+  const subject = record.profile_ip || record.target || record.message?.key;
+  if (peerAddress(subject)) {
+    const about = text("p", "Report about ", "peer-context-note");
+    about.append(hostLink(subject));
+    figure.append(about);
+  }
+  figure.append(text("p", "The reporting Slips sent this report. The receiver may not have observed the reported activity.", "muted peer-context-note"));
+  if (record.timestamp) figure.append(text("p", `${sent ? "Sent" : "Received"}: ${formatTime(record.timestamp)}`, "muted peer-context-note"));
+  return figure;
+}
+
 /** Put the reported detection type before the report's transport label.
  * @param {object} record Evidence, group, or P2P message.
  * @returns {string} Detection names, or an explicit missing-type label.
@@ -757,6 +859,7 @@ function peerDetectionPanel(record) {
       ? "The original detection type and description are not available in this saved report."
       : "This report did not supply an evidence type or detection description.";
     panel.append(text("p", missing, "muted"));
+    panel.append(peerDeliveryDiagram(record));
     return panel;
   }
   detections.forEach((item) => {
@@ -764,6 +867,7 @@ function peerDetectionPanel(record) {
     card.className = "surface p2p-reported-detection";
     card.append(text("h3", alertTypeName(item.evidence_type)),
       text("p", item.description || "The peer supplied the type but no detection description."));
+    card.append(peerConnectionDiagram(item, record));
     const facts = document.createElement("dl");
     facts.className = "p2p-message-facts";
     const values = [["Reported type", item.evidence_type], ["Reported detector", item.module]];
@@ -780,6 +884,7 @@ function peerDetectionPanel(record) {
     card.append(facts);
     panel.append(card);
   });
+  panel.append(peerDeliveryDiagram(record));
   return panel;
 }
 /** Keep peer IDs distinguishable while fitting them in tables and plots.
@@ -5887,7 +5992,10 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     text("span", record.twid || record.timewindow?.number || "—"),
     networkContext(record));
   const headline = text("h2", evidenceDetailHeadline(record));
-  bannerCopy.append(meta, headline, hostDescription(record, "evidence-detail-description"));
+  const description = isPeerReport(record)
+    ? text("p", "A peer reported this finding. The connection and report delivery are shown separately below.", "evidence-detail-description")
+    : hostDescription(record, "evidence-detail-description");
+  bannerCopy.append(meta, headline, description);
   const bannerStats = document.createElement("div");
   bannerStats.className = "evidence-detail-stats";
   bannerStats.append(investigationStats([
@@ -5930,8 +6038,8 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     detailRow("Time window", record.twid || record.timewindow?.number || "—"),
     detailRow("Module", record.module || "—"),
     detailRow("Method", record.method || "—"),
-    detailRow("Signal", record.evidence_signal || "—"),
-    detailRow("Protocol", record.proto || "—"),
+    detailRow("Signal", record.evidence_signal || "—"));
+  if (!isPeerReport(record)) recordCard.append(detailRow("Protocol", record.proto || "—"),
     detailRow(isIcmpProtocol(record.proto) ? "ICMP type" : "Source port",
       isIcmpProtocol(record.proto) ? record.icmp_type ?? record.src_port ?? "—" : record.src_port ?? "—"),
     detailRow(isIcmpProtocol(record.proto) ? "ICMP code" : "Destination port",
@@ -5942,8 +6050,8 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   const subnetRoles = record.evidence_type === "DIFFERENT_LOCALNET" ? {
     SRC: "Connecting host / source", DST: "Receiving host / destination",
   } : {};
-  if (record.attacker) recordCard.append(evidenceEntity(isPeerReport(record) ? "Reported host"
-    : subnetRoles[record.attacker.direction] || "Attacker / source", record.attacker));
+  if (isPeerReport(record)) recordCard.append(detailRow("Reported host", hostLink(record.profile_ip || record.attacker?.value)));
+  else if (record.attacker) recordCard.append(evidenceEntity(subnetRoles[record.attacker.direction] || "Attacker / source", record.attacker));
   if (record.victim) recordCard.append(evidenceEntity(subnetRoles[record.victim.direction]
     || "Victim / destination", record.victim));
   if (alertCount) {
@@ -5991,7 +6099,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     flowSection.prepend(notice);
   }
   if (isPeerReport(record)) {
-    flowHeading.querySelector("h3").textContent = "Reported detection";
+    flowHeading.querySelector("h3").textContent = "What the peer reported";
     flowHeading.querySelector("p").textContent = "The peer sent detection details, without its flow records.";
     flowList.replaceChildren(peerDetectionPanel(record));
     recordCard.append(detailRow("Received from", evidenceReporter(record)),

@@ -209,6 +209,8 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
         "proto": "tcp",
         "src_port": 45000,
         "dst_port": 8123,
+        "src_ip": "192.0.2.10",
+        "dst_ip": "192.0.2.20",
         "observed_at": 1792830000,
     }
     record = {
@@ -298,6 +300,7 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             """async ({record,activity,theme}) => {
             clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
             setTheme(theme); state.activeTab='evidence'; state.deviceView=false;
+            state.computerName='Cherry.local';
             state.whitelists={evidence_types:[]}; state.pages.evidence.items=[record];
             byId('evidence-view').value='individual'; renderEvidenceTable({items:[record]});
             await openEvidence(record);
@@ -323,6 +326,17 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             and "192.0.2.2" in detail.inner_text()
         )
         assert not any(path.endswith("/flows") for path in requests)
+        connection_nodes = detail.locator(".peer-connection .peer-role-node")
+        assert "Source" in connection_nodes.nth(0).inner_text()
+        assert "192.0.2.10" in connection_nodes.nth(0).inner_text()
+        assert "192.0.2.20" in connection_nodes.nth(1).inner_text()
+        assert connection_nodes.locator(".host-label > code").all_text_contents() == ["192.0.2.10", "192.0.2.20"]
+        delivery_nodes = detail.locator(".peer-delivery .peer-role-node")
+        assert "Reporting Slips" in delivery_nodes.nth(0).inner_text()
+        assert "192.0.2.2" in delivery_nodes.nth(0).inner_text()
+        assert "Report receiver" in delivery_nodes.nth(1).inner_text()
+        assert "Cherry.local" in delivery_nodes.nth(1).inner_text()
+        assert "does not establish an attack" in detail.inner_text()
         page.evaluate("""async () => {
             state.host={ip:'192.0.2.10',evidence_count:1}; state.activeTab='hosts';
             await loadHostEvidence();
@@ -349,6 +363,10 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
         assert "Connection to unknown TCP port 8123" in message.inner_text()
         assert "Connection lasted one hour" in message.inner_text()
         assert "peer-A" in message.inner_text()
+        page.evaluate("renderP2PMessageDetail({...window.peerTestActivity, direction:'sent'})")
+        sent_nodes = message.locator(".peer-delivery .peer-role-node")
+        assert "Cherry.local" in sent_nodes.nth(0).inner_text()
+        assert "192.0.2.2" in sent_nodes.nth(1).inner_text()
         assert (
             page.evaluate("p2pMessageContent(window.peerTestActivity)")
             == activity["message"]
@@ -366,6 +384,46 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
                 description:'<img src=x onerror=alert(1)>',dst_port:false}]}}});
             return !panel.querySelector('img') && panel.textContent.includes('<img');
         }""")
+        page.evaluate("record => openEvidence(record,[record],true)", record)
+        assert page.locator("#alerts-evidence-pane .peer-connection").count() == 1
+        assert page.locator("#alerts-evidence-pane .peer-delivery").count() == 1
+        page.evaluate("""record => {
+            state.activeTab='evidence';
+            return openEvidence(record,[record]);
+        }""", record)
+        legacy = {**record, "profile_ip": "192.168.1.249", "peer_report": {
+            **record["peer_report"], "peer_ip": "192.168.1.196", "provenance": [{
+                "evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer",
+                "description": "Connection to unknown destination port 6668/TCP destination IP 192.168.1.200.",
+                "src_port": 6668, "dst_port": 6668,
+            }]}}
+        legacy.pop("reported_detections", None)
+        page.evaluate("""record => {
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', ['evidence','evidence-detail'].includes(panel.id)));
+            byId('evidence-detail-content').replaceChildren(peerDetectionPanel(record));
+        }""", legacy)
+        legacy_panel = detail.locator(".peer-detection-details")
+        legacy_nodes = legacy_panel.locator(".peer-connection .peer-role-node")
+        assert "192.168.1.249" in legacy_nodes.nth(0).inner_text()
+        assert "192.168.1.200" in legacy_nodes.nth(1).inner_text()
+        assert "TCP" in legacy_panel.locator(".peer-connection .peer-role-arrow").inner_text()
+        assert "Older report" in legacy_panel.inner_text()
+        for width in (320, 900):
+            legacy_panel.evaluate("(panel,width) => panel.style.width=width+'px'", width)
+            left, right = legacy_nodes.nth(0).bounding_box(), legacy_nodes.nth(1).bounding_box()
+            assert left["x"] + left["width"] <= right["x"]
+            assert left["y"] == right["y"]
+            assert legacy_panel.evaluate("panel => panel.scrollWidth <= panel.clientWidth")
+        for invalid in ("<img src=x>", "192.0.2.999", "example.org", "192.0.2.1/path"):
+            assert page.evaluate("peerAddress", invalid) == ""
+        assert page.evaluate("peerAddress('2001:db8::1')") == "2001:db8::1"
+        assert page.evaluate("""() => peerConnection({evidence_type:'ARP_SCAN',module:'arp',
+            description:'Connection to unknown destination port 6668/TCP destination IP 192.168.1.200.'},
+            {profile_ip:'192.168.1.249'}).src_ip""") == ""
+        artifact = Path("output/p2p-report-roles")
+        artifact.mkdir(parents=True, exist_ok=True)
+        legacy_panel.evaluate("panel => panel.style.width='650px'")
+        legacy_panel.screenshot(path=str(artifact / f"{theme}.png"))
         assert errors == []
         browser.close()
 

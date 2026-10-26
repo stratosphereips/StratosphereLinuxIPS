@@ -220,6 +220,7 @@ class SetEvidenceHelper:
             confidence=confidence,
             src_port=flow.sport,
             dst_port=flow.dport,
+            proto=flow.proto,
         )
 
         self.db.set_evidence(evidence)

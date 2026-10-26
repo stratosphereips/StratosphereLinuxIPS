@@ -390,11 +390,34 @@ This keeps the network's opinion separate from the local score used to judge
 reporters and to answer other peers.
 
 A report also carries the original evidence type, a short detection description,
-and the protocol and ports when the sender has them. For example, the web shows
+the source and destination IPs, and the protocol and ports when the sender has them. For example, the web shows
 **Unknown port — From P2P**, followed by what the peer detected. The sending
 peer, reported IP, score, confidence, detection time and detector remain
 available. The reporting peer is not automatically the victim of the detection.
 A score of zero means the peer considers the reported IP benign.
+
+The detail pane shows two separate diagrams. **Network activity reported** puts
+the original source on the left and destination on the right, with their ports.
+**Report delivery** shows the reporting Slips sending its finding to the
+receiving Slips. A report about A does not mean A connected to the receiver,
+and the reporter is not automatically the destination. Detection time and
+message receipt time are shown separately. This view is shared by Evidence,
+Hosts, Alerts and the P2P activity inspector.
+
+For example, A can connect to B's Wi-Fi address, while B reports the connection
+from its Ethernet address to C. Those two addresses still belong to B. An
+unknown-port finding means the sender did not recognize the destination service;
+it does not by itself prove an attack or that the service was malicious.
+
+New senders include validated IPv4/IPv6 endpoints with their original source
+and destination roles. Missing endpoints remain labeled as not supplied. For
+older `UNKNOWN_PORT` reports with the original standard description, the web
+can reconstruct the destination and protocol from that text, and the source
+from the reported host, because that detector reports the connecting source.
+It explicitly labels this reconstruction and does not apply it to other
+detection types. This display does not change the saved report or invent
+missing flow records. Restart sending Slips to include endpoints in new reports;
+the diagram itself only needs a page refresh.
 
 The P2P tab shows the reported detection before the report/request message
 details. Selecting a report shows its detection descriptions first, then the

@@ -504,6 +504,48 @@ def test_peer_icmp_reports_preserve_type_and_zero_code(proto: str, legacy: bool)
         validate_provenance([invalid])
 
 
+@pytest.mark.parametrize("direction", ["SRC", "DST"])
+@pytest.mark.parametrize("addresses", [("192.0.2.10", "192.0.2.20"), ("2001:db8::10", "2001:db8::20")])
+def test_peer_reports_keep_connection_roles(direction: str, addresses: tuple[str, str]) -> None:
+    """Carry original endpoint roles without substituting the reporting peer.
+
+    Parameters:
+        direction: Direction of the host the detection concerns.
+        addresses: Source and destination IPv4 or IPv6 addresses.
+    """
+    factory = ModuleFactory()
+    source, destination = addresses
+    attacker_ip, victim_ip = addresses if direction == "SRC" else tuple(reversed(addresses))
+    record = {"evidence_type": "UNKNOWN_PORT", "source_module": Modules.CONN_ANALYZER.value,
+              "threat_level": "high", "id": "original", "observed_at": time.time(),
+              "proto": "tcp", "src_port": 6668, "dst_port": 6668,
+              "attacker": {"direction": direction, "ioc_type": "IP", "value": attacker_ip},
+              "victim": {"direction": "DST" if direction == "SRC" else "SRC", "ioc_type": "IP", "value": victim_ip}}
+    wire = provenance_for_evidence(record, "version")
+    assert wire["src_ip"] == source and wire["dst_ip"] == destination
+    received = validate_provenance([wire])[0]
+    assert received["src_ip"] == source and received["dst_ip"] == destination
+    assert received["proto"] == "tcp"
+    assert factory is not None
+
+
+@pytest.mark.parametrize("value", [None, True, 123, "example.org", "192.0.2.999", "<img src=x>", "1" * 46])
+@pytest.mark.parametrize("field", ["src_ip", "dst_ip"])
+def test_peer_endpoint_metadata_rejects_invalid_addresses(field: str, value: object) -> None:
+    """Reject malformed endpoint metadata while accepting older reports.
+
+    Parameters:
+        field: Source or destination address field.
+        value: Invalid value received from a peer.
+    """
+    factory = ModuleFactory()
+    item = report()["provenance"][0]
+    assert validate_provenance([item])
+    with pytest.raises(ValueError, match="address"):
+        validate_provenance([{**item, field: value}])
+    assert factory is not None
+
+
 def test_shared_dependency_is_derived_locally_and_info_ignored() -> None:
     factory = ModuleFactory()
     item = report()["provenance"][0]

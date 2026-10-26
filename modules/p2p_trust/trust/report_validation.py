@@ -236,6 +236,24 @@ def provenance_for_evidence(
         proto = "icmp6"
     if proto in {"tcp", "udp", "icmp", "icmp6", "arp"}:
         provenance["proto"] = proto
+    for role in ("attacker", "victim"):
+        entity = record.get(role)
+        if not isinstance(entity, dict) or entity.get("ioc_type") != "IP":
+            continue
+        direction = entity.get("direction")
+        if direction not in {"SRC", "DST"}:
+            continue
+        if not isinstance(entity.get("value"), str):
+            continue
+        try:
+            address = str(ipaddress.ip_address(entity.get("value")))
+        except (TypeError, ValueError):
+            continue
+        endpoint = "src_ip" if direction == "SRC" else "dst_ip"
+        if endpoint in provenance and provenance[endpoint] != address:
+            provenance.pop(endpoint)
+        else:
+            provenance[endpoint] = address
     for key in ("src_port", "dst_port"):
         value = record.get(key)
         if (
@@ -330,6 +348,18 @@ def validate_provenance(value: Any) -> list[dict[str, Any]]:
             raise ValueError("Invalid reported detection protocol")
         if proto:
             fields["proto"] = proto
+        for key in ("src_ip", "dst_ip"):
+            if key not in item:
+                continue
+            address = item[key]
+            if not isinstance(address, str) or len(address) > 45:
+                raise ValueError("Invalid reported detection address")
+            try:
+                fields[key] = str(ipaddress.ip_address(address))
+            except ValueError as error:
+                raise ValueError(
+                    "Invalid reported detection address"
+                ) from error
         for key in ("src_port", "dst_port"):
             if key not in item:
                 continue

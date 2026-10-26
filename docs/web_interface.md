@@ -946,6 +946,16 @@ report information. It does not try to load the peer's flows from the local
 capture. The original report and its peer ID, score and confidence remain
 available in the record details.
 
+P2P details separate **Network activity reported** (source → destination) from
+**Report delivery** (reporting Slips ⇢ receiving Slips). Both diagrams use
+explicit role labels and show supplied IPs and ports, with clickable host names.
+The report receiver is labeled **This Slips**; its current IP is not presented
+as its historical address. Missing endpoints stay unknown. Older standard
+unknown-port descriptions can supply a labeled reconstruction, without changing
+the stored evidence. An unknown-port finding explains that an unrecognized
+service alone does not establish an attack. See [P2P](P2P.md) for the example
+where one reporter uses separate Ethernet and Wi-Fi addresses.
+
 In the P2P activity table, **Detection / message** shows the actual detection
 types for reports and blames. The selected report shows readable detection
 details above the peer facts and full packet JSON. Older reports that lack a

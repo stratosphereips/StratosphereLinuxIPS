@@ -18,6 +18,18 @@
 .peer-detection-details { display: grid; gap: .8rem; }
 .p2p-reported-detection { padding: 1rem; min-width: 0; }
 .p2p-reported-detection p { overflow-wrap: anywhere; }
+.p2p-reported-detection .p2p-message-facts { grid-template-columns: minmax(100px, .4fr) minmax(0, 1fr); }
+.peer-relationship { padding: .8rem; border: 1px solid var(--line); border-radius: 8px; }
+.peer-relationship figcaption { font-weight: 750; color: var(--text); }
+.peer-role-row { display: grid; grid-template-columns: minmax(0, 1fr) 55px minmax(0, 1fr); gap: .5rem; align-items: stretch; }
+.peer-role-node { display: flex; flex-direction: column; gap: .35rem; min-width: 0; padding: .65rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); overflow-wrap: anywhere; }
+.peer-role-node > small { color: var(--muted); text-transform: uppercase; font-size: .65rem; }
+.peer-role-node > strong, .peer-role-node > .ip-link { font-size: .8rem; }
+.peer-role-node > .muted { font-size: .7rem; }
+.peer-role-arrow { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: .2rem; text-align: center; overflow-wrap: anywhere; }
+.peer-role-arrow > span { font-size: 1.5rem; color: var(--accent); }
+.peer-role-arrow > small { font-size: .62rem; color: var(--muted); }
+.peer-relationship .peer-context-note { margin: .7rem 0 0; font-size: .75rem; line-height: 1.5; }
 body { margin: 0; min-width: 760px; background: var(--bg); color: var(--text); }
 button, input, select { font: inherit; }
 button { color: inherit; }
