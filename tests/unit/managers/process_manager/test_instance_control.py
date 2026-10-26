@@ -38,6 +38,7 @@ def candidate(pid: int, entrypoint: Path, *arguments: str) -> Mock:
     process.status.return_value = psutil.STATUS_RUNNING
     process.is_running.return_value = True
     process.children.return_value = []
+    process.parents.return_value = []
     return process
 
 
@@ -148,6 +149,35 @@ def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture)
     assert "41003" not in listing
     control.print_instances([])
     assert "No accessible running" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("case", ["forked", "nested", "other_checkout", "denied"])
+def test_discovery_excludes_forked_workers(tmp_path: Path, case: str) -> None:
+    """Exclude workers inheriting slips.py arguments on fork-based systems.
+
+    Parameters:
+        tmp_path: Isolated checkout path.
+        case: Worker ancestry or unrelated/inaccessible parent.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    main = candidate(41001, entrypoint, "-D", "-i", "eth0")
+    worker = candidate(41002, entrypoint, "-D", "-i", "eth0")
+    ancestor = candidate(41003, tmp_path / "other.py")
+    worker.parents.return_value = [main] if case == "forked" else [ancestor, main]
+    if case == "other_checkout":
+        ancestor.cmdline.return_value[1] = str(tmp_path / "other" / "slips.py")
+        worker.parents.return_value = [ancestor]
+    elif case == "denied":
+        ancestor.cmdline.side_effect = psutil.AccessDenied(ancestor.pid)
+        worker.parents.return_value = [ancestor]
+    with patch.object(control.psutil, "process_iter", return_value=[main, worker]):
+        instances = control.list_instances(entrypoint)
+    if case in {"forked", "nested"}:
+        assert [instance.pid for instance in instances] == [main.pid]
+        assert control.inspect_instance(worker, entrypoint) is None
+    else:
+        assert [instance.pid for instance in instances] == [main.pid, worker.pid]
 
 
 @pytest.mark.parametrize("case, expected", [("normal", 0), ("gone", 0), ("reused", 1), ("denied", 1), ("slow", 1)])
@@ -322,19 +352,22 @@ def test_native_shutdown_waits_for_checkpoint_and_worker(tmp_path: Path) -> None
     saved = tmp_path / "saved"
     entrypoint.write_text('''"""Isolated Slips-shaped process for shutdown tests."""
 import json
+import os
 from pathlib import Path
 import signal
-import subprocess
 import sys
-child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(60)"])
+child_pid = os.fork()
+if child_pid == 0:
+    while True:
+        signal.pause()
 def stop(number: int, frame: object) -> None:
     """Save fixture state after its child has stopped."""
-    child.terminate()
-    child.wait(timeout=5)
+    os.kill(child_pid, signal.SIGTERM)
+    os.waitpid(child_pid, 0)
     Path(sys.argv[2]).write_text("saved")
     raise SystemExit(0)
 signal.signal(signal.SIGTERM, stop)
-Path(sys.argv[1]).write_text(json.dumps({"child": child.pid}))
+Path(sys.argv[1]).write_text(json.dumps({"child": child_pid}))
 while True:
     signal.pause()
 ''')
@@ -347,6 +380,8 @@ while True:
         child_pid = json.loads(marker.read_text())["child"]
         instance = control.inspect_instance(psutil.Process(process.pid), entrypoint)
         assert instance is not None
+        assert control.inspect_instance(psutil.Process(child_pid), entrypoint) is None
+        assert [item.pid for item in control.list_instances(entrypoint)] == [process.pid]
         assert control.stop_instances([instance], entrypoint, timeout=5) == 0
         assert saved.read_text() == "saved"
         assert process.wait(timeout=5) == 0

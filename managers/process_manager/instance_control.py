@@ -120,6 +120,19 @@ def inspect_instance(
             return None
         if process.status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}:
             return None
+        for parent in process.parents():
+            try:
+                parent_command = parent.cmdline()
+                parent_position = script_position(parent_command)
+                if parent_position is None:
+                    continue
+                parent_script = Path(parent_command[parent_position])
+                if not parent_script.is_absolute():
+                    parent_script = Path(parent.cwd()) / parent_script
+                if parent_script.resolve() == entrypoint.resolve():
+                    return None
+            except (psutil.Error, OSError):
+                continue
         return RunningInstance(
             process.pid, process.create_time(), tuple(arguments)
         )
