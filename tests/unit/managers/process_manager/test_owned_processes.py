@@ -191,7 +191,6 @@ def shutdown_coordinator(connection: Any, double_interrupt: bool) -> None:
     detached_pid = receiver.recv()
     manager.processes = [worker]
     manager.main.pid = os.getpid()
-    manager.main.args.stopdaemon = False
     manager.main.args.blocking = False
     manager.main.conf.wait_for_modules_to_finish.return_value = .1 / 60
     manager.main.conf.export_labeled_flows.return_value = False

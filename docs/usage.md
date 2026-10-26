@@ -132,13 +132,9 @@ is alive, it reports that startup is continuing and returns the terminal;
 `--list-instances` can already find the daemon. An early startup failure is
 reported in the terminal with a nonzero exit code and its error-log path.
 
-Only one daemon is supported at a time. `-S` / `--stopdaemon` selects the daemon
-from this checkout and uses the same verified shutdown mechanism as `--stop PID`.
-It runs before capture initialization, without reading Redis or requiring the
-original configuration. It gives the running coordinator time to save state
-and stop its workers and owned Zeek instances. `-S -c your-config.yaml` remains
-accepted for compatibility; selecting the daemon does not depend on that file.
-`--stop` also handles foreground, shell-background and service launches.
+Only one daemon is supported at a time. Use `--stop` to stop it when it is the
+only running Slips instance, or `--stop PID` to select it when other analyses
+are also running. The same stop option handles every launch mode.
 
 ### Find and stop running instances
 
@@ -199,8 +195,8 @@ Slips reports the failure instead of claiming a successful shutdown.
 Listing and stopping do not start a capture, load a configuration, create logs
 or connect to Redis. They do not flush Redis or delete saved capture history.
 Existing retention and shutdown settings still apply inside the running Slips
-process. Unlike these commands, `-k`/`--killall` manages unused Redis servers;
-`-S`/`--stopdaemon` remains available for the single `-D` daemon.
+process. `--stop` is the only Slips stop option; it also handles `-D` daemons.
+`-k`/`--killall` manages unused Redis servers.
 
 On macOS, for example, use `.venv-macos/bin/python slips.py --list-instances`
 and `.venv-macos/bin/python slips.py --stop`. You do not need to remember a PID
@@ -1123,7 +1119,6 @@ this file can be used for training Slips RNN module.
 - ```-s``` or  ```--save``` Save the analysed file db to disk.
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
 - ```-D``` or  ```--daemon``` Run slips in daemon mode
-- ```-S``` or  ```--stopdaemon``` Stop slips daemon
 - ```-k``` or  ```--killall``` Kill all unused redis servers
 - `--list-instances` List accessible running Slips instances from this checkout.
 - `--stop [PID|all]` Gracefully stop the sole running instance, a selected PID, or all instances from this checkout.

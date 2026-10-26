@@ -235,14 +235,6 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Run slips in daemon mode",
         )
         self.add_argument(
-            "-S",
-            "--stopdaemon",
-            required=False,
-            default=False,
-            action="store_true",
-            help="Stop slips daemon",
-        )
-        self.add_argument(
             "-k",
             "--killall",
             action="store_true",

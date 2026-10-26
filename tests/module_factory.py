@@ -709,10 +709,10 @@ class ModuleFactory:
         with (
             patch(f"{daemon_module}.Daemon.read_pidfile", return_value=None),
             patch(f"{daemon_module}.Daemon.read_configuration"),
+            patch(f"{daemon_module}.Daemon.prepare_output_dir"),
             patch("builtins.open", mock_open(read_data=None)),
         ):
             slips = MagicMock()
-            slips.args.stopdaemon = True
             slips.args.is_slips_started_by_an_update = False
             slips.args.output = "output"
             daemon = Daemon(slips)

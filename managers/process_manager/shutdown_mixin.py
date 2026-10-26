@@ -792,8 +792,7 @@ class ShutdownMixin:
 
             self._generate_plots()
 
-            if not self.main.args.stopdaemon:
-                print_separator()
+            print_separator()
 
             print("Stopping Slips")
 

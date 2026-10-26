@@ -23,7 +23,6 @@ from __future__ import print_function
 
 import os
 import sys
-import time
 import warnings
 
 from managers.process_manager.instance_control import handle_instance_command
@@ -51,18 +50,7 @@ if __name__ == "__main__":
 
     slips = Main()
 
-    if slips.args.stopdaemon:
-        # -S is provided
-        daemon_status: dict = Daemon(slips).stop()
-        # it takes about 5 seconds for the stop_slips msg
-        # to arrive in the channel, so give slips time to stop
-        time.sleep(5)
-        if daemon_status["stopped"]:
-            print("Daemon stopped.")
-        else:
-            print(daemon_status["error"])
-
-    elif slips.args.daemon:
+    if slips.args.daemon:
         print("Slips daemon starting..", flush=True)
         Daemon(slips).start()
     else:

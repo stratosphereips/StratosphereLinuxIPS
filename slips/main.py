@@ -76,31 +76,26 @@ class Main:
             self.checker.verify_given_flags()
             self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
-            if not self.args.stopdaemon:
-                if self.conf.enable_local_whitelist():
-                    ensure_local_whitelist(self.conf.local_whitelist_path())
-                self.input_type: InputType
-                (
-                    self.input_type,
-                    self.input_information,
-                    self.line_type,
-                ) = self.checker.get_input_type()
-                self.checker.verify_flags_that_require_an_interface(
-                    self.input_type
-                )
-                self.input_information = os.path.normpath(
-                    self.input_information
-                )
-                self.input_information = self.input_information.replace(
-                    ",", "_"
-                )
-                self.check_zeek_or_bro()
-                self.prepare_output_dir()
-                self.redis_man.start_redis_cache_if_not_running()
-                self.twid_width = self.conf.get_tw_width()
-                # should be initialised after self.input_type is set
-                self.host_ip_man = HostIPManager(self)
-                self.ap_manager = APManager(self)
+            if self.conf.enable_local_whitelist():
+                ensure_local_whitelist(self.conf.local_whitelist_path())
+            self.input_type: InputType
+            (
+                self.input_type,
+                self.input_information,
+                self.line_type,
+            ) = self.checker.get_input_type()
+            self.checker.verify_flags_that_require_an_interface(
+                self.input_type
+            )
+            self.input_information = os.path.normpath(self.input_information)
+            self.input_information = self.input_information.replace(",", "_")
+            self.check_zeek_or_bro()
+            self.prepare_output_dir()
+            self.redis_man.start_redis_cache_if_not_running()
+            self.twid_width = self.conf.get_tw_width()
+            # should be initialised after self.input_type is set
+            self.host_ip_man = HostIPManager(self)
+            self.ap_manager = APManager(self)
 
     def check_zeek_or_bro(self):
         """

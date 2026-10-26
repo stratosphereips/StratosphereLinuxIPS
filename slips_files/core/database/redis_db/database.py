@@ -395,12 +395,9 @@ class RedisDB(
         these are the cases that we DO NOT flush the db when we
             connect to it, because we need to use it
             -d means Read an analysed file (rdb) from disk.
-            -S stop daemon
             -cb clears the blocking chain
         """
-        will_need_the_db_later = (
-            "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
-        )
+        will_need_the_db_later = "-cb" in sys.argv or "-d" in sys.argv
         if will_need_the_db_later:
             return False
 

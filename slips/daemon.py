@@ -37,8 +37,7 @@ class Daemon:
         self.pidfile = os.path.join(self.pidfile_dir, "slips_daemon.lock")
         self._startup_write_fd: Optional[int] = None
         self.read_configuration()
-        if not self.slips.args.stopdaemon:
-            self.prepare_output_dir()
+        self.prepare_output_dir()
         self.pid = self.read_pidfile()
 
     def read_pidfile(self) -> Optional[int]:
@@ -108,17 +107,15 @@ class Daemon:
 
         self.create_std_streams()
 
-        # when stopping the daemon don't log this info again
-        if "-S" not in sys.argv:
-            self.print(
-                f"Logsfile: {self.logsfile}\n"
-                f"pidfile: {self.pidfile}\n"
-                f"stdin : {self.stdin}\n"
-                f"stdout: {self.stdout}\n"
-                f"stderr: {self.stderr}\n"
-            )
+        self.print(
+            f"Logsfile: {self.logsfile}\n"
+            f"pidfile: {self.pidfile}\n"
+            f"stdin : {self.stdin}\n"
+            f"stdout: {self.stdout}\n"
+            f"stderr: {self.stderr}\n"
+        )
 
-            self.print("Done reading configuration and setting up files.\n")
+        self.print("Done reading configuration and setting up files.\n")
 
     def delete_pidfile(self):
         """Deletes the pidfile to mark the daemon as closed"""

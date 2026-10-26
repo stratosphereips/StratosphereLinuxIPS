@@ -50,8 +50,8 @@ def test_print(test_message, expected_log_content, tmpdir):
             "slips.log",
             ["errors.log", "slips.log"],
         ),
-        # testcase2: Create only stderr when stopping
-        (["-S"], "errors.log", "slips.log", "slips.log", ["errors.log", "slips.log"]),
+        # testcase2: Daemon startup also creates all streams
+        (["-D"], "errors.log", "slips.log", "slips.log", ["errors.log", "slips.log"]),
     ],
 )
 def test_create_std_streams(
@@ -347,7 +347,7 @@ def daemon_startup_probe(folder: str, scenario: str) -> None:
     slips = SimpleNamespace(
         conf=SimpleNamespace(permanent_dir=lambda: str(permanent), logs_file=lambda: "slips.log",
                              stdout=lambda: "slips.log", stderr=lambda: "errors.log"),
-        args=SimpleNamespace(stopdaemon=False, is_slips_started_by_an_update=False, output=str(location)),
+        args=SimpleNamespace(is_slips_started_by_an_update=False, output=str(location)),
         proc_man=manager,
     )
     slips.set_mode = lambda mode, daemon: setattr(slips, "daemon", daemon)
