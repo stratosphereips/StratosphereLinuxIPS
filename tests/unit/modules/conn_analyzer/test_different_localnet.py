@@ -430,6 +430,7 @@ def test_host_threat_updates_follow_the_source_and_destination_profiles() -> (
         conf=Mock(),
         trust_db=None,
         output_dir="output/unit-subnet-roles",
+        main_pid=os.getpid(),
         source_module=Modules.CONN_ANALYZER.value,
         _get_evidence_interface=Mock(return_value="default"),
         update_threat_level=Mock(),

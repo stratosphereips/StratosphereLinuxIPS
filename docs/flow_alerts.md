@@ -170,7 +170,9 @@ Otherwise, Slips triggers and "unknown port" evidence.
 
 Unknown-port and connection-to-private-IP evidence are skipped when either
 endpoint is multicast, the IPv4 limited-broadcast address, or the monitored
-interface's subnet-directed broadcast address.
+interface's subnet-directed broadcast address at capture time. A recorded
+broadcast or multicast destination MAC also excludes the flow, even when the
+subnet is unknown or has since changed.
 
 For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
 
@@ -396,6 +398,14 @@ Here's how it works
 Slips detects when a private IP is connected to another private IP with threat level info. ICMP traffic does not produce `CONNECTION_TO_PRIVATE_IP` evidence.
 Broadcast and multicast traffic is excluded, as is UDP mDNS on source or
 destination port 5353, including unicast mDNS replies.
+Slips checks the recorded destination MAC as well as the IP addresses: an
+Ethernet broadcast (`ff:ff:ff:ff:ff:ff`) or multicast destination does not
+produce this evidence, even if the interface subnet is unknown. For IP-only
+flows, subnet-directed broadcasts are checked against the subnet active at
+the flow's capture time, including delayed flows processed after a network
+change. Without a known subnet or group destination MAC, an address ending
+in `.255` is not assumed to be broadcast; it can be a valid host address on
+other subnet sizes. These exclusions also apply to unknown-port evidence.
 
 But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.

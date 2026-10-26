@@ -4,6 +4,7 @@
 
 from dataclasses import asdict
 from typing import Any
+from types import SimpleNamespace
 from slips_files.core.flows.zeek import Conn
 from slips_files.core.input_profilers.zeek import ZeekJSON
 from tests.module_factory import ModuleFactory
@@ -306,6 +307,101 @@ def test_broadcast_and_multicast_flows_do_not_create_evidence(
 
     conn.set_evidence.unknown_port.assert_not_called()
     conn.set_evidence.conn_to_private_ip.assert_not_called()
+
+
+@pytest.mark.parametrize("dmac,interface", [
+    ("ff:ff:ff:ff:ff:ff", "en0"),
+    ("FF-FF-FF-FF-FF-FF", "default"),
+    ("01:00:5e:00:00:fb", "en0"),
+    ("33:33:00:00:00:01", ""),
+])
+def test_group_destination_mac_suppresses_private_and_unknown_port_evidence(
+    dmac: str, interface: str,
+) -> None:
+    """Recognize broadcast discovery even when the current subnet differs.
+
+    Parameters:
+        dmac: Broadcast or multicast destination hardware address.
+        interface: Live, offline or missing interface identifier.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_local_network.return_value = "192.168.160.0/24"
+    conn.set_evidence.conn_to_private_ip = Mock()
+    conn.set_evidence.unknown_port = Mock()
+    flow = SimpleNamespace(
+        saddr="192.168.1.116", daddr="192.168.1.255", sport=137,
+        dport=137, proto="udp", history="D", dmac=dmac,
+        interface=interface, starttime=1792502017.916054,
+    )
+    conn.check_connection_to_local_ip(twid, flow)
+    conn.check_unknown_port(f"profile_{flow.saddr}", twid, flow)
+    conn.set_evidence.conn_to_private_ip.assert_not_called()
+    conn.set_evidence.unknown_port.assert_not_called()
+    conn.db.get_network_state.assert_not_called()
+    conn.db.get_local_network.assert_not_called()
+
+
+@pytest.mark.parametrize("timestamp,destination,expected", [
+    (150, "192.168.1.255", True),
+    (150, "192.168.160.255", False),
+    (250, "192.168.160.255", True),
+    (250, "192.168.1.255", False),
+    (50, "192.168.1.255", False),
+])
+def test_broadcast_uses_subnet_at_flow_time(
+    timestamp: int, destination: str, expected: bool,
+) -> None:
+    """Choose the capture subnet for delayed flows after a network change.
+
+    Parameters:
+        timestamp: Capture time before or after the interface changed networks.
+        destination: Address whose broadcast status depends on the subnet.
+        expected: Whether the address was broadcast when captured.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = {
+        "changed_at": 200, "local_network": "192.168.160.0/24",
+        "history": [{"changed_at": 100, "local_network": "192.168.1.0/24"}],
+    }
+    conn.db.get_local_network.return_value = "192.168.160.0/24"
+    flow = SimpleNamespace(saddr="192.168.1.116", daddr=destination,
+        interface="en0", starttime=timestamp, dmac="")
+    assert conn.is_broadcast_or_multicast_flow(flow) is expected
+    flow.starttime = 250 if timestamp < 200 else 150
+    assert conn.is_broadcast_or_multicast_flow(flow) is (not expected if timestamp >= 100 else False)
+    conn.db.get_network_state.assert_called_once_with("en0")
+    conn.db.get_local_network.assert_not_called()
+
+
+@pytest.mark.parametrize("subnet,destination,expected", [
+    ("192.168.1.0/24", "192.168.1.255", True),
+    ("192.168.0.0/23", "192.168.0.255", False),
+    ("192.168.0.0/23", "192.168.1.255", True),
+    ("192.168.1.254/31", "192.168.1.255", False),
+    ("192.168.1.255/32", "192.168.1.255", False),
+    ("", "192.168.1.255", False),
+    ("192.168.1.0/24", "192.168.1.116", False),
+])
+def test_broadcast_does_not_guess_from_last_octet(
+    subnet: str, destination: str, expected: bool,
+) -> None:
+    """Retain valid unicast addresses ending in .255 and unknown subnets.
+
+    Parameters:
+        subnet: Known recording subnet, or empty when unavailable.
+        destination: Destination IPv4 address.
+        expected: Whether this is a broadcast under the specified prefix.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = None
+    conn.db.get_local_network.return_value = subnet
+    conn.set_evidence.conn_to_private_ip = Mock()
+    flow = SimpleNamespace(saddr="192.168.1.20", daddr=destination,
+        interface="default", starttime=150, dmac="02:00:00:00:00:01",
+        proto="udp", sport=137, dport=137, history="D")
+    assert conn.is_broadcast_or_multicast_flow(flow) is expected
+    conn.check_connection_to_local_ip(twid, flow)
+    assert conn.set_evidence.conn_to_private_ip.call_count == int(not expected)
 
 
 @pytest.mark.parametrize(

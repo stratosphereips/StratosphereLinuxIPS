@@ -25,6 +25,7 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
 from slips_files.common.flow_direction import tcp_initiator_is_known
+from slips_files.common.mac import classify_mac
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 
 NOT_ESTAB = "Not Established"
@@ -257,14 +258,20 @@ class ConnAnalyzer(IAsyncModule):
             return True
 
     def is_broadcast_or_multicast_flow(self, flow: Any) -> bool:
-        """Check whether either endpoint is multicast or broadcast traffic.
+        """Identify group traffic using its destination MAC and capture subnet.
 
         Parameters:
-            flow: Connection flow with source, destination, and interface.
+            flow: Connection with addresses, optional MACs, time and interface.
 
         Returns:
-            True when an endpoint is multicast or a known IPv4 broadcast.
+            True for multicast IPs, group destination MACs or IPv4 broadcasts.
         """
+        if classify_mac(getattr(flow, "dmac", None)) in {
+            "broadcast",
+            "multicast",
+        }:
+            return True
+
         addresses = []
         for value in (flow.saddr, flow.daddr):
             try:
@@ -287,17 +294,33 @@ class ConnAnalyzer(IAsyncModule):
         network_cache = getattr(self, "_broadcast_network_cache", {})
         cached = network_cache.get(interface)
         if not cached or now - cached[0] >= 5:
-            local_network = self.db.get_local_network(interface)
-            try:
-                parsed_network = ipaddress.ip_network(
-                    local_network, strict=False
-                )
-            except (TypeError, ValueError):
-                parsed_network = None
-            cached = (now, parsed_network)
+            state = self.db.get_network_state(interface)
+            if isinstance(state, dict):
+                cidrs = [
+                    item.get("local_network", "")
+                    for item in [*state.get("history", []), state]
+                ]
+            else:
+                state = None
+                cidrs = [self.db.get_local_network(interface)]
+            networks = {}
+            for cidr in cidrs:
+                try:
+                    networks[cidr] = ipaddress.ip_network(cidr, strict=False)
+                except (TypeError, ValueError):
+                    continue
+            cached = (now, state, networks)
             network_cache[interface] = cached
             self._broadcast_network_cache = network_cache
-        local_network = cached[1]
+        if isinstance(cached[1], dict):
+            active = network_state_for_flow(self.db, flow, cached[1])
+            local_network = (
+                cached[2].get(active.get("local_network", ""))
+                if active
+                else None
+            )
+        else:
+            local_network = next(iter(cached[2].values()), None)
         if isinstance(local_network, ipaddress.IPv4Network):
             if local_network.prefixlen < 31 and any(
                 address == local_network.broadcast_address
