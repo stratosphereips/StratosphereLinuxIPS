@@ -15,10 +15,147 @@ from modules.web_interface.server import RunDataReader
 from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
-from tests.unit.modules.web_interface.test_server import _network_scope_reader
+from tests.unit.modules.web_interface.test_server import _network_scope_reader, _group_records_reader
 from modules.web_interface.history import connect_history
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, theme: str) -> None:
+    """Exercise full-group record controls against real SQLite API responses.
+
+    Parameters:
+        tmp_path: Independent evidence database.
+        theme: Daylight or dark presentation.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    reader = _group_records_reader(tmp_path)
+    assets = Path("modules/web_interface")
+    queries: list[dict[str, list[str]]] = []
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve the actual web assets and read only the fixture database.
+
+        Parameters:
+            route: Isolated browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/api/evidence":
+            query = parse_qs(url.query)
+            queries.append(query)
+            route.fulfill(json=reader.evidence(query))
+        elif url.path.endswith("/flows"):
+            route.fulfill(json={"items": [], "total": 0, "next_cursor": None})
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated browser fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        page = browser.new_page(viewport={"width": 1900, "height": 1000})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("typeof selectEvidenceGroup === 'function'")
+        page.evaluate("""theme => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.activeTab='evidence'; state.deviceView=false; state.hideExcluded=false;
+            document.body.classList.add('evidence-active');
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='evidence'));
+            byId('evidence-range').value='all'; updateEvidenceViewportHeight();
+            selectEvidenceGroup({id:'host:192.0.2.20',profile_ip:'192.0.2.20',evidence_count:123,
+                module:'conn_analyzer,p2p_trust',threat_level:'high',alert_score:0.122,alert_threshold:5});
+        }""", theme)
+        page.wait_for_function("state.evidenceWorkspace.recordsLoaded && state.evidenceWorkspace.records.length === 50")
+        table = page.locator("#evidence-records-table")
+        rows = table.locator("tbody tr[data-clickable]")
+        assert table.locator("th").count() == 8
+        assert "timewindow" not in table.inner_text().lower()
+        assert "From P2P" in table.inner_text()
+        assert "reporter-" in table.inner_text()
+        assert "Unavailable" in table.locator('tr[data-evidence-id="record-120"]').inner_text()
+        assert "Excluded" in table.locator('tr[data-evidence-id="record-121"]').inner_text()
+        page.get_by_role("button", name="Load more", exact=False).click()
+        page.wait_for_function("state.evidenceWorkspace.records.length === 100")
+        assert queries[-1].get("cursor")
+        assert rows.count() == 100
+        for key in ("time", "type", "threat", "score", "confidence", "flows", "alert", "description"):
+            header = table.locator(f'th[data-sort="{key}"]')
+            previous = page.evaluate("state.evidenceWorkspace.generation")
+            header.click()
+            page.wait_for_function("value => state.evidenceWorkspace.generation > value && !state.requests.has('evidenceGroupPane')", arg=previous)
+            assert queries[-1]["sort"] == [key]
+            assert not queries[-1].get("cursor")
+            assert header.get_attribute("aria-sort") in {"ascending", "descending"}
+            direction = queries[-1]["order"][0]
+            previous = page.evaluate("state.evidenceWorkspace.generation")
+            header.press("Enter")
+            page.wait_for_function("value => state.evidenceWorkspace.generation > value && !state.requests.has('evidenceGroupPane')", arg=previous)
+            assert queries[-1]["order"] == (["asc"] if direction == "desc" else ["desc"])
+        search = page.locator("#evidence-record-search")
+        page.evaluate("byId('evidence-search').value='alpha'")
+        search.fill("needle")
+        search.press("Enter")
+        page.wait_for_function("state.evidenceWorkspace.total === 1 && !state.requests.has('evidenceGroupPane')")
+        assert rows.count() == 1
+        assert rows.first.get_attribute("data-evidence-id") == "record-003"
+        assert queries[-1]["search"] == ["alpha"]
+        assert queries[-1]["record_search"] == ["needle"]
+        assert search.evaluate("element => document.activeElement === element")
+        page.evaluate("byId('evidence-search').value='beta'")
+        search.press("Enter")
+        page.wait_for_function("state.evidenceWorkspace.total === 0 && !state.requests.has('evidenceGroupPane')")
+        assert "No matching records" in table.inner_text()
+        assert page.locator(".evidence-record-list h3").inner_text() == "Records · 0"
+        page.evaluate("byId('evidence-search').value=''")
+        search.fill("")
+        origin = page.locator("#evidence-record-origin")
+        origin.select_option("p2p")
+        page.wait_for_function("state.evidenceWorkspace.total === 31 && !state.requests.has('evidenceGroupPane')")
+        assert rows.count() == 31
+        assert rows.locator(".p2p-origin").count() == 31
+        assert queries[-1]["origin"] == ["p2p"]
+        level = page.locator("#evidence-record-threat")
+        level.select_option("high")
+        page.wait_for_function("state.evidenceWorkspace.total === 6 && !state.requests.has('evidenceGroupPane')")
+        assert rows.locator(".threat-high").count() == 6
+        assert queries[-1]["record_threat"] == ["high"]
+        level.select_option("")
+        page.wait_for_function("state.evidenceWorkspace.total === 31 && !state.requests.has('evidenceGroupPane')")
+        page.evaluate("() => loadEvidenceGroupRecords(true)")
+        assert origin.input_value() == "p2p"
+        origin.select_option("local")
+        page.wait_for_function("state.evidenceWorkspace.total === 92 && !state.requests.has('evidenceGroupPane')")
+        assert rows.locator(".p2p-origin").count() == 0
+        page.evaluate("""() => {
+            const table=document.querySelector('.evidence-record-table-scroll');
+            table.scrollLeft=200; table.scrollTop=100;
+        }""")
+        position = page.locator(".evidence-record-table-scroll").evaluate("el => [el.scrollLeft,el.scrollTop]")
+        page.evaluate("() => loadEvidenceGroupRecords(true)")
+        assert page.locator(".evidence-record-table-scroll").evaluate("el => [el.scrollLeft,el.scrollTop]") == position
+        origin.select_option("")
+        page.wait_for_function("state.evidenceWorkspace.total === 123 && !state.requests.has('evidenceGroupPane')")
+        page.evaluate("""() => {
+            state.evidenceWorkspace.recordSort='time'; state.evidenceWorkspace.recordOrder='desc';
+            return loadEvidenceGroupRecords(true);
+        }""")
+        page.locator(".evidence-record-table-scroll").evaluate("el => {el.scrollLeft=0; el.scrollTop=0;}")
+        artifacts = Path("output/evidence-record-table-check")
+        artifacts.mkdir(parents=True, exist_ok=True)
+        page.screenshot(path=str(artifacts / f"records-{theme}.png"))
+        rows.first.click()
+        page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+        assert page.locator("#evidence-detail").is_visible()
+        assert table.is_visible()
+        assert not errors
+        browser.close()
 
 
 @pytest.mark.parametrize("storage", ["fresh", "saved", "blocked"])

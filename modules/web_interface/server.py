@@ -3502,7 +3502,28 @@ class RunDataReader:
             return self._grouped_evidence(query)
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
+        searches = list(
+            dict.fromkeys(
+                term
+                for term in (
+                    search,
+                    self._query_value(query, "record_search").lower(),
+                )
+                if term
+            )
+        )
+        origin = self._query_value(query, "origin")
         threat = self._query_value(query, "threat").lower()
+        threats = list(
+            dict.fromkeys(
+                level
+                for level in (
+                    threat,
+                    self._query_value(query, "record_threat").lower(),
+                )
+                if level
+            )
+        )
         association = self._query_value(query, "association")
         profiles = [str(value) for value in query.get("profile", []) if value]
         device_id = self._query_value(query, "device_id")
@@ -3619,7 +3640,17 @@ class RunDataReader:
                 if end is not None:
                     clauses.append("evidence_time <= ?")
                     params.append(end)
-                if search:
+                if origin in {"local", "p2p"}:
+                    peer_expression = (
+                        f"({module_expression} = '{Modules.P2P_TRUST.value}' "
+                        "OR evidence_type = 'P2P_REPORT')"
+                    )
+                    clauses.append(
+                        peer_expression
+                        if origin == "p2p"
+                        else f"NOT {peer_expression}"
+                    )
+                for search in searches:
                     searchable = [
                         "LOWER(COALESCE(profile_ip, ''))",
                         "LOWER(COALESCE(evidence_type, ''))",
@@ -3638,6 +3669,10 @@ class RunDataReader:
                         searchable.append(
                             "COALESCE(strftime('%d/%m/%Y, %H:%M:%S', "
                             "evidence_time, 'unixepoch'), '')"
+                        )
+                    if re.fullmatch(r"[0-9._%\-]+", search):
+                        searchable.append(
+                            f"COALESCE(CAST({score_expression} AS TEXT), '')"
                         )
                     if re.fullmatch(r"[0-9%_\-]+", search):
                         searchable.extend(
@@ -3681,7 +3716,7 @@ class RunDataReader:
                 if evidence_type:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
-                if threat:
+                for threat in threats:
                     minimum = threat.removesuffix("_or_more")
                     if (
                         threat.endswith("_or_more")
@@ -3756,7 +3791,19 @@ class RunDataReader:
                     for item in records
                     if float(item.get("timestamp") or 0) <= end
                 ]
-            if search:
+            if origin in {"local", "p2p"}:
+                records = [
+                    item
+                    for item in records
+                    if (
+                        item.get("record_type", item.get("evidence_type"))
+                        == "P2P_REPORT"
+                        or bool((item.get("peer_report") or {}).get("peer_id"))
+                        or item.get("module") == Modules.P2P_TRUST.value
+                    )
+                    == (origin == "p2p")
+                ]
+            for search in searches:
                 records = [
                     item
                     for item in records
@@ -3776,7 +3823,7 @@ class RunDataReader:
                     for item in records
                     if str(item.get("evidence_type", "")) == evidence_type
                 ]
-            if threat:
+            for threat in threats:
                 minimum = threat.removesuffix("_or_more")
                 if (
                     threat.endswith("_or_more")

@@ -21,6 +21,7 @@ import psutil
 from pytest_mock import MockerFixture
 
 from modules.web_interface.history import connect_history, initialize_history
+from modules.supported_module_names import Modules
 from modules.web_interface.server import (
     RequestHandler,
     RunDataReader,
@@ -5527,6 +5528,122 @@ def test_host_score_history_reports_peaks_resets_and_missing_coverage(
     assert custom["range"] == "custom"
     assert custom["evidence_total"] == 2
     assert [point["ts"] for point in custom["timeline"]] == [120.0, 130.0]
+
+
+def _group_records_reader(tmp_path: Path) -> RunDataReader:
+    """Create mixed local and peer records spanning several cursor pages.
+
+    Parameters:
+        tmp_path: Private fixture database directory.
+
+    Returns:
+        Reader with 123 evidence records and no live Redis or whitelist access.
+    """
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader._annotate_detection_networks = Mock()
+    reader._annotate_whitelisted_evidence = Mock()
+    reader._annotate_p2p_reporters = Mock()
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, evidence_time REAL, "
+            "profile_ip TEXT, timewindow TEXT, threat_level TEXT, evidence_type TEXT, "
+            "description TEXT, confidence REAL, data TEXT, accumulated_ratl REAL, "
+            "whitelisted INTEGER, source_module TEXT);"
+            "CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT);"
+            "CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT);"
+        )
+        for index in range(123):
+            identifier = f"record-{index:03}"
+            peer = index % 4 == 0
+            description = f"{'alpha' if index % 2 else 'beta'} connection {index:03}"
+            if index == 3:
+                description += " needle"
+            data = {"record_type": "P2P_REPORT", "peer_report": {
+                "peer_id": f"reporter-{index % 8}", "peer_ip": "192.0.2.200",
+                "provenance": [{"evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer", "description": description}],
+            }} if peer else {}
+            connection.execute("INSERT INTO evidence VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", (
+                identifier, 1700000000 + index, "192.0.2.20", "timewindow1",
+                ["info", "low", "medium", "high", "critical"][index % 5],
+                "UNKNOWN_PORT", description, (index % 11) / 10, json.dumps(data),
+                None if index == 120 else index / 1000, int(index == 121),
+                Modules.P2P_TRUST.value if peer else Modules.CONN_ANALYZER.value,
+            ))
+            for flow in range(index % 4):
+                connection.execute("INSERT INTO evidence_flows VALUES (?,?)", (identifier, f"flow-{index}-{flow}"))
+            if index % 6 == 0:
+                connection.execute("INSERT INTO alert_evidence VALUES (?,?)", (f"alert-{index}", identifier))
+    return reader
+
+
+@pytest.mark.parametrize("origin, count", [("", 123), ("p2p", 31), ("local", 92)])
+def test_group_record_source_filter_precedes_cursor_pagination(tmp_path: Path, origin: str, count: int) -> None:
+    """Filter all group records without losing source constraints on later pages.
+
+    Parameters:
+        tmp_path: Isolated evidence database.
+        origin: All sources, received reports, or local detections.
+        count: Expected total before pagination.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    query = {"range": ["all"], "profile": ["192.0.2.20"], "origin": [origin], "limit": ["7"]}
+    identifiers = []
+    while True:
+        result = reader.evidence(query)
+        assert result["total"] == count
+        for item in result["items"]:
+            if origin:
+                assert (item["module"] == Modules.P2P_TRUST.value) == (origin == "p2p")
+            identifiers.append(item["id"])
+        if not result["next_cursor"]:
+            break
+        query["cursor"] = [result["next_cursor"]]
+    assert len(identifiers) == len(set(identifiers)) == count
+
+
+@pytest.mark.parametrize("search, record_search, expected", [
+    ("alpha", "needle", ["record-003"]), ("beta", "needle", []),
+    ("", "0.123-no-match", []), ("", "0.122", ["record-122"]),
+])
+def test_group_record_search_intersects_parent_search(tmp_path: Path, search: str, record_search: str, expected: list[str]) -> None:
+    """Search beyond the first page while retaining the parent Evidence query.
+
+    Parameters:
+        tmp_path: Isolated evidence database.
+        search: Parent Evidence search.
+        record_search: Additional record search, including stored numeric scores.
+        expected: Matching evidence IDs across the complete group.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    result = reader.evidence({"range": ["all"], "profile": ["192.0.2.20"],
+        "search": [search], "record_search": [record_search], "limit": ["2"]})
+    assert [item["id"] for item in result["items"]] == expected
+    assert result["total"] == len(expected)
+
+
+@pytest.mark.parametrize("parent, record, count", [
+    ("", "high", 24), ("high_or_more", "high", 24),
+    ("low", "high", 0), ("critical", "info", 0),
+])
+def test_group_threat_filter_intersects_parent_filter(tmp_path: Path, parent: str, record: str, count: int) -> None:
+    """Narrow a group without bypassing the main Evidence threat selection.
+
+    Parameters:
+        tmp_path: Isolated evidence database.
+        parent: Main Evidence threat filter.
+        record: Additional threat filter inside the group.
+        count: Matching records across all pages.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    result = reader.evidence({"range": ["all"], "profile": ["192.0.2.20"],
+        "threat": [parent], "record_threat": [record], "limit": ["7"]})
+    assert result["total"] == count
+    assert all(item["threat_level"] == record for item in result["items"])
 
 
 def test_evidence_sorting_is_server_side_and_stable(tmp_path) -> None:

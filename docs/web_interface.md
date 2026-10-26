@@ -104,6 +104,25 @@ third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
 
+The selected group's **Records** pane shows a table with time, detection type
+and module, threat level, **Host score then**, confidence, linked flow and alert
+counts, and description. Reports received from another Slips have a **From P2P**
+badge beside their detection type and show the reporting peer. **Host score
+then** is the saved host score when that evidence was processed, followed by
+the alert threshold; it is not a separate score assigned to the evidence.
+Missing scores appear as **Unavailable**, and excluded records as **Excluded**.
+Time window is omitted from this table and remains available in record details.
+
+Click any column header to sort the entire selected group, and click again to
+reverse the order. The sort choice is remembered in this browser. The record
+search and **All sources / Detected locally / From P2P** filter work across the
+whole group, including records not loaded yet. A threat selector narrows this
+table without closing the group. These controls combine with the main
+Evidence search, range, threat, review and visibility filters. Opening another
+group clears the record search, source and threat filters. Records load in pages of 50;
+**Load more** follows the same filters and order. Clicking a row opens the
+existing detail pane; keyboard users can use arrow keys and Enter.
+
 In **Hosts**, clicking a row in a host's **Evidence** table opens the same
 investigation in a resizable pane on the right. The host and its evidence table
 remain visible. The pane includes triggering flows, review, whitelist, JSON and
@@ -582,7 +601,7 @@ fields, so those original field names remain visible in raw flow JSON. New
 evidence stores explicit `icmp_type`/`icmp_code` fields. Older saved evidence
 is corrected when displayed without changing the original stored record.
 
-The Evidence tab keeps the group or record table on the left and a group summary and full-height record list beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens its newest 50 records, with **Load more** for older records. P2P reputation reports are arranged by reporting peer. Selecting a record from the table or group list opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence selected inside Alerts opens in the fourth Alerts pane; evidence opened from a host retains the full investigation view.
+The Evidence tab keeps the group or record table on the left and a group summary and full-height record table beside it. Before selection, the record pane summarizes evidence types and the highest local host scores from the loaded page; type bars filter the table. Selecting a group opens 50 records in the selected sort order, with **Load more** for the next page. P2P reports show their origin and reporting peer on each row. Selecting a record from either table opens a resizable third pane with triggering flows, review and whitelist controls, Copy ID, and original JSON. The run header and tabs remain visible; closing the third pane returns to the same group and scroll position. Previous and next move through the loaded records. Evidence selected inside Alerts opens in the fourth Alerts pane; evidence opened from a host retains its table beside the investigation.
 
 With a record open, the default widths are approximately **25% groups, 25%
 records, and 50% details**. Both dividers support dragging and arrow keys.
