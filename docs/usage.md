@@ -585,6 +585,21 @@ public-IP lookups made by running modules use the same socket tracking.
 
 Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
 
+The default file includes destination-specific WHOIS exceptions, for example:
+
+```text
+ip,165.160.32.149:43,dst,alerts
+ip,54.151.0.246:43,dst,alerts
+```
+
+These rules exclude detections for connections to port 43 on those servers;
+their flows remain available. They do not whitelist every destination using
+port 43, or other ports on those IPs. Add another verified WHOIS server in the
+same form to your own file if needed. Avoid `ip,*:43,dst,alerts`, which also
+hides detections involving unrelated servers. Existing broader rules for an
+IP, domain or organization still apply independently. Existing evidence is
+retained; adding a rule does not delete historical detections.
+
 Example:
 
 ```bash

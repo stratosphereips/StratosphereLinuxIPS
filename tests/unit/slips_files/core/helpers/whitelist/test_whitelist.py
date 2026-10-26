@@ -19,6 +19,39 @@ from slips_files.core.helpers.whitelist.whitelist_parser import (
 )
 
 
+@pytest.mark.parametrize("ip,port,direction,ignored,expected", [
+    ("165.160.32.149", 43, Direction.DST, "alerts", True),
+    ("54.151.0.246", 43, Direction.DST, "alerts", True),
+    ("165.160.32.149", 443, Direction.DST, "alerts", False),
+    ("54.151.0.246", 443, Direction.DST, "alerts", False),
+    ("192.0.2.43", 43, Direction.DST, "alerts", False),
+    ("165.160.32.149", 43, Direction.SRC, "alerts", False),
+    ("165.160.32.149", 43, Direction.DST, "flows", False),
+])
+def test_default_whois_rules_require_server_and_destination_port(
+    ip: str, port: int, direction: Direction, ignored: str, expected: bool,
+) -> None:
+    """Keep default WHOIS exceptions narrower than all port 43 traffic.
+
+    Parameters:
+        ip: Endpoint being matched.
+        port: Port belonging to that endpoint.
+        direction: Whether it is the source or destination.
+        ignored: Evidence or flow suppression request.
+        expected: Whether the default file should suppress the match.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    for line in Path("config/whitelist.conf").read_text().splitlines():
+        parsed = whitelist.parser.parse_line(line)
+        if parsed:
+            whitelist.parser.call_handler(parsed)
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, _: json.dumps(rules[key]) if key in rules else None
+    assert "*:43" not in rules
+    assert whitelist.ip_analyzer.is_whitelisted(ip, direction, ignored, port) is expected
+
+
 @pytest.mark.parametrize("value,source,port", [
     ("192.0.2.10->*:902", "192.0.2.10", "902"),
     ("[2001:db8::10]->*:902", "2001:db8::10", "902"),
