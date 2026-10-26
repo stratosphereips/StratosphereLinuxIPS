@@ -2769,10 +2769,16 @@ def test_arp_investigation_explains_actual_decision(familiar: bool, theme: str) 
         content = detail.inner_text()
         assert "ARP discovery assessment: 40 distinct targets in 30 seconds" in content
         assert f"{40 if familiar else 0} familiar and {0 if familiar else 40} unfamiliar" in content
+        assert "requires at least 10 unfamiliar targets and 80% unfamiliar targets" in content
         assert "at least 5 requests" not in content
         assert "Missing replies or traffic are unknown" in content
         assert ("ARP_DISCOVERY" if familiar else "ARP_SCAN") in content
         assert ("info" if familiar else "low") in detail.locator(".evidence-detail-stats").inner_text()
         assert detail.locator(".whitelist-dst-port").evaluate("el => el.closest('label').hidden")
         assert errors == []
+        legacy = {**record, "detection_details": {}, "flow_count": 7, "evidence_type": "ARP_SCAN"}
+        page.evaluate("async record => { await openEvidence(record); }", legacy)
+        assert "Legacy ARP scan evidence: no unfamiliar-target assessment was recorded" in detail.inner_text()
+        assert "linked flow count is not an unfamiliar-host count" in detail.inner_text()
+        assert "at least 5 requests" not in detail.inner_text()
         browser.close()

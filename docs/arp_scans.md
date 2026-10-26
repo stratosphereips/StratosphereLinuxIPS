@@ -86,6 +86,26 @@ only after it ends. Initial discovery on a new network and authorized inventory
 tools can still resemble scanning. The evidence explains the observed pattern;
 ARP alone cannot establish the requester's intent.
 
+## Checking which rule created an evidence record
+
+New ARP records save the target counts, the configured minimum unfamiliar
+count, and the other conditions used for that decision. The web displays these
+saved values. By default the minimum is **10 target IPs**, not ten minutes.
+Seven linked requests alone cannot satisfy that minimum.
+
+Older records without this assessment are labeled **Legacy ARP scan evidence**.
+Their linked flow count does not show how many neighbours were unfamiliar.
+They are preserved as historical records, not presented as a decision made by
+the current detector.
+
+A worker must belong to the currently running Slips coordinator, even when
+the same output directory is reused with `--keep-history`. Evidence writes
+check that coordinator's PID. Module and profiler-worker processes also watch
+their actual spawning parent's death sentinel. If that parent dies abruptly,
+the worker exits within about one second instead of consuming a later run's
+traffic. Normal shutdown still performs its regular checkpoint and cleanup.
+The watcher waits locally; it does not poll Redis or scan the process table.
+
 ## Restarting, changing networks and storage
 
 Live capture keeps its bounded contact checkpoint in

@@ -78,6 +78,14 @@ def burst(detector: object, targets: list[int], start: float = 1000, scope: str 
     return findings + detector.flush(start + 4)
 
 
+def test_seven_requests_with_retries_and_self_announcement_do_not_scan() -> None:
+    """Reject the legacy pattern even before familiarity is available."""
+    arp = ModuleFactory().create_arp_obj()
+    targets = [1, 120, 100, 163, 230, 120, 163]
+    assert len(targets) == 7
+    assert burst(arp.scan_detector, targets) == []
+
+
 @pytest.mark.parametrize("count", [5, 15, 40])
 def test_usual_neighbours_do_not_become_scans(count: int) -> None:
     """Keep reconnect bursts benign, retaining only broad info when appropriate.

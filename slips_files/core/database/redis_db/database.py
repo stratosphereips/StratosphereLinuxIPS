@@ -1221,23 +1221,31 @@ class RedisDB(
             self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR
         )
 
-    def belongs_to_run(self, output_dir: str) -> bool:
+    def belongs_to_run(
+        self, output_dir: str, main_pid: int | None = None
+    ) -> bool:
         """
         Check whether Redis belongs to the requested Slips run.
         # A process from a completed/replaced run must never publish evidence
         # into the Redis database now owned by another run.
         Parameters:
             output_dir: Output directory owned by the caller.
+            main_pid: Original coordinator PID; reused output paths alone
+                cannot authorize a worker from an earlier run.
 
         Returns:
-            True only when Redis advertises the same output directory.
+            True when the output directory and supplied coordinator agree.
         """
         redis_output_dir = self.get_output_dir()
         if not redis_output_dir:
             return False
-        return os.path.normpath(str(redis_output_dir)) == os.path.normpath(
-            os.fspath(output_dir)
-        )
+        same_output = os.path.normpath(
+            str(redis_output_dir)
+        ) == os.path.normpath(os.fspath(output_dir))
+        if not same_output or main_pid is None:
+            return same_output
+        owner = self.r.hget(self.constants.PIDS, "main")
+        return owner is not None and str(owner) == str(main_pid)
 
     def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
         """

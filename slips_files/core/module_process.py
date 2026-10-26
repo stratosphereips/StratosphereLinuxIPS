@@ -69,9 +69,15 @@ class ModuleProcess(Process):
         )
         if tracker is not None:
             tracker.install()
+        watchdog = None
         try:
             instance = module_class(*self.module_args, **self.module_kwargs)
             if tracker is not None:
+                from managers.process_manager.worker_lifecycle import (
+                    start_parent_watchdog,
+                )
+
+                watchdog = start_parent_watchdog(instance.db)
                 tracker.attach(instance.db)
             if instance.name.startswith("profiler_worker_process_"):
                 instance._received_lines = self._received_lines
@@ -93,5 +99,7 @@ class ModuleProcess(Process):
                 )
             instance.run()
         finally:
+            if watchdog is not None:
+                watchdog.set()
             if tracker is not None:
                 tracker.stop()

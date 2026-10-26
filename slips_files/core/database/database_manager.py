@@ -905,7 +905,7 @@ class DBManager:
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
-        if not self.rdb.belongs_to_run(self.output_dir):
+        if not self.rdb.belongs_to_run(self.output_dir, self.main_pid):
             return False
 
         if evidence.evidence_type in self.conf.disabled_detections():

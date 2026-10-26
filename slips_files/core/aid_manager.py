@@ -63,7 +63,15 @@ class AIDManager:
             database_options: Serializable database connection settings.
         """
         db = DBManager(**database_options)
-        AIDManager.for_queue(aid_queue)._worker_loop(aid_queue, db)
+        from managers.process_manager.worker_lifecycle import (
+            start_parent_watchdog,
+        )
+
+        watchdog = start_parent_watchdog(db)
+        try:
+            AIDManager.for_queue(aid_queue)._worker_loop(aid_queue, db)
+        finally:
+            watchdog.set()
 
     def _worker_loop(self, aid_queue, db: DBManager):
         """
