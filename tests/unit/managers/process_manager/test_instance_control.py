@@ -96,7 +96,7 @@ def test_argument_value(arguments: tuple[str, ...], names: tuple[str, ...], expe
     assert control.argument_value(arguments, *names) == expected
 
 
-@pytest.mark.parametrize("case", ["capture", "relative", "other_checkout", "self", "zombie", "denied", "management", "legacy_stop"])
+@pytest.mark.parametrize("case", ["capture", "relative", "other_checkout", "self", "zombie", "denied", "management", "legacy_stop", "restart", "restart_pid"])
 def test_inspect_instance_scope(tmp_path: Path, case: str) -> None:
     """Reject other programs, stale processes and management invocations.
 
@@ -120,6 +120,8 @@ def test_inspect_instance_scope(tmp_path: Path, case: str) -> None:
         process.cmdline.side_effect = psutil.AccessDenied(process.pid)
     elif case in {"management", "legacy_stop"}:
         process.cmdline.return_value.append("--stop=all" if case == "management" else "-S")
+    elif case in {"restart", "restart_pid"}:
+        process.cmdline.return_value.append("--restart" if case == "restart" else "--restart=41002")
     actual = control.inspect_instance(process, entrypoint)
     if case in {"capture", "relative"}:
         assert actual == control.RunningInstance(41001, 100.0, ("-i", "eth0"))
@@ -249,7 +251,7 @@ def test_management_selection(arguments: list[str], count: int, selected: list[i
         stop.assert_not_called()
 
 
-@pytest.mark.parametrize("arguments", [["-S"], ["--stopdaemon"], ["-S", "-c", "config/not-read.yaml"], ["--stop", "0"], ["--stop", "-1"], ["--stop", "abc"], ["--stop", "--list-instances"], ["--stop", "-i", "eth0"], ["-S", "--stop"], ["-S", "--list-instances"], ["-S", "-i", "eth0"]])
+@pytest.mark.parametrize("arguments", [["-S"], ["--stopdaemon"], ["-S", "-c", "config/not-read.yaml"], ["--stop", "0"], ["--stop", "-1"], ["--stop", "abc"], ["--stop", "--list-instances"], ["--stop", "-i", "eth0"], ["-S", "--stop"], ["-S", "--list-instances"], ["-S", "-i", "eth0"], ["--restart", "0"], ["--restart", "-1"], ["--restart", "all"], ["--restart", "abc"], ["--restart", "--stop"], ["--restart", "--list-instances"], ["--restart", "-c", "config/not-read.yaml"]])
 def test_management_rejects_invalid_commands(arguments: list[str]) -> None:
     """Reject ambiguous options before discovery or any stop request.
 
@@ -275,8 +277,11 @@ def test_management_help_and_capture_passthrough() -> None:
         assert full_parser.parse_arguments().list_instances
     options = {option for action in full_parser._actions for option in action.option_strings}
     assert "--stop" in options
+    assert "--restart" in options
     assert not {"-S", "--stopdaemon"}.intersection(options)
     assert parser.parse_args(["--stop"]).stop == "auto"
+    assert parser.parse_args(["--restart"]).restart == "auto"
+    assert parser.parse_args(["--restart", "41001"]).restart == "41001"
     with patch.object(sys, "argv", ["slips.py", "--list-instances"]):
         assert ArgumentParser(add_help=False).parse_arguments().list_instances
     with patch.object(control, "list_instances") as discover:
@@ -291,6 +296,8 @@ def test_management_help_and_capture_passthrough() -> None:
     (["--list-instances"], 0),
     (["--stop"], 0),
     (["--stop", "all"], 0),
+    (["--restart"], 1),
+    (["--restart", "41001"], 1),
     (["-S"], 2),
     (["--stopdaemon"], 2),
     (["-S", "-c", "config/not-read.yaml"], 2),
@@ -338,6 +345,191 @@ def test_stop_selects_across_launch_modes(arguments: list[str], selected: list[i
         assert stop.call_args.args[0] == [instances[index] for index in selected]
     else:
         stop.assert_not_called()
+
+
+@pytest.mark.parametrize("arguments, modes, selected, expected", [
+    (["--restart"], [], None, 1),
+    (["--restart"], ["-i"], None, 1),
+    (["--restart"], ["-D"], 41001, 0),
+    (["--restart"], ["-i", "--daemon", "-f"], 41002, 0),
+    (["--restart"], ["-D", "--daemon"], None, 1),
+    (["--restart=41002"], ["-D", "--daemon"], 41002, 0),
+    (["--restart", "41001"], ["-i", "-D"], None, 1),
+    (["--restart", "41003"], ["-D", "-f"], None, 1),
+])
+def test_restart_selects_daemons(
+    arguments: list[str], modes: list[str], selected: int | None, expected: int,
+) -> None:
+    """Select a daemon without stopping foreground captures or analyses.
+
+    Parameters:
+        arguments: Restart command and optional PID.
+        modes: Launch flags of discovered instances.
+        selected: Selected daemon PID, or None for rejected requests.
+        expected: Management exit status.
+    """
+    _factory = ModuleFactory()
+    instances = [control.RunningInstance(41001 + index, 1, (mode,))
+                 for index, mode in enumerate(modes)]
+    with patch.object(control, "list_instances", return_value=instances), patch.object(
+        control, "restart_instance", return_value=0
+    ) as restart, patch.object(control, "stop_instances") as stop:
+        assert control.handle_instance_command(arguments) == expected
+    if selected is None:
+        restart.assert_not_called()
+    else:
+        assert restart.call_args.args[0].pid == selected
+    stop.assert_not_called()
+
+
+@pytest.mark.parametrize("direct_script", [False, True])
+def test_restart_preserves_launch_arguments_and_directory(tmp_path: Path, direct_script: bool) -> None:
+    """Relaunch only after shutdown, preserving argument boundaries and cwd.
+
+    Parameters:
+        tmp_path: Original working directory.
+        direct_script: Whether Slips was launched through its shebang.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    arguments = ("-D", "-c", "config with spaces.yaml", "-i", "eth0",
+                 "-w", "--web-port", "55012", "-o", "output/live capture", "--keep-history")
+    process = candidate(41001, entrypoint, *arguments)
+    process.cwd.return_value = str(tmp_path)
+    original = ["./slips.py", *arguments]
+    process.cmdline.return_value = original if direct_script else ["python3", "-u", *original]
+    instance = control.RunningInstance(41001, 100.0, arguments)
+    order = Mock()
+    order.stop.return_value = 0
+    order.launch.return_value.returncode = 0
+    with patch.object(control.psutil, "Process", return_value=process), patch.object(
+        control, "stop_instances", order.stop
+    ), patch.object(control.subprocess, "run", order.launch):
+        assert control.restart_instance(instance, entrypoint) == 0
+    assert [call[0] for call in order.mock_calls] == ["stop", "launch"]
+    order.stop.assert_called_once_with([instance], entrypoint)
+    expected = [sys.executable, *([] if direct_script else ["-u"]), *original]
+    order.launch.assert_called_once_with(expected, cwd=str(tmp_path), check=False)
+
+
+@pytest.mark.parametrize("case", ["foreground", "gone", "reused", "denied", "slow", "launch_error", "startup_failed"])
+def test_restart_handles_failures(tmp_path: Path, case: str) -> None:
+    """Refuse unverified restarts and propagate shutdown or launcher failures.
+
+    Parameters:
+        tmp_path: Isolated checkout.
+        case: Failure during verification, shutdown or startup.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    process = candidate(41001, entrypoint, "-D", "-i", "eth0")
+    instance = control.inspect_instance(process, entrypoint)
+    if case == "foreground":
+        instance = control.RunningInstance(41001, 100.0, ("-i", "eth0"))
+    elif case == "reused":
+        process.create_time.return_value += 1
+    elif case == "denied":
+        process.cwd.side_effect = psutil.AccessDenied(process.pid)
+    with patch.object(control.psutil, "Process", return_value=process) as constructor, patch.object(
+        control, "stop_instances", return_value=1 if case == "slow" else 0
+    ) as stop, patch.object(control.subprocess, "run") as launch:
+        launch.return_value.returncode = 3
+        if case == "gone":
+            constructor.side_effect = psutil.NoSuchProcess(process.pid)
+        if case == "launch_error":
+            launch.side_effect = OSError("Python executable unavailable")
+        assert control.restart_instance(instance, entrypoint) == (3 if case == "startup_failed" else 1)
+    if case in {"foreground", "gone", "reused", "denied"}:
+        stop.assert_not_called()
+    if case not in {"launch_error", "startup_failed"}:
+        launch.assert_not_called()
+
+
+def test_native_restart_preserves_arguments_and_waits_for_worker(tmp_path: Path) -> None:
+    """Restart an isolated daemon after its worker exits and state is saved.
+
+    Parameters:
+        tmp_path: Private fixture scripts, launch data and shutdown checkpoint.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    marker = tmp_path / "ready.json"
+    saved = tmp_path / "saved.json"
+    entrypoint.write_text('''"""Isolated daemon for restart verification."""
+import json
+import os
+from pathlib import Path
+import signal
+import sys
+if os.fork():
+    raise SystemExit(0)
+os.setsid()
+if os.fork():
+    os._exit(0)
+with open(os.devnull, "r+") as stream:
+    for descriptor in (0, 1, 2):
+        os.dup2(stream.fileno(), descriptor)
+worker = os.fork()
+if worker == 0:
+    while True:
+        signal.pause()
+def stop(number: int, frame: object) -> None:
+    """Stop the worker before recording a completed shutdown."""
+    os.kill(worker, signal.SIGTERM)
+    os.waitpid(worker, 0)
+    Path("saved.json").write_text(json.dumps({"pid": os.getpid()}))
+    raise SystemExit(0)
+signal.signal(signal.SIGTERM, stop)
+Path("ready.tmp").write_text(json.dumps({
+    "pid": os.getpid(), "worker": worker, "arguments": sys.argv[1:],
+    "cwd": os.getcwd(), "prefix": sys.prefix,
+    "previous_stop": json.loads(Path("saved.json").read_text()) if Path("saved.json").exists() else None,
+}))
+Path("ready.tmp").replace("ready.json")
+while True:
+    signal.pause()
+''')
+    arguments = ["--daemon", "-i", "eth0", "-c", "config with spaces.yaml",
+                 "-o", "output/capture with spaces", "--web-port", "55012", "--keep-history"]
+    previous = None
+    current = None
+    try:
+        launched = subprocess.run([sys.executable, "-u", "./slips.py", *arguments], cwd=tmp_path, timeout=10)
+        assert launched.returncode == 0
+        deadline = time.monotonic() + 10
+        while not marker.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        previous = json.loads(marker.read_text())
+        instance = control.inspect_instance(psutil.Process(previous["pid"]), entrypoint)
+        assert instance is not None
+        assert control.restart_instance(instance, entrypoint) == 0
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            current = json.loads(marker.read_text())
+            if current["pid"] != previous["pid"]:
+                break
+            time.sleep(0.02)
+        assert current["pid"] != previous["pid"]
+        assert current["arguments"] == arguments
+        assert current["cwd"] == str(tmp_path.resolve())
+        assert current["prefix"] == sys.prefix
+        assert current["previous_stop"] == {"pid": previous["pid"]}
+        assert not psutil.pid_exists(previous["pid"])
+        assert not psutil.pid_exists(previous["worker"])
+        assert json.loads(saved.read_text()) == {"pid": previous["pid"]}
+    finally:
+        if marker.exists():
+            current = json.loads(marker.read_text())
+            instance = control.inspect_instance(psutil.Process(current["pid"]), entrypoint)
+            if instance is not None:
+                control.stop_instances([instance], entrypoint, timeout=5)
+        for record in (previous, current):
+            if record:
+                for pid in (record["pid"], record["worker"]):
+                    if psutil.pid_exists(pid):
+                        process = psutil.Process(pid)
+                        process.kill()
+                        process.wait(timeout=5)
 
 
 def test_native_shutdown_waits_for_checkpoint_and_worker(tmp_path: Path) -> None:

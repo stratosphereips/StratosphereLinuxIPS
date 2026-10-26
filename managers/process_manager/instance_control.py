@@ -1,10 +1,12 @@
-"""Find and gracefully stop Slips runs without opening their databases."""
+"""Find, stop and restart Slips runs without opening their databases."""
 
 import argparse
 import os
 from pathlib import Path
 import re
 import signal
+import subprocess
+import sys
 from dataclasses import dataclass
 
 import psutil
@@ -25,19 +27,29 @@ def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
     Parameters:
         parser: Parser receiving the management options.
     """
-    parser.add_argument(
+    commands = parser.add_mutually_exclusive_group()
+    commands.add_argument(
         "--list-instances",
         action="store_true",
         help="List running Slips instances from this checkout without "
         "starting a capture or connecting to Redis.",
     )
-    parser.add_argument(
+    commands.add_argument(
         "--stop",
         nargs="?",
         const="auto",
         metavar="PID|all",
         help="Gracefully stop a Slips instance in any mode from this checkout. "
         "Omit PID when only one is running, or use all to stop every instance.",
+    )
+    commands.add_argument(
+        "--restart",
+        nargs="?",
+        const="auto",
+        metavar="PID",
+        help="Stop a running daemon and relaunch it with its original "
+        "arguments. Omit PID when only one daemon is running. Use the same "
+        "Python environment that started it.",
     )
 
 
@@ -100,6 +112,7 @@ def inspect_instance(
             in {
                 "--list-instances",
                 "--stop",
+                "--restart",
                 "-S",
                 "--stopdaemon",
                 "-k",
@@ -109,7 +122,7 @@ def inspect_instance(
                 "-V",
                 "--version",
             }
-            or arg.startswith("--stop=")
+            or arg.startswith(("--stop=", "--restart="))
             for arg in arguments
         ):
             return None
@@ -264,6 +277,50 @@ def stop_instances(
     return int(failed)
 
 
+def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
+    """Stop a verified daemon completely, then repeat its launch command.
+
+    Parameters:
+        instance: Selected daemon identity and original capture arguments.
+        entrypoint: Entry point required before stopping the daemon.
+
+    Returns:
+        Launcher exit status, or one if inspection, shutdown or launch fails.
+    """
+    if not {"-D", "--daemon"}.intersection(instance.arguments):
+        print(f"PID {instance.pid} is not a Slips daemon; not restarted.")
+        return 1
+    try:
+        process = psutil.Process(instance.pid)
+        if inspect_instance(process, entrypoint) != instance:
+            print(
+                f"PID {instance.pid} changed or cannot be verified; not restarted."
+            )
+            return 1
+        command = process.cmdline()
+        position = script_position(command)
+        directory = process.cwd()
+        # macOS can expose Python's base binary instead of its virtualenv.
+        command = [sys.executable, *command[1 if position else 0 :]]
+    except (psutil.Error, OSError) as error:
+        print(
+            f"Cannot read the launch command for PID {instance.pid}: {error}"
+        )
+        return 1
+    if stop_instances([instance], entrypoint) != 0:
+        print("Shutdown did not finish; no replacement daemon was started.")
+        return 1
+    print(
+        f"Restarting Slips daemon with the arguments from PID {instance.pid}.",
+        flush=True,
+    )
+    try:
+        return subprocess.run(command, cwd=directory, check=False).returncode
+    except OSError as error:
+        print(f"Daemon stopped, but restarting failed: {error}")
+        return 1
+
+
 def handle_instance_command(arguments: list[str]) -> int | None:
     """Handle management before capture, config, logs or Redis initialization.
 
@@ -278,23 +335,44 @@ def handle_instance_command(arguments: list[str]) -> int | None:
             "-S/--stopdaemon was removed; use --stop [PID|all] instead"
         )
     if not any(
-        arg in {"--list-instances", "--stop"} or arg.startswith("--stop=")
+        arg in {"--list-instances", "--stop", "--restart"}
+        or arg.startswith(("--stop=", "--restart="))
         for arg in arguments
     ):
         return None
     parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
     add_instance_arguments(parser)
     options = parser.parse_args(arguments)
-    if options.list_instances and options.stop is not None:
-        parser.error("choose --list-instances or --stop")
     if options.stop not in {None, "auto", "all"}:
         if not options.stop.isdecimal() or int(options.stop) <= 0:
             parser.error("--stop expects a positive PID or all")
+    if options.restart not in {None, "auto"}:
+        if not options.restart.isdecimal() or int(options.restart) <= 0:
+            parser.error("--restart expects a positive daemon PID")
     entrypoint = Path(__file__).resolve().parents[2] / "slips.py"
     instances = list_instances(entrypoint)
     print_instances(instances)
     if options.list_instances:
         return 0
+    if options.restart is not None:
+        daemons = [
+            instance
+            for instance in instances
+            if {"-D", "--daemon"}.intersection(instance.arguments)
+            and (
+                options.restart == "auto"
+                or instance.pid == int(options.restart)
+            )
+        ]
+        if not daemons:
+            print(
+                "No matching running Slips daemon from this checkout to restart."
+            )
+            return 1
+        if len(daemons) > 1:
+            print("More than one daemon is running. Use --restart PID.")
+            return 1
+        return restart_instance(daemons[0], entrypoint)
     if not instances:
         return 0 if options.stop in {"auto", "all"} else 1
     if options.stop == "auto" and len(instances) > 1:

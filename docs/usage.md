@@ -111,6 +111,7 @@ capture continues in the background.
 ```bash
 ./slips.py -i en0 -w -o output/live --keep-history -D
 ./slips.py --list-instances
+./slips.py --restart
 ./slips.py --stop
 ```
 
@@ -136,7 +137,7 @@ Only one daemon is supported at a time. Use `--stop` to stop it when it is the
 only running Slips instance, or `--stop PID` to select it when other analyses
 are also running. The same stop option handles every launch mode.
 
-### Find and stop running instances
+### Find, stop and restart running instances
 
 Use these commands from the Slips repository directory, with the same Python
 environment used to run Slips:
@@ -146,6 +147,8 @@ environment used to run Slips:
 ./slips.py --stop
 ./slips.py --stop 12345
 ./slips.py --stop all
+./slips.py --restart
+./slips.py --restart 12345
 ```
 
 `--list-instances` shows accessible running Slips main processes from this
@@ -161,6 +164,30 @@ them and asks you to select a PID with `--stop PID`; it does not choose one.
 `--stop all` explicitly stops all accessible instances from this checkout,
 including foreground and PCAP analyses. These management options run on their
 own; do not combine them with capture options such as `-i`, `-f` or `-c`.
+
+`--restart` selects the only running daemon from this checkout, even when
+foreground or PCAP analyses are also running. Use `--restart PID` to select
+one if several daemons are found. It cannot restart a foreground run or a
+daemon that has already stopped, because it needs the running daemon's launch
+arguments. If no matching daemon exists, it reports the problem and returns
+a nonzero exit status.
+
+Restart first performs the same shutdown as `--stop` and waits for the daemon
+and its observed workers to exit. If shutdown fails or times out, no replacement
+is started. After a successful stop, it launches a new daemon with the original
+Slips arguments, Python interpreter options, and working directory. Arguments
+containing spaces remain separate arguments. Use the same Python environment
+as the original run; for example, on macOS:
+
+```bash
+.venv-macos/bin/python slips.py --restart
+```
+
+The new daemon reads the current configuration files. Restart does not add or
+change capture options: history is retained when the original command included
+`--keep-history`; otherwise normal fresh-start behavior applies. Options such
+as `-c`, `-i`, `-o`, `-w` and `--web-port` keep their original values. Startup
+feedback and failures appear in the terminal just as they do with `-D`.
 
 Stopping sends SIGTERM to the selected main process, which performs Slips'
 normal shutdown: finish cleanup, save learned information, stop its workers
@@ -1152,6 +1179,7 @@ this file can be used for training Slips RNN module.
 - ```-k``` or  ```--killall``` Kill all unused redis servers
 - `--list-instances` List accessible running Slips instances from this checkout.
 - `--stop [PID|all]` Gracefully stop the sole running instance, a selected PID, or all instances from this checkout.
+- `--restart [PID]` Stop a running daemon and start it again with its original arguments and working directory, using the Python environment invoking this command.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
 - ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory, or start fresh if no database exists; start with a clean Redis database 0.
