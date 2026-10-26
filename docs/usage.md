@@ -189,6 +189,11 @@ change capture options: history is retained when the original command included
 as `-c`, `-i`, `-o`, `-w` and `--web-port` keep their original values. Startup
 feedback and failures appear in the terminal just as they do with `-D`.
 
+Restart also works with `--keep-history`: the waiting `--restart` management
+command is not another capture and does not reserve Redis port 6379. A real
+concurrent capture sharing that port is still rejected; the message identifies
+its PID and port so you can locate the process.
+
 Stopping sends SIGTERM to the selected main process, which performs Slips'
 normal shutdown: finish cleanup, save learned information, stop its workers
 and close its web interface. The command waits up to 45 seconds for the main

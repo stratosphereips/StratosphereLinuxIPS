@@ -26,7 +26,10 @@ from slips_files.common.parsers.analysis_config import (
     isolated_analysis_config,
     isolated_analysis_output,
 )
-from managers.process_manager.instance_control import list_instances
+from managers.process_manager.instance_control import (
+    capture_arguments,
+    list_instances,
+)
 from slips_files.common.output_paths import (
     get_this_db_path_inside_output_dir,
 )
@@ -129,11 +132,9 @@ class RedisManager:
             if isinstance(info, dict)
             else process.cmdline()
         )
-        script_index = next(
-            index
-            for index, part in enumerate(command)
-            if os.path.basename(part) == "slips.py"
-        )
+        arguments = capture_arguments(command)
+        if arguments is None:
+            return
         parser = argparse.ArgumentParser(
             add_help=False, allow_abbrev=False, exit_on_error=False
         )
@@ -145,16 +146,14 @@ class RedisManager:
         parser.add_argument("-w", "--webinterface", action="store_true")
         parser.add_argument("--web-port", type=int)
         try:
-            other, _ = parser.parse_known_args(command[script_index + 1 :])
+            other, _ = parser.parse_known_args(arguments)
             other_cwd = Path(process.cwd())
             config_path = other_cwd / other.config
             with config_path.open(encoding="utf-8") as source:
                 config = yaml.safe_load(source) or {}
             if not isinstance(config, dict):
                 raise ValueError("Invalid Slips configuration")
-            analysis_output = isolated_analysis_output(
-                command[script_index + 1 :]
-            )
+            analysis_output = isolated_analysis_output(arguments)
             if analysis_output is not None:
                 config = isolated_analysis_config(config, analysis_output)
             parameters = config.get("parameters") or {}
@@ -192,7 +191,8 @@ class RedisManager:
             and not (other.multiinstance and not other.port)
         ):
             raise SystemExit(
-                "Another Slips run uses the history Redis port. "
+                "Another Slips run uses the history Redis port "
+                f"{current_port} (PID {process.pid}). "
                 "Use -m or -P <unused-port> for the separate analysis."
             )
 

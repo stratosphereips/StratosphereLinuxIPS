@@ -74,6 +74,31 @@ def test_script_position(command: list[str], expected: int | None) -> None:
     assert control.script_position(command) == expected
 
 
+@pytest.mark.parametrize("command,expected", [
+    (["python3", "slips.py"], ()),
+    (["python3", "-u", "slips.py", "-D", "--keep-history"], ("-D", "--keep-history")),
+    (["./slips.py", "-i", "eth0"], ("-i", "eth0")),
+    (["python3", "slips.py", "--restart"], None),
+    (["python3", "slips.py", "--restart=123"], None),
+    (["python3", "slips.py", "--stop=all"], None),
+    (["python3", "slips.py", "--list-instances"], None),
+    (["python3", "slips.py", "-h"], None),
+    (["python3", "other.py", "slips.py"], None),
+    (["python3", "-c", "pass", "slips.py"], None),
+    (["echo", "slips.py"], None),
+    ([], None),
+])
+def test_capture_arguments(command: list[str], expected: tuple[str, ...] | None) -> None:
+    """Use the same capture classification for discovery and resource checks.
+
+    Parameters:
+        command: Candidate process command line.
+        expected: Capture arguments or None for a management/unrelated command.
+    """
+    _factory = ModuleFactory()
+    assert control.capture_arguments(command) == expected
+
+
 @pytest.mark.parametrize(
     "arguments, names, expected",
     [
@@ -455,12 +480,34 @@ def test_native_restart_preserves_arguments_and_waits_for_worker(tmp_path: Path)
     entrypoint = tmp_path / "slips.py"
     marker = tmp_path / "ready.json"
     saved = tmp_path / "saved.json"
+    (tmp_path / "config with spaces.yaml").write_text(Path("config/slips.yaml").read_text())
+    (tmp_path / "VERSION").write_text(Path("VERSION").read_text())
+    history = tmp_path / "output" / "capture with spaces"
+    (history / "databases").mkdir(parents=True)
+    (history / "databases" / "flows.sqlite").write_text("retained history")
+    (history / "metadata").mkdir()
+    (history / "metadata" / "info.txt").write_text("File: eth0\n")
     entrypoint.write_text('''"""Isolated daemon for restart verification."""
 import json
 import os
 from pathlib import Path
 import signal
 import sys
+from types import SimpleNamespace
+from unittest.mock import patch
+sys.path.insert(0, __PROJECT_DIRECTORY__)
+import psutil
+from managers.process_manager.instance_control import inspect_instance, restart_instance
+if sys.argv[1:2] == ["--restart"]:
+    instance = inspect_instance(psutil.Process(int(sys.argv[2])), Path(__file__))
+    raise SystemExit(restart_instance(instance, Path(__file__)))
+from managers.redis_manager import RedisManager
+parent = psutil.Process(os.getppid())
+parent.info = parent.as_dict(attrs=["pid", "cmdline"])
+args = SimpleNamespace(interface="eth0", output="output/capture with spaces",
+    multiinstance=False, db=None, port=None, is_slips_started_by_an_update=False)
+with patch("managers.redis_manager.psutil.process_iter", return_value=[parent]):
+    assert RedisManager(SimpleNamespace(args=args)).validate_keep_history()
 if os.fork():
     raise SystemExit(0)
 os.setsid()
@@ -488,7 +535,7 @@ Path("ready.tmp").write_text(json.dumps({
 Path("ready.tmp").replace("ready.json")
 while True:
     signal.pause()
-''')
+'''.replace("__PROJECT_DIRECTORY__", repr(str(Path.cwd()))))
     arguments = ["--daemon", "-i", "eth0", "-c", "config with spaces.yaml",
                  "-o", "output/capture with spaces", "--web-port", "55012", "--keep-history"]
     previous = None
@@ -502,7 +549,9 @@ while True:
         previous = json.loads(marker.read_text())
         instance = control.inspect_instance(psutil.Process(previous["pid"]), entrypoint)
         assert instance is not None
-        assert control.restart_instance(instance, entrypoint) == 0
+        restarted = subprocess.run([sys.executable, "./slips.py", "--restart", str(instance.pid)],
+                                   cwd=tmp_path, capture_output=True, text=True, timeout=20)
+        assert restarted.returncode == 0, restarted.stdout + restarted.stderr
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             current = json.loads(marker.read_text())
@@ -517,6 +566,7 @@ while True:
         assert not psutil.pid_exists(previous["pid"])
         assert not psutil.pid_exists(previous["worker"])
         assert json.loads(saved.read_text()) == {"pid": previous["pid"]}
+        assert (history / "databases" / "flows.sqlite").read_text() == "retained history"
     finally:
         if marker.exists():
             current = json.loads(marker.read_text())

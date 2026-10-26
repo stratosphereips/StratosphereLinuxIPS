@@ -978,6 +978,48 @@ def test_shared_config_works_with_automatic_file_isolation(
             validate()
 
 
+@pytest.mark.parametrize("has_history", [False, True])
+@pytest.mark.parametrize("command", [
+    ["python3", "./slips.py", "--restart"],
+    ["python3", "./slips.py", "--restart", "75170"],
+    ["python3", "./slips.py", "--restart=75170"],
+    ["python3", "./slips.py", "--stop", "all"],
+    ["python3", "./slips.py", "--list-instances"],
+    ["python3", "./slips.py", "-h"],
+    ["python3", "./slips.py", "--version"],
+    ["python3", "./slips.py", "-k"],
+    ["python3", "other.py", "./slips.py"],
+    ["python3", "-c", "pass", "./slips.py"],
+    ["echo", "./slips.py"],
+])
+def test_history_start_ignores_management_and_other_programs(
+    tmp_path: Path, has_history: bool, command: list[str],
+) -> None:
+    """Do not mistake the waiting restart command for a live capture.
+
+    Parameters:
+        tmp_path: Private output directory, without live databases.
+        has_history: Whether retained history already exists.
+        command: Management command or unrelated program visible during startup.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    output = tmp_path / "capture"
+    if has_history:
+        (output / "databases").mkdir(parents=True)
+        (output / "databases" / "flows.sqlite").touch()
+        (output / "metadata").mkdir()
+        (output / "metadata" / "info.txt").write_text("File: en0\n")
+    manager.main.args = SimpleNamespace(
+        interface="en0", output=str(output), multiinstance=False,
+        db=None, port=None, is_slips_started_by_an_update=False,
+    )
+    management = Mock(info={"pid": 75171, "cmdline": command})
+    management.cwd.return_value = str(tmp_path)
+    with patch("managers.redis_manager.psutil.process_iter", return_value=[management]):
+        assert manager.validate_keep_history() is has_history
+    management.cwd.assert_not_called()
+
+
 def test_active_history_run_blocks_second_instance() -> None:
     """Refuse a normal Slips launch while another run keeps history."""
     manager = ModuleFactory().create_redis_manager_obj()

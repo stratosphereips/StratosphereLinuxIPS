@@ -89,6 +89,41 @@ def script_position(command: list[str]) -> int | None:
     )
 
 
+def capture_arguments(command: list[str]) -> tuple[str, ...] | None:
+    """Separate capture launches from management and unrelated commands.
+
+    Parameters:
+        command: Process argument vector.
+
+    Returns:
+        Arguments following slips.py, or None when no capture is being run.
+    """
+    position = script_position(command)
+    if position is None:
+        return None
+    arguments = tuple(command[position + 1 :])
+    if any(
+        arg
+        in {
+            "--list-instances",
+            "--stop",
+            "--restart",
+            "-S",
+            "--stopdaemon",
+            "-k",
+            "--killall",
+            "-h",
+            "--help",
+            "-V",
+            "--version",
+        }
+        or arg.startswith(("--stop=", "--restart="))
+        for arg in arguments
+    ):
+        return None
+    return arguments
+
+
 def inspect_instance(
     process: psutil.Process, entrypoint: Path
 ) -> RunningInstance | None:
@@ -104,27 +139,8 @@ def inspect_instance(
     try:
         command = process.cmdline()
         position = script_position(command)
-        if position is None or process.pid == os.getpid():
-            return None
-        arguments = command[position + 1 :]
-        if any(
-            arg
-            in {
-                "--list-instances",
-                "--stop",
-                "--restart",
-                "-S",
-                "--stopdaemon",
-                "-k",
-                "--killall",
-                "-h",
-                "--help",
-                "-V",
-                "--version",
-            }
-            or arg.startswith(("--stop=", "--restart="))
-            for arg in arguments
-        ):
+        arguments = capture_arguments(command)
+        if position is None or arguments is None or process.pid == os.getpid():
             return None
         script = Path(command[position])
         if not script.is_absolute():
@@ -146,9 +162,7 @@ def inspect_instance(
                     return None
             except (psutil.Error, OSError):
                 continue
-        return RunningInstance(
-            process.pid, process.create_time(), tuple(arguments)
-        )
+        return RunningInstance(process.pid, process.create_time(), arguments)
     except (psutil.Error, OSError):
         return None
 
