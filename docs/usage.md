@@ -172,6 +172,23 @@ The stop notification and module waits share one shutdown deadline (at most
 main reports it and terminates remaining workers rather than waiting forever.
 A second Ctrl-C also cleans up workers before main exits.
 
+Before asking modules to stop, Slips records their process identities and their
+descendants, including the Zeek instances it started. This matters because a
+module can exit before its subprocess: that subprocess is then reparented and
+would disappear from a later search under the module's PID. Slips retains the
+original identity through shutdown, force-stops any remaining owned processes
+after the grace period, and verifies that they stopped. PID creation times
+prevent cleanup from signaling a different process that reused an old PID.
+Other Slips runs and independently started Zeek instances are left running.
+
+Zeek shutdown first sends SIGTERM and allows up to two seconds for log flushing,
+then kills and verifies any survivors. Final forced cleanup uses a shared
+two-second verification wait, rather than adding a separate wait per module.
+Further Ctrl-C presses cannot interrupt that last cleanup. The existing option
+to keep the web interface open still applies; only that run's web server is
+retained while Slips waits for your answer. If an owned process cannot be stopped,
+Slips reports the failure instead of claiming a successful shutdown.
+
 Listing and stopping do not start a capture, load a configuration, create logs
 or connect to Redis. They do not flush Redis or delete saved capture history.
 Existing retention and shutdown settings still apply inside the running Slips

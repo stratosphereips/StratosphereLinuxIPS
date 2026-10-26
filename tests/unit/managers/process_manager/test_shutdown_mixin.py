@@ -986,27 +986,36 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
     ]
 
 
-def test_kill_process_tree_kills_descendants_before_parent():
-    """Kill descendants before their parent can reparent them."""
+def test_kill_process_tree_uses_verified_identities() -> None:
+    """Delegate scoped tree cleanup to the identity-aware process record."""
     process_manager = ModuleFactory().create_process_manager_obj()
-    parent_children = Mock()
-    parent_children.read.return_value = "456\n"
-    child_children = Mock()
-    child_children.read.return_value = ""
-
-    with (
-        patch(
-            "managers.process_manager.shutdown_mixin.os.popen",
-            side_effect=[parent_children, child_children],
-        ),
-        patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill,
-    ):
+    with patch("managers.process_manager.shutdown_mixin.OwnedProcesses") as owned:
         process_manager.kill_process_tree(123)
+    owned.return_value.remember.assert_called_once_with(123)
+    owned.return_value.stop.assert_called_once_with()
 
-    assert mock_kill.call_args_list == [
-        call(456, signal.SIGKILL),
-        call(123, signal.SIGKILL),
-    ]
+
+def test_shutdown_exception_still_verifies_owned_processes() -> None:
+    """Run final cleanup even when a shutdown operation fails unexpectedly."""
+    manager = ModuleFactory().create_process_manager_obj()
+    manager._generate_plots = Mock(side_effect=RuntimeError("failed plot"))
+    manager._finish_owned_processes = Mock()
+    with patch("managers.process_manager.shutdown_mixin.multiprocessing.active_children", return_value=[]):
+        with pytest.raises(RuntimeError, match="failed plot"):
+            manager.shutdown_gracefully()
+    manager._finish_owned_processes.assert_called_once_with()
+    assert manager.profiler_queue._closed
+
+
+def test_final_process_cleanup_cannot_be_interrupted_by_ctrl_c() -> None:
+    """Restore SIGINT handling only after the verified cleanup completes."""
+    manager = ModuleFactory().create_process_manager_obj()
+    owned = manager._owned_shutdown_processes = Mock()
+    previous = signal.getsignal(signal.SIGINT)
+    owned.stop.side_effect = lambda _: signal.getsignal(signal.SIGINT) == signal.SIG_IGN or pytest.fail("cleanup left interruptible")
+    manager._finish_owned_processes()
+    owned.stop.assert_called_once_with(frozenset())
+    assert signal.getsignal(signal.SIGINT) == previous
 
 
 def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop():

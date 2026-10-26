@@ -16,6 +16,7 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from managers.process_manager.owned_processes import OwnedProcesses
 from slips_files.common.input_type import InputType
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
@@ -90,20 +91,42 @@ class ShutdownMixin:
         Parameters:
             pid: PID at the root of the process tree.
         """
-        # Get descendants before killing their parent so they do not get
-        # reparented and disappear from pgrep's results.
-        try:
-            process_list = os.popen(f"pgrep -P {pid}").read().splitlines()
-        except Exception:
-            process_list = []
+        owned = OwnedProcesses()
+        owned.remember(pid)
+        owned.stop()
 
-        for child_pid in process_list:
-            self.kill_process_tree(int(child_pid))
+    def _remember_shutdown_processes(self) -> None:
+        """Snapshot workers and subprocesses before any shutdown joins."""
+        if not hasattr(self, "_owned_shutdown_processes"):
+            self._owned_shutdown_processes = OwnedProcesses()
+        for process in [*self.processes, *getattr(self, "children", [])]:
+            if isinstance(process.pid, int):
+                self._owned_shutdown_processes.remember(process.pid)
+        self._owned_shutdown_processes.refresh()
 
+    def _finish_owned_processes(self, keep_web: bool = False) -> None:
+        """Verify cleanup even for descendants whose module already exited.
+
+        Parameters:
+            keep_web: Retain the owned HTTP server until its existing prompt.
+        """
+        owned = getattr(self, "_owned_shutdown_processes", None)
+        if owned is None:
+            return
+        web_pid = (
+            self.main.db.get_pid_of("Web Interface") if keep_web else None
+        )
+        excluded = (
+            frozenset({web_pid}) if isinstance(web_pid, int) else frozenset()
+        )
+        previous = None
+        if threading.current_thread() is threading.main_thread():
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
         try:
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
+            owned.stop(excluded)
+        finally:
+            if previous is not None:
+                signal.signal(signal.SIGINT, previous)
 
     def kill_all_children(self, force: bool = False) -> None:
         """
@@ -112,6 +135,8 @@ class ShutdownMixin:
         Parameters:
             force: Kill living children immediately after the grace period.
         """
+        self._remember_shutdown_processes()
+        self._finish_owned_processes(keep_web=True)
         for process in self.children:
             module_name = process.name
             already_reported = (
@@ -752,6 +777,8 @@ class ShutdownMixin:
         """
         normal_completion = self._did_slips_finish_normally()
         try:
+            self.children = multiprocessing.active_children()
+            self._remember_shutdown_processes()
             print = self.get_print_function()
             self.main.logger._flush_startup_queue()
 
@@ -812,6 +839,7 @@ class ShutdownMixin:
                     else:
                         # Wait timeout_seconds for all the processes to finish
                         while time.monotonic() < deadline:
+                            self._remember_shutdown_processes()
                             (
                                 to_kill_first,
                                 to_kill_last,
@@ -885,6 +913,7 @@ class ShutdownMixin:
                 self._stop_web_interface(port)
             return False
         finally:
+            self._finish_owned_processes()
             # These queues are owned by the main process. Close them after
             # children have stopped so their pipe handles do not survive
             # until interpreter shutdown.
