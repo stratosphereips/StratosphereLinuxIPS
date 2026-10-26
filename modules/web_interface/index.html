@@ -1,11 +1,11 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Slips</title>
   <link rel="icon" href="/slips-logo.png?v=4" type="image/png" sizes="512x512">
-  <link rel="stylesheet" href="/style.css?v=20261026-p2p-endpoints">
+  <link rel="stylesheet" href="/style.css?v=20261026-view-defaults">
 </head>
 <body class="overview-active">
   <div id="error-banner" class="error-banner" role="alert" hidden></div>
@@ -22,9 +22,9 @@
     </div>
     <div class="topbar-actions">
       <label id="history-source-label" class="network-filter" hidden>Detection history <select id="history-source" aria-label="Detection history source"><option value="">Active · last 90 days</option></select></label>
-      <label id="network-filter-label" class="network-filter" title="Show detections from the current continuous network connection only" hidden><input id="network-filter" type="checkbox" disabled><span>Current network only</span></label>
-      <label id="device-view-label" class="network-filter" title="Group local IPv4 and IPv6 hosts that have the same verified MAC address" hidden><input id="device-view" type="checkbox" disabled><span>Device view</span></label>
-      <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch to light theme"><span class="theme-icon" aria-hidden="true">☀</span><span class="theme-label">Light</span></button>
+      <label id="network-filter-label" class="network-filter" title="Show detections from the current continuous network connection only" hidden><input id="network-filter" type="checkbox" checked disabled><span>Current network only</span></label>
+      <label id="device-view-label" class="network-filter" title="Group local IPv4 and IPv6 hosts that have the same verified MAC address" hidden><input id="device-view" type="checkbox" checked disabled><span>Device view</span></label>
+      <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch to dark theme"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-label">Dark</span></button>
       <div class="run-state">
         <div class="run-state-pill"><span id="state-dot" class="state-dot"></span><strong id="run-state">Connecting</strong></div>
         <div class="run-state-meta"><small id="run-uptime">Uptime —</small><small id="updated-at">Not updated</small></div>
@@ -338,6 +338,6 @@
   </aside>
   <div id="drawer-backdrop" class="backdrop"></div>
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script src="/app.js?v=20261026-p2p-endpoints"></script>
+  <script src="/app.js?v=20261026-view-defaults"></script>
 </body>
 </html>

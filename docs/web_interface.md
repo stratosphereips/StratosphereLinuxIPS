@@ -29,12 +29,12 @@ indicator appears and disappears.
 
 Use the **Light** or **Dark** button in the page header to switch between the
 daylight and dark themes. The choice is saved in this browser and restored when
-the page is reopened, including after a Slips restart. Dark remains the default
-until a theme is selected.
+the page is reopened, including after a Slips restart. The default is the light
+(white) theme. Saved browser choices take precedence over the defaults.
 
 For live interface capture, the header offers **Current network only** on every
-tab. It limits alert and evidence lists, their grouped views, the Overview
-counts, and the Hosts inventory to activity recorded since the current
+tab, enabled by default. It limits alert and evidence lists, their grouped views,
+the Overview counts, and the Hosts inventory to activity recorded since the current
 continuous network connection began. Host traffic totals, flow pages, peers,
 protocols, and score plots use the same boundary. Selected time ranges intersect
 this connection period. The choice is saved in this browser. Turning it off
@@ -44,8 +44,8 @@ network is connected. If the router MAC is unavailable, Slips uses the most
 recent network-settings change as the conservative boundary. The switch is
 hidden for file analyses and until the running web server advertises support.
 
-**Device view** combines local IPv4 and IPv6 profiles that have the same
-recorded unicast MAC address. It affects the Hosts inventory, grouped Alerts,
+**Device view** is enabled by default when supported. It combines local IPv4
+and IPv6 profiles that have the same recorded unicast MAC address. It affects the Hosts inventory, grouped Alerts,
 grouped Evidence, and the selected device's alert, evidence, and traffic
 pages. Each device row lists its addresses. Public profiles and ambiguous MACs
 shared by more than 16 profiles remain separate. Slips still scores each IP
@@ -1226,7 +1226,7 @@ Slips process or profiler. Restart Slips to load the updated Zeek policy.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
 
-In the default Host view, traffic, scores, alerts, and evidence match only the selected Slips profile IP. In Device view, local addresses with the same verified MAC are combined for traffic, alerts, and evidence. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
+In Host view, traffic, scores, alerts, and evidence match only the selected Slips profile IP. In Device view, local addresses with the same verified MAC are combined for traffic, alerts, and evidence. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
 Selecting a host flow opens the resizable investigation panel with the same flow cards used in evidence details: named source and destination endpoints, ports, connection metrics, compact additional fields, a copyable UID, and expandable complete JSON. Related DNS, HTTP, TLS, and other protocol records sharing that UID load only when the panel opens, in pages of 20. **Load more protocol records** keeps additional records accessible without enlarging the initial host-table response. Protocol tabs and JSON are built only when selected or expanded. Closing or switching the panel cancels the request; connection details remain readable if loading related records fails. The panel supports both themes and narrow widths.
 

@@ -66,8 +66,8 @@ const state = {
   evidenceDetail: { record: null, records: [], generation: 0, history: [], inAlertPane: false, inHostPane: false },
   runIdentity: null,
   reviewAvailable: false,
-  networkOnly: false,
-  deviceView: false,
+  networkOnly: true,
+  deviceView: true,
   deviceViewSupported: false,
   networkFilterSupported: false,
   currentNetworkStart: null,
@@ -248,7 +248,7 @@ restoreViewPreferences();
  * @param {boolean} persist Whether to save the choice for later visits.
  */
 function setTheme(theme, persist = false) {
-  const selected = theme === "light" ? "light" : "dark";
+  const selected = theme === "dark" ? "dark" : "light";
   document.documentElement.dataset.theme = selected;
   const toggle = byId("theme-toggle");
   toggle.querySelector(".theme-icon").textContent = selected === "light" ? "☾" : "☀";
@@ -262,17 +262,17 @@ function setTheme(theme, persist = false) {
     }
   }
 }
-let storedTheme = "dark";
+let storedTheme = "light";
 try {
   storedTheme = window.localStorage.getItem("slips-theme");
 } catch (_) {
-  // Private browsing may disable storage; the default remains dark.
+  // Private browsing may disable storage; keep the light default.
 }
 setTheme(storedTheme);
 try {
-  state.networkOnly = window.localStorage.getItem("slips-network-only") === "1";
+  state.networkOnly = window.localStorage.getItem("slips-network-only") !== "0";
 } catch (_) {
-  state.networkOnly = false;
+  state.networkOnly = true;
 }
 byId("network-filter").checked = state.networkOnly;
 byId("theme-toggle").addEventListener("click", () => {

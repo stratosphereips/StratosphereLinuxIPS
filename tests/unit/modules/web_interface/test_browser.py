@@ -21,6 +21,81 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("storage", ["fresh", "saved", "blocked"])
+def test_web_defaults_and_saved_view_choices(storage: str) -> None:
+    """Start with light, device and current-network views while retaining choices.
+
+    Parameters:
+        storage: Fresh browser, explicit old choices, or unavailable storage.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    queries: list[dict[str, list[str]]] = []
+
+    def route_request(route: Any) -> None:
+        """Serve isolated assets and advertise live filtering support.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/api/identity":
+            route.fulfill(json={"input_type":"interface", "network_filter_supported":True,
+                "device_view_supported":True, "current_network_start":100})
+        elif url.path == "/api/hosts":
+            queries.append(parse_qs(url.query))
+            route.fulfill(json={"items":[], "total":0})
+        else:
+            route.fulfill(status=503, json={"error":"Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        page = browser.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        if storage == "saved":
+            page.add_init_script("""if (!sessionStorage.getItem('seeded')) {
+                localStorage.setItem('slips-theme','dark');
+                localStorage.setItem('slips-network-only','0');
+                localStorage.setItem('slips-view-preferences-v1',JSON.stringify({controls:{'device-view':false}}));
+                sessionStorage.setItem('seeded','1');
+            }""")
+        elif storage == "blocked":
+            page.add_init_script("""Storage.prototype.getItem = () => { throw new Error('Storage unavailable'); };
+                Storage.prototype.setItem = () => { throw new Error('Storage unavailable'); };""")
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("state.networkFilterSupported && state.deviceViewSupported")
+        enabled = storage != "saved"
+        assert page.locator("html").get_attribute("data-theme") == ("light" if enabled else "dark")
+        assert page.locator("#device-view").is_checked() is enabled
+        assert page.locator("#network-filter").is_checked() is enabled
+        page.evaluate("() => loadHosts()")
+        assert queries[-1].get("network") == (["current"] if enabled else None)
+        assert queries[-1].get("device") == (["1"] if enabled else None)
+        if storage == "fresh":
+            page.locator("#theme-toggle").click()
+            page.locator("#device-view").uncheck()
+            page.locator("#network-filter").uncheck()
+            page.reload()
+            page.wait_for_function("state.networkFilterSupported && state.deviceViewSupported")
+            assert page.locator("html").get_attribute("data-theme") == "dark"
+            assert not page.locator("#device-view").is_checked()
+            assert not page.locator("#network-filter").is_checked()
+        page.evaluate("""() => {
+            updateNetworkFilterAvailability({input_type:'pcap',network_filter_supported:false});
+            updateDeviceViewAvailability({device_view_supported:false});
+        }""")
+        assert page.locator("#network-filter").is_disabled()
+        assert page.locator("#device-view").is_disabled()
+        assert page.evaluate("() => rangeQuery('hosts').has('network') || rangeQuery('hosts').has('device')") is False
+        assert not errors
+        browser.close()
+
+
 @pytest.mark.parametrize("protocol", ["arp", "dns"])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 @pytest.mark.parametrize("width", [320, 900])
