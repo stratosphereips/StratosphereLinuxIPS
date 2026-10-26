@@ -401,6 +401,7 @@ def test_reporter_reliability_uses_latest_sample(tmp_path) -> None:
         ),
     ):
         trust_db = TrustDB(module_factory.logger, str(tmp_path / "trust.db"), 1)
+    assert trust_db.get_reporter_reliability("peer-1") is None
     trust_db.insert_go_reliability("peer-1", 0.2, 1)
     trust_db.insert_go_reliability("peer-1", 0.8, 2)
 
@@ -799,6 +800,17 @@ def test_get_reports_for_ip(ipaddress, expected_reports):
     )
 
     assert result == expected_reports
+
+
+@pytest.mark.parametrize(
+    "row,expected", [(None, None), ([], None), ((0.0,), 0.0), ((0.8,), 0.8)]
+)
+def test_reliability_before_first_measurement(row: tuple | list | None, expected: float | None) -> None:
+    """An authenticated connection can precede its first reliability row."""
+    trust_db = ModuleFactory().create_trust_db_obj()
+    trust_db.select = Mock(return_value=row)
+
+    assert trust_db.get_reporter_reliability("new-peer") == expected
 
 
 @pytest.mark.parametrize(

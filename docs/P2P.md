@@ -106,6 +106,11 @@ reliability weight of 0.7, peer trust is
 reduces trust. The wire format and stored peer reports remain on the existing
 0-to-1 maliciousness scale.
 
+A peer can connect before its first reliability measurement arrives. During
+that interval Slips keeps the connection active and skips calculating trust
+for that peer. Missing reliability is unknown, not zero. Trust calculation
+starts once a measurement is available.
+
 These values are model scores, not calibrated probabilities. The P2P web
 table labels the report value as maliciousness: 1 is fully malicious and 0
 is a benign assessment. Informational observations assert neither benign

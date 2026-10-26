@@ -757,9 +757,14 @@ class TrustDB(ISQLite):
             return res[1]  # Return the IP address
         return None
 
-    def get_reporter_reliability(self, reporter_peerid):
-        """
-        Returns the latest reliability score for the given peer.
+    def get_reporter_reliability(self, reporter_peerid: str) -> float | None:
+        """Read the latest measured reliability without assuming a row exists.
+
+        Parameters:
+            reporter_peerid: Authenticated peer identifier.
+
+        Returns:
+            Latest reliability, or None before its first measurement arrives.
         """
         res = self.select(
             table_name="go_reliability",
@@ -770,10 +775,7 @@ class TrustDB(ISQLite):
             limit=1,
         )
 
-        try:
-            return res[0]
-        except IndexError:
-            return None
+        return res[0] if res else None
 
     def get_reporter_reputation(self, reporter_ipaddress):
         """
