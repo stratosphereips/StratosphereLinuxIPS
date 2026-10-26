@@ -1014,6 +1014,37 @@ def test_history_run_concurrency_isolation(
                 validate()
 
 
+@pytest.mark.parametrize("current_port", [55000, 55002])
+@pytest.mark.parametrize("other_cli_port", [55000, 55002])
+def test_history_isolation_uses_other_runs_cli_web_port(
+    tmp_path: Path, current_port: int, other_cli_port: int,
+) -> None:
+    """Compare effective ports instead of a reused configuration's default.
+
+    Parameters:
+        tmp_path: Isolated output and configuration locations.
+        current_port: Effective web port for the new run.
+        other_cli_port: Other run's CLI override of its configured port.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    manager.main.args = SimpleNamespace(port=None, multiinstance=True,
+        output=str(tmp_path / "new-output"), webinterface=True)
+    manager.main.conf = Mock(web_interface_port=current_port)
+    manager.main.conf.permanent_dir.return_value = str(tmp_path / "new-state")
+    manager.main.conf.web_interface_enabled.return_value = True
+    config = tmp_path / "other.yaml"
+    config.write_text("parameters:\n  permanent_dir: other-state\nweb_interface:\n  enabled: true\n  port: 55000\n")
+    other = Mock(info={"pid":123, "cmdline":["python", "./slips.py",
+        "-c", config.name, "-o", "other-output", "-w", "--keep-history",
+        "--web-port", str(other_cli_port)]})
+    other.cwd.return_value = str(tmp_path)
+    if current_port == other_cli_port:
+        with pytest.raises(SystemExit, match="web port"):
+            manager._assert_history_run_isolated(other)
+    else:
+        manager._assert_history_run_isolated(other)
+
+
 @pytest.mark.parametrize("multiinstance", [False, True])
 @pytest.mark.parametrize("port", ["6379", "6381"])
 def test_explicit_redis_port_takes_precedence_for_history_isolation(

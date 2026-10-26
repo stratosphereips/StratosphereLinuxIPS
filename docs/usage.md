@@ -249,6 +249,10 @@ PCAP run its own output, persistent data directory, and web port. Copy your
 active configuration to `permanent/pcap-analysis/slips.yaml`, then change
 these settings in the copy:
 
+Prepare this isolated PCAP configuration once. Reuse it for later analyses;
+`--web-port` selects each run's web port without editing or copying the file
+again. Each simultaneous run still needs `-m` and its own `-o` directory.
+
 This is an independent configuration file. Later changes to `config/slips.yaml`
 or your live configuration do not update this copy. When enabling a new module,
 copy its explained section into the PCAP configuration too. For numeric C2
@@ -280,6 +284,7 @@ Run from the repository root, using an unused output directory:
 ```bash
 nice -n 15 .venv-macos/bin/python slips.py -m -w \
   -c permanent/pcap-analysis/slips.yaml \
+  --web-port 55002 \
   -f dataset/test7-malicious.pcap -o output/pcap-analysis-01
 ```
 
@@ -514,6 +519,9 @@ Enable the run-specific local interface with `-w`:
 ```
 
 Then open `http://localhost:55000/`. You can also enable it with `web_interface.enabled: true` in `config/slips.yaml` and change `web_interface.port`.
+Use `-w --web-port 55002` to select a different port for one run without
+changing that file. The flag accepts 1–65535 and overrides the configured port.
+It does not enable the page by itself: use `-w` or `web_interface.enabled: true`.
 
 The interface is read-only, binds only to `127.0.0.1`, and shows exactly the run that launched it. It is not a receiver for remote Slips systems and is not a multi-instance database selector. It reads this run's Redis database, `output/<run>/databases/flows.sqlite`, `output/<run>/error.log`, and current process metrics. Its own operational log is `output/<run>/web_interface/server.log`.
 
@@ -1144,6 +1152,7 @@ this file can be used for training Slips RNN module.
 - ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory; start with a clean Redis database 0.
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
+- `--web-port PORT` Override `web_interface.port` for this run; use `-w` or enable the web interface in the configuration.
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
 - ```-ap``` or  ```--access-point``` Used for reading packets from two interfaces when Slips is running as an access point.

@@ -1459,7 +1459,7 @@ web_interface:
   # Listen only on localhost, or on the IPv4 address of the monitored interface.
   # Allowed values: localhost, interface
   bind: localhost
-  # Define the port to use
+  # Web listener port. Override for one run with ./slips.py -w --web-port 55002.
   port: 55000
   # Require the shared redis/web password to log in before granting access.
   # Only disable this for CI/tests - never on a machine reachable beyond

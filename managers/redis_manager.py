@@ -129,6 +129,7 @@ class RedisManager:
         parser.add_argument("-c", "--config", default="config/slips.yaml")
         parser.add_argument("-cc", "--clearcache", action="store_true")
         parser.add_argument("-w", "--webinterface", action="store_true")
+        parser.add_argument("--web-port", type=int)
         try:
             other, _ = parser.parse_known_args(command[script_index + 1 :])
             other_cwd = Path(process.cwd())
@@ -143,7 +144,11 @@ class RedisManager:
                 other_web, dict
             ):
                 raise ValueError("Invalid Slips configuration sections")
-            other_web_port = int(other_web.get("port", 55000))
+            other_web_port = (
+                other.web_port
+                if other.web_port is not None
+                else int(other_web.get("port", 55000))
+            )
             current_port = int(self.main.args.port or DEFAULT_REDIS_PORT)
             other_port = int(other.port or DEFAULT_REDIS_PORT)
         except (
@@ -204,7 +209,7 @@ class RedisManager:
         ):
             raise SystemExit(
                 "Another Slips run uses this web port. "
-                "Set a different web_interface.port for the separate analysis."
+                "Use --web-port <unused-port> for the separate analysis."
             )
 
     def reject_active_history_run(self) -> None:

@@ -150,6 +150,21 @@ The `-w` flag enables the module even when `enabled` is false. `bind` accepts:
 - `localhost` — default; listens only on `127.0.0.1`.
 - `interface` — listens only on the IPv4 address of the interface Slips is monitoring. Slips reports the resulting URL in the console. This mode fails closed if no monitored IPv4 interface is available.
 
+Select the web port for one analysis with `--web-port`, reusing the same file:
+
+```bash
+./slips.py -m -w --web-port 55002 -c permanent/pcap-analysis/slips.yaml \
+  -f dataset/test7-malicious.pcap -o output/pcap-analysis-01
+```
+
+`--web-port` accepts ports from 1 to 65535. It overrides `web_interface.port`
+for this run, including its startup, shutdown and conflict checks. It leaves
+the source configuration unchanged; the run's saved configuration and web
+Configuration tab show the selected port. It only chooses the port; enable
+the page with `-w` or `web_interface.enabled: true`. Use another unused port
+and output directory for the next simultaneous analysis. This example uses
+the isolated PCAP configuration described in [Usage](usage.md#running-several-slips-instances).
+
 ### Login
 
 The web interface requires a password before it shows any run data. By
@@ -317,7 +332,13 @@ The database stores at most 200 distinct values per clue type per host and
 network. Existing run history is not imported automatically; new observations
 populate the database.
 
-Only one web-enabled Slips run is supported on a host. A new -w run replaces an older listener only after verifying that it is a Slips web server owned by the same user. It never terminates an unrelated program using the port. If another program owns the port, the module reports an error and stops.
+Multiple web-enabled Slips runs can use separate ports. A new -w run on an
+occupied port replaces an older listener only after verifying that it is a
+Slips web server owned by the same user. It never terminates an unrelated
+program using the port. If another program owns the port, the module reports
+an error and stops. Choose an unused `--web-port` to keep another run's page
+open, and give concurrent analyses separate Redis servers and writable data
+as described below.
 
 When a file or folder analysis finishes naturally, or after the first Ctrl-C stops a web-enabled live analysis, Slips asks `Slips analysis has stopped. Stop the web interface? [y/N]`. Answer `y` or `yes` to stop the page and finish shutdown. Answer `n`, `no`, or press Enter to keep the page and its Redis/SQLite data available; Slips then waits until the page is stopped or you press Ctrl-C. A later web-enabled run can replace a verified older listener.
 

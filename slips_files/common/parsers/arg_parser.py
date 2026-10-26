@@ -8,6 +8,42 @@ import argparse
 import textwrap
 
 
+def parse_web_port(value: str) -> int:
+    """Validate a web listener port supplied on the command line.
+
+    Parameters:
+        value: Requested TCP port.
+
+    Returns:
+        Integer port from 1 to 65535, or an argparse error for invalid input.
+    """
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "web port must be an integer from 1 to 65535"
+        ) from error
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(
+            "web port must be an integer from 1 to 65535"
+        )
+    return port
+
+
+def get_web_port_override(arguments: list[str] | None = None) -> int | None:
+    """Read the port override while allowing unrelated module arguments.
+
+    Parameters:
+        arguments: Command-line arguments, or None to read sys.argv.
+
+    Returns:
+        Requested web port, or None when the option is absent.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--web-port", type=parse_web_port)
+    return parser.parse_known_args(arguments)[0].web_port
+
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self.options = []
@@ -293,6 +329,13 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store_true",
             required=False,
             help="Enable the local web interface for this Slips run",
+        )
+        self.add_argument(
+            "--web-port",
+            type=parse_web_port,
+            metavar="PORT",
+            help="Override web_interface.port for this run (1-65535). "
+            "Enable the web interface with -w or in the configuration.",
         )
         self.add_argument(
             "-V",

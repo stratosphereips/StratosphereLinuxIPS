@@ -426,7 +426,7 @@ class RunDataReader:
             "web_interface.bind": (
                 "Chooses localhost-only access or the monitored interface address."
             ),
-            "web_interface.port": "TCP port used by the web server.",
+            "web_interface.port": "TCP port used by the web server. --web-port overrides the configuration for one run.",
         }
         full_path = f"{section}.{path}"
         if section == Modules.ARP.value and path in ARP_SCAN_EXPLANATIONS:
