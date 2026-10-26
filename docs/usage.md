@@ -589,7 +589,8 @@ the saved database will contain all analyzed flows.
 
 Slips whitelist rules can suppress flow processing, evidence and alerts, or
 only firewall blocking and ARP poisoning.
-In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization.
+You can whitelist an IP address, a domain, a MAC address, a supported organization,
+or an exact HTTP request path (`uri`).
 You can choose to whitelist what is going __to__ them, what is coming __from__ them, or both directions.
 You can also choose to whitelist the flows, so they are not processed, or alerts, so
 you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
@@ -622,11 +623,13 @@ ip,54.151.0.246:43,dst,alerts
 
 These rules exclude detections for connections to port 43 on those servers;
 their flows remain available. They do not whitelist every destination using
-port 43, or other ports on those IPs. Add another verified WHOIS server in the
-same form to your own file if needed. Avoid `ip,*:43,dst,alerts`, which also
-hides detections involving unrelated servers. Existing broader rules for an
-IP, domain or organization still apply independently. Existing evidence is
-retained; adding a rule does not delete historical detections.
+port 43, or other ports on those IPs. The current default also includes
+`ip,*:43,both,alerts`, which excludes detections whenever either endpoint uses
+port 43, regardless of its IP. To restrict the exception to particular WHOIS
+servers, remove that broader line from your copy and add verified servers in
+the destination-specific form above. Rules apply independently: a narrow rule
+does not cancel an existing broader IP, domain, organization or port rule.
+Adding a rule does not delete historical detections.
 
 Example:
 
@@ -761,10 +764,12 @@ Do not edit the default ```config/whitelist.conf``` directly. Copy it, set ```lo
 For example, your copied whitelist file can contain:
 
 
-    "IoCType","IoCValue","Direction","IgnoreType"
+    "IoCType","IoCValue","Direction","IgnoreType","EvidenceType"
     ip,1.2.3.4,both,alerts
     ip,192.168.1.163:5353,dst,alerts
     ip,[fe80::1]:5353,dst,alerts
+    ip,192.168.1.10->*:902,src,alerts,UNKNOWN_PORT
+    ip,192.168.1.128,both,blocking
     domain,google.com,src,flows
     domain,apple.com,both,both
     ip,94.23.253.72,both,alerts
@@ -775,31 +780,82 @@ For example, your copied whitelist file can contain:
     organization,google,both,both
     organization,apple,both,both
     organization,twitter,both,both
+    uri,/health,both,flows
 
-The values for each column are the following:
+### Whitelist columns
 
-    Column IoCType
-        - Supported IoCTypes: ip, domain, organization, mac
-    Column IoCValue
-        - Supported organizations: google, microsoft, apple, facebook, twitter.
-        - IP rules may include one port as `IPv4:port` or `[IPv6]:port`.
-          A port rule matches the source port for `src` and the destination
-          port for `dst`. `both` accepts either side when its IP and port match.
-          The port applies to all transport protocols; choose `alerts` if you
-          want to keep processing the flows. Rules without a port still match
-          the IP on every port. Add separate lines for additional ports.
-          Use `*:port` to match that port on any IP address. For example,
-          `ip,*:5353,both,alerts` suppresses alerts when either the source or
-          destination port is 5353, regardless of its IP address.
-    Column Direction
-        - Direction: src, dst or both
-            - Src: Check if the IoCValue is the source
-            - Dst: Check if the IoCValue is the destination
-            - Both: Check if the IoCValue is the source or destination
-    Column IgnoreType
-        - IgnoreType: alerts or flows or both
-            - Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
-            - Ignore flows: the flow will be completely discarded.
+Write one rule per line, with four required columns and an optional fifth:
+
+```text
+IoCType,IoCValue,Direction,IgnoreType,EvidenceType
+```
+
+Use commas between columns and do not quote rule values. Use lowercase names
+for the type, direction and mode. Start explanation lines with `;`; start a
+disabled rule with `#` so Slips removes that matching rule from its whitelist
+cache. Do not put a comment after a rule on the same line.
+
+| Column | What it does and why |
+| --- | --- |
+| `IoCType` | Chooses what to match: `ip`, `domain`, `organization`, `mac` or `uri`. IoC is the item being whitelisted. |
+| `IoCValue` | The actual address, name or request path. For example, `192.168.1.10`, `example.com`, `apple`, `a1:a2:a3:a4:a5:a6` or `/health`. IP values can also include port conditions, described below. |
+| `Direction` | `src` matches the source; `dst` matches the destination; `both` accepts either side. These are the roles in the flow or evidence, regardless of which host profile you opened. An evidence's attacker is not necessarily its source. |
+| `IgnoreType` | Chooses whether to skip flow processing, exclude evidence from scoring and alerts, or prevent enforcement while keeping detections. See the modes below. |
+| `EvidenceType` (optional) | Limits an `ip` rule with mode `alerts` to one detection type, such as `UNKNOWN_PORT` or `ARP_SCAN`. Use the internal name from `EvidenceType` in `slips_files/core/structures/evidence.py`, not a display label such as "Unknown port". Omit it or leave it empty to match all types. Other item types and modes do not support this column. |
+
+The four `IgnoreType` modes have different effects:
+
+| Mode | Effect |
+| --- | --- |
+| `alerts` | Keep processing flows. Exclude matching evidence from host scoring and alert generation. Retained evidence is marked whitelisted/excluded and can be inspected with **Show excluded** in the web. This suppresses the detection's contribution, not just a notification. |
+| `flows` | Skip matching flow records before detection. Those records cannot produce detections. Use `alerts` instead when you still want the flows analyzed. |
+| `both` | Skip matching flows and also exclude matching evidence from scoring and alerts. |
+| `blocking` | Keep flows, evidence, host scores and alerts, but prevent firewall blocking and ARP poisoning of the specified IP. Requires one individual IP, `Direction=both`, and no port or evidence type. It protects that IP, not every host communicating with it. |
+
+Supported values and their limits:
+
+- **IP address:** one IPv4 or IPv6 address. Without a port condition it applies
+  on every port. Subnets and address ranges, such as `192.168.1.0/24`, are not
+  supported.
+- **IP and its own port:** `192.168.1.10:902` or `[2001:db8::10]:902` requires
+  both the address and its port to match on the same side. With `src`, this is
+  the **source port**; with `dst`, it is the **destination port**. With `both`,
+  either endpoint can match, but its IP and port must match together.
+- **Any IP on a port:** `*:902` matches that port on the side selected by
+  `Direction`. These port forms accept a single number from 0 to 65535 without
+  leading zeros. They have no TCP/UDP selector. Use separate lines for additional
+  ports.
+- **Source IP connecting to a destination port:** `192.168.1.10->*:902` matches
+  that source connecting to port 902 on any destination IP, regardless of source
+  port. Use `[2001:db8::10]->*:902` for IPv6. Requires `src,alerts` and a port
+  from 1 to 65535. The evidence must record the source IP and destination port;
+  ICMP cannot match because it has no ports.
+- **Domain:** a domain and its subdomains, without a URL scheme or path. Slips
+  must know the domain's relationship to the host through DNS or protocol data;
+  a missing relationship can prevent a match.
+- **Organization:** one of `google`, `microsoft`, `apple`, `facebook` or `twitter`.
+  Matches known IP ranges, domains and ASNs of that organization; arbitrary
+  organization names are not accepted.
+- **MAC address:** six pairs separated by colons. Slips must have recorded the
+  host's MAC address to match it.
+- **URI:** an exact HTTP request path, including the query string if present,
+  with a maximum of 256 characters and no commas. `/health` does not match
+  `/health?check=1`; this is not a prefix or regular expression. Use `both,flows`
+  or `both,both`. URI matching ignores direction and IP/port, and skips matching
+  request records, not necessarily their parent connections.
+
+For example, this rule keeps flows but excludes only `UNKNOWN_PORT` evidence
+for one source connecting to destination port 902:
+
+```text
+ip,192.168.1.10->*:902,src,alerts,UNKNOWN_PORT
+```
+
+All conditions on that line must match. Other whitelist rules still apply
+independently, so a broader rule can suppress the same traffic regardless of
+this evidence-type restriction. For the same type, value and evidence type,
+the last rule replaces earlier entries even if their directions or modes differ.
+Adding a rule does not delete old evidence or alerts.
 
 ## Popup notifications
 
