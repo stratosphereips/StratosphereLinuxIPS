@@ -307,22 +307,27 @@ analyze PCAPs elsewhere while live capture continues.
 
 ### Keep detections across a live-interface restart
 
-Stop the previous Slips run, then restart on the same interface and output
-directory:
+Use the same command for the first start and later restarts on the same
+interface and output directory. Stop any previous Slips run before restarting:
 
 ```bash
 ./slips.py -i en0 -o output/my-network --keep-history -w
 ```
 
-`--keep-history` retains `flows.sqlite`, web history, and other files in that
-directory. Alerts and evidence are durable SQLite records, so the web interface
-can show detections from before the restart. Redis database 0 starts clean:
+If `databases/flows.sqlite` does not exist in that output directory,
+`--keep-history` starts a fresh run and creates the directory as needed.
+No first-run command or empty SQLite file is required. An existing directory
+without that database is reset just as it is for a normal fresh run.
+
+When the database exists, `--keep-history` retains it, web history, and other
+files in that directory. Alerts and evidence are durable SQLite records, so
+the web interface can show detections from before the restart. Redis database 0 starts clean:
 process IDs, time-window state, and other temporary values from the prior run
 must not influence new detections. The shared cache in port 6379 database 1 is
-preserved. This mode requires the original run's metadata and output database,
-uses port 6379, and refuses concurrent runs that share its writable data or
-web port. An isolated analysis using `-m` or a separate `-P` port can run
-alongside it, as described above.
+preserved. Existing history requires the original run's metadata to verify
+the interface. Both fresh and retained runs use port 6379 and refuse
+concurrent runs that share writable data or a web port. An isolated analysis
+using `-m` or a separate `-P` port can run alongside it, as described above.
 It cannot be combined with `-m` or a different `-P` port. Start a normal run
 without the flag when you want a fresh output directory and detection history.
 
@@ -1149,7 +1154,7 @@ this file can be used for training Slips RNN module.
 - `--stop [PID|all]` Gracefully stop the sole running instance, a selected PID, or all instances from this checkout.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
-- ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory; start with a clean Redis database 0.
+- ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory, or start fresh if no database exists; start with a clean Redis database 0.
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
 - `--web-port PORT` Override `web_interface.port` for this run; use `-w` or enable the web interface in the configuration.

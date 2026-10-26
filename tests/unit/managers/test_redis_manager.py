@@ -826,6 +826,26 @@ def test_validate_keep_history_rejects_incompatible_args(
         manager.validate_keep_history()
 
 
+def test_existing_history_still_requires_metadata(tmp_path: Path) -> None:
+    """Reject unverifiable existing history without treating it as a fresh run.
+
+    Parameters:
+        tmp_path: Existing output with an unverified database.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    output = tmp_path / "run"
+    database = output / "databases" / "flows.sqlite"
+    database.parent.mkdir(parents=True)
+    database.write_bytes(b"preserve existing history")
+    manager.main.args = SimpleNamespace(
+        interface="eth0", output=str(output), multiinstance=False,
+        db=None, port=None, is_slips_started_by_an_update=False,
+    )
+    with pytest.raises(SystemExit, match="verify the interface"):
+        manager.validate_keep_history()
+    assert database.read_bytes() == b"preserve existing history"
+
+
 def test_validate_keep_history_accepts_matching_stopped_run(
     tmp_path: Path,
 ) -> None:
@@ -848,7 +868,7 @@ def test_validate_keep_history_accepts_matching_stopped_run(
     manager.main.args.is_slips_started_by_an_update = False
 
     with patch("managers.redis_manager.psutil.process_iter", return_value=[]):
-        assert manager.validate_keep_history() is None
+        assert manager.validate_keep_history() is True
 
 
 def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
@@ -874,18 +894,21 @@ def test_validate_keep_history_rejects_other_interface(tmp_path: Path) -> None:
         manager.validate_keep_history()
 
 
+@pytest.mark.parametrize("has_history", [False, True])
 def test_validate_keep_history_rejects_running_slips(
-    tmp_path: Path,
+    tmp_path: Path, has_history: bool
 ) -> None:
     """Do not mix retained history with a concurrent Slips process.
 
     Parameters:
         tmp_path: Temporary output path.
+        has_history: Whether this is a restart or the first start.
     """
     manager = ModuleFactory().create_redis_manager_obj()
     output_dir = tmp_path / "run"
     (output_dir / "databases").mkdir(parents=True)
-    (output_dir / "databases" / "flows.sqlite").touch()
+    if has_history:
+        (output_dir / "databases" / "flows.sqlite").touch()
     (output_dir / "metadata").mkdir()
     (output_dir / "metadata" / "info.txt").write_text("File: en0\n")
     manager.main.args.interface = "en0"
@@ -1008,7 +1031,7 @@ def test_history_run_concurrency_isolation(
         "managers.redis_manager.psutil.process_iter", return_value=[active]
     ):
         if collision is None:
-            assert validate() is None
+            assert validate() is (True if history_starting else None)
         else:
             with pytest.raises(SystemExit):
                 validate()

@@ -189,9 +189,13 @@ class Main:
             return
 
         if getattr(self.args, "keep_history", False) is True:
-            self.redis_man.validate_keep_history()
-            os.chmod(self.args.output, 0o777)
-            return
+            if self.redis_man.validate_keep_history():
+                os.chmod(self.args.output, 0o777)
+                return
+            print(
+                f"No detection history found in {self.args.output}; "
+                "starting a fresh run."
+            )
 
         if not self.args.output:
             # the user didnt give slips an output dir to use, construct one

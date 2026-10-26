@@ -61,8 +61,12 @@ class RedisManager:
         if port in RedisDB.instances:
             del RedisDB.instances[port]
 
-    def validate_keep_history(self) -> None:
-        """Require a matching interface output and isolated concurrent runs."""
+    def validate_keep_history(self) -> bool:
+        """Validate live-run isolation and identify any history to preserve.
+
+        Returns:
+            True for existing SQLite history, False for a fresh run.
+        """
         args = self.main.args
         if (
             not getattr(args, "interface", None)
@@ -73,33 +77,32 @@ class RedisManager:
             or getattr(args, "port", None) not in (None, "6379", 6379)
         ):
             raise SystemExit(
-                "--keep-history requires -i <interface> -o <existing dir> "
+                "--keep-history requires -i <interface> -o <dir> "
                 "and Redis port 6379; it cannot be combined with -m or -d."
             )
 
         output_dir = Path(args.output)
         flows_db = output_dir / "databases" / "flows.sqlite"
-        if not flows_db.is_file():
-            raise SystemExit(f"--keep-history needs an existing {flows_db}.")
-
-        metadata = output_dir / "metadata" / "info.txt"
-        if not metadata.is_file():
-            raise SystemExit(
-                f"--keep-history needs {metadata} to verify the interface."
+        has_history = flows_db.is_file()
+        if has_history:
+            metadata = output_dir / "metadata" / "info.txt"
+            if not metadata.is_file():
+                raise SystemExit(
+                    f"--keep-history needs {metadata} to verify the interface."
+                )
+            previous_input = next(
+                (
+                    line.removeprefix("File: ").strip()
+                    for line in metadata.read_text().splitlines()
+                    if line.startswith("File: ")
+                ),
+                "",
             )
-        previous_input = next(
-            (
-                line.removeprefix("File: ").strip()
-                for line in metadata.read_text().splitlines()
-                if line.startswith("File: ")
-            ),
-            "",
-        )
-        if previous_input != args.interface:
-            raise SystemExit(
-                "--keep-history output belongs to "
-                f"{previous_input or 'an unknown input'}, not {args.interface}."
-            )
+            if previous_input != args.interface:
+                raise SystemExit(
+                    "--keep-history output belongs to "
+                    f"{previous_input or 'an unknown input'}, not {args.interface}."
+                )
 
         for process in psutil.process_iter(attrs=["pid", "cmdline"]):
             if process.info["pid"] == os.getpid():
@@ -107,6 +110,7 @@ class RedisManager:
             command = process.info["cmdline"] or []
             if any(os.path.basename(part) == "slips.py" for part in command):
                 self._assert_history_run_isolated(process)
+        return has_history
 
     def _assert_history_run_isolated(self, process: psutil.Process) -> None:
         """Reject resources shared with a concurrent history-preserving run.

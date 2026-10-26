@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, mock_open, Mock
+import sqlite3
 import pytest
+from managers.redis_manager import RedisManager
 from tests.module_factory import ModuleFactory
 from datetime import datetime, timedelta
 import sys
@@ -488,6 +491,53 @@ def test_prepare_output_dir_with_o_flag_deletes_files_preserve_slips(
     assert len(remaining) == 1
 
 
+@pytest.mark.parametrize(
+    "initial_state", ["missing", "empty", "logs_only", "stale_metadata"]
+)
+def test_keep_history_supports_first_start_and_later_restart(
+    tmp_path: Path, initial_state: str
+) -> None:
+    """Use one command to initialize an output and later retain its history.
+
+    Parameters:
+        tmp_path: Isolated output directory.
+        initial_state: Files present before the first startup.
+    """
+    main = ModuleFactory().create_main_obj()
+    output = tmp_path / "run"
+    main.args = SimpleNamespace(
+        interface="eth0", output=str(output), keep_history=True,
+        multiinstance=False, db=None, port=None, testing=False,
+        is_slips_started_by_an_update=False,
+    )
+    main.redis_man = RedisManager(main)
+    if initial_state != "missing":
+        output.mkdir()
+    if initial_state in {"logs_only", "stale_metadata"}:
+        (output / "errors.log").write_text("previous incomplete startup")
+    if initial_state == "stale_metadata":
+        (output / "metadata").mkdir()
+        (output / "metadata" / "info.txt").write_text("File: different-interface\n")
+    with patch("managers.redis_manager.psutil.process_iter", return_value=[]):
+        main.prepare_output_dir()
+        assert output.is_dir()
+        assert list(output.iterdir()) == []
+        assert main.args.keep_history is True
+        database = output / "databases" / "flows.sqlite"
+        database.parent.mkdir()
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE saved(value TEXT)")
+            connection.execute("INSERT INTO saved VALUES ('previous evidence')")
+        (output / "metadata").mkdir()
+        (output / "metadata" / "info.txt").write_text("File: eth0\n")
+        (output / "errors.log").write_text("preserved log")
+        main.prepare_output_dir()
+    with sqlite3.connect(database) as connection:
+        saved = connection.execute("SELECT value FROM saved").fetchone()
+        assert saved[0] == "previous evidence"
+    assert (output / "errors.log").read_text() == "preserved log"
+
+
 def test_prepare_output_dir_keeps_history(tmp_path: Path) -> None:
     """Keep previous SQLite data when history mode is requested.
 
@@ -503,7 +553,7 @@ def test_prepare_output_dir_keeps_history(tmp_path: Path) -> None:
     old_detection_db = output_dir / "databases" / "flows.sqlite"
     old_detection_db.write_text("previous run")
     main.args.keep_history = True
-    main.redis_man.validate_keep_history = Mock()
+    main.redis_man.validate_keep_history = Mock(return_value=True)
 
     main.prepare_output_dir()
 
