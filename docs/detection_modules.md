@@ -916,14 +916,25 @@ an evidence with threat_level low
 
 ### Non-HTTP connections on port 80
 
-Slips detects established connections on port 80 that are not using HTTP
-using zeek's conn.log flows
+Slips checks established TCP connections to destination port 80 that exchanged
+data. An `http` label in `conn.log`'s `service` field, including combined labels
+such as `http,ssl`, identifies HTTP and prevents this finding.
 
-if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', if means zeek didnt recognize that flow as http.
-Slips makes sure no matching flows were detected as HTTP by zeek
-within 5 mins before or after the given flow. if not, slips sets an evidence saying
-"non http established conn on port 80"
+A missing service label does not prove that traffic is non-HTTP. Slips also
+checks the stored HTTP record with the **same Zeek connection UID**, both before
+waiting and again before generating evidence. For example, Zeek can log an HTTP
+request with the unusual method `Get` while leaving the connection service
+empty. That is still HTTP: it can produce `WEIRD_HTTP_METHOD`, but should not
+produce `NON_HTTP_PORT_80_CONNECTION` for that connection. HTTP records are
+stored before their processing notifications are published so other detectors
+can look them up immediately.
+
+The existing check for recognized HTTP between the same source and destination
+within five minutes before or after the connection also remains in place.
+Slips waits up to five minutes for incoming flows, or until input processing
+finishes, before the final check. These checks use indexed connection lookups;
+they do not scan all stored flows. Existing evidence from an older analysis is
+retained; rerun the capture with the fixed version to generate corrected results.
 
 
 ## Leak Detector Module

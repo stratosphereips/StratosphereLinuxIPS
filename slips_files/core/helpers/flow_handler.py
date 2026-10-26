@@ -55,14 +55,14 @@ class FlowHandler:
         self.db.add_out_dns(self.profileid, self.twid, self.flow)
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
-    def handle_http(self):
+    def handle_http(self) -> None:
+        """Persist HTTP before notifying detectors that may look up its UID."""
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
         self.db.add_out_http(
             self.profileid,
             self.twid,
             self.flow,
         )
-
-        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
     def handle_ssl(self):
         self.db.add_out_ssl(self.profileid, self.twid, self.flow)

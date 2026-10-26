@@ -5,7 +5,7 @@ import json
 import re
 import urllib
 import requests
-from typing import Union, Dict, Optional, List, Tuple
+from typing import Any, Union, Dict, Optional, List, Tuple
 import time
 import bisect
 from threading import Lock
@@ -448,12 +448,36 @@ class HTTPAnalyzer(IAsyncModule):
 
         self.http_recognized_flows_lock.release()
 
-    def is_http_proto_recognized_by_zeek(self, flow) -> bool:
+    def is_http_proto_recognized_by_zeek(self, flow: Any) -> bool:
+        """Check HTTP membership in Zeek's comma-separated service labels.
+
+        Parameters:
+            flow: Connection with an optional application protocol label.
+
+        Returns:
+            True when HTTP is one of the recognized services.
         """
-        if the conn was an http conn recognized by zeek, the 'service'
-        field aka appproto should be 'http'
+        services = str(getattr(flow, "appproto", "") or "").lower().split(",")
+        return any(service.strip() == "http" for service in services)
+
+    def connection_has_http_record(self, flow: Any) -> bool:
+        """Check the stored HTTP record for this exact connection.
+
+        Parameters:
+            flow: Connection whose Zeek UID identifies its protocol records.
+
+        Returns:
+            True when that UID has a parsed HTTP record, even for unusual methods.
         """
-        return flow.appproto and str(flow.appproto.lower()) == "http"
+        uid = getattr(flow, "uid", "")
+        if not isinstance(uid, str) or not uid:
+            return False
+        record = self.db.get_altflow_from_uid(uid)
+        return (
+            isinstance(record, dict)
+            and record.get("uid") == uid
+            and record.get("type_") == "http"
+        )
 
     def is_tcp_established_port_80_non_empty_flow(self, flow) -> bool:
         state = self.db.get_final_state_from_flags(flow.state, flow.pkts)
@@ -500,6 +524,8 @@ class HTTPAnalyzer(IAsyncModule):
     ):
         """
         alerts on established connections on port 80 that are not http
+        A stored HTTP record with the same connection UID prevents evidence,
+        including when it arrives during the wait and service is missing.
         This is how we do the detection.
         for every detected non http flow, we check 5 mins back for
         matching flows that were detected as http by zeek. if found,
@@ -519,6 +545,9 @@ class HTTPAnalyzer(IAsyncModule):
         if self.is_http_proto_recognized_by_zeek(flow):
             # not a fp, thats a recognized http flow
             self.keep_track_of_http_flow(flow, key)
+            return False
+
+        if self.connection_has_http_record(flow):
             return False
 
         flow.starttime = float(flow.starttime)

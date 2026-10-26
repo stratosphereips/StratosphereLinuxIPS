@@ -183,15 +183,14 @@ Here's how it works
 
 ## Non-HTTP connections on port 80.
 
-Slips detects established connections on port 80 that are not using SSL
-using zeek's conn.log flows.
-
-if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', it sets and evidence.
-
-If a flow without http as a service is found, slips first checks past and future flows from the
-same src ip + dst ip + port to see if there's a flow with http as a service, if there is, slips ignores the alert.
-This is done to avoid FPs coming from zeek.
+Slips checks established TCP connections to destination port 80 that exchanged
+data but have no recognized HTTP service. A parsed HTTP record linked by the
+same Zeek connection UID also prevents the finding, even if `conn.log` has no
+service label. Unusual HTTP methods can still produce their own evidence.
+Slips checks again after waiting for incoming records and also considers
+recognized HTTP between the same source and destination within five minutes.
+See [Non-HTTP connections on port 80](detection_modules.md#non-http-connections-on-port-80)
+for the matching and waiting rules.
 
 
 ### Connections without DNS resolution

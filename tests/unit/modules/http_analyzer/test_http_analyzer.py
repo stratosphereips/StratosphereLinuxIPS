@@ -4,6 +4,8 @@
 
 import json
 from dataclasses import asdict
+from types import SimpleNamespace
+from typing import Any
 import pytest
 from unittest.mock import (
     patch,
@@ -590,6 +592,104 @@ def test_get_ua_info_online_error_cases(mock_response):
 
 
 # tests for check_non_http_port_80_conns
+@pytest.mark.parametrize("services,expected", [
+    ("http", True), ("HTTP", True), ("http,ssl", True),
+    ("ssl, http ", True), ("", False), (None, False),
+    ("ssl", False), ("not-http", False),
+])
+def test_http_service_labels(services: str | None, expected: bool) -> None:
+    """Recognize HTTP in combined service labels without substring matches.
+
+    Parameters:
+        services: Zeek service field.
+        expected: Whether it explicitly includes HTTP.
+    """
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    assert analyzer.is_http_proto_recognized_by_zeek(
+        SimpleNamespace(appproto=services)
+    ) is expected
+
+
+@pytest.mark.parametrize("uid,record,expected", [
+    ("same", {"uid": "same", "type_": "http", "method": "Get"}, True),
+    ("same", {"uid": "different", "type_": "http"}, False),
+    ("same", {"uid": "same", "type_": "dns"}, False),
+    ("same", False, False), ("same", None, False),
+    ("", {"uid": "", "type_": "http"}, False),
+    (None, {"type_": "http"}, False),
+])
+def test_connection_has_http_record(uid: str | None, record: Any, expected: bool) -> None:
+    """Require a parsed HTTP record linked to the same connection UID.
+
+    Parameters:
+        uid: Connection identifier, if present.
+        record: Stored alternative protocol record.
+        expected: Whether this proves HTTP on the connection.
+    """
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.db.get_altflow_from_uid.return_value = record
+    assert analyzer.connection_has_http_record(SimpleNamespace(uid=uid)) is expected
+    if uid:
+        analyzer.db.get_altflow_from_uid.assert_called_once_with(uid)
+    else:
+        analyzer.db.get_altflow_from_uid.assert_not_called()
+
+
+@pytest.mark.parametrize("timeout_reached", [False, True])
+async def test_same_connection_http_record_prevents_non_http_evidence(
+    timeout_reached: bool,
+) -> None:
+    """Trust a parsed HTTP request even when conn.log has no service label.
+
+    Parameters:
+        timeout_reached: Whether this is the initial or final connection check.
+    """
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.db.get_final_state_from_flags.return_value = "Established"
+    analyzer.db.get_altflow_from_uid.return_value = {
+        "uid": "http-with-unusual-method", "type_": "http", "method": "Get",
+        "saddr": "10.0.2.102", "daddr": "77.55.48.40",
+    }
+    analyzer.set_evidence.non_http_port_80_conn = Mock()
+    analyzer.wait_for_new_flows_or_timeout = get_mock_coro(None)
+    flow = SimpleNamespace(uid="http-with-unusual-method", appproto="",
+        saddr="10.0.2.102", daddr="77.55.48.40", sport=49209, dport=80,
+        state="SF", pkts=10, proto="tcp", sbytes=222, dbytes=172,
+        starttime=25483.064872)
+    assert await analyzer.check_non_http_port_80_conns(
+        twid, flow, timeout_reached=timeout_reached,
+    ) is False
+    analyzer.set_evidence.non_http_port_80_conn.assert_not_called()
+    analyzer.wait_for_new_flows_or_timeout.assert_not_called()
+    analyzer.db.get_altflow_from_uid.assert_called_once_with(flow.uid)
+
+
+@pytest.mark.parametrize("later_uid,expected", [("candidate", False), ("other", True)])
+async def test_non_http_final_check_rechecks_the_exact_connection(
+    later_uid: str, expected: bool,
+) -> None:
+    """Honor a delayed HTTP record without exempting another connection.
+
+    Parameters:
+        later_uid: UID of the HTTP record available after waiting.
+        expected: Whether the candidate should still produce evidence.
+    """
+    analyzer = ModuleFactory().create_http_analyzer_obj()
+    analyzer.db.get_final_state_from_flags.return_value = "Established"
+    analyzer.db.get_altflow_from_uid.side_effect = [
+        False, {"uid": later_uid, "type_": "http", "method": "Get"},
+    ]
+    analyzer.wait_for_new_flows_or_timeout = get_mock_coro(None)
+    analyzer.set_evidence.non_http_port_80_conn = Mock()
+    flow = SimpleNamespace(uid="candidate", appproto="", saddr="10.0.2.102",
+        daddr="77.55.48.40", sport=49209, dport=80, proto="tcp", state="SF",
+        pkts=10, sbytes=222, dbytes=172, starttime=25483.064872)
+    await analyzer.check_non_http_port_80_conns(twid, flow)
+    assert analyzer.set_evidence.non_http_port_80_conn.call_count == int(expected)
+    assert analyzer.db.get_altflow_from_uid.call_count == 2
+    analyzer.wait_for_new_flows_or_timeout.assert_called_once()
+
+
 async def test_check_non_http_port_80_conns_not_interested():
     # mock a flow that we're not interested in (e.g. not an established tcp
     # connection on port 80 with non-zero bytes)
