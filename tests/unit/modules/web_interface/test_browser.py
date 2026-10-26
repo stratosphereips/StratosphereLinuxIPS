@@ -22,11 +22,15 @@ from slips_files.common.slips_utils import utils
 
 
 @pytest.mark.parametrize("protocol", ["arp", "dns"])
-def test_protocol_only_cards_and_reverse_dns_outcomes(protocol: str) -> None:
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [320, 900])
+def test_protocol_only_cards_and_reverse_dns_outcomes(protocol: str, theme: str, width: int) -> None:
     """Explain natural ARP records and distinguish reverse DNS outcomes.
 
     Parameters:
         protocol: Standalone protocol record shown in the investigation pane.
+        theme: Browser color theme.
+        width: Available detail pane width in pixels.
     """
     _factory = ModuleFactory()
     playwright = pytest.importorskip("playwright.sync_api")
@@ -59,6 +63,31 @@ def test_protocol_only_cards_and_reverse_dns_outcomes(protocol: str) -> None:
             assert card["warnings"] == 0
             assert "does not create a conn.log" in card["message"]
             assert "Related ARP" not in card["message"]
+            page.evaluate("""({theme, width}) => {
+                document.documentElement.dataset.theme = theme;
+                const pane = document.createElement('section');
+                pane.id = 'arp-layout-test';
+                pane.style.width = width + 'px';
+                pane.append(flowCard({uid:'arp-layout', network_flow:null, protocol_flows:[{
+                    flow_type:'arp', flow:{saddr:'192.168.1.20', daddr:'192.168.1.212', operation:'request'}
+                }]}));
+                document.body.append(pane);
+            }""", {"theme": theme, "width": width})
+            pane = page.locator("#arp-layout-test")
+            for inspector in (False, True):
+                pane.evaluate("(pane, inspector) => pane.classList.toggle('host-flow-inspector', inspector)", inspector)
+                fields = pane.locator(".protocol-field")
+                source, destination = fields.nth(0), fields.nth(1)
+                assert source.locator(":scope > small").inner_text() == "SOURCE IP"
+                assert destination.locator(":scope > small").inner_text() == "DESTINATION IP"
+                assert "192.168.1.20" in source.inner_text()
+                assert "192.168.1.212" in destination.inner_text()
+                assert source.locator("button").count() == 1
+                assert destination.locator("button").count() == 1
+                left, right = source.bounding_box(), destination.bounding_box()
+                assert left["x"] + left["width"] <= right["x"]
+                assert left["y"] == right["y"]
+                assert left["width"] == pytest.approx(right["width"], abs=1)
         else:
             assert card["warnings"] == 1
         assert "primary flow row is unavailable" not in card["message"]
@@ -2272,12 +2301,14 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
             }]}));
         }""")
         arp = page.locator(".protocol-arp")
-        destination = arp.locator(".protocol-field").first
+        source = arp.locator(".protocol-field").first
+        destination = arp.locator(".protocol-field").nth(1)
+        assert source.locator(":scope > small").inner_text() == "SOURCE IP"
         assert destination.locator(":scope > small").inner_text() == "DESTINATION IP"
         assert "important" in destination.get_attribute("class")
         assert "192.168.1.212" in destination.inner_text()
         assert destination.locator("button").count() == 1
-        assert "192.168.1.20" in arp.locator(".protocol-field").nth(1).inner_text()
+        assert "192.168.1.20" in source.inner_text()
         assert "DADDR" not in page.locator(".evidence-flow-fields").inner_text()
         assert arp.locator(".mac-locally_administered").count() == 2
         assert arp.locator(".mac-broadcast").inner_text() == "B"

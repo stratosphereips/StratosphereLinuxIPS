@@ -455,6 +455,8 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .protocol-details { display: grid; grid-template-columns: repeat(3, minmax(100px, 1fr)); gap: .5rem; margin-top: .7rem; }
 .protocol-field { min-width: 0; padding: .58rem .65rem; border: 1px solid #1d3341; border-radius: 7px; background: #101f29; }
 .protocol-field.important { grid-column: span 2; border-color: #43c7b540; background: #10252d; }
+.protocol-card.protocol-arp .protocol-details { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.protocol-arp .protocol-field.important { grid-column: auto; }
 .protocol-field small { display: block; color: var(--muted); font-size: .62rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
 .protocol-field strong { display: block; margin-top: .24rem; overflow-wrap: anywhere; color: #dce9f1; font-size: .77rem; line-height: 1.35; }
 .protocol-field.important strong { color: var(--accent); font-size: .82rem; }

@@ -5359,8 +5359,8 @@ const PROTOCOL_FIELDS = {
     ["Receiving hosts", ["rx_hosts"]],
   ],
   arp: [
-    ["Destination IP", ["daddr", "dst_ip", "resp_h"]],
     ["Source IP", ["saddr", "src_ip", "orig_h"]],
+    ["Destination IP", ["daddr", "dst_ip", "resp_h"]],
     ["Operation", ["operation"]], ["Source MAC", ["smac", "src_hw"]],
     ["Destination MAC", ["dmac", "dst_hw"]], ["Source hardware", ["src_hw"]],
     ["Destination hardware", ["dst_hw"]],
@@ -5475,8 +5475,8 @@ function protocolFlowCard(record) {
   if (!details.length) grid.append(text("p", "No parsed protocol fields are available.", "muted"));
   details.forEach(([label, value]) => {
     const field = document.createElement("div");
-    field.className = "protocol-field" + (/query|host|uri|server name|destination ip/i.test(label) ? " important" : "");
     const isAddress = type === "arp" && /^(?:Source|Destination) IP$/.test(label);
+    field.className = "protocol-field" + (isAddress || /query|host|uri|server name/i.test(label) ? " important" : "");
     field.append(text("small", label), isAddress ? hostLink(value)
       : /(?:MAC|hardware)$/.test(label) ? macIdentity(value) : text("strong", value));
     grid.append(field);

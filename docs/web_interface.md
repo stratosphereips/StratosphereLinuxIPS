@@ -586,8 +586,9 @@ and counts saved with the finding; older `ARP_SCAN` records retain their legacy
 rule explanation. See [ARP scan detection](arp_scans.md) for the distinction
 between familiar-neighbour refreshes, broad discovery and possible scans.
 
-ARP protocol cards put **Destination IP** first in a highlighted field, followed
-by **Source IP**, operation, and hardware addresses. Both IPs open the host
+ARP protocol cards show **Source IP** on the left and **Destination IP** on the
+right in equally sized fields, including narrow detail panes. Operation and
+hardware addresses follow below. Both IPs open the host
 workspace. They remain visible when only the ARP protocol record was retained;
 they are not repeated in the additional-fields table.
 
