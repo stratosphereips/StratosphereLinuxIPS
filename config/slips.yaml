@@ -95,6 +95,7 @@ parameters:
   # This directory stores databases and runtime-generated files that must
   # persist across different slips runs and should not be overwritten.
   # this dir is inside slips root dir.
+  # With -m -f <input> -o <dir>, runtime data uses <dir>/permanent automatically.
   permanent_dir: permanent
 
   # Default pcap packet filter. Used with zeek pcapfilter : 'ip or not ip'

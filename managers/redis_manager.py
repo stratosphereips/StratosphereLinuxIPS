@@ -22,6 +22,11 @@ from slips_files.core.database.redis_db.redis_auth import (
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
+from slips_files.common.parsers.analysis_config import (
+    isolated_analysis_config,
+    isolated_analysis_output,
+)
+from managers.process_manager.instance_control import list_instances
 from slips_files.common.output_paths import (
     get_this_db_path_inside_output_dir,
 )
@@ -118,7 +123,12 @@ class RedisManager:
         Parameters:
             process: Other Slips process, with cached PID and command line.
         """
-        command = process.info["cmdline"] or []
+        info = getattr(process, "info", None)
+        command = (
+            (info["cmdline"] or [])
+            if isinstance(info, dict)
+            else process.cmdline()
+        )
         script_index = next(
             index
             for index, part in enumerate(command)
@@ -142,6 +152,11 @@ class RedisManager:
                 config = yaml.safe_load(source) or {}
             if not isinstance(config, dict):
                 raise ValueError("Invalid Slips configuration")
+            analysis_output = isolated_analysis_output(
+                command[script_index + 1 :]
+            )
+            if analysis_output is not None:
+                config = isolated_analysis_config(config, analysis_output)
             parameters = config.get("parameters") or {}
             other_web = config.get("web_interface") or {}
             if not isinstance(parameters, dict) or not isinstance(
@@ -219,6 +234,10 @@ class RedisManager:
     def reject_active_history_run(self) -> None:
         """Protect history mode from a second run sharing its resources."""
         if getattr(self.main.args, "keep_history", False) is True:
+            return
+        if getattr(self.main.conf, "isolated_analysis", False) is True:
+            for instance in list_instances(Path("slips.py")):
+                self._assert_history_run_isolated(psutil.Process(instance.pid))
             return
         for process in psutil.process_iter(attrs=["pid", "cmdline"]):
             if process.info["pid"] == os.getpid():

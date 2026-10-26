@@ -47,6 +47,12 @@ class MetadataManager:
 
         config_file = self.main.args.config or "config/slips.yaml"
         shutil.copy(config_file, metadata_dir)
+        if getattr(self.main.conf, "isolated_analysis", False) is True:
+            captured_config = os.path.join(
+                metadata_dir, os.path.basename(config_file)
+            )
+            with open(captured_config, "w", encoding="utf-8") as target:
+                yaml.safe_dump(self.main.conf.config, target, sort_keys=False)
         if isinstance(getattr(self.main.args, "web_port", None), int):
             captured_config = os.path.join(
                 metadata_dir, os.path.basename(config_file)

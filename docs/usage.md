@@ -271,49 +271,37 @@ However, all instance share 1 cached redis database on redis://localhost:6379 DB
 
 Slips opens the required Redis servers automatically.
 
-To analyze a PCAP alongside a live capture using `--keep-history`, give the
-PCAP run its own output, persistent data directory, and web port. Copy your
-active configuration to `permanent/pcap-analysis/slips.yaml`, then change
-these settings in the copy:
+To analyze a PCAP alongside a live capture, reuse your usual configuration
+directly. `-m -f ... -o ...` automatically gives the file analysis its own
+runtime data under `<output>/permanent`, as well as a separate Redis instance.
+No configuration or credential files need to be copied by hand. The same
+behavior applies to a completed Zeek log directory passed with `-f`.
 
-Prepare this isolated PCAP configuration once. Reuse it for later analyses;
-`--web-port` selects each run's web port without editing or copying the file
-again. Each simultaneous run still needs `-m` and its own `-o` directory.
-
-This is an independent configuration file. Later changes to `config/slips.yaml`
-or your live configuration do not update this copy. When enabling a new module,
-copy its explained section into the PCAP configuration too. For numeric C2
-analysis, include the `beaconing` section and its evidence-signal overrides, and
-put `rnn_cc_detection` in `modules.disable` if using the numeric replacement.
-The web Configuration tab shows the file saved when that run started; changes
-appear in a newly started analysis, not in the saved configuration of an old run.
-
-```yaml
-parameters:
-  permanent_dir: permanent/pcap-analysis
-  store_zeek_files_in_the_output_dir: true
-web_interface:
-  enabled: true
-  bind: localhost
-  port: 55002
-  require_password: true
-```
-
-Preserve the other settings from the copied configuration. Copy
-`redis_auth.conf` and `web_auth.json` from the live run's permanent directory
-into `permanent/pcap-analysis/`, preserving their restrictive permissions.
-The separate Redis server must use the same credentials for the shared
-cache. The separate persistent directory keeps offline host identities and
-learned models away from the live capture's persistent data.
-
-Run from the repository root, using an unused output directory:
+Run from the repository root with an independent output directory and an
+unused web port:
 
 ```bash
 nice -n 15 .venv-macos/bin/python slips.py -m -w \
-  -c permanent/pcap-analysis/slips.yaml \
+  -c config/slips.yaml \
   --web-port 55002 \
   -f dataset/test7-malicious.pcap -o output/pcap-analysis-01
 ```
+
+Replace `config/slips.yaml` with your normal `-c` file if you use another one.
+Slips reads its current detection settings on every launch. It copies that
+file's whitelist into the analysis so changes made from the PCAP web page do
+not edit the live whitelist. Redis and web credentials are copied automatically
+with restrictive permissions, keeping the same login password. Saved host
+identities and learned runtime state start independently; the live databases
+are not copied. New ML model files are saved under the analysis output, while
+configured model files can still be read for detection.
+
+The analysis keeps its Zeek files in its own output, listens on localhost, and
+disables automatic Slips code updates. Its web Configuration tab shows the
+effective configuration saved for that run, including these path changes and
+the selected web port. Your source YAML is unchanged. Starting another analysis
+with the same output directory replaces the previous analysis under the normal
+fresh-run rules; use a different `-o` for each result you want to keep.
 
 On a native Linux installation, replace `.venv-macos/bin/python` with your
 Python environment, for example `.venv/bin/python`. Open
@@ -327,8 +315,8 @@ ssh -N -L 127.0.0.1:55002:127.0.0.1:55002 bsyclass
 ```
 
 Slips refuses resource conflicts before clearing the second run's output.
-Do not pass `--keep-history` to the PCAP run. Concurrent runs still share
-the Redis cache and the computer's CPU and memory. `nice` lowers CPU
+Do not pass `--keep-history` or `--clearcache` to the PCAP run. Concurrent runs
+still share the Redis cache and the computer's CPU and memory. `nice` lowers CPU
 priority but does not limit memory; a machine with little spare RAM should
 analyze PCAPs elsewhere while live capture continues.
 

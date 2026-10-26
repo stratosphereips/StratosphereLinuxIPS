@@ -927,6 +927,57 @@ def test_validate_keep_history_rejects_running_slips(
             manager.validate_keep_history()
 
 
+@pytest.mark.parametrize("history_starting", [False, True])
+@pytest.mark.parametrize("collision", [None, "output", "web"])
+def test_shared_config_works_with_automatic_file_isolation(
+    tmp_path: Path, history_starting: bool, collision: str | None,
+) -> None:
+    """Compare effective file-analysis paths regardless of startup order.
+
+    Parameters:
+        tmp_path: Shared source config and separate output directories.
+        history_starting: Whether the live capture is being started second.
+        collision: Shared output or web port that must remain rejected.
+    """
+    manager = ModuleFactory().create_redis_manager_obj()
+    source = tmp_path / "slips.yaml"
+    source.write_text("parameters:\n  permanent_dir: live-state\nweb_interface:\n  enabled: true\n  port: 55000\n")
+    live_output = tmp_path / "live-output"
+    analysis_output = live_output if collision == "output" else tmp_path / "analysis"
+    analysis_web = 55000 if collision == "web" else 55012
+    live_args = SimpleNamespace(interface="eth0", output=str(live_output),
+        multiinstance=False, port=None, db=None, is_slips_started_by_an_update=False,
+        keep_history=True, webinterface=True)
+    analysis_args = SimpleNamespace(output=str(analysis_output),
+        multiinstance=True, port=None, keep_history=False, webinterface=True)
+    manager.main.args = live_args if history_starting else analysis_args
+    manager.main.conf = Mock(web_interface_port=55000 if history_starting else analysis_web)
+    manager.main.conf.isolated_analysis = not history_starting
+    manager.main.conf.web_interface_enabled.return_value = True
+    manager.main.conf.permanent_dir.return_value = str(
+        tmp_path / "live-state" if history_starting else analysis_output / "permanent")
+    command = ["python", "./slips.py", "-c", source.name, "-w"]
+    if history_starting:
+        command.extend(["-m", "-f", "test.pcap", "-o", str(analysis_output), "--web-port", str(analysis_web)])
+        (live_output / "databases").mkdir(parents=True)
+        (live_output / "databases" / "flows.sqlite").touch()
+        (live_output / "metadata").mkdir()
+        (live_output / "metadata" / "info.txt").write_text("File: eth0\n")
+    else:
+        command.extend(["-i", "eth0", "-o", str(live_output), "--keep-history"])
+    active = Mock(info={"pid": 123, "cmdline": command})
+    active.cwd.return_value = str(tmp_path)
+    validate = manager.validate_keep_history if history_starting else manager.reject_active_history_run
+    with patch("managers.redis_manager.psutil.process_iter", return_value=[active]), patch(
+        "managers.redis_manager.list_instances", return_value=[SimpleNamespace(pid=123)]
+    ), patch("managers.redis_manager.psutil.Process", return_value=active):
+        if collision:
+            with pytest.raises(SystemExit):
+                validate()
+        else:
+            validate()
+
+
 def test_active_history_run_blocks_second_instance() -> None:
     """Refuse a normal Slips launch while another run keeps history."""
     manager = ModuleFactory().create_redis_manager_obj()

@@ -22,6 +22,10 @@ from managers.timewindow_manager import TimewindowManager
 from managers.ui_manager import UIManager
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.parsers.analysis_config import (
+    prepare_analysis_files,
+    validate_analysis_paths,
+)
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
 from slips_files.common.sqlite_flock import SQLiteFlock
@@ -73,11 +77,23 @@ class Main:
             self.args = self.conf.get_args()
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
+            if self.conf.isolated_analysis:
+                validate_analysis_paths(
+                    self.conf.source_config,
+                    self.args.output,
+                    self.args.config,
+                    self.args.filepath,
+                )
             self.checker.verify_given_flags()
             self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
             if self.conf.enable_local_whitelist():
-                ensure_local_whitelist(self.conf.local_whitelist_path())
+                whitelist = self.conf.local_whitelist_path()
+                if self.conf.isolated_analysis:
+                    whitelist = (
+                        self.conf.source_config.get("whitelists") or {}
+                    ).get("local_whitelist_path", "config/whitelist.conf")
+                ensure_local_whitelist(whitelist)
             self.input_type: InputType
             (
                 self.input_type,
@@ -91,6 +107,13 @@ class Main:
             self.input_information = self.input_information.replace(",", "_")
             self.check_zeek_or_bro()
             self.prepare_output_dir()
+            if self.conf.isolated_analysis:
+                prepare_analysis_files(
+                    self.conf.source_config, self.conf.config
+                )
+                print(
+                    f"Independent analysis data: {self.conf.permanent_dir()}"
+                )
             self.redis_man.start_redis_cache_if_not_running()
             self.twid_width = self.conf.get_tw_width()
             # should be initialised after self.input_type is set

@@ -289,7 +289,9 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help="Run multiple instances of slips, don't overwrite the old "
             "one. This option run redis using a random unused port "
-            "instead of the default one (6379).",
+            "instead of the default one (6379). With -f and -o, also isolate "
+            "runtime data and copy the whitelist and credentials automatically "
+            "under the output directory; reuse the same -c file.",
         )
         self.add_argument(
             "-P",
