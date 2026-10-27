@@ -2636,6 +2636,99 @@ const context = {
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize("mode", ["individual", "grouped", "type", "host"])
+def test_evidence_middle_list_survives_selection_and_refresh(mode: str) -> None:
+    """Keep actual browser record lists populated during navigation and refresh.
+
+    Parameters:
+        mode: Ungrouped records or a supported evidence grouping.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split(
+        "let viewPreferencesTimer = null;", 1
+    )[0]
+    records = [
+        {"id": f"record-{index}", "profile_ip": "192.0.2.1",
+         "evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer",
+         "timestamp": 1793000000 + index, "threat_level": "medium",
+         "confidence": 0.8, "flow_count": 1, "alert_ids": [],
+         "description": f"Unknown port connection {index}",
+         "alert_score": index / 10, "alert_threshold": 1.2}
+        for index in range(1, 4)
+    ]
+    errors = []
+    queries = []
+
+    def respond(route: object) -> None:
+        """Serve real UI assets and bounded evidence without a Slips backend.
+
+        Parameters:
+            route: Intercepted browser HTTP request.
+        """
+        from urllib.parse import parse_qs, urlparse
+
+        url = urlparse(route.request.url)
+        query = parse_qs(url.query)
+        if url.path == "/":
+            route.fulfill(path=str(assets / "index.html"))
+        elif url.path == "/app.js":
+            route.fulfill(body="", content_type="text/javascript")
+        elif url.path == "/style.css":
+            route.fulfill(path=str(assets / "style.css"))
+        elif url.path == "/api/evidence":
+            queries.append(query)
+            items = [{**records[0], "id": "group-1", "evidence_count": 3, "alert_count": 0}] if query.get("group") else list(records)
+            if query.get("sort") == ["score"]:
+                items.sort(key=lambda row: row["alert_score"], reverse=query.get("order") == ["desc"])
+            route.fulfill(json={"items": items, "total": len(items), "page_size": len(items), "next_cursor": None})
+        else:
+            route.fulfill(json={"items": [], "total": 0, "names": {}})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is required for browser evidence checks: {error}")
+        try:
+            page = browser.new_page(viewport={"width": 2000, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.add_script_tag(content=script)
+            page.evaluate("""async mode => {
+              state.activeTab = 'evidence';
+              document.querySelectorAll('main > .panel').forEach(panel => panel.classList.remove('active'));
+              byId('evidence').classList.add('active');
+              byId('evidence-view').value = mode;
+              await loadEvidence();
+              if (mode !== 'individual') selectEvidenceGroup(state.pages.evidence.items[0]);
+            }""", mode)
+            rows = page.locator("#evidence-records-table tbody tr[data-clickable]")
+            rows.first.wait_for()
+            assert rows.count() == 3
+            rows.first.click()
+            page.wait_for_function("state.evidenceDetail.record?.id === 'record-1'")
+            assert rows.count() == 3
+            page.locator("#evidence-detail button", has_text="next ↓").click()
+            page.wait_for_function("state.evidenceDetail.record?.id === 'record-2'")
+            assert page.locator("#evidence-records-table tr.selected").get_attribute("data-evidence-id") == "record-2"
+            rows.nth(1).focus()
+            before = len(queries)
+            page.evaluate("async () => { await loadEvidence(); await loadEvidence(); }")
+            assert len(queries) == before + 2
+            assert rows.count() == 3
+            assert page.locator("#evidence-records-table tr.selected").get_attribute("data-evidence-id") == "record-2"
+            assert page.evaluate("document.activeElement.dataset.evidenceId") == "record-2"
+            page.locator("#evidence-record-sort-score").click()
+            page.wait_for_function("document.querySelector('#evidence-records-table tbody tr')?.dataset.evidenceId === 'record-3'")
+            assert rows.count() == 3
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 def test_overview_uses_counter_without_scanning_retained_evidence(
     tmp_path: Path,
 ) -> None:

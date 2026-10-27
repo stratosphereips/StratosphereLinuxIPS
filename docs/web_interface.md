@@ -128,6 +128,12 @@ the alert threshold; it is not a separate score assigned to the evidence.
 Missing scores appear as **Unavailable**, and excluded records as **Excluded**.
 Time window is omitted from this table and remains available in record details.
 
+With grouping set to **None**, the middle Records pane shows the individual
+evidence on the current page, using the filters above the main table. Its
+columns remain sortable. Selecting a record or using previous/next in the
+detail pane highlights the same record in the lists. Automatic refresh keeps
+the Records pane visible in both grouped and ungrouped views.
+
 Click any column header to sort the entire selected group, and click again to
 reverse the order. The sort choice is remembered in this browser. The record
 search and **All sources / Detected locally / From P2P** filter work across the
