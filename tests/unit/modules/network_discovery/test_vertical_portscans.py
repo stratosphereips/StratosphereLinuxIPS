@@ -192,3 +192,44 @@ def test_check_if_enough_dports_to_trigger_an_evidence(
     )
 
     assert result is expected
+
+
+@pytest.mark.parametrize("proto", ["tcp", "udp"])
+def test_flow_event_checks_only_its_destination_and_protocol(proto: str) -> None:
+    """A horizontal scan must not make each vertical check reread all hosts.
+
+    Parameters:
+        proto: Transport of the current connection.
+    """
+    module = ModuleFactory().create_vertical_portscan_obj()
+    from slips_files.core.structures.flow_attributes import Protocol
+    profile = ProfileID(ip="10.0.0.1")
+    window = TimeWindow(number=0)
+    module.db.get_info_about_not_established_flows.return_value = (10, 20)
+    module.db.get_uids_for_vertical_portscan.return_value = ["one", "two"]
+    module.should_set_evidence = Mock(return_value=True)
+    module.set_evidence_vertical_portscan = Mock()
+    module.check(profile, window, dict(saddr=profile.ip, daddr="8.8.8.8", proto=proto, starttime=1234.5))
+    module.db.get_dstips_with_not_established_flows.assert_not_called()
+    module.db.get_info_about_not_established_flows.assert_called_once_with(profile, window, Protocol[proto.upper()], "8.8.8.8")
+    module.set_evidence_vertical_portscan.assert_called_once()
+    assert module.set_evidence_vertical_portscan.call_args.args[0]["uid"] == ["one", "two"]
+    assert module.set_evidence_vertical_portscan.call_args.args[0]["timestamp"] == 1234.5
+
+
+@pytest.mark.parametrize("flow", [
+    {"saddr": "10.0.0.1", "daddr": "8.8.8.8", "proto": "icmp", "starttime": 1},
+    {"saddr": "10.0.0.2", "daddr": "8.8.8.8", "proto": "tcp", "starttime": 1},
+    {"saddr": "10.0.0.1", "proto": "tcp", "starttime": 1},
+    {},
+])
+def test_irrelevant_flow_does_not_run_vertical_database_search(flow: dict) -> None:
+    """Ignore unsupported traffic and destination-profile copies without reads.
+
+    Parameters:
+        flow: Non-source, malformed or non-TCP/UDP event.
+    """
+    module = ModuleFactory().create_vertical_portscan_obj()
+    module.check(ProfileID(ip="10.0.0.1"), TimeWindow(number=0), flow)
+    module.db.get_dstips_with_not_established_flows.assert_not_called()
+    module.db.get_info_about_not_established_flows.assert_not_called()

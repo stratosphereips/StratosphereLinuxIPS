@@ -166,13 +166,14 @@ def test_cooldown_and_immediate_severity_escalation() -> None:
     assert module.db.set_evidence.call_count == 1
     for i in range(10, 20):
         send(module, conn(i, daddr=f"10.{i}.0.1", state="REJ", history="Sr"))
-    assert module.db.set_evidence.call_count == 2
+    assert module.db.set_evidence.call_count == 3
     assert str(module.db.set_evidence.call_args.args[0].threat_level) == "high"
+    assert module.db.set_evidence.call_args.args[0].confidence == 0.95
     for i in range(20, 40):
         send(module, conn(i, daddr=f"10.{i}.0.1", state="REJ", history="Sr"))
-    assert module.db.set_evidence.call_count == 2
-    send(module, conn(40, starttime=1400, state="REJ", history="Sr"))
     assert module.db.set_evidence.call_count == 3
+    send(module, conn(40, starttime=1400, state="REJ", history="Sr"))
+    assert module.db.set_evidence.call_count == 4
 
 
 def test_memory_limits_and_idle_group_expiration() -> None:
@@ -293,3 +294,122 @@ def test_one_subnet_without_dense_address_coverage_is_not_strong_scan_evidence()
     for i in range(10):
         send(module, conn(i, daddr=f"10.0.0.{1 + i * 20}"))
     assert str(module.db.set_evidence.call_args.args[0].threat_level) == "low"
+
+
+@pytest.mark.parametrize("packets", [1, 1000])
+def test_confidence_growth_releases_full_target_state(packets: int) -> None:
+    """Reach full scan support from distinct probes, then release their records.
+
+    Parameters:
+        packets: Retransmission volume, which must not change confidence.
+    """
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(100):
+        send(module, conn(i, starttime=1000 + i / 10000, spkts=packets))
+    assert [c.args[0].confidence for c in module.db.set_evidence.call_args_list] == [0.85, 0.95, 1.0]
+    group = next(iter(module.detector.groups.values()))
+    assert group.progress is not None
+    assert not group.targets
+    assert not group.counts
+    assert len(group.progress.counter.registers) == 1024
+    assert module.detector.capacity_evictions == 0
+
+
+@pytest.mark.parametrize("successes,confidence", [(0, 1.0), (8, 0.95), (25, 0.85)])
+def test_full_confidence_requires_high_failed_target_fraction(successes: int, confidence: float) -> None:
+    """Keep ordinary successful use in the denominator during confirmation.
+
+    Parameters:
+        successes: Distinct successful destinations mixed into the scan window.
+        confidence: Highest supported confidence for that mixture.
+    """
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(successes):
+        send(module, conn(i, daddr=f"172.16.0.{i+1}", starttime=1000,
+                          history="ShADadFf", state="SF", sbytes=100, dbytes=100))
+    for i in range(100):
+        send(module, conn(i, starttime=1001 + i / 10000))
+    assert max(c.args[0].confidence for c in module.db.set_evidence.call_args_list) == confidence
+
+
+def test_continuing_scan_keeps_logarithmic_reports_with_bounded_memory() -> None:
+    """Report continuing growth without keeping thousands of target records."""
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(12000):
+        send(module, conn(i, daddr=f"198.18.{i//256}.{i%256}", starttime=1000 + i / 10000))
+    records = [c.args[0] for c in module.db.set_evidence.call_args_list]
+    growth = [r for r in records if "approximately" in r.description]
+    assert len(records) == 5
+    assert len(growth) == 2
+    for record, milestone in zip(growth, (1000, 10000)):
+        count = int(record.description.split("approximately ")[1].split()[0])
+        assert milestone * 0.9 <= count <= milestone * 1.1
+        assert record.confidence == 1.0
+        assert len(record.uid) <= 20
+        assert "continuing previously confirmed" in record.description
+        assert "fraction" not in record.description
+    group = next(iter(module.detector.groups.values()))
+    assert not group.targets
+    assert len(group.progress.samples) <= 20
+    assert len(group.progress.pending) < 32
+    assert len(group.progress.counter.registers) == 1024
+    assert module.detector.capacity_evictions == 0
+
+
+def test_retries_do_not_trigger_more_logarithmic_reports() -> None:
+    """Repeated attempts to the same confirmed targets do not grow the total."""
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(100):
+        send(module, conn(i, starttime=1000 + i / 10000))
+    group = next(iter(module.detector.groups.values()))
+    before = group.progress.counter.estimate()
+    for i in range(2000):
+        send(module, conn(i % 100, starttime=1001 + i / 10000))
+    assert group.progress.counter.estimate() == before
+    assert module.db.set_evidence.call_count == 3
+
+
+def test_progress_excludes_authenticated_p2p_connections() -> None:
+    """Apply batched P2P exclusions before adding targets to the small counter."""
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(100):
+        send(module, conn(i, starttime=1000 + i / 10000))
+    group = next(iter(module.detector.groups.values()))
+    before = group.progress.counter.estimate()
+    module.db.is_p2p_related_flow_batch.side_effect = lambda flows: [True] * len(flows)
+    for i in range(2000):
+        send(module, conn(i + 100, daddr=f"198.18.{i//256}.{i%256}", starttime=1001 + i / 10000))
+    assert group.progress.counter.estimate() == before
+    assert module.db.set_evidence.call_count == 3
+    assert not group.progress.samples
+
+
+def test_confirmation_resets_after_a_quiet_period() -> None:
+    """A later scan starts fresh instead of inheriting a previous full score."""
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(100):
+        send(module, conn(i, starttime=1000 + i / 10000))
+    for i in range(10):
+        send(module, conn(i, starttime=1400 + i / 10000))
+    assert module.db.set_evidence.call_count == 4
+    assert module.db.set_evidence.call_args.args[0].confidence == 0.85
+    group = next(iter(module.detector.groups.values()))
+    assert group.progress is None
+    assert len(group.targets) == 10
+
+
+@pytest.mark.parametrize("history,state", [("", "S0"), ("S", "S0")])
+def test_ambiguous_scans_do_not_enter_full_confidence_mode(history: str, state: str) -> None:
+    """Missing history and a possible multi-service outage retain uncertainty.
+
+    Parameters:
+        history: Actual SYN history or an incomplete summary.
+        state: Failed connection state.
+    """
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    send(module, conn(0, dport=80))
+    send(module, conn(1, dport=22))
+    for i in range(100):
+        send(module, conn(i, starttime=1002 + i / 10000, history=history, state=state))
+    assert max(c.args[0].confidence for c in module.db.set_evidence.call_args_list) <= 0.45
+    assert all(g.progress is None for g in module.detector.groups.values())

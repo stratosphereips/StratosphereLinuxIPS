@@ -71,6 +71,13 @@ These rules MUST be followed:
 - when creating a new branch use the following format: my_name/fix_x.
 - be brief and avoid being verbose with comments in the code, .yml files, Dockerfiles etc. unless absolutely necessary.
 
+### Core performance:
+- Core capture, parsing, profiling and routing throughput takes priority over detection features.
+- Keep detection, correlation and expensive processing in module workers.
+- Keep essential core integration minimal; do not add detection-specific lookups, scans or waits to the core flow path.
+- Slower modules must not block the core. Bound their memory and queued work to avoid exhausting shared resources.
+- Verify core throughput when changing core integration for a module.
+
 ### Paths:
 - NEVER use absolute paths
 - ALWAYS use relative paths

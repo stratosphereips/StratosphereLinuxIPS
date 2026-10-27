@@ -9,6 +9,7 @@ from typing import Any
 from slips_files.common.flow_direction import zeek_history_in_final_direction
 
 from .scan_settings import ScanSettings
+from .distinct_targets import DistinctTargets
 
 
 @dataclass(frozen=True, slots=True)
@@ -166,6 +167,25 @@ class Target:
 
 
 @dataclass(slots=True)
+class ScanProgress:
+    """Keep a fixed-size counter and small samples after scan confirmation."""
+
+    started: float
+    last_probe: float
+    counter: DistinctTargets = field(default_factory=DistinctTargets)
+    pending: list[ScanFlow] = field(default_factory=list)
+    samples: OrderedDict[str, ScanFlow] = field(default_factory=OrderedDict)
+    next_milestone: int = 1000
+
+
+@dataclass(frozen=True, slots=True)
+class ProgressBatch:
+    """Probes awaiting a single batched P2P exclusion check."""
+
+    flows: tuple[ScanFlow, ...]
+
+
+@dataclass(slots=True)
 class Group:
     """Bound targets for one network, source, protocol and destination port."""
 
@@ -173,7 +193,8 @@ class Group:
     targets: OrderedDict[str, Target] = field(default_factory=OrderedDict)
     evaluated: float = -math.inf
     counts: Counter[tuple[str, str]] = field(default_factory=Counter)
-    reports: dict[str, tuple[float, int]] = field(default_factory=dict)
+    reports: dict[str, tuple[float, int, float]] = field(default_factory=dict)
+    progress: ScanProgress | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +206,9 @@ class Finding:
     confidence: float
     reason: str
     window: float
-    failure_ratio: float
+    failure_ratio: float | None
+    target_count: int = 0
+    approximate: bool = False
 
 
 class ScanDetector:
@@ -218,7 +241,7 @@ class ScanDetector:
 
     def process(
         self, flow: ScanFlow, scope: str
-    ) -> tuple[Group, Finding] | None:
+    ) -> tuple[Group, Finding | ProgressBatch] | None:
         """Update one target and evaluate eligible groups at a bounded cadence.
 
         Parameters:
@@ -226,7 +249,7 @@ class ScanDetector:
             scope: Capture interface and observed network identity.
 
         Returns:
-            Group and candidate finding, or None when no threshold is met.
+            Group and finding or P2P-check batch, or None without a candidate.
         """
         s = self.settings
         # Failed attempts may be logged only after long retransmission timeouts.
@@ -248,6 +271,22 @@ class ScanDetector:
             self.groups[key] = group
         group.seen = self.clock
         self.groups.move_to_end(key)
+        if group.progress:
+            progress = group.progress
+            if (
+                self.clock - progress.last_probe
+                < s.horizontal_alert_cooldown_seconds
+            ):
+                if flow.family != "tcp" or flow.start < progress.started:
+                    return None
+                progress.last_probe = max(progress.last_probe, flow.start)
+                progress.pending.append(flow)
+                if len(progress.pending) < 32:
+                    return None
+                batch = ProgressBatch(tuple(progress.pending))
+                progress.pending.clear()
+                return group, batch
+            group.progress = None
         if len(self.groups) > s.horizontal_max_groups:
             self.groups.popitem(last=False)
             self.capacity_evictions += 1
@@ -384,6 +423,7 @@ class ScanDetector:
                 and self.clock - previous[0]
                 < s.horizontal_alert_cooldown_seconds
                 and rank <= previous[1]
+                and finding.confidence <= previous[2]
             ):
                 return None
         return finding
@@ -432,6 +472,7 @@ class ScanDetector:
                     and self.clock - previous[0]
                     < s.horizontal_alert_cooldown_seconds
                     and previous[1] >= maximum_rank
+                    and (family != "tcp" or previous[2] >= 1.0)
                 ):
                     continue
                 candidates = [p for p in probes if p.kind in kinds]
@@ -469,6 +510,17 @@ class ScanDetector:
                     if rejections >= minimum / 2 or structured:
                         threat, confidence = "high", 0.85
                         reason = "new SYN attempts with repeated rejection or concentrated address coverage"
+                        if (
+                            len(candidates) >= max(20, 2 * minimum)
+                            and ratio >= 0.9
+                        ):
+                            confidence = 0.95
+                        if (
+                            len(candidates) >= max(100, 10 * minimum)
+                            and ratio >= 0.95
+                            and (structured or rejections >= minimum)
+                        ):
+                            confidence = 1.0
                 elif family == "connect":
                     if not structured:
                         continue
@@ -496,6 +548,7 @@ class ScanDetector:
                     and self.clock - previous[0]
                     < s.horizontal_alert_cooldown_seconds
                     and ranks[threat] <= previous[1]
+                    and confidence <= previous[2]
                 ):
                     continue
                 finding = Finding(
@@ -506,12 +559,16 @@ class ScanDetector:
                     window,
                     ratio,
                 )
-                if best is None or ranks[threat] > ranks[best.threat]:
+                if best is None or (
+                    ranks[threat],
+                    confidence,
+                    len(candidates),
+                ) > (ranks[best.threat], best.confidence, len(best.flows)):
                     best = finding
         return best
 
     def reported(self, group: Group, finding: Finding) -> None:
-        """Start the family's cooldown only after eligible evidence was emitted.
+        """Start cooldown and release target state for a fully supported scan.
 
         Parameters:
             group: Group that supplied the evidence.
@@ -522,4 +579,53 @@ class ScanDetector:
         group.reports[family] = (
             self.clock,
             {"low": 1, "medium": 2, "high": 3}[finding.threat],
+            finding.confidence,
         )
+        if finding.approximate:
+            while group.progress.next_milestone <= finding.target_count:
+                group.progress.next_milestone *= 10
+        elif finding.threat == "high" and finding.confidence == 1.0:
+            progress = ScanProgress(
+                min(p.start for p in finding.flows), self.clock
+            )
+            for probe in finding.flows:
+                progress.counter.add(probe.dst)
+            while progress.next_milestone <= len(finding.flows):
+                progress.next_milestone *= 10
+            group.progress = progress
+            group.targets.clear()
+            group.counts.clear()
+
+    def progress_candidate(
+        self, group: Group, probes: list[ScanFlow]
+    ) -> Finding | None:
+        """Count eligible probes cheaply and report only powers-of-ten growth.
+
+        Parameters:
+            group: Confirmed scan holding only compact progress state.
+            probes: Batch after authenticated Slips P2P flows were removed.
+
+        Returns:
+            Approximate continuing-scan finding, or None below the next decade.
+        """
+        progress = group.progress
+        for probe in probes:
+            progress.counter.add(probe.dst)
+            progress.last_probe = max(progress.last_probe, probe.start)
+            progress.samples[probe.dst] = probe
+            progress.samples.move_to_end(probe.dst)
+            if len(progress.samples) > 20:
+                progress.samples.popitem(last=False)
+        count = progress.counter.estimate()
+        if probes and count >= progress.next_milestone:
+            return Finding(
+                tuple(progress.samples.values()),
+                "high",
+                1.0,
+                "continuing previously confirmed SYN scan; approximate distinct-target count, with sampled probe flows",
+                self.clock - progress.started,
+                None,
+                count,
+                True,
+            )
+        return None

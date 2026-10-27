@@ -22,21 +22,9 @@ from slips_files.core.structures.flow_attributes import (
 
 class VerticalPortscan:
     """
-    Here's how the detection of vertical portscans is done
-    1. Slips retrieves all destination IPs of the not
-    established flows on TCP and UDP protocols
-    2. For each dst IP, slips checks the amount of
-    destination ports we connected to
-    3. then we trigger evidence based on a log scaled of the pkts seen
-        during the attack
-        so we set an evidence every 10, 100, 1000 etc.
-            log(10 pkts) = one evidence
-            log(100 pkts) = another evidence
-
-        this scaled is done to avoid duplicate evidence
-
-    4. Once the timewindow ends, Slips resets
-     all counters, we go back to step 1
+    Check distinct failed destination ports for the arriving flow's host.
+    Report logarithmic port-count milestones to avoid repeated evidence.
+    Counts are scoped to a source profile, destination and time window.
     """
 
     def __init__(self, db):
@@ -129,10 +117,30 @@ class VerticalPortscan:
             )
         )
 
-    def check(self, profileid: ProfileID, twid: TimeWindow):
+    def check(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        flow: dict | None = None,
+    ) -> None:
+        """Check the arriving flow's destination instead of rescanning all hosts.
+
+        Parameters:
+            profileid: Original source profile receiving the event.
+            twid: Time window containing the failed-port counters.
+            flow: Current connection metadata; omit for an explicit full check.
         """
-        sets an evidence if a vertical portscan is detected
-        """
+        protocols = (Protocol.TCP, Protocol.UDP)
+        if flow is not None:
+            if (
+                not isinstance(flow, dict)
+                or flow.get("saddr") != profileid.ip
+                or str(flow.get("proto", "")).lower() not in {"tcp", "udp"}
+                or not flow.get("daddr")
+                or "starttime" not in flow
+            ):
+                return
+            protocols = (Protocol[str(flow["proto"]).upper()],)
         # When scanning an open port, the connection will appear as
         # ESTABLISHED.
         # Open ports are typically very few compared to the full port range.
@@ -140,14 +148,18 @@ class VerticalPortscan:
         # it misses scans hitting open ports, but in practice this is
         # negligible. Focusing on non-ESTABLISHED states significantly
         # reduces false positives while preserving the port-scan signal.
-        for protocol in (Protocol.TCP, Protocol.UDP):
+        for protocol in protocols:
             # For each dstip, see if the amount of ports
             # connections is over the threshold
             for (
                 dstip,
                 first_seen_ts,
-            ) in self.db.get_dstips_with_not_established_flows(
-                profileid, twid, protocol
+            ) in (
+                ((flow["daddr"], flow["starttime"]),)
+                if flow is not None
+                else self.db.get_dstips_with_not_established_flows(
+                    profileid, twid, protocol
+                )
             ):
                 if not (
                     utils.are_detection_modules_interested_in_this_ip(dstip)

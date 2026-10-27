@@ -18,7 +18,7 @@ from slips_files.core.structures.evidence import (
     Direction,
 )
 
-from .scan_detector import ScanDetector, ScanFlow
+from .scan_detector import ProgressBatch, ScanDetector, ScanFlow
 from .scan_settings import ScanSettings
 
 
@@ -136,19 +136,31 @@ class HorizontalPortscan:
             return
         group, finding = result
         # Check actual tuples in one round trip only when a candidate exists.
-        probes = [t.probe for t in group.targets.values() if t.probe]
+        probes = (
+            list(finding.flows)
+            if isinstance(finding, ProgressBatch)
+            else [t.probe for t in group.targets.values() if t.probe]
+        )
         excluded = self.db.is_p2p_related_flow_batch(
             [(p.src, p.sport, p.dst, p.port, p.proto) for p in probes]
         )
-        dropped = False
-        for probe, is_p2p in zip(probes, excluded):
-            if is_p2p:
-                self.detector.forget(group, probe.dst)
-                dropped = True
-        if dropped:
-            finding = self.detector.candidate(group, scope, flow.src)
+        if isinstance(finding, ProgressBatch):
+            finding = self.detector.progress_candidate(
+                group,
+                [p for p, own_p2p in zip(probes, excluded) if not own_p2p],
+            )
             if finding is None:
                 return
+        else:
+            dropped = False
+            for probe, is_p2p in zip(probes, excluded):
+                if is_p2p:
+                    self.detector.forget(group, probe.dst)
+                    dropped = True
+            if dropped:
+                finding = self.detector.candidate(group, scope, flow.src)
+                if finding is None:
+                    return
         self.set_evidence_horizontal_portscan(
             {
                 "protocol": flow.proto,
@@ -158,7 +170,8 @@ class HorizontalPortscan:
                 "dport": flow.port,
                 "pkts_sent": sum(p.packets for p in finding.flows),
                 "first_timestamp": max(p.start for p in finding.flows),
-                "amount_of_dips": len(finding.flows),
+                "amount_of_dips": finding.target_count or len(finding.flows),
+                "approximate": finding.approximate,
                 "threat": finding.threat,
                 "confidence": finding.confidence,
                 "reason": finding.reason,
@@ -181,11 +194,22 @@ class HorizontalPortscan:
         srcip = evidence["profileid"].split("_", 1)[-1]
         portproto = f"{evidence['dport']}/{evidence['protocol']}"
         port_info = self.db.get_port_info(portproto) or ""
+        count_label = "approximately " if evidence.get("approximate") else ""
+        period_label = (
+            "over the continuing scan's"
+            if evidence.get("approximate")
+            else "within"
+        )
+        fraction = (
+            f"Failed-target fraction: {evidence['failure_ratio']:.0%}. "
+            if evidence.get("failure_ratio") is not None
+            else ""
+        )
         description = (
             f"Horizontal port scan to port {port_info} {portproto}. "
-            f"From {srcip} to {evidence['amount_of_dips']} unique destination IPs "
-            f"within {evidence['window']:g} seconds. {evidence['reason']}. "
-            f"Target fraction: {evidence['failure_ratio']:.0%}. "
+            f"From {srcip} to {count_label}{evidence['amount_of_dips']} unique destination IPs "
+            f"{period_label} {evidence['window']:g} seconds. {evidence['reason']}. "
+            f"{fraction}"
             f"Packets in contributing flows: {evidence['pkts_sent']}. "
             f"Confidence: {evidence['confidence']:g}."
         )

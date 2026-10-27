@@ -828,7 +828,14 @@ network_discovery:
   horizontal_success_history_seconds: 3600
 
   # Minimum seconds between findings of the same probe kind/source/port.
-  # A stronger threat level can be reported immediately during this cooldown.
+  # A stronger threat or confidence bypasses this cooldown. Strong TCP scans
+  # reach 95% at 2x the target threshold (at least 20 targets), then 100% at
+  # 10x (at least 100), with at least 90% and 95% failed targets respectively.
+  # At 100%, replace full target records with a fixed 1 KiB distinct-IP counter.
+  # Report continuing growth near 1000, 10000, 100000, etc. as approximate totals.
+  # Check batches of 32 probes, retaining at most 20 sample flows. Reset after
+  # probes pause for this many seconds; no repeated expensive scan checks.
+  # Confidence rates the observed scan pattern; it is not malware probability.
   horizontal_alert_cooldown_seconds: 300
 
   # Minimum seconds between full checks of a source/port group. New targets

@@ -245,7 +245,7 @@ class NetworkDiscovery(IModule):
                     )
                     self.horizontal_capacity_reported = evictions
                     self.horizontal_next_warning = now + 60
-            self.vertical_ps.check(profileid, twid)
+            self.vertical_ps.check(profileid, twid, msg.get("flow"))
 
         if msg := self.get_msg("new_notice"):
             data = json.loads(msg["data"])
