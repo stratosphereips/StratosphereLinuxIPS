@@ -218,6 +218,76 @@ def argument_value(arguments: tuple[str, ...], *names: str) -> str:
     return "—"
 
 
+def web_ports_for_instance(instance: RunningInstance) -> list[int]:
+    """Find HTTP ports actually listening for one verified Slips run.
+
+    Parameters:
+        instance: Main process identity and original launch arguments.
+
+    Returns:
+        Sorted open web ports, empty when absent or inaccessible.
+    """
+    try:
+        main = psutil.Process(instance.pid)
+        if main.create_time() != instance.created:
+            return []
+        if argument_value(instance.arguments, "--view") != "—":
+            candidates = [main]
+            output = None
+        else:
+            candidates = main.children(recursive=True)
+            output_arg = argument_value(instance.arguments, "-o", "--output")
+            output = (
+                (Path(main.cwd()) / output_arg).resolve()
+                if output_arg != "—"
+                else None
+            )
+            if output is not None:
+                # The launcher may have exited while its page stays open.
+                candidates.extend(
+                    process
+                    for process in psutil.process_iter(["cmdline"])
+                    if "modules.web_interface.server"
+                    in (process.info["cmdline"] or [])
+                )
+    except (psutil.Error, OSError):
+        return []
+
+    ports: set[int] = set()
+    inspected: set[int] = set()
+    for process in candidates:
+        if process.pid in inspected:
+            continue
+        inspected.add(process.pid)
+        try:
+            if process.pid != main.pid:
+                command = process.cmdline()
+                if (
+                    not any(
+                        command[index : index + 2]
+                        == ["-m", "modules.web_interface.server"]
+                        for index in range(len(command) - 1)
+                    )
+                    or process.create_time() < instance.created
+                ):
+                    continue
+                if output is not None:
+                    destination = argument_value(
+                        tuple(command), "--output-dir"
+                    )
+                    if (Path(process.cwd()) / destination).resolve() != output:
+                        continue
+            for connection in process.net_connections(kind="tcp"):
+                if (
+                    connection.status == psutil.CONN_LISTEN
+                    and connection.laddr
+                ):
+                    ports.add(connection.laddr.port)
+        except (psutil.Error, OSError):
+            continue
+    return sorted(ports)
+
+
 def print_instances(instances: list[RunningInstance]) -> None:
     """Show enough launch information to select the intended capture.
 
@@ -228,7 +298,7 @@ def print_instances(instances: list[RunningInstance]) -> None:
         print("No accessible running Slips instances from this checkout.")
         return
     print("Slips instances from this checkout:")
-    print(f"{'PID':<9} {'MODE':<9} {'INPUT':<24} OUTPUT")
+    print(f"{'PID':<9} {'MODE':<9} {'WEB PORT':<12} {'INPUT':<24} OUTPUT")
     for instance in instances:
         args = instance.arguments
         mode = "daemon" if {"-D", "--daemon"}.intersection(args) else "normal"
@@ -243,7 +313,8 @@ def print_instances(instances: list[RunningInstance]) -> None:
             mode = "view-bg" if mode == "daemon" else "viewer"
             source = "saved results"
             output = saved_output
-        print(f"{instance.pid:<9} {mode:<9} {source:<24} {output}")
+        ports = ",".join(map(str, web_ports_for_instance(instance))) or "—"
+        print(f"{instance.pid:<9} {mode:<9} {ports:<12} {source:<24} {output}")
 
 
 def stop_instances(

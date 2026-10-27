@@ -152,12 +152,17 @@ environment used to run Slips:
 ```
 
 `--list-instances` shows accessible running Slips main processes from this
-checkout, with their PID, launch mode, interface or input file, and output
+checkout, with their PID, launch mode, open webpage port, interface or input file, and output
 directory. It finds normal foreground runs, shell background runs (`&` or
 `nohup`), service launches, and `-D` daemons. It excludes worker processes,
 other checkouts, stale PIDs and the management command itself.
 On Linux, forked workers inherit their main process's command line; Slips
 checks their ancestry so these workers are not listed as separate instances.
+The **WEB PORT** column shows the actual listening port, including custom
+ports and saved-result viewers opened with `--view`. A dash means no web
+listener could be verified (disabled, still starting, stopped, or inaccessible).
+Listing inspects processes and sockets; it does not start a server, read the
+analysis databases, or connect to Redis.
 
 `--stop` stops the only running instance. If several are running, it lists
 them and asks you to select a PID with `--stop PID`; it does not choose one.

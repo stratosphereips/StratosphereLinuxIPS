@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from unittest.mock import Mock, patch
+from types import SimpleNamespace
 
 import psutil
 import pytest
@@ -123,6 +124,60 @@ def test_argument_value(arguments: tuple[str, ...], names: tuple[str, ...], expe
     assert control.argument_value(arguments, *names) == expected
 
 
+@pytest.mark.parametrize("case,expected", [
+    ("capture", [55123]), ("viewer", [55001]), ("orphan", [55123]),
+    ("disabled", []), ("starting", []), ("other_output", []),
+    ("old_server", []), ("denied", []), ("reused", []),
+])
+def test_web_ports_use_owned_listening_sockets(
+    tmp_path: Path, case: str, expected: list[int]
+) -> None:
+    """Show bound HTTP ports without guessing from arguments or Redis ports.
+
+    Parameters:
+        tmp_path: Independent checkout and output paths.
+        case: Viewer, capture or ownership/access edge case.
+        expected: Verified listening web ports.
+    """
+    _factory = ModuleFactory()
+    arguments = ("--view", "output/saved", "--web-port", "55000") if case == "viewer" else ("-i", "eth0", "-o", "output/live")
+    instance = control.RunningInstance(41001, 100.0, arguments)
+    main = candidate(instance.pid, tmp_path / "slips.py", *arguments)
+    main.cwd.return_value = str(tmp_path)
+    main.net_connections.return_value = [SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(port=55001))]
+    server = Mock(pid=41002)
+    server.cmdline.return_value = ["python3", "-m", "modules.web_interface.server", "--output-dir", "output/live", "--port", "55123"]
+    server.info = {"cmdline": server.cmdline.return_value}
+    server.cwd.return_value = str(tmp_path)
+    server.create_time.return_value = 101.0
+    server.net_connections.return_value = [
+        SimpleNamespace(status=psutil.CONN_LISTEN, laddr=SimpleNamespace(port=55123)),
+        SimpleNamespace(status=psutil.CONN_ESTABLISHED, laddr=SimpleNamespace(port=45678)),
+    ]
+    redis_child = Mock(pid=41003)
+    redis_child.cmdline.return_value = ["redis-server", "127.0.0.1:6379"]
+    main.children.return_value = [server, redis_child]
+    if case in {"disabled", "orphan"}:
+        main.children.return_value = [redis_child]
+    if case == "starting":
+        server.net_connections.return_value = []
+    elif case == "other_output":
+        server.cmdline.return_value[4] = "output/other"
+    elif case == "old_server":
+        server.create_time.return_value = 99.0
+    elif case == "denied":
+        server.net_connections.side_effect = psutil.AccessDenied(server.pid)
+    elif case == "reused":
+        main.create_time.return_value = 102.0
+    with patch.object(control.psutil, "Process", return_value=main), patch.object(
+        control.psutil, "process_iter", return_value=[server] if case == "orphan" else []
+    ):
+        assert control.web_ports_for_instance(instance) == expected
+    redis_child.net_connections.assert_not_called()
+    if case == "viewer":
+        main.children.assert_not_called()
+
+
 @pytest.mark.parametrize("case", ["capture", "relative", "other_checkout", "self", "zombie", "denied", "management", "legacy_stop", "restart", "restart_pid"])
 def test_inspect_instance_scope(tmp_path: Path, case: str) -> None:
     """Reject other programs, stale processes and management invocations.
@@ -171,10 +226,12 @@ def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture)
     with patch.object(control.psutil, "process_iter", return_value=[first, other, second]):
         instances = control.list_instances(entrypoint)
     assert [instance.pid for instance in instances] == [41001, 41002]
-    control.print_instances(instances)
+    with patch.object(control, "web_ports_for_instance", side_effect=[[55000], []]):
+        control.print_instances(instances)
     listing = capsys.readouterr().out
     assert "eth0" in listing and "test.pcap" in listing
     assert "daemon" in listing and "output/test" in listing
+    assert "WEB PORT" in listing and "55000" in listing
     assert "41003" not in listing
     control.print_instances([])
     assert "No accessible running" in capsys.readouterr().out
