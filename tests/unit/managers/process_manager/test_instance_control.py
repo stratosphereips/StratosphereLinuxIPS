@@ -82,6 +82,8 @@ def test_script_position(command: list[str], expected: int | None) -> None:
     (["python3", "slips.py", "--restart=123"], None),
     (["python3", "slips.py", "--stop=all"], None),
     (["python3", "slips.py", "--list-instances"], None),
+    (["python3", "slips.py", "--view", "output/saved"], None),
+    (["python3", "slips.py", "--view=output/saved", "-D"], None),
     (["python3", "slips.py", "-h"], None),
     (["python3", "other.py", "slips.py"], None),
     (["python3", "-c", "pass", "slips.py"], None),
@@ -176,6 +178,27 @@ def test_list_and_print_instances(tmp_path: Path, capsys: pytest.CaptureFixture)
     assert "41003" not in listing
     control.print_instances([])
     assert "No accessible running" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("background", [False, True])
+def test_saved_viewer_discovery_and_listing(background: bool, capsys: pytest.CaptureFixture) -> None:
+    """Find viewers for stopping while excluding them from capture conflicts.
+
+    Parameters:
+        background: Whether the viewer was launched with -D.
+        capsys: Captured instance listing.
+    """
+    _factory = ModuleFactory()
+    entrypoint = Path("slips.py")
+    arguments = ["--view", "output/saved", *( ["-D"] if background else [])]
+    process = candidate(41001, entrypoint, *arguments)
+    instance = control.inspect_instance(process, entrypoint)
+    assert instance is not None
+    assert control.capture_arguments(process.cmdline()) is None
+    control.print_instances([instance])
+    listing = capsys.readouterr().out
+    assert "saved results" in listing and "output/saved" in listing
+    assert ("view-bg" if background else "viewer") in listing
 
 
 @pytest.mark.parametrize("case", ["forked", "nested", "other_checkout", "denied"])

@@ -89,11 +89,14 @@ def script_position(command: list[str]) -> int | None:
     )
 
 
-def capture_arguments(command: list[str]) -> tuple[str, ...] | None:
+def capture_arguments(
+    command: list[str], include_views: bool = False
+) -> tuple[str, ...] | None:
     """Separate capture launches from management and unrelated commands.
 
     Parameters:
         command: Process argument vector.
+        include_views: Include saved viewers for process discovery and stopping.
 
     Returns:
         Arguments following slips.py, or None when no capture is being run.
@@ -102,6 +105,10 @@ def capture_arguments(command: list[str]) -> tuple[str, ...] | None:
     if position is None:
         return None
     arguments = tuple(command[position + 1 :])
+    if not include_views and any(
+        arg == "--view" or arg.startswith("--view=") for arg in arguments
+    ):
+        return None
     if any(
         arg
         in {
@@ -139,7 +146,7 @@ def inspect_instance(
     try:
         command = process.cmdline()
         position = script_position(command)
-        arguments = capture_arguments(command)
+        arguments = capture_arguments(command, include_views=True)
         if position is None or arguments is None or process.pid == os.getpid():
             return None
         script = Path(command[position])
@@ -231,6 +238,11 @@ def print_instances(instances: list[RunningInstance]) -> None:
                 args, "-f", "--filepath", "-g", "--growing"
             )
         output = argument_value(args, "-o", "--output")
+        saved_output = argument_value(args, "--view")
+        if saved_output != "—":
+            mode = "view-bg" if mode == "daemon" else "viewer"
+            source = "saved results"
+            output = saved_output
         print(f"{instance.pid:<9} {mode:<9} {source:<24} {output}")
 
 

@@ -961,8 +961,9 @@ function clearError() {
  * Show whether the retained page is connected to the Slips backend.
  *
  * @param {boolean} connected True while the backend heartbeat is fresh.
+ * @param {boolean} savedView True when only saved results are being served.
  */
-function renderConnectionState(connected) {
+function renderConnectionState(connected, savedView = false) {
   if (!connected && state.connected && state.runUptimeRunning
       && state.runUptimeSeconds !== null) {
     state.runUptimeSeconds += Math.max(
@@ -974,6 +975,14 @@ function renderConnectionState(connected) {
   const dot = byId("state-dot");
   const label = byId("run-state");
   const updated = byId("updated-at");
+  if (savedView) {
+    state.runUptimeRunning = false;
+    dot.className = "state-dot";
+    label.textContent = "Viewing saved results";
+    updated.textContent = "Analysis is not running";
+    renderHeaderUptime();
+    return;
+  }
   if (!connected) {
     state.runUptimeRunning = false;
     dot.className = "state-dot error";
@@ -1105,7 +1114,10 @@ async function api(key, path, trackFailures = true, allowNotFound = false) {
     applyRunIdentity(payload.run_identity);
     if (trackFailures) state.failures = 0;
     state.lastSuccessfulRequest = new Date();
-    renderConnectionState(payload.backend_status?.connected === true);
+    renderConnectionState(
+      payload.backend_status?.connected === true,
+      payload.run_identity?.saved_view === true,
+    );
     if (trackFailures) clearError();
     return payload;
   } catch (error) {
@@ -1666,7 +1678,7 @@ function renderRunContext(data) {
   byId("run-device").textContent = state.computerName
     || addresses.ipv4?.[0] || addresses.ipv6?.[0] || "Name unavailable";
   renderHeaderNetwork(data);
-  renderConnectionState(backendConnected);
+  renderConnectionState(backendConnected, data.run_identity?.saved_view === true);
   byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts ?? data.counts.alerts);
   byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence ?? data.counts.evidence);
   byId("hosts-badge").textContent = compact(state.filteredBadgeCounts.hosts ?? data.counts.hosts);

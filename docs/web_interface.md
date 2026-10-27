@@ -2,6 +2,21 @@
 
 The web_interface module is a technical view of one Slips run. It is designed for the person running Slips, not for receiving data from remote installations or combining concurrent runs. It binds to localhost by default.
 
+Reopen a completed output folder without repeating the analysis:
+
+```bash
+python3 slips.py --view output/pcap-case-18 --web-port 55001
+```
+
+`--view` automatically starts a private Redis server from a temporary copy
+of the saved snapshot and opens the existing SQLite results. It needs no
+running capture or shared Redis server. The header says **Viewing saved
+results**, and the page stays local to this computer. Omit `--web-port` to
+choose an available port automatically, or add `-D` to run in the background.
+Ctrl-C or `--stop PID` stops only this viewer and its Redis child.
+See [reopening saved runs](usage.md#reopen-a-saved-runs-webpage) for required
+files, passwords, retained data and shutdown details.
+
 Host addresses in the Overview, Alerts, Evidence, Firewall, ARP, and Hosts views,
 including IPs mentioned in evidence descriptions, appear with their stored
 hostname or cached DNS name. Addresses on the monitored

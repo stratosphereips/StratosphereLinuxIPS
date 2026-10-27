@@ -27,7 +27,6 @@ import warnings
 
 from managers.process_manager.instance_control import handle_instance_command
 
-
 # Ignore warnings on CPU from tensorflow
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 # Ignore warnings in general
@@ -42,6 +41,12 @@ if __name__ == "__main__":
         sys.exit("Slips can only run on python3+ .. Stopping.")
 
     status = handle_instance_command(sys.argv[1:])
+    if status is not None:
+        sys.exit(status)
+
+    from managers.process_manager.saved_run_viewer import handle_view_command
+
+    status = handle_view_command(sys.argv[1:])
     if status is not None:
         sys.exit(status)
 

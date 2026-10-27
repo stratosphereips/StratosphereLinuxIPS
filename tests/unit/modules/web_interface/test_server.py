@@ -1661,7 +1661,7 @@ def test_header_tracks_backend_heartbeat_and_freezes_uptime() -> None:
         encoding="utf-8"
     )
     connection_renderer = app_source.split(
-        "function renderConnectionState(connected)", 1
+        "function renderConnectionState(", 1
     )[1].split("function toast", 1)[0]
     api_handler = app_source.split("async function api", 1)[1].split(
         "function renderTable", 1
@@ -1680,6 +1680,8 @@ def test_header_tracks_backend_heartbeat_and_freezes_uptime() -> None:
     )
     assert "state.runUptimeRunning && state.connected" in connection_renderer
     assert "payload.backend_status?.connected === true" in api_handler
+    assert 'label.textContent = "Viewing saved results"' in connection_renderer
+    assert "payload.run_identity?.saved_view === true" in api_handler
     assert "renderConnectionState(false);" in api_handler
     assert 'api("backendStatus", "/api/identity", false)' in app_source
     assert "scheduleBackendStatusPoll();" in app_source

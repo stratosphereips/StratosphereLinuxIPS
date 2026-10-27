@@ -334,6 +334,12 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Enable the local web interface for this Slips run",
         )
         self.add_argument(
+            "--view",
+            metavar="OUTPUT_FOLDER",
+            help="Open a saved run's webpage without analyzing traffic again. "
+            "Restores databases/dump.rdb alongside the saved SQLite data.",
+        )
+        self.add_argument(
             "--web-port",
             type=parse_web_port,
             metavar="PORT",

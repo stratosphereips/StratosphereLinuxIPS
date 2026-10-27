@@ -251,6 +251,8 @@ class RunDataReader:
         redis_port: int,
         output_dir: str,
         host_profiles_path: str = "permanent/host_profiles/hosts.sqlite",
+        cache_redis_port: int = 6379,
+        saved_view: bool = False,
     ) -> None:
         """
         Initialize run data sources.
@@ -259,6 +261,8 @@ class RunDataReader:
             redis_port: Redis port assigned to this run.
             output_dir: Output directory assigned to this run.
             host_profiles_path: Shared host profile database path.
+            cache_redis_port: Redis cache port, separate from live runs for viewers.
+            saved_view: Use saved event times instead of the current live clock.
         """
         self.redis_port = redis_port
         self.output_dir = Path(output_dir)
@@ -267,6 +271,7 @@ class RunDataReader:
             self.output_dir / "web_interface" / "history.sqlite"
         )
         self.host_profiles_path = Path(host_profiles_path)
+        self.saved_view = saved_view
         self.redis = try_connect_with_and_without_password(
             redis.Redis,
             host=LOOPBACK_ADDRESS,
@@ -278,7 +283,7 @@ class RunDataReader:
         self.cache = try_connect_with_and_without_password(
             redis.Redis,
             host=LOOPBACK_ADDRESS,
-            port=6379,
+            port=cache_redis_port,
             db=1,
             decode_responses=True,
             socket_timeout=2,
@@ -1789,8 +1794,10 @@ class RunDataReader:
             ).lower()
         except (AttributeError, redis.RedisError):
             input_type = ""
-        if input_type in {"interface", "stdin", "cyst"} and not getattr(
-            self, "archive_mode", False
+        if (
+            input_type in {"interface", "stdin", "cyst"}
+            and not getattr(self, "archive_mode", False)
+            and not getattr(self, "saved_view", False)
         ):
             now = time.time()
         if range_name in TIME_RANGES:
@@ -2610,6 +2617,8 @@ class RunDataReader:
         Returns:
             Earliest retained timestamp on the current network, if connected.
         """
+        if getattr(self, "saved_view", False):
+            return None
         analysis = self.redis.hgetall("analysis")
         if analysis.get("input_type") != "interface" or analysis.get(
             "analysis_end"
@@ -2662,6 +2671,7 @@ class RunDataReader:
         """
         if (
             getattr(self, "archive_mode", False)
+            or getattr(self, "saved_view", False)
             or self._query_value(query, "network") != "current"
         ):
             return start
@@ -2676,7 +2686,7 @@ class RunDataReader:
             "service": "slips-web-interface",
             "pid": os.getpid(),
             "review_actions": True,
-            "network_filter_supported": True,
+            "network_filter_supported": not getattr(self, "saved_view", False),
             "device_view_supported": True,
             "current_network_start": self._current_network_start(),
             "current_network": self._current_header_network(),
@@ -2689,6 +2699,8 @@ class RunDataReader:
         Returns:
             Current monitored interface, connection, name and all its IPs.
         """
+        if getattr(self, "saved_view", False):
+            return {}
         analysis = self.redis.hgetall("analysis")
         if analysis.get("input_type") != "interface" or analysis.get(
             "analysis_end"
@@ -2807,6 +2819,7 @@ class RunDataReader:
             "run_identity": {
                 "output_dir": str(self.output_dir),
                 "server_pid": os.getpid(),
+                "saved_view": getattr(self, "saved_view", False),
             },
             "backend_status": backend_status,
             "source_freshness": {
