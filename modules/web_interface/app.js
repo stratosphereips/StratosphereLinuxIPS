@@ -834,7 +834,6 @@ function peerConnectionDiagram(detection, record) {
     peerRoleNode("Destination", connection.dst_ip, "Destination not supplied", port(connection.dst_port)));
   figure.append(row);
   if (connection.reconstructed) figure.append(text("p", "Older report: this detector flags the connecting host. Its saved description identifies the destination and protocol; the peer did not send flow records.", "muted peer-context-note"));
-  if (detection.evidence_type === "UNKNOWN_PORT") figure.append(text("p", "Unknown port means the reporting detector did not recognize the destination service. This finding alone does not establish an attack.", "peer-context-note"));
   return figure;
 }
 
@@ -6398,7 +6397,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   if (arpDecision?.continuation) {
     flowList.before(text("p", `Continuing confirmed ARP scan: approximately ${arpDecision.targets} distinct unfamiliar targets over ${Number(arpDecision.window_seconds).toFixed(1)} seconds. Familiar neighbours are excluded. Only representative requests are linked; repeats do not increase the target estimate.`, "muted"));
   } else if (arpDecision?.version === 1) {
-    flowList.before(text("p", `ARP discovery assessment: ${arpDecision.targets} distinct targets in ${arpDecision.window_seconds} seconds; ${arpDecision.familiar_targets} familiar and ${arpDecision.unfamiliar_targets} unfamiliar to this source before the burst. This detector requires at least ${arpDecision.min_unfamiliar_targets} unfamiliar targets and ${Math.round(100 * arpDecision.min_unfamiliar_ratio)}% unfamiliar targets, plus an ordered sweep or a large search. Observed replies: ${arpDecision.replied_targets}; observed two-way application traffic: ${arpDecision.used_targets}. Missing replies or traffic are unknown. ${arpDecision.truncated ? "The configured target limit was reached; these counts cover retained targets only." : arpDecision.sampled_flows ? "Up to 20 representative requests are linked; retries count once." : "One representative request is linked per target; retries count once."}`, "muted"));
+    flowList.before(text("p", `ARP discovery assessment: ${arpDecision.targets} distinct targets in ${arpDecision.window_seconds} seconds; ${arpDecision.familiar_targets} familiar and ${arpDecision.unfamiliar_targets} unfamiliar to this source before the burst. This detector requires at least ${arpDecision.min_unfamiliar_targets} unfamiliar targets and ${Math.round(100 * arpDecision.min_unfamiliar_ratio)}% unfamiliar targets, plus an ordered sweep or a large search. Observed replies: ${arpDecision.replied_targets}; observed two-way application traffic: ${arpDecision.used_targets}. ${arpDecision.truncated ? "The configured target limit was reached; these counts cover retained targets only." : arpDecision.sampled_flows ? "Up to 20 representative requests are linked; retries count once." : "One representative request is linked per target; retries count once."}`, "muted"));
   } else if (String(record.evidence_type).toUpperCase() === "ARP_SCAN") {
     flowList.before(text("p", "Legacy ARP scan evidence: no unfamiliar-target assessment was recorded. The linked flow count is not an unfamiliar-host count. This record does not establish whether the current ARP scan rule is satisfied.", "flow-missing"));
   }

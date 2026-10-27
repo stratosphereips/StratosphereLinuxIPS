@@ -438,7 +438,7 @@ class ARPScanDetector:
                             tuple(progress.samples.values()),
                             True,
                             1.0,
-                            f"Continuing previously confirmed ARP scan: approximately {count} distinct unfamiliar target IPs over {timestamp - progress.started:g} seconds. Familiar neighbours are excluded; representative request IDs are sampled. Missing replies remain unknown.",
+                            f"Continuing previously confirmed ARP scan: approximately {count} distinct unfamiliar target IPs over {timestamp - progress.started:g} seconds.",
                             {
                                 "version": 1,
                                 "continuation": True,
@@ -735,8 +735,7 @@ class ARPScanDetector:
             f"{familiar} familiar and {unfamiliar} unfamiliar to this source before the burst; "
             f"{known} previously observed on this network; prior source communication history {'available' if has_history else 'unavailable'}; "
             f"{replied} observed replying, {used} with observed two-way application traffic; "
-            f"{ordered:.0%} adjacent address steps. Reason: {reason}. "
-            "Missing replies or later traffic are unknown, not failed connections."
+            f"{ordered:.0%} adjacent address steps. Reason: {reason}."
         )
         group.reported, group.report_level, group.report_confidence = (
             group.seen,

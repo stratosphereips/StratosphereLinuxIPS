@@ -62,6 +62,14 @@ Here's a very simple beginner-level steps on how to create your PR in Slips
 11. Open a PR in Slips, remember to set the base branch as develop.
 12. List your changes in the PR description
 
+## Writing evidence descriptions
+
+State what was observed: the hosts, actions, counts, timing and the reason the
+detector reported it. Keep the text short. For example: "Established SMB session
+192.168.1.10 → 192.168.1.20: client sent 5,410,965 bytes and received 50,910 bytes."
+Keep detector limitations and possible benign explanations in the module's
+documentation instead of repeating them in each evidence description.
+
 ## How to test the auto update functionality
 
 To test Slips auto update using the `testing` channel, follow these steps:

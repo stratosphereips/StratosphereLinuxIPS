@@ -107,8 +107,7 @@ class HTTPAnalyzer(IAsyncModule):
                 ThreatLevel.INFO,
                 f"{flow.saddr} sent an HTTP {flow.method} request to "
                 f"{flow.daddr} with IP-based Host header {host}, "
-                f"rather than a domain name ({address}). "
-                "Direct IP requests can also be legitimate.",
+                f"rather than a domain name ({address}).",
             )
 
         request_types = self.binary_mime_types(

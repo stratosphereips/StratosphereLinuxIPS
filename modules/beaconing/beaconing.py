@@ -228,12 +228,10 @@ class Beaconing(IModule):
             f"{stats['support']:.0%} timing support, {stats['jitter']:.1%} relative variation, "
             f"{stats['missed']:.0%} missed-cycle intervals; "
             f"median sent/received {stats['sent']:.0f}/{stats['received']:.0f} B, "
-            f"duration {stats['duration']:.3f}s; {stats['answered']:.0%} answered. "
+            f"duration {stats['duration']:.3f}s; {stats['answered']:.0%} answered."
         )
         if suspected:
-            description += f"Resembles labeled C2 examples: pattern score {score:.4f}, model {self.model.version}. This score is not the probability of malware."
-        else:
-            description += "Periodic activity can also come from normal software; this finding alone does not establish malware."
+            description += f" Resembles labeled C2 examples: pattern score {score:.4f}, model {self.model.version}."
         self.db.set_evidence(
             Evidence(
                 evidence_type=(

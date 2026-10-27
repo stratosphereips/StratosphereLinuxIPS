@@ -418,7 +418,7 @@ class ScanDetector:
                     finding.flows,
                     "low",
                     0.4,
-                    "unanswered attempts across several services; a network outage is possible",
+                    "unanswered attempts across several services",
                     finding.window,
                     finding.failure_ratio,
                 )
@@ -513,7 +513,7 @@ class ScanDetector:
                 )
                 rejections = sum(p.kind == "rejected" for p in candidates)
                 threat, confidence = "low", 0.45
-                reason = "unanswered attempts to many new targets; connectivity failure is also possible"
+                reason = "unanswered attempts to many new targets"
                 if family == "tcp":
                     if ratio < s.horizontal_min_failure_ratio:
                         continue
@@ -546,14 +546,14 @@ class ScanDetector:
                             confidence, len(candidates), minimum, ratio
                         )
                     reason = (
-                        "small ACK/FIN-only probes to many nearby addresses; incomplete capture is also possible"
+                        "small ACK/FIN-only probes to many nearby addresses"
                         if family == "flags"
-                        else "unanswered UDP traffic to many nearby addresses; UDP has no TCP handshake"
+                        else "unanswered UDP traffic to many nearby addresses"
                     )
                 else:
                     if ratio < s.horizontal_min_failure_ratio:
                         continue
-                    reason = "failed-flow summaries without packet history; a new outgoing probe cannot be confirmed"
+                    reason = "failed-flow summaries without packet history"
                 previous = group.reports.get(family)
                 if (
                     previous

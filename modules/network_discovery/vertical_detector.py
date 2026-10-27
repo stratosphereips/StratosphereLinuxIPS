@@ -176,7 +176,7 @@ class VerticalDetector:
                 else (
                     "distinct unanswered UDP destination ports"
                     if flow.family == "udp"
-                    else "incomplete packet history; scan intent remains uncertain"
+                    else "incomplete packet history"
                 )
             ),
             s.vertical_window_seconds,

@@ -120,7 +120,8 @@ def test_ordered_and_random_sweeps(randomized: bool, count: int, expected: bool)
     if expected:
         assert len(findings) == 1
         assert len(set(findings[0].uids)) == min(count, 20)
-        assert "Missing replies" in findings[0].description
+        assert f"{count} distinct target IPs" in findings[0].description
+        assert "unfamiliar targets" in findings[0].description
 
 
 @pytest.mark.parametrize("scope,source_mac,expected", [(SCOPE, MAC, False), ("other-network", MAC, True), (SCOPE, "02:00:00:00:02:01", True)])

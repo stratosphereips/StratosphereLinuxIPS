@@ -128,7 +128,7 @@ def test_multi_service_outage_reduces_confidence() -> None:
         send(module, conn(i, starttime=1002 + i))
     evidence = module.db.set_evidence.call_args.args[0]
     assert str(evidence.threat_level) == "low"
-    assert "outage" in evidence.description
+    assert "unanswered attempts across several services" in evidence.description
 
 
 def test_scans_of_open_services_and_ipv6_addresses_detected() -> None:
@@ -155,7 +155,7 @@ def test_udp_scan_with_address_coverage_is_detected() -> None:
         send(module, conn(i, proto="udp", history="D", sbytes=50))
     evidence = module.db.set_evidence.call_args.args[0]
     assert str(evidence.threat_level) == "medium"
-    assert "UDP has no TCP handshake" in evidence.description
+    assert "unanswered UDP traffic to many nearby addresses" in evidence.description
 
 
 def test_cooldown_and_immediate_severity_escalation() -> None:

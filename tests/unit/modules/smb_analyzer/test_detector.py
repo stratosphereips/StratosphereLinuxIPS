@@ -178,7 +178,8 @@ def test_suspicious_large_transfer_joins_both_arrival_orders(
         f for f in findings if f.kind == "SMB_SUSPICIOUS_TRANSFER"
     )
     assert suspicious.details["sent_bytes"] == 5410965
-    assert "not proven" in suspicious.description
+    assert "5,410,965 client-to-server bytes" in suspicious.description
+    assert "recent SMB scanning" in suspicious.description
 
 
 def test_large_normal_copy_is_informational_and_tcp_port_alone_is_insufficient() -> (
@@ -494,7 +495,7 @@ def test_large_file_uses_reported_size_without_claiming_bytes_transferred() -> (
         )
     )
     assert {f.kind for f in findings} == {"SMB_LARGE_FILE"}
-    assert "not a measurement" in findings[0].description
+    assert "reported size 200,000,000 bytes" in findings[0].description
 
 
 @pytest.mark.parametrize(

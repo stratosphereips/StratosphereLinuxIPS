@@ -633,7 +633,7 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
         assert "192.0.2.2" in delivery_nodes.nth(0).inner_text()
         assert "Report receiver" in delivery_nodes.nth(1).inner_text()
         assert "Cherry.local" in delivery_nodes.nth(1).inner_text()
-        assert "does not establish an attack" in detail.inner_text()
+        assert "does not establish an attack" not in detail.inner_text()
         page.evaluate("""async () => {
             state.host={ip:'192.0.2.10',evidence_count:1}; state.activeTab='hosts';
             await loadHostEvidence();
@@ -3196,7 +3196,8 @@ def test_arp_investigation_explains_actual_decision(familiar: bool, theme: str) 
         assert f"{40 if familiar else 0} familiar and {0 if familiar else 40} unfamiliar" in content
         assert "requires at least 10 unfamiliar targets and 80% unfamiliar targets" in content
         assert "at least 5 requests" not in content
-        assert "Missing replies or traffic are unknown" in content
+        assert "Observed replies:" in content
+        assert "observed two-way application traffic:" in content
         assert ("ARP_DISCOVERY" if familiar else "ARP_SCAN") in content
         assert ("info" if familiar else "low") in detail.locator(".evidence-detail-stats").inner_text()
         assert detail.locator(".whitelist-dst-port").evaluate("el => el.closest('label').hidden")
