@@ -322,7 +322,7 @@ does not run the detectors again or delete earlier findings. The old name,
 `INCOMPATIBLE_CN`, remains an accepted alias for stored evidence, P2P input
 and evidence-specific whitelist rules. New detections use the new name.
 Saved findings retain their original threat and profile; the web labels
-the old type **TLS provider mismatch (legacy)**. Reanalyze into a new output
+the old type **TLS provider mismatch**. Reanalyze into a new output
 folder to apply the corrected detector and scores to an old capture.
 
 ## Pastebin downloads

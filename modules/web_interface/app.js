@@ -2551,7 +2551,7 @@ function alertTypeName(type) {
     HTTP_TRAFFIC: "HTTP traffic",
     ARP_SCAN: "ARP scan",
     TLS_PROVIDER_IMPERSONATION: "Suspected TLS provider impersonation",
-    INCOMPATIBLE_CN: "TLS provider mismatch (legacy)",
+    INCOMPATIBLE_CN: "TLS provider mismatch",
     P2P_REPORT: "P2P report",
   };
   return names[type] || String(type || "Unknown detection").replaceAll("_", " ").toLowerCase()

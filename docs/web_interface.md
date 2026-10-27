@@ -1127,7 +1127,7 @@ the certificate; the description also identifies the connecting client.
 Known provider domains hosted on CDNs are accepted. Provider data can be
 incomplete, so this is a suspected false identity, separate from certificate
 expiry or a hostname mismatch. Older `INCOMPATIBLE_CN` records are displayed
-as **TLS provider mismatch (legacy)** and retain their recorded threat,
+as **TLS provider mismatch** and retain their recorded threat,
 profile and scores. Opening saved results does not reclassify them.
 
 Alert and evidence drill-down uses structured cards instead of unformatted
