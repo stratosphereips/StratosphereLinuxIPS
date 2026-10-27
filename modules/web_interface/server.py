@@ -280,6 +280,9 @@ class RunDataReader:
             decode_responses=True,
             socket_timeout=2,
         )
+        self.analysis_start = (
+            self.redis.hget("analysis", "analysis_start") or ""
+        )
         self.cache = try_connect_with_and_without_password(
             redis.Redis,
             host=LOOPBACK_ADDRESS,
@@ -2818,6 +2821,7 @@ class RunDataReader:
         return {
             "run_identity": {
                 "output_dir": str(self.output_dir),
+                "analysis_start": getattr(self, "analysis_start", ""),
                 "server_pid": os.getpid(),
                 "saved_view": getattr(self, "saved_view", False),
             },

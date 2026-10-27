@@ -66,6 +66,7 @@ const state = {
   drawerGeneration: 0,
   evidenceDetail: { record: null, records: [], generation: 0, history: [], inAlertPane: false, inHostPane: false },
   runIdentity: null,
+  viewPreferencesKey: null,
   reviewAvailable: false,
   networkOnly: true,
   deviceView: true,
@@ -112,6 +113,10 @@ const VIEW_CONTROL_IDS = [
   "whitelists-search", "whitelists-type", "firewall-search", "arp-poisoning-search",
   "device-view",
 ];
+const VIEW_CONTROL_DEFAULTS = Object.fromEntries(VIEW_CONTROL_IDS.map((id) => {
+  const element = byId(id);
+  return [id, element?.type === "checkbox" ? element.checked : element?.value];
+}));
 
 /** Save browser-only filters, sorts, visible columns, and pane widths. */
 function saveViewPreferences() {
@@ -153,20 +158,29 @@ function saveViewPreferences() {
   };
   try {
     window.localStorage.setItem(VIEW_PREFERENCES_KEY, JSON.stringify(preferences));
+    if (state.viewPreferencesKey) {
+      window.localStorage.setItem(state.viewPreferencesKey, JSON.stringify(preferences));
+    }
   } catch (_) {
     // Filtering still works when browser storage is unavailable.
   }
 }
 
-/** Restore browser-only view choices before the first API requests. */
-function restoreViewPreferences() {
+/** Restore shared layout or filters belonging to a verified run.
+ * @param {string} key Browser storage key for layout or one analysis.
+ */
+function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   let saved;
   try {
-    saved = JSON.parse(window.localStorage.getItem(VIEW_PREFERENCES_KEY) || "null");
+    saved = JSON.parse(window.localStorage.getItem(key) || "null");
   } catch (_) {
     return;
   }
   if (!saved || typeof saved !== "object") return;
+  if (key === VIEW_PREFERENCES_KEY) {
+    saved = { columns: saved.columns, paneWidths: saved.paneWidths,
+      controls: { "device-view": saved.controls?.["device-view"] ?? true } };
+  }
   Object.entries(saved.controls || {}).forEach(([id, value]) => {
     if (!VIEW_CONTROL_IDS.includes(id)) return;
     const element = byId(id);
@@ -1070,6 +1084,20 @@ function applyRunIdentity(identity) {
     state.computerName = "";
     state.headerNetwork = null;
     toast("A new Slips run is now active. Investigation state was cleared.");
+  }
+  const preferencesKey = `slips-run-view-v2:${JSON.stringify([identity.output_dir, identity.analysis_start || ""])}`;
+  if (state.viewPreferencesKey !== preferencesKey) {
+    VIEW_CONTROL_IDS.filter((id) => id !== "device-view").forEach((id) => {
+      const element = byId(id);
+      if (!element) return;
+      if (element.type === "checkbox") element.checked = VIEW_CONTROL_DEFAULTS[id];
+      else element.value = VIEW_CONTROL_DEFAULTS[id];
+    });
+    state.rangesInitialized = false;
+    state.alertsWorkspace.rangeTouched = false;
+    state.viewPreferencesKey = preferencesKey;
+    restoreViewPreferences();
+    restoreViewPreferences(preferencesKey);
   }
   state.runIdentity = token;
 }
@@ -2196,11 +2224,14 @@ async function loadMetrics() {
   renderLineChart("fps-chart", state.metrics, [{ key: "fps" }, { key: "fps_max", className: "secondary-line" }]);
 }
 
-/** Choose a useful initial history range for the current input source. */
-function initializeRanges(run) {
+/** Choose a useful initial history range for the current input source.
+ * @param {Object} run Recorded analysis metadata.
+ * @param {boolean} savedView Whether this server only shows saved results.
+ */
+function initializeRanges(run, savedView = false) {
   if (state.rangesInitialized) return;
   const inputType = String(run.input_type || "").toLowerCase();
-  const range = ["interface", "stdin", "cyst"].includes(inputType) ? "live" : "all";
+  const range = !savedView && ["interface", "stdin", "cyst"].includes(inputType) ? "live" : "all";
   const preserveAlerts = state.alertsWorkspace.rangeTouched
     || Boolean(state.alertsWorkspace.autoRange);
   const activeRange = ["alerts", "evidence", "hosts"].includes(state.activeTab)
@@ -2236,7 +2267,7 @@ async function loadOverview() {
   if (!payload) return;
   applyOverviewEvidence(payload);
   state.overview = payload;
-  initializeRanges(payload.run);
+  initializeRanges(payload.run, payload.run_identity?.saved_view === true);
   const alertPath = overviewAlertGroupsPath();
   if (state.overviewAlertQuery !== alertPath) {
     state.overviewAlertQuery = alertPath;

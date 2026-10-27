@@ -21,6 +21,86 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("input_type", ["zeek_folder", "interface"])
+def test_saved_filters_belong_to_analysis(input_type: str) -> None:
+    """Prevent live-run filters from hiding evidence in a different saved run.
+
+    Parameters:
+        input_type: Original saved input, including a completed live capture.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve local assets without connecting to any active Slips run.
+
+        Parameters:
+            route: Isolated browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path == "/":
+            route.fulfill(path=str(assets / "index.html"))
+        elif path == "/style.css":
+            route.fulfill(path=str(assets / "style.css"))
+        else:
+            route.fulfill(body="", content_type="text/javascript")
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page()
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""() => localStorage.setItem('slips-view-preferences-v1', JSON.stringify({
+              controls: {'device-view': false, 'evidence-range':'24h', 'evidence-search':'live host',
+                'evidence-threat':'high', 'evidence-review':'true_positive'}, hideExcluded:false
+            }))""")
+            page.add_script_tag(content=script)
+            page.evaluate("""() => {
+              applyRunIdentity({output_dir:'output/en0',analysis_start:'live-start',server_pid:1});
+              initializeRanges({input_type:'interface'});
+              byId('evidence-range').value='24h'; byId('evidence-search').value='live host';
+              saveViewPreferences();
+            }""")
+            page.reload()
+            page.add_script_tag(content=script)
+            page.evaluate("""inputType => {
+              applyRunIdentity({output_dir:'output/pcap',analysis_start:'capture-start',server_pid:2});
+              initializeRanges({input_type:inputType}, true);
+            }""", input_type)
+            assert page.locator("#evidence-range").input_value() == "all"
+            assert page.locator("#evidence-search").input_value() == ""
+            assert page.locator("#evidence-threat").input_value() == ""
+            assert page.locator("#evidence-review").input_value() == "all"
+            assert not page.locator("#device-view").is_checked()
+            assert page.evaluate("state.hideExcluded") is True
+            page.evaluate("""() => {
+              byId('evidence-search').value='pcap host'; byId('evidence-range').value='7d';
+              saveViewPreferences();
+            }""")
+            page.reload()
+            page.add_script_tag(content=script)
+            page.evaluate("""inputType => {
+              applyRunIdentity({output_dir:'output/pcap',analysis_start:'capture-start',server_pid:3});
+              initializeRanges({input_type:inputType}, true);
+            }""", input_type)
+            assert page.locator("#evidence-search").input_value() == "pcap host"
+            assert page.locator("#evidence-range").input_value() == "7d"
+            page.evaluate("""inputType => {
+              applyRunIdentity({output_dir:'output/pcap',analysis_start:'new-start',server_pid:4});
+              initializeRanges({input_type:inputType}, true);
+            }""", input_type)
+            assert page.locator("#evidence-search").input_value() == ""
+            assert page.locator("#evidence-range").input_value() == "all"
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, theme: str) -> None:
     """Exercise full-group record controls against real SQLite API responses.

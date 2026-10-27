@@ -5131,12 +5131,21 @@ def test_module_rows_exclude_internal_threads(mocker) -> None:
     process_constructor.assert_not_called()
 
 
-def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
-    """Test offline evidence ranges follow capture time instead of wall time."""
+@pytest.mark.parametrize("saved_view", [False, True])
+def test_live_evidence_range_uses_newest_capture_timestamp(
+    tmp_path: Path, saved_view: bool
+) -> None:
+    """Test offline evidence ranges follow capture time instead of wall time.
+
+    Parameters:
+        tmp_path: Independent detection database.
+        saved_view: Whether the capture has been reopened for viewing.
+    """
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
     reader.sqlite_path = tmp_path / "flows.sqlite"
     reader.redis = Mock()
+    reader.saved_view = saved_view
     with sqlite3.connect(reader.sqlite_path) as connection:
         connection.execute(
             "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
@@ -5173,6 +5182,42 @@ def test_live_evidence_range_uses_newest_capture_timestamp(tmp_path) -> None:
     assert result["total"] == 1
     assert result["full_total"] == 2
     assert result["items"][0]["id"] == "current"
+
+
+@pytest.mark.parametrize("saved_view", [False, True])
+def test_full_run_keeps_mixed_clock_evidence(
+    tmp_path: Path, saved_view: bool
+) -> None:
+    """Keep identical saved evidence IDs even when Zeek logs mix clocks.
+
+    Parameters:
+        tmp_path: Independent detection database.
+        saved_view: Whether the reader represents a reopened snapshot.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "zeek_folder"
+    reader.saved_view = saved_view
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE TABLE evidence (evidence_id TEXT PRIMARY KEY, "
+            "evidence_time REAL, profile_ip TEXT, timewindow TEXT, "
+            "threat_level TEXT, evidence_type TEXT, description TEXT, "
+            "confidence REAL, data TEXT)"
+        )
+        connection.execute("CREATE TABLE evidence_flows (evidence_id TEXT, uid TEXT)")
+        connection.execute("CREATE TABLE alert_evidence (alert_id TEXT, evidence_id TEXT)")
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [(key, timestamp, "10.0.0.1", "tw", "low", "TEST", "", 1.0, "{}")
+             for key, timestamp in [("relative", 254.819), ("calendar", 1632302615.44)]],
+        )
+    full = reader.evidence({"range": ["all"]})
+    recent = reader.evidence({"range": ["24h"]})
+    assert {row["id"] for row in full["items"]} == {"relative", "calendar"}
+    assert {row["id"] for row in recent["items"]} == {"calendar"}
 
 
 @pytest.mark.parametrize(
@@ -8048,10 +8093,12 @@ def test_response_metadata_exposes_stale_backend_status(
     reader = RunDataReader.__new__(RunDataReader)
     reader.history_path = history_path
     reader.output_dir = tmp_path
+    reader.analysis_start = "saved-analysis-start"
 
     with patch("modules.web_interface.server.time.time", return_value=116):
         metadata = reader.response_metadata()
 
+    assert metadata["run_identity"]["analysis_start"] == "saved-analysis-start"
     assert metadata["backend_status"] == {
         "connected": False,
         "last_seen": 100.0,

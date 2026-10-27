@@ -72,6 +72,14 @@ pane widths for Evidence and Hosts after Slips restarts. Alerts starts with an
 equal list/details split each time you enter its tab. These view choices stay
 in browser storage. Host-specific activity searches and threat selections apply
 only while inspecting the current host; opening or reopening a host clears them.
+Searches, time ranges, threat and review filters belong to the output folder
+and analysis start time. A different analysis reusing the same web port starts
+with fresh filters. Layout, theme and Device view remain shared browser choices.
+Reopening the same analysis with `--view` restores its own filters; a first
+visit starts with **Full run**, including saved interface captures. Select
+**Full run** to compare all saved evidence. Some synthetic Zeek datasets mix
+relative seconds with calendar dates: a 24-hour filter cannot include both.
+Viewing saved data reads its evidence records without running detectors again.
 Restart a running Slips server after updating its Python code.
 
 Searches reuse the existing evidence covering index to reject out-of-range
