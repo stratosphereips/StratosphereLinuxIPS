@@ -112,13 +112,91 @@ def test_generic_mismatched_paths_and_propagation() -> None:
     "path", [r"\\10.0.0.1\IPC$", r"\\server.example\IPC$"]
 )
 def test_normal_single_share_has_no_attack_finding(path: str) -> None:
-    """An IPC share, DNS alias or one mismatched address is insufficient.
+    """A matching IP or hostname in an ordinary share produces no mismatch.
 
     :param path: Normal SMB path or server alias.
     """
     module = ModuleFactory().create_smb_analyzer_obj()
     findings = module.detector.process(event(0, "smb_mapping", path=path))
     assert findings == []
+
+
+@pytest.mark.parametrize(
+    "destination,path,expected",
+    [
+        ("192.168.1.135", r"\\192.168.56.20\IPC$", True),
+        ("192.168.1.135", r"\\192.168.1.135\IPC$", False),
+        ("192.168.1.135", r"\\server.example\IPC$", False),
+        ("192.168.1.135", r"\\192.168.56.20", False),
+        ("192.168.1.135", "", False),
+        ("fd00::1", r"\\fd00::2\data", True),
+        ("fd00::1", r"\\fd00:0:0:0:0:0:0:1\data", False),
+    ],
+)
+def test_share_ip_mismatch_reports_first_observation(
+    destination: str, path: str, expected: bool
+) -> None:
+    """Compare literal share server addresses with the actual TCP destination.
+
+    :param destination: Connected SMB server.
+    :param path: Requested share path.
+    :param expected: Whether a separate mismatch finding should be produced.
+    """
+    module = ModuleFactory().create_smb_analyzer_obj()
+    findings = module.detector.process(
+        event(0, "smb_mapping", daddr=destination, path=path)
+    )
+    assert {f.kind for f in findings} == (
+        {"SMB_SHARE_IP_MISMATCH"} if expected else set()
+    )
+    if expected:
+        finding = findings[0]
+        assert finding.details["actual_server"] == destination
+        assert finding.details["requested_path"] == path
+        assert destination in finding.description and path in finding.description
+        assert finding.uids == ["Rsmb_mapping0", "C0"]
+
+
+def test_share_ip_mismatch_cooldown_and_repeated_rule_are_independent() -> None:
+    """Limit retries per server while retaining distinct targets and escalation."""
+    module = ModuleFactory().create_smb_analyzer_obj()
+    findings = []
+    for i, destination in enumerate(["10.0.0.1"] * 3 + ["10.0.0.2", "10.0.0.3"]):
+        findings += module.detector.process(
+            event(i, "smb_mapping", daddr=destination, path=r"\\192.168.56.20\IPC$")
+        )
+    assert sum(f.kind == "SMB_SHARE_IP_MISMATCH" for f in findings) == 3
+    assert sum(f.kind == "SMB_SHARE_PATH_MISMATCH" for f in findings) == 1
+    module.db.set_evidence.reset_mock()
+    for finding in findings:
+        if finding.kind == "SMB_SHARE_IP_MISMATCH":
+            module.emit(finding, 1)
+    records = [call.args[0] for call in module.db.set_evidence.call_args_list]
+    assert len(records) == 3
+    assert all(record.profile.ip == "192.168.1.120" for record in records)
+    assert all(record.threat_level.name == "LOW" for record in records)
+    assert all(record.confidence == 0.9 for record in records)
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    assert all(worker.get_threat_level(record) == pytest.approx(0.18) for record in records)
+    later = module.detector.process(
+        event(8, "smb_mapping", daddr="10.0.0.1", path=r"\\192.168.56.20\IPC$", starttime=BASE + 301)
+    )
+    assert {f.kind for f in later} == {"SMB_SHARE_IP_MISMATCH"}
+
+
+def test_share_ip_mismatch_can_be_disabled_independently() -> None:
+    """Disabling the single-server rule retains repeated-path detection."""
+    module = ModuleFactory().create_smb_analyzer_obj(
+        rules={"SMB_SHARE_IP_MISMATCH": {"enabled": False}}
+    )
+    findings = [
+        finding
+        for i in range(3)
+        for finding in module.detector.process(
+            event(i, "smb_mapping", path=r"\\192.168.56.20\IPC$")
+        )
+    ]
+    assert {f.kind for f in findings} == {"SMB_SHARE_PATH_MISMATCH"}
 
 
 @pytest.mark.parametrize(

@@ -137,6 +137,7 @@ class EvidenceType(Enum):
     SMB_PASSWORD_SPRAYING = auto()
     SMB_RAPID_FILE_CHANGES = auto()
     SMB_RANSOMWARE_BEHAVIOR = auto()
+    SMB_SHARE_IP_MISMATCH = auto()
 
     def __str__(self):
         return self.name

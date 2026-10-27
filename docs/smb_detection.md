@@ -8,13 +8,13 @@ malicious. It works with live captures, PCAPs and previously generated Zeek logs
 ## What the module detects
 
 All findings are attributed to the initiating client. The record identifies the
-actual destination, the supporting connection/event IDs, the thresholds that
-were crossed, and what the observation does **not** establish.
+actual destination, the supporting connection/event IDs and the detection reason.
 
 | Evidence type | Required observations | Default threat / confidence |
 | --- | --- | --- |
 | `SMB_SCAN` | At least 20 distinct TCP/139 or TCP/445 targets within 60 capture seconds, with at least 80% failing to establish TCP. Requires fresh SYN attempts, not session tails. | Medium / 0.85 |
 | `SMB_SHARE_SWEEP` | Share mappings across at least 8 servers, or at least 10 distinct share names, in 60 seconds. | Medium / 0.80 |
+| `SMB_SHARE_IP_MISMATCH` | The literal server IP in a requested share path differs from the connected server IP. Reports the first occurrence, independently of session size. | Low / 0.90 |
 | `SMB_SHARE_PATH_MISMATCH` | The same literal server IP inside a UNC path differs from at least 3 actual destination IPs. DNS aliases are not compared to IPs. | Medium / 0.75 |
 | `SMB_SUSPECTED_PROPAGATION` | Repeated mismatched share paths together with probing or share access involving at least 20 hosts in the same period. | High / 0.90 |
 | `SMB_EXTERNAL_CONNECTION` | SMB protocol or a share mapping was observed with a globally routable destination outside explicitly approved external networks. A TCP/445 attempt alone is insufficient. | Low / 0.80 |
@@ -54,6 +54,36 @@ IP/port/evidence-specific rules in `config/whitelist.conf` remain available for
 known authorized activity. `external_allowed_networks` suppresses only the
 external-SMB finding; it does not exempt a server from the other checks.
 
+## A share path names a different server IP
+
+In `output/pcap-case-17`, client `192.168.1.112` connects to
+`192.168.1.135:445` but requests `\\192.168.56.20\IPC$`. The TCP destination is
+`192.168.1.135`; the address inside the path is a value sent in the SMB request.
+The path does not show a second connection to `192.168.56.20`.
+
+`SMB_SHARE_IP_MISMATCH` reports this discrepancy immediately with low threat
+and confidence 0.90. It identifies the initiating client, connected server and
+requested path, and contributes to the client's score through the normal
+Evidence Handler. A large session can produce its separate volume evidence too.
+Repeated requests by the same client to the same server are limited by
+`cooldown_seconds`; another destination can produce its own mismatch finding.
+
+This is suspicious because a client can reuse a hardcoded share path against
+unrelated servers. NAT or a server with multiple addresses can also explain a
+single discrepancy. Hostnames are excluded from this comparison because a name
+can legitimately resolve to the connected IP. Matching literal IPv4/IPv6
+addresses are excluded too. This check uses only Zeek SMB metadata and performs
+no DNS lookups or core-flow processing.
+
+`mismatch_min_hosts` still controls the stronger `SMB_SHARE_PATH_MISMATCH`
+finding: by default, the same path IP must disagree with three distinct server
+IPs within `window_seconds`. Propagation and suspicious-transfer rules retain
+their additional requirements. Configure, disable or whitelist the new evidence
+type independently using the same controls as the other SMB findings.
+
+The share path is carried inside the SMB tree-connect request; see Microsoft's
+[SMB2 share connection specification](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-smb2/decadb64-9619-46e5-8892-c634213396d2).
+
 ## The example connection to 36.239.158.54
 
 In `output/pcap-case-16`, the client `192.168.1.120` scans many SMB destinations,
@@ -66,8 +96,7 @@ A mapping demonstrates that SMB progressed far enough for Zeek to record a
 server reply. It does not establish successful malware installation, remote
 execution or even that those bytes represent one file. Connection summaries
 also cannot measure exactly how many bytes came before/after a particular SMB
-operation. The finding explains that limitation rather than inventing a file
-upload or an exploit result. No address or domain from this capture is embedded
+operation. No address or domain from this capture is embedded
 in a detection rule.
 
 ## Input records and future captures

@@ -11,6 +11,7 @@ RULES = {
     "SMB_SCAN": ("medium", 0.85),
     "SMB_SHARE_SWEEP": ("medium", 0.8),
     "SMB_SHARE_PATH_MISMATCH": ("medium", 0.75),
+    "SMB_SHARE_IP_MISMATCH": ("low", 0.9),
     "SMB_SUSPECTED_PROPAGATION": ("high", 0.9),
     "SMB_EXTERNAL_CONNECTION": ("low", 0.8),
     "SMB_LARGE_TRANSFER": ("info", 0.95),

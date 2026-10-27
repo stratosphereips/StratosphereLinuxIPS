@@ -940,7 +940,8 @@ smb_analyzer:
   share_min_hosts: 8
   share_min_names: 10
   # Require the same literal IP inside a share path to disagree with this many
-  # actual destination IPs. Reduces findings caused by one alias or NAT mapping.
+  # actual destination IPs before the medium-threat repeated-mismatch finding.
+  # Each individual mismatch is reported separately as SMB_SHARE_IP_MISMATCH.
   mismatch_min_hosts: 3
   # Raise suspected propagation only when repeated path mismatches also accompany
   # probing or share access involving this many hosts. No fixed malware IP/domain.
@@ -1017,6 +1018,9 @@ smb_analyzer:
     SMB_SCAN: {enabled: true, threat_level: medium, confidence: 0.85}
     SMB_SHARE_SWEEP: {enabled: true, threat_level: medium, confidence: 0.8}
     SMB_SHARE_PATH_MISMATCH: {enabled: true, threat_level: medium, confidence: 0.75}
+    # A literal IP in the requested share differs from the connected server IP.
+    # Report the first occurrence; cooldown_seconds limits repeats per source/server.
+    SMB_SHARE_IP_MISMATCH: {enabled: true, threat_level: low, confidence: 0.9}
     SMB_SUSPECTED_PROPAGATION: {enabled: true, threat_level: high, confidence: 0.9}
     SMB_EXTERNAL_CONNECTION: {enabled: true, threat_level: low, confidence: 0.8}
     SMB_LARGE_TRANSFER: {enabled: true, threat_level: info, confidence: 0.95}
@@ -1533,7 +1537,8 @@ DisabledAlerts:
   # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
   # ANOMALOUS_FLOW, MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
   # INCOMPATIBLE_USER_AGENT, EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT,
-  # SMB_SCAN, SMB_SHARE_SWEEP, SMB_SHARE_PATH_MISMATCH, SMB_SUSPECTED_PROPAGATION,
+  # SMB_SCAN, SMB_SHARE_SWEEP, SMB_SHARE_IP_MISMATCH, SMB_SHARE_PATH_MISMATCH,
+  # SMB_SUSPECTED_PROPAGATION,
   # SMB_EXTERNAL_CONNECTION, SMB_LARGE_TRANSFER, SMB_LARGE_FILE, SMB_SUSPICIOUS_TRANSFER,
   # SMB_REMOTE_EXECUTION, SMB_PASSWORD_GUESSING, SMB_PASSWORD_SPRAYING,
   # SMB_RAPID_FILE_CHANGES, SMB_RANSOMWARE_BEHAVIOR,

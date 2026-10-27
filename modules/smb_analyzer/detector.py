@@ -696,9 +696,20 @@ class Detector:
                 mismatch = ipaddress.ip_address(claimed) != dst
             except ValueError:
                 mismatch = False
-            if mismatch:
+            if mismatch and share:
                 session["mismatch"] = True
                 session["claimed"] = claimed
+                self._emit(
+                    output,
+                    scope,
+                    "SMB_SHARE_IP_MISMATCH",
+                    flow,
+                    f"{src} connected to SMB server {dst}:{port} but requested share {flow['path']}, whose server IP is {claimed}.",
+                    destination=str(dst),
+                    actual_server=str(dst),
+                    claimed_server=claimed,
+                    requested_path=flow["path"],
+                )
                 self._remember(
                     context,
                     "mismatch",

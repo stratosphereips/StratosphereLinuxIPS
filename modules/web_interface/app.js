@@ -2552,6 +2552,7 @@ function alertTypeName(type) {
     HTTP_TRAFFIC: "HTTP traffic",
     SMB_SCAN: "SMB scan", SMB_SHARE_SWEEP: "SMB share sweep",
     SMB_SHARE_PATH_MISMATCH: "Repeated mismatched SMB share paths",
+    SMB_SHARE_IP_MISMATCH: "SMB share IP mismatch",
     SMB_SUSPECTED_PROPAGATION: "Suspected SMB propagation",
     SMB_EXTERNAL_CONNECTION: "External SMB communication",
     SMB_LARGE_TRANSFER: "Large SMB session", SMB_LARGE_FILE: "Large file accessed over SMB",
