@@ -768,6 +768,12 @@ arp:
 
   # Minimum seconds between findings of the same source device/address/network.
   # A scan can still be reported during an earlier informational discovery cooldown.
+  # Stronger confidence also bypasses it: 95% needs at least twice the unfamiliar
+  # threshold (minimum 20) and 90% unfamiliar; 100% needs ten times (minimum 100)
+  # and 95% unfamiliar. Novelty/search checks must still pass; heavy normal use
+  # keeps confidence lower. At 100%, replace target records with a 1 KiB counter
+  # and 20 sample IDs, reporting near 1000, 10000, etc. Familiar neighbours never
+  # add to that counter. This value also sets the quiet gap before tracking resets.
   scan_alert_cooldown_seconds: 300
 
   # Two successful TCP/UDP contacts must be separated by at least these seconds
@@ -828,7 +834,7 @@ network_discovery:
   horizontal_success_history_seconds: 3600
 
   # Minimum seconds between findings of the same probe kind/source/port.
-  # A stronger threat or confidence bypasses this cooldown. Strong TCP scans
+  # A stronger threat or confidence bypasses this cooldown. Strong scan patterns
   # reach 95% at 2x the target threshold (at least 20 targets), then 100% at
   # 10x (at least 100), with at least 90% and 95% failed targets respectively.
   # At 100%, replace full target records with a fixed 1 KiB distinct-IP counter.
@@ -851,6 +857,50 @@ network_discovery:
   # Must cover both target thresholds. The oldest used target is discarded
   # at capacity. More targets improve coverage but use more memory and CPU.
   horizontal_max_targets: 256
+
+  # Seconds in the vertical scan check: one source trying many ports of one
+  # destination. One hour also catches slow probes. Uses incoming flows only,
+  # with no Redis scan-total searches; shorter periods require a tighter burst.
+  vertical_window_seconds: 3600
+
+  # Distinct failed destination ports needed for the initial finding. Repeated
+  # attempts to the same port count once; increasing this misses smaller scans.
+  vertical_min_ports: 10
+
+  # Seconds between ordinary vertical findings, and the probe-free gap that
+  # ends a continuing scan. Higher confidence bypasses the ordinary cooldown.
+  # Confirmed SYN/UDP scans reach 95% at 2x the threshold (minimum 20 ports),
+  # then 100% at 10x (minimum 100). Replace exact records with a 1 KiB counter
+  # and at most 20 IDs; report growth near 1000 and 10000 distinct ports.
+  # Missing history and ACK/FIN-only traffic retain their lower confidence.
+  vertical_alert_cooldown_seconds: 300
+
+  # Maximum source/destination/protocol/probe-family/network groups in memory.
+  # Allocate a group after a second distinct port. A separate cache remembers
+  # at most four times this many single-port contacts; rotating that cache is
+  # normal during horizontal scans. Oldest-used groups are discarded at capacity.
+  vertical_max_groups: 256
+
+  # Maximum exact failed ports per unconfirmed group. Must cover min_ports;
+  # values below the full-confidence threshold can prevent compact tracking.
+  # Confirmed groups release this list and keep only the small counter.
+  vertical_max_ports: 256
+
+  # Maximum client groups for DHCP requests and, separately, ICMP notice groups.
+  # This bounds memory even when many clients scan. DHCP also separates client
+  # MACs and Slips time windows; ICMP relies on host counts supplied by Zeek.
+  other_scan_max_groups: 256
+
+  # A gap this many seconds long starts fresh DHCP/ICMP tracking. Continuing
+  # confirmed DHCP requests use compact distinct-IP counting and powers-of-ten
+  # reports; duplicate ICMP notices are suppressed until their count grows.
+  other_scan_quiet_seconds: 300
+
+  # Distinct addresses requested by one DHCP client before reporting broad
+  # requests. Renewals of the same address do not add up. Confidence starts at
+  # 80%, rises to 95% at twice this count (minimum 20), and reaches 100% at ten
+  # times (minimum 100). Range 2-100 keeps pre-confirmation memory bounded.
+  dhcp_min_addresses: 4
 
 #############################
 
@@ -877,6 +927,11 @@ smb_analyzer:
   max_lateness_seconds: 1800
   # Require this many distinct SMB targets before calling the behavior a scan.
   scan_min_hosts: 20
+  # Scan confidence is based on distinct hosts: 95% requires twice this count
+  # (minimum 20) with at least 90% explicit failed SYNs; 100% requires ten times
+  # (minimum 100) and 95%. Then release probe records, retain a fixed 1 KiB
+  # distinct-host counter and 20 sample IDs, and report near 1000, 10000, etc.
+  # Missing SYN history cannot acquire full confidence from volume alone.
   # At least this fraction of those targets must have failed to establish TCP.
   # A successful connection to a busy file server does not count as a failed probe.
   scan_min_failure_ratio: 0.8
@@ -930,6 +985,11 @@ smb_analyzer:
   remote_service_operations: [CreateServiceW, CreateServiceA, CreateServiceWOW64W, StartServiceW, StartServiceA]
   # Wait this many capture seconds before repeating the same rule for one source
   # (or source/server for transfer/external/service findings). Limits alert floods.
+  # Stronger confidence for SMB_SCAN / SMB_SHARE_SWEEP bypasses this cooldown.
+  # Confirmed scans/share sweeps report powers-of-ten growth and reset after
+  # this many seconds without their qualifying probes/mappings. Share sweeps
+  # compact the confirmed dimension (distinct hosts or distinct share names).
+  # Other SMB correlations keep their own bounded records and unchanged rules.
   cooldown_seconds: 300
   # Recalculate scan counters after this many capture seconds or another
   # scan_min_hosts probes (so a fast burst is detected immediately). SMB
@@ -951,6 +1011,8 @@ smb_analyzer:
   # Threat describes the seriousness of the behavior. Confidence describes how
   # strongly the available records establish that behavior, NOT malware probability.
   # Volume alone is info; combined propagation/execution-like behavior is high.
+  # For SMB_SCAN / SMB_SHARE_SWEEP, confidence is the starting value and grows
+  # with verified distinct hosts/shares; for other rules it stays fixed.
   rules:
     SMB_SCAN: {enabled: true, threat_level: medium, confidence: 0.85}
     SMB_SHARE_SWEEP: {enabled: true, threat_level: medium, confidence: 0.8}

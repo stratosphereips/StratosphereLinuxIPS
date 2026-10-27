@@ -202,19 +202,17 @@ def test_flow_event_checks_only_its_destination_and_protocol(proto: str) -> None
         proto: Transport of the current connection.
     """
     module = ModuleFactory().create_vertical_portscan_obj()
-    from slips_files.core.structures.flow_attributes import Protocol
-    profile = ProfileID(ip="10.0.0.1")
+    from tests.unit.modules.network_discovery.test_horizontal_portscans import conn
+    profile = ProfileID(ip="192.168.1.2")
     window = TimeWindow(number=0)
-    module.db.get_info_about_not_established_flows.return_value = (10, 20)
-    module.db.get_uids_for_vertical_portscan.return_value = ["one", "two"]
-    module.should_set_evidence = Mock(return_value=True)
-    module.set_evidence_vertical_portscan = Mock()
-    module.check(profile, window, dict(saddr=profile.ip, daddr="8.8.8.8", proto=proto, starttime=1234.5))
+    for i in range(10):
+        module.check(profile, window, conn(i, daddr="8.8.8.8", dport=1000+i, proto=proto, history="S" if proto == "tcp" else "D"))
     module.db.get_dstips_with_not_established_flows.assert_not_called()
-    module.db.get_info_about_not_established_flows.assert_called_once_with(profile, window, Protocol[proto.upper()], "8.8.8.8")
-    module.set_evidence_vertical_portscan.assert_called_once()
-    assert module.set_evidence_vertical_portscan.call_args.args[0]["uid"] == ["one", "two"]
-    assert module.set_evidence_vertical_portscan.call_args.args[0]["timestamp"] == 1234.5
+    module.db.get_info_about_not_established_flows.assert_not_called()
+    module.db.set_evidence.assert_called_once()
+    assert module.db.set_evidence.call_args.args[0].victim.value == "8.8.8.8"
+    assert module.db.set_evidence.call_args.args[0].proto.value == proto
+
 
 
 @pytest.mark.parametrize("flow", [

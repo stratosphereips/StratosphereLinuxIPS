@@ -413,3 +413,25 @@ def test_ambiguous_scans_do_not_enter_full_confidence_mode(history: str, state: 
         send(module, conn(i, starttime=1002 + i / 10000, history=history, state=state))
     assert max(c.args[0].confidence for c in module.db.set_evidence.call_args_list) <= 0.45
     assert all(g.progress is None for g in module.detector.groups.values())
+
+
+@pytest.mark.parametrize("proto,history,state,base", [("tcp", "ShAFf", "SF", .7), ("udp", "D", "S0", .65)])
+def test_other_supported_horizontal_scans_compact_and_report_growth(proto: str, history: str, state: str, base: float) -> None:
+    """Strong empty-connect and ordered UDP sweeps use the same memory policy.
+
+    Parameters:
+        proto: Transport under examination.
+        history: Observed packet flags supporting the pattern.
+        state: Connection state.
+        base: Initial confidence for the pattern.
+    """
+    module = ModuleFactory().create_horizontal_portscan_obj()
+    for i in range(1200):
+        send(module, conn(i, daddr=f"198.18.{i//256}.{i%256}", proto=proto, history=history, state=state, starttime=1000+i/10000))
+    records = [c.args[0] for c in module.db.set_evidence.call_args_list]
+    assert [r.confidence for r in records] == [base, .95, 1, 1]
+    assert all(str(r.threat_level) == "medium" for r in records)
+    assert "approximately" in records[-1].description
+    group = next(iter(module.detector.groups.values()))
+    assert not group.targets
+    assert module.detector.capacity_evictions == 0

@@ -39,7 +39,7 @@ retained when the interface's gateway IP is available.
 The window spans Slips time-window boundaries. One source device/address/network
 normally produces at most one finding every 300 seconds, including repeated
 sweeps. A scan finding can supersede an earlier informational discovery during
-that interval. Evidence links one representative request per retained target;
+that interval. Evidence links up to 20 representative requests;
 retries do not inflate the count or add unbounded flow IDs.
 
 | Example | Result |
@@ -147,7 +147,7 @@ short explanations for every option. Restart Slips after changing them.
 | `scan_broad_targets` | 32 | This many unfamiliar targets can establish a large search without ordered addresses. Bursts of this size lacking enough scan indicators become informational discovery. |
 | `scan_ordered_ratio` | 0.7 | Share of consecutive distinct targets whose IPs differ by one, in either direction. Supports smaller ordered sweeps. |
 | `scan_context_wait_seconds` | 3 | Short wait after candidate creation for context. Zero decides immediately; it does not create a startup blind period. |
-| `scan_alert_cooldown_seconds` | 300 | Minimum interval between repeated findings for a source/device/network; a scan can supersede info sooner. Prevents one burst repeatedly increasing scores. |
+| `scan_alert_cooldown_seconds` | 300 | Gap between ordinary findings and the unfamiliar-probe-free gap ending compact tracking. Stronger confidence and logarithmic continuations bypass reporting cooldown. |
 | `scan_familiar_min_interval_seconds` | 300 | Minimum separation between two successful contacts before a neighbour is familiar. Stops a single short discovery burst from creating its own benign history. |
 | `scan_familiar_retention_days` | 30 | Days since last successful use before contact history expires. Handles changes while keeping history bounded. |
 | `scan_checkpoint_seconds` | 120 | Minimum interval between dirty history saves. Larger values reduce writes but risk more lost learning on a crash. |
@@ -169,3 +169,23 @@ observed application traffic. Structured decision details are retained in
 details are separate from P2P report provenance and survive P2P annotation.
 Old evidence without these details retains its legacy five-target rule
 explanation; upgrading never rewrites historical findings or scores.
+
+## Fully supported and continuing ARP scans
+
+ARP uses the shared [scan progress policy](scan_progress.md) only after its
+novelty and search-pattern checks pass. At least twice
+`scan_min_unfamiliar_targets` (minimum 20) with 90% unfamiliar targets can raise
+confidence to 95%. At least ten times the threshold (minimum 100) with 95%
+unfamiliar targets can reach 100%. A missing source MAC, truncated target context or observed ordinary
+application use of at least 80% of the targets prevents this promotion. Missing
+replies remain unknown. Broad known/familiar-neighbour discovery remains info
+evidence; its count cannot turn it into a certain scan.
+
+At 100%, full request-target records are released and a fixed 1 KiB counter
+with at most 20 sample request IDs tracks **unfamiliar targets**. Familiar
+neighbours never increase this count or extend the scan. New evidence appears
+near 1,000, 10,000, and larger powers of ten, clearly marked approximate. The
+web pane labels these as continuations and does not present the original
+confirmation's familiar/reply/use counts as fresh measurements. The threat
+remains low. A gap of `scan_alert_cooldown_seconds` without unfamiliar requests
+starts fresh detection; the persistent successful-contact history is preserved.

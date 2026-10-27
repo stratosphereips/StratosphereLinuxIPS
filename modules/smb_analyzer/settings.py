@@ -218,7 +218,7 @@ class Settings:
                 )
 
     def rule(self, name: str) -> tuple[bool, str, float]:
-        """Return a rule's configured severity and observation confidence.
+        """Return severity and initial scan confidence, fixed for other rules.
 
         :param name: Registered evidence type.
         :return: Enabled flag, severity and confidence, with default values.

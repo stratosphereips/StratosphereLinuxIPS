@@ -1283,12 +1283,23 @@ class ModuleFactory:
         return horizontal_ps
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_vertical_portscan_obj(self, mock_db):
+    def create_vertical_portscan_obj(self, mock_db: Mock, **options: object) -> object:
+        """Create bounded vertical analysis with a mocked database.
+
+        Parameters:
+            mock_db: Patched database facade.
+            options: Scan period and memory-limit overrides.
+
+        Returns:
+            Vertical detector wrapper without database connections.
+        """
         from modules.network_discovery.vertical_portscan import (
             VerticalPortscan,
         )
+        from modules.network_discovery.scan_settings import ScanSettings
 
-        vertical_ps = VerticalPortscan(mock_db)
+        mock_db.get_authenticated_p2p_connections.return_value = []
+        vertical_ps = VerticalPortscan(mock_db, ScanSettings(**options))
         return vertical_ps
 
     @patch(MODULE_DB_MANAGER, name="mock_db")

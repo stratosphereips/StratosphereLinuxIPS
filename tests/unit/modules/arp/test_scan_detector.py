@@ -119,7 +119,7 @@ def test_ordered_and_random_sweeps(randomized: bool, count: int, expected: bool)
     assert any(item.scan for item in findings) is expected
     if expected:
         assert len(findings) == 1
-        assert len(set(findings[0].uids)) == count
+        assert len(set(findings[0].uids)) == min(count, 20)
         assert "Missing replies" in findings[0].description
 
 
@@ -345,3 +345,42 @@ def test_rolling_state_expires_after_cooldown_without_new_packets() -> None:
     burst(detector, list(range(1, 16)))
     detector.flush(2000)
     assert not detector.groups and not detector.pending
+
+
+def test_large_arp_scan_compacts_and_reports_logarithmic_growth() -> None:
+    """Proven unfamiliar sweeps release target records and keep small counters."""
+    detector = ModuleFactory().create_arp_scan_detector()
+    findings = []
+    for i in range(1, 12001):
+        flow = request(1, 1000+i*.1, saddr="10.0.0.10", daddr=f"10.0.{i//256}.{i%256}", uid=f"arp-{i}")
+        findings += detector.request(flow, "large-lan", "profile_10.0.0.10", "timewindow1", "10.0.0.0/16")
+    assert any(f.confidence == 1 and not f.facts.get("continuation") for f in findings)
+    growth = [f for f in findings if f.facts.get("continuation")]
+    assert len(growth) == 2
+    assert all(f.scan and f.confidence == 1 and len(f.uids) <= 20 for f in growth)
+    group = next(iter(detector.groups.values()))
+    assert not group.targets
+    assert len(group.progress.counter.registers) == 1024
+    assert len(group.progress.samples) <= 20
+    assert detector.evictions == 0
+
+
+def test_many_known_neighbours_cannot_enter_confirmed_arp_mode() -> None:
+    """Without source history, many already-observed devices remain discovery."""
+    detector = ModuleFactory().create_arp_scan_detector()
+    targets = [i for i in range(1, 151) if i != 100]
+    for i in targets:
+        detector._node(SCOPE, f"192.168.1.{i}", f"02:00:00:00:01:{i:02x}", 100)
+    findings = burst(detector, targets)
+    assert findings and all(not f.scan and f.confidence == .3 for f in findings)
+    assert all(g.progress is None for g in detector.groups.values())
+
+
+def test_familiar_arp_discovery_remains_informational_at_large_counts() -> None:
+    """Volume cannot promote established neighbour discovery to full confidence."""
+    detector = ModuleFactory().create_arp_scan_detector()
+    targets = [i for i in range(1, 151) if i != 100]
+    train(detector, targets)
+    findings = burst(detector, targets)
+    assert findings and all(not f.scan for f in findings)
+    assert all(g.progress is None for g in detector.groups.values())

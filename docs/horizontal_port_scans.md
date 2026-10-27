@@ -142,7 +142,7 @@ page shows the copy saved when that run started.
 The detector reads the connection already present in the `new_flow` event. It
 adds no per-flow SQLite searches or Redis keys. Horizontal detection no longer
 writes or reads the old per-time-window Redis scan totals; vertical detection
-keeps its existing counters. Most updates are dictionary lookups. Full checks
+now also uses original-direction events and bounded local state. Most updates are dictionary lookups. Full checks
 visit only the bounded group and run at the configured cadence or target-count
 boundary. Correlation with other failed services is performed only for a strong
 SYN-only candidate.
@@ -150,13 +150,13 @@ SYN-only candidate.
 At defaults, at most 65,536 full target records can be held across 256 groups;
 confirmed groups replace their full records with the smaller counter and samples.
 Counter updates maintain their sum incrementally, so neither updates nor estimates
-scan the 1,024 registers. All this work runs in the existing module worker; no
-capture, parsing, profiling, storage or routing code was changed.
-The vertical-scan check also examines only the arriving connection's destination
-and protocol. It no longer rereads every accumulated destination on every event,
-which made a large horizontal scan cause quadratic database work. Its distinct
-port counts and logarithmic reporting thresholds remain unchanged; new evidence
-uses the arriving connection's timestamp, when the check is triggered.
+scan the 1,024 registers. Detection work runs in the module workers. The core
+stops writing obsolete vertical-scan Redis indexes and avoids service lookups
+for failed/non-TCP flows; established unknown-service aggregation is preserved.
+No detection logic is added to capture, profiling or routing.
+The vertical-scan check also uses only the arriving connection. It no longer
+queries Redis scan totals, reads every accumulated destination or retrieves an
+expanding list of scan UIDs. Evidence uses the arriving connection timestamp.
 Old
 records expire when later packet timestamps advance beyond the larger of the
 slow period and successful-use history. With no traffic, the bounded allocation
@@ -222,3 +222,39 @@ the saved metadata path, not a fresh capture or a general false-positive rate.
 An already running module keeps its loaded code and settings; rerun an analysis
 to obtain evidence from the updated detector. Opening its old results with
 `--view` does not recalculate evidence or change old confidence values.
+
+## Vertical port scans and other scan types
+
+Vertical detection keeps distinct failed ports for one source/destination,
+transport, probe family and network. Only the source profile contributes.
+Successful use of a port removes its earlier failed observation. The default
+rolling period is one hour, preserving coverage of slow probing. Confirmed SYN
+attempts start at 85%, and unanswered UDP at 65%; each can reach 95% at 20 ports
+and 100% at 100 ports. Missing history and ACK/FIN-only patterns retain their
+lower confidence. Established empty connections do not enter this failed-port
+check. Context is transient and separated by interface/network; Slips P2P tuples
+are cached for five seconds, with at most 4,096 connections retained.
+
+Exact records are replaced by a 1 KiB counter at full confidence. Continuing
+findings report approximate powers-of-ten growth with at most 20 flow IDs. A
+probe-free cooldown ends the continuation. A first-contact cache holds at most
+`4 × vertical_max_groups` single-port source/destination/family observations; a
+multi-port group is allocated only after a second distinct port. Cache rotation
+can forget an isolated old probe, while protecting active multi-port contexts
+from a large horizontal scan. Actual multi-port/group capacity loss is warned.
+
+| Parameter | Default | What it does and why |
+| --- | --- | --- |
+| `vertical_window_seconds` | `3600` | Seconds of distinct failed-port history. An hour covers slow scans; shortening it requires a tighter burst. Range 1–86400. |
+| `vertical_min_ports` | `10` | Distinct failed ports needed to examine a scan. Retries count once; increasing this reduces sensitivity to small scans. Integer 5–4096. |
+| `vertical_alert_cooldown_seconds` | `300` | Gap between ordinary reports and the probe-free interval ending a confirmed scan. Higher confidence and logarithmic continuations bypass reporting cooldown. Range 1–86400. |
+| `vertical_max_groups` | `256` | Maximum active multi-port/family/network groups, plus a separate first-contact cache of at most four times this size. Protects memory from large fanout. Integer 1–4096. |
+| `vertical_max_ports` | `256` | Maximum exact failed ports in an unconfirmed group. Must cover the initial threshold. Too small a cap can prevent full confirmation. Integer 5–4096. |
+| `other_scan_max_groups` | `256` | Separate hard limits on DHCP client groups and ICMP notice groups. Bounds memory as sources change. Integer 1–4096. |
+| `other_scan_quiet_seconds` | `300` | Gap that starts fresh DHCP/ICMP tracking. DHCP also separates client MACs, interfaces and Slips windows. Range 1–86400. |
+| `dhcp_min_addresses` | `4` | Distinct requested addresses before a DHCP broad-request finding. Requests and representative IDs stay local to the module, with no per-request Redis set searches/writes. Confidence grows to 95% at twice this count (minimum 20), then 100% at ten times it (minimum 100). Integer 2–100 bounds pre-confirmation storage. |
+
+Strong horizontal empty-connect and concentrated UDP sweeps also use confidence
+growth and compact continuation, retaining medium threat. Uncertain packet
+patterns keep their existing lower confidence. See [scan progress](scan_progress.md)
+for common equations, approximate counting, ICMP notices and cross-module behavior.

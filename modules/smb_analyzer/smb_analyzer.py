@@ -150,6 +150,7 @@ class SMBAnalyzer(IModule):
         """
         flow = finding.flow
         _, threat, confidence = self.settings.rule(finding.kind)
+        confidence = finding.details.get("scan_confidence", confidence)
         self.db.set_evidence(
             Evidence(
                 evidence_type=EvidenceType[finding.kind],

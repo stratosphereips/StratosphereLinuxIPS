@@ -544,3 +544,62 @@ def test_reopening_one_path_does_not_make_many_changed_files() -> None:
         )
     ]
     assert not findings
+
+
+def test_smb_scan_compacts_and_keeps_logarithmic_growth() -> None:
+    """Large scans stop retaining each probe but still report their growth."""
+    module = ModuleFactory().create_smb_analyzer_obj()
+    findings = []
+    for i in range(12000):
+        findings += module.detector.process(event(i, daddr=f"198.18.{i//256}.{i%256}", starttime=BASE+i/10000))
+    scans = [f for f in findings if f.kind == "SMB_SCAN"]
+    assert [f.details["scan_confidence"] for f in scans] == [.85, .95, 1, 1, 1]
+    assert len([f for f in scans if f.details.get("approximate")]) == 2
+    context = next(iter(module.detector.sources.values()))
+    assert not context.events
+    assert module.detector.total_events == 0
+    assert len(module.detector.seen) == 200
+    assert module.detector.evictions == 0
+    assert len(context.growth["SMB_SCAN"].counter.registers) == 1024
+    for finding in scans:
+        module.emit(finding, 1)
+    assert module.db.set_evidence.call_args.args[0].confidence == 1
+    assert all(len(f.uids) <= 20 for f in scans)
+    transfer = module.detector.process(event(13000, starttime=BASE+2, daddr="198.18.99.1", appproto="smb", state="SF", history="ShADadFf", sbytes=5000000, dbytes=100))
+    assert "SMB_SUSPICIOUS_TRANSFER" in {f.kind for f in transfer}
+
+
+@pytest.mark.parametrize("axis", ["hosts", "names"])
+def test_share_sweeps_compact_the_confirmed_distinct_axis(axis: str) -> None:
+    """Count hosts or share names without converting ordinary single-share use.
+
+    Parameters:
+        axis: Broad share activity supported by the capture.
+    """
+    module = ModuleFactory().create_smb_analyzer_obj()
+    findings = []
+    for i in range(1200):
+        findings += module.detector.process(event(i, "smb_mapping", starttime=BASE+i/10000,
+            daddr=f"198.18.{i//256}.{i%256}" if axis == "hosts" else "10.0.0.1",
+            path=f"\\\\server.example\\{'IPC$' if axis == 'hosts' else 'share'+str(i)}"))
+    sweeps = [f for f in findings if f.kind == "SMB_SHARE_SWEEP"]
+    assert [f.details["scan_confidence"] for f in sweeps] == [.8, .95, 1, 1]
+    assert sweeps[-1].details["approximate"]
+    context = next(iter(module.detector.sources.values()))
+    assert not any(k[0] == "share" for k in context.events)
+    assert len(context.growth["SMB_SHARE_SWEEP"].counter.registers) == 1024
+
+
+def test_smb_missing_history_cannot_promote_confidence_and_quiet_resets() -> None:
+    """Preserve uncertainty and require fresh confirmation after a probe-free gap."""
+    module = ModuleFactory().create_smb_analyzer_obj()
+    for i in range(200):
+        module.detector.process(event(i, history="", starttime=BASE+i/10000))
+    context = next(iter(module.detector.sources.values()))
+    assert not context.growth
+    for i in range(200):
+        module.detector.process(event(i+500, daddr=f"198.18.0.{i+1}", starttime=BASE+100+i/10000))
+    assert "SMB_SCAN" in context.growth
+    module.detector.process(event(1000, starttime=BASE+500))
+    assert "SMB_SCAN" not in context.growth
+    assert len([k for k in context.events if k[0] == "probe"]) == 1

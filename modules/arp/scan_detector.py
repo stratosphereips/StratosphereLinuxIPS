@@ -8,6 +8,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 from slips_files.common.mac import classify_mac, normalize_mac
+from slips_files.common.scan_progress import ConfirmedScan, scan_confidence
 
 from .scan_settings import ARPScanSettings
 
@@ -101,6 +102,8 @@ class RequestGroup:
     evaluated: float = -math.inf
     truncated: bool = False
     expire_at: float = math.inf
+    report_confidence: float = 0
+    progress: ConfirmedScan | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -409,6 +412,52 @@ class ARPScanDetector:
         key = scope, mac or f"ip:{src}", src
         group = self.groups.get(key)
         findings = []
+        if group is not None and group.progress:
+            progress = group.progress
+            if timestamp < progress.started:
+                return []
+            if (
+                timestamp - progress.last
+                < self.settings.scan_alert_cooldown_seconds
+            ):
+                group.seen = max(group.seen, timestamp)
+                group.profileid, group.twid = profileid, twid
+                self.groups.move_to_end(key)
+                self.clock = max(self.clock, timestamp)
+                if not self._familiar(scope, mac, dst, progress.started):
+                    progress.observe(dst, flow.uid, timestamp)
+                if progress.due():
+                    count = progress.counter.estimate()
+                    progress.reported()
+                    return [
+                        ARPFinding(
+                            profileid,
+                            twid,
+                            flow.interface,
+                            timestamp,
+                            tuple(progress.samples.values()),
+                            True,
+                            1.0,
+                            f"Continuing previously confirmed ARP scan: approximately {count} distinct unfamiliar target IPs over {timestamp - progress.started:g} seconds. Familiar neighbours are excluded; representative request IDs are sampled. Missing replies remain unknown.",
+                            {
+                                "version": 1,
+                                "continuation": True,
+                                "approximate": True,
+                                "targets": count,
+                                "window_seconds": timestamp - progress.started,
+                                "source_mac": mac,
+                                "network_scope": scope,
+                            },
+                        )
+                    ]
+                return []
+            group.progress = None
+            group.reported, group.report_level, group.report_confidence = (
+                -math.inf,
+                -1,
+                0,
+            )
+            group.candidate_at = None
         if group is not None:
             if timestamp < group.seen - self.settings.scan_window_seconds:
                 return []
@@ -552,13 +601,6 @@ class ARPScanDetector:
             < group.candidate_at + self.settings.scan_context_wait_seconds
         ):
             return None
-        if (
-            group.report_level == 1
-            and group.seen
-            < group.reported + self.settings.scan_alert_cooldown_seconds
-        ):
-            self.pending.discard(key)
-            return None
         group.evaluated = group.seen
         before = max(
             group.started, group.seen - self.settings.scan_window_seconds
@@ -616,13 +658,6 @@ class ARPScanDetector:
         if not scan and not broad:
             self.pending.discard(key)
             return None
-        if (
-            group.seen
-            < group.reported + self.settings.scan_alert_cooldown_seconds
-            and level <= group.report_level
-        ):
-            self.pending.discard(key)
-            return None
         familiar = count - unfamiliar
         replied = sum(target.replied >= before for target in targets)
         used = sum(target.used >= before for target in targets)
@@ -638,10 +673,29 @@ class ARPScanDetector:
         )
         if scan and used / count >= 0.8:
             confidence -= 0.1
+        if scan:
+            confidence = scan_confidence(
+                confidence,
+                unfamiliar,
+                self.settings.scan_min_unfamiliar_targets,
+                unfamiliar / max(1, count),
+                strong=bool(group.source_mac)
+                and not group.truncated
+                and used / count < 0.8,
+            )
+        if (
+            group.seen
+            < group.reported + self.settings.scan_alert_cooldown_seconds
+            and level <= group.report_level
+            and confidence <= group.report_confidence
+        ):
+            self.pending.discard(key)
+            return None
         facts = {
             "version": 1,
             "window_seconds": self.settings.scan_window_seconds,
             "targets": count,
+            "sampled_flows": count > 20,
             "familiar_targets": familiar,
             "unfamiliar_targets": unfamiliar,
             "known_on_network": known,
@@ -658,7 +712,11 @@ class ARPScanDetector:
             "ordered_min_ratio": self.settings.scan_ordered_ratio,
         }
         title = (
-            "Possible ARP scan"
+            (
+                "ARP scan pattern confirmed"
+                if confidence == 1.0
+                else "Possible ARP scan"
+            )
             if scan
             else "Broad ARP neighbour discovery (informational)"
         )
@@ -680,14 +738,31 @@ class ARPScanDetector:
             f"{ordered:.0%} adjacent address steps. Reason: {reason}. "
             "Missing replies or later traffic are unknown, not failed connections."
         )
-        group.reported, group.report_level = group.seen, level
+        group.reported, group.report_level, group.report_confidence = (
+            group.seen,
+            level,
+            confidence,
+        )
+        if scan and confidence == 1.0:
+            group.progress = ConfirmedScan.seed(
+                (
+                    (ip, target.uid)
+                    for ip, target in group.targets.items()
+                    if not target.familiar
+                ),
+                before,
+                group.seen,
+                "unfamiliar ARP targets",
+            )
+            group.targets.clear()
+            group.candidate_at = None
         self.pending.discard(key)
         return ARPFinding(
             group.profileid,
             group.twid,
             group.interface,
             group.seen,
-            tuple(target.uid for target in targets),
+            tuple(target.uid for target in targets[-20:]),
             scan,
             round(confidence, 2),
             description,

@@ -6,6 +6,7 @@ from collections import OrderedDict
 from itertools import islice
 from dataclasses import dataclass, field
 from typing import Any
+from slips_files.common.scan_progress import ConfirmedScan, scan_confidence
 
 from .settings import Settings
 
@@ -31,6 +32,7 @@ class Source:
     evaluated: float = -math.inf
     scan_seen: float = -math.inf
     probe_updates: int = 0
+    growth: dict[str, ConfirmedScan] = field(default_factory=dict)
 
 
 class Detector:
@@ -171,10 +173,18 @@ class Detector:
             return
         ts = float(flow["starttime"])
         key = (scope, flow["saddr"], kind, destination)
-        previous = self.cooldowns.get(key, -math.inf)
-        if ts < previous + self.settings.cooldown_seconds:
+        previous, previous_confidence = self.cooldowns.get(key, (-math.inf, 0))
+        confidence = details.get(
+            "scan_confidence", self.settings.rule(kind)[2]
+        )
+        if (
+            ts < previous + self.settings.cooldown_seconds
+            and confidence <= previous_confidence
+            and not details.get("continuation")
+            and not details.get("confirmation")
+        ):
             return
-        self.cooldowns[key] = ts
+        self.cooldowns[key] = (ts, confidence)
         self.cooldowns.move_to_end(key)
         while len(self.cooldowns) > self.settings.max_cooldowns:
             self.cooldowns.popitem(last=False)
@@ -194,6 +204,66 @@ class Detector:
             )
         )
 
+    def _purge_scan_records(self, context: Source, category: str) -> None:
+        """Release exact scan records while preserving other SMB correlations.
+
+        Parameters:
+            context: Source whose scan pattern has been confirmed.
+            category: Probe or share records replaced by the compact counter.
+        """
+        for key in [key for key in context.events if key[0] == category]:
+            del context.events[key]
+            self.total_events -= 1
+        context.categories.discard(category)
+
+    def _continue_scan(
+        self, context: Source, scope: str, kind: str, flow: dict, identity: str
+    ) -> list[Finding]:
+        """Count ongoing confirmed behavior and emit logarithmic milestones.
+
+        Parameters:
+            context: Source with compact scan state.
+            scope: Capture network identity.
+            kind: SMB host scan or share sweep evidence type.
+            flow: Current validated metadata record.
+            identity: Distinct host or share name, never a retry counter.
+
+        Returns:
+            Continuing-scan evidence at a milestone, otherwise no findings.
+        """
+        progress = context.growth[kind]
+        ts = float(flow["starttime"])
+        if ts < progress.started:
+            return []
+        progress.observe(
+            identity, str(flow.get("record_id") or flow["uid"]), ts
+        )
+        if kind == "SMB_SCAN":
+            context.scan_seen = max(context.scan_seen, ts)
+        output: list[Finding] = []
+        if not self.settings.rule(kind)[0]:
+            if progress.due():
+                progress.reported()
+            return output
+        if progress.due():
+            count = progress.counter.estimate()
+            self._emit(
+                output,
+                scope,
+                kind,
+                flow,
+                f"Continuing previously confirmed {'SMB scan' if kind == 'SMB_SCAN' else 'SMB share sweep'} by {flow['saddr']}: approximately {count} distinct {progress.unit} over {ts-progress.started:g}s. Representative flow IDs are sampled; retries do not increase the estimate.",
+                [(ts, "", "", uid) for uid in progress.samples.values()],
+                scan_confidence=1.0,
+                continuation=True,
+                approximate=True,
+                distinct_count=count,
+                count_unit=progress.unit,
+            )
+            if output:
+                progress.reported()
+        return output
+
     def _analyze(
         self, context: Source, scope: str, flow: dict
     ) -> list[Finding]:
@@ -208,11 +278,26 @@ class Detector:
         ts, src = float(flow["starttime"]), flow["saddr"]
         probes = self._recent(context, "probe", ts)
         failures = sum(v[2] == "failed" for v in probes)
+        failures += sum(v[2] == "unknown_failed" for v in probes)
         if (
             len(probes) >= self.settings.scan_min_hosts
             and failures / len(probes) >= self.settings.scan_min_failure_ratio
         ):
             context.scan_seen = max(context.scan_seen, ts)
+            verified_ratio = sum(v[2] == "failed" for v in probes) / len(
+                probes
+            )
+            confidence = scan_confidence(
+                self.settings.rule("SMB_SCAN")[2],
+                len(probes),
+                self.settings.scan_min_hosts,
+                verified_ratio,
+            )
+            full = (
+                len(probes) >= max(100, 10 * self.settings.scan_min_hosts)
+                and verified_ratio >= 0.95
+            )
+            previous_count = len(output)
             self._emit(
                 output,
                 scope,
@@ -222,7 +307,20 @@ class Detector:
                 probes,
                 distinct_hosts=len(probes),
                 failed_hosts=failures,
+                scan_confidence=confidence,
+                confirmation=full,
             )
+            if full and (
+                len(output) > previous_count
+                or not self.settings.rule("SMB_SCAN")[0]
+            ):
+                context.growth["SMB_SCAN"] = ConfirmedScan.seed(
+                    ((v[1], v[3]) for v in probes),
+                    min(v[0] for v in probes),
+                    ts,
+                    "SMB hosts",
+                )
+                self._purge_scan_records(context, "probe")
         shares = self._recent(context, "share", ts)
         hosts = {v[1] for v in shares}
         share_names = {v[2] for v in shares}
@@ -230,6 +328,24 @@ class Detector:
             len(hosts) >= self.settings.share_min_hosts
             or len(share_names) >= self.settings.share_min_names
         ):
+            host_confidence = scan_confidence(
+                self.settings.rule("SMB_SHARE_SWEEP")[2],
+                len(hosts),
+                self.settings.share_min_hosts,
+            )
+            name_confidence = scan_confidence(
+                self.settings.rule("SMB_SHARE_SWEEP")[2],
+                len(share_names),
+                self.settings.share_min_names,
+            )
+            confidence = max(host_confidence, name_confidence)
+            full_hosts = len(hosts) >= max(
+                100, 10 * self.settings.share_min_hosts
+            )
+            full_names = len(share_names) >= max(
+                100, 10 * self.settings.share_min_names
+            )
+            previous_count = len(output)
             self._emit(
                 output,
                 scope,
@@ -239,7 +355,20 @@ class Detector:
                 shares,
                 distinct_hosts=len(hosts),
                 distinct_share_names=len(share_names),
+                scan_confidence=confidence,
+                confirmation=full_hosts or full_names,
             )
+            if (full_hosts or full_names) and (
+                len(output) > previous_count
+                or not self.settings.rule("SMB_SHARE_SWEEP")[0]
+            ):
+                context.growth["SMB_SHARE_SWEEP"] = ConfirmedScan.seed(
+                    ((v[1] if full_hosts else v[2], v[3]) for v in shares),
+                    min(v[0] for v in shares),
+                    ts,
+                    "SMB hosts" if full_hosts else "SMB share names",
+                )
+                self._purge_scan_records(context, "share")
         mismatches = self._recent(context, "mismatch", ts)
         by_claim: dict[str, list] = {}
         for record in mismatches:
@@ -259,6 +388,12 @@ class Detector:
             if (
                 len(probes) >= self.settings.propagation_min_hosts
                 or len(hosts) >= self.settings.propagation_min_hosts
+                or len(repeated) >= self.settings.propagation_min_hosts
+                or (
+                    "SMB_SCAN" in context.growth
+                    and ts - context.scan_seen
+                    <= self.settings.correlation_seconds
+                )
             ):
                 self._emit(
                     output,
@@ -456,12 +591,6 @@ class Detector:
         self.highwater = max(self.highwater, ts)
         if ts < self.highwater - self.settings.max_lateness_seconds:
             return []
-        identity = (scope, flow.get("record_id") or (kind, flow["uid"]))
-        if identity in self.seen:
-            return []
-        self.seen[identity] = ts
-        while len(self.seen) > self.settings.max_total_events:
-            self.seen.popitem(last=False)
         source_key = (scope, str(src))
         context = self.sources.setdefault(source_key, Source())
         context.last = max(context.last, ts)
@@ -473,6 +602,24 @@ class Detector:
             _, dropped = self.sources.popitem(last=False)
             self.total_events -= len(dropped.events)
             self.evictions += 1
+        for rule, progress in tuple(context.growth.items()):
+            if ts - progress.last >= self.settings.cooldown_seconds:
+                del context.growth[rule]
+        if kind == "conn" and "SMB_SCAN" in context.growth:
+            if "S" in str(flow.get("history", "")) and flow.get("state") in {
+                "S0",
+                "REJ",
+                "RSTOS0",
+            }:
+                return self._continue_scan(
+                    context, scope, "SMB_SCAN", flow, str(dst)
+                )
+        identity = (scope, flow.get("record_id") or (kind, flow["uid"]))
+        if identity in self.seen:
+            return []
+        self.seen[identity] = ts
+        while len(self.seen) > self.settings.max_total_events:
+            self.seen.popitem(last=False)
         session_key = (scope, flow["uid"])
         session = self.sessions.get(session_key, {"last": ts, "records": []})
         session["last"] = max(session["last"], ts)
@@ -493,14 +640,20 @@ class Detector:
         if kind == "conn":
             history = str(flow.get("history", ""))
             failed = flow.get("state") in {"S0", "REJ", "RSTOS0"}
-            if "S" in history or flow.get("state") in {"S0", "REJ"}:
+            if "SMB_SCAN" not in context.growth and (
+                "S" in history or flow.get("state") in {"S0", "REJ"}
+            ):
                 self._remember(
                     context,
                     "probe",
                     str(dst),
                     ts,
                     str(dst),
-                    "failed" if failed else "answered",
+                    (
+                        "failed"
+                        if failed and "S" in history
+                        else "unknown_failed" if failed else "answered"
+                    ),
                     record_uid,
                 )
                 context.probe_updates += 1
@@ -512,15 +665,31 @@ class Detector:
         elif kind == "smb_mapping":
             claimed, share = self.share(flow.get("path", ""))
             if share:
-                self._remember(
-                    context,
-                    "share",
-                    f"{dst}/{share}",
-                    ts,
-                    str(dst),
-                    share,
-                    record_uid,
-                )
+                if "SMB_SHARE_SWEEP" in context.growth:
+                    progress = context.growth["SMB_SHARE_SWEEP"]
+                    output.extend(
+                        self._continue_scan(
+                            context,
+                            scope,
+                            "SMB_SHARE_SWEEP",
+                            flow,
+                            (
+                                str(dst)
+                                if progress.unit == "SMB hosts"
+                                else share
+                            ),
+                        )
+                    )
+                else:
+                    self._remember(
+                        context,
+                        "share",
+                        f"{dst}/{share}",
+                        ts,
+                        str(dst),
+                        share,
+                        record_uid,
+                    )
             session["mapped"] = True
             session["records"] = [(ts, str(dst), share, record_uid)]
             try:
@@ -746,7 +915,7 @@ class Detector:
                     else (
                         value.get("last", 0)
                         if isinstance(value, dict)
-                        else value
+                        else value[0] if isinstance(value, tuple) else value
                     )
                 )
                 if last < cutoff:

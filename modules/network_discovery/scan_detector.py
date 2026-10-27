@@ -10,6 +10,7 @@ from slips_files.common.flow_direction import zeek_history_in_final_direction
 
 from .scan_settings import ScanSettings
 from .distinct_targets import DistinctTargets
+from slips_files.common.scan_progress import scan_confidence
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,6 +173,8 @@ class ScanProgress:
 
     started: float
     last_probe: float
+    family: str = "tcp"
+    threat: str = "high"
     counter: DistinctTargets = field(default_factory=DistinctTargets)
     pending: list[ScanFlow] = field(default_factory=list)
     samples: OrderedDict[str, ScanFlow] = field(default_factory=OrderedDict)
@@ -209,6 +212,7 @@ class Finding:
     failure_ratio: float | None
     target_count: int = 0
     approximate: bool = False
+    sample_uids: tuple[str, ...] = ()
 
 
 class ScanDetector:
@@ -277,7 +281,10 @@ class ScanDetector:
                 self.clock - progress.last_probe
                 < s.horizontal_alert_cooldown_seconds
             ):
-                if flow.family != "tcp" or flow.start < progress.started:
+                if (
+                    flow.family != progress.family
+                    or flow.start < progress.started
+                ):
                     return None
                 progress.last_probe = max(progress.last_probe, flow.start)
                 progress.pending.append(flow)
@@ -472,7 +479,10 @@ class ScanDetector:
                     and self.clock - previous[0]
                     < s.horizontal_alert_cooldown_seconds
                     and previous[1] >= maximum_rank
-                    and (family != "tcp" or previous[2] >= 1.0)
+                    and (
+                        family not in {"tcp", "connect", "udp"}
+                        or previous[2] >= 1.0
+                    )
                 ):
                     continue
                 candidates = [p for p in probes if p.kind in kinds]
@@ -510,21 +520,19 @@ class ScanDetector:
                     if rejections >= minimum / 2 or structured:
                         threat, confidence = "high", 0.85
                         reason = "new SYN attempts with repeated rejection or concentrated address coverage"
-                        if (
-                            len(candidates) >= max(20, 2 * minimum)
-                            and ratio >= 0.9
+                        confidence = scan_confidence(
+                            confidence, len(candidates), minimum, ratio
+                        )
+                        if confidence == 1.0 and not (
+                            structured or rejections >= minimum
                         ):
                             confidence = 0.95
-                        if (
-                            len(candidates) >= max(100, 10 * minimum)
-                            and ratio >= 0.95
-                            and (structured or rejections >= minimum)
-                        ):
-                            confidence = 1.0
                 elif family == "connect":
                     if not structured:
                         continue
-                    threat, confidence = "medium", 0.7
+                    threat, confidence = "medium", scan_confidence(
+                        0.7, len(candidates), minimum
+                    )
                     reason = "short connections to many nearby addresses, closed without application data"
                 elif family in {"flags", "udp"}:
                     if (
@@ -533,6 +541,10 @@ class ScanDetector:
                     ):
                         continue
                     threat, confidence = "medium", 0.65
+                    if family == "udp":
+                        confidence = scan_confidence(
+                            confidence, len(candidates), minimum, ratio
+                        )
                     reason = (
                         "small ACK/FIN-only probes to many nearby addresses; incomplete capture is also possible"
                         if family == "flags"
@@ -584,9 +596,12 @@ class ScanDetector:
         if finding.approximate:
             while group.progress.next_milestone <= finding.target_count:
                 group.progress.next_milestone *= 10
-        elif finding.threat == "high" and finding.confidence == 1.0:
+        elif finding.confidence == 1.0:
             progress = ScanProgress(
-                min(p.start for p in finding.flows), self.clock
+                min(p.start for p in finding.flows),
+                self.clock,
+                finding.flows[0].family,
+                finding.threat,
             )
             for probe in finding.flows:
                 progress.counter.add(probe.dst)
@@ -620,9 +635,9 @@ class ScanDetector:
         if probes and count >= progress.next_milestone:
             return Finding(
                 tuple(progress.samples.values()),
-                "high",
+                progress.threat,
                 1.0,
-                "continuing previously confirmed SYN scan; approximate distinct-target count, with sampled probe flows",
+                "continuing previously confirmed horizontal scan; approximate distinct-target count, with sampled probe flows",
                 self.clock - progress.started,
                 None,
                 count,

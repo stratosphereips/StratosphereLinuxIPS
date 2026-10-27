@@ -320,7 +320,7 @@ def test_arp_worker_emits_explained_decisions(familiar: bool, count: int, kind: 
     assert evidence.evidence_type.name == kind
     assert evidence.profile.ip == SOURCE
     assert evidence.timewindow.number == 2
-    assert len(set(evidence.uid)) == count
+    assert len(set(evidence.uid)) == min(count, 20)
     assert evidence.detection_details["arp_scan"]["targets"] == count
     assert evidence.interface == "eth0"
     assert evidence.threat_level.name == ("INFO" if familiar else "LOW")

@@ -17,6 +17,10 @@ from tests.module_factory import ModuleFactory
     ("horizontal_max_targets", 10),
     ("horizontal_slow_window_seconds", 1),
     ("horizontal_alert_cooldown_seconds", "300"),
+    ("vertical_window_seconds", 0),
+    ("vertical_max_ports", 5),
+    ("other_scan_max_groups", True),
+    ("dhcp_min_addresses", 101),
 ])
 def test_invalid_limits_fail_clearly(option: object, value: object) -> None:
     """Verify invalid limits fail clearly.

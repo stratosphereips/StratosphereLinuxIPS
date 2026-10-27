@@ -160,3 +160,27 @@ linked to evidence so the existing retention policy can preserve them.
 For the Zeek field definitions, see the official [SMB reference](https://docs.zeek.org/en/current/scripts/base/protocols/smb/main.zeek.html),
 [NTLM reference](https://docs.zeek.org/en/current/scripts/base/protocols/ntlm/main.zeek.html)
 and [DCE-RPC reference](https://docs.zeek.org/en/current/scripts/base/protocols/dce-rpc/main.zeek.html).
+
+## Confidence growth and continuing SMB scans
+
+`SMB_SCAN` and `SMB_SHARE_SWEEP` now use the shared [scan progress policy](scan_progress.md).
+The configured per-rule confidence is their initial confidence, not a ceiling.
+For a host scan, 95% requires at least twice `scan_min_hosts` (minimum 20) with
+90% explicit failed SYNs; 100% requires ten times it (minimum 100) and 95%
+explicit failures. At defaults, 200 distinct hosts can confirm the pattern.
+Unknown packet history and retransmissions cannot supply this support.
+
+Share sweeps count distinct actual servers or distinct share names. Confidence
+can reach 95% at twice the respective threshold (minimum 20), then 100% at ten
+times it (minimum 100). This supports the observed broad access; authorized
+administration remains another explanation, and the threat stays medium.
+
+At confirmation, exact probe/share records are released. A fixed 1 KiB counter
+for the confirmed dimension and at most 20 sample IDs replace them. Later
+evidence reports approximate growth near 1,000, 10,000, and so on. Stronger
+confidence and continuation milestones bypass `cooldown_seconds`; a gap that
+long without qualifying probes/mappings starts fresh tracking. Other bounded
+SMB correlations continue, including suspicious transfers after scanning.
+Disabled scan evidence can still use compact state for these correlations.
+Authentication, propagation, remote execution and file-abuse rules retain their
+configured confidence; bulk activity does not automatically make those claims certain.

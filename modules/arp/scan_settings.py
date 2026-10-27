@@ -6,7 +6,6 @@ from typing import Any
 
 from modules.supported_module_names import Modules
 
-
 ARP_SCAN_EXPLANATIONS = {
     "scan_window_seconds": "Seconds of requests counted together. Each target expires separately, so old questions cannot inflate a fresh burst.",
     "scan_min_targets": "Distinct targets needed before examining a burst. Repeated requests count once; this candidate count alone never produces scan evidence.",
@@ -15,7 +14,7 @@ ARP_SCAN_EXPLANATIONS = {
     "scan_broad_targets": "This many unfamiliar targets can establish a large search without an ordered sequence. A burst this large lacking enough scan indicators becomes informational ARP_DISCOVERY, which does not increase scores.",
     "scan_ordered_ratio": "Required share of successive distinct requests to adjacent IPs. Supports smaller ordered sweeps; large unfamiliar searches can be detected in random order.",
     "scan_context_wait_seconds": "Brief wait after a burst becomes a candidate, allowing arriving replies and application traffic to add context. Missing traffic remains unknown, not a failure.",
-    "scan_alert_cooldown_seconds": "Minimum seconds between repeated findings for one source device/address/network. A scan can supersede informational discovery sooner, without waiting for the cooldown.",
+    "scan_alert_cooldown_seconds": "Minimum seconds between ordinary findings for one source device/address/network. Stronger scan confidence and logarithmic continuation milestones bypass it. After confirmation, this also sets the unfamiliar-probe-free gap that ends compact tracking.",
     "scan_familiar_min_interval_seconds": "Two successful TCP/UDP contacts must be separated by this many seconds before a neighbour becomes familiar. Both directions need application bytes; ARP questions and empty probes never train history.",
     "scan_familiar_retention_days": "Expire contact history after this many days without successful use. Live contacts survive restarts and remain separate for each source MAC, gateway and subnet.",
     "scan_checkpoint_seconds": "Seconds between dirty contact-history saves. No disk writes occur per packet. Clean stops save immediately; a crash can lose learning since the last save.",

@@ -21,6 +21,14 @@ class ScanSettings:
     horizontal_evaluation_interval_seconds: float = 1.0
     horizontal_max_groups: int = 256
     horizontal_max_targets: int = 256
+    vertical_window_seconds: float = 3600.0
+    vertical_min_ports: int = 10
+    vertical_alert_cooldown_seconds: float = 300.0
+    vertical_max_groups: int = 256
+    vertical_max_ports: int = 256
+    other_scan_max_groups: int = 256
+    other_scan_quiet_seconds: float = 300.0
+    dhcp_min_addresses: int = 4
 
     @classmethod
     def from_config(cls, conf: Any) -> "ScanSettings":
@@ -56,6 +64,14 @@ class ScanSettings:
             "horizontal_evaluation_interval_seconds": (0, 60),
             "horizontal_max_groups": (1, 4096),
             "horizontal_max_targets": (5, 4096),
+            "vertical_window_seconds": (1, 86400),
+            "vertical_min_ports": (5, 4096),
+            "vertical_alert_cooldown_seconds": (1, 86400),
+            "vertical_max_groups": (1, 4096),
+            "vertical_max_ports": (5, 4096),
+            "other_scan_max_groups": (1, 4096),
+            "other_scan_quiet_seconds": (1, 86400),
+            "dhcp_min_addresses": (2, 100),
         }
         for field in fields(self):
             value = getattr(self, field.name)
@@ -81,4 +97,8 @@ class ScanSettings:
         ):
             raise ValueError(
                 "horizontal_max_targets must cover both target thresholds"
+            )
+        if self.vertical_max_ports < self.vertical_min_ports:
+            raise ValueError(
+                "vertical_max_ports must cover vertical_min_ports"
             )

@@ -2,6 +2,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 from slips_files.common.slips_utils import utils
+from collections.abc import Callable
+import time
+
+from .scan_detector import ScanFlow
+from .scan_settings import ScanSettings
+from .vertical_detector import VerticalDetector
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -27,8 +33,26 @@ class VerticalPortscan:
     Counts are scoped to a source profile, destination and time window.
     """
 
-    def __init__(self, db):
+    def __init__(
+        self,
+        db: object,
+        settings: ScanSettings | None = None,
+        scope: Callable | None = None,
+    ) -> None:
+        """Initialize bounded scan state and optional shared network resolution.
+
+        Parameters:
+            db: Existing database facade used only for evidence and P2P context.
+            settings: Validated limits, or defaults.
+            scope: Cached network identity resolver supplied by the module.
+        """
         self.db = db
+        self.settings = settings or ScanSettings()
+        self.settings.validate()
+        self.detector = VerticalDetector(self.settings)
+        self.scope = scope
+        self.p2p_tuples: set[tuple] = set()
+        self.next_p2p_refresh = 0.0
         # to keep track of the max dports reported per timewindow
         self.cached_thresholds_per_tw = {}
         # The minimum amount of scanned ports to trigger an evidence
@@ -122,6 +146,7 @@ class VerticalPortscan:
         profileid: ProfileID,
         twid: TimeWindow,
         flow: dict | None = None,
+        summary_state: str = "",
     ) -> None:
         """Check the arriving flow's destination instead of rescanning all hosts.
 
@@ -129,18 +154,12 @@ class VerticalPortscan:
             profileid: Original source profile receiving the event.
             twid: Time window containing the failed-port counters.
             flow: Current connection metadata; omit for an explicit full check.
+            summary_state: Profiler fallback for inputs without packet history.
         """
         protocols = (Protocol.TCP, Protocol.UDP)
         if flow is not None:
-            if (
-                not isinstance(flow, dict)
-                or flow.get("saddr") != profileid.ip
-                or str(flow.get("proto", "")).lower() not in {"tcp", "udp"}
-                or not flow.get("daddr")
-                or "starttime" not in flow
-            ):
-                return
-            protocols = (Protocol[str(flow["proto"]).upper()],)
+            self.check_flow(profileid, twid, flow, summary_state)
+            return
         # When scanning an open port, the connection will appear as
         # ESTABLISHED.
         # Open ports are typically very few compared to the full port range.
@@ -223,3 +242,82 @@ class VerticalPortscan:
                     }
 
                     self.set_evidence_vertical_portscan(evidence_details)
+
+    def check_flow(
+        self,
+        profileid: ProfileID,
+        twid: TimeWindow,
+        raw: dict,
+        summary_state: str = "",
+    ) -> None:
+        """Detect from the event without reading accumulated Redis scan totals.
+
+        Parameters:
+            profileid: Source profile of the event.
+            twid: Evidence attribution time window.
+            raw: Original-direction connection metadata.
+            summary_state: Profiler fallback for incomplete legacy summaries.
+        """
+        if not isinstance(raw, dict) or raw.get("saddr") != profileid.ip:
+            return
+        flow = ScanFlow.from_flow(
+            raw, summary_state or raw.get("interpreted_state", "")
+        )
+        if flow is None:
+            return
+        scope = self.scope(flow) if self.scope else flow.interface
+        if scope is None:
+            return
+        now = time.monotonic()
+        if flow.proto == "tcp" and now >= self.next_p2p_refresh:
+            self.next_p2p_refresh = now + 5
+            self.p2p_tuples.clear()
+            for item in self.db.get_authenticated_p2p_connections():
+                try:
+                    entry = (
+                        str(item["local_ip"]),
+                        int(item["local_port"]),
+                        str(item["remote_ip"]),
+                        int(item["remote_port"]),
+                    )
+                except (KeyError, TypeError, ValueError):
+                    continue
+                self.p2p_tuples.add(entry)
+                self.p2p_tuples.add((entry[2], entry[3], entry[0], entry[1]))
+                if len(self.p2p_tuples) >= 8192:
+                    break
+        if (
+            flow.proto == "tcp"
+            and (flow.src, flow.sport, flow.dst, flow.port) in self.p2p_tuples
+        ):
+            return
+        finding = self.detector.process(flow, scope)
+        if finding is None:
+            return
+        count = finding.target_count or len(finding.flows)
+        uids = list(
+            finding.sample_uids or tuple(p.uid for p in finding.flows[-20:])
+        )
+        description = (
+            f"Vertical port scan from {flow.src} to {flow.dst}: "
+            f"{'approximately ' if finding.approximate else ''}{count} distinct {flow.proto.upper()} destination ports "
+            f"{'over the continuing scan' if finding.approximate else 'within'} {finding.window:g} seconds. "
+            f"{finding.reason}. Confidence: {finding.confidence:g}."
+        )
+        self.db.set_evidence(
+            Evidence(
+                evidence_type=EvidenceType.VERTICAL_PORT_SCAN,
+                attacker=Attacker(Direction.SRC, IoCType.IP, flow.src),
+                victim=Victim(Direction.DST, IoCType.IP, flow.dst),
+                threat_level=ThreatLevel[finding.threat.upper()],
+                confidence=finding.confidence,
+                description=description,
+                profile=profileid,
+                timewindow=twid,
+                uid=uids,
+                timestamp=flow.start,
+                proto=Proto(flow.proto),
+            )
+        )
+        if finding.threat in {"medium", "high"}:
+            self.db.mark_ip_as_port_scanner(flow.src, str(twid))
