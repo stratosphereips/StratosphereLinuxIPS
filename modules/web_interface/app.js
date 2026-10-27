@@ -881,6 +881,7 @@ function evidenceTypeLabel(record) {
   if (record.archived_report || record.evidence_type === "P2P_REPORT") return "Type unavailable";
   if (["report", "blame"].includes(record.message_type)) return "Type not supplied";
   if (record.evidence_type && String(record.module || "").split(",").includes("p2p_trust")) return alertTypeName(record.evidence_type);
+  if (["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"].includes(record.evidence_type)) return alertTypeName(record.evidence_type);
   return record.evidence_type || record.message_type || "All types";
 }
 
@@ -2549,6 +2550,8 @@ function alertTypeName(type) {
     HORIZONTAL_PORT_SCAN: "Horizontal port scan",
     HTTP_TRAFFIC: "HTTP traffic",
     ARP_SCAN: "ARP scan",
+    TLS_PROVIDER_IMPERSONATION: "Suspected TLS provider impersonation",
+    INCOMPATIBLE_CN: "TLS provider mismatch (legacy)",
     P2P_REPORT: "P2P report",
   };
   return names[type] || String(type || "Unknown detection").replaceAll("_", " ").toLowerCase()
@@ -6301,9 +6304,10 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     SRC: "Connecting host / source", DST: "Receiving host / destination",
   } : {};
   if (isPeerReport(record)) recordCard.append(detailRow("Reported host", hostLink(record.profile_ip || record.attacker?.value)));
-  else if (record.attacker) recordCard.append(evidenceEntity(subnetRoles[record.attacker.direction] || "Attacker / source", record.attacker));
+  else if (record.attacker) recordCard.append(evidenceEntity(record.evidence_type === "TLS_PROVIDER_IMPERSONATION"
+    ? "Server / suspected impersonator" : subnetRoles[record.attacker.direction] || "Attacker / source", record.attacker));
   if (record.victim) recordCard.append(evidenceEntity(subnetRoles[record.victim.direction]
-    || "Victim / destination", record.victim));
+    || (record.evidence_type === "TLS_PROVIDER_IMPERSONATION" ? "Connecting client" : "Victim / destination"), record.victim));
   if (alertCount) {
     const links = document.createElement("div");
     links.className = "evidence-detail-alert-links";

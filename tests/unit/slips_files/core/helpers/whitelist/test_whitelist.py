@@ -273,6 +273,32 @@ def test_alert_type_scoped_ip_rule(
     )
 
 
+@pytest.mark.parametrize("rule_type", ["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"])
+@pytest.mark.parametrize("reported_type", ["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"])
+def test_provider_impersonation_whitelist_alias(rule_type: str, reported_type: str) -> None:
+    """Keep existing scoped whitelist rules working after the detector rename.
+
+    Parameters:
+        rule_type: Current or legacy evidence name in the whitelist file.
+        reported_type: Evidence name received from a detector or peer.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(whitelist.parser.parse_line(
+        f"ip,192.0.2.10,dst,alerts,{rule_type}"
+    ))
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", Direction.DST, "alerts", evidence_type=reported_type
+    )
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", Direction.DST, "alerts", evidence_type="ARP_SCAN"
+    )
+
+
 def test_new_scoped_rule_matches_before_bloom_refresh() -> None:
     """Use the current Redis rule while a worker's filter is still stale."""
     whitelist = ModuleFactory().create_whitelist_obj()

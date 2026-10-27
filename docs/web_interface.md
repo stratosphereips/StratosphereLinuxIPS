@@ -1120,9 +1120,15 @@ interpreted reliably. The original message remains visible under **Original
 validation in log** and in JSON. Other failures, such as self-signed
 certificates or an untrusted issuer, are still shown as failures.
 
-`INCOMPATIBLE_CN` is a separate check of the organization named in the
-certificate against known destination networks and domains. It is not a
-certificate expiry check.
+**Suspected TLS provider impersonation** (`TLS_PROVIDER_IMPERSONATION`)
+checks the certificate's claimed provider against known server domains and
+networks. New findings are high threat and belong to the server presenting
+the certificate; the description also identifies the connecting client.
+Known provider domains hosted on CDNs are accepted. Provider data can be
+incomplete, so this is a suspected false identity, separate from certificate
+expiry or a hostname mismatch. Older `INCOMPATIBLE_CN` records are displayed
+as **TLS provider mismatch (legacy)** and retain their recorded threat,
+profile and scores. Opening saved results does not reclassify them.
 
 Alert and evidence drill-down uses structured cards instead of unformatted
 record text. Drag the left edge of the investigation panel to resize it

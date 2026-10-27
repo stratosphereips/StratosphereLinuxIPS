@@ -98,7 +98,7 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `flowalerts` | `GRE_TUNNEL` | `PAMP` |
 | `flowalerts` | `HIGH_ENTROPY_DNS_ANSWER` | `DAMP` |
 | `flowalerts` | `HORIZONTAL_PORT_SCAN` | `PAMP` |
-| `flowalerts` | `INCOMPATIBLE_CN` | `PAMP` |
+| `flowalerts` | `TLS_PROVIDER_IMPERSONATION` (legacy alias: `INCOMPATIBLE_CN`) | `PAMP` |
 | `flowalerts` | `INVALID_DNS_RESOLUTION` | `PAMP` |
 | `flowalerts` | `LONG_CONNECTION` | `DAMP` |
 | `flowalerts` | `MALICIOUS_JA3` | `PAMP` |

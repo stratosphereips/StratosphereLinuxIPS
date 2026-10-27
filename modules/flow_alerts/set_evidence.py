@@ -230,36 +230,56 @@ class SetEvidenceHelper:
         ):
             self.db.set_evidence(evidence)
 
-    def incompatible_cn(self, twid, flow, org: str) -> None:
+    def tls_provider_impersonation(
+        self, twid: str, flow: Any, org: str
+    ) -> None:
+        """Record the server's suspected false provider claim as high threat.
+
+        Parameters:
+            twid: Detection time window.
+            flow: TLS connection identifying its client and server.
+            org: Provider named in the certificate subject.
+        """
         confidence: float = 0.9
         description: str = (
-            f"Incompatible certificate CN to IP: {flow.daddr} domain: "
-            f"{flow.server_name}. The certificate is "
-            f"claiming to belong to {org.capitalize()}."
+            f"Suspected TLS provider impersonation: {flow.server_name} "
+            f"({flow.daddr}) presented a certificate claiming to belong to "
+            f"{org.capitalize()}, but its server name and IP do not match "
+            f"Slips' known {org.capitalize()} domains or networks. "
+            f"Client {flow.saddr} connected to this server. "
+            "Provider lists can be incomplete; this is a suspected false identity."
         )
 
         twid_number: int = int(twid.replace("timewindow", ""))
         evidence: Evidence = Evidence(
-            evidence_type=EvidenceType.INCOMPATIBLE_CN,
+            evidence_type=EvidenceType.TLS_PROVIDER_IMPERSONATION,
             attacker=Attacker(
-                direction=Direction.SRC,
-                ioc_type=IoCType.IP,
-                value=flow.saddr,
-            ),
-            victim=Victim(
                 direction=Direction.DST,
                 ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
-            threat_level=ThreatLevel.MEDIUM,
+            victim=Victim(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=flow.saddr,
+            ),
+            threat_level=ThreatLevel.HIGH,
             description=description,
-            profile=ProfileID(ip=flow.saddr),
+            profile=ProfileID(ip=flow.daddr),
             timewindow=TimeWindow(number=twid_number),
             uid=[flow.uid],
             timestamp=flow.starttime,
             confidence=confidence,
             src_port=flow.sport,
             dst_port=flow.dport,
+            detection_details={
+                "claimed_provider": org,
+                "server_name": flow.server_name,
+                "server_ip": flow.daddr,
+                "client_ip": flow.saddr,
+                "certificate_subject": flow.subject,
+                "reason": "server_name_and_ip_outside_known_provider",
+            },
         )
 
         self.db.set_evidence(evidence)

@@ -273,9 +273,31 @@ And you can add other SSL feeds in ```ssl_feeds``` in ```slips.yaml```.
 
 ### Certificate organization and capture dates
 
-`INCOMPATIBLE_CN` checks whether a certificate claims a supported
-organization while the destination IP and server name are outside that
-organization's known networks and domains. The network lookup reads decoded
+`TLS_PROVIDER_IMPERSONATION` (**Suspected TLS provider impersonation**) is
+**high threat**. It checks whether the certificate's organization fields name
+a supported provider while both the server name and destination IP are
+outside that provider's known domains and networks. A provider name appearing
+only inside an unrelated hostname is not enough. A missing certificate
+subject, server name, or bundled provider-domain list skips this check.
+
+The description names the server, its claimed provider, and the client that
+connected. The server presenting the certificate is the suspected attacker;
+the client is the potential victim. The high-threat evidence belongs to the
+server's profile. The triggering connection retains its original direction.
+Provider lists can be incomplete, so the finding describes suspected
+impersonation rather than claiming it has proved who owns the domain.
+
+Domains bundled with Slips are loaded once when the detector starts, so a
+missing or older shared cache does not by itself flag those legitimate
+domains. A provider domain hosted on a CDN is accepted even if that CDN's IP
+is outside the provider's networks. For example, `mem.gfx.ms` is used by
+[Microsoft Support](https://support.microsoft.com/en-us/); the bundled
+Microsoft domains include `gfx.ms` and `assets.onestore.ms`, both listed in
+[Microsoft's service endpoints](https://learn.microsoft.com/microsoft-365/enterprise/urls-and-ip-address-ranges).
+Exact domains and their subdomains match;
+names such as `gfx.ms.attacker.example` do not.
+
+The network lookup reads decoded
 IP ranges from the shared organization cache; it does not require those
 ranges to exist in each analysis database. For example,
 `104.244.43.176` belongs to the bundled Twitter range `104.244.40.0/21` and
@@ -296,7 +318,12 @@ such as self-signed certificates are not hidden.
 The organization lookup fix applies to new analysis runs using the updated
 code, or after restarting a running capture. Existing saved
 evidence and alert scores remain historical records; viewing a saved output
-does not run the detectors again or delete earlier findings.
+does not run the detectors again or delete earlier findings. The old name,
+`INCOMPATIBLE_CN`, remains an accepted alias for stored evidence, P2P input
+and evidence-specific whitelist rules. New detections use the new name.
+Saved findings retain their original threat and profile; the web labels
+the old type **TLS provider mismatch (legacy)**. Reanalyze into a new output
+folder to apply the corrected detector and scores to an old capture.
 
 ## Pastebin downloads
 

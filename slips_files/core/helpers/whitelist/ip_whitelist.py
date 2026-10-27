@@ -103,10 +103,19 @@ class IPAnalyzer(IWhitelistAnalyzer):
                     pass
 
         if evidence_type:
+            types = (
+                ("TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN")
+                if evidence_type
+                in {"TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"}
+                else (evidence_type,)
+            )
             candidates = [
                 scoped
                 for candidate in candidates
-                for scoped in (f"{candidate}|{evidence_type}", candidate)
+                for scoped in (
+                    *[f"{candidate}|{kind}" for kind in types],
+                    candidate,
+                )
             ]
 
         for candidate in candidates:

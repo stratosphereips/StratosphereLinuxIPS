@@ -221,33 +221,32 @@ def test_different_localnet_usage(
 
 
 @pytest.mark.parametrize(
-    "org, daddr, expected_description",
+    "org, daddr",
     [
         # Testcase 1: Regular organization name
         (
             "example",
             "10.0.0.1",
-            "Incompatible certificate CN to IP: 10.0.0.1 domain: x.com. "
-            "The certificate is claiming to belong to Example.",
         ),
         # Testcase 2: Organization name with spaces
         (
             "google llc",
             "8.8.8.8",
-            "Incompatible certificate CN to IP: 8.8.8.8 domain: x.com. "
-            "The certificate is claiming to belong to Google llc.",
         ),
-        # Testcase 3: Empty organization name
+        # Testcase 3: Provider claim for a server on a different network
         (
-            "",
+            "microsoft",
             "192.168.1.1",
-            "Incompatible certificate CN to IP: 192.168.1.1 domain: x.com. "
-            "The certificate is claiming to belong to .",
         ),
     ],
 )
-def test_incompatible_cn(org, daddr, expected_description):
-    """Testing the incompatible_CN method."""
+def test_tls_provider_impersonation(org: str, daddr: str) -> None:
+    """Attribute a high-threat provider claim to the presenting server.
+
+    Parameters:
+        org: Provider named in the certificate.
+        daddr: Destination presenting that certificate.
+    """
     set_ev = ModuleFactory().create_set_evidence_helper()
     set_ev.db.get_ip_identification.return_value = "- Some Information -"
     flow = SSL(
@@ -272,20 +271,27 @@ def test_incompatible_cn(org, daddr, expected_description):
         ja3s="",
         is_DoH="",
     )
-    set_ev.incompatible_cn("timewindow1", flow, org)
+    set_ev.tls_provider_impersonation("timewindow1", flow, org)
 
     assert set_ev.db.set_evidence.call_count == 1
     args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
-    assert evidence.evidence_type == EvidenceType.INCOMPATIBLE_CN
-    assert evidence.attacker.value == flow.saddr
-    assert evidence.victim.value == flow.daddr
-    assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.profile.ip == flow.saddr
+    assert evidence.evidence_type.name == "TLS_PROVIDER_IMPERSONATION"
+    assert evidence.attacker.value == flow.daddr
+    assert evidence.attacker.direction == Direction.DST
+    assert evidence.victim.value == flow.saddr
+    assert evidence.victim.direction == Direction.SRC
+    assert evidence.threat_level == ThreatLevel.HIGH
+    assert evidence.profile.ip == flow.daddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
     assert evidence.confidence == 0.9
-    assert evidence.description == expected_description
+    assert "Suspected TLS provider impersonation" in evidence.description
+    assert org.capitalize() in evidence.description
+    assert flow.daddr in evidence.description
+    assert flow.saddr in evidence.description
+    assert evidence.detection_details["claimed_provider"] == org
+    assert EvidenceType["INCOMPATIBLE_CN"] is EvidenceType.TLS_PROVIDER_IMPERSONATION
 
 
 @pytest.mark.parametrize(
