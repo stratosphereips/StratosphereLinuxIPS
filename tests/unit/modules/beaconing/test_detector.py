@@ -98,7 +98,7 @@ def test_pauses_resume_and_changed_behavior() -> None:
 def test_dedup_network_rollover_capacity_and_restore() -> None:
     """Dedup network rollover capacity and restore.
     """
-    module = ModuleFactory().create_beaconing_obj(max_channels=16, window_connections=16, evaluate_interval_seconds=0.0)
+    module = ModuleFactory().create_beaconing_obj(max_channels=16, max_candidates=16, window_connections=16, evaluate_interval_seconds=0.0)
     detector = module.detector
     for i in range(20):
         detector.process(event(i), "wifi", i)
@@ -106,12 +106,13 @@ def test_dedup_network_rollover_capacity_and_restore() -> None:
     key = next(iter(detector.channels))
     assert len(detector.channels[key].events) == 16
     detector.process(event(20), "phone", 21)
-    assert len(detector.channels) == 2
+    assert len(detector.channels) == 1
+    assert len(detector.candidates) == 1
     detector.process(event(200, event(18).timestamp + 1), "wifi", 22)
     assert len(detector.channels[key].events) == 16
     assert detector.late_flows == 1
     detector.should_alert(key, "periodic", event(20).timestamp)
-    records = [(k, detector.snapshot(k)) for k in reversed(detector.channels)]
+    records = [(k, detector.snapshot(k)) for k in reversed([*detector.channels, *detector.candidates])]
     restored = Detector(module.settings)
     restored.restore(records)
     assert restored.snapshot(key) == detector.snapshot(key)
@@ -120,8 +121,9 @@ def test_dedup_network_rollover_capacity_and_restore() -> None:
     for i in range(1000):
         detector.process(event(i + 1000, dst=f"10.0.{i // 250}.{i % 250 + 1}"), "wifi", i)
     assert len(detector.channels) <= 16
-    assert len(detector.deleted) <= 16
-    assert len(detector.dirty) <= 16
+    assert len(detector.candidates) <= 16
+    assert len(detector.deleted) <= 32
+    assert len(detector.dirty) <= 32
     assert len(detector.seen) <= 16 * 16
 
 
@@ -138,7 +140,7 @@ def test_reject_invalid_flow(changes: dict) -> None:
     assert not module.detector.channels
 
 
-@pytest.mark.parametrize("changes", [{"min_connections": 1}, {"jitter_tolerance": True}, {"max_channels": 16.5}, {"max_period_seconds": float("inf")}, {"window_connections": 16, "min_connections": 20}, {"max_period_seconds": 86400, "retention_hours": 1}])
+@pytest.mark.parametrize("changes", [{"min_connections": 1}, {"jitter_tolerance": True}, {"max_channels": 16.5}, {"max_period_seconds": float("inf")}, {"window_connections": 16, "min_connections": 20}, {"max_period_seconds": 86400, "retention_hours": 1}, {"max_candidates": 0}, {"report_growth_factor": 1}, {"stable_evaluate_every": 0}, {"stable_evaluate_interval_seconds": -1}])
 def test_reject_invalid_settings(changes: dict) -> None:
     """Reject invalid settings.
 
@@ -162,3 +164,78 @@ def test_runtime_cadence_and_constant_epochs() -> None:
     key = next(iter(detector.channels))
     assert len({e.timestamp for e in detector.channels[key].events}) == 20
     assert not rhythm([0] * 30, module.settings)
+
+
+def test_short_connection_flood_preserves_mature_channels() -> None:
+    """One-off destinations and short retry bursts cannot evict a mature window."""
+    module = ModuleFactory().create_beaconing_obj(max_channels=16, max_candidates=16)
+    detector = module.detector
+    for i in range(20):
+        detector.process(event(i), "network", i)
+    key = next(iter(detector.channels))
+    for i in range(100):
+        for retry in range(4):
+            detector.process(event(1000 + i * 4 + retry, timestamp=1700002000 + i, dst=f"10.0.0.{i + 1}"), "network", 100 + i)
+    assert key in detector.channels
+    assert len(detector.channels) == 1
+    assert detector.evictions == 0
+    assert detector.candidate_evictions == 84
+    assert len(detector.candidates) == 16
+    assert all(len(channel.events) == 4 for channel in detector.candidates.values())
+    assert all(channel.events.maxlen == 12 for channel in detector.candidates.values())
+
+
+def test_long_silence_requires_new_observations() -> None:
+    """A resumed channel earns a new finding from fresh connections."""
+    module = ModuleFactory().create_beaconing_obj()
+    detector = module.detector
+    for i in range(12):
+        result = detector.process(event(i), "network", i * 60)
+    key, stats = result
+    assert detector.should_alert(key, "periodic", event(11).timestamp, stats)
+    for i in range(11):
+        assert detector.process(event(i + 100, timestamp=1700010000 + i * 60), "network", 10000 + i * 60) is None
+    result = detector.process(event(111, timestamp=1700010660), "network", 10660)
+    assert result
+    key, stats = result
+    assert detector.should_alert(key, "periodic", 1700010660, stats)
+    assert detector.channels[key].reports["periodic"]["count"] == 12
+    assert not detector.channels[key].reports["periodic"]["continuation"]
+
+
+def test_mature_capacity_still_bounds_retained_windows() -> None:
+    """Promotion at a full mature pool discards one window and records the loss."""
+    module = ModuleFactory().create_beaconing_obj(max_channels=16, max_candidates=16)
+    for destination in range(17):
+        for i in range(12):
+            module.detector.process(event(destination * 100 + i, timestamp=1700000000 + destination * 1000 + i * 60, dst=f"10.0.0.{destination+1}"), "network", destination * 1000 + i * 60)
+    assert len(module.detector.channels) == 16
+    assert not module.detector.candidates
+    assert module.detector.evictions == 1
+    assert len(module.detector.deleted) == 1
+
+
+@pytest.mark.parametrize("change", ["period", "mode", "interrupted"])
+def test_changed_rhythm_and_interrupted_progress(change: str) -> None:
+    """Changed timing bypasses old progress; a recovered same pattern uses cooldown.
+
+    Parameters:
+        change: New period, new timing method, or recovery after a failed check.
+    """
+    module = ModuleFactory().create_beaconing_obj()
+    detector = module.detector
+    for i in range(12):
+        result = detector.process(event(i), "network", i * 60)
+    key, stats = result
+    assert detector.should_alert(key, "periodic", event(11).timestamp, stats)
+    channel = detector.channels[key]
+    if change == "period":
+        stats = {**stats, "period": stats["period"] * 2}
+    elif change == "mode":
+        stats = {**stats, "mode": "after-reply"}
+    else:
+        channel.reports["periodic"]["interrupted"] = True
+    assert detector.should_alert(key, "periodic", event(12).timestamp, stats) is (change != "interrupted")
+    if change == "interrupted":
+        assert detector.should_alert(key, "periodic", event(12).timestamp + 3600, stats)
+    assert not channel.reports["periodic"]["continuation"]

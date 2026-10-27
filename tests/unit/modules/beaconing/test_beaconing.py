@@ -125,3 +125,44 @@ def test_pre_main_and_subscribe(tmp_path: Path) -> None:
         module.pre_main()
     assert isinstance(module.model, PatternModel)
     module.shutdown_gracefully()
+
+
+def test_continuing_reports_grow_logarithmically_and_allow_c2_upgrade() -> None:
+    """Reduce repeated findings and classifications without delaying a checked C2 upgrade."""
+    module = ModuleFactory().create_beaconing_obj()
+    module.live = False
+    module.model = Mock(minimum_threshold=0.5, version="test", protocols=["tcp"])
+    module.model.score.return_value = 0.0
+    for i in range(10032):
+        module.handle_flow(payload(i))
+    records = [call.args[0] for call in module.db.set_evidence.call_args_list]
+    assert [record.detection_details["beaconing"]["connections"] for record in records] == [12, 108, 1004, 10028]
+    assert len(records) == 4
+    assert module.model.score.call_count < 320
+    assert all(len(record.uid) <= 32 for record in records)
+    assert records[-1].detection_details["beaconing"]["window_connections"] == 128
+    assert "Continuing" in records[-1].description
+    module.model.score.return_value = 0.999
+    for i in range(10032, 10064):
+        module.handle_flow(payload(i))
+    upgrade = module.db.set_evidence.call_args.args[0]
+    assert upgrade.evidence_type == EvidenceType.SUSPECTED_C2_CHANNEL
+    assert not upgrade.detection_details["beaconing"]["continuation"]
+
+
+def test_capacity_notice_requires_new_evictions() -> None:
+    """A historical eviction count cannot repeat warnings on quiet checkpoints."""
+    module = ModuleFactory().create_beaconing_obj()
+    module.store = Mock()
+    module.detector.evictions = 410
+    with patch("modules.beaconing.beaconing.time.monotonic", return_value=100):
+        module._checkpoint(force=True)
+    assert module.print.call_count == 1
+    with patch("modules.beaconing.beaconing.time.monotonic", return_value=200):
+        module._checkpoint(force=True)
+    assert module.print.call_count == 1
+    module.detector.evictions += 1
+    with patch("modules.beaconing.beaconing.time.monotonic", return_value=300):
+        module._checkpoint(force=True)
+    assert module.print.call_count == 2
+    assert "1 mature windows discarded" in module.print.call_args.args[0]

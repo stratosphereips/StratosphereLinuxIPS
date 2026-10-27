@@ -264,6 +264,9 @@ class Channel:
     pending: int = 0
     last_evaluation: float = -1e30
     last_alert: dict[str, float] = field(default_factory=dict)
+    count: int = 0
+    matching: bool = False
+    reports: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class Detector:
@@ -278,11 +281,13 @@ class Detector:
         settings.validate()
         self.settings = settings
         self.channels: OrderedDict[str, Channel] = OrderedDict()
+        self.candidates: OrderedDict[str, Channel] = OrderedDict()
         self.seen: OrderedDict[str, None] = OrderedDict()
         self.dirty: set[str] = set()
         self.deleted: set[str] = set()
         self.watermark = 0.0
         self.evictions = 0
+        self.candidate_evictions = 0
         self.late_flows = 0
 
     def process(
@@ -316,62 +321,158 @@ class Detector:
         if o.timestamp < cutoff:
             self.late_flows += 1
             return None
-        channel = self.channels.get(key)
+        channel = self.channels.get(key) or self.candidates.get(key)
         if channel is None:
-            if len(self.channels) >= s.max_channels:
-                old, _ = self.channels.popitem(last=False)
-                self.dirty.discard(old)
-                self.deleted.add(old)
-                if len(self.deleted) > s.max_channels:
-                    self.deleted.pop()
-                self.evictions += 1
-            channel = Channel(deque(maxlen=s.window_connections), o.timestamp)
-            self.channels[key] = channel
+            if len(self.candidates) >= s.max_candidates:
+                old, evicted = self.candidates.popitem(last=False)
+                self._discard(old)
+                if evicted.last_seen >= cutoff:
+                    self.candidate_evictions += 1
+            channel = Channel(deque(maxlen=s.min_connections), o.timestamp)
+            self.candidates[key] = channel
             self.deleted.discard(key)
-        self.channels.move_to_end(key)
+        table = self.channels if key in self.channels else self.candidates
+        table.move_to_end(key)
+        period = max(
+            (report["period"] for report in channel.reports.values()),
+            default=0,
+        )
+        if (
+            channel.events
+            and period
+            and o.timestamp - channel.last_seen
+            > max(s.alert_cooldown_seconds, period * (s.max_missed + 2))
+        ):
+            channel.events.clear()
         while channel.events and channel.events[0].timestamp < cutoff:
             channel.events.popleft()
+        if not channel.events:
+            channel.count = 0
+            channel.pending = 0
+            channel.matching = False
+            channel.reports.clear()
+            channel.last_alert.clear()
+            channel.last_evaluation = -1e30
         if any(e.uid == o.uid for e in channel.events):
             return None
         if channel.events and o.timestamp < channel.events[-1].timestamp:
             self.late_flows += 1
             ordered = sorted([*channel.events, o], key=lambda e: e.timestamp)
             channel.events = deque(
-                ordered[-s.window_connections :], maxlen=s.window_connections
+                ordered[-channel.events.maxlen :], maxlen=channel.events.maxlen
             )
         else:
             channel.events.append(o)
         channel.last_seen = max(channel.last_seen, o.timestamp)
+        channel.count += 1
         channel.pending += 1
         self.dirty.add(key)
+        if key in self.candidates and len(channel.events) >= s.min_connections:
+            if len(self.channels) >= s.max_channels:
+                old, evicted = self.channels.popitem(last=False)
+                self._discard(old)
+                if evicted.last_seen >= cutoff:
+                    self.evictions += 1
+            self.candidates.pop(key)
+            channel.events = deque(channel.events, maxlen=s.window_connections)
+            self.channels[key] = channel
+        every = s.evaluate_every
+        interval = s.evaluate_interval_seconds
+        if channel.matching:
+            every = max(every, s.stable_evaluate_every)
+            interval = max(interval, s.stable_evaluate_interval_seconds)
         if (
             len(channel.events) < s.min_connections
-            or channel.pending < s.evaluate_every
-            or now - channel.last_evaluation < s.evaluate_interval_seconds
+            or channel.pending < every
+            or now - channel.last_evaluation < interval
         ):
             return None
         channel.pending = 0
         channel.last_evaluation = now
         result = features(list(channel.events), s)
+        channel.matching = bool(result)
+        if not result:
+            for report in channel.reports.values():
+                report["interrupted"] = True
         return (key, result) if result else None
 
-    def should_alert(self, key: str, kind: str, timestamp: float) -> bool:
-        """Rate-limit each finding category while allowing a later C2 upgrade.
+    def _discard(self, key: str) -> None:
+        """Queue removal of an evicted checkpoint without retaining its window.
+
+        Parameters:
+            key: Removed channel or candidate identity.
+        """
+        self.dirty.discard(key)
+        self.deleted.add(key)
+        if (
+            len(self.deleted)
+            > self.settings.max_channels + self.settings.max_candidates
+        ):
+            self.deleted.pop()
+
+    def should_alert(
+        self,
+        key: str,
+        kind: str,
+        timestamp: float,
+        stats: dict[str, Any] | None = None,
+    ) -> bool:
+        """Report a new pattern, growth milestone or changed rhythm per category.
 
         Parameters:
             key: Existing channel key.
             kind: Periodicity or suspected C2 category.
             timestamp: Last connection's packet time.
+            stats: Current checked pattern, used to recognize a changed rhythm.
 
         Returns:
-            True once per category and cooldown interval.
+            Whether a fresh checked pattern warrants another evidence.
         """
         channel = self.channels[key]
-        if (
-            timestamp - channel.last_alert.get(kind, -1e30)
-            < self.settings.alert_cooldown_seconds
-        ):
-            return False
+        previous = channel.reports.get(kind)
+        period = float((stats or {}).get("period", 0))
+        mode = str((stats or {}).get("mode", ""))
+        changed = bool(
+            previous
+            and period
+            and previous["period"]
+            and (
+                max(period / previous["period"], previous["period"] / period)
+                >= 2
+                or mode != previous["mode"]
+            )
+        )
+        continuation = bool(
+            previous and not changed and not previous.get("interrupted")
+        )
+        if continuation:
+            count = channel.count - previous["origin"]
+            if count < previous["next_count"]:
+                return False
+        else:
+            if (
+                not changed
+                and timestamp - channel.last_alert.get(kind, -1e30)
+                < self.settings.alert_cooldown_seconds
+            ):
+                return False
+            count = len(channel.events)
+            previous = {
+                "origin": channel.count - count,
+                "started": channel.events[0].timestamp,
+                "period": period,
+                "mode": mode,
+            }
+        next_count = self.settings.report_growth_factor
+        while next_count <= count:
+            next_count *= self.settings.report_growth_factor
+        channel.reports[kind] = {
+            **previous,
+            "next_count": next_count,
+            "count": count,
+            "continuation": continuation,
+            "interrupted": False,
+        }
         channel.last_alert[kind] = timestamp
         self.dirty.add(key)
         return True
@@ -385,7 +486,7 @@ class Detector:
         Returns:
             JSON-compatible recent connections and evidence cooldowns.
         """
-        channel = self.channels[key]
+        channel = self.channels.get(key) or self.candidates[key]
         endpoint = channel.events[-1]
         return {
             "endpoint": [
@@ -410,6 +511,8 @@ class Detector:
                 for e in channel.events
             ],
             "last_alert": channel.last_alert,
+            "count": channel.count,
+            "reports": channel.reports,
         }
 
     def restore(self, records: list[tuple[str, dict[str, Any]]]) -> None:
@@ -418,7 +521,8 @@ class Detector:
         Parameters:
             records: Newest-first, capped checkpoint records.
         """
-        for key, record in reversed(records[: self.settings.max_channels]):
+        limit = self.settings.max_channels + self.settings.max_candidates
+        for key, record in reversed(records[:limit]):
             src, dst, port, proto, interface = record["endpoint"]
             events = []
             for (
@@ -457,15 +561,37 @@ class Detector:
                 continue
             events.sort(key=lambda e: e.timestamp)
             channel = Channel(
-                deque(events, maxlen=self.settings.window_connections),
+                deque(
+                    events,
+                    maxlen=(
+                        self.settings.window_connections
+                        if len(events) >= self.settings.min_connections
+                        else self.settings.min_connections
+                    ),
+                ),
                 events[-1].timestamp,
                 last_alert={
                     k: float(v)
                     for k, v in record.get("last_alert", {}).items()
                     if k in {"periodic", "c2"} and math.isfinite(float(v))
                 },
+                count=max(len(events), int(record.get("count", len(events)))),
+                reports=record.get("reports", {}),
             )
-            self.channels[key] = channel
+            table = (
+                self.channels
+                if len(events) >= self.settings.min_connections
+                else self.candidates
+            )
+            table[key] = channel
+            capacity = (
+                self.settings.max_channels
+                if table is self.channels
+                else self.settings.max_candidates
+            )
+            if len(table) > capacity:
+                old, _ = table.popitem(last=False)
+                self._discard(old)
             self.watermark = max(self.watermark, channel.last_seen)
             scope = json.loads(key)[0]
             for e in events:

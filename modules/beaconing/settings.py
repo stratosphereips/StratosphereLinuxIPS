@@ -22,6 +22,10 @@ class Settings:
     evaluate_every: int = 4
     evaluate_interval_seconds: float = 5.0
     max_channels: int = 2048
+    max_candidates: int = 4096
+    report_growth_factor: int = 10
+    stable_evaluate_every: int = 32
+    stable_evaluate_interval_seconds: float = 60.0
     retention_hours: float = 72.0
     alert_cooldown_seconds: float = 3600.0
     flush_interval_seconds: float = 30.0
@@ -62,6 +66,10 @@ class Settings:
             "evaluate_every": (1, 128),
             "evaluate_interval_seconds": (0, 3600),
             "max_channels": (16, 16384),
+            "max_candidates": (16, 65536),
+            "report_growth_factor": (2, 100),
+            "stable_evaluate_every": (1, 512),
+            "stable_evaluate_interval_seconds": (0, 3600),
             "retention_hours": (1, 8760),
             "alert_cooldown_seconds": (1, 2592000),
             "flush_interval_seconds": (5, 300),

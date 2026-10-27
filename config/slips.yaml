@@ -1069,15 +1069,36 @@ beaconing:
   # Minimum seconds between checks of one channel. Limits repeated work on fast
   # streams; offline analysis uses packet time. Range: 0-3600.
   evaluate_interval_seconds: 5.0
-  # Maximum retained channels. At capacity, older channels are evicted and Slips
-  # logs a warning. More retains more endpoints but uses more memory. Range: 16-16384.
+  # After a pattern is found, require this many new connections between checks.
+  # Reduces repeated fitting/classification while the rolling window still tracks
+  # current traffic. A failed check resumes evaluate_every. Range: 1-512.
+  stable_evaluate_every: 32
+  # Minimum seconds between checks of an established pattern. Raising this saves
+  # CPU but delays recognizing changes; offline runs use packet time. Range: 0-3600.
+  stable_evaluate_interval_seconds: 60.0
+  # Maximum mature channels with at least min_connections observations. Shorter
+  # sequences have a separate limit below, so scan targets and one-off connections
+  # cannot evict mature windows. More uses more memory. Range: 16-16384.
   max_channels: 2048
+  # Maximum short sequences awaiting min_connections observations. Each keeps
+  # at most min_connections records. At capacity the least recently used candidate
+  # is forgotten; it must collect observations again. Range: 16-65536.
+  max_candidates: 4096
+  # Report a new pattern once, then at powers of this connection count: with 10,
+  # the default first finding at 12 is followed near 100, 1000, 10000, etc. Checks
+  # must still confirm the pattern. Larger values reduce evidence/DB writes.
+  # A suspected-C2 upgrade has its own progress and can be reported immediately.
+  # Range: 2-100. Reports can arrive after a milestone because checks are spaced.
+  report_growth_factor: 10
   # Hours of packet history retained across time windows and restarts of this
   # output directory. Expired windows are removed at checkpoint. Range: 1-8760.
   # Must cover max_period_seconds; twelve daily connections need at least 264 hours.
   retention_hours: 72.0
-  # Seconds between findings of the same category for one channel. Limits repeated
-  # evidence; a suspected-C2 finding can still follow a periodicity finding. Range: 1-2592000.
+  # Seconds before re-reporting a pattern lost and then found again in one channel.
+  # Continuing count milestones, a changed timing method or a period changing by
+  # at least 2x can report earlier. A silence longer than this value and four
+  # periods (with default max_missed) starts fresh observation collection.
+  # Range: 1-2592000.
   alert_cooldown_seconds: 3600.0
   # Seconds between saving changed windows to this run's private SQLite file.
   # More reduces disk work but loses more recent observations after a crash. Range: 5-300.

@@ -55,6 +55,9 @@ class Beaconing(IModule):
         self.networks: OrderedDict[str, tuple[float, dict]] = OrderedDict()
         self.next_flush = 0.0
         self.next_warning = 0.0
+        self.next_capacity_warning = 0.0
+        self.reported_evictions = 0
+        self.reported_candidate_evictions = 0
 
     def subscribe_to_channels(self) -> None:
         """Consume existing flow summaries without another capture or Redis keys."""
@@ -194,7 +197,7 @@ class Beaconing(IModule):
         )
         kind = "c2" if suspected else "periodic"
         latest = self.detector.channels[key].events[-1]
-        if self.detector.should_alert(key, kind, latest.timestamp):
+        if self.detector.should_alert(key, kind, latest.timestamp, stats):
             self._emit(latest, latest.timewindow, key, stats, score, suspected)
 
     def _emit(
@@ -221,10 +224,20 @@ class Beaconing(IModule):
             if suspected
             else "Strong recurring connections"
         )
+        kind = "c2" if suspected else "periodic"
+        progress = self.detector.channels[key].reports[kind]
+        continuation = progress["continuation"]
+        count = progress["count"]
+        span = observation.timestamp - progress["started"]
         description = (
-            f"{title}: {observation.src} → {observation.dst}:{observation.port}/{observation.proto}; "
-            f"{stats['count']} connections over {stats['span']:.1f}s; "
-            f"period {stats['period']:.3f}s ({1 / stats['period']:.5f} Hz, {stats['mode']}); "
+            f"{'Continuing ' if continuation else ''}{title}: {observation.src} → {observation.dst}:{observation.port}/{observation.proto}; "
+            f"{count} connections over {span:.1f}s; "
+            + (
+                f"latest {stats['count']} connections: "
+                if continuation
+                else ""
+            )
+            + f"period {stats['period']:.3f}s ({1 / stats['period']:.5f} Hz, {stats['mode']}); "
             f"{stats['support']:.0%} timing support, {stats['jitter']:.1%} relative variation, "
             f"{stats['missed']:.0%} missed-cycle intervals; "
             f"median sent/received {stats['sent']:.0f}/{stats['received']:.0f} B, "
@@ -262,6 +275,17 @@ class Beaconing(IModule):
                 dst_port=observation.port,
                 interface=observation.interface,
                 method=Method.STATISTICAL,
+                detection_details={
+                    "beaconing": {
+                        "connections": count,
+                        "span_seconds": span,
+                        "window_connections": stats["count"],
+                        "window_span_seconds": stats["span"],
+                        "continuation": continuation,
+                        "next_report_connections": progress["next_count"],
+                        "period_seconds": stats["period"],
+                    }
+                },
             )
         )
 
@@ -293,13 +317,26 @@ class Beaconing(IModule):
                     1,
                 )
                 self.next_warning = now + 60
-        if self.detector.evictions and now >= self.next_warning:
+        evictions = self.detector.evictions - self.reported_evictions
+        candidates = (
+            self.detector.candidate_evictions
+            - self.reported_candidate_evictions
+        )
+        if (evictions or candidates) and now >= self.next_capacity_warning:
             self.print(
-                f"Beaconing channel capacity reached: {self.detector.evictions} older windows evicted; increase max_channels if needed.",
-                0,
-                1,
+                (
+                    f"Beaconing channel capacity: {evictions} mature windows discarded since the last notice ({self.detector.evictions} total); max_channels={self.settings.max_channels}."
+                    if evictions
+                    else f"Beaconing candidate capacity: {candidates} short sequences discarded since the last notice; max_candidates={self.settings.max_candidates}."
+                ),
+                0 if evictions else 2,
+                1 if evictions else 0,
             )
-            self.next_warning = now + 60
+            self.reported_evictions = self.detector.evictions
+            self.reported_candidate_evictions = (
+                self.detector.candidate_evictions
+            )
+            self.next_capacity_warning = now + 60
 
     def main(self) -> None:
         """Drain a bounded batch, then checkpoint outside the per-flow path."""

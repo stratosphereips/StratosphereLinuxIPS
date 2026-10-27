@@ -40,6 +40,10 @@ class Store:
             )
             self.connection.execute("PRAGMA user_version=1")
             self.connection.commit()
+            self.persisted_keys = {
+                row[0]
+                for row in self.connection.execute("SELECT key FROM channels")
+            }
         except BaseException:
             self.close()
             raise
@@ -55,7 +59,8 @@ class Store:
             "SELECT key, data FROM channels WHERE updated >= ? ORDER BY updated DESC LIMIT ?",
             (
                 now - detector.settings.retention_hours * 3600,
-                detector.settings.max_channels,
+                detector.settings.max_channels
+                + detector.settings.max_candidates,
             ),
         )
         detector.restore([(key, json.loads(data)) for key, data in rows])
@@ -67,22 +72,30 @@ class Store:
             detector: State and pending dirty keys; retained on write failure.
         """
         cutoff = detector.watermark - detector.settings.retention_hours * 3600
-        for key, channel in list(detector.channels.items()):
-            if channel.last_seen < cutoff:
-                del detector.channels[key]
-                detector.dirty.discard(key)
-                detector.deleted.add(key)
-            else:
-                trimmed = False
-                while channel.events and channel.events[0].timestamp < cutoff:
-                    channel.events.popleft()
-                    trimmed = True
-                if trimmed:
-                    detector.dirty.add(key)
+        for table in (detector.channels, detector.candidates):
+            for key, channel in list(table.items()):
+                if channel.last_seen < cutoff:
+                    del table[key]
+                    detector._discard(key)
+                else:
+                    trimmed = False
+                    while (
+                        channel.events and channel.events[0].timestamp < cutoff
+                    ):
+                        channel.events.popleft()
+                        trimmed = True
+                    if trimmed:
+                        detector.dirty.add(key)
+        retained = detector.channels.keys() | detector.candidates.keys()
+        deleted = detector.deleted | (self.persisted_keys - retained)
+        if not detector.dirty and not deleted:
+            return
         rows = [
             (
                 key,
-                detector.channels[key].last_seen,
+                (
+                    detector.channels.get(key) or detector.candidates[key]
+                ).last_seen,
                 json.dumps(
                     detector.snapshot(key),
                     separators=(",", ":"),
@@ -90,7 +103,7 @@ class Store:
                 ),
             )
             for key in detector.dirty
-            if key in detector.channels
+            if key in retained
         ]
         with self.connection:
             self.connection.executemany(
@@ -99,17 +112,11 @@ class Store:
             )
             self.connection.executemany(
                 "DELETE FROM channels WHERE key=?",
-                ((key,) for key in detector.deleted),
-            )
-            self.connection.execute(
-                "DELETE FROM channels WHERE updated < ?", (cutoff,)
-            )
-            self.connection.execute(
-                "DELETE FROM channels WHERE key NOT IN (SELECT key FROM channels ORDER BY updated DESC LIMIT ?)",
-                (detector.settings.max_channels,),
+                ((key,) for key in deleted),
             )
         detector.dirty.clear()
         detector.deleted.clear()
+        self.persisted_keys = retained
 
     def close(self) -> None:
         """Release the checkpoint and exclusive writer lock."""

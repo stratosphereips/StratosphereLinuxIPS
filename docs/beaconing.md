@@ -95,9 +95,12 @@ not assume that unrelated users of the same CDN are one service.
 
 ## Keeping it running
 
-State is bounded by `max_channels` and `window_connections`. Recently used
-channels replace older ones at capacity, with a warning in the logs. This is a
-coverage limit: an evicted channel must collect observations again. UID duplicate
+State has separate limits for short sequences (`max_candidates`) and mature
+channels (`max_channels`). A short sequence keeps at most `min_connections`
+records; once it reaches that count it becomes a mature channel and can retain
+up to `window_connections` records. This prevents one-off connections and scan
+targets from displacing mature windows. Both pools use bounded recent-use state.
+At either limit, an evicted sequence must collect observations again. UID duplicate
 checks are bounded too; the recent window provides a second check after global
 UID entries expire. Zeek records that arrive out of start-time order are inserted
 into the bounded window without losing the original timestamp precision.
@@ -109,7 +112,43 @@ pending changes for a later retry, including on Python 3.10 systems such as
 older Raspberry Pi installations. Checkpoints expire old records and cap the
 number of saved channels. There are no new Redis keys or periodic database-wide
 flow scans. Offline analyses begin with fresh detector state; live runs restore
-recent state in that output directory, including evidence cooldowns.
+recent state in that output directory, including report progress. Older
+checkpoints remain readable and are divided between the two pools on restore.
+Unchanged checkpoints do not start write transactions.
+
+The old message `Beaconing channel capacity reached: 410 older windows evicted`
+meant that 410 channel windows had been discarded cumulatively since that worker
+started. It did not mean 410 new losses at each warning. Previously, the warning
+repeated even when the count had not changed. Notices now require new evictions,
+report the additional count and separate candidate churn from mature-window loss.
+Candidate churn is informational; loss of mature windows is a warning. Increasing
+limits trades memory and checkpoint size for more coverage.
+
+### Continuing patterns and report spacing
+
+A new pattern produces an evidence. If it continues, further evidence is spaced
+by connection counts: with `report_growth_factor: 10`, the default first finding
+after 12 connections is followed near 100, 1,000, 10,000, and so on. Reporting
+waits for the next successful pattern check, so counts can exceed those milestones.
+This replaces hourly repeats for an unchanged pattern, reducing evidence writes
+and repeated scoring. Each finding records the cumulative connection count and
+elapsed capture time, plus timing/size statistics from the current bounded window.
+Only up to 32 recent supporting flow IDs are linked.
+
+Periodicity and suspected C2 have separate progress: a C2 upgrade can report
+immediately. A period changing by at least a factor of two, or a change between
+start-to-start, after-reply and burst timing, can start a fresh report. A failed
+pattern check ends growth progress; recovering the same rhythm uses the ordinary
+cooldown, while a different rhythm can report sooner.
+A silence exceeding both the cooldown and `(max_missed + 2)` periods clears the
+old window so that the next episode collects new observations.
+
+After finding a pattern, the module checks it less frequently, using
+`stable_evaluate_every` and `stable_evaluate_interval_seconds`. Failed checks
+restore the normal cadence. Unlike scan counting, timing analysis continues to
+need a recent window: keeping only a lifetime counter would hide changes and
+interruptions. The window remains capped; model classification happens only
+after a successful fresh check. All this work stays in the beaconing worker.
 
 For TCP records with Zeek history, handshake evidence must support the recorded
 client/server roles. Traffic first seen during an ongoing session is skipped
@@ -142,8 +181,12 @@ Every option also has an explanation beside it in `config/slips.yaml`.
 | `evaluate_every` (`4`) | Requires four new connections between checks. Raising it reduces work and delays detection of changed behavior. |
 | `evaluate_interval_seconds` (`5`) | Minimum time between checks of one channel. Uses the processing clock live and packet time offline, so accelerated PCAP playback still gets repeated checks. |
 | `max_channels` (`2048`) | Caps retained endpoint combinations. Raising it reduces evictions and increases memory and checkpoint size. |
+| `max_candidates` (`4096`) | Separately caps sequences below `min_connections`, with at most that many records each. Keeps one-off connections from evicting mature windows; raising it remembers more potential slow beacons. |
+| `report_growth_factor` (`10`) | Spaces continuing evidence at powers of the cumulative connection count, normally 12, then near 100, 1,000, 10,000. Larger values reduce evidence writes. Separate suspected-C2 progress allows upgrades. |
+| `stable_evaluate_every` (`32`) | Requires this many new connections between checks once a pattern is found. Uses the larger of this value and `evaluate_every`; reduces repeated fitting and classification. |
+| `stable_evaluate_interval_seconds` (`60`) | Minimum seconds between checks once a pattern is found. Uses the larger of this value and `evaluate_interval_seconds`. Higher values save CPU and delay change detection. |
 | `retention_hours` (`72`) | Removes older observations and inactive channels. Must cover the period being sought: 12 daily callbacks require at least 264 hours. |
-| `alert_cooldown_seconds` (`3600`) | Limits repeated evidence of one category per channel. A later suspected-C2 finding can follow a periodicity finding immediately. |
+| `alert_cooldown_seconds` (`3600`) | Limits re-reporting after a pattern was lost and found again. Growth milestones and changed rhythms can report earlier; suspected C2 has separate progress. Together with the observed period, also defines when a silence starts fresh collection. |
 | `flush_interval_seconds` (`30`) | Time between saving changed windows. Larger values reduce disk work but lose more recent observations after a crash. |
 | `model_file` (`modules/beaconing/model.json`) | Loads a reviewed C2-pattern classifier. An empty value keeps only the numeric periodicity detector. |
 | `c2_score_threshold` (`0.5`) | Minimum similarity score for suspected C2. Raising it reduces findings and recall. The model's validation threshold is also enforced; neither is a malware probability. |

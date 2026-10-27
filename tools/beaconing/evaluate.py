@@ -134,7 +134,8 @@ def replay(
             and stats["answered"] >= 0.8
         )
         kind = "c2" if suspected else "periodic"
-        if detector.should_alert(key, kind, observation.timestamp):
+        latest = detector.channels[key].events[-1]
+        if detector.should_alert(key, kind, latest.timestamp, stats):
             alerted[kind] += 1
         windows.append(
             {
@@ -150,9 +151,11 @@ def replay(
         "flows": count,
         "accepted": accepted,
         "channels_retained": len(detector.channels),
+        "candidates_retained": len(detector.candidates),
         "recurring_channels": len(recurring),
         "findings": dict(alerted),
         "evictions": detector.evictions,
+        "candidate_evictions": detector.candidate_evictions,
         "out_of_order": detector.late_flows,
         "wall_seconds": time.perf_counter() - start,
         "cpu_seconds": time.process_time() - cpu,
