@@ -40,7 +40,12 @@ def saved_output(tmp_path: Path) -> Path:
 
 @pytest.mark.parametrize("missing", [None, "dump.rdb", "flows.sqlite"])
 def test_validate_saved_files(tmp_path: Path, missing: str | None) -> None:
-    """Fail before changing output when required saved files are absent."""
+    """Fail before changing output when required saved files are absent.
+
+    Parameters:
+        tmp_path: Temporary saved output.
+        missing: Required filename to remove, or None for a complete folder.
+    """
     _factory = ModuleFactory()
     output = saved_output(tmp_path)
     if missing:
@@ -55,7 +60,13 @@ def test_validate_saved_files(tmp_path: Path, missing: str | None) -> None:
 
 @pytest.mark.parametrize("same,other_viewer", [(True, False), (False, False), (True, True)])
 def test_reject_active_capture(tmp_path: Path, same: bool, other_viewer: bool) -> None:
-    """Permit a separate capture or viewer while protecting the active folder."""
+    """Permit a separate capture or viewer while protecting the active folder.
+
+    Parameters:
+        tmp_path: Temporary saved output.
+        same: Whether the other process uses this output.
+        other_viewer: Whether the other process is a viewer instead of a capture.
+    """
     _factory = ModuleFactory()
     output = saved_output(tmp_path)
     flag = "--view" if other_viewer else "-o"
@@ -72,7 +83,12 @@ def test_reject_active_capture(tmp_path: Path, same: bool, other_viewer: bool) -
 
 @pytest.mark.parametrize("location", ["local", "snapshot", "fallback"])
 def test_saved_host_profiles(tmp_path: Path, location: str) -> None:
-    """Prefer identities belonging to the saved run over shared identities."""
+    """Prefer identities belonging to the saved run over shared identities.
+
+    Parameters:
+        tmp_path: Temporary output and identity databases.
+        location: Identity source available to the viewer.
+    """
     _factory = ModuleFactory()
     output = tmp_path / "saved"
     fallback = str(tmp_path / "shared" / "hosts.sqlite")
@@ -92,7 +108,11 @@ def test_saved_host_profiles(tmp_path: Path, location: str) -> None:
 
 @pytest.mark.parametrize("state", ["exited", "running", "stuck"])
 def test_stop_owned_redis(state: str) -> None:
-    """Reap only the owned child and force it down after a bounded grace period."""
+    """Reap only the owned child and force it down after a bounded grace period.
+
+    Parameters:
+        state: Whether the child exited, is running, or refuses termination.
+    """
     _factory = ModuleFactory()
     process = Mock()
     process.poll.return_value = 0 if state == "exited" else None
@@ -105,7 +125,12 @@ def test_stop_owned_redis(state: str) -> None:
 
 @pytest.mark.parametrize("failure", [None, "exited", "missing_identity", "connect_error", "wrong_owner"])
 def test_restore_is_private(tmp_path: Path, failure: str | None) -> None:
-    """Load a copy with no persistence and clean up every failed restore."""
+    """Load a copy with no persistence and clean up every failed restore.
+
+    Parameters:
+        tmp_path: Temporary original snapshot and restored copy.
+        failure: Startup failure to simulate, or None for success.
+    """
     _factory = ModuleFactory()
     output = saved_output(tmp_path)
     runtime = tmp_path / "runtime"
@@ -147,7 +172,11 @@ def test_restore_is_private(tmp_path: Path, failure: str | None) -> None:
 
 @pytest.mark.parametrize("explicit", [False, True])
 def test_web_port_conflict(explicit: bool) -> None:
-    """Try a nearby port by default but honor an explicit port without replacing its owner."""
+    """Honor an explicit busy port without replacing its owner.
+
+    Parameters:
+        explicit: Whether automatic selection of a nearby port is forbidden.
+    """
     _factory = ModuleFactory()
     reader = Mock()
     with patch("modules.web_interface.server.SlipsHTTPServer") as server:
@@ -169,7 +198,11 @@ def test_web_port_conflict(explicit: bool) -> None:
     ["--view"],
 ])
 def test_reject_capture_options(arguments: list[str]) -> None:
-    """Reject mixed capture commands before opening any saved files."""
+    """Reject mixed capture commands before opening any saved files.
+
+    Parameters:
+        arguments: Invalid command-line combination.
+    """
     _factory = ModuleFactory()
     with patch.object(viewer, "validate_output") as validate:
         with pytest.raises(SystemExit) as error:
@@ -180,7 +213,12 @@ def test_reject_capture_options(arguments: list[str]) -> None:
 
 @pytest.mark.parametrize("background", [False, True])
 def test_view_cli_selection(tmp_path: Path, background: bool) -> None:
-    """Route --view before capture setup and expose it in normal help."""
+    """Route --view before capture setup and expose it in normal help.
+
+    Parameters:
+        tmp_path: Output folder returned by validation.
+        background: Whether -D should select the background launcher.
+    """
     _factory = ModuleFactory()
     arguments = ["--view", str(tmp_path), "--web-port", "55002"]
     if background:
@@ -197,7 +235,12 @@ def test_view_cli_selection(tmp_path: Path, background: bool) -> None:
 
 @pytest.mark.parametrize("failure", [False, True])
 def test_viewer_cleanup(tmp_path: Path, failure: bool) -> None:
-    """Close the private server on Ctrl-C and on HTTP startup failure."""
+    """Close the private server on Ctrl-C and on HTTP startup failure.
+
+    Parameters:
+        tmp_path: Temporary viewer runtime directory.
+        failure: Whether binding the HTTP server should fail.
+    """
     _factory = ModuleFactory()
     process, client = Mock(), Mock()
     reader = Mock()
@@ -221,7 +264,12 @@ def test_viewer_cleanup(tmp_path: Path, failure: bool) -> None:
 
 @pytest.mark.parametrize("result", [0, 1, None])
 def test_background_readiness(tmp_path: Path, result: int | None) -> None:
-    """Report real child readiness and reap failed background startup."""
+    """Report real child readiness and reap failed background startup.
+
+    Parameters:
+        tmp_path: Temporary viewer log directory.
+        result: Child status, or None when the child closes its startup pipe.
+    """
     _factory = ModuleFactory()
     payload = b"" if result is None else json.dumps({"status": result, "message": "viewer startup"}).encode() + b"\n"
     with patch.object(viewer.os, "fork", return_value=12345), patch.object(viewer.os, "pipe", return_value=(21, 22)), patch.object(viewer.os, "close"), patch.object(viewer.select, "select", return_value=([21], [], [])), patch.object(viewer.os, "read", return_value=payload), patch.object(viewer.os, "kill") as kill, patch.object(viewer.os, "waitpid"):
