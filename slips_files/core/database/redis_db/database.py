@@ -112,6 +112,7 @@ class RedisDB(
         "new_tunnel",
         "new_login",
         "new_smb",
+        "new_packet_timing",
         "p2p_data_request",
         "remove_old_files",
         "export_evidence",

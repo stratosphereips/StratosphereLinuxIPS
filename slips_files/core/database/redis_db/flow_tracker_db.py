@@ -34,6 +34,7 @@ class FlowTracker:
         "new_tunnel": 0,
         "new_login": 0,
         "new_smb": 0,
+        "new_packet_timing": 0,
     }
 
     def _should_track_msg(self, msg: dict) -> bool:

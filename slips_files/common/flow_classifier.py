@@ -38,6 +38,7 @@ from slips_files.core.flows.smb import (
     NTLM,
     DCERPC,
 )
+from slips_files.core.flows.packet_timing import PacketTiming
 
 
 class FlowClassifier:
@@ -50,6 +51,7 @@ class FlowClassifier:
 
     def __init__(self):
         self.flow_map: Dict[str, Type] = {
+            "packet_timing": PacketTiming,
             "smb_mapping": SMBMapping,
             "smb_files": SMBFile,
             "smb_cmd": SMBCommand,

@@ -312,6 +312,7 @@ class ProfilerWorker(IModule):
             "weird": flow_handler.handle_weird,
             "tunnel": flow_handler.handle_tunnel,
             "login": flow_handler.handle_login,
+            "packet_timing": flow_handler.handle_packet_timing,
             **{
                 name: flow_handler.handle_smb
                 for name in (
@@ -529,6 +530,7 @@ class ProfilerWorker(IModule):
             "weird",
             "tunnel",
             "login",
+            "packet_timing",
             "smb_mapping",
             "smb_files",
             "smb_cmd",

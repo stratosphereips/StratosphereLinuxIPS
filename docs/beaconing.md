@@ -86,10 +86,12 @@ deep. Runtime reads a reviewed JSON file; it imports neither TensorFlow nor
 scikit-learn and does not execute a pickle. The shipped classifier covers **TCP**
 only. UDP recurrence is still reported, but this TCP model cannot label it C2.
 
-The adapter receives completed Zeek flow summaries, so detection happens when
-those summaries arrive. It cannot see individual callbacks inside one long-lived
-TLS connection from a single conn record. Such detection needs additional packet
-or application events. Completely irregular C2 and weak patterns mixed with other
+The ordinary adapter receives completed Zeek flow summaries, so detection happens
+when those summaries arrive. A conn record cannot show individual callbacks
+inside one long-lived connection. The optional
+[packet timing collector](packet_timing.md) measures that activity separately,
+including sparse application-data packets and optional ACK/keepalive timing.
+Completely irregular C2 and weak patterns mixed with other
 traffic can be missed. Different destination IPs remain separate: the module does
 not assume that unrelated users of the same CDN are one service.
 

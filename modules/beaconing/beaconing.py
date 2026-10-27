@@ -30,7 +30,8 @@ from slips_files.core.structures.evidence import (
 )
 from .detector import Detector, Observation
 from .model import PatternModel
-from .settings import Settings
+from .settings import Settings, PacketTimingSettings
+from .packet_timing import PacketTimingDetector
 from .store import Store
 
 
@@ -45,6 +46,10 @@ class Beaconing(IModule):
         """Initialize bounded analysis and packet-time network context caches."""
         self.settings = Settings.from_config(self.conf)
         self.detector = Detector(self.settings)
+        self.packet_settings = PacketTimingSettings.from_config(self.conf)
+        self.packet_detector = PacketTimingDetector(
+            self.packet_settings, self.settings
+        )
         self.model: PatternModel | None = None
         self.store: Store | None = None
         self.live = self.db.get_input_type() == InputType.INTERFACE or bool(
@@ -62,6 +67,10 @@ class Beaconing(IModule):
     def subscribe_to_channels(self) -> None:
         """Consume existing flow summaries without another capture or Redis keys."""
         self.channels = {"new_flow": self.db.subscribe("new_flow")}
+        if self.packet_settings.enabled:
+            self.channels["new_packet_timing"] = self.db.subscribe(
+                "new_packet_timing"
+            )
 
     def pre_main(self) -> None:
         """Restore this capture's state and validate the optional numeric model."""
@@ -338,6 +347,78 @@ class Beaconing(IModule):
             )
             self.next_capacity_warning = now + 60
 
+    def handle_packet_timing(self, payload: dict[str, Any]) -> None:
+        """Assess a bounded summary and submit a connection-linked evidence.
+
+        Parameters:
+            payload: Parsed summary routed by the profiler.
+        """
+        flow = payload.get("flow")
+        if (
+            not self.packet_settings.enabled
+            or not isinstance(flow, dict)
+            or payload.get("profileid") != f"profile_{flow.get('saddr')}"
+        ):
+            return
+        try:
+            window = int(str(payload["twid"]).replace("timewindow", ""))
+            timestamp = flow["starttime"]
+            timestamp = (
+                timestamp.timestamp()
+                if isinstance(timestamp, datetime)
+                else float(timestamp)
+            )
+            observation = Observation(
+                str(flow["uid"]),
+                timestamp,
+                0,
+                str(flow["saddr"]),
+                str(flow["daddr"]),
+                int(flow["dport"]),
+                "tcp",
+                0,
+                0,
+                0,
+                0,
+                True,
+                str(flow.get("interface") or "default"),
+                window,
+            )
+        except (KeyError, ValueError, TypeError):
+            return
+        scope = self._scope(observation, flow)
+        finding = (
+            self.packet_detector.process(flow, scope)
+            if scope is not None
+            else None
+        )
+        if finding is None:
+            return
+        self.db.set_evidence(
+            Evidence(
+                evidence_type=EvidenceType[finding["evidence_type"]],
+                attacker=Attacker(
+                    Direction.SRC, IoCType.IP, finding["source"]
+                ),
+                victim=Victim(
+                    Direction.DST, IoCType.IP, finding["destination"]
+                ),
+                profile=ProfileID(finding["source"]),
+                timewindow=TimeWindow(window),
+                threat_level=ThreatLevel[finding["threat"].upper()],
+                confidence=finding["confidence"],
+                description=finding["description"],
+                timestamp=finding["timestamp"],
+                uid=[flow["record_id"]],
+                src_port=finding["sport"],
+                dst_port=finding["dport"],
+                proto=Proto.TCP,
+                interface=observation.interface,
+                method=Method.STATISTICAL,
+                detection_details={"packet_timing": finding["details"]},
+            )
+        )
+
     def main(self) -> None:
         """Drain a bounded batch, then checkpoint outside the per-flow path."""
         for _ in range(32):
@@ -352,6 +433,21 @@ class Beaconing(IModule):
                 if time.monotonic() >= self.next_warning:
                     self.print(f"Invalid beaconing flow: {error}", 0, 1)
                     self.next_warning = time.monotonic() + 60
+        if self.packet_settings.enabled:
+            for _ in range(8):
+                msg = self.get_msg("new_packet_timing")
+                if not msg:
+                    break
+                try:
+                    payload = json.loads(msg["data"])
+                    if isinstance(payload, dict):
+                        self.handle_packet_timing(payload)
+                except (ValueError, TypeError, KeyError) as error:
+                    if time.monotonic() >= self.next_warning:
+                        self.print(
+                            f"Invalid packet timing summary: {error}", 0, 1
+                        )
+                        self.next_warning = time.monotonic() + 60
         self._checkpoint()
 
     def shutdown_gracefully(self) -> None:

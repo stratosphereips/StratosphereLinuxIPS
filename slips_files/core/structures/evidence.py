@@ -138,6 +138,8 @@ class EvidenceType(Enum):
     SMB_RAPID_FILE_CHANGES = auto()
     SMB_RANSOMWARE_BEHAVIOR = auto()
     SMB_SHARE_IP_MISMATCH = auto()
+    PERIODIC_PACKETS = auto()
+    SUSPICIOUS_PACKET_HEARTBEAT = auto()
 
     def __str__(self):
         return self.name

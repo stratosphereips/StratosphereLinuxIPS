@@ -1037,6 +1037,58 @@ beaconing:
   # Disable rnn_cc_detection in modules.disable to avoid running two C2 detectors and TensorFlow.
   enabled: true
 
+  packet_timing:
+    # Collect packet timing inside individual TCP connections. Opt in because
+    # Zeek must handle packet events; disabled leaves the capture path unchanged.
+    enabled: false
+    # Also examine pure ACKs and TCP keepalive probes. These produce info only.
+    # Leave off to reduce ordinary transport-maintenance records.
+    include_acks: false
+    # Events needed in ONE direction of ONE connection before judging a rhythm.
+    # More reduces accidental patterns but delays detection of slow callbacks.
+    min_events: 12
+    # Recent event times and sizes retained per direction/kind; bounds memory.
+    window_events: 64
+    # Additional events between summary records sent to the Python worker.
+    # Larger values reduce logging and processing but delay recognition of changes.
+    emit_every: 8
+    # Maximum concurrently tracked TCP connections in the Zeek collector.
+    # At capacity, additional connections wait for space rather than growing state.
+    max_connections: 2048
+    # Ignore early handshake/startup traffic for this many seconds per connection.
+    min_connection_age_seconds: 30.0
+    # Minimum interval between events. Faster bursts reset the timing window
+    # instead of being downsampled into an artificial regular pattern.
+    min_interval_seconds: 1.0
+    # Require this many seconds of observations before reporting periodic packets.
+    min_span_seconds: 60.0
+    # Data packets larger than this reset the small-packet window in that direction.
+    # Keeps bulk transfers out of heartbeat analysis; payload bytes are never logged.
+    max_payload_bytes: 512
+    # Fraction of intervals that must fit a period for an informational finding.
+    min_support: 0.9
+    # Allowed error as a fraction of the period: 0.1 permits +/-10%.
+    jitter_tolerance: 0.1
+    # Stronger suspicious-heartbeat finding requires this fraction of fitting gaps.
+    suspicious_min_support: 0.95
+    # Maximum robust relative timing variation for the stronger finding (5%).
+    suspicious_max_jitter: 0.05
+    # Largest typical application message size for the stronger finding, in bytes.
+    small_payload_bytes: 128
+    # Fraction of messages that must have the same size for the stronger finding.
+    uniform_size_fraction: 0.9
+    # On these server ports, regular small client data without a recognized
+    # application protocol is suspicious. Requires handshake and server data;
+    # recognized TLS/HTTP/etc., ACKs and keepalives remain informational.
+    expected_tls_ports: [443]
+    # Severity and confidence of the stronger heartbeat finding. Medium * 0.85
+    # contributes 0.425 to the source host score. Lower severity to reduce its impact.
+    suspicious_threat_level: medium
+    suspicious_confidence: 0.85
+    # Confidence for ordinary packet periodicity, which always has info threat
+    # and contributes zero to the host score, including ACK/keepalive rhythms.
+    periodic_confidence: 0.6
+
   # Connections needed in a channel before judging repetition. More reduces
   # accidental patterns but takes longer to detect slow beacons. Range: 6-512.
   min_connections: 12
@@ -1565,6 +1617,7 @@ DisabledAlerts:
   # SMB_RAPID_FILE_CHANGES, SMB_RANSOMWARE_BEHAVIOR,
   # HTTP_TRAFFIC, MALICIOUS_JARM, NETWORK_GPS_LOCATION_LEAKED,
   # HTTP_IP_HOST, HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE, HTTP_BINARY_RESPONSE_AS_HTML,
+  # PERIODIC_PACKETS, SUSPICIOUS_PACKET_HEARTBEAT,
   # ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN, ICMP_ADDRESS_MASK_SCAN,
   #  DHCP_SCAN, MALICIOUS_IP_FROM_P2P_NETWORK, P2P_REPORT,
   # COMMAND_AND_CONTROL_CHANNEL, THREAT_INTELLIGENCE_BLACKLISTED_ASN,
@@ -1594,6 +1647,8 @@ EvidenceSignals:
   overrides:
     PERIODIC_CONNECTION: DAMP
     SUSPECTED_C2_CHANNEL: DAMP
+    PERIODIC_PACKETS: DAMP
+    SUSPICIOUS_PACKET_HEARTBEAT: DAMP
     ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
     UNSOLICITED_ARP: DAMP

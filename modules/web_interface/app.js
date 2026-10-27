@@ -2553,6 +2553,8 @@ function alertTypeName(type) {
     SMB_SCAN: "SMB scan", SMB_SHARE_SWEEP: "SMB share sweep",
     SMB_SHARE_PATH_MISMATCH: "Repeated mismatched SMB share paths",
     SMB_SHARE_IP_MISMATCH: "SMB share IP mismatch",
+    PERIODIC_PACKETS: "Periodic packets within a connection",
+    SUSPICIOUS_PACKET_HEARTBEAT: "Suspicious application heartbeat",
     SMB_SUSPECTED_PROPAGATION: "Suspected SMB propagation",
     SMB_EXTERNAL_CONNECTION: "External SMB communication",
     SMB_LARGE_TRANSFER: "Large SMB session", SMB_LARGE_FILE: "Large file accessed over SMB",
@@ -5638,6 +5640,9 @@ function flowValue(flow, ...names) {
 }
 
 const PROTOCOL_FIELDS = {
+  packet_timing: [["Packet direction: originator", ["is_orig"]], ["Packet kind", ["kind"]],
+    ["Events observed", ["event_count"]], ["Application protocol", ["service"]],
+    ["Packet times (seconds)", ["times"]], ["Payload lengths (bytes)", ["lengths"]]],
   smb_mapping: [["Requested share path", ["path"]], ["Service", ["service"]], ["Share type", ["share_type"]]],
   smb_files: [["Action", ["action"]], ["Share path", ["path"]], ["File name", ["name"]],
     ["Previous name", ["prev_name"]], ["Reported file size", ["size"]], ["File ID", ["fuid"]],

@@ -237,3 +237,17 @@ class FlowHandler:
                 }
             ),
         )
+
+    def handle_packet_timing(self) -> None:
+        """Store and route one bounded Zeek summary to its detection worker."""
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+        self.db.publish(
+            "new_packet_timing",
+            json.dumps(
+                {
+                    "profileid": self.profileid,
+                    "twid": self.twid,
+                    "flow": asdict(self.flow),
+                }
+            ),
+        )

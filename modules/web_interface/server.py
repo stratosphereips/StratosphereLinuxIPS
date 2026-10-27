@@ -4963,13 +4963,27 @@ class RunDataReader:
                     result["network_flow"] = record
             if self._table_exists(connection, "altflows"):
                 result["protocol_flow_total"] = connection.execute(
-                    "SELECT COUNT(*) FROM altflows WHERE uid=? OR (uid>=? AND uid<?)",
-                    (uid, uid + ":smb:", uid + ":smb;"),
+                    "SELECT COUNT(*) FROM altflows WHERE uid=? OR (uid>=? AND uid<?) OR (uid>=? AND uid<?)",
+                    (
+                        uid,
+                        uid + ":smb:",
+                        uid + ":smb;",
+                        uid + ":packet:",
+                        uid + ":packet;",
+                    ),
                 ).fetchone()[0]
                 rows = connection.execute(
                     "SELECT rowid AS protocol_rowid, * FROM altflows "
-                    "WHERE (uid=? OR (uid>=? AND uid<?)) AND rowid>? ORDER BY rowid LIMIT ?",
-                    (uid, uid + ":smb:", uid + ":smb;", after, limit + 1),
+                    "WHERE (uid=? OR (uid>=? AND uid<?) OR (uid>=? AND uid<?)) AND rowid>? ORDER BY rowid LIMIT ?",
+                    (
+                        uid,
+                        uid + ":smb:",
+                        uid + ":smb;",
+                        uid + ":packet:",
+                        uid + ":packet;",
+                        after,
+                        limit + 1,
+                    ),
                 ).fetchall()
                 if len(rows) > limit:
                     result["next_cursor"] = str(
@@ -5079,11 +5093,18 @@ class RunDataReader:
                 parameters = list(bounded_uids)
                 if table == "altflows":
                     for parent_uid in bounded_uids:
-                        if ":smb:" not in parent_uid:
-                            condition += " OR (uid>=? AND uid<?)"
-                            parameters.extend(
-                                [parent_uid + ":smb:", parent_uid + ":smb;"]
-                            )
+                        if not any(
+                            marker in parent_uid
+                            for marker in (":smb:", ":packet:")
+                        ):
+                            for marker in ("smb", "packet"):
+                                condition += " OR (uid>=? AND uid<?)"
+                                parameters.extend(
+                                    [
+                                        parent_uid + f":{marker}:",
+                                        parent_uid + f":{marker};",
+                                    ]
+                                )
                 rows = connection.execute(
                     f"SELECT * FROM {table} WHERE {condition} LIMIT 1000",
                     parameters,
@@ -5093,7 +5114,9 @@ class RunDataReader:
                     record["flow"] = self._loads(record.get("flow"), {})
                     record["table"] = table
                     uid = str(record.get("uid", ""))
-                    if table == "altflows" and ":smb:" in uid:
+                    if table == "altflows" and any(
+                        marker in uid for marker in (":smb:", ":packet:")
+                    ):
                         uid = str(record["flow"].get("uid") or uid)
                     item = grouped.setdefault(
                         uid,
@@ -5125,7 +5148,8 @@ class RunDataReader:
         incomplete = {
             uid: group
             for uid, group in grouped.items()
-            if ":smb:" not in uid and self._needs_connection_record(group)
+            if not any(marker in uid for marker in (":smb:", ":packet:"))
+            and self._needs_connection_record(group)
         }
         if incomplete:
             recovered_flow_count = self._recover_zeek_flows(incomplete)

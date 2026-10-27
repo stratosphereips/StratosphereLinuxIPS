@@ -567,6 +567,28 @@ class ZeekInputUtils:
         )
 
         cmd = builder.build(pcap_or_interface, tcpdump_filter=tcpdump_filter)
+        packet_options = self.input.conf.read_configuration(
+            Modules.BEACONING.value, "packet_timing", {}
+        )
+        if (
+            isinstance(packet_options, dict)
+            and packet_options.get("enabled") is True
+            and self.input.conf.beaconing_enabled()
+            and Modules.BEACONING.value
+            not in self.input.conf.read_configuration("modules", "disable", [])
+        ):
+            from modules.beaconing.settings import PacketTimingSettings
+
+            packet_settings = PacketTimingSettings.from_config(self.input.conf)
+            cmd.extend(
+                [
+                    os.path.join(
+                        os.getcwd(), "zeek-scripts", "packet-timing.zeek"
+                    ),
+                    "-e",
+                    packet_settings.zeek_overrides(),
+                ]
+            )
         smb_enabled = self.input.conf.read_configuration(
             Modules.SMB_ANALYZER.value, "enabled", True
         )

@@ -19,4 +19,5 @@ SUPPORTED_LOGFILES = (
     "smb_cmd",
     "ntlm",
     "dce_rpc",
+    "packet_timing",
 )
