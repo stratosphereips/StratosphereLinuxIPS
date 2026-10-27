@@ -5683,13 +5683,40 @@ function protocolValueText(label, value) {
   return String(displayValue(value));
 }
 
+/** Explain a recorded TLS validation result using the capture's clock.
+ * @param {object} flow Stored TLS flow, whose original validation stays intact.
+ * @returns {object} Display text, clock explanation, and uncertainty flag.
+ */
+function tlsValidationStatus(flow) {
+  const raw = String(flowValue(flow, "validation_status") || "");
+  const timestamp = flowValue(flow, "starttime", "ts");
+  const numericTime = Number(timestamp);
+  const seconds = Number.isFinite(numericTime) ? numericTime
+    : Date.parse(String(timestamp)) / 1000;
+  const calendarTime = timestamp !== null && Number.isFinite(seconds) && seconds >= 946684800;
+  const dateError = /not yet valid|certificate (?:has )?expired|certificate_expired/i.test(raw);
+  const uncertain = Boolean(raw && dateError && !calendarTime);
+  return {
+    text: uncertain ? "Certificate dates unknown" : raw,
+    uncertain,
+    note: uncertain
+      ? "This capture has no original calendar date, so certificate dates cannot be checked reliably. The original validation result is shown below. It is not a new check against today's date."
+      : raw ? "This is the validation result recorded for the captured connection, not a new check against today's date." : "",
+  };
+}
+
 /** Build the visible labeled fields for a protocol-specific record. */
 function protocolDetails(type, flow) {
   const definitions = PROTOCOL_FIELDS[type] || [];
+  const validation = type === "ssl" ? tlsValidationStatus(flow) : null;
   const details = definitions.map(([label, names]) => {
     const value = flowValue(flow, ...names);
+    if (validation && label === "Validation" && hasProtocolValue(value)) {
+      return [validation.uncertain ? "Certificate date validity" : "Validation at capture time", validation.text];
+    }
     return hasProtocolValue(value) ? [label, protocolValueText(label, value)] : null;
   }).filter(Boolean);
+  if (validation?.uncertain) details.push(["Original validation in log", flow.validation_status]);
   if (details.length || definitions.length) return details;
   const excluded = new Set([
     "uid", "starttime", "endtime", "saddr", "daddr", "sport", "dport", "proto",
@@ -5710,7 +5737,7 @@ function protocolOutcome(type, flow) {
     const message = flowValue(flow, "status_msg");
     return [code, message].filter(hasProtocolValue).join(" ");
   }
-  if (type === "ssl") return flowValue(flow, "validation_status");
+  if (type === "ssl") return tlsValidationStatus(flow).text;
   if (type === "ssh" && hasProtocolValue(flow.auth_success)) {
     return flow.auth_success === true || String(flow.auth_success).toLowerCase() === "true"
       ? "Authentication succeeded" : "Authentication failed";
@@ -5729,9 +5756,12 @@ function protocolFlowCard(record) {
   heading.className = "protocol-card-head";
   heading.append(text("h4", displayType + " flow"));
   const outcome = protocolOutcome(type, flow);
+  const validation = type === "ssl" ? tlsValidationStatus(flow) : null;
   if (outcome) {
-    const isFailure = /NXDOMAIN|SERVFAIL|REFUSED|failed|invalid|error/i.test(outcome);
-    heading.append(text("span", outcome, "protocol-outcome " + (isFailure ? "failure" : "success")));
+    const isFailure = type === "ssl" ? !/^(?:ok|valid|verified)$/i.test(outcome)
+      : /NXDOMAIN|SERVFAIL|REFUSED|failed|invalid|error/i.test(outcome);
+    const status = validation?.uncertain ? "unknown" : isFailure ? "failure" : "success";
+    heading.append(text("span", outcome, "protocol-outcome " + status));
   }
   const context = document.createElement("div");
   context.className = "protocol-context";
@@ -5758,6 +5788,10 @@ function protocolFlowCard(record) {
     grid.append(field);
   });
   card.append(heading, context, grid, rawBlock(record, displayType + " protocol flow"));
+  if (validation?.note) {
+    const note = text("p", validation.note, "muted protocol-validation-note");
+    grid.before(note);
+  }
   return card;
 }
 

@@ -2161,14 +2161,28 @@ class RedisDB(
         self, org: str, first_octet: str
     ) -> List[str] | None:
         """
-        checks if the given first octet in the org's octets
-        :param org: supported orgs are ('google', 'microsoft', 'apple',
-         'facebook', 'twitter')
-        :param ip: ip to check
-        :return: a list of cidrs the given ip may belong to, None otherwise
+        Read organization ranges from the shared cache where they are stored.
+
+        Parameters:
+            org: Supported organization name.
+            first_octet: IPv4 first octet or IPv6 first segment.
+
+        Returns:
+            Decoded network ranges, or None for absent or invalid cache data.
         """
         key = f"{org}_IPs"
-        return self.r.hget(key, first_octet)
+        cached = self.rcache.hget(key, first_octet)
+        if not cached:
+            return None
+        try:
+            ranges = json.loads(cached)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(ranges, list) or not all(
+            isinstance(network, str) for network in ranges
+        ):
+            return None
+        return ranges
 
     def get_org_ips(self, org: str) -> Dict[str, str]:
         """

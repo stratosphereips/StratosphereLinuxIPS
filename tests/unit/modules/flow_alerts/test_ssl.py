@@ -9,6 +9,8 @@ from unittest.mock import (
 )
 import json
 import pytest
+from types import SimpleNamespace
+from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.flows.zeek import SSL
 from tests.module_factory import ModuleFactory
 from tests.unit.common_test_utils import get_mock_coro
@@ -19,6 +21,34 @@ twid = "timewindow1"
 uid = "CAeDWs37BipkfP21u8"
 timestamp = 1635765895.037696
 daddr = "192.168.1.2"
+
+
+@pytest.mark.parametrize("ip,expected", [("104.244.43.176", False), ("192.0.2.77", True)])
+def test_cn_recognizes_cached_twitter_network(ip: str, expected: bool) -> None:
+    """Use the real cached-network lookup before declaring an incompatible CN.
+
+    Parameters:
+        ip: Captured destination inside or outside Twitter's known network.
+        expected: Whether an incompatible-organization detection is expected.
+    """
+    factory = ModuleFactory()
+    ssl = factory.create_ssl_analyzer_obj()
+    whitelist = factory.create_whitelist_obj()
+    analyzer = whitelist.org_analyzer
+    analyzer.bloom_filters = {"twitter": {"first_octets": ["104", "192"]}}
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.rcache = Mock()
+    db.rcache.hget.return_value = '["104.244.40.0/21"]'
+    whitelist.db.is_ip_in_org_ips.side_effect = db.is_ip_in_org_cidrs
+    ssl.whitelist = whitelist
+    analyzer.is_domain_in_org = Mock(return_value=False)
+    ssl.set_evidence.incompatible_cn = Mock()
+    flow = SimpleNamespace(subject="CN=ads-twitter.com,O=Twitter", daddr=ip,
+                           server_name="static.ads-twitter.com")
+    ssl.detect_incompatible_cn("timewindow1", flow)
+    assert ssl.set_evidence.incompatible_cn.called is expected
+    db.r.hget.assert_not_called()
 
 
 def is_present_in_calls(mock_object, search_term):

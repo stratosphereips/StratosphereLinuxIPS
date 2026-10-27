@@ -271,6 +271,32 @@ Slips uses SSL certificates sha1 hashes to detect C&C servers.
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default.
 And you can add other SSL feeds in ```ssl_feeds``` in ```slips.yaml```.
 
+### Certificate organization and capture dates
+
+`INCOMPATIBLE_CN` checks whether a certificate claims a supported
+organization while the destination IP and server name are outside that
+organization's known networks and domains. The network lookup reads decoded
+IP ranges from the shared organization cache; it does not require those
+ranges to exist in each analysis database. For example,
+`104.244.43.176` belongs to the bundled Twitter range `104.244.40.0/21` and
+must not trigger this finding just because a separate file analysis has an
+empty run database.
+
+This check is independent of certificate dates. Zeek's certificate validation
+uses the captured network time by default, not the date when the webpage is
+opened ([Zeek x509_verify documentation](https://docs.zeek.org/en/current/scripts/base/bif/plugins/Zeek_X509.functions.bif.zeek.html#id-x509_verify)).
+Imported logs may already contain a date error. If their timestamps are only
+relative seconds, Slips cannot reconstruct the original calendar date or
+decide whether the certificate was valid then. The web details show
+**Certificate dates unknown**, explain the missing date, and preserve the
+original validation text. An old capture with real calendar timestamps keeps
+its recorded result; it is not revalidated against today. Non-date errors
+such as self-signed certificates are not hidden.
+
+The organization lookup fix applies to new analysis runs using the updated
+code, or after restarting a running capture. Existing saved
+evidence and alert scores remain historical records; viewing a saved output
+does not run the detectors again or delete earlier findings.
 
 ## Pastebin downloads
 

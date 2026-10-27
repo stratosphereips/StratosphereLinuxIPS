@@ -25,6 +25,29 @@ from slips_files.core.structures.evidence import EvidenceType
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("cached,expected", [
+    ('["104.244.40.0/21"]', ["104.244.40.0/21"]),
+    ('["2400:6680::/32"]', ["2400:6680::/32"]),
+    (None, None), ("", None), ("not-json", None), ('{"104": []}', None),
+    ('[42]', None), ('[]', []),
+])
+def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | None) -> None:
+    """Read decoded organization networks from cache rather than run DB 0.
+
+    Parameters:
+        cached: Serialized cache result, including missing or malformed values.
+        expected: Network list supplied to organization membership checks.
+    """
+    _factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.rcache = Mock()
+    db.rcache.hget.return_value = cached
+    assert db.is_ip_in_org_cidrs("twitter", "104") == expected
+    db.rcache.hget.assert_called_once_with("twitter_IPs", "104")
+    db.r.hget.assert_not_called()
+
+
 @pytest.fixture(autouse=True)
 def ensure_redis_options(monkeypatch: Any) -> None:
     """

@@ -2729,6 +2729,58 @@ def test_evidence_middle_list_survives_selection_and_refresh(mode: str) -> None:
             browser.close()
 
 
+@pytest.mark.parametrize("timestamp,status,uncertain", [
+    (254.819068, "certificate is not yet valid", True),
+    (0, "certificate has expired", True),
+    (None, "certificate is not yet valid", True),
+    ("invalid timestamp", "certificate has expired", True),
+    (1440000000, "certificate is not yet valid", False),
+    ("2015-08-19T00:00:00Z", "certificate has expired", False),
+    (1440000000, "ok", False),
+    (254.819068, "self signed certificate", False),
+    (254.819068, "unable to get local issuer certificate", False),
+])
+def test_tls_validation_uses_capture_clock(
+    timestamp: float | str | None, status: str, uncertain: bool
+) -> None:
+    """Distinguish missing capture dates from recorded TLS chain failures.
+
+    Parameters:
+        timestamp: Recorded capture time, which may be relative or missing.
+        status: Original sensor validation text that must remain unchanged.
+        uncertain: Whether the date-specific result cannot be interpreted.
+    """
+    _factory = ModuleFactory()
+    if not shutil.which("node"):
+        pytest.skip("Node.js is required for TLS presentation checks")
+    fixture = json.dumps({"starttime": timestamp, "validation_status": status})
+    script = r"""
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const source = fs.readFileSync('modules/web_interface/app.js', 'utf8');
+const context = {Date: class extends Date {
+  static now() { throw new Error('Must not validate against today'); }
+}};
+vm.createContext(context);
+for (const name of ['flowValue', 'tlsValidationStatus', 'protocolOutcome']) {
+  const definition = source.match(new RegExp('function ' + name + '\\([^]*?\\n\\}'));
+  assert.ok(definition, name);
+  vm.runInContext(definition[0], context);
+}
+const flow = FIXTURE;
+const original = JSON.stringify(flow);
+const result = context.tlsValidationStatus(flow);
+assert.equal(result.uncertain, UNCERTAIN);
+assert.equal(result.text, UNCERTAIN ? 'Certificate dates unknown' : flow.validation_status);
+assert.equal(context.protocolOutcome('ssl', flow), result.text);
+assert.ok(result.note.includes('capture') || result.note.includes('captured'));
+assert.equal(JSON.stringify(flow), original, 'The source result must remain intact');
+""".replace("FIXTURE", fixture).replace("UNCERTAIN", json.dumps(uncertain))
+    result = subprocess.run(["node", "-e", script], capture_output=True, text=True, timeout=10, check=False)
+    assert result.returncode == 0, result.stderr
+
+
 def test_overview_uses_counter_without_scanning_retained_evidence(
     tmp_path: Path,
 ) -> None:

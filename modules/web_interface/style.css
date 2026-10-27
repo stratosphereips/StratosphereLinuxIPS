@@ -463,6 +463,8 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .protocol-card-head h4 { margin: 0; color: var(--text); font-size: .86rem; letter-spacing: .03em; }
 .protocol-outcome { padding: .2rem .5rem; border: 1px solid #43c7b54d; border-radius: 99px; background: #43c7b518; color: var(--accent); font: 700 .68rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .protocol-outcome.failure { border-color: #ff64704d; background: #ff647018; color: var(--danger); }
+.protocol-outcome.unknown { border-color: var(--line); background: var(--bg); color: var(--muted); }
+.protocol-validation-note { margin: .5rem 0; font-size: .73rem; line-height: 1.4; }
 .protocol-context { display: flex; flex-wrap: wrap; gap: .25rem 1rem; margin-top: .45rem; color: var(--muted); font-size: .67rem; }
 .protocol-details { display: grid; grid-template-columns: repeat(3, minmax(100px, 1fr)); gap: .5rem; margin-top: .7rem; }
 .protocol-field { min-width: 0; padding: .58rem .65rem; border: 1px solid #1d3341; border-radius: 7px; background: #101f29; }

@@ -1102,6 +1102,20 @@ are rendered as `score / threshold`, and the score columns are sortable.
 
 Protocol activity is rendered as labeled fields instead of connection metrics. For example, DNS shows the queried name and type, response code such as `NXDOMAIN`, answers, and TTLs; HTTP shows method, host, URI, response status, user agent, body sizes, MIME types, and response file IDs; TLS shows server name, version, validation, cipher, and certificate fields. Other supported protocols have equivalent structured fields, with a readable generic field view for unknown types. Complete flow and protocol-flow records remain available in separately labeled JSON expanders. Alert to evidence to flow drill-down remains available after Redis time windows expire.
 
+TLS validation text comes from the captured protocol log. Opening an old run
+does not check its certificate against today's date. With calendar timestamps,
+the page labels this **Validation at capture time**. If a log reports an
+expired or not-yet-valid certificate but only has relative times such as
+`T+00:04:14`, the page shows **Certificate dates unknown** with a neutral
+badge. Without the original calendar date, that time-based result cannot be
+interpreted reliably. The original message remains visible under **Original
+validation in log** and in JSON. Other failures, such as self-signed
+certificates or an untrusted issuer, are still shown as failures.
+
+`INCOMPATIBLE_CN` is a separate check of the organization named in the
+certificate against known destination networks and domains. It is not a
+certificate expiry check.
+
 Alert and evidence drill-down uses structured cards instead of unformatted
 record text. Drag the left edge of the investigation panel to resize it
 horizontally; the browser remembers the selected width. Source and destination
