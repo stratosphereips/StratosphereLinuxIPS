@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
+import ipaddress
 import json
 import re
 import urllib
@@ -16,8 +17,39 @@ from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.core.flows.zeek import HTTP
+from slips_files.core.structures.evidence import EvidenceType, ThreatLevel
 
 ESTAB = "Established"
+
+# File signatures identified by Zeek, rather than MIME types claimed in headers.
+BINARY_MIME_TYPES = frozenset(
+    {
+        "application/octet-stream",
+        "application/x-dosexec",
+        "application/x-executable",
+        "application/x-sharedlib",
+        "application/x-msdownload",
+        "application/x-ms-dos-executable",
+        "application/x-ms-exe",
+        "application/x-exe",
+        "application/x-winexe",
+        "application/zip",
+        "application/x-rar",
+        "application/x-7z-compressed",
+        "application/x-gzip",
+        "application/gzip",
+        "application/x-bzip2",
+        "application/pdf",
+        "image/png",
+        "image/jpeg",
+        "image/gif",
+        "image/bmp",
+        "image/tiff",
+        "image/webp",
+        "audio/mpeg",
+        "video/mp4",
+    }
+)
 
 
 class HTTPAnalyzer(IAsyncModule):
@@ -25,6 +57,111 @@ class HTTPAnalyzer(IAsyncModule):
     name = "http_analyzer"
     description = "Analyze HTTP flows"
     authors = ["Alya Gomaa"]
+
+    @staticmethod
+    def binary_mime_types(value: list[str] | str) -> list[str]:
+        """Return recognized binary file types from Zeek's MIME signature list.
+
+        :param value: A JSON vector or comma-separated TSV MIME field.
+        :return: Recognized binary types; unknown or text types are omitted.
+        """
+        values = (
+            value if isinstance(value, list) else str(value or "").split(",")
+        )
+        return sorted(
+            {
+                mime.strip().lower()
+                for mime in values
+                if isinstance(mime, str)
+                and mime.strip().lower() in BINARY_MIME_TYPES
+            }
+        )
+
+    def check_http_header_anomalies(self, twid: str, flow: HTTP) -> None:
+        """Check each HTTP transaction using only its Zeek metadata.
+
+        :param twid: Time window containing the transaction.
+        :param flow: HTTP record with optional captured-header metadata.
+        """
+        host = str(flow.host or "").strip()
+        try:
+            authority = urllib.parse.urlsplit(f"//{host}")
+            if (
+                authority.netloc != host
+                or authority.path
+                or authority.query
+                or authority.fragment
+                or authority.username is not None
+            ):
+                raise ValueError("Not a Host header authority")
+            address = ipaddress.ip_address(authority.hostname or "")
+            # Accessing port also rejects invalid or out-of-range ports.
+            authority.port
+        except ValueError:
+            pass
+        else:
+            self.set_evidence.http_header_anomaly(
+                twid,
+                flow,
+                EvidenceType.HTTP_IP_HOST,
+                ThreatLevel.INFO,
+                f"{flow.saddr} sent an HTTP {flow.method} request to "
+                f"{flow.daddr} with IP-based Host header {host}, "
+                f"rather than a domain name ({address}). "
+                "Direct IP requests can also be legitimate.",
+            )
+
+        request_types = self.binary_mime_types(
+            getattr(flow, "orig_mime_types", "")
+        )
+        request_headers = getattr(flow, "request_headers_complete", False)
+        if (
+            str(flow.method).upper() == "POST"
+            and request_headers in (True, "T")
+            and not getattr(flow, "request_content_type", "").strip()
+            and getattr(flow, "request_content_encoding", "").strip().lower()
+            in ("", "identity")
+            and float(flow.request_body_len or 0) > 0
+            and request_types
+        ):
+            self.set_evidence.http_header_anomaly(
+                twid,
+                flow,
+                EvidenceType.HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE,
+                ThreatLevel.MEDIUM,
+                f"{flow.saddr} sent an HTTP POST to {flow.daddr} "
+                f"({host}{flow.uri}) without a Content-Type value. "
+                f"Zeek identified binary request content: {', '.join(request_types)}.",
+                observed_mime_types=request_types,
+            )
+
+        response_types = self.binary_mime_types(flow.resp_mime_types)
+        response_headers = getattr(flow, "response_headers_complete", False)
+        response_type = (
+            getattr(flow, "response_content_type", "")
+            .split(";", 1)[0]
+            .strip()
+            .lower()
+        )
+        if (
+            response_headers in (True, "T")
+            and response_type == "text/html"
+            and getattr(flow, "response_content_encoding", "").strip().lower()
+            in ("", "identity")
+            and float(flow.response_body_len or 0) > 0
+            and response_types
+        ):
+            self.set_evidence.http_header_anomaly(
+                twid,
+                flow,
+                EvidenceType.HTTP_BINARY_RESPONSE_AS_HTML,
+                ThreatLevel.MEDIUM,
+                f"HTTP server {flow.daddr} sent binary content to {flow.saddr} "
+                f"({host}{flow.uri}) while declaring Content-Type text/html. "
+                f"Zeek identified: {', '.join(response_types)}.",
+                server=True,
+                observed_mime_types=response_types,
+            )
 
     def init(self):
         self.set_evidence = SetEvidenceHelper(self.db)
@@ -691,6 +828,7 @@ class HTTPAnalyzer(IAsyncModule):
             profileid = msg["profileid"]
             twid = msg["twid"]
             flow = self.classifier.convert_to_flow_obj(msg["flow"])
+            self.check_http_header_anomalies(twid, flow)
             self.check_suspicious_user_agents(profileid, twid, flow)
             self.check_multiple_empty_connections(twid, flow)
             # find the UA of this profileid if we don't have it

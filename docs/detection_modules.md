@@ -937,6 +937,58 @@ they do not scan all stored flows. Existing evidence from an older analysis is
 retained; rerun the capture with the fixed version to generate corrected results.
 
 
+### HTTP Host and binary content checks
+
+The HTTP analyzer checks each HTTP transaction separately. These are three
+independent findings; one transaction can produce more than one:
+
+| Evidence type | What it checks and why | Threat | Host receiving the finding |
+| --- | --- | --- | --- |
+| `HTTP_IP_HOST` | The `Host` header contains a literal IPv4 or bracketed IPv6 address, with an optional port, instead of a domain. This helps find direct-IP communication. Routers, monitoring tools and other legitimate clients also do this, so this finding alone does not claim an attack. | Info | Request sender |
+| `HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE` | The method is POST, the request has a nonempty body, the captured headers have no Content-Type value, and Zeek positively identifies a binary file type in the request. This records an upload whose binary content is not described by the sender. | Medium | Request sender |
+| `HTTP_BINARY_RESPONSE_AS_HTML` | The captured response header declares `text/html`, but Zeek identifies a binary file type in the nonempty response body. This can reveal a binary download presented as a web page. | Medium | Response sender, the HTTP server |
+
+The checks use **only Zeek HTTP records**, including Zeek's existing file-type
+signatures (`orig_mime_types` for requests and `resp_mime_types` for responses).
+Supported binary signatures include executables, common archives, PDF, common
+binary image formats, MP3 and MP4. Unknown types, plain text, SVG and other
+unlisted types do not establish binary content. No extracted file, payload
+sample, entropy calculation or additional packet inspection is used by Slips.
+
+Slips loads `zeek-scripts/http-content-metadata.zeek` when it starts Zeek. The
+script adds the following fields to `http.log`:
+
+| Zeek field | Meaning |
+| --- | --- |
+| `slips_request_content_type` / `slips_response_content_type` | The Content-Type value actually sent in the top-level request or final response. An empty value means no usable type was supplied. These are declared headers, unlike Zeek's file-type signatures. |
+| `slips_request_headers_complete` / `slips_response_headers_complete` | Zeek reached the end of that message's headers. Only a true value lets Slips interpret an empty captured Content-Type as missing. Missing metadata in older logs is not evidence of a missing header. |
+| `slips_request_content_encoding` / `slips_response_content_encoding` | The declared Content-Encoding. The binary checks skip encodings other than absent or `identity`, so compressed HTML is not mistaken for disguised binary content. |
+
+Only the first top-level headers of each request or final response are kept;
+multipart attachment headers and interim replies such as `100 Continue` do not
+replace them. Each value is limited to 256 bytes. The metadata is attached to
+Zeek's existing bounded HTTP transaction state; there is no extra growing table,
+body buffer or per-flow database query. The Python checks use the fields in the
+incoming record. The web's HTTP flow details show both the declared headers and
+the observed MIME types. Evidence also records the transaction number, because
+several HTTP requests can share a connection UID.
+
+**Limits of existing logs:** ordinary Zeek logs do not include these declared
+Content-Type headers. Reread the capture with the updated Slips Zeek scripts to
+collect them; reloading a saved output folder cannot recover omitted fields.
+An opaque binary body that Zeek cannot identify still cannot trigger the two
+binary findings. For example, the POSTs to `195.219.57.34:8080` in
+`training-capture-015` have IP Host headers, but their saved HTTP/file records
+do not identify the opaque bodies' types. Those saved records support the IP
+Host finding only. Missing MIME fields or file hashes do not prove binary
+content or missing Content-Type headers.
+
+All three checks are enabled by default. To disable one, add its evidence type
+from the table to `DisabledAlerts.disabled_detections` in `config/slips.yaml`.
+The server receives the response-mismatch finding; the downloading client is
+listed as the other endpoint, rather than being blamed for the server's header.
+
+
 ## Leak Detector Module
 
 This module work only when slips is given a PCAP

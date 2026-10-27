@@ -142,13 +142,33 @@ class HTTP(BaseFlow):
     resp_mime_types: str
     resp_fuids: str
 
+    sport: int | str = ""
+    dport: int | str = ""
+    trans_depth: int | str = ""
+    orig_mime_types: list[str] | str = ""
+    orig_fuids: list[str] | str = ""
+    request_content_type: str = ""
+    response_content_type: str = ""
+    request_content_encoding: str = ""
+    response_content_encoding: str = ""
+    request_headers_complete: bool | str = False
+    response_headers_complete: bool | str = False
+
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
     type_: str = field(default="http")
 
     def __post_init__(self) -> None:
-        pass
+        """Normalize Zeek TSV's empty-string marker in captured HTTP headers."""
+        for name in (
+            "request_content_type",
+            "response_content_type",
+            "request_content_encoding",
+            "response_content_encoding",
+        ):
+            if getattr(self, name) == "(empty)":
+                setattr(self, name, "")
 
 
 @dataclass(kw_only=True)

@@ -120,6 +120,9 @@ class EvidenceType(Enum):
     TOR_EXIT_NODE = auto()
     PERIODIC_CONNECTION = auto()
     SUSPECTED_C2_CHANNEL = auto()
+    HTTP_IP_HOST = auto()
+    HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE = auto()
+    HTTP_BINARY_RESPONSE_AS_HTML = auto()
 
     def __str__(self):
         return self.name

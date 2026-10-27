@@ -119,6 +119,9 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `http_analyzer` | `EMPTY_CONNECTIONS` | `PAMP` |
 | `http_analyzer` | `EXECUTABLE_MIME_TYPE` | `PAMP` |
 | `http_analyzer` | `HTTP_TRAFFIC` | `DAMP` |
+| `http_analyzer` | `HTTP_IP_HOST` | `PAMP` |
+| `http_analyzer` | `HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE` | `PAMP` |
+| `http_analyzer` | `HTTP_BINARY_RESPONSE_AS_HTML` | `PAMP` |
 | `http_analyzer` | `INCOMPATIBLE_USER_AGENT` | `PAMP` |
 | `http_analyzer` | `MULTIPLE_USER_AGENT` | `DAMP` |
 | `http_analyzer` | `NON_HTTP_PORT_80_CONNECTION` | `DAMP` |

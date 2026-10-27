@@ -11,6 +11,7 @@
 @load ./log_gw.zeek
 @load ./airplay-info.zeek
 @load ./mdns-identity.zeek
+@load ./http-content-metadata.zeek
 
 ########################################
 ##! Local site policy. Customize as appropriate.

@@ -881,7 +881,8 @@ function evidenceTypeLabel(record) {
   if (record.archived_report || record.evidence_type === "P2P_REPORT") return "Type unavailable";
   if (["report", "blame"].includes(record.message_type)) return "Type not supplied";
   if (record.evidence_type && String(record.module || "").split(",").includes("p2p_trust")) return alertTypeName(record.evidence_type);
-  if (["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"].includes(record.evidence_type)) return alertTypeName(record.evidence_type);
+  if (["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN", "HTTP_IP_HOST",
+    "HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE", "HTTP_BINARY_RESPONSE_AS_HTML"].includes(record.evidence_type)) return alertTypeName(record.evidence_type);
   return record.evidence_type || record.message_type || "All types";
 }
 
@@ -2549,6 +2550,9 @@ function alertTypeName(type) {
     VERTICAL_PORT_SCAN: "Vertical port scan",
     HORIZONTAL_PORT_SCAN: "Horizontal port scan",
     HTTP_TRAFFIC: "HTTP traffic",
+    HTTP_IP_HOST: "HTTP Host header is an IP address",
+    HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE: "Binary HTTP POST without Content-Type",
+    HTTP_BINARY_RESPONSE_AS_HTML: "Binary HTTP response declared as HTML",
     ARP_SCAN: "ARP scan",
     TLS_PROVIDER_IMPERSONATION: "Suspected TLS provider impersonation",
     INCOMPATIBLE_CN: "TLS provider mismatch",
@@ -5632,6 +5636,14 @@ const PROTOCOL_FIELDS = {
     ["HTTP version", ["version", "http_version"]], ["Status", ["status_code"]],
     ["Status message", ["status_msg"]], ["User agent", ["user_agent"]],
     ["Request body", ["request_body_len"]], ["Response body", ["response_body_len"]],
+    ["HTTP transaction", ["trans_depth"]],
+    ["Request Content-Type header", ["request_content_type"]],
+    ["Response Content-Type header", ["response_content_type"]],
+    ["Request headers recorded", ["request_headers_complete"]],
+    ["Response headers recorded", ["response_headers_complete"]],
+    ["Request Content-Encoding", ["request_content_encoding"]],
+    ["Response Content-Encoding", ["response_content_encoding"]],
+    ["Request MIME types", ["orig_mime_types"]], ["Request file IDs", ["orig_fuids"]],
     ["Response MIME types", ["resp_mime_types"]], ["Response file IDs", ["resp_fuids"]],
   ],
   ssl: [

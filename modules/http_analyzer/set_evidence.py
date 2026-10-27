@@ -13,12 +13,79 @@ from slips_files.core.structures.evidence import (
     EvidenceType,
     IoCType,
     Direction,
+    Proto,
 )
 
 
 class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
+
+    def http_header_anomaly(
+        self,
+        twid: str,
+        flow: HTTP,
+        evidence_type: EvidenceType,
+        threat_level: ThreatLevel,
+        description: str,
+        server: bool = False,
+        observed_mime_types: list[str] | None = None,
+    ) -> None:
+        """Store an HTTP header finding against the endpoint that sent it.
+
+        :param twid: Transaction's time window.
+        :param flow: Zeek HTTP transaction.
+        :param evidence_type: Independent check that matched.
+        :param threat_level: Severity of this behavior.
+        :param description: Explanation including the communicating endpoints.
+        :param server: Whether the response sender is responsible.
+        :param observed_mime_types: Binary types identified by Zeek signatures.
+        """
+        responsible = flow.daddr if server else flow.saddr
+        other = flow.saddr if server else flow.daddr
+        evidence = Evidence(
+            evidence_type=evidence_type,
+            attacker=Attacker(
+                direction=Direction.DST if server else Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=responsible,
+            ),
+            victim=Victim(
+                direction=Direction.SRC if server else Direction.DST,
+                ioc_type=IoCType.IP,
+                value=other,
+            ),
+            threat_level=threat_level,
+            confidence=0.9 if observed_mime_types else 1.0,
+            description=description,
+            profile=ProfileID(ip=responsible),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            proto=Proto.TCP,
+            src_port=getattr(flow, "sport", "") or None,
+            dst_port=getattr(flow, "dport", "") or None,
+            detection_details={
+                "http_transaction": getattr(flow, "trans_depth", ""),
+                "host_header": flow.host,
+                "method": flow.method,
+                "uri": flow.uri,
+                "observed_mime_types": observed_mime_types or [],
+                "request_headers_complete": getattr(
+                    flow, "request_headers_complete", False
+                ),
+                "response_headers_complete": getattr(
+                    flow, "response_headers_complete", False
+                ),
+                "request_content_type": getattr(
+                    flow, "request_content_type", ""
+                ),
+                "response_content_type": getattr(
+                    flow, "response_content_type", ""
+                ),
+            },
+        )
+        self.db.set_evidence(evidence)
 
     def weird_http_method(
         self, twid: str, weird_flow: Weird, flow: dict
