@@ -244,3 +244,36 @@ login_fields_to_slips_fields_map = {
     "client_user": "client_user",
     "password": "password",  #  pragma: allowlist secret
 }
+
+
+smb_fields_to_slips_fields_map = {
+    "ts": "starttime",
+    "uid": "uid",
+    "id.orig_h": "saddr",
+    "id.resp_h": "daddr",
+    "id.orig_p": "sport",
+    "id.resp_p": "dport",
+    "path": "path",
+    "service": "service",
+    "share_type": "share_type",
+    "action": "action",
+    "name": "name",
+    "prev_name": "prev_name",
+    "size": "size",
+    "fuid": "fuid",
+    "slips_file_id": "file_id",
+    "command": "command",
+    "sub_command": "sub_command",
+    "status": "status",
+    "version": "version",
+    "username": "username",
+    "domainname": "domainname",
+    "success": "success",
+    "endpoint": "endpoint",
+    "operation": "operation",
+    "named_pipe": "named_pipe",
+    "rtt": "rtt",
+    "slips_event_ts": "event_ts",
+    "slips_write_seen": "write_seen",
+    "slips_read_seen": "read_seen",
+}

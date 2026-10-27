@@ -23,6 +23,7 @@ class ConfigMixin:
         (Modules.REGEX_GENERATOR, "regex_generator_enabled"),
         (Modules.ANOMALY_DETECTION_SERVICES, "service_anomaly_enabled"),
         (Modules.BEACONING, "beaconing_enabled"),
+        (Modules.SMB_ANALYZER, "smb_analyzer_enabled"),
         (Modules.WEB_INTERFACE, "web_interface_enabled"),
     )
 

@@ -160,3 +160,9 @@ DAMP overrides in
 `NON_SSL_PORT_443_CONNECTION`, `UNKNOWN_PORT`, `YOUNG_DOMAIN`,
 `HTTP_TRAFFIC`, `MULTIPLE_USER_AGENT`, `NON_HTTP_PORT_80_CONNECTION`,
 and `SSH_SUCCESSFUL`.
+
+### SMB behavior findings
+
+All `SMB_*` types from [SMB behavior detection](smb_detection.md) default to `PAMP`.
+Their severity and confidence are independent: informational volume findings do
+not claim malicious intent; stronger correlated behaviors have higher severity.

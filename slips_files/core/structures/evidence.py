@@ -124,6 +124,20 @@ class EvidenceType(Enum):
     HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE = auto()
     HTTP_BINARY_RESPONSE_AS_HTML = auto()
 
+    SMB_SCAN = auto()
+    SMB_SHARE_SWEEP = auto()
+    SMB_SHARE_PATH_MISMATCH = auto()
+    SMB_SUSPECTED_PROPAGATION = auto()
+    SMB_EXTERNAL_CONNECTION = auto()
+    SMB_LARGE_TRANSFER = auto()
+    SMB_LARGE_FILE = auto()
+    SMB_SUSPICIOUS_TRANSFER = auto()
+    SMB_REMOTE_EXECUTION = auto()
+    SMB_PASSWORD_GUESSING = auto()
+    SMB_PASSWORD_SPRAYING = auto()
+    SMB_RAPID_FILE_CHANGES = auto()
+    SMB_RANSOMWARE_BEHAVIOR = auto()
+
     def __str__(self):
         return self.name
 

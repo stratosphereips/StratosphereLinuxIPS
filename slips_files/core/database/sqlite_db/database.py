@@ -614,7 +614,12 @@ class SQLiteDB(ISQLite):
         parameters = (
             profileid,
             twid,
-            flow.uid,
+            (
+                flow.record_id
+                if isinstance(getattr(flow, "record_id", None), str)
+                and flow.record_id
+                else flow.uid
+            ),
             json.dumps(asdict(flow)),
             label,
             flow.type_,

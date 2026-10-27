@@ -989,6 +989,16 @@ The server receives the response-mismatch finding; the downloading client is
 listed as the other endpoint, rather than being blamed for the server's header.
 
 
+## SMB Analyzer Module
+
+The new `smb_analyzer` detects scanning, broad share access, repeated mismatched
+share paths, suspected propagation, external SMB, large sessions/files,
+correlated suspicious transfers, executable-write/service-request sequences,
+authentication failures and rapid file changes. All checks use Zeek metadata.
+See [SMB behavior detection](smb_detection.md) for rules, confidence, configuration,
+resource limits and visibility limitations.
+
+
 ## Leak Detector Module
 
 This module work only when slips is given a PCAP

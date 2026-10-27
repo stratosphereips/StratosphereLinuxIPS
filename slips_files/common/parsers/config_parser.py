@@ -677,6 +677,18 @@ class ConfigParser(object):
             permanent_dir = "permanent"
         return os.path.normpath(permanent_dir)
 
+    def smb_analyzer_enabled(self) -> bool:
+        """Read the SMB analyzer switch.
+
+        :return: Whether the SMB analyzer should be started.
+        """
+        return (
+            self.read_configuration(
+                Modules.SMB_ANALYZER.value, "enabled", True
+            )
+            is True
+        )
+
     def beaconing_enabled(self) -> bool:
         """Check the numeric recurring connection detector feature flag.
 

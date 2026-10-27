@@ -120,3 +120,4 @@ redef digest_salt = "Please change this value.";
 
 # Uncomment this to source zkg's package state
 # @load packages
+@load ./smb-behavior.zeek

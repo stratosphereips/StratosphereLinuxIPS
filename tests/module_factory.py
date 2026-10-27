@@ -61,6 +61,24 @@ class ModuleFactory:
 
         return ARPScanDetector(ARPScanSettings(**settings))
 
+    def create_smb_analyzer_obj(self, **settings: object) -> object:
+        """Create SMB analysis with real bounded state and mocked external services.
+
+        :param settings: SMB configuration overrides.
+        :return: Module that does not connect to Redis or create workers.
+        """
+        from modules.smb_analyzer.smb_analyzer import SMBAnalyzer
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: settings.get(key, default)
+        db = Mock()
+        db.get_input_type.return_value = InputType.PCAP
+        with patch(MODULE_DB_MANAGER, return_value=db):
+            module = SMBAnalyzer(logger=Mock(), output_dir="output/unit_smb", redis_port=6379,
+                termination_event=Mock(), slips_args=SimpleNamespace(interface=[], growing=False),
+                conf=conf, ppid=12345, bloom_filters_manager=Mock())
+        module.print = Mock()
+        return module
+
     def create_beaconing_obj(self, output_dir: str = "output/unit_beaconing", **settings: object) -> object:
         """Create the numeric detector without Redis or checkpoint files.
 

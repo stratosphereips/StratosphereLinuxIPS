@@ -31,6 +31,15 @@ from slips_files.core.flows.zeek import (
 )
 
 
+from slips_files.core.flows.smb import (
+    SMBMapping,
+    SMBFile,
+    SMBCommand,
+    NTLM,
+    DCERPC,
+)
+
+
 class FlowClassifier:
     """
     when modules receive msgs in redis channels, they're received in dict
@@ -41,6 +50,11 @@ class FlowClassifier:
 
     def __init__(self):
         self.flow_map: Dict[str, Type] = {
+            "smb_mapping": SMBMapping,
+            "smb_files": SMBFile,
+            "smb_cmd": SMBCommand,
+            "ntlm": NTLM,
+            "dce_rpc": DCERPC,
             "conn": Conn,
             "dns": DNS,
             "http": HTTP,

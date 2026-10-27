@@ -846,6 +846,119 @@ network_discovery:
   horizontal_max_targets: 256
 
 #############################
+
+#############################
+smb_analyzer:
+  # Start the SMB behavior detector. It reads Zeek records, not packet bodies.
+  enabled: true
+  # Record the first read/write per file handle and file closes in new Zeek runs.
+  # Needed for executable writes, reported file sizes and rapid file changes.
+  log_file_operations: true
+  # Keep failed SMB session-setup replies, without logging every SMB command.
+  # Needed when NTLM records do not contain a definite authentication result.
+  log_authentication_failures: true
+  # Treat these TCP destination ports as SMB candidates. Other ports need RPC context.
+  ports: [139, 445]
+  # Count distinct scanned hosts, shares, failed logins and changed files over this
+  # many capture seconds. Shorter periods require more concentrated activity.
+  window_seconds: 60
+  # Connect scanning with later transfers, and executable writes with later service
+  # requests, for this many capture seconds. This is not a training period.
+  correlation_seconds: 900
+  # Accept records arriving this far behind the newest capture timestamp. Allows
+  # parallel parsing and long connections without mixing unrelated days of activity.
+  max_lateness_seconds: 1800
+  # Require this many distinct SMB targets before calling the behavior a scan.
+  scan_min_hosts: 20
+  # At least this fraction of those targets must have failed to establish TCP.
+  # A successful connection to a busy file server does not count as a failed probe.
+  scan_min_failure_ratio: 0.8
+  # Broad share access: trigger at this many servers OR this many share names.
+  # One ordinary IPC$ or C$ access is insufficient.
+  share_min_hosts: 8
+  share_min_names: 10
+  # Require the same literal IP inside a share path to disagree with this many
+  # actual destination IPs. Reduces findings caused by one alias or NAT mapping.
+  mismatch_min_hosts: 3
+  # Raise suspected propagation only when repeated path mismatches also accompany
+  # probing or share access involving this many hosts. No fixed malware IP/domain.
+  propagation_min_hosts: 20
+  # Report an established SMB session sending OR receiving at least this many
+  # bytes. Default is 4 MiB. Ordinary volume is informational; sending this much
+  # with recent scanning or repeated mismatched share paths produces the stronger finding.
+  large_transfer_bytes: 4194304
+  # Report an accessed file whose recorded size reaches this many bytes (100 MiB).
+  # Reported file size does not prove the whole file was uploaded or downloaded.
+  large_file_bytes: 104857600
+  # Require this many distinct connections with explicit authentication failures.
+  # Duplicate NTLM/SMB reports for one connection count once. Unknown results,
+  # unfinished negotiations and TCP failures are not failed password attempts.
+  auth_min_failures: 10
+  # Count these SMB session-setup results as rejected credentials. Generic access
+  # denial, password expiry and unfinished negotiation are excluded by default.
+  authentication_failure_statuses: [LOGON_FAILURE, WRONG_PASSWORD, NO_SUCH_USER]
+  # After enough failures, flag possible spraying across this many known accounts
+  # OR servers. Password values are unavailable; reuse of one password is unproven.
+  spray_min_accounts: 5
+  spray_min_hosts: 5
+  # Flag a burst affecting this many distinct files. Repeated chunks of one file
+  # cannot meet this threshold. Backups and bulk administration can also do this.
+  file_change_min_files: 30
+  # The stronger possible-ransomware finding requires BOTH this many distinct
+  # renamed files and this many files written/deleted during window_seconds.
+  # These records cannot establish encryption or see changes made only locally.
+  ransomware_min_renames: 20
+  ransomware_min_other_changes: 10
+  # Recognize these filename suffixes when correlating an executable write with
+  # a later remote service request. A filename alone does not prove execution.
+  executable_extensions: [.exe, .dll, .scr, .ps1, .bat, .cmd, .vbs, .msi]
+  # Approved external SMB servers/subnets, e.g. [203.0.113.10/32]. Suppresses only
+  # external-connection findings. Other behaviors still run; use whitelist.conf
+  # for evidence-specific exceptions to known authorized activity.
+  external_allowed_networks: []
+  # Shares used to correlate executable writes with remote service requests.
+  admin_shares: [admin$, c$]
+  # RPC operations considered service creation/start after an executable write.
+  # A request does not prove that Windows successfully executed the service.
+  remote_service_operations: [CreateServiceW, CreateServiceA, CreateServiceWOW64W, StartServiceW, StartServiceA]
+  # Wait this many capture seconds before repeating the same rule for one source
+  # (or source/server for transfer/external/service findings). Limits alert floods.
+  cooldown_seconds: 300
+  # Recalculate scan counters after this many capture seconds or another
+  # scan_min_hosts probes (so a fast burst is detected immediately). SMB
+  # share, authentication and file events are evaluated immediately.
+  evaluation_interval_seconds: 1
+  # Resource ceilings. Evict older context when a ceiling is reached and report
+  # that loss of detection context. Raw events already saved on disk remain saved.
+  # Most initiating clients tracked at once; older client context is discarded.
+  max_sources: 256
+  # Most distinct targets, file actions, login results and correlations per client.
+  max_events_per_source: 2048
+  # Combined observation ceiling across all clients, to bound total memory use.
+  max_total_events: 32768
+  # Most connection summaries kept while joining SMB operations to their sessions.
+  max_sessions: 4096
+  # Most source/rule/server repeat timers retained to limit repeated findings.
+  max_cooldowns: 4096
+  # Each rule can be disabled or assigned a different threat/confidence below.
+  # Threat describes the seriousness of the behavior. Confidence describes how
+  # strongly the available records establish that behavior, NOT malware probability.
+  # Volume alone is info; combined propagation/execution-like behavior is high.
+  rules:
+    SMB_SCAN: {enabled: true, threat_level: medium, confidence: 0.85}
+    SMB_SHARE_SWEEP: {enabled: true, threat_level: medium, confidence: 0.8}
+    SMB_SHARE_PATH_MISMATCH: {enabled: true, threat_level: medium, confidence: 0.75}
+    SMB_SUSPECTED_PROPAGATION: {enabled: true, threat_level: high, confidence: 0.9}
+    SMB_EXTERNAL_CONNECTION: {enabled: true, threat_level: low, confidence: 0.8}
+    SMB_LARGE_TRANSFER: {enabled: true, threat_level: info, confidence: 0.95}
+    SMB_LARGE_FILE: {enabled: true, threat_level: info, confidence: 0.8}
+    SMB_SUSPICIOUS_TRANSFER: {enabled: true, threat_level: high, confidence: 0.85}
+    SMB_REMOTE_EXECUTION: {enabled: true, threat_level: high, confidence: 0.85}
+    SMB_PASSWORD_GUESSING: {enabled: true, threat_level: medium, confidence: 0.85}
+    SMB_PASSWORD_SPRAYING: {enabled: true, threat_level: high, confidence: 0.85}
+    SMB_RAPID_FILE_CHANGES: {enabled: true, threat_level: medium, confidence: 0.8}
+    SMB_RANSOMWARE_BEHAVIOR: {enabled: true, threat_level: high, confidence: 0.85}
+
 beaconing:
   # Analyze numeric connection timing and sizes. Restart Slips to change this.
   # Disable rnn_cc_detection in modules.disable to avoid running two C2 detectors and TensorFlow.
@@ -1351,6 +1464,10 @@ DisabledAlerts:
   # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
   # ANOMALOUS_FLOW, MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
   # INCOMPATIBLE_USER_AGENT, EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT,
+  # SMB_SCAN, SMB_SHARE_SWEEP, SMB_SHARE_PATH_MISMATCH, SMB_SUSPECTED_PROPAGATION,
+  # SMB_EXTERNAL_CONNECTION, SMB_LARGE_TRANSFER, SMB_LARGE_FILE, SMB_SUSPICIOUS_TRANSFER,
+  # SMB_REMOTE_EXECUTION, SMB_PASSWORD_GUESSING, SMB_PASSWORD_SPRAYING,
+  # SMB_RAPID_FILE_CHANGES, SMB_RANSOMWARE_BEHAVIOR,
   # HTTP_TRAFFIC, MALICIOUS_JARM, NETWORK_GPS_LOCATION_LEAKED,
   # HTTP_IP_HOST, HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE, HTTP_BINARY_RESPONSE_AS_HTML,
   # ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN, ICMP_ADDRESS_MASK_SCAN,

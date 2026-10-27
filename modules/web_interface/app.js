@@ -881,6 +881,7 @@ function evidenceTypeLabel(record) {
   if (record.archived_report || record.evidence_type === "P2P_REPORT") return "Type unavailable";
   if (["report", "blame"].includes(record.message_type)) return "Type not supplied";
   if (record.evidence_type && String(record.module || "").split(",").includes("p2p_trust")) return alertTypeName(record.evidence_type);
+  if (String(record.evidence_type || "").startsWith("SMB_")) return alertTypeName(record.evidence_type);
   if (["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN", "HTTP_IP_HOST",
     "HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE", "HTTP_BINARY_RESPONSE_AS_HTML"].includes(record.evidence_type)) return alertTypeName(record.evidence_type);
   return record.evidence_type || record.message_type || "All types";
@@ -2550,6 +2551,17 @@ function alertTypeName(type) {
     VERTICAL_PORT_SCAN: "Vertical port scan",
     HORIZONTAL_PORT_SCAN: "Horizontal port scan",
     HTTP_TRAFFIC: "HTTP traffic",
+    SMB_SCAN: "SMB scan", SMB_SHARE_SWEEP: "SMB share sweep",
+    SMB_SHARE_PATH_MISMATCH: "Repeated mismatched SMB share paths",
+    SMB_SUSPECTED_PROPAGATION: "Suspected SMB propagation",
+    SMB_EXTERNAL_CONNECTION: "External SMB communication",
+    SMB_LARGE_TRANSFER: "Large SMB session", SMB_LARGE_FILE: "Large file accessed over SMB",
+    SMB_SUSPICIOUS_TRANSFER: "Suspicious SMB data transfer",
+    SMB_REMOTE_EXECUTION: "SMB executable write followed by remote service request",
+    SMB_PASSWORD_GUESSING: "SMB authentication failures", // pragma: allowlist secret
+    SMB_PASSWORD_SPRAYING: "Possible SMB password spraying", // pragma: allowlist secret
+    SMB_RAPID_FILE_CHANGES: "Rapid SMB file changes",
+    SMB_RANSOMWARE_BEHAVIOR: "Possible ransomware activity over SMB",
     HTTP_IP_HOST: "HTTP Host header is an IP address",
     HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE: "Binary HTTP POST without Content-Type",
     HTTP_BINARY_RESPONSE_AS_HTML: "Binary HTTP response declared as HTML",
@@ -5626,6 +5638,13 @@ function flowValue(flow, ...names) {
 }
 
 const PROTOCOL_FIELDS = {
+  smb_mapping: [["Requested share path", ["path"]], ["Service", ["service"]], ["Share type", ["share_type"]]],
+  smb_files: [["Action", ["action"]], ["Share path", ["path"]], ["File name", ["name"]],
+    ["Previous name", ["prev_name"]], ["Reported file size", ["size"]], ["File ID", ["fuid"]],
+    ["Write seen", ["write_seen"]], ["Read seen", ["read_seen"]]],
+  smb_cmd: [["Command", ["command"]], ["Subcommand", ["sub_command"]], ["Reply status", ["status"]], ["SMB version", ["version"]], ["Account", ["username"]]],
+  ntlm: [["Account", ["username"]], ["Domain", ["domainname"]], ["Authentication succeeded", ["success"]]],
+  dce_rpc: [["Endpoint", ["endpoint"]], ["Operation", ["operation"]], ["Named pipe", ["named_pipe"]], ["Reply round-trip time", ["rtt"]]],
   dns: [
     ["Query", ["query"]], ["Query type", ["qtype_name", "qtype"]],
     ["Query class", ["qclass_name", "qclass"]], ["Result", ["rcode_name", "rcode"]],

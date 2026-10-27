@@ -14,4 +14,9 @@ SUPPORTED_LOGFILES = (
     "software",
     "weird",
     "login",
+    "smb_mapping",
+    "smb_files",
+    "smb_cmd",
+    "ntlm",
+    "dce_rpc",
 )

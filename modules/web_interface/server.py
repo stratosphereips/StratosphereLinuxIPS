@@ -51,6 +51,7 @@ from slips_files.core.structures.evidence import (
     is_icmp_protocol,
 )
 from modules.supported_module_names import Modules
+from modules.smb_analyzer.settings import RULES as SMB_RULES
 from modules.arp.scan_settings import ARP_SCAN_EXPLANATIONS
 from modules.p2p_trust.trust.base_model import (
     RELIABILITY_WEIGHT,
@@ -150,6 +151,7 @@ METRIC_RANGES = {
 }
 # pragma: allowlist secret
 EVIDENCE_MODULE = {
+    **{name: Modules.SMB_ANALYZER for name in SMB_RULES},
     "ARP_SCAN": Modules.ARP,
     "ARP_OUTSIDE_LOCALNET": Modules.ARP,
     "UNSOLICITED_ARP": Modules.ARP,
@@ -4961,12 +4963,13 @@ class RunDataReader:
                     result["network_flow"] = record
             if self._table_exists(connection, "altflows"):
                 result["protocol_flow_total"] = connection.execute(
-                    "SELECT COUNT(*) FROM altflows WHERE uid=?", (uid,)
+                    "SELECT COUNT(*) FROM altflows WHERE uid=? OR (uid>=? AND uid<?)",
+                    (uid, uid + ":smb:", uid + ":smb;"),
                 ).fetchone()[0]
                 rows = connection.execute(
                     "SELECT rowid AS protocol_rowid, * FROM altflows "
-                    "WHERE uid=? AND rowid>? ORDER BY rowid LIMIT ?",
-                    (uid, after, limit + 1),
+                    "WHERE (uid=? OR (uid>=? AND uid<?)) AND rowid>? ORDER BY rowid LIMIT ?",
+                    (uid, uid + ":smb:", uid + ":smb;", after, limit + 1),
                 ).fetchall()
                 if len(rows) > limit:
                     result["next_cursor"] = str(
@@ -5072,15 +5075,26 @@ class RunDataReader:
         }
         with self._connect_sqlite() as connection:
             for table in ("flows", "altflows"):
+                condition = f"uid IN ({placeholders})"
+                parameters = list(bounded_uids)
+                if table == "altflows":
+                    for parent_uid in bounded_uids:
+                        if ":smb:" not in parent_uid:
+                            condition += " OR (uid>=? AND uid<?)"
+                            parameters.extend(
+                                [parent_uid + ":smb:", parent_uid + ":smb;"]
+                            )
                 rows = connection.execute(
-                    f"SELECT * FROM {table} WHERE uid IN ({placeholders}) LIMIT 1000",
-                    tuple(bounded_uids),
+                    f"SELECT * FROM {table} WHERE {condition} LIMIT 1000",
+                    parameters,
                 ).fetchall()
                 for row in rows:
                     record = dict(row)
                     record["flow"] = self._loads(record.get("flow"), {})
                     record["table"] = table
                     uid = str(record.get("uid", ""))
+                    if table == "altflows" and ":smb:" in uid:
+                        uid = str(record["flow"].get("uid") or uid)
                     item = grouped.setdefault(
                         uid,
                         {
@@ -5093,31 +5107,53 @@ class RunDataReader:
                         item["network_flow"] = record
                     else:
                         item["protocol_flows"].append(record)
+            missing_uids = [
+                uid
+                for uid, group in grouped.items()
+                if group["protocol_flows"] and not group["network_flow"]
+            ]
+            if missing_uids:
+                marks = ",".join("?" for _ in missing_uids)
+                for row in connection.execute(
+                    f"SELECT * FROM flows WHERE uid IN ({marks})", missing_uids
+                ):
+                    record = dict(row)
+                    record["flow"] = self._loads(record.get("flow"), {})
+                    record["table"] = "flows"
+                    grouped[record["uid"]]["network_flow"] = record
         recovered_flow_count = 0
         incomplete = {
             uid: group
             for uid, group in grouped.items()
-            if self._needs_connection_record(group)
+            if ":smb:" not in uid and self._needs_connection_record(group)
         }
         if incomplete:
             recovered_flow_count = self._recover_zeek_flows(incomplete)
         items = [
-            grouped[uid]
-            for uid in bounded_uids
-            if uid in grouped
-            and (
-                grouped[uid]["network_flow"] or grouped[uid]["protocol_flows"]
-            )
+            group
+            for group in grouped.values()
+            if group["network_flow"] or group["protocol_flows"]
         ]
+        for group in items:
+            protocols = {
+                record["uid"]: record for record in group["protocol_flows"]
+            }
+            group["protocol_flows"] = list(protocols.values())
         network_flow_total = sum(bool(item["network_flow"]) for item in items)
         protocol_flow_total = sum(
             len(item["protocol_flows"]) for item in items
+        )
+        available_uids = {item["uid"] for item in items}
+        available_uids.update(
+            record["uid"]
+            for item in items
+            for record in item["protocol_flows"]
         )
         return {
             "items": items,
             "total": len(items),
             "linked_uid_count": total_uids,
-            "unavailable_flow_count": len(bounded_uids) - len(items),
+            "unavailable_flow_count": len(set(bounded_uids) - available_uids),
             "network_flow_total": network_flow_total,
             "protocol_flow_total": protocol_flow_total,
             "recovered_flow_count": recovered_flow_count,

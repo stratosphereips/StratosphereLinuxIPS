@@ -223,3 +223,17 @@ class FlowHandler:
         to_send = json.dumps(to_send)
         self.db.publish("new_login", to_send)
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+
+    def handle_smb(self) -> None:
+        """Store each SMB event before publishing its connection-linked metadata."""
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+        self.db.publish(
+            "new_smb",
+            json.dumps(
+                {
+                    "profileid": self.profileid,
+                    "twid": self.twid,
+                    "flow": asdict(self.flow),
+                }
+            ),
+        )

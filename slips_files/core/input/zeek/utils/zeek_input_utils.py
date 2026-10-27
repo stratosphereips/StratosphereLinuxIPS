@@ -14,6 +14,7 @@ from re import split
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from slips_files.common.slips_utils import utils
+from modules.supported_module_names import Modules
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 from managers.process_manager.owned_processes import OwnedProcesses
@@ -566,6 +567,15 @@ class ZeekInputUtils:
         )
 
         cmd = builder.build(pcap_or_interface, tcpdump_filter=tcpdump_filter)
+        smb_enabled = self.input.conf.read_configuration(
+            Modules.SMB_ANALYZER.value, "enabled", True
+        )
+        for option in ("log_file_operations", "log_authentication_failures"):
+            enabled = self.input.conf.read_configuration(
+                Modules.SMB_ANALYZER.value, option, True
+            )
+            if smb_enabled is False or enabled is False:
+                cmd.extend(["-e", f"redef SMB::slips_{option}=F;"])
         return cmd
 
     def run_zeek(
