@@ -34,7 +34,7 @@ def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
     playwright = pytest.importorskip("playwright.sync_api")
     assets = Path("modules/web_interface")
     source, destination = "fe80::44d6:6ff0:6f58:42b7", "fe80::143c:dd8d:c4ba:b95"
-    record = {"id": "compact-evidence", "profile_ip": source, "evidence_type": "CONNECTION_TO_PRIVATE_IP",
+    record = {"id": "compact-evidence", "profile_ip": source, "evidence_type": "CONNECTION_TO_PRIVATE_IP", "twid": "timewindow1",
               "module": "conn_analyzer", "timestamp": 1793000000, "threat_level": "info",
               "confidence": .8, "alert_score": 0, "alert_threshold": 5,
               "description": f"Connecting to private IP: {destination} on destination port: 37222. Extra diagnostic detail stays visible.",
@@ -1226,6 +1226,8 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             and "From P2P" in evidence_type
         )
         detail = page.locator("#evidence-detail-content")
+        assert "timewindow" not in detail.inner_text().lower()
+        assert "time window" not in detail.inner_text().lower()
         assert detail.locator("h2").inner_text() == "192.0.2.10 connected to unknown port 8123/TCP on 192.0.2.20"
         summary = detail.locator(".peer-evidence-summary")
         assert summary.locator(".peer-evidence-endpoints > span").nth(0).inner_text().startswith("Source: 192.0.2.10")
@@ -1236,6 +1238,8 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
         metadata = detail.locator("details.evidence-detail-record")
         assert not metadata.evaluate("el => el.open")
         metadata.evaluate("el => el.open = true")
+        assert "time window" not in metadata.inner_text().lower()
+        assert "timewindow1" not in metadata.inner_text().lower()
         assert (
             "peer-A" in detail.inner_text()
             and "192.0.2.2" in detail.inner_text()
@@ -3779,7 +3783,7 @@ def test_configuration_explains_alert_equations_in_chrome(tmp_path: Path, theme:
         assert "Evidence contribution = threat value × confidence" in content
         assert "Live score (RATL) = ATL × active risk weight" in content
         assert "RATL ≥ risk_accumulated_threat_level" in content
-        assert "ATL ≥ evidence_detection_threshold × time_window_width / 60" in content
+        assert "ATL ≥ evidence_detection_threshold × interval_seconds / 60" in content
         assert "1.2 / 0.4 = 3" in content
         assert "0.6 × 120 / 60 = 1.2" in content
         assert "separate from evidence threat levels" in content
@@ -3806,7 +3810,7 @@ def test_configuration_explains_alert_equations_in_chrome(tmp_path: Path, theme:
             renderConfiguration();
         }""")
         assert "low_risk_weight = not captured" in note.inner_text()
-        assert "time_window_width = not captured" in note.inner_text()
+        assert "interval_seconds = not captured" in note.inner_text()
         assert note.locator(".config-score-example").count() == 0
         page.locator(".config-nav-item", has_text="Parameters").click()
         assert note.count() == 0
@@ -4066,6 +4070,89 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
             assert counts == [12, 48, 1000, 0, 96]
             page.evaluate("""() => {state.networkOnly=true; state.currentNetworkStart=Date.now()/1000+5; renderP2PGraph();}""")
             assert page.locator("#p2p-graph-empty").is_visible()
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_readable_views_omit_internal_scoring_intervals(theme: str) -> None:
+    """Keep internal identifiers out of cards, controls and enforcement tables.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve real assets without reading a running Slips database.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated display fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1500, "height": 1050})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderFirewall === 'function'")
+            results = page.evaluate("""theme => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                setTheme(theme); state.deviceView=false; state.networkOnly=false;
+                const host={ip:'192.0.2.10',status:'blocked',blocked_at:1793185200,
+                    unblock_at:1793188800,remaining_seconds:3600,remaining_timewindows:7,
+                    stopped_packets:11,stopped_flows:12,evidence_while_blocked:13,evidence_count:14,alert_count:15};
+                renderFirewall({enabled:true,total:1,page_size:1,items:[host],history:[{
+                    timestamp:1793185200,ip:host.ip,action:'unblocked',details:'rules removed in timewindow9'
+                }],history_total:1});
+                state.arpPoisoning={counts:{hosts:1},hosts:[{...host,status:'poisoned',poisoned_at:1793185200,
+                    current_tw:'timewindow1',release_tw:'timewindow7',extra_timewindows:6,mac:'aa:bb:cc:dd:ee:ff'}],
+                    events:[{ip:host.ip,action:'released',timestamp:1793188800,current_tw:'timewindow7',
+                        release_tw:'timewindow8',extra_timewindows:1,details:'7 timewindows · 0.5 hours'}],evidence:[]};
+                renderArpPoisoning();
+                const record={id:'unchanged',timestamp:1793185200,evidence_type:'LONG_CONNECTION',
+                    description:'Long connection',threat_level:'low',twid:'timewindow1',
+                    timewindow:{number:1},flow_count:1,module:'conn_analyzer'};
+                const card=evidenceCard(record);
+                const dns=renderDnsDetails({'timewindows':['timewindow1'],domains:['example.test'],'resolved-by':['192.0.2.10']});
+                const extra=flowFieldList({twid:'timewindow1',current_tw:'timewindow1',release_tw:'timewindow7',
+                    time_window:'timewindow1',bytes:123});
+                const score=slipsScore({alert_score:1,alert_threshold:5,alert_score_basis:'current host time window'});
+                return {
+                    card:card.textContent,dns:dns.textContent,extra:extra.textContent,score:score.title,
+                    record:JSON.stringify(record),
+                    header:byId('p2p-title').textContent,
+                    oldSort:byId('alerts-item-sort').querySelector('option[value="tw"]')!==null,
+                    firewall:byId('firewall-table').textContent,firewallHistory:byId('firewall-history-table').textContent,
+                    arp:byId('arp-poisoning-hosts-table').textContent,arpEvents:byId('arp-poisoning-events-table').textContent,
+                    sizes:['firewall-table','arp-poisoning-hosts-table','arp-poisoning-events-table'].map(id=>[
+                        byId(id).querySelectorAll('thead th').length,byId(id).querySelector('tbody tr').children.length]),
+                };
+            }""", theme)
+            for key in ["card", "dns", "extra", "score", "header", "firewall", "firewallHistory", "arp", "arpEvents"]:
+                assert "timewindow" not in results[key].lower(), (key, results[key])
+                assert "time window" not in results[key].lower(), (key, results[key])
+            assert results["sizes"] == [[11, 11], [7, 7], [5, 5]]
+            assert not results["oldSort"]
+            assert "rules removed" in results["firewallHistory"]
+            assert "0.5 hours" in results["arpEvents"]
+            assert "Est. stopped packets" in results["firewall"]
+            assert "MAC" in results["arp"]
+            assert "123" in results["extra"]
+            assert json.loads(results["record"])["twid"] == "timewindow1"
             assert not errors, errors
         finally:
             browser.close()

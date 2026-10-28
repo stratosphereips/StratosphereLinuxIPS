@@ -117,7 +117,7 @@
             </div>
             <p id="alerts-range-note" class="alerts-range-note" role="status" hidden></p>
           </div>
-          <div class="alerts-sort-controls"><label>Sort hosts <select id="alerts-host-sort" aria-label="Sort alert hosts"><option value="time">Latest alert</option><option value="host">Host</option><option value="threat">Severity</option><option value="score">Score</option><option value="alerts" data-alert-mode="host">Alert count</option><option value="evidence">Evidence count</option><option value="label">Label</option><option value="tw" data-alert-mode="individual">Time window</option><option value="id" data-alert-mode="individual">ID</option></select></label><button id="alerts-host-order" type="button" aria-label="Reverse alert host order">↓</button></div>
+          <div class="alerts-sort-controls"><label>Sort hosts <select id="alerts-host-sort" aria-label="Sort alert hosts"><option value="time">Latest alert</option><option value="host">Host</option><option value="threat">Severity</option><option value="score">Score</option><option value="alerts" data-alert-mode="host">Alert count</option><option value="evidence">Evidence count</option><option value="label">Label</option><option value="id" data-alert-mode="individual">ID</option></select></label><button id="alerts-host-order" type="button" aria-label="Reverse alert host order">↓</button></div>
           <div id="alerts-host-list" class="alerts-host-list" aria-live="polite"></div>
           <div id="alerts-pager" class="alerts-host-pager"></div>
         </div>
@@ -125,7 +125,7 @@
         <div id="alerts-empty-pane" class="alerts-pane alerts-empty-pane"><div class="alerts-empty-state"><strong>Select a host group or show all alerts</strong><p>Choose a host to see its alerts here. Use the divider to adjust the pane widths.</p></div></div>
         <div id="alerts-list-pane" class="alerts-pane alerts-list-pane" hidden>
           <div id="alerts-selected-host" class="alerts-selected-host"></div>
-          <div class="alerts-sort-controls"><label>Sort alerts <select id="alerts-item-sort" aria-label="Sort alerts for selected host"><option value="time">Latest</option><option value="threat">Severity</option><option value="score">Score</option><option value="label">Label</option><option value="evidence">Evidence</option><option value="tw">Time window</option><option value="id">ID</option></select></label><button id="alerts-item-order" type="button" aria-label="Reverse alert order">↓</button></div>
+          <div class="alerts-sort-controls"><label>Sort alerts <select id="alerts-item-sort" aria-label="Sort alerts for selected host"><option value="time">Latest</option><option value="threat">Severity</option><option value="score">Score</option><option value="label">Label</option><option value="evidence">Evidence</option><option value="id">ID</option></select></label><button id="alerts-item-order" type="button" aria-label="Reverse alert order">↓</button></div>
           <div id="alerts-list" class="alerts-list" aria-live="polite"></div>
           <div id="alerts-list-more" class="alerts-list-more"></div>
         </div>
@@ -181,7 +181,7 @@
           <div id="firewall-impact-summary" class="summary-grid impact-summary"></div>
         </article>
         <div class="toolbar"><input id="firewall-search" type="search" placeholder="Search IP or status"><span id="firewall-count" class="result-count"></span></div>
-        <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="origin">Rule origin</th><th data-sort="blocked_at">Blocked since</th><th data-sort="unblock_at">Unblock at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="remaining_timewindows">Extra TWs</th><th data-sort="stopped_packets">Est. stopped packets</th><th data-sort="stopped_flows">Est. stopped flows</th><th data-sort="evidence_while_blocked">Evidence while blocked</th><th data-sort="evidence_count">Total evidence</th><th data-sort="alert_count">Alerts</th></tr></thead><tbody></tbody></table></div></div>
+        <div class="surface table-surface"><div class="table-wrap"><table id="firewall-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="origin">Rule origin</th><th data-sort="blocked_at">Blocked since</th><th data-sort="unblock_at">Unblock at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="stopped_packets">Est. stopped packets</th><th data-sort="stopped_flows">Est. stopped flows</th><th data-sort="evidence_while_blocked">Evidence while blocked</th><th data-sort="evidence_count">Total evidence</th><th data-sort="alert_count">Alerts</th></tr></thead><tbody></tbody></table></div></div>
         <article class="surface table-surface"><div class="table-heading"><div><h3>Block / unblock history</h3><p id="firewall-history-count">Firewall transitions and failed removals from this run.</p></div></div><div class="table-wrap"><table id="firewall-history-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="ip">IP</th><th data-sort="action">Action</th><th data-sort="details">Details</th></tr></thead><tbody></tbody></table></div></article>
         <div id="firewall-history-pager" class="pager"></div>
       </div>
@@ -192,14 +192,14 @@
       <article id="arp-poisoning-disabled" class="surface empty-state" hidden><p>ARP poisoning not enabled in this run.</p></article>
       <div id="arp-poisoning-stats">
         <div id="arp-poisoning-summary" class="summary-grid"></div>
-        <div class="toolbar"><input id="arp-poisoning-search" type="search" placeholder="Search IP, MAC, state, TW, or evidence…"><button class="excluded-visibility-toggle secondary" type="button" aria-label="Hide excluded records" aria-pressed="true">Excluded hidden</button><span id="arp-poisoning-count" class="result-count"></span></div>
+        <div class="toolbar"><input id="arp-poisoning-search" type="search" placeholder="Search IP, MAC, state, or evidence…"><button class="excluded-visibility-toggle secondary" type="button" aria-label="Hide excluded records" aria-pressed="true">Excluded hidden</button><span id="arp-poisoning-count" class="result-count"></span></div>
         <article class="surface table-surface">
           <div class="table-heading"><div><h3>Isolation state</h3><p>Hosts currently poisoned or previously released in this run.</p></div></div>
-          <div class="table-wrap"><table id="arp-poisoning-hosts-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="poisoned_at">Poisoned since</th><th data-sort="unblock_at">Release at</th><th data-sort="released_at">Released at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="mac">MAC</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap"><table id="arp-poisoning-hosts-table"><thead><tr><th data-sort="ip">IP</th><th data-sort="status">Status</th><th data-sort="poisoned_at">Poisoned since</th><th data-sort="unblock_at">Release at</th><th data-sort="released_at">Released at</th><th data-sort="remaining_seconds">Remaining</th><th data-sort="mac">MAC</th></tr></thead><tbody></tbody></table></div>
         </article>
         <article class="surface table-surface">
           <div class="table-heading"><div><h3>Poison / release history</h3><p>Newest module transitions from arp_poisoning.log.</p></div></div>
-          <div class="table-wrap"><table id="arp-poisoning-events-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="ip">IP</th><th data-sort="action">Action</th><th data-sort="current_tw">Current TW</th><th data-sort="release_tw">Release TW</th><th data-sort="unblock_at">Release at</th><th data-sort="extra_timewindows">Extra TWs</th><th data-sort="details">Details</th></tr></thead><tbody></tbody></table></div>
+          <div class="table-wrap"><table id="arp-poisoning-events-table"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="ip">IP</th><th data-sort="action">Action</th><th data-sort="unblock_at">Release at</th><th data-sort="details">Details</th></tr></thead><tbody></tbody></table></div>
         </article>
         <article class="surface table-surface">
           <div class="table-heading"><div><h3>ARP detections</h3><p>Latest durable evidence generated by the arp module.</p></div></div>
@@ -236,7 +236,7 @@
 
     <section id="p2p" class="panel" aria-labelledby="p2p-title">
       <div class="p2p-network-head surface">
-        <div class="p2p-network-title"><h2 id="p2p-title">P2P network <span class="info-pill" title="Message counts (reports and requests sent/received) reset at the start of each timewindow">stats per timewindow</span></h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div>
+        <div class="p2p-network-title"><h2 id="p2p-title">P2P network</h2><p id="p2p-status">Loading peer connectivity and trust state…</p></div>
         <div id="p2p-identity" class="p2p-identity"></div>
         <div class="p2p-network-actions"><span id="p2p-updated" class="muted"></span><button class="secondary refresh-list" data-target="p2p">↻ Refresh</button></div>
       </div>

@@ -231,8 +231,9 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   state.deviceView = byId("device-view").checked;
   state.alertsWorkspace.severity = String(saved.alertSeverity || "");
   state.alertsWorkspace.grouping = byId("alerts-group").value;
-  state.alertsWorkspace.itemSort = String(saved.alertItemSort || "time");
+  state.alertsWorkspace.itemSort = saved.alertItemSort === "tw" ? "time" : String(saved.alertItemSort || "time");
   state.alertsWorkspace.itemOrder = saved.alertItemOrder === "asc" ? "asc" : "desc";
+  ["alerts-host-sort", "alerts-item-sort"].forEach((id) => { if (!byId(id).value) byId(id).value = "time"; });
   state.evidenceWorkspace.typeFilter = String(saved.evidenceType || "");
   if (["time", "type", "threat", "score", "confidence", "flows", "alert", "description"].includes(saved.evidenceRecordSort)) {
     state.evidenceWorkspace.recordSort = saved.evidenceRecordSort;
@@ -664,7 +665,7 @@ const slipsScore = (record) => {
     `${formatter.format(score)} / ${formatter.format(threshold)}`,
     `slips-score ${tone}`,
   );
-  element.title = `${record.alert_score_mode || "Slips"} · ${record.alert_score_basis || "detector accumulator"}`;
+  element.title = `${record.alert_score_mode || "Slips"} · ${String(record.alert_score_basis || "detector accumulator").replace(/current host time window/gi, "current host score")}`;
   return element;
 };
 
@@ -1260,8 +1261,7 @@ function bindLocalTableSort(id, rerender) {
       if (sort.key === key) sort.order = sort.order === "asc" ? "desc" : "asc";
       else {
         sort.key = key;
-        sort.order = ["ip", "status", "mac", "action", "current_tw", "release_tw",
-          "profile_ip", "threat_level", "evidence_type", "description"].includes(key)
+        sort.order = ["ip", "status", "mac", "action", "profile_ip", "threat_level", "evidence_type", "description"].includes(key)
           ? "asc" : "desc";
       }
       rerender();
@@ -1575,7 +1575,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     marker.setAttribute("y2", String(height - bottom));
     marker.setAttribute("class", "chart-reset-line");
     const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    title.textContent = `${formatTime(point.ts)} · ${point.reset_reason}`;
+    title.textContent = `${formatTime(point.ts)} · ${point.reset_reason === "time window changed" ? "Score reset" : point.reset_reason}`;
     marker.append(title);
     svg.append(marker);
   });
@@ -2880,7 +2880,6 @@ function renderAlertDetailPane(record) {
   container.append(investigationStats([
     ["Score / threshold", slipsScore(record), "danger"],
     ["Network", networkContext(record)],
-    ["Time window", record.timewindow || "—"],
     ["Evidence", compact(record.evidence_count)],
   ]));
   const editor = whitelistEditor("alert-pane", firstEvidence.profile_ip
@@ -3737,6 +3736,16 @@ function configValue(value, sensitive = false) {
   return String(value);
 }
 
+/** Use plain interval wording for configuration explanations.
+ * @param {string} value Label or explanatory text from a saved configuration.
+ * @returns {string} Display text without internal interval terminology.
+ */
+function configurationDisplayText(value) {
+  return String(value || "").replace(/time_window_width/g, "interval_seconds")
+    .replace(/time[-_ ]?windows?/gi, "analysis periods")
+    .replace(/\bTWs?\b/g, "periods");
+}
+
 /** Fill the six quick facts from settings captured at the start of this run. */
 function renderConfigurationSummary(sections) {
   const setting = (path) => {
@@ -3751,7 +3760,7 @@ function renderConfigurationSummary(sections) {
   const tiPeriod = Number(setting("threatintelligence.TI_files_update_period"));
   const facts = [
     ["Alert threshold", configValue(setting("detection.risk_accumulated_threat_level")), "score to raise an alert"],
-    ["Time window", Number.isFinite(windowSeconds) && windowSeconds > 0
+    ["Analysis interval", Number.isFinite(windowSeconds) && windowSeconds > 0
       ? windowSeconds % 3600 === 0 ? `${windowSeconds / 3600} h` : `${windowSeconds} s`
       : configValue(setting("parameters.time_window_width")), `${windowSeconds || 0} s`],
     ["Direction", configValue(setting("parameters.analysis_direction")),
@@ -3787,15 +3796,15 @@ function detectionScoreExplanation(sections) {
     text("code", "Evidence contribution = threat value × confidence", "config-score-equation"),
     text("p", "Threat values: info = 0, low = 0.2, medium = 0.5, high = 0.8, critical = 1. Confidence uses 0–1: 80% means 0.8. For example, high threat at 80% confidence contributes 0.8 × 0.8 = 0.64."),
     text("code", "Host total (ATL) = sum of eligible evidence contributions", "config-score-equation"),
-    text("p", "Add evidence for one host in one time window, since its previous alert. Whitelisted evidence, received P2P reports and evidence already used in an alert do not add to this total. After an alert, the host total resets to zero; the alert keeps the score that triggered it."),
+    text("p", "Add evidence for one host during the current analysis period, since its previous alert. Whitelisted evidence, received P2P reports and evidence already used in an alert do not add to this total. After an alert, the host total resets to zero; the alert keeps the score that triggered it."),
     text("h4", "Live capture"),
     text("code", "Live score (RATL) = ATL × active risk weight", "config-score-equation"),
     text("code", "Alert when RATL ≥ risk_accumulated_threat_level", "config-score-equation"),
     text("p", `Captured risk weights: low_risk_weight = ${captured("detection", "low_risk_weight")}, medium_risk_weight = ${captured("detection", "medium_risk_weight")}, high_risk_weight = ${captured("detection", "high_risk_weight")}. Captured live alert threshold: ${captured("detection", "risk_accumulated_threat_level")}.`),
     text("p", "Risk starts low and rises toward medium and high after alerts. Slips shares the highest reached risk weight across hosts, so an alert on one host can increase sensitivity for others. These risk levels are separate from evidence threat levels. A larger weight, or a lower alert threshold, makes alerts easier to reach."),
     text("h4", "PCAP and log analysis"),
-    text("code", "Alert when ATL ≥ evidence_detection_threshold × time_window_width / 60", "config-score-equation"),
-    text("p", `time_window_width is in seconds; dividing by 60 converts it to minutes. Captured evidence_detection_threshold = ${captured("detection", "evidence_detection_threshold")}; time_window_width = ${captured("parameters", "time_window_width")}. This mode compares ATL directly, without the risk multiplier.`));
+    text("code", "Alert when ATL ≥ evidence_detection_threshold × interval_seconds / 60", "config-score-equation"),
+    text("p", `interval_seconds is the analysis interval in seconds; dividing by 60 converts it to minutes. Captured evidence_detection_threshold = ${captured("detection", "evidence_detection_threshold")}; interval_seconds = ${captured("parameters", "time_window_width")}. This mode compares ATL directly, without the risk multiplier.`));
   const low = setting("detection", "low_risk_weight");
   const threshold = setting("detection", "risk_accumulated_threat_level");
   if (typeof low === "number" && Number.isFinite(low) && low > 0
@@ -3886,7 +3895,7 @@ function renderConfiguration() {
   heading.className = "config-table-heading";
   const label = text("h3", selected.key === "threatintelligence" ? "Threat intelligence" : selected.title);
   const title = document.createElement("div");
-  title.append(label, text("span", selected.description));
+  title.append(label, text("span", configurationDisplayText(selected.description)));
   heading.append(title, text("small", `${settings.length} settings · ${settings.filter((item) => item.changed).length} changed`));
   const wrap = document.createElement("div");
   wrap.className = "config-table-wrap";
@@ -3925,11 +3934,12 @@ function renderConfiguration() {
     const row = document.createElement("tr");
     if (setting.changed) row.className = "changed";
     const name = document.createElement("td");
-    name.append(text("strong", setting.label), text("small", `${selected.key}.${setting.key}`));
+    name.append(text("strong", setting.key === "time_window_width" ? "Analysis interval" : configurationDisplayText(setting.label)));
+    if (!/time[_-]?window/i.test(setting.key)) name.append(text("small", `${selected.key}.${setting.key}`));
     const value = document.createElement("td");
     value.append(text("code", configValue(setting.value, setting.sensitive),
       setting.sensitive ? "config-secret" : "config-current"));
-    const explanation = text("td", setting.explanation);
+    const explanation = text("td", configurationDisplayText(setting.explanation));
     const defaultCell = document.createElement("td");
     defaultCell.append(text("span", setting.changed
       ? `was ${configValue(setting.default, setting.sensitive)}`
@@ -4668,6 +4678,15 @@ async function loadFirewall() {
   renderFirewall(payload);
 }
 
+/** Show enforcement actions and durations without internal interval counters.
+ * @param {string} value Saved event description.
+ * @returns {string} Human-readable action or elapsed duration.
+ */
+function enforcementEventText(value) {
+  return String(value || "—").replace(/\b\d+\s+timewindows?\s*·?\s*/gi, "")
+    .replace(/\s+in\s+timewindow-?\d+\b/gi, "");
+}
+
 /** Render sorted active firewall rules and their paged transition history.
  * @param {object} payload Current firewall API response.
  */
@@ -4696,7 +4715,6 @@ function renderFirewall(payload) {
     (row) => formatTime(row.blocked_at),
     (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
     (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
-    (row) => row.remaining_timewindows === null ? "—" : row.remaining_timewindows,
     (row) => compact(row.stopped_packets),
     (row) => compact(row.stopped_flows),
     (row) => compact(row.evidence_while_blocked),
@@ -4704,6 +4722,7 @@ function renderFirewall(payload) {
     (row) => compact(row.alert_count),
   ], (row) => openHost(row.ip));
   const history = sortLocalRows("firewall-history-table", payload.history || []);
+  const historyPage = state.pages.firewall;
   historyPage.items = history;
   historyPage.total = payload.history_total || 0;
   historyPage.next = payload.history_next_cursor || null;
@@ -4712,7 +4731,7 @@ function renderFirewall(payload) {
     (row) => formatTime(row.timestamp),
     (row) => hostIdentity(row.ip),
     (row) => text("span", row.action, `status ${row.action === "unblocked" ? "ok" : "bad"}`),
-    (row) => row.details || "—",
+    (row) => enforcementEventText(row.details),
   ], (row) => openHost(row.ip));
   pager("firewall", "firewall-history-pager", loadFirewall);
 }
@@ -4738,9 +4757,6 @@ function renderArpPoisoning() {
       (row) => formatTime(row.released_at),
       (row) => row.remaining_seconds === null
         ? "—" : formatDuration(row.remaining_seconds),
-      (row) => row.current_tw ?? "—",
-      (row) => row.release_tw ?? "—",
-      (row) => row.extra_timewindows ?? "—",
       (row) => macIdentity(row.mac),
     ], (row) => openHost(row.ip));
   renderTable("arp-poisoning-events-table",
@@ -4749,11 +4765,8 @@ function renderArpPoisoning() {
       (row) => hostIdentity(row.ip),
       (row) => text("span", row.action,
         `status ${row.action === "released" ? "ok" : "bad"}`),
-      (row) => row.current_tw ?? "—",
-      (row) => row.release_tw ?? "—",
       (row) => formatTime(row.unblock_at),
-      (row) => row.extra_timewindows ?? "—",
-      (row) => row.details || "—",
+      (row) => enforcementEventText(row.details),
     ], (row) => openHost(row.ip));
   renderTable("arp-poisoning-evidence-table",
     sortLocalRows("arp-poisoning-evidence-table", evidence), [
@@ -5885,11 +5898,9 @@ function renderDnsDetails(dns) {
     text("code", domain, "dns-chip dns-domain"));
   addValues("Hosts that requested the resolution", asList(dns["resolved-by"]), (ip) =>
     hostLink(ip));
-  addValues("Observed in time windows", asList(dns.timewindows), (timewindow) =>
-    text("code", timewindow, "dns-chip"));
 
   const knownFields = new Set(["ts", "uid", "domains", "resolved-by", "timewindows"]);
-  const additional = Object.entries(dns).filter(([key]) => !knownFields.has(key));
+  const additional = Object.entries(dns).filter(([key]) => !knownFields.has(key) && !isInternalPeriodField(key));
   if (additional.length) {
     const section = document.createElement("section");
     section.className = "dns-section";
@@ -6134,7 +6145,6 @@ function evidenceCard(record, contextRecords = null, inAlertPane = false) {
   metadata.className = "investigation-card-meta";
   metadata.append(
     text("span", formatTime(record.timestamp)),
-    text("span", `TW: ${record.twid || record.timewindow?.number || "—"}`),
     text("span", `${compact(record.flow_count)} triggering flows`),
     text("span", record.module ? `Module: ${record.module}` : "Module unknown"),
   );
@@ -6307,7 +6317,7 @@ function protocolDetails(type, flow) {
     "detailed_ground_truth_label", "label", "detailedlabel",
   ]);
   return Object.entries(flow).filter(([name, value]) =>
-    !excluded.has(name) && hasProtocolValue(value)).slice(0, 16).map(([name, value]) => [
+    !excluded.has(name) && !isInternalPeriodField(name) && hasProtocolValue(value)).slice(0, 16).map(([name, value]) => [
     name.replaceAll("_", " "), protocolValueText(name, value),
   ]);
 }
@@ -6392,6 +6402,15 @@ function inputFlowLabel(record) {
   return "";
 }
 
+/** Identify internal scoring identifiers omitted from readable record fields.
+ * @param {string} key Original stored field name.
+ * @returns {boolean} Whether this field contains an internal interval identifier.
+ */
+function isInternalPeriodField(key) {
+  return /^(?:tw|twid|twstart|currenttw|releasetw|timewindows?|timewindowid|remainingtimewindows|extratimewindows|alertscoretwid)$/.test(
+    key.replace(/[_ -]/g, "").toLowerCase());
+}
+
 /** Show nonduplicate stored fields in a compact table, with empty fields on demand.
  * @param {object} flow Parsed Zeek flow fields.
  * @param {string[]} displayedFields Fields already shown in the flow summary.
@@ -6405,7 +6424,7 @@ function flowFieldList(flow, displayedFields = []) {
     ["label", "ground_truth_label", "detailed_ground_truth_label", "detailedlabel"]
       .forEach((key) => omitted.add(key));
   }
-  const fields = Object.entries(flow || {}).filter(([key]) => !omitted.has(key));
+  const fields = Object.entries(flow || {}).filter(([key]) => !omitted.has(key) && !isInternalPeriodField(key));
   if (!fields.length) return container;
   const empty = ([, value]) => value === "" || value === null || value === undefined
     || (Array.isArray(value) && value.length === 0);
@@ -6836,7 +6855,6 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   meta.append(evidenceTypeCell(record),
     text("span", record.module || "Unknown module"),
     text("span", formatTime(record.timestamp)),
-    text("span", record.twid || record.timewindow?.number || "—"),
     networkContext(record));
   if (MACHINE_LEARNING_EVIDENCE[record.evidence_type]
       || peerDetections(record).some((item) => MACHINE_LEARNING_EVIDENCE[item.evidence_type])) {
@@ -6893,7 +6911,6 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     detailRow("Evidence ID", text("code", record.id || "—")),
     detailRow(isPeerReport(record) ? "Received" : "Detected", formatTime(record.timestamp)),
     detailRow("Network", networkContext(record)),
-    detailRow("Time window", record.twid || record.timewindow?.number || "—"),
     detailRow("Module", record.module || "—"),
     detailRow("Method", record.method || "—"),
     detailRow("Signal", record.evidence_signal || "—"));
@@ -7080,8 +7097,6 @@ async function openAlert(record) {
     investigationStats([
       ["Alert ID", record.alert_id],
       ["Classification", record.label || "—"],
-      ["Time window", record.timewindow || "—"],
-      ["Window start", record.tw_start || "—"],
     ]),
     investigationHeading("Related evidence", "Select evidence to inspect its triggering flows"),
   );
@@ -8930,7 +8945,7 @@ byId("alerts-host-order").addEventListener("click", () => {
 byId("alerts-item-sort").addEventListener("change", () => {
   const workspace = state.alertsWorkspace;
   workspace.itemSort = byId("alerts-item-sort").value;
-  workspace.itemOrder = ["label", "tw", "id"].includes(workspace.itemSort) ? "asc" : "desc";
+  workspace.itemOrder = ["label", "id"].includes(workspace.itemSort) ? "asc" : "desc";
   byId("alerts-item-order").textContent = workspace.itemOrder === "asc" ? "↑" : "↓";
   loadAlertHostAlerts(true).catch(() => {});
 });

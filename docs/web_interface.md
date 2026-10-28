@@ -237,7 +237,14 @@ badge beside their detection type and show the reporting peer. **Host score
 then** is the saved host score when that evidence was processed, followed by
 the alert threshold; it is not a separate score assigned to the evidence.
 Missing scores appear as **Unavailable**, and excluded records as **Excluded**.
-Time window is omitted from this table and remains available in record details.
+Internal scoring interval identifiers are omitted throughout the readable web
+interface: evidence and alert cards, headers and record fields, DNS context,
+score tooltips, P2P headings, and firewall/ARP columns. Enforcement uses actual
+dates, remaining durations and action descriptions. Alert sort controls use
+visible fields only. Configuration calls the duration **Analysis interval**;
+its equation uses `interval_seconds`, the captured `parameters.time_window_width`
+value. Original JSON, copied records, captured YAML and stored analysis data
+retain their original fields for export and debugging.
 
 With grouping set to **None**, the middle Records pane shows the individual
 evidence on the current page, using the filters above the main table. Its
@@ -700,7 +707,7 @@ reloading the page, or opening a different pane layout restores that split.
 You can resize the panes during a visit; automatic refreshes keep your chosen
 widths. Old saved Alerts widths no longer override the opening layout.
 
-Alerts opens with an **Alerts grouped by host** pane and an empty selection pane. The first divider is resizable immediately. Choose a host to open its **Alerts for this host** timeline, then choose an alert to open its score, network, time window, linked evidence, whitelist control, and original record. Alert rows summarize all linked evidence types and their counts. Selecting an evidence card opens its investigation in a resizable fourth pane beside the alert. **All alerts** shows the individual alert list directly and opens alert and evidence details beside it. Dividers can be dragged or adjusted with the left and right arrow keys. Closing evidence returns to the same alert; closing an alert returns to its list.
+Alerts opens with an **Alerts grouped by host** pane and an empty selection pane. The first divider is resizable immediately. Choose a host to open its **Alerts for this host** timeline, then choose an alert to open its score, network, linked evidence, whitelist control, and original record. Alert rows summarize all linked evidence types and their counts. Selecting an evidence card opens its investigation in a resizable fourth pane beside the alert. **All alerts** shows the individual alert list directly and opens alert and evidence details beside it. Dividers can be dragged or adjusted with the left and right arrow keys. Closing evidence returns to the same alert; closing an alert returns to its list.
 
 Opening an alert fetches its full record by exact alert ID through the indexed
 alert lookup. The general search remains available for finding alerts by host,
@@ -713,7 +720,7 @@ evidence**; the underlying evidence page and its scroll position remain open.
 Following an evidence link from that alert and going back restores the alert
 drawer and then the original evidence record.
 
-Both alert lists have sort controls and a reverse-order button. Host sorting covers latest alert, address, severity, score, alert and evidence counts, and label. The selected host's alerts can be sorted by time, severity, score, label, evidence count, time window, and ID. These choices apply before cursor paging.
+Both alert lists have sort controls and a reverse-order button. Host sorting covers latest alert, address, severity, score, alert and evidence counts, and label. The selected host's alerts can be sorted by time, severity, score, label, evidence count, and ID. These choices apply before cursor paging.
 
 Search, severity chips, time range, and excluded-record visibility stay visible
 in the host pane. Time choices include 5 minutes, 15 minutes, Live (the last
@@ -842,8 +849,8 @@ Every Firewall table heading sorts the corresponding active blocks or history ev
 
 The ARP poisoning tab separates local ARP isolation from iptables firewall
 blocking. It shows whether `arp_poisoner` is running, every host poisoned or
-released during the run, its target MAC, the current and release time windows,
-the scheduled release time, remaining duration, and every schedule extension.
+released during the run, its target MAC, scheduled release time,
+remaining duration, and every schedule extension.
 If a release deadline passes without a recorded release, the host is marked
 **release due** instead of being shown as released.
 
@@ -979,8 +986,8 @@ The **Detection** section also explains how these settings work together:
   individual evidence's threat level. The highest reached weight applies across
   hosts. A higher multiplier or lower threshold makes Slips more sensitive.
 - For PCAP/log analysis, an alert is created when
-  **ATL ≥ evidence_detection_threshold × time_window_width / 60**.
-  The window width is in seconds. This comparison does not use the risk weight.
+  **ATL ≥ evidence_detection_threshold × interval_seconds / 60**. Here `interval_seconds` is the captured `parameters.time_window_width` value.
+  The analysis interval is in seconds. This comparison does not use the risk weight.
 - **popup_alerts** controls desktop notifications, without changing detection.
 
 The explanation shows captured weights and thresholds, plus calculated examples
@@ -1127,7 +1134,7 @@ MAC-derived host aliases because Slips accumulators are IP-specific. Interface,
 standard-input, and CYST runs plot RATL; finite input runs plot ATL. The chart
 includes the configured alert threshold, the last score and peak score in each
 bounded server-side interval, and detected drops.
-A time-window change is labeled separately from a same-window drop after an
+An analysis-period change appears as a score reset, alongside a drop after an
 alert resets the accumulator. The host range selector also controls this
 plot.
 
@@ -1484,7 +1491,7 @@ the identity stays on an unidentified run profile instead of being assigned
 to today's network. No per-flow identity database access is added to the main
 Slips process or profiler. Restart Slips to load the updated Zeek policy.
 
-DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, the latest DNS observation and flow UID, and the relevant Slips time windows. Resolver addresses are clickable and open their host workspace.
+DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, and the latest observation time and flow UID. Resolver addresses are clickable and open their host workspace.
 
 In Host view, traffic, scores, alerts, and evidence match only the selected Slips profile IP. In Device view, local addresses with the same verified MAC are combined for traffic, alerts, and evidence. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
