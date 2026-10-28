@@ -42,6 +42,7 @@
     <button class="tab" data-tab="p2p">P2P <span id="p2p-badge" class="badge">0</span></button>
     <button class="tab" data-tab="logs">Logs <span id="logs-badge" class="badge">0</span></button>
     <button class="tab" data-tab="configuration">Configuration</button>
+    <button class="tab" data-tab="threat-intelligence">Threat Intelligence</button>
     <button class="tab" data-tab="whitelists">Whitelists <span id="whitelists-badge" class="badge">0</span></button>
     <button class="tab" data-tab="metadata">Metadata</button>
   </nav>
@@ -69,6 +70,15 @@
       <div class="section-heading"><div><p class="eyebrow">RUNTIME</p><h2 id="logs-title">Logs</h2></div><button class="secondary refresh-list" data-target="logs">Refresh</button></div>
       <div class="toolbar"><label class="network-filter">Log history <select id="logs-history-source" aria-label="Log history source"><option value="current">This run</option><option value="history">All retained runs</option></select></label><span id="logs-count" class="result-count"></span><span id="logs-scope-note" class="muted"></span></div>
       <div class="surface table-surface"><div class="table-wrap"><table id="logs-table"><thead><tr><th data-sort="event_time">Time</th><th data-sort="level">Level</th><th data-sort="module">Module</th><th data-sort="message">Message</th></tr></thead><tbody></tbody></table></div></div>
+    </section>
+
+    <section id="threat-intelligence" class="panel" aria-labelledby="ti-title">
+      <div class="section-heading"><div><p class="eyebrow">INTELLIGENCE SOURCES</p><h2 id="ti-title">Threat Intelligence</h2></div><button class="secondary refresh-list" data-target="threat-intelligence">Refresh</button></div>
+      <p id="ti-scope" class="muted">Status of the TI cache connected to this web server. Refresh reads cached status; it does not download feeds.</p>
+      <div id="ti-summary" class="summary-grid ti-summary"></div>
+      <div class="toolbar"><input id="ti-search" type="search" placeholder="Search sources, types, tags…" aria-label="Search TI sources"><label>Show <select id="ti-status"><option value="">All sources</option><option value="error">Update failed</option><option value="overdue">Check overdue</option><option value="ready">Ready</option><option value="pending">Not loaded yet</option><option value="unrecorded">Older status</option></select></label><span id="ti-count" class="result-count"></span></div>
+      <p class="muted">Entries count accepted items at the last load, with their types below. Older feeds show “Not recorded” until loaded again. Last checked can advance without a new download.</p>
+      <div class="surface table-surface"><div class="table-wrap"><table id="ti-sources-table"><thead><tr><th data-sort="source">Source</th><th data-sort="kind">Type</th><th data-sort="status">Status</th><th data-sort="entries">Entries</th><th data-sort="downloaded_at">Last downloaded</th><th data-sort="loaded_at">Last loaded</th><th data-sort="checked_at">Last checked</th><th data-sort="download_bytes">Download size</th><th data-sort="update_period">Check every</th></tr></thead><tbody></tbody></table></div></div>
     </section>
 
     <section id="metadata" class="panel" aria-labelledby="metadata-title">

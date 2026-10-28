@@ -907,6 +907,12 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-toolbar .result-count { margin-left: auto; white-space: nowrap; }
 .evidence-export { flex: none; padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 5px; color: var(--blue); font-size: .68rem; text-decoration: none; }
 .evidence-export:hover { border-color: var(--accent); }
+.ti-summary { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+.ti-summary strong { display: block; font-size: 1.4rem; }
+#ti-sources-table { min-width: 1200px; }
+#ti-sources-table td { vertical-align: top; }
+#ti-sources-table small { display: block; margin-top: .25rem; }
+#ti-sources-table .ti-source { display: block; max-width: 360px; overflow-wrap: anywhere; }
 .evidence-workspace { display: grid; grid-template-columns: minmax(0, var(--evidence-left-width, 57%)) 8px minmax(0, 1fr); min-height: 0; flex: 1; background: #0b141d; }
 .evidence-workspace.has-detail { grid-template-columns: minmax(240px, var(--evidence-detail-group-width, 25%)) 8px minmax(280px, var(--evidence-detail-record-width, 25%)) 8px minmax(320px, 1fr); }
 .evidence-workspace.individual { grid-template-columns: minmax(0, 1fr); }

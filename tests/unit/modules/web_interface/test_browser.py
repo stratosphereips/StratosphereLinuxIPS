@@ -21,6 +21,87 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_threat_intelligence_sources_filter_sort_and_refresh(theme: str) -> None:
+    """Show source status and counts without polling or fetching indicators.
+
+    Parameters:
+        theme: Browser presentation to exercise.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    requests: list[str] = []
+    errors: list[str] = []
+    common = {"url": "", "counts": None, "entries": None, "download_bytes": None,
+              "downloaded_at": None, "loaded_at": None, "checked_at": None,
+              "update_period": None, "tags": [], "threat_level": "", "error": ""}
+    payload = {"available": True, "checked_at": 1793180000, "totals": {"ips": 120, "domains": 80},
+               "items": [{**common, "source": "https://example.com/beacons.txt", "url": "https://example.com/beacons.txt",
+                          "kind": "IP / domain", "status": "ready", "entries": 9,
+                          "counts": {"ips": 9}, "loaded_at": 1793100000, "downloaded_at": 1793000000,
+                          "checked_at": 1793170000, "download_bytes": 1024, "update_period": 86400,
+                          "tags": ["botnet"]},
+                         {**common, "source": "old.csv", "kind": "Local data", "status": "unrecorded"},
+                         {**common, "source": "failed.txt", "kind": "JA3", "status": "error",
+                          "counts": {"ja3": 0}, "entries": 0}]}
+
+    def respond(route: Any) -> None:
+        """Serve UI assets and the compact source-status endpoint.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path == "/api/threat-intelligence":
+            requests.append(path)
+            route.fulfill(json=payload)
+        elif path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1800, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof loadThreatIntelligence === 'function'")
+            page.evaluate("theme => {setTheme(theme); clearTimeout(state.timer)}", theme)
+            page.get_by_role("button", name="Threat Intelligence", exact=True).click()
+            page.wait_for_function("state.threatIntelligence !== undefined")
+            table = page.locator("#ti-sources-table")
+            assert table.is_visible()
+            assert table.locator("tbody tr").count() == 3
+            assert "120" in page.locator("#ti-summary").inner_text()
+            assert "Not recorded" in table.inner_text()
+            assert "9 IPs" in table.inner_text()
+            assert "0 JA3 fingerprints" in table.inner_text()
+            page.locator("#ti-search").fill("botnet")
+            assert table.locator("tbody tr").count() == 1
+            page.locator("#ti-search").fill("")
+            page.locator("#ti-status").select_option("error")
+            assert table.locator("tbody tr").count() == 1
+            assert "failed.txt" in table.inner_text()
+            page.locator("#ti-status").select_option("")
+            table.locator('th[data-sort="entries"]').click()
+            assert "beacons.txt" in table.locator("tbody tr").first.inner_text()
+            assert "old.csv" in table.locator("tbody tr").last.inner_text()
+            assert page.evaluate("activeRangeIsLive()") is False
+            assert len(requests) == 1
+            page.locator("#threat-intelligence").get_by_role("button", name="Refresh", exact=True).click()
+            page.wait_for_function("!state.requests.has('threat-intelligence')")
+            assert len(requests) == 2
+            artifacts = Path("output/ti-panel-check")
+            artifacts.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(artifacts / f"sources-{theme}.png"))
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("clipboard_mode", ["api", "http", "api_denied", "blocked"])
 def test_json_copy_buttons(clipboard_mode: str) -> None:
     """Copy the displayed JSON without closing viewers or eagerly rendering it.

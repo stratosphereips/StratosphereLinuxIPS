@@ -37,6 +37,7 @@ from slips_files.common.sqlite_flock import SQLiteFlock
 
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.database.sqlite_db.detection_queries import (
     detection_total,
     hourly_evidence_source,
@@ -7018,6 +7019,140 @@ class RunDataReader:
         except sqlite3.Error:
             return 0
 
+    def threat_intelligence(self) -> Dict[str, Any]:
+        """Read feed status and constant-time cache sizes without scanning IoCs.
+
+        Returns:
+            Shared-cache source records, indicator totals and availability.
+        """
+        kinds = {
+            "ips": Constants.IOC_IPS,
+            "domains": Constants.IOC_DOMAINS,
+            "ip_ranges": Constants.IOC_IP_RANGES,
+            "asns": Constants.IOC_ASN,
+            "ja3": Constants.IOC_JA3,
+            "jarm": Constants.IOC_JARM,
+            "ssl_sha1": Constants.IOC_SSL,
+        }
+        scope = (
+            "Saved viewer's isolated TI cache"
+            if getattr(self, "saved_view", False)
+            else "Shared TI cache"
+        )
+        try:
+            feeds = self.cache.hgetall(Constants.TI_FILES_INFO)
+            pipeline = self.cache.pipeline(transaction=False)
+            for key in kinds.values():
+                pipeline.hlen(key)
+            totals = dict(zip(kinds, pipeline.execute()))
+        except redis.RedisError:
+            return {
+                "available": False,
+                "items": [],
+                "totals": {},
+                "scope": scope,
+                "checked_at": time.time(),
+            }
+        items = []
+        for source, raw in sorted(feeds.items()):
+            info = self._loads(raw, {})
+            if not isinstance(info, dict):
+                info = {}
+            counts = info.get("counts")
+            counts = (
+                {
+                    key: value
+                    for key, value in counts.items()
+                    if isinstance(value, int)
+                    and not isinstance(value, bool)
+                    and value >= 0
+                }
+                if isinstance(counts, dict)
+                else None
+            )
+            url = str(info.get("url") or source)
+            try:
+                parsed = urlparse(url)
+                url = (
+                    parsed._replace(
+                        netloc=parsed.netloc.rsplit("@", 1)[-1],
+                        query="",
+                        fragment="",
+                    ).geturl()
+                    if parsed.scheme in {"http", "https"} and parsed.hostname
+                    else ""
+                )
+            except ValueError:
+                url = ""
+            kind = info.get("kind") or ("Local data" if not url else "TI feed")
+            stamp = {}
+            for name in (
+                "checked_at",
+                "loaded_at",
+                "downloaded_at",
+                "time",
+                "download_bytes",
+                "update_period",
+            ):
+                try:
+                    value = float(info.get(name))
+                    valid = (
+                        value > 0
+                        or name == "update_period"
+                        or value == 0
+                        and name == "download_bytes"
+                    )
+                    stamp[name] = (
+                        value if math.isfinite(value) and valid else None
+                    )
+                except (TypeError, ValueError):
+                    stamp[name] = None
+            checked = stamp["checked_at"] or stamp["time"]
+            status = info.get("status")
+            if status not in {"ready", "error"}:
+                status = (
+                    "unrecorded" if checked or info.get("hash") else "pending"
+                )
+            if (
+                status == "ready"
+                and checked
+                and stamp["update_period"]
+                and stamp["update_period"] > 0
+                and checked + stamp["update_period"] < time.time()
+            ):
+                status = "overdue"
+            items.append(
+                {
+                    "source": url or str(source),
+                    "url": url,
+                    "kind": kind,
+                    "status": status,
+                    "checked_at": checked,
+                    "loaded_at": stamp["loaded_at"],
+                    "downloaded_at": stamp["downloaded_at"],
+                    "download_bytes": stamp["download_bytes"],
+                    "update_period": stamp["update_period"],
+                    "counts": counts,
+                    "entries": (
+                        sum(counts.values()) if counts is not None else None
+                    ),
+                    "threat_level": info.get("threat_level", ""),
+                    "tags": info.get("tags", []),
+                    "error": (
+                        "Update failed; see Slips logs."
+                        if info.get("error")
+                        else ""
+                    ),
+                }
+            )
+        return {
+            "available": True,
+            "items": items,
+            "totals": totals,
+            "scope": scope,
+            "checked_at": time.time(),
+        }
+
     def _ti_for_ip(self, ip: str) -> Dict[str, Any]:
         """Read cached threat-intelligence fields for an IP."""
         result: Dict[str, Any] = {}
@@ -10531,6 +10666,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.overview_evidence_counts(query)
         elif path == "/api/metadata":
             payload = reader.metadata()
+        elif path == "/api/threat-intelligence":
+            payload = reader.threat_intelligence()
         elif path == "/api/logs":
             payload = reader.logs(query)
         elif path == "/api/metrics":

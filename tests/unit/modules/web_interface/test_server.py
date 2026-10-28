@@ -37,10 +37,63 @@ from slips_files.common.mac import classify_mac
 from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
+from redis.exceptions import ConnectionError as RedisConnectionError
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
 )
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_threat_intelligence_reads_only_status_and_hash_sizes(failed: bool) -> None:
+    """Report feed provenance and unknown older counts without scanning IoCs.
+
+    Parameters:
+        failed: Simulate a shared-cache connection failure.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.cache = Mock()
+    now = time.time()
+    reader.cache.hgetall.return_value = {
+        "https://user:secret@example.com/feed?token=private": json.dumps({
+            "counts": {"ips": 5, "domains": 3}, "downloaded_at": now - 30,
+            "loaded_at": now - 20, "checked_at": now - 10, "time": now - 10,
+            "status": "ready", "update_period": 86400,
+        }),
+        "old.csv": json.dumps({"time": now - 50}),
+        "empty.csv": json.dumps({"counts": {"ja3": 0}, "status": "ready"}),
+        "broken.csv": "not-json",
+        "failed.csv": json.dumps({"status": "error", "counts": {"ips": 2},
+                                   "error": "secret token from download"}),
+        "overdue.csv": json.dumps({"status": "ready", "checked_at": now - 100, "update_period": 10}),
+    }
+    reader.cache.pipeline.return_value.execute.return_value = [10, 20, 30, 40, 50, 60, 70]
+    if failed:
+        reader.cache.hgetall.side_effect = RedisConnectionError("offline")
+    result = reader.threat_intelligence()
+    assert result["available"] is not failed
+    reader.cache.scan_iter.assert_not_called()
+    reader.cache.hscan.assert_not_called()
+    if failed:
+        assert result["items"] == []
+        assert result["totals"] == {}
+        return
+    assert result["totals"]["ips"] == 10
+    assert reader.cache.pipeline.return_value.hlen.call_count == 7
+    items = {item["source"]: item for item in result["items"]}
+    feed = items["https://example.com/feed"]
+    assert feed["entries"] == 8
+    assert feed["checked_at"] > feed["loaded_at"] > feed["downloaded_at"]
+    assert items["old.csv"]["entries"] is None
+    assert items["old.csv"]["loaded_at"] is None
+    assert items["old.csv"]["download_bytes"] is None
+    assert items["empty.csv"]["entries"] == 0
+    assert items["broken.csv"]["status"] == "pending"
+    assert items["failed.csv"]["entries"] == 2
+    assert items["overdue.csv"]["status"] == "overdue"
+    assert "secret" not in json.dumps(result)
+    assert "private" not in json.dumps(result)
 
 
 @pytest.mark.parametrize("main_pid", [12345, "12345", None])
@@ -2636,12 +2689,12 @@ const context = {
     assert result.returncode == 0, result.stderr
 
 
-@pytest.mark.parametrize("mode", ["individual", "grouped", "type", "host"])
+@pytest.mark.parametrize("mode", ["grouped", "type", "host"])
 def test_evidence_middle_list_survives_selection_and_refresh(mode: str) -> None:
     """Keep actual browser record lists populated during navigation and refresh.
 
     Parameters:
-        mode: Ungrouped records or a supported evidence grouping.
+        mode: Supported evidence grouping; None has no middle pane.
     """
     _factory = ModuleFactory()
     playwright = pytest.importorskip("playwright.sync_api")

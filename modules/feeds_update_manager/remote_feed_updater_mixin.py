@@ -14,6 +14,11 @@ import traceback
 
 import requests
 
+from modules.feeds_update_manager.feed_status import (
+    record_feed_load,
+    record_feed_status,
+)
+
 CHUNK_SIZE = 64 * 1024
 
 
@@ -71,6 +76,13 @@ class RemoteFeedUpdaterMixin:
                 self.path_to_remote_ti_files_dir, file_name_to_download
             )
             self.write_file_to_disk(response, feed_local_path)
+            record_feed_status(
+                self.db,
+                link_to_download,
+                downloaded_at=time.time(),
+                download_bytes=os.path.getsize(feed_local_path),
+                checked_at=time.time(),
+            )
             is_blank = True
             with open(feed_local_path, "rb") as feed_file:
                 while chunk := feed_file.read(CHUNK_SIZE):
@@ -78,6 +90,13 @@ class RemoteFeedUpdaterMixin:
                         is_blank = False
                         break
             if is_blank:
+                record_feed_status(
+                    self.db,
+                    link_to_download,
+                    checked_at=time.time(),
+                    status="error",
+                    error="Empty download; kept previously loaded entries.",
+                )
                 self.db.set_feed_last_update_time(
                     link_to_download, time.time()
                 )
@@ -103,6 +122,12 @@ class RemoteFeedUpdaterMixin:
                     0,
                     1,
                 )
+                record_feed_status(
+                    self.db,
+                    link_to_download,
+                    status="error",
+                    error="JA3 parsing failed.",
+                )
                 return False
 
             # is it a ti_file? load updated IPs/domains to the database
@@ -115,6 +140,12 @@ class RemoteFeedUpdaterMixin:
                     0,
                     1,
                 )
+                record_feed_status(
+                    self.db,
+                    link_to_download,
+                    status="error",
+                    error="Feed parsing failed.",
+                )
                 return False
             elif (
                 link_to_download in self.ssl_feeds
@@ -126,6 +157,12 @@ class RemoteFeedUpdaterMixin:
                     0,
                     1,
                 )
+                record_feed_status(
+                    self.db,
+                    link_to_download,
+                    status="error",
+                    error="SSL parsing failed.",
+                )
                 return False
             elif (
                 link_to_download == self.tor_nodes_feed_link
@@ -136,6 +173,12 @@ class RemoteFeedUpdaterMixin:
                     f"Updating was aborted.",
                     0,
                     1,
+                )
+                record_feed_status(
+                    self.db,
+                    link_to_download,
+                    status="error",
+                    error="Tor list parsing failed.",
                 )
                 return False
 
@@ -161,6 +204,13 @@ class RemoteFeedUpdaterMixin:
             return True
 
         except Exception:
+            record_feed_status(
+                self.db,
+                link_to_download,
+                checked_at=time.time(),
+                status="error",
+                error="Feed update failed; see Slips logs.",
+            )
             exception_line = sys.exc_info()[2].tb_lineno
             self.print(
                 f"Problem on update_ti_file() line {exception_line}", 0, 1
@@ -191,11 +241,13 @@ class RemoteFeedUpdaterMixin:
             # extract domains only from the response
             try:
                 response = response["indicators"]
+                accepted_domains = set()
                 for indicator in response:
                     # each indicator is a dict
                     malicious_domains_dict = {}
                     if indicator.get("type", "") == "domain":
                         domain = indicator["value"]
+                        accepted_domains.add(domain)
                         malicious_domains_dict[domain] = json.dumps(
                             {
                                 "description": "malicious domain detected by RiskIQ",
@@ -212,6 +264,13 @@ class RemoteFeedUpdaterMixin:
                 )
                 return False
 
+            record_feed_load(
+                self.db,
+                "riskiq_domains",
+                {"domains": len(accepted_domains)},
+                downloaded_at=time.time(),
+                url=url,
+            )
             self._mark_feed_as_updated("riskiq_domains")
             self.log("Successfully updated RiskIQ domains.")
             return True

@@ -97,6 +97,48 @@ If the configured file is missing, Slips restores the copy before parsing and
 fails startup when neither file exists. The recovery copy is local and ignored
 by Git, just like a personal whitelist.
 
+## Threat Intelligence sources
+
+The **Threat Intelligence** tab lists recorded remote feeds and local TI files,
+plus supporting downloads such as the Tor exit list, domain allowlist and MAC
+vendor data. Search by source, type or tag, filter by update status, and click
+column headings to sort. **Refresh** reads the cached status; it does not start
+downloads. The tab loads on demand rather than polling every five seconds.
+
+- **Entries** counts distinct accepted items of each type at that source's last
+  successful load. Invalid or unsupported rows are excluded. The breakdown
+  distinguishes IPs, domains, ranges, ASNs and fingerprints from allowlist or
+  port data. Sources can overlap, so their counts must not be added to estimate
+  the number of distinct cached indicators.
+- **Last downloaded** records a completed remote download. **Download size** is
+  the size of that downloaded file, when recorded.
+- **Last loaded** records successful parsing into Slips's cache. Local files
+  have this date but no download date.
+- **Last checked** also advances when the source has not changed. It is
+  separate from the download and load dates. **Check every** is the configured
+  update interval, not a promise about the publisher's update schedule.
+- **Update failed** records the latest failed attempt. Previously recorded
+  counts remain visible. **Check overdue** means the configured interval has
+  passed since the last successful check. **Not loaded yet** means a source
+  has been registered without recorded load results.
+
+Older cache records lack these counts and separate dates. They show **Older
+status** or **Not recorded**, rather than a made-up zero or download time.
+New fields are recorded when the updated feed workers next load a source.
+The cards show current distinct cached indicators using Redis hash sizes.
+The panel names the connected cache. Live runs use the current **shared TI
+cache**; selecting an old detection archive does not change it into a snapshot.
+Standalone `--view` uses its isolated viewer cache and can show no sources when
+the shared TI database was not included in the saved data. An unreachable
+cache is reported unavailable.
+URL credentials and query strings are omitted from displayed source links.
+
+Counts are taken from collections already built by the feed parsers. Status
+is stored in the existing per-source metadata, with no download history list
+that grows over time. Web requests read only those small records and seven
+constant-time hash sizes. They never enumerate indicators, download feeds or
+add processing to capture, parsing or profiling.
+
 ## Reviewing and cleaning up detections
 
 Alerts open as **Active**. Mark one **In review** while investigating, or

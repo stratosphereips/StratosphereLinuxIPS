@@ -115,6 +115,7 @@ class FeedsUpdateManager(
         we update different types of files remote TI files, remote JA3 feeds,
          RiskIQ domains and local slips files
         """
+        self._register_feed_sources()
         if self.update_period <= 0:
             # User does not want to update the malicious IP list.
             self.print(

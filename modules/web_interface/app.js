@@ -82,6 +82,7 @@ const state = {
     "p2p-activity-table": { key: "timestamp", order: "desc" },
     "p2p-peers-table": { key: "connected", order: "desc" },
     "logs-table": { key: "event_time", order: "desc" },
+    "ti-sources-table": { key: "source", order: "asc" },
     "firewall-table": { key: null, order: "asc" },
     "firewall-history-table": { key: "timestamp", order: "desc" },
     "whitelists-table": { key: null, order: "asc" },
@@ -3930,6 +3931,71 @@ function renderConfiguration() {
   container.append(panel);
   byId("configuration-count").textContent =
     `Showing ${settings.length} of ${payload.total} captured settings · Secrets show as “configured” and are never displayed. Settings absent from the snapshot may use built-in defaults.`;
+}
+
+/** Render and filter the recorded TI source list without requesting indicators. */
+function renderThreatIntelligence() {
+  const payload = state.threatIntelligence;
+  if (!payload) return;
+  byId("ti-scope").textContent = `${payload.scope || "Connected TI cache"} · Status belongs to this cache, not the selected detection-history dates. Refresh reads cached status; it does not download feeds.`;
+  const names = {ips: "IPs", domains: "Domains", ip_ranges: "IP ranges", asns: "ASNs",
+    ja3: "JA3 fingerprints", jarm: "JARM fingerprints", ssl_sha1: "TLS certificates",
+    tor_nodes: "Tor exit IPs", allowlisted_domains: "Allowlisted domains",
+    fp_hashes: "Known benign hashes", port_mappings: "Port mappings", services: "Services"};
+  const statusNames = {ready: "Ready", error: "Update failed", overdue: "Check overdue",
+    pending: "Not loaded yet", unrecorded: "Older status"};
+  const search = byId("ti-search").value.trim().toLowerCase();
+  const status = byId("ti-status").value;
+  const items = payload.items || [];
+  const rows = items.filter((row) => (!status || row.status === status)
+    && (!search || [row.source, row.kind, row.threat_level, row.tags, statusNames[row.status]]
+      .join(" ").toLowerCase().includes(search)));
+  const summary = byId("ti-summary");
+  summary.replaceChildren();
+  Object.entries(payload.totals || {}).forEach(([kind, count]) => {
+    const card = document.createElement("article");
+    card.className = "surface";
+    card.append(text("small", names[kind] || kind), text("strong", compact(count)));
+    summary.append(card);
+  });
+  byId("ti-count").textContent = payload.available
+    ? `${rows.length} of ${items.length} sources · status read ${formatTime(payload.checked_at)}`
+    : "Shared TI cache is unavailable.";
+  const date = (value) => value ? formatTime(value) : "Not recorded";
+  renderTable("ti-sources-table", sortLocalRows("ti-sources-table", rows), [
+    (row) => {
+      const cell = document.createElement("div");
+      const label = text(row.url ? "a" : "span", row.source, "ti-source");
+      if (row.url) { label.href = row.url; label.target = "_blank"; label.rel = "noopener noreferrer"; }
+      cell.append(label);
+      const tags = Array.isArray(row.tags) ? row.tags.join(", ") : row.tags;
+      if (row.threat_level || tags) cell.append(text("small", [row.threat_level, tags].filter(Boolean).join(" · "), "muted"));
+      return cell;
+    },
+    (row) => row.kind,
+    (row) => { const value = text("span", statusNames[row.status] || row.status, `status ${row.status === "error" ? "bad" : row.status === "ready" ? "ok" : ""}`); value.title = row.error || ""; return value; },
+    (row) => {
+      const value = document.createElement("div");
+      value.append(text("strong", row.entries === null ? "Not recorded" : compact(row.entries)));
+      if (row.counts) value.append(text("small", Object.entries(row.counts)
+        .map(([kind, count]) => `${compact(count)} ${names[kind] || kind}`).join(" · "), "muted"));
+      return value;
+    },
+    (row) => date(row.downloaded_at), (row) => date(row.loaded_at), (row) => date(row.checked_at),
+    (row) => row.download_bytes === null ? "Not recorded" : formatBytes(row.download_bytes),
+    (row) => row.update_period === null ? "Not recorded"
+      : row.update_period <= 0 ? "Automatic updates off" : formatDuration(row.update_period),
+  ]);
+}
+
+/** Load compact status records from the shared TI cache on demand.
+ * @returns {Promise<void>} Completes after rendering the source list.
+ */
+async function loadThreatIntelligence() {
+  const payload = await api("threat-intelligence", "/api/threat-intelligence");
+  if (!payload) return;
+  state.threatIntelligence = payload;
+  renderThreatIntelligence();
 }
 
 async function loadConfiguration() {
@@ -7858,6 +7924,7 @@ function tabLoader(name) {
     p2p: loadP2P,
     logs: loadLogs,
     configuration: loadConfiguration,
+    "threat-intelligence": loadThreatIntelligence,
     whitelists: loadWhitelists,
     metadata: loadMetadata,
     hosts: loadHosts,
@@ -7883,7 +7950,7 @@ async function refreshActive() {
 
 function activeRangeIsLive() {
   if (state.archiveSource && ["alerts", "evidence", "hosts"].includes(state.activeTab)) return false;
-  if (["configuration", "whitelists"].includes(state.activeTab)) return false;
+  if (["configuration", "whitelists", "threat-intelligence"].includes(state.activeTab)) return false;
   if (state.activeTab === "metadata") return true;
   if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
@@ -8250,6 +8317,9 @@ bindLocalTableSort("p2p-peers-table", renderP2PPeers);
 bindLocalTableSort("logs-table", () => loadLogs().catch(() => {}));
 byId("logs-history-source").addEventListener("change", () => loadLogs().catch(() => {}));
 bindLocalTableSort("whitelists-table", renderWhitelists);
+bindLocalTableSort("ti-sources-table", renderThreatIntelligence);
+byId("ti-search").addEventListener("input", renderThreatIntelligence);
+byId("ti-status").addEventListener("change", renderThreatIntelligence);
 bindLocalTableSort("firewall-table", () => loadFirewall().catch(() => {}));
 bindLocalTableSort("firewall-history-table", () => {
   resetPage("firewall");
