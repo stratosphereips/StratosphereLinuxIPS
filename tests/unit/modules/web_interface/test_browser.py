@@ -22,6 +22,127 @@ from slips_files.common.slips_utils import utils
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [1100, 2200])
+def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
+    """Keep evidence controls visible and summaries compact without losing facts.
+
+    Parameters:
+        theme: Browser theme.
+        width: Wrapped laptop or wide desktop layout.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    source, destination = "fe80::44d6:6ff0:6f58:42b7", "fe80::143c:dd8d:c4ba:b95"
+    record = {"id": "compact-evidence", "profile_ip": source, "evidence_type": "CONNECTION_TO_PRIVATE_IP",
+              "module": "conn_analyzer", "timestamp": 1793000000, "threat_level": "info",
+              "confidence": .8, "alert_score": 0, "alert_threshold": 5,
+              "description": f"Connecting to private IP: {destination} on destination port: 37222. Extra diagnostic detail stays visible.",
+              "attacker": {"value": source, "ioc_type": "IP"},
+              "victim": {"value": destination, "ioc_type": "IP"}, "alert_ids": []}
+    group = {**record, "id": "group", "evidence_count": 4, "network_name": "Home-Wifi6"}
+    queries: list[dict[str, list[str]]] = []
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve the real UI with a bounded group and one evidence record.
+
+        Parameters:
+            route: Intercepted request.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/evidence":
+            query = parse_qs(parsed.query)
+            queries.append(query)
+            route.fulfill(json={"items": [group if query.get("group") else record], "total": 1,
+                                "page_size": 1, "next_cursor": None})
+        elif parsed.path.endswith("/flows"):
+            route.fulfill(json={"items": [], "linked_uid_count": 0})
+        elif parsed.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1100})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof openEvidence === 'function'")
+            page.evaluate("""async ({theme,source,destination}) => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                applyRunIdentity({output_dir:'output/compact-test',analysis_start:'layout-test',server_pid:1});
+                setTheme(theme); state.activeTab='evidence'; state.deviceView=false;
+                document.body.classList.add('evidence-active');
+                document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='evidence'));
+                state.ownAddresses=new Set([source]); state.computerName='Cherry.local';
+                state.hostNames.set(destination,{name:'never-you-mind.local',checkedAt:Date.now()});
+                state.hideExcluded=true; syncExcludedVisibility(); byId('evidence-range').value='all';
+                updateEvidenceViewportHeight(); await loadEvidence(); clearError();
+                selectEvidenceGroup(state.pages.evidence.items[0]);
+            }""", {"theme": theme, "source": source, "destination": destination})
+            page.wait_for_function("state.evidenceWorkspace.recordsLoaded")
+            toolbar = page.locator(".evidence-toolbar")
+            assert toolbar.locator("details").count() == 0
+            assert page.locator("#evidence-link").is_visible()
+            assert page.locator("#evidence-range").is_visible()
+            metrics = toolbar.evaluate("""node => ['#evidence-search','#evidence-review',
+                '#evidence-group-controls','.evidence-toolbar-check','.excluded-visibility-toggle',
+                '#evidence-link','#evidence-range'].map(selector => {
+                    const el=node.querySelector(selector), style=getComputedStyle(el);
+                    return [el.getBoundingClientRect().height,style.fontSize,style.fontFamily];
+                })""")
+            assert len({metric[0] for metric in metrics}) == 1
+            assert len({metric[1] for metric in metrics}) == 1
+            assert len({metric[2] for metric in metrics}) == 1
+            if width == 2200:
+                assert page.locator("#evidence-link").bounding_box()["y"] == page.locator("#evidence-range").bounding_box()["y"]
+            summary = page.locator(".evidence-group-summary")
+            assert summary.inner_text().count(source) == 1
+            assert summary.locator(".type-chip").count() == 1
+            assert summary.locator(".investigation-stat").count() == 3
+            assert summary.locator(".investigation-stat").first.evaluate("node => getComputedStyle(node).borderTopWidth") == "0px"
+            for host in summary.locator(".host-label").all():
+                assert host.locator("code").evaluate("node => getComputedStyle(node).fontSize") == host.locator(".host-name").evaluate("node => getComputedStyle(node).fontSize"), host.evaluate("node => [node.outerHTML,getComputedStyle(node).fontSize,getComputedStyle(node.parentElement).fontSize,node.closest('#evidence')?.id]")
+                assert host.locator(".host-name").evaluate("node => getComputedStyle(node,'::before').content") == '"["'
+                assert host.locator(".host-name").evaluate("node => getComputedStyle(node).textTransform") == "none"
+            toggle = toolbar.get_by_role("button", name="Hide excluded records", exact=True)
+            toggle.click()
+            page.wait_for_function("!state.requests.has('evidence')")
+            assert not page.evaluate("state.hideExcluded")
+            assert all(value == "false" for value in page.locator(".excluded-visibility-toggle").evaluate_all("nodes => nodes.map(node => node.getAttribute('aria-pressed'))"))
+            assert "hide_excluded" not in queries[-1]
+            page.locator("#evidence-range").select_option("24h")
+            page.wait_for_function("!state.requests.has('evidence')")
+            assert queries[-1]["range"] == ["24h"]
+            page.evaluate("""() => {saveViewPreferences(); state.hideExcluded=true;
+                syncExcludedVisibility(); restoreViewPreferences(state.viewPreferencesKey);}""")
+            assert toggle.get_attribute("aria-pressed") == "false"
+            page.locator("#evidence-records-table tbody tr[data-clickable]").first.click()
+            page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+            banner = page.locator(".evidence-detail-banner")
+            assert banner.inner_text().count(destination) == 1
+            assert banner.inner_text().count(source) == 1
+            assert "never-you-mind.local" in banner.inner_text()
+            assert banner.locator(".evidence-detail-description").inner_text() == "Extra diagnostic detail stays visible."
+            assert page.locator(".evidence-detail-breadcrumb").inner_text() == "← Close record"
+            assert banner.locator(".investigation-stat").first.evaluate("node => getComputedStyle(node).borderTopWidth") == "0px"
+            artifacts = Path("output/compact-evidence-check")
+            artifacts.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(artifacts / f"summary-{theme}-{width}.png"))
+            page.evaluate("record => openEvidence({...record,description:record.description.split('. ')[0]+'.'})", record)
+            assert banner.locator(".evidence-detail-description").is_hidden()
+            assert "never-you-mind.local" in banner.locator("h2").inner_text()
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_threat_intelligence_sources_filter_sort_and_refresh(theme: str) -> None:
     """Show source status and counts without polling or fetching indicators.
 
@@ -855,7 +976,11 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
             assert metadata.locator(".detail-row .ip-link").count() == 0
             metadata.locator("summary").press("Enter")
             assert not metadata.evaluate("el => el.open")
-            assert record["description"].split(". ")[0] == detail.locator("h2").inner_text()
+            assert record["description"].split(". ")[0] == detail.locator("h2").evaluate("""node => {
+                const copy=node.cloneNode(true);
+                copy.querySelectorAll('.host-name').forEach(name => name.remove());
+                return copy.textContent;
+            }""")
             assert "ICMP type: 11; code: 0" in detail.inner_text()
             assert "Source port" not in detail.locator(".evidence-detail-record").inner_text()
             assert "Destination port" not in detail.locator(".evidence-detail-record").inner_text()

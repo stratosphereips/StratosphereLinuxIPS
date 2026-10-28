@@ -129,6 +129,15 @@ const VIEW_CONTROL_DEFAULTS = Object.fromEntries(VIEW_CONTROL_IDS.map((id) => {
   return [id, element?.type === "checkbox" ? element.checked : element?.value];
 }));
 
+/** Keep exclusion buttons synchronized with the saved visibility preference. */
+function syncExcludedVisibility() {
+  document.querySelectorAll(".excluded-visibility-toggle").forEach((button) => {
+    button.textContent = state.hideExcluded ? "Excluded hidden" : "Excluded shown";
+    button.setAttribute("aria-pressed", String(state.hideExcluded));
+    button.title = state.hideExcluded ? "Show records excluded from scoring" : "Hide records excluded from scoring";
+  });
+}
+
 /** Save browser-only filters, sorts, visible columns, and pane widths. */
 function saveViewPreferences() {
   const controls = {};
@@ -217,6 +226,7 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
     });
   });
   state.hideExcluded = saved.hideExcluded !== false;
+  syncExcludedVisibility();
   state.deviceView = byId("device-view").checked;
   state.alertsWorkspace.severity = String(saved.alertSeverity || "");
   state.alertsWorkspace.grouping = byId("alerts-group").value;
@@ -496,7 +506,7 @@ function hostIdentity(ip) {
     return element;
   }
   element.dataset.hostIp = String(ip);
-  element.append(text("code", ip), text("small", "Name unknown", "host-name"));
+  element.append(text("code", ip), text("span", "Name unknown", "host-name"));
   updateHostLabel(element);
   const cached = state.hostNames.get(String(ip));
   if ((!cached || Date.now() - cached.checkedAt > 60000)
@@ -3469,14 +3479,12 @@ function renderEvidenceGroup() {
     head.append(label, close);
     summary.append(head);
     const p2pReports = isPeerReport(group) || group.module === "p2p_trust";
-    const title = group.profile_ip && group.evidence_type
-      ? `${evidenceTypeLabel(group)} · ${group.profile_ip}`
-      : group.profile_ip || evidenceTypeLabel(group) || "Evidence group";
-    summary.append(text("h3", title));
+    const host = text("h3", "", "evidence-group-host");
+    host.append(group.profile_ip ? deviceIdentity(group, "profile_ip") : text("span", "All hosts"));
+    summary.append(host);
     if (p2pReports) summary.append(text("p", "These detections were reported by other Slips. Select a record to see what the peer detected and who sent it. Received reports do not increase the local host score."));
     else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
     summary.append(investigationStats([
-      [state.deviceView ? "Device" : "Host", group.profile_ip ? deviceIdentity(group, "profile_ip") : "All hosts"],
       ["Threat", threat(group.threat_level)],
       ["Local score", slipsScore(group)],
       ["Network", group.profile_ip ? networkContext(group) : "Multiple networks"],
@@ -6315,7 +6323,32 @@ function evidenceDetailHeadline(record, groups = []) {
     }
   }
   return String(record.description || record.evidence_type || "Evidence")
-    .split(/\.(?:\s|$)/)[0].slice(0, 180);
+    .split(/\.(?:\s|$)/)[0];
+}
+
+/** Omit the opening sentence already shown as the evidence headline.
+ * @param {object} record Original evidence, kept intact for JSON and exports.
+ * @param {string} headline Current concise headline.
+ * @returns {string} Remaining description, including any additional details.
+ */
+function evidenceDescriptionRemainder(record, headline) {
+  const description = String(record.description || "").trim();
+  if (description.toLowerCase().startsWith(headline.toLowerCase())) {
+    return description.slice(headline.length).replace(/^[\s.;:]+/, "");
+  }
+  if (record.evidence_type === "UNKNOWN_PORT" && /^Connection to unknown destination port \d+\/(TCP|UDP) destination IP [\da-f:.]+\.$/i.test(description)
+      && headline.includes(" connected to unknown port ")) return "";
+  return description;
+}
+
+/** Show the profile owner only when the visible description does not name it.
+ * @param {HTMLElement} label Profile identity in the header metadata.
+ * @param {object} record Evidence whose score belongs to this profile.
+ * @param {HTMLElement[]} copy Headline and remaining description elements.
+ */
+function updateEvidenceProfileLabel(label, record, copy) {
+  label.hidden = !record.profile_ip || copy.some((element) => !element.hidden
+    && [...element.querySelectorAll("[data-host-ip]")].some((host) => host.dataset.hostIp === record.profile_ip));
 }
 
 /** Open an evidence record in its investigation pane or full-width page.
@@ -6400,9 +6433,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   const back = text("button", inAlertPane || cameFromDrawer ? "← Back to alert" : inPane || inHostPane ? "← Close record" : "← Back to evidence", "evidence-detail-link");
   back.type = "button";
   back.addEventListener("click", closeEvidenceDetail);
-  breadcrumb.append(back, text("span", "›"),
-    text("span", `${record.profile_ip || "Unknown host"} · ${evidenceTypeLabel(record)}`),
-    text("span", "›"), text("code", record.id || ""));
+  breadcrumb.append(back);
   const controls = document.createElement("div");
   controls.className = "evidence-detail-controls";
   if (context.length > 1 && position >= 0) {
@@ -6436,10 +6467,18 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
       || peerDetections(record).some((item) => MACHINE_LEARNING_EVIDENCE[item.evidence_type])) {
     meta.append(text("span", "Machine learning (ML)", "info-pill"));
   }
-  const headline = text("h2", evidenceDetailHeadline(record));
+  let headlineText = evidenceDetailHeadline(record);
+  const headline = text("h2", "");
+  headline.append(isPeerReport(record) ? text("span", headlineText)
+    : hostDescription({...record, description: headlineText}));
   const description = isPeerReport(record)
     ? peerEvidenceDescription(record)
-    : hostDescription(record, "evidence-detail-description");
+    : hostDescription({...record, description: evidenceDescriptionRemainder(record, headlineText)}, "evidence-detail-description");
+  description.hidden = !isPeerReport(record) && !evidenceDescriptionRemainder(record, headlineText);
+  const profileLabel = text("span", "", "evidence-profile-host");
+  profileLabel.append(text("span", "Profile: "), deviceIdentity(record, "profile_ip"));
+  updateEvidenceProfileLabel(profileLabel, record, [headline, description]);
+  meta.append(profileLabel);
   bannerCopy.append(meta, headline, description);
   const bannerStats = document.createElement("div");
   bannerStats.className = "evidence-detail-stats";
@@ -6591,7 +6630,14 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
       recovered += numeric(payload.recovered_flow_count);
       suggestions.push(...payload.items.slice(0, Math.max(0, 20 - suggestions.length)));
       updateWhitelistSuggestions(whitelistSection, record, suggestions);
-      headline.textContent = evidenceDetailHeadline(record, suggestions);
+      headlineText = evidenceDetailHeadline(record, suggestions);
+      headline.replaceChildren(hostDescription({...record, description: headlineText}));
+      if (!isPeerReport(record)) {
+        const remainder = evidenceDescriptionRemainder(record, headlineText);
+        description.replaceChildren(...hostDescription({...record, description: remainder}).childNodes);
+        description.hidden = !remainder;
+        updateEvidenceProfileLabel(profileLabel, record, [headline, description]);
+      }
       cursor = payload.next_cursor || "";
       moreFlows.hidden = !cursor && !pendingFlows.length;
       moreFlows.textContent = "Load more triggering flows";
@@ -8261,7 +8307,7 @@ document.addEventListener("input", (event) => {
 });
 document.addEventListener("change", (event) => {
   if (VIEW_CONTROL_IDS.includes(event.target.id)
-      || event.target.closest?.(".hosts-columns, .excluded-visibility-select")) {
+      || event.target.closest?.(".hosts-columns")) {
     scheduleViewPreferencesSave();
   }
 });
@@ -8417,13 +8463,12 @@ byId("host-flow-limit").addEventListener("change", () => {
   resetPage("hostFlows");
   loadHostFlows().catch(() => {});
 });
-document.querySelectorAll(".excluded-visibility-select").forEach((select) => {
-  select.value = state.hideExcluded ? "hide" : "show";
-  select.addEventListener("change", () => {
-    state.hideExcluded = select.value === "hide";
-    document.querySelectorAll(".excluded-visibility-select").forEach((other) => {
-      other.value = select.value;
-    });
+syncExcludedVisibility();
+document.querySelectorAll(".excluded-visibility-toggle").forEach((button) => {
+  button.addEventListener("click", () => {
+    state.hideExcluded = !state.hideExcluded;
+    syncExcludedVisibility();
+    scheduleViewPreferencesSave();
     ["alerts", "evidence", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
     if (state.activeTab === "hosts" && state.host) {
       refreshHostWorkspace().catch(() => {});

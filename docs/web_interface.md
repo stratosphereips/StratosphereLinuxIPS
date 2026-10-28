@@ -168,6 +168,14 @@ The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
+Evidence filters sit directly in the toolbar, wrapping onto another row when
+needed. Alert-link and time-range selectors are always visible; custom dates
+appear beside the range selector. Controls share the same font and height.
+The group summary shows its type once, one host identity, the description and
+a compact row for threat, score and network. Record headers keep additional
+description details without repeating their opening sentence. Identifiers stay
+in the collapsed **Evidence record** section. Device names appear in a muted
+color as **[name]**, at the address's font size and with their original case.
 With evidence grouping set to **None**, the middle record-list pane is hidden.
 Select evidence directly in the left table to open its details on the right;
 the divider resizes these two panes. Closing the details gives the table the
@@ -1025,7 +1033,7 @@ partial whitelist in place of a missing configured file. Keep an additional
 copy of any personal whitelist outside the repository before replacing a
 checkout. Existing evidence and alerts are historical records.
 With an `alerts` or `both` rule, new matching evidence is excluded from scoring
-and alerts and is hidden by the default **Hide excluded** setting. A `blocking`
+and alerts and is hidden by the default **Excluded hidden** setting. A `blocking`
 rule keeps evidence eligible for scoring and alerts. Saving
 changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web
@@ -1142,8 +1150,9 @@ after numeric scores in both ascending and descending order, including across
 pages. A host/type group with any excluded evidence follows the same rule
 because its score cell displays **Excluded**.
 
-The **Hide excluded / Show excluded** selector defaults to **Hide excluded**
-and is shared by Alerts, Evidence, the Host workspace, and ARP detections.
+The exclusion toggle defaults to **Excluded hidden**. Click it to switch to
+**Excluded shown**, or click again to hide excluded records.
+The choice is shared by Alerts, Evidence, the Host workspace, and ARP detections.
 New evidence-type rules take effect as soon as they reach Redis, even while a
 worker's local IP filter refresh is pending. Existing detections and alerts
 remain in the run history. The Alerts tab stays on the selected time range;
@@ -1164,9 +1173,9 @@ scored evidence. In the Host workspace, historical traffic linked only to
 excluded evidence is hidden as well. Flows linked to scored evidence and flows
 with no evidence remain visible. Alerts are already formed only from scored
 evidence, so their list is unchanged. Opening an Evidence group keeps the same
-filter. The selector changes displayed lists;
-stored records and run totals remain available when **Show excluded** is
-selected. Flows discarded by the profiler's flow whitelist were never stored
+filter. The toggle changes displayed lists;
+stored records and run totals remain available with **Excluded shown**.
+Flows discarded by the profiler's flow whitelist were never stored
 and cannot appear in either view.
 
 New `MALICIOUS_IP_FROM_P2P_NETWORK` evidence names every peer ID that reported
@@ -1282,7 +1291,7 @@ Opening a host or device from the inventory copies its selected time range,
 including custom start and end times, into the detail workspace. The Alerts
 and Evidence summary cards, peak score, highest evidence threat, score plot,
 and activity tables use that range and the current-network selection.
-**Hide excluded** also excludes whitelisted evidence from the peak, threat,
+**Excluded hidden** also excludes whitelisted evidence from the peak, threat,
 and evidence count. Select **Full run** to inspect earlier findings. The
 header separates the current active time-window score from the peak in the
 selected range. In Device view, the host header shows every associated IPv4
