@@ -3370,7 +3370,9 @@ async function loadEvidenceGroupRecords(reset = true) {
   workspace.listLoadedAt = Date.now();
   workspace.listSignature = signature;
   if (workspace.record) {
-    workspace.record = workspace.records.find((item) => item.id === workspace.record.id) || null;
+    workspace.record = workspace.records.find((item) => item.id === workspace.record.id)
+      || (state.evidenceDetail.inPane && state.evidenceDetail.record?.id === workspace.record.id
+        ? state.evidenceDetail.record : null);
   }
   renderEvidenceGroup();
 }
@@ -3944,32 +3946,44 @@ async function saveReviewChange(entity, change) {
 
 /** Refresh the visible investigation after an alert or evidence decision.
  * @param {string} entity Alert or evidence that changed.
+ * @param {boolean} keepOpen Whether the reviewed record still exists and stays open.
  * @returns {Promise<void>} Resolves after the current page refreshes.
  */
-async function refreshAfterReview(entity) {
-  closeDrawer();
-  closeEvidenceDetail(false, true);
+async function refreshAfterReview(entity, keepOpen = false) {
+  if (!keepOpen) {
+    closeDrawer();
+    closeEvidenceDetail(false, true);
+  }
   if (state.activeTab === "hosts" && state.host) {
-    resetPage("hostAlerts");
-    resetPage("host-evidence");
+    if (!keepOpen) {
+      resetPage("hostAlerts");
+      resetPage("host-evidence");
+    }
     await refreshHostWorkspace();
     return;
   }
   if (state.activeTab === "alerts") {
-    state.alertsWorkspace.alert = null;
-    setAlertPaneCount(state.alertsWorkspace.host ? 2 : 1);
-    resetPage("alerts");
+    if (!keepOpen) {
+      state.alertsWorkspace.alert = null;
+      setAlertPaneCount(state.alertsWorkspace.host ? 2 : 1);
+      resetPage("alerts");
+    }
+    state.alertsWorkspace.listLoadedAt = Date.now();
     await loadAlerts();
     if (state.alertsWorkspace.host) {
-      await loadAlertHostAlerts(true);
-      if (!state.alertsWorkspace.items.length) closeAlertHostPane();
+      await loadAlertHostAlerts(true, keepOpen);
+      if (!keepOpen && !state.alertsWorkspace.items.length) closeAlertHostPane();
     }
     return;
   }
   if (state.activeTab === "evidence") {
-    clearEvidenceSelection();
-    resetPage("evidence");
+    if (!keepOpen) {
+      clearEvidenceSelection();
+      resetPage("evidence");
+    }
+    state.evidenceWorkspace.listLoadedAt = Date.now();
     await loadEvidence();
+    if (keepOpen && state.evidenceWorkspace.group) await loadEvidenceGroupRecords(true);
     return;
   }
   await currentLoader()();
@@ -3990,7 +4004,8 @@ function reviewEditor(entity, record) {
   availability.hidden = state.reviewAvailable;
   panel.append(availability);
   const current = record.review_status || (entity === "alert" ? "active" : "unreviewed");
-  panel.append(text("p", `Current: ${current.replaceAll("_", " ")}${record.review_updated_at ? ` · ${formatTime(record.review_updated_at)}` : ""}`, "muted"));
+  const currentStatus = text("p", `Current: ${current.replaceAll("_", " ")}${record.review_updated_at ? ` · ${formatTime(record.review_updated_at)}` : ""}`, "muted");
+  panel.append(currentStatus);
   const status = document.createElement("select");
   const states = entity === "alert"
     ? [["active", "Active"], ["in_review", "In review"], ["resolved", "Resolved"]]
@@ -4055,13 +4070,17 @@ function reviewEditor(entity, record) {
       const result = await saveReviewChange(entity, { action: "review", id: identifier,
         status: status.value, verdict: entity === "alert" ? verdict.value : "",
         note: note.value });
+      Object.assign(record, { review_status: result.status, review_note: result.note,
+        review_updated_at: null, ...(entity === "alert" ? { review_verdict: result.verdict } : {}) });
+      currentStatus.textContent = `Current: ${result.status.replaceAll("_", " ")}`;
+      note.value = result.note;
       feedback.hidden = true;
       toast(result.p2p_feedback_note || (result.p2p_feedback === "pending"
         ? "Review saved. P2P feedback is queued for retry."
         : status.value === "resolved"
         ? "Review saved. The alert is now in Resolved; use the Review filter to see it."
         : "Review saved."));
-      await refreshAfterReview(entity);
+      await refreshAfterReview(entity, true);
     } catch (error) {
       feedback.textContent = error.message;
       feedback.hidden = false;

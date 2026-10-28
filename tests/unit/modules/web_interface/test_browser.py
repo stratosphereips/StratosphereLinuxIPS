@@ -21,6 +21,154 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize(
+    ("workspace", "decision"),
+    [("grouped", "false_positive"), ("individual", "true_positive"),
+     ("host", "inconclusive"), ("alert-evidence", "expected_behavior"),
+     ("alert", "resolved"), ("drawer", "resolved")],
+)
+def test_review_keeps_investigation_open(workspace: str, decision: str) -> None:
+    """Keep the selected investigation when a saved review removes its list row.
+
+    Parameters:
+        workspace: Evidence, host, alert or drawer investigation context.
+        decision: Saved review state that no longer matches the active filter.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    evidence = {"id": "review-evidence", "profile_ip": "192.0.2.20",
+                "evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer",
+                "timestamp": 1700000000, "threat_level": "high", "confidence": 1,
+                "flow_count": 0, "alert_ids": ["review-alert"], "description": "Review fixture"}
+    alert = {"alert_id": "review-alert", "ip_alerted": "192.0.2.20",
+             "alert_time": 1700000000, "threat_level": "high", "evidence_count": 1,
+             "evidence": [evidence], "review_status": "active"}
+    saved: list[dict[str, Any]] = []
+    flow_requests: list[str] = []
+    fail_review = False
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve isolated review writes and filtered lists without touching a run.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else "style.css")))
+        elif url.path.endswith("-review"):
+            change = route.request.post_data_json
+            if fail_review and change["action"] == "review":
+                route.fulfill(status=500, json={"error": "Review write failed"})
+                return
+            saved.append(change)
+            if change["action"] == "delete":
+                route.fulfill(json={"evidence_removed": 1, "flows_removed": 0, "shared_preserved": 0})
+            else:
+                route.fulfill(json={"id": change["id"], "status": change["status"],
+                                    "note": change["note"].strip(), "verdict": change["verdict"]})
+        elif url.path.endswith("/flows"):
+            flow_requests.append(url.path)
+            route.fulfill(json={"items": [], "total": 0, "linked_uid_count": 0, "next_cursor": None})
+        elif url.path in {"/api/evidence", "/api/alerts"}:
+            query = parse_qs(url.query)
+            items = [] if saved else [evidence if url.path.endswith("evidence") else alert]
+            if query.get("search") == ["review-alert"]:
+                items = [alert]
+            route.fulfill(json={"items": items, "total": len(items), "page_size": len(items),
+                                "next_cursor": None})
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(body="", content_type="text/javascript")
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1900, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.add_script_tag(content=script)
+            page.evaluate("""async ({workspace, evidence, alert}) => {
+                state.reviewAvailable=true; state.deviceView=false; state.networkOnly=false;
+                state.hideExcluded=false;
+                state.activeTab=['grouped','individual'].includes(workspace) ? 'evidence'
+                  : workspace==='host' ? 'hosts' : 'alerts';
+                document.querySelectorAll('.panel').forEach(panel =>
+                  panel.classList.toggle('active',panel.id===state.activeTab));
+                document.body.classList.toggle('evidence-active',state.activeTab==='evidence');
+                byId('evidence-range').value='all'; byId('evidence-review').value='unreviewed';
+                byId('alerts-range').value='all'; byId('alerts-review').value='open';
+                state.pages.evidence.items=[evidence]; state.pages.evidence.total=1;
+                state.pages.evidence.index=1; state.pages.evidence.cursors=[null,'page-two'];
+                if (workspace==='grouped') {
+                  state.evidenceWorkspace.group={id:'host:192.0.2.20',profile_ip:'192.0.2.20',evidence_count:1};
+                  state.evidenceWorkspace.records=[evidence]; state.evidenceWorkspace.recordsLoaded=true;
+                  state.evidenceWorkspace.listSignature=evidenceGroupQuery().toString();
+                  byId('evidence-view').value='host'; renderEvidenceGroup();
+                } else if (workspace==='individual') byId('evidence-view').value='individual';
+                if (workspace==='host') {
+                  state.host={ip:'192.0.2.20'}; state.hostActivity='evidence';
+                  byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+                  // Aggregate charts are outside this review/navigation regression.
+                  refreshHostWorkspace=async () => { await loadHostEvidence(); };
+                }
+                if (workspace==='alert' || workspace==='alert-evidence') {
+                  state.alertsWorkspace.host={ip_alerted:'192.0.2.20',alert_count:1};
+                  state.alertsWorkspace.listSignature=alertRangeSignature();
+                  await selectAlertDetailPane(alert);
+                }
+                if (workspace==='drawer') await openAlert(alert);
+                else if (state.activeTab==='evidence') await selectEvidenceRecord(evidence);
+                else if (workspace!=='alert') await openEvidence(evidence,[evidence],workspace==='alert-evidence');
+            }""", {"workspace": workspace, "evidence": evidence, "alert": alert})
+            selector = "#drawer-body" if workspace == "drawer" else (
+                "#alerts-detail" if workspace == "alert" else "#evidence-detail")
+            pane = page.locator(selector)
+            editor = pane.locator(".review-editor")
+            editor.locator("select").first.select_option(decision)
+            editor.locator("textarea").fill("  Checked manually  ")
+            editor.get_by_role("button", name="Save review", exact=True).click()
+            page.wait_for_function("() => !state.requests.size")
+            page.wait_for_function("""selector =>
+                !document.querySelector(selector + ' .review-editor button').disabled""", arg=selector)
+            assert saved[-1]["status"] == decision
+            assert pane.is_visible()
+            assert f"Current: {decision.replace('_', ' ')}" in editor.inner_text()
+            assert editor.locator("textarea").input_value() == "Checked manually"
+            if workspace not in {"alert", "drawer"}:
+                assert page.evaluate("state.evidenceDetail.record.id") == "review-evidence"
+                assert len(flow_requests) == 1
+            if workspace == "grouped":
+                assert page.evaluate("state.evidenceWorkspace.record.id") == "review-evidence"
+                assert page.evaluate("state.evidenceWorkspace.group.id") == "host:192.0.2.20"
+                page.evaluate("() => loadEvidenceGroupRecords(true)")
+                assert page.evaluate("state.evidenceWorkspace.record.id") == "review-evidence"
+            if workspace in {"grouped", "individual"}:
+                assert page.evaluate("state.pages.evidence.index") == 1
+                assert page.locator("#evidence-review").input_value() == "unreviewed"
+            if workspace in {"alert", "alert-evidence"}:
+                assert page.evaluate("state.alertsWorkspace.alert.alert_id") == "review-alert"
+                assert page.evaluate("state.alertsWorkspace.host.ip_alerted") == "192.0.2.20"
+            fail_review = True
+            editor.get_by_role("button", name="Save review", exact=True).click()
+            page.wait_for_function("selector => document.querySelector(selector + ' .review-feedback').textContent === 'Review write failed'", arg=selector)
+            assert pane.is_visible()
+            if workspace == "grouped":
+                page.once("dialog", lambda dialog: dialog.accept())
+                editor.get_by_role("button", name="Delete…", exact=True).click()
+                page.wait_for_function("state.evidenceDetail.record === null")
+                assert pane.is_hidden()
+                assert saved[-1]["action"] == "delete"
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("input_type", ["zeek_folder", "interface"])
 def test_saved_filters_belong_to_analysis(input_type: str) -> None:
     """Prevent live-run filters from hiding evidence in a different saved run.

@@ -126,6 +126,11 @@ The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
+Saving a review keeps the same alert or evidence detail pane open, including
+evidence opened from Hosts or Alerts. The saved decision appears in place while
+the lists refresh. If the new decision no longer matches a list's Review filter,
+the record leaves that list but its detail pane stays open until you close it or
+select another record. Deleting a record closes its details.
 
 The selected group's **Records** pane shows a table with time, detection type
 and module, threat level, **Host score then**, confidence, linked flow and alert
