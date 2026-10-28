@@ -937,6 +937,17 @@ they do not scan all stored flows. Existing evidence from an older analysis is
 retained; rerun the capture with the fixed version to generate corrected results.
 
 
+### Executable HTTP downloads
+
+`EXECUTABLE_MIME_TYPE` has **medium threat** and **100% confidence** for both
+the downloading host and the server supplying the file. It matches Zeek's
+response MIME signatures against the HTTP analyzer's executable-type list,
+including `application/x-dosexec` and `application/x-msdownload`. At medium
+threat and confidence 1, each host's evidence contributes 0.5 to its score
+before any live risk multiplier. This replaces the previous low-threat value
+for new detections; saved evidence keeps its original severity until the
+capture is analyzed again.
+
 ### HTTP Host and binary content checks
 
 The HTTP analyzer checks each HTTP transaction separately. These are three

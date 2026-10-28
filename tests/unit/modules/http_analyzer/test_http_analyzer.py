@@ -22,6 +22,7 @@ from slips_files.core.flows.zeek import (
 from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
 from modules.http_analyzer.http_analyzer import utils
+from slips_files.core.structures.evidence import EvidenceType, ThreatLevel
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -382,7 +383,16 @@ def test_set_evidence_weird_http_method(mocker):
     http_analyzer.db.set_evidence.assert_called_once()
 
 
-def test_set_evidence_executable_mime_type(mocker):
+@pytest.mark.parametrize(
+    "mime_type", ["application/x-msdownload", "application/x-dosexec"]
+)
+def test_set_evidence_executable_mime_type(mocker: Any, mime_type: str) -> None:
+    """Executable downloads create linked medium-threat findings for both hosts.
+
+    Parameters:
+        mocker: Mock fixture for evidence storage.
+        mime_type: Executable file signature identified by Zeek.
+    """
     http_analyzer = ModuleFactory().create_http_analyzer_obj()
     flow = HTTP(
         starttime="1726593782.8840969",
@@ -398,13 +408,24 @@ def test_set_evidence_executable_mime_type(mocker):
         response_body_len=10,
         status_code="",
         status_msg="",
-        resp_mime_types="application/x-msdownload",
+        resp_mime_types=[mime_type],
         resp_fuids="",
     )
-    mocker.spy(http_analyzer.db, "set_evidence")
+    mocker.patch.object(http_analyzer.db, "set_evidence")
     http_analyzer.set_evidence.executable_mime_type(twid, flow)
 
     assert http_analyzer.db.set_evidence.call_count == 2
+    source, destination = [
+        call.args[0] for call in http_analyzer.db.set_evidence.call_args_list
+    ]
+    for evidence, host in [(source, flow.saddr), (destination, flow.daddr)]:
+        assert evidence.evidence_type == EvidenceType.EXECUTABLE_MIME_TYPE
+        assert evidence.threat_level == ThreatLevel.MEDIUM
+        assert evidence.confidence == 1
+        assert evidence.attacker.value == host
+        assert evidence.uid == [flow.uid]
+    assert source.rel_id == [destination.id]
+    assert destination.rel_id == [source.id]
 
 
 @pytest.mark.parametrize("config_value", [700])

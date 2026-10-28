@@ -360,7 +360,13 @@ class SetEvidenceHelper:
 
         self.db.set_evidence(evidence)
 
-    def executable_mime_type(self, twid, flow):
+    def executable_mime_type(self, twid: str, flow: HTTP) -> None:
+        """Record executable downloads as medium threat for both endpoints.
+
+        Parameters:
+            twid: Detection time window identifier.
+            flow: HTTP transaction with the executable response MIME type.
+        """
         description: str = (
             f"Download of an executable with MIME type: {flow.resp_mime_types} "
             f"by {flow.saddr} from {flow.daddr}."
@@ -378,7 +384,7 @@ class SetEvidenceHelper:
                 ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
-            threat_level=ThreatLevel.LOW,
+            threat_level=ThreatLevel.MEDIUM,
             confidence=1,
             description=description,
             profile=ProfileID(ip=flow.saddr),
@@ -398,7 +404,7 @@ class SetEvidenceHelper:
                 ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
-            threat_level=ThreatLevel.LOW,
+            threat_level=ThreatLevel.MEDIUM,
             confidence=1,
             description=description,
             profile=ProfileID(ip=flow.daddr),
