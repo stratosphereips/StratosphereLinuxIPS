@@ -51,18 +51,19 @@ class ZeekInputUtils:
         self.next_zeek_files_refresh = 0.0
 
     def check_if_time_to_del_rotated_files(self) -> bool:
-        """
-        After a specific period (keep_rotated_files_for), slips deletes all rotated files
-        Check if it's time to do so
+        """Delete expired rotated files, retaining future deadlines in FIFO order.
+
+        Returns:
+            Whether any scheduled file was removed or already absent.
         """
         if not self.rotated_files_to_delete:
             return False
 
         now = time.time()
+        removed = False
         while self.rotated_files_to_delete:
-            file, delete_after = self.rotated_files_to_delete.pop()
+            file, delete_after = self.rotated_files_to_delete[0]
             if now < delete_after:
-                # not time to del it yet
                 break
 
             try:
@@ -73,6 +74,9 @@ class ZeekInputUtils:
                 )
             except FileNotFoundError:
                 pass
+            self.rotated_files_to_delete.pop(0)
+            removed = True
+        return removed
 
     def schedule_rotated_file_deletion(
         self, file_path: str, rotated_at: Optional[float] = None

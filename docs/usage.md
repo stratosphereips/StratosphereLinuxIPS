@@ -470,6 +470,43 @@ above the targets. Lower the active/archive caps and log backup count to
 choose a smaller disk budget; keeping 30 days of archives does not require
 keeping 30 backup files for every log.
 
+For a personal live capture targeting **about 4 GiB**, use these overrides in
+the configuration passed with `-c` (applied to the macOS en0 configuration):
+
+```yaml
+detection_history:
+  active_days: 30
+  max_active_size_mb: 1024
+  min_active_hours: 24
+  archive_retention_days: 30
+  archive_file_size_mb: 128
+  max_archive_size_mb: 2048
+  log_max_size_mb: 16
+  log_backup_count: 3
+anomaly_detection_https:
+  log_verbosity: 1
+```
+
+Keep the remaining settings in the existing configuration. This allocates
+1 GiB to the active database and 2 GiB to detection archives. Six rotated
+text logs can use about 384 MiB altogether, including their active segments.
+The remaining space covers web history, Zeek logs, Redis snapshots and module
+state. The existing 512 MiB raw-flow target shares the active database; it is
+not an extra 512 MiB allocation. The last day of recent detections stays
+protected, and archives expire after 30 days or earlier under size pressure.
+Lower HTTPS log verbosity reduces diagnostic writes without changing detection.
+
+This is a working storage target, not a hard total-folder quota. Traffic bursts,
+protected records, legacy deletion space and unfinished maintenance can exceed
+it. Restart Slips to load the settings; old oversized database files still need
+offline compaction. Existing rotated log backups are removed gradually under
+the new retention policy. Shared defaults are unchanged.
+
+Zeek cleanup retains each pending rotated-file deadline until it expires and
+processes the oldest first. A newer file cannot cancel or delay an older
+file's scheduled deletion. Checking a future deadline takes constant time;
+there is no scan of pending files for each input read.
+
 The option preserves past detections in the output directory; it does not
 restore active Redis state after a machine reboot. For an archival Redis
 snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
