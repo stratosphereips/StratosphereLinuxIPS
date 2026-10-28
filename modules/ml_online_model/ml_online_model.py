@@ -38,7 +38,7 @@ class _FallbackRiverModel:
 
 class MLOnlineModel(ml_base.MLBaseDetection):
     name = "ml_online_model"
-    description = "Standalone online ML flow detector"
+    description = "Machine learning flow detector trained one flow at a time"
     authors = ["Jan Svoboda, Sebastian Garcia"]
     module_key = "ml_online_model"
     module_config_section = "ml_online_model"
@@ -46,7 +46,7 @@ class MLOnlineModel(ml_base.MLBaseDetection):
         ml_base.EvidenceType.ML_ONLINE_MALICIOUS_FLOW
     )
     malicious_flow_description_template = (
-        "Flow with malicious characteristics detected by ml_online_model. "
+        "Machine learning flagged a suspicious flow using the online model. "
         "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
     )
 

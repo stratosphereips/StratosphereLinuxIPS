@@ -7,6 +7,13 @@ Current ML modules:
 - `ml_linear_model`
 - `ml_online_model`
 
+In the web interface their findings are **ML suspicious flow · Linear** and
+**ML suspicious flow · Online**. ML means Machine learning. The linear model
+trains on batches of labeled flows; the online model trains on labeled flows
+one at a time. Both support separate training and testing modes; their names
+do not mean that a detection run automatically retrains them. Configuration
+sections and stored evidence identifiers keep their existing names.
+
 ## Labels used for training
 
 `ml_linear_model` and `ml_online_model` share the same labeling behavior.

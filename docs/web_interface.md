@@ -136,6 +136,14 @@ JSON text. This includes evidence, alerts, connection and protocol records, P2P
 messages, and cached host threat intelligence. Copying keeps the current pane
 open. Browsers without clipboard API access use a copy-command fallback, which
 also supports remote pages opened over plain HTTP.
+Machine learning findings use the short labels **ML suspicious flow · Linear**
+and **ML suspicious flow · Online**. **ML** means **Machine learning**; the type
+label's tooltip explains it, and the detail header spells it out. Linear uses
+the classifier trained in batches; Online uses the classifier trained one flow
+at a time. The same names appear in Evidence, Hosts, Alerts and P2P reports,
+including saved analyses. Configuration keys and JSON evidence identifiers
+retain `ml_linear_model` / `ML_LINEAR_MALICIOUS_FLOW` and
+`ml_online_model` / `ML_ONLINE_MALICIOUS_FLOW`, respectively.
 Saving a review keeps the same alert or evidence detail pane open, including
 evidence opened from Hosts or Alerts. The saved decision appears in place while
 the lists refresh. If the new decision no longer matches a list's Review filter,

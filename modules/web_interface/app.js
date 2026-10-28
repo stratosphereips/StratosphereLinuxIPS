@@ -100,6 +100,16 @@ const state = {
 };
 
 const byId = (id) => document.getElementById(id);
+const MACHINE_LEARNING_EVIDENCE = {
+  ML_LINEAR_MALICIOUS_FLOW: {
+    name: "ML suspicious flow · Linear",
+    explanation: "Machine learning (ML) flagged this flow using the linear model, which trains on batches of labeled flows.",
+  },
+  ML_ONLINE_MALICIOUS_FLOW: {
+    name: "ML suspicious flow · Online",
+    explanation: "Machine learning (ML) flagged this flow using the online model, which trains on labeled flows one at a time.",
+  },
+};
 const VIEW_PREFERENCES_KEY = "slips-view-preferences-v1";
 const VIEW_CONTROL_IDS = [
   "metrics-range", "module-search", "alerts-group", "alerts-search", "alerts-review",
@@ -881,6 +891,7 @@ function evidenceTypeLabel(record) {
   if (["report", "blame"].includes(record.message_type)) return "Type not supplied";
   if (record.evidence_type && String(record.module || "").split(",").includes("p2p_trust")) return alertTypeName(record.evidence_type);
   if (String(record.evidence_type || "").startsWith("SMB_")) return alertTypeName(record.evidence_type);
+  if (MACHINE_LEARNING_EVIDENCE[record.evidence_type]) return alertTypeName(record.evidence_type);
   if (["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN", "HTTP_IP_HOST",
     "HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE", "HTTP_BINARY_RESPONSE_AS_HTML"].includes(record.evidence_type)) return alertTypeName(record.evidence_type);
   return record.evidence_type || record.message_type || "All types";
@@ -892,7 +903,15 @@ function evidenceTypeLabel(record) {
  */
 function evidenceTypeCell(record) {
   const cell = document.createElement("span");
-  cell.append(text("span", evidenceTypeLabel(record), "type-chip"));
+  const chip = text("span", evidenceTypeLabel(record), "type-chip");
+  const explanations = [...new Set([record.evidence_type,
+    ...peerDetections(record).map((item) => item.evidence_type)])]
+    .map((type) => MACHINE_LEARNING_EVIDENCE[type]?.explanation).filter(Boolean);
+  if (explanations.length) {
+    chip.title = explanations.join("\n");
+    chip.setAttribute("aria-label", `${chip.textContent}. ${chip.title}`);
+  }
+  cell.append(chip);
   const modules = String(record.module || "").split(",");
   if (isPeerReport(record) || modules.includes("p2p_trust")) {
     const badge = text("small", modules.length > 1 ? "Includes P2P" : "From P2P", "info-pill p2p-origin");
@@ -2544,6 +2563,7 @@ function alertEvidenceTypes(record) {
 
 /** Give a detector type a readable name in alert summaries. */
 function alertTypeName(type) {
+  if (MACHINE_LEARNING_EVIDENCE[type]) return MACHINE_LEARNING_EVIDENCE[type].name;
   const names = {
     CONNECTION_TO_PRIVATE_IP: "Private IP connection",
     UNKNOWN_PORT: "Unknown port",
@@ -3252,7 +3272,7 @@ function renderEvidenceEmptyState() {
       const fill = document.createElement("span");
       fill.style.width = `${Math.max(1, 100 * count / max)}%`;
       track.append(fill);
-      row.append(text("span", type, "evidence-bar-label"), track,
+      row.append(text("span", MACHINE_LEARNING_EVIDENCE[type]?.name || type, "evidence-bar-label"), track,
         text("span", compact(count), "evidence-bar-count"));
       if (typeCounts.has(type)) row.addEventListener("click", () => {
         state.evidenceWorkspace.typeFilter = type;
@@ -3647,7 +3667,7 @@ async function loadEvidence() {
   const activeType = byId("evidence-active-type");
   activeType.hidden = !state.evidenceWorkspace.typeFilter;
   activeType.textContent = state.evidenceWorkspace.typeFilter
-    ? `${state.evidenceWorkspace.typeFilter} ×` : "";
+    ? `${MACHINE_LEARNING_EVIDENCE[state.evidenceWorkspace.typeFilter]?.name || state.evidenceWorkspace.typeFilter} ×` : "";
   byId("evidence-count").textContent = mode === "individual"
     ? `${compact(payload.total)} records`
     : `${compact(payload.total)} groups · ${recordsLabel}`;
@@ -4315,7 +4335,7 @@ function whitelistEditor(kind, record = null, host = null) {
   const typeNames = new Set(state.whitelists?.evidence_types || []);
   if (record?.evidence_type) typeNames.add(record.evidence_type);
   typeNames.forEach((name) => {
-    const option = text("option", name);
+    const option = text("option", MACHINE_LEARNING_EVIDENCE[name]?.name || name);
     option.value = name;
     evidenceType.append(option);
   });
@@ -4451,7 +4471,7 @@ function renderWhitelists() {
     (row) => row.type === "MAC address" ? macIdentity(row.value) : text("code", row.value),
     (row) => row.type === "Request URI" ? "Request" : row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
     (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "blocking" ? "Blocking only (keep alerts)" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
-    (row) => row.evidence_type || "All",
+    (row) => MACHINE_LEARNING_EVIDENCE[row.evidence_type]?.name || row.evidence_type || "All",
     (row) => row.dst_port || "Any",
     (row) => row.effect,
     (row) => row.source,
@@ -4493,7 +4513,7 @@ async function loadWhitelists() {
     all.value = "";
     select.append(all);
     (payload.evidence_types || []).forEach((name) => {
-      const option = text("option", name);
+      const option = text("option", MACHINE_LEARNING_EVIDENCE[name]?.name || name);
       option.value = name;
       select.append(option);
     });
@@ -6172,6 +6192,9 @@ function evidenceDetailHeadline(record, groups = []) {
     }
     return `${evidenceTypeLabel(record)} · report about ${peerAddress(record.profile_ip || record.attacker?.value) || "an unspecified host"}`;
   }
+  if (MACHINE_LEARNING_EVIDENCE[record.evidence_type]) {
+    return `${evidenceTypeLabel(record)}${record.profile_ip ? ` · ${record.profile_ip}` : ""}`;
+  }
   if (record.evidence_type === "UNKNOWN_PORT") {
     const flow = groups[0]?.network_flow?.flow;
     const source = flowValue(flow, "saddr");
@@ -6300,6 +6323,10 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     text("span", formatTime(record.timestamp)),
     text("span", record.twid || record.timewindow?.number || "—"),
     networkContext(record));
+  if (MACHINE_LEARNING_EVIDENCE[record.evidence_type]
+      || peerDetections(record).some((item) => MACHINE_LEARNING_EVIDENCE[item.evidence_type])) {
+    meta.append(text("span", "Machine learning (ML)", "info-pill"));
+  }
   const headline = text("h2", evidenceDetailHeadline(record));
   const description = isPeerReport(record)
     ? peerEvidenceDescription(record)
@@ -7080,8 +7107,9 @@ function hostActivityGroupValue(kind, row) {
   if (group === "threat") return row.threat_level || row.linked_threat_level || "No linked evidence";
   if (group === "type") {
     const types = alertEvidenceTypes(row);
-    return kind === "alerts" ? types.length ? types.map((item) => item.type).join(" + ") : "Unknown type"
-      : peerDetections(row)[0]?.evidence_type || row.evidence_type || "Unknown type";
+    const type = peerDetections(row)[0]?.evidence_type || row.evidence_type;
+    return kind === "alerts" ? types.length ? types.map((item) => MACHINE_LEARNING_EVIDENCE[item.type]?.name || item.type).join(" + ") : "Unknown type"
+      : MACHINE_LEARNING_EVIDENCE[type]?.name || type || "Unknown type";
   }
   if (group === "module") {
     if (kind === "evidence") return row.module || "Unknown module";
