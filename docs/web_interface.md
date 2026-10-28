@@ -193,6 +193,11 @@ JSON text. This includes evidence, alerts, connection and protocol records, P2P
 messages, and cached host threat intelligence. Copying keeps the current pane
 open. Browsers without clipboard API access use a copy-command fallback, which
 also supports remote pages opened over plain HTTP.
+JSON uses indentation, a consistent monospace font, and separate colors for
+field names, strings, numbers, booleans and null values in both themes. Long
+values wrap inside the pane. Formatting preserves the complete displayed JSON
+for copying and text selection. Closed record viewers are built only when
+expanded; very large records use plain formatted text to keep the page responsive.
 Flow tables, detail cards and grouping controls show **Input label** only when
 labels were supplied with the input. Slips's default stored `benign`/`normal`
 label is not shown as an input label. The host flow table offers this column

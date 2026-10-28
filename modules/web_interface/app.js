@@ -5068,7 +5068,9 @@ function renderP2PMessageDetail(record) {
   facts.forEach(([label, value]) => list.append(text("dt", label), text("dd", value)));
   panel.append(list, text("h4", record.archived_report ? "Stored report fields" : "Payload"));
   if (record.archived_report) panel.append(text("p", "The original message is no longer retained; these report fields remain in the trust database.", "muted"));
-  panel.append(text("pre", JSON.stringify(p2pMessageContent(record), null, 2), "p2p-message-content"));
+  const payload = text("pre", "", "p2p-message-content");
+  renderJson(payload, JSON.stringify(p2pMessageContent(record), null, 2));
+  panel.append(payload);
 }
 
 /** Select a message for inline inspection.
@@ -5691,6 +5693,43 @@ function initDrawerResize() {
     setDrawerWidth(drawer.getBoundingClientRect().width));
 }
 
+const jsonSources = new WeakMap();
+
+/** Format JSON safely with colors, preserving its text for selection and copying.
+ * @param {HTMLPreElement} container Destination for the formatted JSON.
+ * @param {string} source Indented JSON text, with any display conversions applied.
+ */
+function renderJson(container, source) {
+  if (jsonSources.get(container) === source) return;
+  const code = document.createElement("code");
+  container.classList.add("json-view");
+  container.tabIndex = 0;
+  container.setAttribute("aria-label", "JSON record");
+  if (source.length <= 262144) {
+    const tokens = /("(?:\\.|[^"\\])*")(?=\s*:)|("(?:\\.|[^"\\])*")|(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)|\b(true|false)\b|\b(null)\b/g;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    let count = 0;
+    for (const match of source.matchAll(tokens)) {
+      if (++count > 12000) break;
+      fragment.append(source.slice(offset, match.index));
+      const kind = match[1] !== undefined ? "key" : match[2] !== undefined ? "string"
+        : match[3] !== undefined ? "number" : match[4] !== undefined ? "boolean" : "null";
+      const token = document.createElement("span");
+      token.className = `json-${kind}`;
+      token.textContent = match[0];
+      fragment.append(token);
+      offset = match.index + match[0].length;
+    }
+    if (count <= 12000) {
+      fragment.append(source.slice(offset));
+      code.append(fragment);
+    } else code.textContent = source;
+  } else code.textContent = source;
+  container.replaceChildren(code);
+  jsonSources.set(container, source);
+}
+
 /** Show lazily rendered JSON with a button to copy the displayed value.
  * @param {object} record Record shown by this viewer.
  * @param {string} label Human-readable record kind.
@@ -5707,7 +5746,9 @@ function rawBlock(record, label) {
   details.append(summary, copy);
   details.addEventListener("toggle", () => {
     if (details.open && !details.querySelector("pre")) {
-      details.append(text("pre", JSON.stringify(displayData(record), null, 2)));
+      const pre = document.createElement("pre");
+      renderJson(pre, JSON.stringify(displayData(record), null, 2));
+      details.append(pre);
     }
   });
   return details;
@@ -7164,9 +7205,9 @@ function renderHostCards(host) {
     } else networks.append(text("p", "No observations on the current network.", "muted"));
   }
   byId("host-dns-details").replaceChildren(renderDnsDetails(host.dns));
-  byId("host-ti").textContent = Object.keys(host.ti || {}).length
+  renderJson(byId("host-ti"), Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
-    : "No cached threat-intelligence data.";
+    : "No cached threat-intelligence data.");
   byId("host-ti-copy").hidden = !Object.keys(host.ti || {}).length;
 }
 

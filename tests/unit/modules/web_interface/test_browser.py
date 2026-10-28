@@ -307,6 +307,7 @@ def test_json_copy_buttons(clipboard_mode: str) -> None:
                 viewer = viewers.nth(index)
                 viewer.locator("summary").click()
                 viewer.locator("pre").wait_for()
+                assert viewer.locator(".json-key").count() > 0
                 check_copy(viewer)
                 assert viewer.evaluate("el => el.open")
             assert page.evaluate("window.serializationReads") == viewers.count()
@@ -321,11 +322,110 @@ def test_json_copy_buttons(clipboard_mode: str) -> None:
                 state.activeTab='hosts';
                 document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='hosts'));
                 byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
-                byId('host-ti').textContent=JSON.stringify({source:'cached TI',items:[{score:0.8}]},null,2);
+                renderJson(byId('host-ti'),JSON.stringify({source:'cached TI',items:[{score:0.8}]},null,2));
                 byId('host-ti-copy').hidden=false; byId('host-ti').closest('details').open=true;
             }""")
             check_copy(page.locator("#host-ti").locator(".."))
             assert page.evaluate("window.copyCommands") == (0 if clipboard_mode == "api" else 8)
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+@pytest.mark.parametrize("width", [800, 1600])
+def test_json_formatting_preserves_content(theme: str, width: int) -> None:
+    """Keep highlighted JSON safe, copyable and bounded in both pane sizes.
+
+    Parameters:
+        theme: Active browser theme.
+        width: Browser width for a narrow or wide pane.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    record = {"source": "192.168.1.163", "destination": "37.48.125.108",
+              "protocol": "tcp", "destination_port": 443, "confidence": 0.95,
+              "established": True, "blocked": False, "missing": None,
+              "details": {"path": "C:\\Users\\Cherry", "message": 'Hello "Cherry" · café',
+                          "payload": '<img src=x onerror="window.jsonInjected=true">',
+                          "long_value": "unbroken-value-" * 45},
+              "samples": [39, 0, -1.25, 1e-8]}
+
+    def respond(route: Any) -> None:
+        """Serve shipped assets without connecting to any running analysis.
+
+        Parameters:
+            route: Browser asset or API request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated browser fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderJson === 'function'")
+            page.evaluate("""({record,theme,width}) => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                document.documentElement.dataset.theme=theme;
+                const root=document.createElement('section'); root.id='json-format-fixture';
+                root.className='surface';
+                root.style.cssText=`margin:16px;padding:20px;width:${width < 1000 ? 380 : 760}px`;
+                root.append(text('h3','Connection record'),rawBlock(record,'flow'));
+                document.body.append(root);
+                window.displayedJson=JSON.stringify(displayData(record),null,2);
+            }""", {"record": record, "theme": theme, "width": width})
+            viewer = page.locator("#json-format-fixture details")
+            assert viewer.locator("pre").count() == 0
+            viewer.locator("summary").click()
+            pre = viewer.locator("pre")
+            pre.wait_for()
+            expected = page.evaluate("window.displayedJson")
+            assert pre.inner_text() == expected
+            assert pre.text_content() == expected
+            assert json.loads(expected)["details"]["payload"] == record["details"]["payload"]
+            assert pre.locator("img, script").count() == 0
+            assert page.evaluate("window.jsonInjected") is None
+            for kind in ["key", "string", "number", "boolean"]:
+                assert pre.locator(f".json-{kind}").count() > 0
+            colors = pre.evaluate("el => ['key','string','number','boolean'].map(kind => getComputedStyle(el.querySelector('.json-'+kind)).color)")
+            assert len(set(colors)) == 4
+            assert pre.evaluate("el => el.scrollWidth <= el.clientWidth")
+            assert pre.get_attribute("tabindex") == "0"
+            assert pre.evaluate("""el => {
+                const first=el.firstChild;
+                renderJson(el,window.displayedJson);
+                return el.firstChild===first;
+            }""")
+            artifacts = Path("output/pretty-json-check")
+            artifacts.mkdir(parents=True, exist_ok=True)
+            page.locator("#json-format-fixture").screenshot(path=str(artifacts / f"json-{theme}-{width}.png"))
+            viewer.locator("summary").click()
+            viewer.locator("summary").click()
+            assert pre.text_content() == expected
+            assert viewer.locator("pre").count() == 1
+            page.evaluate("""() => {
+                const nullable=document.createElement('pre');
+                renderJson(nullable,'{"value": null}');
+                if (nullable.querySelector('.json-null')?.textContent!=='null')
+                  throw new Error('JSON null must have its own style');
+                for (const record of [{payload:'x'.repeat(262145)},
+                    {samples:Array.from({length:13000},(_,index)=>index)}]) {
+                  const pre=document.createElement('pre');
+                  const source=JSON.stringify(record,null,2);
+                  renderJson(pre,source);
+                  if (pre.textContent!==source || pre.querySelectorAll('*').length!==1)
+                    throw new Error('Large JSON must preserve all text with bounded markup');
+                }
+            }""")
             assert not errors, errors
         finally:
             browser.close()
