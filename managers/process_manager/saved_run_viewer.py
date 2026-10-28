@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import select
+import shlex
 import shutil
 import signal
 import socket
@@ -103,6 +104,49 @@ def saved_host_profiles(output: Path, fallback: str) -> str:
             if path.is_file():
                 return os.path.relpath(path)
     return fallback
+
+
+def viewer_web_port(
+    output: Path, override: int | None, fallback: int
+) -> tuple[int, bool]:
+    """Prefer a viewer override, then the original run's recorded web port.
+
+    Parameters:
+        output: Saved analysis folder containing immutable run metadata.
+        override: Optional --web-port supplied for this viewer.
+        fallback: Current configuration's port when no saved port is available.
+
+    Returns:
+        Preferred port and whether the viewer must bind exactly that port.
+    """
+    if override is not None:
+        return override, True
+    candidates = []
+    metadata = output / "metadata"
+    try:
+        for line in (metadata / "info.txt").read_text().splitlines():
+            if line.startswith("Command: "):
+                candidates.append(
+                    argument_value(shlex.split(line[9:]), "--web-port")
+                )
+                break
+    except (OSError, ValueError):
+        pass
+    for snapshot in sorted(metadata.glob("*.yaml")):
+        try:
+            config = yaml.safe_load(snapshot.read_text())
+        except (OSError, yaml.YAMLError):
+            continue
+        if isinstance(config, dict) and isinstance(
+            config.get("web_interface"), dict
+        ):
+            candidates.append(config["web_interface"].get("port"))
+    for candidate in candidates:
+        try:
+            return parse_web_port(str(candidate)), True
+        except argparse.ArgumentTypeError:
+            continue
+    return fallback, False
 
 
 def stop_owned_redis(process: subprocess.Popen) -> None:
@@ -257,6 +301,9 @@ def run_viewer(
 
     output = options.view
     conf = ConfigParser()
+    web_port, require_port = viewer_web_port(
+        output, options.web_port, conf.web_interface_port
+    )
     web_dir = output / "web_interface"
     web_dir.mkdir(parents=True, exist_ok=True)
     policy = conf.detection_history_policy()
@@ -301,8 +348,8 @@ def run_viewer(
                     reader.validate_run_identity()
                     with bind_view_server(
                         reader,
-                        options.web_port or conf.web_interface_port,
-                        options.web_port is not None,
+                        web_port,
+                        require_port,
                     ) as server:
                         url = f"http://127.0.0.1:{server.server_port}/"
                         message = f"Saved results: {output}\nWebpage: {url}\nViewer PID: {os.getpid()}"

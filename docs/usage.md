@@ -597,16 +597,19 @@ including a private cache, so another Slips capture can keep running.
 It refuses to open a folder that is still being analyzed.
 
 The webpage always listens on `127.0.0.1`. Slips prints its URL and viewer
-PID after startup. It tries the configured web port, then a nearby free port.
-Use `--web-port` to require a specific port; an occupied explicit port gives
-an error without replacing its owner:
+PID after startup. It reuses the original analysis's web port from its saved
+metadata, including an original `--web-port` override. If that port is occupied,
+the viewer reports an error without replacing its owner or switching ports.
+Use `--web-port` to open the saved results on a different port:
 
 ```bash
 python3 slips.py --view output/pcap-case-18 --web-port 55001
 ```
 
 `-w`, `-f`, `-i` and `--keep-history` are not needed. `-c config/custom.yaml`
-can select your installation's web password and default web port; the
+can select your installation's web password and fallback web port. Only when
+no valid original port was saved does the viewer try that fallback and nearby
+free ports. An explicit `--web-port` always takes precedence. The
 Configuration tab and detection thresholds still come from the saved run's
 metadata. Saved host identities are used when available. A copied or moved
 output folder can be reopened without editing its Redis snapshot.

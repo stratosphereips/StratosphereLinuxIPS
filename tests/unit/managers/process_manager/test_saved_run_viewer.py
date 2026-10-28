@@ -123,6 +123,43 @@ def test_stop_owned_redis(state: str) -> None:
     assert process.kill.call_count == (state == "stuck")
 
 
+@pytest.mark.parametrize("command,snapshot,override,expected", [
+    (None, "web_interface:\n  port: 55005\n", None, (55005, True)),
+    ("python3 slips.py -f test.pcap --web-port 55006", "web_interface:\n  port: 55005\n", None, (55006, True)),
+    ("python3 slips.py --web-port=55006 -f 'capture with spaces.pcap'", None, None, (55006, True)),
+    ("python3 slips.py --web-port 55006", "web_interface:\n  port: 55005\n", 55007, (55007, True)),
+    (None, None, None, (55000, False)),
+    (None, "[broken yaml", None, (55000, False)),
+    (None, "web_interface:\n  port: 65536\n", None, (55000, False)),
+    (None, "web_interface:\n  port: false\n", None, (55000, False)),
+    ("python3 slips.py --web-port 0", "web_interface:\n  port: '55005'\n", None, (55005, True)),
+    ("python3 slips.py -f 'unclosed", "web_interface:\n  port: 55005\n", None, (55005, True)),
+])
+def test_viewer_web_port_uses_original_run(
+    tmp_path: Path, command: str | None, snapshot: str | None,
+    override: int | None, expected: tuple[int, bool],
+) -> None:
+    """Honor saved/CLI ports without treating malformed metadata as a port.
+
+    Parameters:
+        tmp_path: Temporary analysis output.
+        command: Optional original startup command.
+        snapshot: Optional saved YAML configuration.
+        override: Viewer CLI port override.
+        expected: Port and whether alternate-port selection is forbidden.
+    """
+    _factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    if command is not None:
+        (metadata / "info.txt").write_text(f"Command: {command}\n")
+    if snapshot is not None:
+        (metadata / "slips.yaml").write_text(snapshot)
+    assert viewer.viewer_web_port(tmp_path, override, 55000) == expected
+    if snapshot is not None:
+        assert (metadata / "slips.yaml").read_text() == snapshot
+
+
 @pytest.mark.parametrize("failure", [None, "exited", "missing_identity", "connect_error", "wrong_owner"])
 def test_restore_is_private(tmp_path: Path, failure: str | None) -> None:
     """Load a copy with no persistence and clean up every failed restore.
@@ -234,28 +271,35 @@ def test_view_cli_selection(tmp_path: Path, background: bool) -> None:
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_viewer_cleanup(tmp_path: Path, failure: bool) -> None:
+@pytest.mark.parametrize("override", [None, 55001])
+def test_viewer_cleanup(tmp_path: Path, failure: bool, override: int | None) -> None:
     """Close the private server on Ctrl-C and on HTTP startup failure.
 
     Parameters:
         tmp_path: Temporary viewer runtime directory.
         failure: Whether binding the HTTP server should fail.
+        override: Explicit port, or reuse the port captured with the run.
     """
     _factory = ModuleFactory()
     process, client = Mock(), Mock()
     reader = Mock()
     conf = Mock()
     conf.permanent_dir.return_value = "permanent"
+    conf.web_interface_port = 55000
     conf.detection_history_policy.return_value = {"enabled": False}
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    (metadata / "slips.yaml").write_text("web_interface:\n  port: 55005\n")
     server = Mock()
     server.server_port = 55001
     server.serve_forever.side_effect = KeyboardInterrupt
     context = Mock()
     context.__enter__ = Mock(return_value=server)
     context.__exit__ = Mock(return_value=False)
-    with patch("slips_files.common.parsers.config_parser.ConfigParser", return_value=conf), patch("modules.web_interface.server.RunDataReader", return_value=reader) as create_reader, patch.object(viewer, "start_snapshot_redis", return_value=(process, client, 12345)), patch.object(viewer, "stop_owned_redis") as stop, patch.object(viewer, "bind_view_server", side_effect=ValueError("busy") if failure else None, return_value=context):
-        status = viewer.run_viewer(argparse.Namespace(view=tmp_path, web_port=55001))
+    with patch("slips_files.common.parsers.config_parser.ConfigParser", return_value=conf), patch("modules.web_interface.server.RunDataReader", return_value=reader) as create_reader, patch.object(viewer, "start_snapshot_redis", return_value=(process, client, 12345)), patch.object(viewer, "stop_owned_redis") as stop, patch.object(viewer, "bind_view_server", side_effect=ValueError("busy") if failure else None, return_value=context) as bind:
+        status = viewer.run_viewer(argparse.Namespace(view=tmp_path, web_port=override))
     assert status == int(failure)
+    bind.assert_called_once_with(reader, override or 55005, True)
     assert create_reader.call_args.kwargs == {"cache_redis_port": 12345, "saved_view": True}
     stop.assert_called_once_with(process)
     client.close.assert_called_once()

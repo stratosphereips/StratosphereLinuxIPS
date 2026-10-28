@@ -12,7 +12,10 @@ python3 slips.py --view output/pcap-case-18 --web-port 55001
 of the saved snapshot and opens the existing SQLite results. It needs no
 running capture or shared Redis server. The header says **Viewing saved
 results**, and the page stays local to this computer. Omit `--web-port` to
-choose an available port automatically, or add `-D` to run in the background.
+reuse the original analysis's saved web port, or add `-D` to run in the background.
+If the original port is busy, choose another with `--web-port`; the viewer does
+not silently switch ports. Older outputs without a recorded port use the
+configured default and, if necessary, a nearby free port.
 Ctrl-C or `--stop PID` stops only this viewer and its Redis child.
 See [reopening saved runs](usage.md#reopen-a-saved-runs-webpage) for required
 files, passwords, retained data and shutdown details.
