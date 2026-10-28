@@ -134,16 +134,16 @@ toward 1, but their contribution to trust stops at 0.35. A peer does not earn
 unlimited trust by staying online. A flat value near 0.34 can therefore mean
 communication is consistently working, rather than that updates have stopped.
 
-The P2P table labels this case **Communication only**. Hover over the value for
+The P2P table labels this case **Communication only** when no agreement credit
+has been earned either. Hover over the value for
 the communication and local-behavior contributions, their sum, and the local
 assessment's confidence. The web, P2P report evaluation, and history sampling
-use the same calculation. The plot shows base trust; **Report accuracy** shows
-the separate adjustments earned by validated reports for each evidence type
-and detector version. Unreviewed reports earn no automatic credit just because
-their sender is reachable or other peers repeat them. This distinction follows
-the risks discussed in the thesis's section 8.1.4.
+use the same calculation. The plot includes the learned agreement increase
+described below. **Report accuracy** separates agreed targets from TP/FP reviews.
+Being reachable or repeating reports alone earns no agreement credit.
 
-An explicit benign assessment can raise base trust above 0.35; a malicious
+An explicit benign assessment can raise base trust above 0.35; learned agreement
+credit can raise the displayed trust above this communication baseline too. A malicious
 assessment reduces it. Missing evidence, informational observations and a flow's
 default `benign` label do not establish benign behavior. The formula permits a
 benign assessment, but ordinary Slips detections primarily supply malicious
@@ -358,8 +358,9 @@ Older peers can still exchange the original score/confidence messages.
 Agreement between identical detectors is not independent verification. Slips
 groups related error sources conservatively: for example, DNS detectors share
 one dependency group and threat-intelligence lookups share another. Different
-Slips versions do not establish independence. Ordinary agreement between local
-and remote heuristics earns no trust credit. Automatic validation requires
+Slips versions do not establish independence. Ordinary agreement can earn the
+smaller peer-wide reward described below, but does not certify a TP.
+Automatic independent validation requires
 matching local evidence of the same type within one hour, a different dependency
 group, and a local signature, integrity or honeypot method with confidence at
 least 0.9 and maliciousness at least 0.8. Peer-derived findings cannot provide
@@ -369,6 +370,54 @@ During blame evaluation, a peer assessment from the local detection's dependency
 group is excluded from the additional network contribution unless independently
 validated or reviewed. Identical local and remote rules therefore do not supply
 two confirmations to cross the block threshold.
+
+### Learning from local detections and peer agreement
+
+Slips increases trust when it independently detects behavior that at least two
+authenticated peer IDs report. The two peers include the reporter being rated;
+one local detection and one remote peer alone are not enough. The target IP,
+evidence type, and network must match. Protocol and destination port must also
+match when both records contain them. All contributing detection times must
+fit inside the configured window. Default confidence is at least 0.8 for the
+local detection and each report. Informational observations, peer-derived
+local evidence and untyped legacy reports do not supply this confirmation.
+
+Each qualifying **peer ID and target IP** earns +0.025 once, across runs,
+networks, evidence types and detector versions. A separate persistent
+`positive_targets` ledger reserves that lifetime reward. Repeated reports,
+new versions, a new output directory, or moving to another network cannot
+award it again or renew its earning time. Original supporting records are
+retained, so replacing a peer's latest report does not lose the earned case.
+Older network-scoped credits are deduplicated when read or reused.
+
+The agreement increase applies to the peer's report trust and is included in
+the P2P table and newly recorded trust history. For example, a communication
+baseline of 0.350 becomes 0.375 after one agreed target. Eight fresh targets
+reach the maximum +0.20 increase. Rewards halve over 30 days, using their
+original earning times. Positive agreement and detector-specific review
+adjustments together cannot add more than +0.20 to a report's base trust.
+They cannot override a strong current local malicious assessment of the peer.
+
+Agreement is shown as **Agreed**, separately from **TP** and **FP**. It does not
+train a detector or become independent confirmation for combining duplicate
+rules in a blocking decision. FP, Expected behavior and conflicting reviews
+override the supporting case and remove its agreement contribution. Clearing
+a verdict can restore the same case, with its original earning time. Incoming
+reports are evaluated before awarding any credit from that report.
+
+Configure `local_p2p.report_agreement` in `config/slips.yaml`, then restart:
+
+| Setting | What it does and why |
+| --- | --- |
+| `enabled` | Enable this learning path, default `true`. `false` removes its contribution without deleting the ledger. |
+| `min_peers` | Distinct authenticated peer IDs, including the reporter; default 2, allowed 2–50. The local detection is always required in addition. Higher values require broader agreement. |
+| `min_confidence` | Minimum confidence for every local and remote witness, default 0.8, allowed 0–1. Higher values avoid rewarding weak detections. |
+| `window_seconds` | Maximum time span covering the local detection and matching reports, default 3600, allowed 1–86400. A shorter window requires closer observations of the same behavior. |
+| `trust_credit` | Increase per unique peer/target case, default 0.025, allowed 0–0.05. Larger values learn faster; the total increase remains capped at 0.20. |
+
+Invalid settings keep their defaults. Matching and ledger writes run in the
+P2P worker, using bounded per-target lookups. The capture/profiler flow path
+does no agreement matching and performs no extra database work.
 
 The existing web **Review this alert/evidence** controls also provide validation:
 
@@ -398,14 +447,14 @@ sent to peers.
 
 The thesis's base trust and signed-score conversion remain unchanged. An
 additional report-accuracy adjustment is specific to the authenticated peer,
-evidence type and detector fingerprint. One validated target IP in one recorded
-network can contribute only once during the ledger's lifetime, across detector
+evidence type and detector fingerprint. One validated target IP can contribute
+only once per peer during the ledger's lifetime, across networks, detector
 versions and repeated reports; correcting its verdict changes that contribution
 without renewing its age. Each TP contributes +0.05 and each FP −0.10, with a
 30-day half-life and a total adjustment limited to [−0.30, +0.20]. Effective
 report trust remains within [−0.5, 0.85]. Positive credit cannot override a strong
 local malicious assessment of the reporter. The P2P table shows report accuracy
-separately from base trust and communication reliability; hover for each type
+separately from learned peer trust and communication reliability; hover for each type
 and detector version's adjustment.
 
 The once-per-host restriction limits positive rewards. A later rejected report

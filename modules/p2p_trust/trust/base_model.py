@@ -10,6 +10,7 @@ from slips_files.core.output import Output
 from modules.p2p_trust.trust.report_validation import (
     MATCH_WINDOW,
     LOCAL_REPUTATION_HALF_LIFE,
+    MAX_CREDIT,
     ReportValidator,
 )
 
@@ -33,6 +34,7 @@ def peer_trust_details(
     score: float | None,
     confidence: float | None,
     reliability_weight: float = RELIABILITY_WEIGHT,
+    agreement_credit: float = 0.0,
 ) -> dict[str, float | bool | None]:
     """Calculate thesis trust and expose the contribution of each input.
 
@@ -41,6 +43,7 @@ def peer_trust_details(
         score: Local maliciousness, from 0 to 1; None means unknown.
         confidence: Confidence in the local assessment; None means unknown.
         reliability_weight: Weight limiting communication's influence.
+        agreement_credit: Reward earned from distinct locally corroborated targets.
 
     Returns:
         Trust, its communication/local contributions and assessment inputs.
@@ -52,8 +55,14 @@ def peer_trust_details(
         else 0.0
     )
     communication = reliability * reliability_weight
+    base = (communication + local) / 2
+    learned = min(MAX_CREDIT, max(0.0, agreement_credit))
+    if assessed and score >= 0.8 and confidence >= 0.8:
+        learned = 0.0
     return {
-        "trust": (communication + local) / 2,
+        "trust": max(-0.5, min(0.85, base + learned)),
+        "base_trust": base,
+        "agreement": learned,
         "communication": communication / 2,
         "local_behavior": local / 2,
         "local_assessed": assessed,
@@ -159,6 +168,7 @@ class BaseModel:
         reviewed_families = set()
         contributions = []
         weights = {}
+        agreement_credits = {}
         for report in reports:
             if (
                 after_id is not None
@@ -179,15 +189,23 @@ class BaseModel:
             )
             if local_score is None or local_confidence is None:
                 local_score, local_confidence = 0.5, 0.0
+            if peer not in agreement_credits:
+                agreement_credits[peer] = (
+                    self.report_validation.peer_agreement(peer)["adjustment"]
+                )
+            agreement_credit = agreement_credits[peer]
             trust = self.compute_peer_trust(
-                reliability, local_score, local_confidence
+                reliability,
+                local_score,
+                local_confidence,
+                agreement_credit=agreement_credit,
             )
             detector = report["detector"]
             kind, version = detector["evidence_type"], detector["rule_version"]
             feedback = self.report_validation.report_adjustment(
                 peer, kind, version
             )
-            bonus = feedback["adjustment"]
+            bonus = min(MAX_CREDIT - agreement_credit, feedback["adjustment"])
             if local_score >= 0.8 and local_confidence >= 0.8:
                 bonus = min(0, bonus)
             trust = max(-0.5, min(0.85, trust + bonus))
@@ -272,7 +290,11 @@ class BaseModel:
         )
 
     def compute_peer_trust(
-        self, reliability: float, score: float, confidence: float
+        self,
+        reliability: float,
+        score: float,
+        confidence: float,
+        agreement_credit: float = 0.0,
     ) -> float:
         """Compute base peer trust using thesis equation 3.1.
 
@@ -280,12 +302,17 @@ class BaseModel:
             reliability: Communication reliability measured by Pigeon.
             score: Local maliciousness of the reporter's IP, from 0 to 1.
             confidence: Confidence in that local assessment, from 0 to 1.
+            agreement_credit: Peer-wide reward for distinct corroborated targets.
 
         Returns:
-            Base trust before detector-specific report-accuracy adjustments.
+            Learned peer trust before detector-specific review adjustments.
         """
         return peer_trust_details(
-            reliability, score, confidence, self.reliability_weight
+            reliability,
+            score,
+            confidence,
+            self.reliability_weight,
+            agreement_credit,
         )["trust"]
 
     def normalize_peer_reputations(self, peers: list) -> (float, float, list):

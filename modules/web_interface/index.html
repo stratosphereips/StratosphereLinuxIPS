@@ -229,7 +229,7 @@
           <div id="p2p-calculated-trust-legend" class="p2p-trust-legend"></div>
           <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-calculated-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130" role="img" aria-label="Calculated peer trust history"></svg></div>
           <p class="p2p-chart-note">Trust is sampled every minute while connected. Its history starts when sampling is enabled.</p>
-          <p class="p2p-chart-note">Base trust = (0.7 × reliability + (1 − 2 × local maliciousness) × local confidence) / 2. Without a local assessment, communication alone contributes at most 0.35. Old local assessments gradually lose confidence using the configured half-life. Staying online improves reliability; it does not establish that reports are correct. Validated reports adjust trust per evidence type; see Report accuracy. Hover over a peer’s trust for its inputs. Offline peers stop at last seen.</p>
+          <p class="p2p-chart-note">Trust = (0.7 × reliability + (1 − 2 × local maliciousness) × local confidence) / 2 + agreement credit, capped at 0.85. Communication alone contributes at most 0.35. Old local assessments lose confidence over time. Matching local detections and at least two peer IDs earn a small reward once per peer and target IP. “Agreed” counts these targets; TP/FP counts separate validations. Hover over trust for its inputs. Offline peers stop at last seen.</p>
         </article>
         </div>
         <div class="p2p-two-column p2p-message-workspace">

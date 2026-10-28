@@ -235,7 +235,10 @@ class Trust(IModule):
     def _configure(self):
         self.trust_db = self.db.trust_db
         self.report_validation = ReportValidator(
-            Path(self.db.get_p2p_trust_dir()) / "report_validation.sqlite"
+            Path(self.db.get_p2p_trust_dir()) / "report_validation.sqlite",
+            ConfigParser().read_configuration(
+                "local_p2p", "report_agreement", {}
+            ),
         )
         self.trust_db.execute("DELETE FROM opinion_cache")
         self.reputation_model = reputation_model.BaseModel(
@@ -1470,16 +1473,21 @@ class Trust(IModule):
             if reliability is None:
                 continue
             score, confidence = self.trust_db.get_reporter_reputation(ip)
+            agreement_credit = 0.0
             if isinstance(validator, ReportValidator):
                 score, confidence, _ = validator.local_report(
                     f"{network}|{ip}",
                     max_age=None,
                     decay_half_life=self.local_reputation_half_life,
                 )
+                agreement_credit = validator.peer_agreement(peer)["adjustment"]
             score = 0.5 if score is None else score
             confidence = 0.0 if confidence is None else confidence
             trust = self.reputation_model.compute_peer_trust(
-                reliability, score, confidence
+                reliability,
+                score,
+                confidence,
+                agreement_credit=agreement_credit,
             )
             samples.append((peer, ip, network, trust, reliability))
         self.trust_db.store_peer_trust_samples(

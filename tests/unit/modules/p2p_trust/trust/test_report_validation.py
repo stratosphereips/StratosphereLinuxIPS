@@ -213,7 +213,7 @@ def test_report_weight_uses_aged_peer_assessment(
 
 
 @pytest.mark.parametrize("peers", [1, 2, 10])
-def test_same_detector_agreement_never_earns_credit(
+def test_same_detector_agreement_does_not_certify_true_positives(
     tmp_path: Path, peers: int
 ) -> None:
     factory = ModuleFactory()
@@ -221,13 +221,14 @@ def test_same_detector_agreement_never_earns_credit(
     local = observation()
     validator.observe_local(local)
     for index in range(peers):
-        validator.observe_report(report(peer=f"peer-{index}"))
+        validator.observe_report(report(f"peer-record-{index}", peer=f"peer-{index}"))
     assert factory is not None
     with validator.connect() as connection:
         assert (
-            connection.execute("SELECT COUNT(*) FROM credits").fetchone()[0]
+            connection.execute("SELECT COUNT(*) FROM credits WHERE verdict='true_positive'").fetchone()[0]
             == 0
         )
+        assert connection.execute("SELECT COUNT(*) FROM credits WHERE verdict='corroborated'").fetchone()[0] == (peers if peers >= 2 else 0)
 
 
 @pytest.mark.parametrize(

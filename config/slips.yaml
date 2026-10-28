@@ -1759,6 +1759,18 @@ local_p2p:
    # Larger values keep penalties longer; smaller values allow faster recovery.
    # This returns trust toward the communication baseline, not a benign verdict.
    local_reputation_half_life_hours: 24
+   report_agreement:
+      # Increase peer trust when our own detection and other peers agree.
+      enabled: true
+      # Distinct peer IDs, INCLUDING the reporter. Our local detection is also required.
+      min_peers: 2
+      # Minimum confidence in both our own detection and each matching report (0-1).
+      min_confidence: 0.8
+      # All matching detections must occur within this many seconds of one another.
+      window_seconds: 3600
+      # Reward per peer ID and target IP, once across runs, networks and detector versions.
+      # The total agreement increase is capped at 0.20 and halves every 30 days.
+      trust_credit: 0.025
    # Authenticated connection records are refreshed by successful activity.
    connection_ttl: 30
    # Briefly hold candidate handshake flows while authentication completes.

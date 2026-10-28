@@ -7,6 +7,7 @@ import json
 import math
 import sqlite3
 import time
+from dataclasses import dataclass
 from contextlib import contextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -27,6 +28,54 @@ MAX_CREDIT = 0.20
 HALF_LIFE = 30 * 86400
 MATCH_WINDOW = 3600
 LOCAL_REPUTATION_HALF_LIFE = 86400
+
+
+@dataclass(frozen=True)
+class AgreementPolicy:
+    """Limits for learning from a local detection corroborated by peers."""
+
+    enabled: bool = True
+    min_peers: int = 2
+    min_confidence: float = 0.8
+    window_seconds: float = 3600
+    trust_credit: float = 0.025
+
+    @classmethod
+    def from_config(cls, value: object) -> "AgreementPolicy":
+        """Parse the optional local_p2p.report_agreement configuration.
+
+        Parameters:
+            value: YAML mapping; invalid settings keep their defaults.
+
+        Returns:
+            Validated policy with at least two peers and bounded rewards.
+        """
+        if not isinstance(value, dict):
+            return cls()
+        fields = {}
+        if isinstance(value.get("enabled"), bool):
+            fields["enabled"] = value["enabled"]
+        for name, lower, upper in (
+            ("min_peers", 2, 50),
+            ("min_confidence", 0, 1),
+            ("window_seconds", 1, 86400),
+            ("trust_credit", 0, 0.05),
+        ):
+            try:
+                number = float(value.get(name))
+                if isinstance(value.get(name), bool) or not math.isfinite(
+                    number
+                ):
+                    continue
+                if lower <= number <= upper and (
+                    name != "min_peers" or number.is_integer()
+                ):
+                    fields[name] = (
+                        int(number) if name == "min_peers" else number
+                    )
+            except (TypeError, ValueError, OverflowError):
+                continue
+        return cls(**fields)
 
 
 def local_reputation_half_life(hours: object) -> float:
@@ -433,13 +482,15 @@ def review_verdict(verdicts: list[str]) -> str:
 class ReportValidator:
     """Store local report validation and reversible analyst feedback in SQLite."""
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, agreement: object = None) -> None:
         """Initialize durable validation storage.
 
         Parameters:
             path: Database inside the configured permanent P2P directory.
+            agreement: Optional local_p2p.report_agreement settings.
         """
         self.path = Path(path)
+        self.agreement = AgreementPolicy.from_config(agreement)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         with self.connect() as connection:
             schemas = {
@@ -449,6 +500,7 @@ class ReportValidator:
                 "reports": "peer_id TEXT NOT NULL, target_key TEXT NOT NULL, evidence_type TEXT NOT NULL, rule_version TEXT NOT NULL, record_id TEXT NOT NULL, data TEXT NOT NULL, observed_at REAL NOT NULL, PRIMARY KEY(peer_id, target_key, evidence_type, rule_version)",
                 "credits": "peer_id TEXT NOT NULL, target_key TEXT NOT NULL, evidence_type TEXT NOT NULL, rule_version TEXT NOT NULL, verdict TEXT NOT NULL, reason TEXT NOT NULL, report_data TEXT NOT NULL, earned_at REAL NOT NULL, changed_at REAL NOT NULL, PRIMARY KEY(peer_id, target_key)",
                 "credit_sources": "peer_id TEXT NOT NULL, target_key TEXT NOT NULL, record_id TEXT NOT NULL, PRIMARY KEY(peer_id, target_key, record_id)",
+                "positive_targets": "peer_id TEXT NOT NULL, target_ip TEXT NOT NULL, target_key TEXT NOT NULL, evidence_type TEXT NOT NULL, rule_version TEXT NOT NULL, earned_at REAL NOT NULL, PRIMARY KEY(peer_id, target_ip)",
                 "rejections": "peer_id TEXT NOT NULL, target_key TEXT NOT NULL, evidence_type TEXT NOT NULL, rule_version TEXT NOT NULL, verdict TEXT NOT NULL, reason TEXT NOT NULL, report_data TEXT NOT NULL, earned_at REAL NOT NULL, changed_at REAL NOT NULL, PRIMARY KEY(peer_id, target_key, evidence_type, rule_version)",
                 "review_imports": "run_path TEXT PRIMARY KEY, updated_at REAL NOT NULL, source TEXT NOT NULL",
                 "feedback_state": "id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL",
@@ -681,7 +733,7 @@ class ReportValidator:
                 (event["source"], event["revision"]),
             )
             for target in targets:
-                self._reconcile(connection, target)
+                self._reconcile(connection, target, notify=False)
             connection.execute(
                 "UPDATE feedback_state SET revision=revision+1 WHERE id=1"
             )
@@ -705,6 +757,239 @@ class ReportValidator:
                     (identifier,),
                 )
             ]
+        )
+
+    @staticmethod
+    def _same_detection(left: dict[str, Any], right: dict[str, Any]) -> bool:
+        """Compare detection types and any available service context.
+
+        Parameters:
+            left: First local or reported detector metadata.
+            right: Second detector metadata.
+
+        Returns:
+            Whether type, protocol and known destination port are compatible.
+        """
+        return left.get("evidence_type") == right.get("evidence_type") and all(
+            left.get(key) is None
+            or right.get(key) is None
+            or str(left[key]).lower() == str(right[key]).lower()
+            for key in ("proto", "dst_port")
+        )
+
+    def _agreement_sources(
+        self, connection: sqlite3.Connection, report: dict[str, Any]
+    ) -> list[str]:
+        """Find first-hand local evidence and distinct matching peer reports.
+
+        Parameters:
+            connection: Current validation transaction.
+            report: Typed report from the authenticated claimant.
+
+        Returns:
+            Retainable proof IDs, or an empty list without sufficient agreement.
+        """
+        policy = self.agreement
+        detector = report["detector"]
+        if (
+            not policy.enabled
+            or detector.get("rule_version") == "legacy"
+            or report.get("score", 0) <= 0
+            or report.get("confidence", 0) < policy.min_confidence
+        ):
+            return []
+        start = report["observed_at"] - policy.window_seconds
+        end = report["observed_at"] + policy.window_seconds
+        local_records = [
+            json.loads(row[0])
+            for row in connection.execute(
+                "SELECT data FROM observations WHERE target_key=? AND observed_at BETWEEN ? AND ? "
+                "AND json_extract(data, '$.peer_id')='' ORDER BY observed_at DESC LIMIT 256",
+                (report["target_key"], start, end),
+            )
+        ]
+        if not local_records:
+            return []
+        witnesses = [
+            json.loads(row[0])
+            for row in connection.execute(
+                "SELECT data, observed_at FROM reports WHERE target_key=? AND evidence_type=? AND observed_at BETWEEN ? AND ? "
+                "UNION ALL SELECT data, observed_at FROM observations WHERE target_key=? "
+                "AND json_extract(data, '$.peer_id')<>'' "
+                "AND json_extract(data, '$.detector.evidence_type')=? AND observed_at BETWEEN ? AND ? "
+                "ORDER BY observed_at DESC LIMIT 512",
+                (report["target_key"], detector["evidence_type"], start, end)
+                * 2,
+            )
+        ]
+        for local in local_records:
+            if (
+                local.get("score", 0) <= 0
+                or local.get("confidence", 0) < policy.min_confidence
+                or not self._same_detection(
+                    local.get("provenance", {}), detector
+                )
+                or self._verdict(connection, local["id"])
+                in {"false_positive", "conflict"}
+            ):
+                continue
+            eligible = []
+            for witness in witnesses:
+                peer = witness.get("peer_id")
+                times = (
+                    local["observed_at"],
+                    report["observed_at"],
+                    witness["observed_at"],
+                )
+                if (
+                    not peer
+                    or peer == report["peer_id"]
+                    or witness.get("score", 0) <= 0
+                    or witness.get("confidence", 0) < policy.min_confidence
+                    or witness.get("detector", {}).get("rule_version")
+                    == "legacy"
+                    or not self._same_detection(
+                        witness.get("detector", {}), detector
+                    )
+                    or not self._same_detection(
+                        witness.get("detector", {}),
+                        local.get("provenance", {}),
+                    )
+                    or max(times) - min(times) > policy.window_seconds
+                    or self._verdict(connection, witness["id"])
+                    in {"false_positive", "conflict"}
+                ):
+                    continue
+                eligible.append(witness)
+            eligible.sort(key=lambda item: item["observed_at"])
+            earliest = min(local["observed_at"], report["observed_at"])
+            lower = (
+                max(local["observed_at"], report["observed_at"])
+                - policy.window_seconds
+            )
+            starts = sorted(
+                {
+                    lower,
+                    earliest,
+                    *(
+                        item["observed_at"]
+                        for item in eligible
+                        if lower <= item["observed_at"] <= earliest
+                    ),
+                }
+            )
+            left = right = 0
+            counts = {}
+            for boundary in starts:
+                while (
+                    right < len(eligible)
+                    and eligible[right]["observed_at"]
+                    <= boundary + policy.window_seconds
+                ):
+                    peer = eligible[right]["peer_id"]
+                    counts[peer] = counts.get(peer, 0) + 1
+                    right += 1
+                while (
+                    left < right and eligible[left]["observed_at"] < boundary
+                ):
+                    peer = eligible[left]["peer_id"]
+                    counts[peer] -= 1
+                    if not counts[peer]:
+                        del counts[peer]
+                    left += 1
+                if len(counts) >= policy.min_peers - 1:
+                    sources = [local["id"], report["id"]]
+                    seen = {report["peer_id"]}
+                    for witness in eligible[left:right]:
+                        if witness["peer_id"] not in seen:
+                            seen.add(witness["peer_id"])
+                            sources.append(witness["id"])
+                        if len(seen) >= policy.min_peers:
+                            return sources
+        return []
+
+    @staticmethod
+    def _target_ip(target_key: str) -> str:
+        """Canonicalize a network-scoped target for lifetime reward deduplication.
+
+        Parameters:
+            target_key: Network prefix followed by the reported IP address.
+
+        Returns:
+            Canonical IP, or the original suffix for older malformed records.
+        """
+        value = target_key.rsplit("|", 1)[-1]
+        try:
+            return str(ipaddress.ip_address(value))
+        except ValueError:
+            return value
+
+    @staticmethod
+    def _positive_owner(
+        connection: sqlite3.Connection, peer_id: str, target_ip: str
+    ) -> sqlite3.Row | None:
+        """Find the permanent first positive case, including pre-upgrade credits.
+
+        Parameters:
+            connection: Open validation transaction.
+            peer_id: Authenticated reporting identity.
+            target_ip: Target IP without its network prefix.
+
+        Returns:
+            Original target, detector and earning time, or None before any reward.
+        """
+        return (
+            connection.execute(
+                "SELECT target_key, evidence_type, rule_version, earned_at FROM positive_targets "
+                "WHERE peer_id=? AND target_ip=?",
+                (peer_id, target_ip),
+            ).fetchone()
+            or connection.execute(
+                "SELECT target_key, evidence_type, rule_version, earned_at FROM credits "
+                "WHERE peer_id=? AND substr(target_key, instr(target_key, '|')+1)=? "
+                "ORDER BY earned_at, target_key LIMIT 1",
+                (peer_id, target_ip),
+            ).fetchone()
+        )
+
+    def _reserve_positive_target(
+        self,
+        connection: sqlite3.Connection,
+        report: dict[str, Any],
+        earned_at: float,
+    ) -> bool:
+        """Reserve at most one positive reward per peer ID and target IP.
+
+        Parameters:
+            connection: Current write transaction.
+            report: Candidate positive report.
+            earned_at: Original earning time, never refreshed by repeated reports.
+
+        Returns:
+            Whether this network and detector own the target's lifetime reward.
+        """
+        target_ip = self._target_ip(report["target_key"])
+        detector = report["detector"]
+        owner = self._positive_owner(connection, report["peer_id"], target_ip)
+        values = (
+            tuple(owner)
+            if owner
+            else (
+                report["target_key"],
+                detector["evidence_type"],
+                detector["rule_version"],
+                earned_at,
+            )
+        )
+        connection.execute(
+            "INSERT OR IGNORE INTO positive_targets VALUES (?, ?, ?, ?, ?, ?)",
+            (report["peer_id"], target_ip, *values),
+        )
+        owner = self._positive_owner(connection, report["peer_id"], target_ip)
+        return tuple(owner)[:3] == (
+            report["target_key"],
+            detector["evidence_type"],
+            detector["rule_version"],
         )
 
     def _validation(
@@ -788,23 +1073,38 @@ class ReportValidator:
                 ),
                 sources,
             )
+        if automatic:
+            return (
+                "true_positive",
+                "Independent local verification method",
+                sources,
+            )
+        agreement = self._agreement_sources(connection, report)
         return (
-            ("true_positive", "Independent local verification method", sources)
-            if automatic
-            else ("", "Awaiting independent validation or analyst verdict", [])
+            (
+                "corroborated",
+                "Local detection and matching peer reports",
+                agreement,
+            )
+            if agreement
+            else ("", "Awaiting local agreement or analyst verdict", [])
         )
 
-    def _reconcile(self, connection: sqlite3.Connection, target: str) -> None:
+    def _reconcile(
+        self, connection: sqlite3.Connection, target: str, notify: bool = True
+    ) -> None:
         """Award at most one reversible credit per peer and target for its lifetime.
 
         Parameters:
             connection: Current write transaction.
             target: Network-scoped host identity.
+            notify: Invalidate cached opinions; reviews already do this themselves.
         """
         rewarded = set()
         rejected = set()
         proof: dict[str, set[str]] = {}
         candidates = []
+        changed = False
         for table in ("credits", "rejections"):
             for credit in connection.execute(
                 f"SELECT * FROM {table} WHERE target_key=?", (target,)
@@ -835,6 +1135,7 @@ class ReportValidator:
                         f"UPDATE {table} SET verdict=?, reason=?, changed_at=? WHERE {condition}",
                         parameters,
                     )
+                    changed = True
         candidates.extend(
             json.loads(row[0])
             for row in connection.execute(
@@ -853,7 +1154,19 @@ class ReportValidator:
                 detector["evidence_type"],
                 detector["rule_version"],
             )
-            if verdict == "true_positive" and peer_id not in rewarded:
+            now = time.time()
+            earned_at = (
+                min(now, report["observed_at"])
+                if verdict == "corroborated"
+                else now
+            )
+            if (
+                verdict in {"true_positive", "corroborated"}
+                and peer_id not in rewarded
+                and self._reserve_positive_target(
+                    connection, report, earned_at
+                )
+            ):
                 table = "credits"
                 rewarded.add(peer_id)
             elif verdict == "false_positive" and rejection_key not in rejected:
@@ -861,7 +1174,6 @@ class ReportValidator:
                 rejected.add(rejection_key)
             else:
                 continue
-            now = time.time()
             connection.execute(
                 f"INSERT OR IGNORE INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
@@ -871,12 +1183,26 @@ class ReportValidator:
                     detector["rule_version"],
                     verdict,
                     reason,
-                    json.dumps(report),
-                    now,
+                    json.dumps(
+                        {**report, "agreement_earned": True}
+                        if verdict == "corroborated"
+                        else report
+                    ),
+                    earned_at,
                     now,
                 ),
             )
+            changed = True
             proof.setdefault(peer_id, set()).update(sources)
+            if verdict == "corroborated" and sources:
+                placeholders = ",".join("?" for _ in sources)
+                for row in connection.execute(
+                    f"SELECT data FROM reports WHERE target_key=? AND record_id IN ({placeholders})",
+                    (target, *sources),
+                ).fetchall():
+                    self._put_observation(
+                        connection, json.loads(row[0]), compact=False
+                    )
         for peer_id, sources in proof.items():
             connection.execute(
                 "DELETE FROM credit_sources WHERE peer_id=? AND target_key=?",
@@ -885,6 +1211,10 @@ class ReportValidator:
             connection.executemany(
                 "INSERT OR IGNORE INTO credit_sources VALUES (?, ?, ?)",
                 [(peer_id, target, identifier) for identifier in sources],
+            )
+        if changed and notify:
+            connection.execute(
+                "UPDATE feedback_state SET revision=revision+1 WHERE id=1"
             )
 
     def reconcile_target(self, target: str) -> None:
@@ -921,6 +1251,13 @@ class ReportValidator:
                     rule_version,
                 ),
             ).fetchall()
+            owners = {
+                row["target_key"]: self._positive_owner(
+                    connection, peer_id, self._target_ip(row["target_key"])
+                )
+                for row in rows
+                if row["reward_allowed"]
+            }
         adjustment = 0.0
         positive = 0
         negative_cases: dict[str, float] = {}
@@ -931,6 +1268,13 @@ class ReportValidator:
                     row["earned_at"],
                 )
             elif row["verdict"] == "true_positive" and row["reward_allowed"]:
+                owner = owners.get(row["target_key"])
+                if owner is None or tuple(owner)[:3] != (
+                    row["target_key"],
+                    evidence_type,
+                    rule_version,
+                ):
+                    continue
                 positive += 1
                 adjustment += 0.05 * 2 ** (
                     -max(0, time.time() - row["earned_at"]) / HALF_LIFE
@@ -945,6 +1289,45 @@ class ReportValidator:
             "confirmed": positive,
             "false_positive": negative,
         }
+
+    def peer_agreement(self, peer_id: str) -> dict[str, float | int]:
+        """Read the bounded peer-wide reward for distinct corroborated targets.
+
+        Parameters:
+            peer_id: Authenticated reporting identity.
+
+        Returns:
+            Learned trust adjustment and lifetime cases still carrying credit.
+        """
+        if not self.agreement.enabled:
+            return {"adjustment": 0.0, "targets": 0}
+        total = 0.0
+        count = 0
+        now = time.time()
+        with self.connect() as connection:
+            for row in connection.execute(
+                "SELECT * FROM credits WHERE peer_id=? AND verdict IN ('corroborated', 'true_positive')",
+                (peer_id,),
+            ).fetchall():
+                report = json.loads(row["report_data"])
+                if row["verdict"] != "corroborated" and not report.get(
+                    "agreement_earned"
+                ):
+                    continue
+                owner = self._positive_owner(
+                    connection, peer_id, self._target_ip(row["target_key"])
+                )
+                if owner is None or tuple(owner)[:3] != (
+                    row["target_key"],
+                    row["evidence_type"],
+                    row["rule_version"],
+                ):
+                    continue
+                count += 1
+                total += self.agreement.trust_credit * 2 ** (
+                    -max(0, now - row["earned_at"]) / HALF_LIFE
+                )
+        return {"adjustment": min(MAX_CREDIT, total), "targets": count}
 
     def detector_weight(
         self, evidence_type: str, rule_version: str, target_prefix: str = ""

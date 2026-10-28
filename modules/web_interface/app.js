@@ -5137,14 +5137,18 @@ function renderP2PPeers() {
       if (!inputs) return value;
       const wrapper = document.createElement("div");
       wrapper.className = "p2p-trust-value";
-      wrapper.append(value, text("small", inputs.local_assessed ? "Local assessment" : "Communication only"));
+      const learned = numeric(inputs.agreement);
+      wrapper.append(value, text("small", learned > 0
+        ? `+${learned.toFixed(3)} from agreement`
+        : inputs.local_assessed ? "Local assessment" : "Communication only"));
       wrapper.title = `Base trust: ${numeric(inputs.communication).toFixed(5)} from communication`
         + ` ${numeric(inputs.local_behavior) < 0 ? "−" : "+"} ${Math.abs(numeric(inputs.local_behavior)).toFixed(5)} from local behavior`
+        + (learned > 0 ? ` + ${learned.toFixed(5)} from corroborated targets` : "")
         + ` = ${numeric(row.trust).toFixed(5)}. `
         + (inputs.local_assessed
           ? `Local maliciousness ${numeric(inputs.local_maliciousness).toFixed(3)}; confidence ${numeric(inputs.local_confidence).toFixed(3)}. `
           : `No local benign or malicious assessment. Communication alone contributes at most ${numeric(inputs.communication_limit).toFixed(3)}. `)
-        + "Validated reports adjust trust separately for each evidence type and detector version; see Report accuracy.";
+        + "Each peer and target IP earns agreement credit only once. Analyst reviews also adjust trust per evidence type; see Report accuracy.";
       return wrapper;
     },
     (row) => {
@@ -5163,9 +5167,10 @@ function renderP2PPeers() {
     (row) => compact(row.reports_received),
     (row) => {
       const items = row.report_accuracy || [];
-      if (!items.length) return text("span", "Not validated", "muted");
-      const value = text("span", `TP ${row.confirmed_reports || 0} · FP ${row.false_reports || 0}`);
-      value.title = items.map((item) => `${item.evidence_type} · ${item.rule_version.slice(0, 8)}: ${item.confirmed} TP, ${item.false_positive} FP, trust adjustment ${item.adjustment.toFixed(3)}`).join("\n");
+      if (!items.length && !row.agreed_reports) return text("span", "Not validated", "muted");
+      const value = text("span", `${row.agreed_reports ? `Agreed ${row.agreed_reports} · ` : ""}TP ${row.confirmed_reports || 0} · FP ${row.false_reports || 0}`);
+      value.title = `${row.agreed_reports || 0} distinct targets corroborated by local detections and other peer IDs.\n`
+        + items.map((item) => `${item.evidence_type} · ${item.rule_version.slice(0, 8)}: ${item.confirmed} TP, ${item.false_positive} FP, review adjustment ${item.adjustment.toFixed(3)}`).join("\n");
       return value;
     },
     (row) => formatP2PTime(row.last_seen),

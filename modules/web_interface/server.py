@@ -220,7 +220,7 @@ CONFIG_SECTION_DESCRIPTIONS = {
     "web_interface": "Run-scoped local web server settings.",
     "detection_history": "Active detection limits, monthly archives, log rotation, and maintenance budgets.",
     "global_p2p": "Global peer-to-peer threat-intelligence behaviour.",
-    "local_p2p": "Local peer-to-peer transport and identity settings.",
+    "local_p2p": "Local peer-to-peer communication, trust and report-agreement learning.",
 }
 SENSITIVE_CONFIG_TERMS = (
     "api_key",
@@ -382,6 +382,29 @@ class RunDataReader:
         name = path.rsplit(".", 1)[-1]
         label = cls._setting_label(name).lower()
         explicit = {
+            "local_p2p.report_agreement.enabled": (
+                "Learn a small trust increase when our own detection and reports "
+                "from distinct peers match. Disabling removes this contribution "
+                "without deleting its once-per-peer-and-target ledger."
+            ),
+            "local_p2p.report_agreement.min_peers": (
+                "Distinct authenticated peer IDs required, including the reporter. "
+                "Default 2, range 2–50. Our own first-hand detection is always "
+                "required too. Higher values need broader agreement."
+            ),
+            "local_p2p.report_agreement.min_confidence": (
+                "Minimum confidence in every matching local detection and peer "
+                "report, from 0 to 1. Default 0.8; higher avoids credit for weak detections."
+            ),
+            "local_p2p.report_agreement.window_seconds": (
+                "Maximum time span covering the local detection and matching peer "
+                "reports. Default 3600 seconds; shorter requires closer observations."
+            ),
+            "local_p2p.report_agreement.trust_credit": (
+                "Trust added once per peer ID and target IP. Default 0.025, maximum "
+                "0.05. Repetition, new versions and changing networks cannot "
+                "renew it. Total increase is capped at 0.20 and halves over 30 days."
+            ),
             "local_p2p.local_reputation_half_life_hours": (
                 "Hours needed to halve the confidence of an old local detection "
                 "when weighting a peer's reports. The first hour keeps full "
@@ -2211,6 +2234,18 @@ class RunDataReader:
             Path(directory) / "p2p_trust_runtime" / "report_validation.sqlite"
         )
 
+    def _report_agreement_settings(self) -> dict[str, Any]:
+        """Read this run's peer-agreement settings for reviews and trust display.
+
+        Returns:
+            Captured policy, or an empty mapping for the default policy.
+        """
+        if not hasattr(self, "output_dir"):
+            return {}
+        config, _ = self._run_config()
+        settings = (config.get("local_p2p") or {}).get("report_agreement")
+        return settings if isinstance(settings, dict) else {}
+
     def _review_feedback_records(
         self,
         connection: sqlite3.Connection,
@@ -2557,7 +2592,10 @@ class RunDataReader:
             writer_lock.close()
             if feedback_records:
                 try:
-                    validator = ReportValidator(self._report_validation_path())
+                    validator = ReportValidator(
+                        self._report_validation_path(),
+                        self._report_agreement_settings(),
+                    )
                     validator.drain_reviews(self.sqlite_path)
                     result["p2p_feedback"] = "applied"
                     if (
@@ -10325,7 +10363,9 @@ class RunDataReader:
         validator = None
         if validation_path.exists():
             try:
-                validator = ReportValidator(validation_path)
+                validator = ReportValidator(
+                    validation_path, self._report_agreement_settings()
+                )
             except (sqlite3.Error, OSError):
                 pass
         current_interface = str(analysis.get("interface") or "").split(",", 1)[
@@ -10365,6 +10405,12 @@ class RunDataReader:
                     reliability_value = None
             trust_value = None
             trust_details = None
+            agreement = {"adjustment": 0.0, "targets": 0}
+            if validator is not None:
+                try:
+                    agreement = validator.peer_agreement(peer_id)
+                except sqlite3.Error:
+                    pass
             if reliability_value is not None and ip:
                 score, confidence = reputations.get(ip, (0.5, 0.0))
                 if validator is not None and validation_network:
@@ -10384,7 +10430,10 @@ class RunDataReader:
                     except sqlite3.Error:
                         pass
                 trust_details = peer_trust_details(
-                    reliability_value, score, confidence
+                    reliability_value,
+                    score,
+                    confidence,
+                    agreement_credit=agreement["adjustment"],
                 )
                 trust_value = trust_details["trust"]
             accuracy = []
@@ -10400,6 +10449,7 @@ class RunDataReader:
                     "connected": peer_id in connected,
                     "trust": trust_value,
                     "trust_details": trust_details,
+                    "agreed_reports": agreement["targets"],
                     "report_accuracy": accuracy,
                     "confirmed_reports": sum(
                         item["confirmed"] for item in accuracy

@@ -855,7 +855,7 @@ Peer IDs appear shortened in tables, message details, and chart labels; hover
 shows the full ID and the copy controls retain it. The IP column prefers an
 authenticated TCP endpoint or the newest usable peer IP. Loopback updates
 from Pigeon do not replace a known remote address. The table calculates Trust
-from the latest stored reliability and local reputation; a dash means those
+from the latest stored reliability, local reputation and learned agreement credit; a dash means those
 inputs are unavailable. Reliability is Pigeon's connectivity measure, ranging
 from 0 to 1. Trust also includes the local assessment of the peer, so these
 columns need not have the same value. With no local assessment (confidence
@@ -883,7 +883,13 @@ available, or **Local assessment** otherwise. Hover to see each contribution,
 their sum and the local assessment's confidence. The equation is also shown
 below the charts. Communication alone is limited to 0.35, so a stable, reachable
 peer can correctly stay near 0.34. Higher uptime does not validate reports;
-the separate **Report accuracy** column shows any detector-specific adjustments.
+the separate **Report accuracy** column shows agreed targets and detector-specific
+TP/FP adjustments. A learned agreement increase is shown below trust, for example
+**+0.025 from agreement**, and included in newly saved plot points. It requires
+matching first-hand local evidence and at least two distinct reporting peer IDs.
+Each peer ID and target IP can earn it only once, even across restarts, networks
+or detector versions. It is capped at +0.20 and halves over 30 days; analyst FP
+reviews withdraw the contribution. See [peer agreement settings](P2P.md#learning-from-local-detections-and-peer-agreement).
 Old local detections lose influence after the first hour, using
 `local_p2p.local_reputation_half_life_hours` (24 hours by default). Their confidence
 halves each interval, so an old test cannot keep its full penalty indefinitely.

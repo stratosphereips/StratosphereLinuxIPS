@@ -2509,6 +2509,17 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
             assert trust_chart.locator(".chart-time-label").all_text_contents() == chart.locator(".chart-time-label").all_text_contents()
             assert len(chart.locator(".chart-time-label").all_text_contents()) == 3
             payload[key] = saved
+        payload["peers"][0]["trust"] = 0.375
+        payload["peers"][0]["agreed_reports"] = 1
+        payload["peers"][0]["trust_details"]["agreement"] = 0.025
+        payload["calculated_trust_history"].append({"peer_id": first_id, "timestamp": 500, "trust": 0.375})
+        page.evaluate("() => loadP2P()")
+        assert rows.nth(0).locator("td").nth(3).locator("code").inner_text() == "0.375"
+        assert "+0.025 from agreement" in rows.nth(0).inner_text()
+        assert "Agreed 1" in rows.nth(0).inner_text()
+        endpoint = trust_chart.locator(".peer-trust-line-0").evaluate("path => path.getPointAtLength(path.getTotalLength()).y")
+        assert endpoint == pytest.approx(100 - 0.375 / 0.85 * 88, abs=0.01)
+        assert trust_chart.locator(".chart-time-label").all_text_contents() == chart.locator(".chart-time-label").all_text_contents()
         assert errors == []
         browser.close()
 

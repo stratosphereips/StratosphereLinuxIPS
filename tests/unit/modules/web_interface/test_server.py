@@ -7363,6 +7363,8 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "trust": (0.75 * 0.7) / 2,
             "trust_details": {
                 "trust": (0.75 * 0.7) / 2,
+                "base_trust": (0.75 * 0.7) / 2,
+                "agreement": 0.0,
                 "communication": (0.75 * 0.7) / 2,
                 "local_behavior": 0.0,
                 "local_assessed": False,
@@ -7371,6 +7373,7 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
                 "communication_limit": 0.35,
             },
             "report_accuracy": [],
+            "agreed_reports": 0,
             "confirmed_reports": 0,
             "false_reports": 0,
             "reliability": 0.75,
@@ -7453,6 +7456,7 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     validator = Mock()
     validator.local_report.return_value = (0.8, 0.5, [])
     validator.peer_feedback.return_value = []
+    validator.peer_agreement.return_value = {"adjustment": 0.025, "targets": 1}
     if with_validation:
         trust_path.with_name("report_validation.sqlite").touch()
         metadata = output_dir / "metadata"
@@ -7469,7 +7473,7 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
         assert validator.local_report.call_args.kwargs == {
             "max_age": None, "decay_half_life": 172800,
         }
-        expected_trust = 0.13
+        expected_trust = 0.155
 
     assert peer["ip"] == "192.168.1.249"
     assert peer["trust"] == pytest.approx(expected_trust)
@@ -7479,6 +7483,8 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     assert peer["trust_details"]["local_assessed"] is True
     assert peer["trust_details"]["local_maliciousness"] == (0.8 if with_validation else 0)
     assert peer["trust_details"]["local_confidence"] == (0.5 if with_validation else 0.05)
+    assert peer["agreed_reports"] == (1 if with_validation else 0)
+    assert peer["trust_details"]["agreement"] == (0.025 if with_validation else 0)
 
 
 @pytest.mark.parametrize("interfaces", ["en0", "en0,en1"])

@@ -1128,8 +1128,9 @@ def test_evaluate_blame_report_single_malicious_peer_is_not_enough():
 
 
 @pytest.mark.parametrize("score,confidence,expected", [(None, 0, 0.35), (0, 1, 0.85), (1, 1, -0.15)])
+@pytest.mark.parametrize("agreement", [0.0, 0.1])
 def test_trust_samples_use_current_network_and_skip_offline_peers(
-    score: float | None, confidence: float, expected: float
+    score: float | None, confidence: float, expected: float, agreement: float
 ) -> None:
     """Persist actual model values once a minute without relying on web visits.
 
@@ -1137,6 +1138,7 @@ def test_trust_samples_use_current_network_and_skip_offline_peers(
         score: Current local maliciousness for the connected peer.
         confidence: Confidence in that assessment.
         expected: Calculated trust for reliability one.
+        agreement: Credit from distinct corroborated targets.
     """
     _module_factory = ModuleFactory()
     trust = create_trust()
@@ -1156,12 +1158,14 @@ def test_trust_samples_use_current_network_and_skip_offline_peers(
     from modules.p2p_trust.trust.base_model import BaseModel
     trust.report_validation = Mock(spec=ReportValidator)
     trust.report_validation.local_report.return_value = (score, confidence, [])
+    trust.report_validation.peer_agreement.return_value = {"adjustment": agreement, "targets": 4}
     trust.reputation_model = BaseModel.__new__(BaseModel)
     trust.reputation_model.reliability_weight = 0.7
     Trust._sample_peer_trust(trust, 100)
     Trust._sample_peer_trust(trust, 101)
     samples, timestamp, days = trust.trust_db.store_peer_trust_samples.call_args.args
-    assert samples == [("peer-a", "192.0.2.1", "network-a", pytest.approx(expected), 1.0)]
+    effective = min(0.85, expected + (agreement if score != 1 else 0))
+    assert samples == [("peer-a", "192.0.2.1", "network-a", pytest.approx(effective), 1.0)]
     assert timestamp == 100 and days == 90
     trust.trust_db.store_peer_trust_samples.assert_called_once()
     trust.report_validation.local_report.assert_called_once_with(
