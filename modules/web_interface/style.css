@@ -480,6 +480,7 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .json-details > summary { padding: .75rem 0 .15rem; color: var(--blue); font-size: .75rem; cursor: pointer; }
 .json-details > summary:hover { color: var(--accent); }
 .json-details pre { max-height: 420px; margin-bottom: 0; }
+.json-copy { margin-top: .5rem; font-size: .7rem; }
 .entity-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
 .entity-card { padding: .8rem .9rem; border: 1px solid var(--line); border-radius: 8px; background: #111d26; }
 .entity-card small { display: block; margin-bottom: .3rem; color: var(--muted); font-size: .67rem; text-transform: uppercase; }

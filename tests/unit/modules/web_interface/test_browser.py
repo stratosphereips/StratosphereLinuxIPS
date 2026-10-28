@@ -21,6 +21,114 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("clipboard_mode", ["api", "http", "api_denied", "blocked"])
+def test_json_copy_buttons(clipboard_mode: str) -> None:
+    """Copy the displayed JSON without closing viewers or eagerly rendering it.
+
+    Parameters:
+        clipboard_mode: Browser clipboard availability or permission outcome.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve actual assets with no connection to a running analysis.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated browser fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1600, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof rawBlock === 'function'")
+            page.evaluate("""mode => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                window.testCopied=null; window.copyCommands=0; window.serializationReads=0;
+                Object.defineProperty(navigator,'clipboard',{configurable:true,value:
+                  mode==='http' ? undefined : {writeText:async value => {
+                    if (mode!=='api') throw new Error('Clipboard access denied');
+                    window.testCopied=value;
+                  }}});
+                document.execCommand=command => {
+                  if (command!=='copy') throw new Error('Unexpected command');
+                  window.copyCommands++;
+                  if (mode==='blocked') return false;
+                  window.testCopied=document.activeElement.value; return true;
+                };
+                const root=document.createElement('section'); root.id='copy-json-fixture';
+                for (const label of ['evidence','alert','flow','DNS protocol flow','SMB protocol flow','packet timing protocol flow']) {
+                  const record={id:label,timestamp:1793160000};
+                  Object.defineProperty(record,'payload',{enumerable:true,get:() => {
+                    window.serializationReads++;
+                    return {text:'<img src=x> \\"quoted\\" café',items:[1,true,null]};
+                  }});
+                  root.append(rawBlock(record,label));
+                }
+                document.body.append(root);
+            }""", clipboard_mode)
+            assert page.evaluate("window.serializationReads") == 0
+            viewers = page.locator("#copy-json-fixture details")
+            assert viewers.locator("pre").count() == 0
+
+            def check_copy(container: Any) -> None:
+                """Compare clipboard output with this viewer's visible JSON.
+
+                Parameters:
+                    container: Expanded JSON viewer or message panel.
+                """
+                expected = container.locator("pre").last.inner_text()
+                json.loads(expected)
+                page.evaluate("window.testCopied=null")
+                button = container.get_by_role("button", name="Copy JSON", exact=True)
+                button.click()
+                if clipboard_mode == "blocked":
+                    page.wait_for_function("byId('toast').textContent.startsWith('Could not copy')")
+                    assert page.evaluate("window.testCopied") is None
+                else:
+                    page.wait_for_function("expected => window.testCopied === expected", arg=expected)
+                assert button.evaluate("el => document.activeElement === el")
+                assert page.locator("textarea[style*='position: fixed']").count() == 0
+
+            for index in range(viewers.count()):
+                viewer = viewers.nth(index)
+                viewer.locator("summary").click()
+                viewer.locator("pre").wait_for()
+                check_copy(viewer)
+                assert viewer.evaluate("el => el.open")
+            assert page.evaluate("window.serializationReads") == viewers.count()
+            page.evaluate("""() => {
+                state.activeTab='p2p';
+                document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='p2p'));
+                renderP2PMessageDetail({message_type:'request',direction:'sent',timestamp:100,
+                  peer:'fixture-peer',message:{nested:{value:'P2P payload'}}});
+            }""")
+            check_copy(page.locator("#p2p-message-detail"))
+            page.evaluate("""() => {
+                state.activeTab='hosts';
+                document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='hosts'));
+                byId('hosts-list-view').hidden=true; byId('host-detail-view').hidden=false;
+                byId('host-ti').textContent=JSON.stringify({source:'cached TI',items:[{score:0.8}]},null,2);
+                byId('host-ti-copy').hidden=false; byId('host-ti').closest('details').open=true;
+            }""")
+            check_copy(page.locator("#host-ti").locator(".."))
+            assert page.evaluate("window.copyCommands") == (0 if clipboard_mode == "api" else 8)
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize(
     ("workspace", "decision"),
     [("grouped", "false_positive"), ("individual", "true_positive"),

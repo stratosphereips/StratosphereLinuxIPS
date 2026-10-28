@@ -4928,7 +4928,7 @@ function renderP2PMessageDetail(record) {
     text("strong", `${record.message_type} · ${record.direction}`));
   const copy = text("button", "Copy JSON", "secondary");
   copy.type = "button";
-  copy.addEventListener("click", () => copyP2PText(JSON.stringify(p2pMessageContent(record), null, 2), "Message JSON"));
+  copy.addEventListener("click", () => copyText(panel.querySelector(".p2p-message-content").textContent, "Message JSON"));
   heading.append(title, copy);
   panel.append(heading);
   if (["report", "blame"].includes(record.message_type)) panel.append(peerDetectionPanel(record));
@@ -4964,24 +4964,34 @@ function openP2PMessage(record) {
   });
 }
 
-/** Copy a P2P identifier or payload to the clipboard.
+/** Copy displayed text using the clipboard API or the plain-HTTP fallback.
  * @param {string} value Text to copy.
  * @param {string} label User-facing content label.
  * @returns {Promise<void>} Completes after reporting the copy result.
  */
-async function copyP2PText(value, label) {
+async function copyText(value, label) {
   try {
-    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
-    else {
+    let copied = false;
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(value);
+        copied = true;
+      } catch (_) { /* Try the browser's copy command when API access is denied. */ }
+    }
+    if (!copied) {
+      const active = document.activeElement;
       const input = document.createElement("textarea");
       input.value = value;
       input.style.position = "fixed";
       input.style.opacity = "0";
       document.body.append(input);
-      input.select();
-      const copied = document.execCommand("copy");
-      input.remove();
-      if (!copied) throw new Error("Browser denied clipboard access");
+      try {
+        input.select();
+        if (!document.execCommand("copy")) throw new Error("Browser denied clipboard access");
+      } finally {
+        input.remove();
+        active?.focus?.({ preventScroll: true });
+      }
     }
     toast(`${label} copied`);
   } catch {
@@ -5077,7 +5087,7 @@ async function loadP2P() {
     code.title = value;
     const copy = text("button", "Copy", "p2p-copy-link");
     copy.type = "button";
-    copy.addEventListener("click", () => copyP2PText(value, label));
+    copy.addEventListener("click", () => copyText(value, label));
     line.append(text("span", label), code, copy);
     identity.append(line);
   });
@@ -5563,11 +5573,20 @@ function initDrawerResize() {
     setDrawerWidth(drawer.getBoundingClientRect().width));
 }
 
+/** Show lazily rendered JSON with a button to copy the displayed value.
+ * @param {object} record Record shown by this viewer.
+ * @param {string} label Human-readable record kind.
+ * @returns {HTMLDetailsElement} Expandable viewer and its copy control.
+ */
 function rawBlock(record, label) {
   const details = document.createElement("details");
   details.className = "json-details";
   const summary = text("summary", `View complete ${label} record (JSON)`);
-  details.append(summary);
+  const copy = text("button", "Copy JSON", "secondary json-copy");
+  copy.type = "button";
+  copy.addEventListener("click", () => copyText(details.querySelector("pre")?.textContent
+    ?? JSON.stringify(displayData(record), null, 2), `${label} JSON`));
+  details.append(summary, copy);
   details.addEventListener("toggle", () => {
     if (details.open && !details.querySelector("pre")) {
       details.append(text("pre", JSON.stringify(displayData(record), null, 2)));
@@ -5957,7 +5976,7 @@ function flowCard(group, position = 1, total = 1, title = null) {
   flowActions.append(text("code", `UID ${uid}`));
   const copy = text("button", "Copy", "evidence-detail-link");
   copy.type = "button";
-  copy.addEventListener("click", () => copyP2PText(uid, "Flow UID"));
+  copy.addEventListener("click", () => copyText(uid, "Flow UID"));
   flowActions.append(copy);
   heading.append(flowActions);
   card.append(heading);
@@ -6966,6 +6985,7 @@ function renderHostCards(host) {
   byId("host-ti").textContent = Object.keys(host.ti || {}).length
     ? JSON.stringify(displayData(host.ti), null, 2)
     : "No cached threat-intelligence data.";
+  byId("host-ti-copy").hidden = !Object.keys(host.ti || {}).length;
 }
 
 /** Start a host investigation without another host's narrowing filters. */
@@ -8173,6 +8193,8 @@ document.addEventListener("keydown", (event) => {
   }
 });
 byId("host-back").addEventListener("click", closeHost);
+byId("host-ti-copy").addEventListener("click", () =>
+  copyText(byId("host-ti").textContent, "Threat intelligence JSON"));
 document.querySelectorAll("[data-host-activity]").forEach((button) =>
   button.addEventListener("click", () => {
     state.hostActivityPreferred = true;

@@ -131,6 +131,11 @@ metadata and alert links; P2P records also retain reporting-peer metadata there.
 Source and destination hosts remain in the description and triggering flows
 without duplicate host cards in this section. **Copy ID** and **JSON** remain
 available beside the collapsed heading. Review controls stay visible below it.
+Each expanded JSON viewer has a **Copy JSON** button that copies its displayed
+JSON text. This includes evidence, alerts, connection and protocol records, P2P
+messages, and cached host threat intelligence. Copying keeps the current pane
+open. Browsers without clipboard API access use a copy-command fallback, which
+also supports remote pages opened over plain HTTP.
 Saving a review keeps the same alert or evidence detail pane open, including
 evidence opened from Hosts or Alerts. The saved decision appears in place while
 the lists refresh. If the new decision no longer matches a list's Review filter,
