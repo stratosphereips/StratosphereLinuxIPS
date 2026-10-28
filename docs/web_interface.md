@@ -635,7 +635,7 @@ selected range's boundaries. Updates invalidate affected summaries, and queries
 fall back to the time index while those summaries are rebuilt. Maintained
 record counters avoid scanning the entire database for each page.
 
-`slips.log`, `errors.log`, `alerts.log`, `alerts.json` and the web server log
+`slips.log`, `errors.log`, `alerts.log`, `alerts.json`, the HTTPS anomaly log and the web server log
 rotate at `detection_history.log_max_size_mb` (64 MiB by default). Their rotated
 files stay beside the active logs in `rotated/` for the archive retention age,
 with at most `log_backup_count` backups each (30 by default). The collector

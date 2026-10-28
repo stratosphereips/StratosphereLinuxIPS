@@ -52,8 +52,9 @@ def test_rotation_preserves_full_log_and_active_permissions(
 
 
 @pytest.mark.parametrize("enabled,expected", [(True, 2), (False, 0)])
+@pytest.mark.parametrize("log_path", ["alerts/alerts.json", "anomaly_detection_https/anomaly_detection_https.log"])
 def test_quiet_segments_expire_by_age_and_count(
-    tmp_path: Path, enabled: bool, expected: int
+    tmp_path: Path, enabled: bool, expected: int, log_path: str
 ) -> None:
     """Enforce retention even without another write to the active log.
 
@@ -61,13 +62,15 @@ def test_quiet_segments_expire_by_age_and_count(
         tmp_path: Isolated output directory.
         enabled: Whether retention is enabled.
         expected: Number of expired files.
+        log_path: Run-owned log whose quiet rotated segments must expire.
     """
     _factory = ModuleFactory()
-    directory = tmp_path / "alerts" / "rotated"
+    active = tmp_path / log_path
+    directory = active.parent / "rotated"
     directory.mkdir(parents=True)
     now = 2_000_000_000.0
     for index, days in enumerate((1, 2, 31)):
-        path = directory / f"alerts.json.{index}"
+        path = directory / f"{active.name}.{index}"
         path.write_text("record\n")
         os.utime(path, (now - days * 86400, now - days * 86400))
     policy = {

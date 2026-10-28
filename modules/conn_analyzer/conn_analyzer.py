@@ -535,13 +535,15 @@ class ConnAnalyzer(IAsyncModule):
 
         return bytes_sent
 
-    def detect_data_upload_in_twid(self, profileid, twid):
+    def detect_data_upload_in_twid(self, profileid: str, twid: str) -> None:
+        """Check upload totals using only flows from the closed analysis period.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Closed period whose uploaded bytes are counted.
         """
-        For each contacted ip in this twid,
-        check if the total bytes sent to this ip is >= data_exfiltration_threshold
-        """
-        all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid(
-            profileid
+        all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid_twid(
+            profileid, twid
         )
         if not all_flows:
             return

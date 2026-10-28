@@ -5,6 +5,7 @@ import math
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Optional, Set, List, Any
 
 from slips_files.common.abstracts.imodule import IModule
@@ -13,6 +14,7 @@ from slips_files.common.anomaly_detection import (
     robust_location_scale,
 )
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.log_rotation import RotatingTextLog
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -232,6 +234,9 @@ class AnomalyDetectionHTTPS(IModule):
         self.operational_log_path = self.get_module_specific_output_path(
             "anomaly_detection_https.log"
         )
+        self.operational_log = RotatingTextLog(
+            Path(self.operational_log_path), self.log_rotation_policy
+        )
         self.host_states: Dict[str, HostState] = {}
 
     def subscribe_to_channels(self):
@@ -267,6 +272,7 @@ class AnomalyDetectionHTTPS(IModule):
             conf.https_anomaly_empirical_threshold_quantile()
         )
         self.log_verbosity = conf.https_anomaly_log_verbosity()
+        self.log_rotation_policy = conf.detection_history_policy()
         # Operational logs always use emojis and colors.
         self.log_emojis = True
         self.log_colors = True
@@ -406,10 +412,7 @@ class AnomalyDetectionHTTPS(IModule):
         )
         if color:
             line = f"{color}{line}{reset}"
-        with open(
-            self.operational_log_path, "a", encoding="utf-8"
-        ) as log_file:
-            log_file.write(f"{line}\n")
+        self.operational_log.write(f"{line}\n")
 
     @staticmethod
     def get_hour_start(ts: float) -> int:

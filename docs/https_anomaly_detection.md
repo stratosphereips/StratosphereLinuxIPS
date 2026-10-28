@@ -293,6 +293,15 @@ Reference:
 
 ## Operational logs
 
+The operational log uses the shared `detection_history` rotation policy:
+`log_max_size_mb` limits each active segment (64 MiB by default),
+`log_backup_count` limits retained segments (30), and
+`archive_retention_days` expires old segments (30 days). Quiet rotated segments
+also expire during live history maintenance. Changing `log_verbosity` to `1`
+reduces per-connection logging without changing detection. Rotation starts on
+the next logged event, including when an older active file already exceeds
+the limit. Restart the module through Slips to load this behavior.
+
 The module logs key events such as:
 
 - flow arrivals,

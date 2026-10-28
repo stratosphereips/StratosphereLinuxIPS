@@ -756,6 +756,34 @@ def test_get_sent_bytes(all_flows, expected_bytes_sent):
     assert bytes_sent == expected_bytes_sent
 
 
+@pytest.mark.parametrize("current_bytes,expected_count", [(0, 0), (150 * 1024 * 1024, 1)])
+def test_upload_totals_do_not_reuse_other_periods(
+    current_bytes: int, expected_count: int,
+) -> None:
+    """Ignore earlier uploads when evaluating a newly closed analysis period.
+
+    Parameters:
+        current_bytes: Bytes uploaded during the current period.
+        expected_count: Findings supported by that period alone.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.data_exfiltration_threshold = 100
+    conn.is_ignored_ip_data_upload = Mock(return_value=False)
+    previous = {"old-uid": {"daddr": "8.8.8.8", "sbytes": 200 * 1024 * 1024, "starttime": 1000}}
+    current = {"new-uid": {"daddr": "8.8.8.8", "sbytes": current_bytes, "starttime": 2000}}
+    conn.db.get_all_flows_in_profileid.return_value = {**previous, **current}
+    conn.db.get_all_flows_in_profileid_twid.return_value = current
+    conn.set_evidence.data_exfiltration = Mock()
+    conn.detect_data_upload_in_twid(profileid, "timewindow2")
+    conn.db.get_all_flows_in_profileid_twid.assert_called_once_with(profileid, "timewindow2")
+    conn.db.get_all_flows_in_profileid.assert_not_called()
+    assert conn.set_evidence.data_exfiltration.call_count == expected_count
+    if expected_count:
+        args = conn.set_evidence.data_exfiltration.call_args.args
+        assert args[4] == ["new-uid"]
+        assert args[5] == 2000
+
+
 @pytest.mark.parametrize(
     "sbytes, ignored_ip, daddr, expected_result, expected_call_count",
     [  # Testcase1: Exceeds threshold

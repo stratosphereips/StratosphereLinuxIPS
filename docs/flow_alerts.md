@@ -226,6 +226,12 @@ The number of MBs can be modified by changing the value of ```data_exfiltration_
 
 Slips also detects data upload when an IP uploads >=100MBs to any IP in 1 connections.
 
+The aggregate check reads only flows belonging to the period being closed,
+using the indexed host-and-period lookup. Earlier periods are not added again
+to a new upload total or its triggering-flow list. This prevents repeated
+findings and growing evidence records during a continuous capture. The work
+runs in `conn_analyzer`, without adding processing to the capture or profiler.
+
 ## Tor Exit Nodes
 
 Slips generates informational evidence when it detects a tor exit node from the list https://check.torproject.org/torbulkexitlist.

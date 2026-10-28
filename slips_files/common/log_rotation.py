@@ -5,6 +5,7 @@ import io
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from modules.supported_module_names import Modules
 
 
 def rotate_log(
@@ -77,6 +78,10 @@ def expire_rotated_logs(
         (output_dir, ("slips.log", "errors.log")),
         (output_dir / "alerts", ("alerts.log", "alerts.json")),
         (output_dir / "web_interface", ("server.log",)),
+        (
+            output_dir / Modules.ANOMALY_DETECTION_HTTPS.value,
+            (f"{Modules.ANOMALY_DETECTION_HTTPS.value}.log",),
+        ),
     ):
         for filename in filenames:
             paths = sorted(

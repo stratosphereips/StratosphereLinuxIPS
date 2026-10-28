@@ -434,7 +434,7 @@ classification checkpoints before they become eligible for cleanup. Hourly
 summaries speed compact evidence queries once their backfill catches up;
 dirty or incomplete hours use exact raw queries.
 
-Slips, errors, alerts and web server logs rotate into a `rotated/` directory
+Slips, errors, alerts, HTTPS anomaly and web server logs rotate into a `rotated/` directory
 beside each active log at 64 MiB. Rotated logs use the same 30-day age limit,
 with at most 30 backups per log. Live web error events, minute metrics and
 transient host snapshots expire after `active_days`; one-second metrics roll
@@ -451,12 +451,24 @@ For an output database created before flow retention was added, stop Slips
 before compacting it:
 
 ```bash
-sqlite3 output/my-network/databases/flows.sqlite 'VACUUM;'
+sqlite3 output/my-network/databases/flows.sqlite 'PRAGMA auto_vacuum=INCREMENTAL; VACUUM;'
 ```
 
 SQLite needs temporary free disk space roughly equal to the
 database size during that operation. Normal live retention can reuse freed
-pages in the old database even without this one-time compaction.
+pages in the old database even without this one-time compaction. Setting
+`auto_vacuum` before that offline vacuum also enables incremental reclamation
+for future deletions; plain `VACUUM` alone only shrinks it once.
+
+These are separate budgets, not one limit on the output folder. The default
+active detection target is 2 GiB, archive storage is 4 GiB, and log backups
+can consume up to 30 × 64 MiB **per log**, plus active logs, Zeek logs and
+module databases. The 512 MiB raw-flow target does not cap detection records
+or their relationships in the shared SQLite file. Existing deletion space,
+protected recent evidence and a rotation backlog can increase physical usage
+above the targets. Lower the active/archive caps and log backup count to
+choose a smaller disk budget; keeping 30 days of archives does not require
+keeping 30 backup files for every log.
 
 The option preserves past detections in the output directory; it does not
 restore active Redis state after a machine reboot. For an archival Redis
