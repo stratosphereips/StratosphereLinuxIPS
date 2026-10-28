@@ -10125,6 +10125,100 @@ class RunDataReader:
         except sqlite3.Error:
             return []
 
+    def p2p_graph(self) -> Dict[str, Any]:
+        """Return bounded report-delivery data without reading trust history.
+
+        Returns:
+            Run-scoped message snapshots, peer addresses and local identity.
+        """
+        analysis = self.redis.hgetall("analysis")
+        run_start = self._event_timestamp(analysis.get("analysis_start"))
+        run_end = self._event_timestamp(analysis.get("analysis_end"))
+        activity = []
+        for raw in self.redis.lrange("p2p_message_history", 0, 999):
+            item = self._loads(raw, {})
+            if (
+                isinstance(item, dict)
+                and item.get("message_type") in {"report", "blame"}
+                and item.get("direction") in {"sent", "received"}
+                and (
+                    not run_start
+                    or self._event_timestamp(item.get("timestamp"))
+                    >= run_start
+                )
+                and (
+                    not run_end
+                    or self._event_timestamp(item.get("timestamp")) <= run_end
+                )
+            ):
+                activity.append(item)
+        peers = {}
+        for peer_id, raw in self.redis.hgetall("peer_info").items():
+            info = self._loads(raw, {})
+            if isinstance(info, dict):
+                address = info.get("ip") or info.get("ipaddress")
+                peers[str(peer_id)] = {
+                    "peer_id": str(peer_id),
+                    "ip": (
+                        str(address) if self._usable_peer_ip(address) else ""
+                    ),
+                }
+        reports = []
+        trust_path = self._report_validation_path().with_name("trustdb.db")
+        if trust_path.exists():
+            try:
+                with sqlite3.connect(
+                    f"file:{trust_path}?mode=ro", uri=True, timeout=1
+                ) as connection:
+                    connection.row_factory = sqlite3.Row
+                    for row in connection.execute(
+                        "SELECT reporter_peerid, reported_key, score, confidence, update_time "
+                        "FROM reports WHERE update_time BETWEEN ? AND ? ORDER BY update_time DESC LIMIT 200",
+                        (run_start or 0, run_end or time.time()),
+                    ):
+                        reports.append(
+                            {
+                                "peer_id": str(row["reporter_peerid"]),
+                                "target": str(row["reported_key"]),
+                                "score": float(row["score"]),
+                                "confidence": float(row["confidence"]),
+                                "timestamp": self._event_timestamp(
+                                    row["update_time"]
+                                ),
+                            }
+                        )
+                    identities = (
+                        set(peers)
+                        | {str(item.get("peer") or "") for item in activity}
+                        | {item["peer_id"] for item in reports}
+                    )
+                    for peer_id in sorted(identities - {"", "*"})[:128]:
+                        if peers.get(peer_id, {}).get("ip"):
+                            continue
+                        row = connection.execute(
+                            "SELECT ipaddress FROM peer_ips WHERE peerid=? "
+                            "ORDER BY update_time DESC LIMIT 1",
+                            (peer_id,),
+                        ).fetchone()
+                        if row and self._usable_peer_ip(row[0]):
+                            peers[peer_id] = {
+                                "peer_id": peer_id,
+                                "ip": str(row[0]),
+                            }
+            except sqlite3.Error:
+                pass
+        multiaddress = str(self.redis.get("multiAddress") or "")
+        match = re.search(r"/p2p/([^/\s]+)", multiaddress)
+        return {
+            "enabled": bool(self.redis.hget("PIDs", Modules.P2P_TRUST)),
+            "local_peer_id": match[1] if match else "",
+            "peers": list(peers.values()),
+            "activity": activity,
+            "reports": reports,
+            "message_limit": 1000,
+            "report_limit": 200,
+        }
+
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -10756,6 +10850,8 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.arp_poisoning(query)
         elif path == "/api/p2p":
             payload = reader.p2p(query)
+        elif path == "/api/p2p-graph":
+            payload = reader.p2p_graph()
         elif path == "/api/configuration":
             payload = reader.configuration()
         elif path == "/api/whitelists":

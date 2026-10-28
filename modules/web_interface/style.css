@@ -1444,3 +1444,43 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .request-spinner { width: .75rem; height: .75rem; border: 2px solid var(--line); border-top-color: currentColor; border-radius: 50%; animation: request-spin .8s linear infinite; }
 @keyframes request-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .request-spinner { animation: none; } }
+
+.p2p-graph-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 1rem; }
+.p2p-graph-header h2 { margin: 0 0 .3rem; }
+.p2p-graph-header p { margin: 0; color: var(--muted); }
+.p2p-graph-filters { display: flex; align-items: end; flex-wrap: wrap; gap: .65rem; padding: .8rem 1rem; margin-top: .8rem; }
+.p2p-graph-filters > input { flex: 1 1 260px; min-width: 180px; }
+.p2p-graph-filters label { display: flex; flex-direction: column; gap: .3rem; font-size: .75rem; color: var(--muted); min-width: 100px; }
+.p2p-graph-filters select { width: 100%; max-width: 230px; }
+.p2p-graph-filters input, .p2p-graph-filters select, .p2p-graph-filters button { height: 36px; font-family: inherit; font-size: .8rem; }
+.p2p-graph-status, .p2p-graph-scope { margin: .7rem .3rem; font-size: .8rem; }
+.p2p-graph-scope { max-width: 1100px; }
+.p2p-graph-workspace { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(330px, 1fr); gap: 1rem; align-items: start; }
+.p2p-graph-canvas-panel { min-width: 0; overflow: hidden; }
+.p2p-graph-canvas-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; padding: .7rem 1rem; border-bottom: 1px solid var(--line); color: var(--muted); font-size: .75rem; }
+.p2p-graph-canvas-head > div { display: flex; gap: .3rem; }
+.p2p-graph-canvas-head button { min-height: 28px; padding: .2rem .6rem; font: inherit; }
+.p2p-graph-scroll { height: min(70vh, 850px); min-height: 400px; overflow: auto; }
+#p2p-report-graph { display: block; min-width: 820px; height: auto; font-family: inherit; }
+.p2p-graph-column { fill: var(--muted); font-size: 15px; font-weight: 650; }
+.p2p-graph-route path { fill: none; stroke: var(--muted); stroke-width: 1.5; opacity: .55; }
+.p2p-graph-arrow { fill: var(--muted); }
+.p2p-graph-report rect, .p2p-graph-peer rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.p2p-graph-route, .p2p-graph-peer { cursor: pointer; outline: none; }
+.p2p-graph-route.selected path, .p2p-graph-route:hover path, .p2p-graph-route:focus path { stroke: var(--blue); opacity: 1; stroke-width: 2.5; }
+.p2p-graph-route.selected rect, .p2p-graph-route:hover rect, .p2p-graph-route:focus rect, .p2p-graph-peer:hover rect, .p2p-graph-peer:focus rect { stroke: var(--blue); stroke-width: 2.5; }
+.p2p-graph-peer.graph-local rect { fill: var(--surface-2); stroke: var(--accent); }
+.p2p-graph-target, .p2p-graph-peer-name { fill: var(--text); font-size: 16px; font-weight: 650; }
+.p2p-graph-evidence { fill: var(--blue); font-size: 14px; }
+.p2p-graph-meta { fill: var(--muted); font-size: 13px; }
+.p2p-graph-detail { padding: 1rem; min-width: 0; max-height: 85vh; overflow: auto; }
+.p2p-graph-detail h3 { margin: 0 0 .6rem; overflow-wrap: anywhere; }
+.p2p-graph-delivery { overflow-wrap: anywhere; }
+.p2p-graph-detail-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin: .8rem 0; }
+.p2p-graph-detail > .table-wrap { max-height: 230px; overflow: auto; margin: .8rem 0; }
+.p2p-graph-report-list td { font-size: .75rem; white-space: normal; overflow-wrap: anywhere; }
+.p2p-graph-report-select { background: none; border: 0; padding: .2rem 0; color: var(--blue); font: inherit; text-align: left; cursor: pointer; }
+.p2p-graph-report-list tr.selected { background: var(--surface-2); }
+.p2p-graph-detail .peer-detection-details { padding: 0; margin-top: 1rem; }
+.p2p-graph-detail .peer-role-row { grid-template-columns: minmax(0, 1fr) 26px minmax(0, 1fr); }
+@media (max-width: 1150px) { .p2p-graph-workspace { grid-template-columns: minmax(0, 1fr); } .p2p-graph-detail { max-height: none; } }

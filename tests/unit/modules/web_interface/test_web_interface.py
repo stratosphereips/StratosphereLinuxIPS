@@ -18,7 +18,7 @@ from modules.web_interface.history import HistoryCollector, connect_history
         ("index.html", 'id="evidence-view"'),
         ("index.html", 'value="grouped" selected'),
         ("index.html", 'id="host-evidence-table"'),
-        ("app.js", "function initializeRanges(run)"),
+        ("app.js", "function initializeRanges(run,"),
         ("app.js", "function configureTable(name, layout, headers, loader)"),
         ("app.js", "function bindView(name, loader)"),
         ("app.js", "function renderDnsDetails(dns)"),

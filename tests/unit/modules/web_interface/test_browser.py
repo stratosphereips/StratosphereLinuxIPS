@@ -3886,3 +3886,186 @@ def test_arp_investigation_explains_actual_decision(familiar: bool, theme: str) 
         assert "linked flow count is not an unfamiliar-host count" in detail.inner_text()
         assert "at least 5 requests" not in detail.inner_text()
         browser.close()
+
+
+@pytest.mark.parametrize("theme,width", [("light", 1600), ("dark", 1600), ("light", 900)])
+def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, width: int) -> None:
+    """Trace sender, reported host and recipient without inventing remote traffic.
+
+    Parameters:
+        theme: Browser color theme.
+        width: Wide or laptop layout.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    graph_requests: list[str] = []
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1050})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            now = page.evaluate("Date.now()/1000")
+            detection = {"evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer",
+                         "description": "Source connected to an unknown destination port", "src_ip": "192.0.2.99",
+                         "dst_ip": "192.0.2.3", "dst_port": 8123, "proto": "tcp"}
+
+            def report(peer: str, direction: str, target: str, seconds: int = 0, kind: str = "UNKNOWN_PORT") -> dict[str, Any]:
+                """Create one recorded message with explicit delivery direction.
+
+                Parameters:
+                    peer: Remote authenticated ID or broadcast marker.
+                    direction: Sent or received relative to this Slips.
+                    target: Reported host address.
+                    seconds: Age of the message in seconds.
+                    kind: Original evidence identifier.
+
+                Returns:
+                    Retained P2P message snapshot.
+                """
+                return {"peer": peer, "direction": direction, "target": target, "timestamp": now-seconds,
+                        "message_type": "report", "message": {"key": target, "evaluation": {
+                            "score": .8, "confidence": 1, "provenance": [{**detection, "evidence_type": kind}]}}}
+
+            payload = {"local_peer_id": "peer-local", "enabled": True,
+                       "peers": [{"peer_id": "peer-A", "ip": "192.0.2.2"}, {"peer_id": "peer-B", "ip": "192.0.2.3"}],
+                       "activity": [report("peer-A", "received", "192.0.2.99"),
+                                    report("peer-A", "received", "192.0.2.99", 10),
+                                    report("peer-B", "received", "192.0.2.99", 20),
+                                    report("peer-B", "sent", "192.0.2.99", 30),
+                                    report("*", "sent", "2001:db8::99", 40, "ARP_SCAN"),
+                                    report("peer-A", "received", "192.0.2.98", 172800)],
+                       "reports": [{"peer_id": "peer-A", "target": "192.0.2.97", "timestamp": now-50, "score": .8, "confidence": 1}]}
+
+            def respond(route: Any) -> None:
+                """Serve real assets, bounded graph telemetry and optional names.
+
+                Parameters:
+                    route: Intercepted request.
+                """
+                path = urlparse(route.request.url).path
+                if path in {"/", "/app.js", "/style.css"}:
+                    route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+                elif path == "/api/p2p-graph":
+                    graph_requests.append(path)
+                    route.fulfill(json=payload)
+                elif path == "/api/hosts/192.0.2.99":
+                    route.fulfill(json={"ip": "192.0.2.99", "all_ips": ["192.0.2.99"], "scope": "local",
+                                        "evidence_count": 1, "alert_count": 0, "alert_score": 0,
+                                        "alert_threshold": 5, "load": {"flows": 0}})
+                elif path == "/api/evidence":
+                    route.fulfill(json={"items": [{"id": "local-evidence", "profile_ip": "192.0.2.99",
+                        "evidence_type": "UNKNOWN_PORT", "module": "conn_analyzer", "description": "Local test finding",
+                        "timestamp": now, "confidence": 1, "threat_level": "low", "alert_ids": []}], "total": 1, "page_size": 1})
+                elif path in {"/api/hosts", "/api/alerts"}:
+                    route.fulfill(json={"items": [], "total": 0, "page_size": 0})
+                elif path == "/api/host-names":
+                    route.fulfill(json={"names": {}})
+                else:
+                    route.fulfill(status=503, json={"error": "Isolated graph fixture"})
+
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof loadP2PGraph === 'function'")
+            page.evaluate("""theme => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                state.networkOnly=false; state.computerName='Cherry'; setTheme(theme);
+                state.hostNames.set('192.0.2.2',{name:'rpi-one',checkedAt:Date.now()});
+            }""", theme)
+            page.get_by_role("button", name="P2P Graph", exact=True).click()
+            page.wait_for_function("state.p2pGraph.groups.length===5")
+            page.evaluate("clearTimeout(state.timer)")
+            assert page.locator("#p2p-graph").is_visible()
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 5
+            assert "rpi-one" in page.locator("#p2p-report-graph").text_content()
+            assert page.evaluate("state.p2pGraph.groups.every(g=>g.sender.id==='@local'||g.receiver.id==='@local')")
+            assert page.locator("#p2p-graph-detail").get_by_text("Select a report card", exact=False).count() == 1
+            selected_key = page.evaluate("state.p2pGraph.groups.find(g=>g.sender.id==='peer-A'&&g.target==='192.0.2.99').key")
+            page.locator("#p2p-report-graph [data-route]").evaluate_all("(nodes,key)=>nodes.find(n=>n.dataset.route===key).focus()", selected_key)
+            page.keyboard.press("Enter")
+            detail = page.locator("#p2p-graph-detail")
+            assert detail.locator("h3").first.inner_text() == "Reports about 192.0.2.99"
+            assert detail.locator(".p2p-graph-delivery").inner_text() == "192.0.2.2 → This Slips · Cherry"
+            assert detail.locator(".p2p-graph-report-list tbody tr").count() == 2
+            assert "Unknown Port" in detail.inner_text()
+            assert "192.0.2.99" in detail.locator(".peer-connection").inner_text()
+            detail.locator(".p2p-graph-report-select").nth(1).click()
+            detail.locator("details.json-details").evaluate("node=>node.open=true")
+            page.wait_for_function("document.querySelector('#p2p-graph-detail pre')")
+            original = json.loads(detail.locator("details pre").inner_text())
+            assert original["evaluation"]["provenance"][0]["evidence_type"] == "UNKNOWN_PORT"
+            page.evaluate("""() => {
+                window.keptGraphNode=byId('p2p-report-graph').lastChild;
+                window.keptDetailNode=byId('p2p-graph-detail').lastChild;
+                window.keptGraphMessage=state.p2pGraph.message;
+                return loadP2PGraph();
+            }""")
+            assert page.evaluate("window.keptGraphNode===byId('p2p-report-graph').lastChild")
+            assert page.evaluate("window.keptDetailNode===byId('p2p-graph-detail').lastChild && window.keptGraphMessage===state.p2pGraph.message")
+            assert detail.locator("details.json-details").evaluate("node=>node.open")
+            detail.get_by_role("button", name="Open local evidence", exact=True).click()
+            page.wait_for_function("state.activeTab==='hosts' && state.hostActivity==='evidence' && !state.requests.has('hostEvidence')")
+            page.locator("#host-evidence-table").wait_for(state="visible")
+            assert page.locator("#host-evidence-table").is_visible()
+            assert "Local test finding" in page.locator("#host-evidence-table").inner_text()
+            page.get_by_role("button", name="P2P Graph", exact=True).click()
+            page.wait_for_function("!state.requests.has('p2p-graph')")
+            detail.get_by_role("button", name="Open local alerts", exact=True).click()
+            page.wait_for_function("state.activeTab==='hosts' && state.hostActivity==='alerts' && !state.requests.has('hostAlerts')")
+            page.locator("#host-alerts-panel").wait_for(state="visible")
+            assert page.locator("#host-alerts-panel").is_visible()
+            page.get_by_role("button", name="P2P Graph", exact=True).click()
+            page.wait_for_function("!state.requests.has('p2p-graph')")
+            page.evaluate("clearTimeout(state.timer)")
+            before_filters = len(graph_requests)
+            page.locator("#p2p-graph-type").select_option("UNKNOWN_PORT")
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 3
+            page.locator("#p2p-graph-type").select_option("")
+            page.locator("#p2p-graph-peer").select_option("peer-B")
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 2
+            page.locator("#p2p-graph-peer").select_option("")
+            page.locator("#p2p-graph-direction").select_option("sent")
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 2
+            page.locator("#p2p-graph-search").fill("2001:db8::99")
+            page.locator("#p2p-graph-search").press("Enter")
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 1
+            page.locator("#p2p-report-graph .p2p-graph-route").click()
+            assert detail.locator(".p2p-graph-delivery").inner_text() == "This Slips · Cherry → All peers"
+            assert "Individual recipients are not recorded" in detail.inner_text()
+            page.get_by_role("button", name="Reset filters", exact=True).click()
+            page.locator("#p2p-graph-range").select_option("all")
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 6
+            page.locator("#p2p-graph-search").fill("nothingmatches")
+            page.locator("#p2p-graph-search").press("Enter")
+            assert page.locator("#p2p-graph-empty").is_visible()
+            assert not page.locator("#p2p-graph-scroll").is_visible()
+            page.get_by_role("button", name="Reset filters", exact=True).click()
+            page.get_by_role("button", name="Zoom graph in", exact=True).click()
+            assert page.locator("#p2p-report-graph").evaluate("node=>node.style.width") == "125%"
+            page.get_by_role("button", name="Fit width", exact=True).click()
+            assert page.locator("#p2p-report-graph").evaluate("node=>node.style.width") == "100%"
+            assert len(graph_requests) == before_filters
+            assert page.evaluate("document.documentElement.scrollWidth<=window.innerWidth")
+            output = Path("output/p2p-graph-check")
+            output.mkdir(parents=True, exist_ok=True)
+            page.locator("#p2p-report-graph .p2p-graph-route").first.click()
+            page.screenshot(path=str(output / f"graph-{theme}-{width}.png"))
+            counts = page.evaluate("""payload => {
+                const graph=state.p2pGraph;
+                graph.payload={...payload,reports:[],activity:Array.from({length:1500},(_,i)=>({
+                    ...payload.activity[0],peer:'peer-<img src=x onerror=alert(1)>',target:'2001:db8::'+i.toString(16),
+                }))};
+                renderP2PGraph();
+                const first=graph.groups.length;
+                byId('p2p-graph-limit').value='48';renderP2PGraph();
+                return [first,graph.groups.length,p2pGraphGroups(graph.payload).length,
+                    byId('p2p-report-graph').querySelectorAll('img,script').length,
+                    byId('p2p-report-graph').querySelectorAll('.p2p-graph-route path').length];
+            }""", payload)
+            assert counts == [12, 48, 1000, 0, 96]
+            page.evaluate("""() => {state.networkOnly=true; state.currentNetworkStart=Date.now()/1000+5; renderP2PGraph();}""")
+            assert page.locator("#p2p-graph-empty").is_visible()
+            assert not errors, errors
+        finally:
+            browser.close()

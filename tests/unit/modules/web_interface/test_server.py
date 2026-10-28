@@ -8510,3 +8510,75 @@ def test_offline_whitelist_lists_destination_port(tmp_path: Path) -> None:
     assert rules[0]["dst_port"] == "902"
     assert rules[0]["evidence_type"] == "UNKNOWN_PORT"
     assert "destination port is 902" in rules[0]["effect"]
+
+
+@pytest.mark.parametrize("stored", [False, True])
+@pytest.mark.parametrize("ended", [False, True])
+def test_p2p_graph_is_bounded_run_scoped_and_skips_trust_history(tmp_path: Path, stored: bool, ended: bool) -> None:
+    """Expose actual delivery records without trust calculations or invented edges.
+
+    Parameters:
+        tmp_path: Isolated output directory.
+        stored: Include a persistent report database with peer addresses.
+        ended: Bound a saved run before later reports in the shared trust store.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hgetall.side_effect = lambda key: {
+        "analysis": {"analysis_start": "2026-10-28T10:00:00+00:00", **({"analysis_end": "1793185300"} if ended else {})},
+        "peer_info": {"peer-A": json.dumps({"ip": "192.0.2.2"}), "malformed": "[]"},
+    }.get(key, {})
+    reader.redis.get.return_value = "/ip4/0.0.0.0/tcp/6668/p2p/local-id"
+    reader.redis.hget.return_value = "123"
+    now = 1793185200
+    valid = {"direction": "received", "message_type": "report", "peer": "peer-A",
+             "target": "192.0.2.99", "timestamp": now, "message": {
+                 "evaluation": {"score": .8, "confidence": 1, "provenance": [{"evidence_type": "UNKNOWN_PORT"}]}}}
+    sent = {**valid, "direction": "sent", "peer": "*"}
+    reader.redis.lrange.return_value = [json.dumps(item) for item in [
+        valid, sent, {**valid, "timestamp": 1}, {**valid, "message_type": "request"},
+        {**valid, "direction": "unknown"}, {**valid, "timestamp": now+1000}, [],
+    ]] + ["not-json"]
+    validation_path = tmp_path / "report_validation.sqlite"
+    reader._report_validation_path = Mock(return_value=validation_path)
+    reader._p2p_metric_history = Mock(side_effect=AssertionError("Graph must not read metric history"))
+    reader._p2p_calculated_trust_history = Mock(side_effect=AssertionError("Graph must not read trust samples"))
+    if stored:
+        with sqlite3.connect(tmp_path / "trustdb.db") as connection:
+            connection.executescript("""
+                CREATE TABLE reports(reporter_peerid TEXT, reported_key TEXT, score REAL, confidence REAL, update_time REAL);
+                CREATE INDEX reports_time_idx ON reports(update_time DESC);
+                CREATE TABLE peer_ips(peerid TEXT, ipaddress TEXT, update_time REAL);
+                INSERT INTO peer_ips VALUES ('peer-B', '192.0.2.3', 1793185200);
+            """)
+            connection.executemany("INSERT INTO reports VALUES (?, ?, .8, 1, ?)", [
+                ("peer-B", f"198.51.100.{index % 250 + 1}", now + index) for index in range(250)
+            ] + [("old-peer", "203.0.113.1", 1)])
+    result = reader.p2p_graph()
+    assert result["local_peer_id"] == "local-id"
+    assert result["enabled"] is True
+    assert result["activity"] == [valid, sent] + ([] if ended else [{**valid, "timestamp": now+1000}])
+    assert result["message_limit"] == 1000
+    assert len(result["reports"]) == ((101 if ended else 200) if stored else 0)
+    assert result["peers"][0] == {"peer_id": "peer-A", "ip": "192.0.2.2"}
+    if stored:
+        assert {"peer_id": "peer-B", "ip": "192.0.2.3"} in result["peers"]
+        assert all(row["peer_id"] != "old-peer" for row in result["reports"])
+    reader.redis.lrange.assert_called_once_with("p2p_message_history", 0, 999)
+    reader._p2p_metric_history.assert_not_called()
+    reader._p2p_calculated_trust_history.assert_not_called()
+
+
+def test_p2p_graph_api_uses_lightweight_reader() -> None:
+    """Route graph reads independently of reliability and trust history."""
+    _factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler.server = Mock()
+    handler.server.reader.response_metadata.return_value = {}
+    handler.server.reader.p2p_graph.return_value = {"activity": [], "peers": []}
+    result = handler._api_response("/api/p2p-graph", {})
+    assert result["activity"] == []
+    handler.server.reader.p2p_graph.assert_called_once_with()
+    handler.server.reader.p2p.assert_not_called()

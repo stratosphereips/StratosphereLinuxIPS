@@ -852,6 +852,48 @@ Poison, extension, and release transitions come from the run's durable
 evidence produced by the `arp` module. Every displayed column is sortable;
 search applies to isolation state, transition history, and ARP evidence.
 
+### P2P Graph
+
+The **P2P Graph** tab shows report delivery from left to right:
+**reporting peer → report about a host → recipient**. The middle cards are
+reports, not devices receiving an attack. A peer can appear on both sides
+when it sends and receives reports. Identities use authenticated peer IDs;
+known IPs and stored host names make them easier to recognize. Hover over
+a peer for its full ID.
+
+Select a card or arrow, with a click or Enter/Space, to inspect its messages.
+The right pane lists the report times, evidence types and confidence. Selecting
+a message shows the supplied detection descriptions, network source and
+destination, reporting peer, recipient and expandable JSON with Copy JSON.
+**Open local evidence** and **Open local alerts** open the reported host's
+existing investigation view. These buttons show findings stored by this Slips;
+they do not imply that a remote peer supplied its alert records or flow data.
+
+Search matches peer IDs, IPs, known names, reported hosts, evidence names and
+descriptions. Direction, peer, evidence type and time filters narrow the graph
+without extra database queries. The global **Current network only** filter
+also applies when a current-network boundary is available. Reset filters
+restores the 24-hour view. Use the route limit, zoom buttons, Fit width and
+the graph's scroll area for larger views. Selection survives refreshes, and
+unchanged data keeps the existing graph and detail nodes.
+
+This is a view of exchanges recorded by this Slips. Received messages confirm
+arrival here; sent messages identify their intended recipient. Broadcasts
+appear once as **All peers**, without inventing individual deliveries. Traffic
+between two remote peers is visible only if recorded here. Older stored
+reports whose original packet was discarded say **Evidence type unavailable**.
+The graph does not reconstruct missing evidence or alert content.
+
+The graph reads the latest 1,000 retained telemetry messages and up to 200
+recent stored reports inside this run's start/end boundaries. These are
+retained samples, not a complete lifetime audit. The default shows the 12
+most recently active matching routes; choose 24 or 48 to see more. At most
+48 routes and 96 arrows are drawn. The layout has no physics simulation or
+animation and reuses unchanged output. Its lightweight endpoint does not
+load trust/reliability history, calculate trust or scan evidence databases.
+Host names refresh in bounded batches, and local host details are fetched
+only when opened. Capture, profiling and the P2P protocol are unchanged.
+
 ### P2P
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent **Peer reliability history** chart plots the same metric as the table's **Reliability** column, with three decimal places on its numeric axis and hover values. It keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges. Full history starts at the peer's first recorded detection and samples the whole reliability timeline, keeping each peer's first and latest measured reliability; no reliability value is invented before the first measurement or for a missing measurement. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.

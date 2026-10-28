@@ -19,6 +19,7 @@ const state = {
   whitelists: null,
   arpPoisoning: null,
   p2p: null,
+  p2pGraph: { payload: null, groups: [], selected: null, message: null, signature: "", detailSignature: "", zoom: 1 },
   p2pSelectedPeer: null,
   p2pSelectedMessage: null,
   p2pVisibleMessages: 12,
@@ -427,6 +428,7 @@ function updateHostLabel(element) {
 
 /** Update all visible host labels after identity information changes. */
 function refreshHostLabels() {
+  if (state.activeTab === "p2p-graph") renderP2PGraph();
   document.querySelectorAll("[data-host-ip]").forEach(updateHostLabel);
   const displayedName = byId("host-displayed-name");
   if (displayedName && state.host?.ip) {
@@ -1095,6 +1097,9 @@ function applyRunIdentity(identity) {
     state.filteredBadgeCounts.evidence = null;
     state.filteredBadgeCounts.hosts = null;
     state.metadata = null;
+    state.p2pGraph = { payload: null, groups: [], selected: null, message: null, signature: "", detailSignature: "", zoom: 1 };
+    byId("p2p-report-graph").replaceChildren();
+    byId("p2p-graph-detail").replaceChildren(text("p", "Loading reports for the new run…", "muted"));
     byId("logs-history-source").value = "current";
     state.metrics = [];
     state.configuration = null;
@@ -5187,6 +5192,316 @@ function renderP2PPeers() {
   });
 }
 
+/** Resolve a graph participant without treating a reported host as a peer.
+ * @param {string} id Peer identity, @local, or broadcast marker.
+ * @param {object} payload Recorded graph data.
+ * @returns {object} Stable identity, address and readable label.
+ */
+function p2pGraphPeer(id, payload) {
+  if (id === "@local") return { id, ip: "", label: `This Slips · ${state.computerName || "local"}`, detail: shortPeerId(payload.local_peer_id || "Local instance") };
+  if (id === "*") return { id, ip: "", label: "All peers", detail: "Broadcast · recipients not recorded" };
+  const peer = (payload.peers || []).find((item) => item.peer_id === id);
+  const ip = peerAddress(peer?.ip) || peerAddress(id);
+  const name = state.hostNames.get(ip)?.name;
+  return { id, ip, label: ip || shortPeerId(id || "Unknown peer"), detail: name || shortPeerId(id || "Identity not recorded") };
+}
+
+/** Group real report deliveries by sender, reported target and recipient.
+ * @param {object} payload Bounded telemetry and older stored reports.
+ * @returns {object[]} Filtered routes with their original report records.
+ */
+function p2pGraphGroups(payload) {
+  const bounded = { ...payload, activity: (payload.activity || []).slice(0, 1000), reports: (payload.reports || []).slice(0, 200) };
+  const rows = p2pMessageRows(bounded).filter((row) => ["report", "blame"].includes(row.message_type)
+    && ["sent", "received"].includes(row.direction));
+  const range = byId("p2p-graph-range").value;
+  const seconds = ({ "1h": 3600, "24h": 86400, "7d": 604800 })[range];
+  const cutoff = Math.max(seconds ? Date.now() / 1000 - seconds : 0,
+    state.networkOnly && state.currentNetworkStart ? Number(state.currentNetworkStart) : 0);
+  const search = byId("p2p-graph-search").value.trim().toLowerCase();
+  const direction = byId("p2p-graph-direction").value;
+  const peer = byId("p2p-graph-peer").value;
+  const type = byId("p2p-graph-type").value;
+  const groups = new Map();
+  rows.sort((left, right) => numeric(right.timestamp) - numeric(left.timestamp));
+  rows.forEach((record) => {
+    if (numeric(record.timestamp) < cutoff || (direction !== "all" && record.direction !== direction)) return;
+    const sender = record.direction === "sent" ? "@local" : record.peer || "@unknown";
+    const receiver = record.direction === "received" ? "@local" : record.peer || "@unknown";
+    if (peer && peer !== sender && peer !== receiver) return;
+    const detections = peerDetections(record);
+    if (type && !detections.some((item) => item.evidence_type === type)) return;
+    const from = p2pGraphPeer(sender, payload), to = p2pGraphPeer(receiver, payload);
+    const target = record.target || "Host not supplied";
+    const targetName = state.hostNames.get(target)?.name || "";
+    const haystack = [from.id, from.ip, from.label, from.detail, to.id, to.ip, to.label, to.detail,
+      target, targetName, evidenceTypeLabel(record), ...detections.map((item) => item.description)].join(" ").toLowerCase();
+    if (search && !haystack.includes(search) && !haystack.replaceAll(" ", "_").includes(search)) return;
+    const key = JSON.stringify([sender, target, receiver]);
+    if (!groups.has(key)) groups.set(key, { key, sender: from, receiver: to, target, records: [], types: new Set(), latest: numeric(record.timestamp) });
+    const group = groups.get(key);
+    group.records.push(record);
+    detections.forEach((item) => group.types.add(item.evidence_type));
+  });
+  return [...groups.values()];
+}
+
+/** Create one SVG element using text nodes for untrusted report values.
+ * @param {string} tag SVG element name.
+ * @param {object} attributes Fixed layout or accessibility attributes.
+ * @param {string} content Optional visible text.
+ * @returns {SVGElement} Detached safe SVG element.
+ */
+function p2pGraphSvg(tag, attributes = {}, content = "") {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
+  if (content) node.textContent = content;
+  return node;
+}
+
+/** Make SVG selection accessible by keyboard as well as pointer.
+ * @param {SVGElement} node Route or peer node.
+ * @param {string} label Accessible selection label.
+ * @param {Function} action Selection callback.
+ */
+function p2pGraphAction(node, label, action) {
+  node.setAttribute("tabindex", "0");
+  node.setAttribute("role", "button");
+  node.setAttribute("aria-label", label);
+  node.addEventListener("click", action);
+  node.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" || event.key === " ") { event.preventDefault(); action(); }
+  });
+}
+
+/** Select a route while retaining its report selection across refreshes.
+ * @param {string} key Stable sender/target/receiver group key.
+ */
+function selectP2PGraphRoute(key) {
+  state.p2pGraph.selected = key;
+  const first = state.p2pGraph.groups.find((group) => group.key === key)?.records[0];
+  state.p2pGraph.message = first ? p2pMessageKey(first) : null;
+  state.p2pGraph.detailLimit = 20;
+  byId("p2p-report-graph").querySelectorAll("[data-route]").forEach((node) => {
+    const selected = node.dataset.route === key;
+    node.classList.toggle("selected", selected);
+    if (node.getAttribute("role") === "button") node.setAttribute("aria-pressed", String(selected));
+  });
+  renderP2PGraphDetail();
+}
+
+/** Draw a stable, bounded three-column graph without a physics simulation.
+ * @param {object[]} groups Visible report routes.
+ */
+function drawP2PGraph(groups) {
+  const svg = byId("p2p-report-graph");
+  const scroll = byId("p2p-graph-scroll");
+  const savedScroll = [scroll.scrollLeft, scroll.scrollTop];
+  const height = Math.max(520, groups.length * 106 + 130);
+  svg.setAttribute("viewBox", `0 0 1200 ${height}`);
+  svg.replaceChildren();
+  const definitions = p2pGraphSvg("defs");
+  const marker = p2pGraphSvg("marker", { id: "p2p-graph-arrow", markerWidth: 10, markerHeight: 10, refX: 8, refY: 4, orient: "auto", markerUnits: "userSpaceOnUse" });
+  marker.append(p2pGraphSvg("path", { d: "M0,0 L8,4 L0,8 Z", class: "p2p-graph-arrow" }));
+  definitions.append(marker); svg.append(definitions);
+  [[146, "Reporting peer"], [600, "Report about host"], [1054, "Recipient"]].forEach(([x, label]) =>
+    svg.append(p2pGraphSvg("text", { x, y: 32, class: "p2p-graph-column", "text-anchor": "middle" }, label)));
+  const positions = {};
+  ["sender", "receiver"].forEach((role) => {
+    const nodes = new Map();
+    groups.forEach((group, index) => {
+      if (!nodes.has(group[role].id)) nodes.set(group[role].id, { peer: group[role], slots: [] });
+      nodes.get(group[role].id).slots.push(110 + index * 106);
+    });
+    positions[role] = new Map();
+    [...nodes.values()].map((entry) => ({ ...entry, desired: entry.slots.reduce((a, b) => a + b, 0) / entry.slots.length }))
+      .sort((a, b) => a.desired - b.desired || a.peer.id.localeCompare(b.peer.id))
+      .forEach((entry, index, entries) => {
+        const previous = index ? positions[role].get(entries[index - 1].peer.id).y + 88 : 110;
+        const y = Math.max(previous, Math.min(entry.desired, height - 70 - (entries.length - index - 1) * 88));
+        positions[role].set(entry.peer.id, { ...entry.peer, y });
+      });
+  });
+  const short = (value, limit) => value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
+  groups.forEach((group, index) => {
+    const y = 110 + index * 106;
+    const route = p2pGraphSvg("g", { class: "p2p-graph-route", "data-route": group.key });
+    const fromY = positions.sender.get(group.sender.id).y, toY = positions.receiver.get(group.receiver.id).y;
+    route.append(p2pGraphSvg("path", { d: `M276,${fromY} C350,${fromY} 370,${y} 438,${y}`, "marker-end": "url(#p2p-graph-arrow)" }),
+      p2pGraphSvg("path", { d: `M790,${y} C850,${y} 850,${toY} 924,${toY}`, "marker-end": "url(#p2p-graph-arrow)" }));
+    p2pGraphAction(route, `Inspect ${group.records.length} reports about ${group.target} from ${group.sender.label} to ${group.receiver.label}`, () => selectP2PGraphRoute(group.key));
+    route.classList.toggle("selected", group.key === state.p2pGraph.selected);
+    route.setAttribute("aria-pressed", String(group.key === state.p2pGraph.selected));
+    const card = p2pGraphSvg("g", { class: "p2p-graph-report" });
+    const names = [...group.types].map(alertTypeName).join(" + ") || "Evidence type unavailable";
+    card.append(p2pGraphSvg("rect", { x: 442, y: y - 38, width: 348, height: 76, rx: 10 }),
+      p2pGraphSvg("title", {}, `${group.target}\n${names}\n${group.records.length} recorded messages`),
+      p2pGraphSvg("text", { x: 458, y: y - 16, class: "p2p-graph-target" }, short(`About ${group.target}`, 37)),
+      p2pGraphSvg("text", { x: 458, y: y + 6, class: "p2p-graph-evidence" }, short(names, 44)),
+      p2pGraphSvg("text", { x: 458, y: y + 26, class: "p2p-graph-meta" }, `${group.records.length} report${group.records.length === 1 ? "" : "s"} · ${formatP2PTime(group.latest)}`));
+    route.append(card); svg.append(route);
+  });
+  ["sender", "receiver"].forEach((role) => positions[role].forEach((peer) => {
+    const x = role === "sender" ? 16 : 924;
+    const node = p2pGraphSvg("g", { class: `p2p-graph-peer${peer.id === "@local" ? " graph-local" : ""}` });
+    node.append(p2pGraphSvg("rect", { x, y: peer.y - 34, width: 260, height: 68, rx: 10 }),
+      p2pGraphSvg("title", {}, `${peer.label}\n${peer.detail}\n${peer.id === "@local" ? state.p2pGraph.payload.local_peer_id || "This instance" : peer.id}`),
+      p2pGraphSvg("text", { x: x + 14, y: peer.y - 6, class: "p2p-graph-peer-name" }, short(peer.label, 28)),
+      p2pGraphSvg("text", { x: x + 14, y: peer.y + 17, class: "p2p-graph-meta" }, short(peer.detail, 33)));
+    p2pGraphAction(node, `Filter reports involving ${peer.label}`, () => {
+      byId("p2p-graph-peer").value = peer.id === "@local" ? "" : peer.id;
+      renderP2PGraph();
+    });
+    svg.append(node);
+  }));
+  svg.style.width = `${state.p2pGraph.zoom * 100}%`;
+  scroll.scrollLeft = savedScroll[0]; scroll.scrollTop = savedScroll[1];
+}
+
+/** Open actual local evidence or alerts for a reported host on demand.
+ * @param {string} target Reported IP address.
+ * @param {string} activity Host activity tab to select.
+ */
+async function openP2PGraphHost(target, activity) {
+  byId("host-range").value = "all";
+  byId("host-from").hidden = byId("host-to").hidden = true;
+  state.hostActivity = activity;
+  state.hostActivityPreferred = true;
+  await inspectHost(target);
+}
+
+/** Show the selected route's report records and their original detection detail. */
+function renderP2PGraphDetail() {
+  const graph = state.p2pGraph;
+  const group = graph.groups.find((item) => item.key === graph.selected);
+  const panel = byId("p2p-graph-detail");
+  if (!group) {
+    if (graph.detailSignature !== "empty") panel.replaceChildren(text("p", "Select a report card or arrow to inspect its evidence and reported network activity.", "muted"));
+    graph.detailSignature = "empty";
+    return;
+  }
+  const selected = group.records.find((record) => p2pMessageKey(record) === graph.message) || group.records[0];
+  const signature = JSON.stringify([group.key, group.records, p2pMessageKey(selected), graph.detailLimit, group.sender, group.receiver]);
+  if (signature === graph.detailSignature) return;
+  graph.detailSignature = signature;
+  const preserveRaw = graph.detailSelection === p2pMessageKey(selected)
+    && panel.querySelector("details.json-details")?.open;
+  graph.detailSelection = p2pMessageKey(selected);
+  const top = panel.scrollTop;
+  panel.replaceChildren();
+  panel.append(text("h3", `Reports about ${group.target}`));
+  const summary = text("p", "", "p2p-graph-delivery");
+  summary.append(text("strong", group.sender.label), document.createTextNode(" → "), text("strong", group.receiver.label));
+  panel.append(summary, text("p", `${group.records.length} recorded message${group.records.length === 1 ? "" : "s"} · ${group.types.size} evidence type${group.types.size === 1 ? "" : "s"}`, "muted"));
+  if (group.receiver.id === "*") panel.append(text("p", "Sent as a broadcast. Individual recipients are not recorded.", "muted"));
+  const ip = peerAddress(group.target);
+  if (ip) {
+    const actions = text("div", "", "p2p-graph-detail-actions");
+    [["Open local evidence", "evidence"], ["Open local alerts", "alerts"]].forEach(([label, activity]) => {
+      const button = text("button", label, "secondary"); button.type = "button";
+      button.addEventListener("click", () => openP2PGraphHost(ip, activity).catch(() => {}));
+      actions.append(button);
+    });
+    panel.append(actions);
+  }
+  const table = document.createElement("table"); table.className = "p2p-graph-report-list";
+  table.setAttribute("aria-label", "Reports on selected route");
+  const head = document.createElement("thead"), headings = document.createElement("tr");
+  ["Time", "Evidence", "Confidence"].forEach((label) => headings.append(text("th", label)));
+  head.append(headings); table.append(head);
+  const body = document.createElement("tbody");
+  group.records.slice(0, graph.detailLimit || 20).forEach((record) => {
+    const row = document.createElement("tr"); const key = p2pMessageKey(record);
+    row.classList.toggle("selected", key === p2pMessageKey(selected));
+    const time = document.createElement("td"), button = text("button", formatP2PTime(record.timestamp), "p2p-graph-report-select");
+    button.type = "button"; button.setAttribute("aria-label", `Inspect report ${formatP2PTime(record.timestamp)} ${evidenceTypeLabel(record)}`);
+    button.addEventListener("click", () => { graph.message = key; renderP2PGraphDetail(); });
+    time.append(button);
+    row.append(time, text("td", evidenceTypeLabel(record)), text("td", record.confidence == null ? "—" : `${Math.round(numeric(record.confidence) * 100)}%`));
+    body.append(row);
+  });
+  table.append(body); const wrap = text("div", "", "table-wrap"); wrap.append(table); panel.append(wrap);
+  if (group.records.length > (graph.detailLimit || 20)) {
+    const more = text("button", "Show more reports", "secondary"); more.type = "button";
+    more.addEventListener("click", () => { graph.detailLimit = (graph.detailLimit || 20) + 20; renderP2PGraphDetail(); });
+    panel.append(more);
+  }
+  const report = { ...selected, peer_ip: (graph.payload.peers || []).find((item) => item.peer_id === selected.peer)?.ip };
+  panel.append(text("p", `Selected report · maliciousness ${selected.score == null ? "unavailable" : numeric(selected.score).toFixed(3)} · confidence ${selected.confidence == null ? "unavailable" : `${Math.round(numeric(selected.confidence) * 100)}%`}`, "muted"),
+    peerDetectionPanel(report), rawBlock(p2pMessageContent(selected), "P2P message"));
+  if (preserveRaw) panel.querySelector("details.json-details").open = true;
+  panel.scrollTop = top;
+}
+
+/** Refresh the graph only when visible routes or selection data change. */
+function renderP2PGraph() {
+  const graph = state.p2pGraph;
+  if (!graph.payload) return;
+  const all = p2pGraphGroups(graph.payload);
+  const limit = Math.min(48, Math.max(1, Number(byId("p2p-graph-limit").value) || 12));
+  const visible = all.slice(0, limit).sort((a, b) => a.sender.id.localeCompare(b.sender.id)
+    || a.receiver.id.localeCompare(b.receiver.id) || a.target.localeCompare(b.target));
+  graph.groups = visible;
+  if (!visible.some((group) => group.key === graph.selected)) { graph.selected = null; graph.message = null; }
+  const reports = all.reduce((count, group) => count + group.records.length, 0);
+  byId("p2p-graph-status").textContent = `${visible.length} of ${all.length} matching routes · ${reports} recorded reports · latest ${graph.payload.message_limit || 1000} messages and up to ${graph.payload.report_limit || 200} stored reports from this run`;
+  byId("p2p-graph-empty").hidden = visible.length > 0;
+  byId("p2p-graph-scroll").hidden = !visible.length;
+  const signature = JSON.stringify([visible.map((group) => [group.key, group.records, group.sender, group.receiver]), state.computerName]);
+  if (signature !== graph.signature) { drawP2PGraph(visible); graph.signature = signature; }
+  renderP2PGraphDetail();
+}
+
+/** Fetch lightweight bounded graph data without requesting metric histories. */
+async function loadP2PGraph() {
+  const payload = await api("p2p-graph", "/api/p2p-graph");
+  if (!payload) return;
+  state.p2pGraph.payload = payload;
+  const replaceOptions = (id, options, first) => {
+    const select = byId(id), selected = select.value;
+    const signature = JSON.stringify(options);
+    if (select.dataset.options === signature) return;
+    select.replaceChildren(text("option", first)); select.firstChild.value = "";
+    options.forEach(([value, label]) => { const option = text("option", label); option.value = value; select.append(option); });
+    if (options.some(([value]) => value === selected)) select.value = selected;
+    select.dataset.options = signature;
+  };
+  const rows = p2pMessageRows(payload);
+  const identities = [...new Set(rows.map((record) => record.peer).filter(Boolean))].sort();
+  replaceOptions("p2p-graph-peer", identities.map((id) => {
+    const peer = p2pGraphPeer(id, payload); return [id, `${peer.label}${peer.detail ? ` · ${peer.detail}` : ""}`];
+  }), "All peers");
+  const types = [...new Set(rows.flatMap((record) => peerDetections(record).map((item) => item.evidence_type)))].sort();
+  replaceOptions("p2p-graph-type", types.map((type) => [type, alertTypeName(type)]), "All evidence types");
+  renderP2PGraph();
+  if (!state.p2pGraph.namesRequestedAt || Date.now() - state.p2pGraph.namesRequestedAt > 60000) {
+    state.p2pGraph.namesRequestedAt = Date.now();
+    const ips = [...new Set(state.p2pGraph.groups.flatMap((group) =>
+      [group.sender.ip, group.receiver.ip, peerAddress(group.target)]).filter(Boolean))].slice(0, 100);
+    ips.filter((ip) => !state.hostNames.has(ip) || Date.now() - state.hostNames.get(ip).checkedAt > 60000)
+      .forEach((ip) => state.pendingHostNames.add(ip));
+    if (state.pendingHostNames.size) loadHostNames();
+  }
+}
+
+/** Bind local graph filters, zoom controls and keyboard-friendly selection. */
+function bindP2PGraph() {
+  ["direction", "peer", "type", "range", "limit"].forEach((name) => byId(`p2p-graph-${name}`).addEventListener("change", renderP2PGraph));
+  let timer;
+  byId("p2p-graph-search").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(renderP2PGraph, 200); });
+  byId("p2p-graph-search").addEventListener("keydown", (event) => { if (event.key === "Enter") { clearTimeout(timer); renderP2PGraph(); } });
+  byId("p2p-graph-reset").addEventListener("click", () => {
+    byId("p2p-graph-search").value = ""; byId("p2p-graph-peer").value = ""; byId("p2p-graph-type").value = "";
+    byId("p2p-graph-direction").value = "all"; byId("p2p-graph-range").value = "24h"; renderP2PGraph();
+  });
+  [["zoom-in", 0.25], ["zoom-out", -0.25], ["fit", 0]].forEach(([name, amount]) => {
+    byId(`p2p-graph-${name}`).addEventListener("click", () => {
+      state.p2pGraph.zoom = amount ? Math.min(2, Math.max(0.75, state.p2pGraph.zoom + amount)) : 1;
+      byId("p2p-report-graph").style.width = `${state.p2pGraph.zoom * 100}%`;
+    });
+  });
+}
+
 async function loadP2P() {
   const range = byId("p2p-range").value;
   const payload = await api("p2p", `/api/p2p?range=${encodeURIComponent(range)}`);
@@ -8028,6 +8343,7 @@ function tabLoader(name) {
     firewall: loadFirewall,
     "arp-poisoning": loadArpPoisoning,
     p2p: loadP2P,
+    "p2p-graph": loadP2PGraph,
     logs: loadLogs,
     configuration: loadConfiguration,
     "threat-intelligence": loadThreatIntelligence,
@@ -8058,7 +8374,7 @@ function activeRangeIsLive() {
   if (state.archiveSource && ["alerts", "evidence", "hosts"].includes(state.activeTab)) return false;
   if (["configuration", "whitelists", "threat-intelligence"].includes(state.activeTab)) return false;
   if (state.activeTab === "metadata") return true;
-  if (["firewall", "arp-poisoning", "p2p", "logs"].includes(state.activeTab)) return true;
+  if (["firewall", "arp-poisoning", "p2p", "p2p-graph", "logs"].includes(state.activeTab)) return true;
   if (state.activeTab === "overview") return true;
   if (state.activeTab === "hosts" && state.host) {
     const page = state.hostActivity === "alerts" ? state.pages.hostAlerts
@@ -8291,6 +8607,7 @@ function switchTab(name) {
   document.body.classList.toggle("metadata-active", name === "metadata");
   document.body.classList.toggle("configuration-active", name === "configuration");
   document.body.classList.toggle("p2p-active", name === "p2p");
+  document.body.classList.toggle("p2p-graph-active", name === "p2p-graph");
   document.querySelectorAll(".tab").forEach((tab) =>
     tab.classList.toggle("active", tab.dataset.tab === name));
   document.querySelectorAll(".panel").forEach((panel) =>
@@ -8402,6 +8719,7 @@ byId("toggle-overview-details").addEventListener("click", () => {
 byId("load-module-evidence").addEventListener("click", () =>
   loadOverviewEvidenceCounts().catch(() => {}));
 byId("metrics-range").addEventListener("change", () => loadMetrics().catch(() => {}));
+bindP2PGraph();
 byId("p2p-range").addEventListener("change", () => loadP2P().catch(() => {}));
 byId("p2p-message-filter").addEventListener("change", () => {
   state.p2pVisibleMessages = 12;
