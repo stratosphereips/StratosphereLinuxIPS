@@ -57,6 +57,11 @@ continuous network connection began. Host traffic totals, flow pages, peers,
 protocols, and score plots use the same boundary. Selected time ranges intersect
 this connection period. The choice is saved in this browser. Turning it off
 restores the selected time range across the full run.
+With `--keep-history`, restarting on the same router keeps this boundary, so
+**Full run** still includes the earlier saved evidence, alerts and hosts. The web
+worker saves the boundary in `web_interface/history.sqlite` inside that output
+folder. A detected disconnection or a different router starts a new connection
+period. This bookkeeping runs in the web worker, outside capture and profiling.
 When the monitored interface disconnects, the scoped lists are empty until a
 network is connected. If the router MAC is unavailable, Slips uses the most
 recent network-settings change as the conservative boundary. The switch is

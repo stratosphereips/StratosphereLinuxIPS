@@ -5314,6 +5314,59 @@ def test_current_network_scope_stops_at_prior_connection(
     )
 
 
+@pytest.mark.parametrize("group", ["none", "host_type", "type"])
+def test_current_network_history_survives_same_router_restart(
+    tmp_path: Path,
+    group: str,
+) -> None:
+    """Retain earlier evidence, alerts and hosts when restarting on the same router.
+
+    Parameters:
+        tmp_path: Independent durable history.
+        group: Evidence grouping selected in the page.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    state = {
+        "connected": True,
+        "changed_at": 2_000_000_000 - 50,
+        "gateway_mac": "aa:bb:cc:dd:ee:01",
+        "history": [],
+    }
+    original_get = reader.redis.hget.side_effect
+    reader.redis.hget.side_effect = lambda key, field: (
+        json.dumps(state)
+        if key == "network_states"
+        else original_get(key, field)
+    )
+    with connect_history(reader.history_path) as connection:
+        connection.execute(
+            "INSERT INTO metadata VALUES ('current_network_scopes', ?)",
+            (
+                json.dumps(
+                    {
+                        "en0": {
+                            "connected": True,
+                            "gateway_mac": state["gateway_mac"],
+                            "changed_at": 2_000_000_000 - 600,
+                            "start": 2_000_000_000 - 600,
+                        }
+                    }
+                ),
+            ),
+        )
+    query = {"range": ["all"], "network": ["current"]}
+    with patch(
+        "modules.web_interface.server.time.time", return_value=2_000_000_000
+    ):
+        evidence = reader.evidence({**query, "group": [group]})
+        assert evidence.get("matching_total", evidence.get("total")) == 1
+        assert reader.alerts(query)["total"] == 1
+        hosts = reader.hosts(query)
+    assert "192.168.1.22" in {row["ip"] for row in hosts["items"]}
+    assert "192.168.12.1" not in {row["ip"] for row in hosts["items"]}
+
+
 def test_current_network_scope_filters_durable_detection_pages(
     tmp_path: Path,
 ) -> None:

@@ -74,8 +74,10 @@ from slips_files.core.helpers.whitelist.whitelist_parser import (
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
+    NETWORK_SCOPES_KEY,
     connect_history,
     initialize_history,
+    network_connection_scope,
 )
 from slips_files.core.database.redis_db.redis_auth import (
     ensure_web_password_matches_redis_password,
@@ -2666,7 +2668,7 @@ class RunDataReader:
         }
 
     def _current_network_start(self) -> Optional[float]:
-        """Find the start of the current continuous monitored connection.
+        """Find the current connection boundary, including retained restarts.
 
         Returns:
             Earliest retained timestamp on the current network, if connected.
@@ -2684,32 +2686,23 @@ class RunDataReader:
         state = self._loads(self.redis.hget("network_states", interface), {})
         if not isinstance(state, dict) or not state.get("connected"):
             return None
-        try:
-            start = float(state["changed_at"])
-        except (KeyError, TypeError, ValueError):
-            return None
-        if not math.isfinite(start):
-            return None
-        gateway_mac = str(state.get("gateway_mac") or "").lower()
-        if gateway_mac:
-            for previous in reversed(state.get("history", [])):
-                if not isinstance(previous, dict) or not previous.get(
-                    "connected"
-                ):
-                    break
-                if (
-                    str(previous.get("gateway_mac") or "").lower()
-                    != gateway_mac
-                ):
-                    break
-                try:
-                    previous_start = float(previous["changed_at"])
-                except (KeyError, TypeError, ValueError):
-                    break
-                if not math.isfinite(previous_start):
-                    break
-                start = previous_start
-        return start
+        saved = {}
+        history_path = getattr(self, "history_path", None)
+        if history_path and history_path.exists():
+            try:
+                with connect_history(
+                    history_path, read_only=True
+                ) as connection:
+                    row = connection.execute(
+                        "SELECT value FROM metadata WHERE key=?",
+                        (NETWORK_SCOPES_KEY,),
+                    ).fetchone()
+                scopes = self._loads(row["value"], {}) if row else {}
+                if isinstance(scopes, dict):
+                    saved = scopes.get(interface, {})
+            except (OSError, sqlite3.Error):
+                pass
+        return network_connection_scope(state, saved).get("start")
 
     def _scoped_start(
         self, query: Dict[str, List[str]], start: Optional[float]

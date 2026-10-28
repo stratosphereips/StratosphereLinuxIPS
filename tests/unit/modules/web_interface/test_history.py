@@ -9,9 +9,141 @@ from modules.web_interface.history import (
     HistoryCollector,
     connect_history,
     initialize_history,
+    network_connection_scope,
+    NETWORK_SCOPES_KEY,
 )
 from tests.module_factory import ModuleFactory
 from slips_files.common.sqlite_flock import SQLiteFlock
+
+
+@pytest.mark.parametrize(
+    "states,expected",
+    [
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "aa", "changed_at": 200, "connected": True},
+            ],
+            100,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "bb", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "aa", "changed_at": 150, "connected": False},
+                {"gateway_mac": "aa", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {
+                    "gateway_mac": "aa",
+                    "changed_at": 200,
+                    "connected": True,
+                    "history": [
+                        {
+                            "gateway_mac": "bb",
+                            "changed_at": 150,
+                            "connected": True,
+                        }
+                    ],
+                },
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "", "changed_at": 100, "connected": True},
+                {"gateway_mac": "", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+    ],
+)
+def test_network_scope_is_durable_and_does_not_merge_other_connections(
+    tmp_path: Path,
+    states: list[dict],
+    expected: float,
+) -> None:
+    """Keep same-router history across collector restarts, respecting network changes.
+
+    Parameters:
+        tmp_path: Isolated web history.
+        states: Snapshots observed across independent collector lifetimes.
+        expected: Final lower time boundary.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "history.sqlite"
+    client = Mock()
+    for state in states:
+        client.hgetall.return_value = {"eth0": json.dumps(state)}
+        collector = HistoryCollector(str(tmp_path), path, client, 999999)
+        collector.record_backend_heartbeat()
+    with connect_history(path, read_only=True) as connection:
+        saved = json.loads(
+            connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (NETWORK_SCOPES_KEY,)
+            ).fetchone()[0]
+        )
+    assert saved["eth0"]["start"] == expected
+    assert len(saved) == 1
+
+
+@pytest.mark.parametrize(
+    "changed_at", [None, "bad", float("nan"), float("inf")]
+)
+def test_network_scope_rejects_invalid_timestamps(changed_at: object) -> None:
+    """Keep malformed network snapshots from changing a valid boundary.
+
+    Parameters:
+        changed_at: Invalid snapshot timestamp.
+    """
+    _factory = ModuleFactory()
+    assert network_connection_scope({"changed_at": changed_at}) == {}
+
+
+def test_network_scope_survives_bounded_snapshot_history(
+    tmp_path: Path,
+) -> None:
+    """More than ten same-router setting changes do not hide older evidence.
+
+    Parameters:
+        tmp_path: Independent web history file.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999
+    )
+    history = []
+    for changed_at in range(100, 125):
+        state = {
+            "gateway_mac": "aa",
+            "changed_at": changed_at,
+            "connected": True,
+            "history": history[-10:],
+        }
+        client.hgetall.return_value = {"eth0": json.dumps(state)}
+        collector.record_backend_heartbeat()
+        history.append(
+            {key: value for key, value in state.items() if key != "history"}
+        )
+    with connect_history(collector.history_path, read_only=True) as connection:
+        saved = json.loads(
+            connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (NETWORK_SCOPES_KEY,)
+            ).fetchone()[0]
+        )
+    assert saved["eth0"]["start"] == 100
+    assert "history" not in saved["eth0"]
 
 
 def test_rotated_error_log_resets_offset_even_when_larger(

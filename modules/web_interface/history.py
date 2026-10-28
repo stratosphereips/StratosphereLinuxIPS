@@ -3,6 +3,7 @@
 
 import ipaddress
 import json
+import math
 import re
 import sqlite3
 import time
@@ -28,6 +29,79 @@ FLOW_RECONCILE_BATCH_SIZE = 500
 HOST_SNAPSHOT_INTERVAL_SECONDS = 60
 BACKEND_HEARTBEAT_KEY = "backend_heartbeat_at"
 BACKEND_DISCONNECTED_KEY = "backend_disconnected_at"
+NETWORK_SCOPES_KEY = "current_network_scopes"
+
+
+def network_connection_scope(
+    state: Dict[str, Any],
+    saved: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Find a connection boundary, joining restarts on the same router.
+
+    Parameters:
+        state: Current interface snapshot, including recent changes.
+        saved: Last connection boundary retained in this output folder.
+
+    Returns:
+        Bounded connection checkpoint with an optional start timestamp.
+    """
+    try:
+        changed_at = float(state["changed_at"])
+    except (KeyError, TypeError, ValueError):
+        return {}
+    if not math.isfinite(changed_at):
+        return {}
+    gateway = str(state.get("gateway_mac") or "").lower()
+    result = {
+        "connected": bool(state.get("connected")),
+        "gateway_mac": gateway,
+        "changed_at": changed_at,
+        "start": None,
+    }
+    if not result["connected"]:
+        return result
+    start = changed_at
+    barrier = False
+    history = state.get("history", [])
+    for previous in reversed(
+        history[-10:] if isinstance(history, list) and gateway else []
+    ):
+        if (
+            not isinstance(previous, dict)
+            or not previous.get("connected")
+            or str(previous.get("gateway_mac") or "").lower() != gateway
+        ):
+            barrier = True
+            break
+        try:
+            previous_start = float(previous["changed_at"])
+        except (KeyError, TypeError, ValueError):
+            barrier = True
+            break
+        if not math.isfinite(previous_start) or previous_start > start:
+            barrier = True
+            break
+        start = previous_start
+    if (
+        gateway
+        and isinstance(saved, dict)
+        and saved.get("connected")
+        and saved.get("gateway_mac") == gateway
+    ):
+        try:
+            saved_start = float(saved["start"])
+            saved_change = float(saved["changed_at"])
+            if (
+                math.isfinite(saved_start)
+                and math.isfinite(saved_change)
+                and saved_start <= saved_change <= changed_at
+                and (not barrier or saved_change >= start)
+            ):
+                start = min(start, saved_start)
+        except (KeyError, TypeError, ValueError):
+            pass
+    result["start"] = start
+    return result
 
 
 def connect_history(path: Path, read_only: bool = False) -> sqlite3.Connection:
@@ -207,9 +281,29 @@ class HistoryCollector:
             The heartbeat timestamp written to history.
         """
         heartbeat = time.time() if now is None else float(now)
+        try:
+            states = self.redis.hgetall("network_states")
+        except redis.RedisError:
+            states = None
         with connect_history(self.history_path) as connection:
             self._metadata_set(connection, BACKEND_HEARTBEAT_KEY, heartbeat)
             self._metadata_set(connection, BACKEND_DISCONNECTED_KEY, 0)
+            if isinstance(states, dict) and states:
+                old = self._metadata_get(connection, NETWORK_SCOPES_KEY, "{}")
+                saved = self._json_value(old, {})
+                saved = saved if isinstance(saved, dict) else {}
+                scopes = {}
+                for interface, raw in states.items():
+                    state = self._json_value(raw, {})
+                    if isinstance(state, dict):
+                        scopes[interface] = network_connection_scope(
+                            state, saved.get(interface)
+                        )
+                serialized = json.dumps(scopes, sort_keys=True)
+                if serialized != old:
+                    self._metadata_set(
+                        connection, NETWORK_SCOPES_KEY, serialized
+                    )
         return heartbeat
 
     def mark_backend_disconnected(self, now: Optional[float] = None) -> float:
