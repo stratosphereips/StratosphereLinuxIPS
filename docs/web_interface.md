@@ -739,7 +739,7 @@ range, Slips keeps that choice. Individual alerts load 50 at a time, with
 from each alert's newest linked evidence without loading every full evidence
 record. The selected host and alert stay open while the list refreshes.
 
-Severity chips offer both exact levels and inclusive thresholds such as
+Severity chips offer **All** and inclusive thresholds such as
 **High+** (high and critical), **Low+** (low through critical), and **Info+**
 (all levels). The filter applies to the host list and the selected host's
 alert timeline before paging.
@@ -785,7 +785,7 @@ they are not repeated in the additional-fields table.
 
 The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
 
-Evidence and Hosts also offer exact severity levels and inclusive **High+**,
+Evidence and Hosts also offer **All** and inclusive **High+**,
 **Medium+**, **Low+**, **Info+**, and **Critical+** filters. Host thresholds
 use each host's highest threat level; evidence thresholds include qualifying
 records before grouping and pagination.
@@ -1128,8 +1128,9 @@ interface; an unprotected web interface accepts these changes only locally.
 The optional fifth column in a local IP whitelist line is the canonical
 evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN`.
 
-Evidence threat chips support exact levels and inclusive `High+`, `Medium+`,
-and `Low+` filters. The inclusive filters include all more severe levels.
+Evidence threat chips offer **All**, **Critical+**, **High+**, **Medium+**,
+**Low+**, and **Info+**. Each `+` includes that level and all more severe levels.
+Previously saved exact-level selections use the corresponding `+` filter.
 
 ### Host score history
 

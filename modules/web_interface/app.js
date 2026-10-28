@@ -204,6 +204,8 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   }
   Object.entries(saved.controls || {}).forEach(([id, value]) => {
     if (!VIEW_CONTROL_IDS.includes(id)) return;
+    if (["evidence-threat", "hosts-threat"].includes(id)
+        && /^(critical|high|medium|low|info)$/.test(value)) value = `${value}_or_more`;
     const element = byId(id);
     if (!element) return;
     if (element.type === "checkbox") element.checked = value === true;
@@ -230,6 +232,7 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   syncExcludedVisibility();
   state.deviceView = byId("device-view").checked;
   state.alertsWorkspace.severity = String(saved.alertSeverity || "");
+  state.alertsWorkspace.severity = state.alertsWorkspace.severity.replace(/^(critical|high|medium|low|info)$/, "$1_or_more");
   state.alertsWorkspace.grouping = byId("alerts-group").value;
   state.alertsWorkspace.itemSort = saved.alertItemSort === "tw" ? "time" : String(saved.alertItemSort || "time");
   state.alertsWorkspace.itemOrder = saved.alertItemOrder === "asc" ? "asc" : "desc";
@@ -2531,16 +2534,14 @@ function setAlertPaneCount(count) {
   byId("alerts-evidence-pane").hidden = !evidenceVisible;
 }
 
-/** Render exact and inclusive severity filters for alert hosts. */
+/** Render inclusive severity filters for alert hosts. */
 function renderAlertSeverityFilters() {
   const page = state.pages.alerts;
   const selected = state.alertsWorkspace.severity;
   const container = byId("alerts-severity-filters");
   container.replaceChildren();
   [["", "All"], ...["critical", "high", "medium", "low", "info"]
-    .map((level) => [level, level[0].toUpperCase() + level.slice(1)]),
-    ...["critical", "high", "medium", "low", "info"]
-      .map((level) => [`${level}_or_more`, `${level[0].toUpperCase() + level.slice(1)}+`])]
+    .map((level) => [`${level}_or_more`, `${level[0].toUpperCase() + level.slice(1)}+`])]
     .forEach(([level, label]) => {
       const button = text("button", `${label}${selected === level ? ` ${compact(page.total)}` : ""}`, "alerts-filter");
       button.type = "button";
@@ -3157,11 +3158,8 @@ function renderEvidenceThreatChips() {
   const counts = state.evidenceWorkspace.threatCounts || new Map();
   const container = byId("evidence-threat-chips");
   container.replaceChildren();
-  [["", "All"], ...["critical", "high", "medium", "low", "info"]
-    .filter((level) => counts.get(level) || selected === level)
-    .map((level) => [level, level[0].toUpperCase() + level.slice(1)]),
-    ...[["critical_or_more", "Critical+"], ["high_or_more", "High+"],
-      ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]]
+  [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"],
+    ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]
     .forEach(([level, label]) => {
       const button = text("button", level.endsWith("_or_more")
         ? label : `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
@@ -5725,7 +5723,7 @@ function hostPeakScoreCell(row) {
 function renderHostFilterChips(payload) {
   const ranks = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
   const groups = [
-    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical", "Critical"], ["high", "High"], ["medium", "Medium"], ["low", "Low"], ["info", "Info"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]], "max_threat_level"],
+    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]], "max_threat_level"],
     ["hosts-scope-chips", "hosts-scope", [["", "All scopes"], ["local", "Local"], ["public", "Public"]], "scope"],
   ];
   groups.forEach(([targetId, selectId, options, field]) => {
