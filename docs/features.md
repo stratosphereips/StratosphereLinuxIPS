@@ -212,6 +212,12 @@ This detection will ignore certain IP addresses for which a connection without D
 - Multicast IPs
 - Broadcast IPs only if they are private
 - Well known organizations
+- Working DNS servers on UDP or TCP port 53, including connections without
+  Zeek's DNS application label. Configured resolvers and servers observed
+  returning `NOERROR` or `NXDOMAIN` replies are recognized. Other services on
+  the same IP remain subject to this rule. See the
+  [connection-without-DNS exceptions](flow_alerts.md#connections-without-dns-resolution)
+  for timing and memory limits.
 
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips

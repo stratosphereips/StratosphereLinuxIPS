@@ -5,7 +5,9 @@ import bisect
 import contextlib
 import ipaddress
 import json
+import math
 import time
+from collections import OrderedDict
 from threading import Lock
 from typing import Tuple, List, Dict, Any
 import validators
@@ -18,6 +20,7 @@ from modules.flow_alerts.utils import (
     should_check_different_localnet,
     should_ignore_dns_or_dhcpv6_flow,
     network_state_for_flow,
+    is_official_dns_server,
 )
 from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -65,6 +68,9 @@ class ConnAnalyzer(IAsyncModule):
         self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
         self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
         self.ssl_recognized_flows_lock = Lock()
+        self.working_dns_servers: OrderedDict[tuple[str, str], float] = (
+            OrderedDict()
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -76,9 +82,11 @@ class ConnAnalyzer(IAsyncModule):
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
         self.c2 = self.db.subscribe("tw_closed")
+        self.c3 = self.db.subscribe("new_dns")
         self.channels = {
             "new_flow": self.c1,
             "tw_closed": self.c2,
+            "new_dns": self.c3,
         }
 
     def pre_main(self):
@@ -709,7 +717,67 @@ class ConnAnalyzer(IAsyncModule):
         self.set_evidence.tor_exit_node(twid, flow)
         return True
 
-    def should_ignore_conn_without_dns(self, flow) -> bool:
+    def remember_working_dns_server(self, flow: Any) -> bool:
+        """Remember a DNS responder without storing per-query state.
+
+        Parameters:
+            flow: Parsed DNS transaction with an observed response code.
+
+        Returns:
+            Whether the transaction establishes a working resolver.
+        """
+        if (
+            flow.type_ != "dns"
+            or str(flow.dport) != "53"
+            or flow.proto.lower() not in {"tcp", "udp"}
+            or flow.rcode_name not in {"NOERROR", "NXDOMAIN"}
+        ):
+            return False
+        try:
+            server = ipaddress.ip_address(flow.daddr)
+            timestamp = float(flow.starttime)
+            if (
+                server.is_multicast
+                or server.is_unspecified
+                or not math.isfinite(timestamp)
+                or timestamp < 0
+            ):
+                return False
+        except (ValueError, TypeError):
+            return False
+        key = (flow.interface, str(server))
+        self.working_dns_servers[key] = max(
+            timestamp, self.working_dns_servers.get(key, timestamp)
+        )
+        self.working_dns_servers.move_to_end(key)
+        while len(self.working_dns_servers) > 4096:
+            self.working_dns_servers.popitem(last=False)
+        return True
+
+    def is_working_dns_connection(self, flow: Any) -> bool:
+        """Recognize resolver service traffic even without Zeek's DNS label.
+
+        Parameters:
+            flow: Connection being checked for a missing DNS lookup.
+
+        Returns:
+            Whether it uses a configured or recently observed resolver on port 53.
+        """
+        if str(flow.dport) != "53" or flow.proto.lower() not in {"tcp", "udp"}:
+            return False
+        key = (flow.interface, flow.daddr)
+        seen = self.working_dns_servers.get(key)
+        if seen is not None:
+            try:
+                timestamp = float(flow.starttime)
+                if math.isfinite(timestamp) and abs(timestamp - seen) <= 86400:
+                    self.working_dns_servers.move_to_end(key)
+                    return True
+            except (ValueError, TypeError):
+                pass
+        return is_official_dns_server(self.db, flow, "dstip")
+
+    def should_ignore_conn_without_dns(self, flow: Any) -> bool:
         """
         checks for the cases that we should ignore the connection without dns
         """
@@ -719,6 +787,7 @@ class ConnAnalyzer(IAsyncModule):
                 flow.proto, getattr(flow, "history", None)
             )
             or flow.appproto in ("dns", "icmp")
+            or self.is_working_dns_connection(flow)
             or utils.is_ignored_ip(flow.daddr)
             or self.db.is_dhcp_server(flow.daddr)
             # if the daddr is a client ip, it means that this is a conn
@@ -792,7 +861,9 @@ class ConnAnalyzer(IAsyncModule):
         # don't alert a Connection Without DNS until 15 seconds has passed
         # in real time from the time of this checking.
         await asyncio.sleep(15)
-        if self.db.is_ip_resolved(flow.daddr, 24):
+        if self.should_ignore_conn_without_dns(flow) or self.db.is_ip_resolved(
+            flow.daddr, 24
+        ):
             return False
 
         # Reaching here means we already waited 15 seconds for the dns
@@ -1236,6 +1307,11 @@ class ConnAnalyzer(IAsyncModule):
         self.ts_of_last_ssl_recognized_flows_cleanup = now
 
     async def main(self):
+        if msg := self.get_msg("new_dns"):
+            msg = json.loads(msg["data"])
+            self.remember_working_dns_server(
+                self.classifier.convert_to_flow_obj(msg["flow"])
+            )
         if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]

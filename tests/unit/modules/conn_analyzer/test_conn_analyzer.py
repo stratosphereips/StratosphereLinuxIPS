@@ -986,6 +986,174 @@ def test_should_ignore_conn_without_dns(
 
 
 @pytest.mark.parametrize(
+    "rcode, port, proto, query, server, timestamp, expected",
+    [
+        ("NOERROR", 53, "udp", "example.org", "95.211.15.53", 100, True),
+        ("NXDOMAIN", "53", "TCP", "absent.example.org", "95.211.15.53", 100, True),
+        ("NOERROR", 53, "tcp", "example.org", "2606:4700:4700::1111", 100, True),
+        ("-", 53, "udp", "example.org", "95.211.15.53", 100, False),
+        ("SERVFAIL", 53, "udp", "example.org", "95.211.15.53", 100, False),
+        ("REFUSED", 53, "udp", "example.org", "95.211.15.53", 100, False),
+        ("NOERROR", 5353, "udp", "example.org", "95.211.15.53", 100, False),
+        ("NOERROR", 53, "icmp", "example.org", "95.211.15.53", 100, False),
+        ("NOERROR", 53, "udp", "-", "95.211.15.53", 100, True),
+        ("NXDOMAIN", 53, "tcp", "", "95.211.15.53", 100, True),
+        ("NOERROR", 53, "udp", "example.org", "224.0.0.251", 100, False),
+        ("NOERROR", 53, "udp", "example.org", "invalid", 100, False),
+        ("NOERROR", 53, "udp", "example.org", "95.211.15.53", float("nan"), False),
+    ],
+)
+def test_remember_working_dns_server(
+    rcode: str, port: int | str, proto: str, query: str,
+    server: str, timestamp: float, expected: bool,
+) -> None:
+    """Learn actual resolver replies rather than trusting a destination port.
+
+    Parameters:
+        rcode: Observed DNS response code, or query-only marker.
+        port: Destination service port.
+        proto: Transport protocol.
+        query: DNS question.
+        server: Responder address.
+        timestamp: Capture time of the DNS transaction.
+        expected: Whether a working responder should be remembered.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = SimpleNamespace(type_="dns", daddr=server, dport=port, proto=proto,
+                           query=query, rcode_name=rcode, starttime=timestamp,
+                           interface="eth0", answers=[])
+    assert conn.remember_working_dns_server(flow) is expected
+    assert len(conn.working_dns_servers) == int(expected)
+
+
+@pytest.mark.parametrize(
+    "port, proto, configured, learned, interface, age, expected",
+    [
+        (53, "udp", True, False, "eth0", 0, True),
+        ("53", "TCP", True, False, "eth0", 0, True),
+        (53, "udp", False, True, "eth0", 100, True),
+        (53, "tcp", False, True, "eth0", -1, True),
+        (53, "udp", False, True, "eth0", 86401, False),
+        (53, "udp", False, True, "other-interface", 0, False),
+        (53, "udp", False, False, "eth0", 0, False),
+        (443, "tcp", True, True, "eth0", 0, False),
+        (53, "icmp", True, True, "eth0", 0, False),
+    ],
+)
+def test_working_dns_exemption_is_scoped(
+    port: int | str, proto: str, configured: bool, learned: bool,
+    interface: str, age: float, expected: bool,
+) -> None:
+    """Exempt resolver service traffic without exempting unrelated connections.
+
+    Parameters:
+        port: Connection destination port.
+        proto: Connection transport.
+        configured: Whether the address is a configured resolver.
+        learned: Whether a valid DNS reply was observed.
+        interface: Connection capture interface.
+        age: Time difference from the observed DNS reply, in seconds.
+        expected: Whether the connection should be excluded.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.is_official_dns_server.return_value = configured
+    conn.db.get_network_state.return_value = None
+    conn.db.is_doh_server.return_value = False
+    conn.db.is_dhcp_server.return_value = False
+    conn.is_running_non_stop = False
+    conn.client_ips = []
+    reply = SimpleNamespace(type_="dns", daddr="95.211.15.53", dport=53,
+                            proto="udp", query="example.org", rcode_name="NOERROR",
+                            starttime=100000, interface="eth0")
+    if learned:
+        assert conn.remember_working_dns_server(reply)
+    flow = SimpleNamespace(type_="conn", saddr="10.0.2.111", daddr=reply.daddr,
+                           sport=49284, dport=port, proto=proto.lower(), appproto="",
+                           history="ShADadFf", starttime=100000 + age, interface=interface)
+    assert conn.is_working_dns_connection(flow) is expected
+    if proto != "icmp":
+        assert conn.should_ignore_conn_without_dns(flow) is expected
+
+
+def test_working_dns_cache_is_bounded() -> None:
+    """Bound resolver state and ignore older updates from reordered logs."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = SimpleNamespace(type_="dns", daddr="95.211.15.53", dport=53,
+                           proto="udp", query="example.org", rcode_name="NOERROR",
+                           starttime=100, interface="eth0")
+    for number in range(4097):
+        flow.daddr = str(ip_address(int(ip_address("100.64.0.1")) + number))
+        assert conn.remember_working_dns_server(flow)
+    assert len(conn.working_dns_servers) == 4096
+    assert ("eth0", "100.64.0.1") not in conn.working_dns_servers
+    flow.starttime = 99
+    assert conn.remember_working_dns_server(flow)
+    assert conn.working_dns_servers[("eth0", flow.daddr)] == 100
+
+
+@pytest.mark.parametrize("reply_arrives", [True, False])
+async def test_without_dns_rechecks_responder_after_grace(
+    mocker: Any, reply_arrives: bool,
+) -> None:
+    """Honor a DNS reply processed after the connection before reporting evidence.
+
+    Parameters:
+        mocker: Patch helper for the existing processing grace period.
+        reply_arrives: Whether a valid DNS response arrives while waiting.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.is_official_dns_server.return_value = False
+    conn.db.get_network_state.return_value = None
+    conn.db.is_doh_server.return_value = False
+    conn.db.is_dhcp_server.return_value = False
+    conn.db.is_ip_resolved.return_value = False
+    conn.is_running_non_stop = False
+    conn.client_ips = []
+    conn.input_type = InputType.PCAP
+    conn.check_if_resolution_was_made_by_different_version = Mock(return_value=False)
+    conn.is_well_known_org = Mock(return_value=False)
+    conn.set_evidence.conn_without_dns = Mock()
+    flow = SimpleNamespace(type_="conn", saddr="10.0.2.111", daddr="95.211.15.53",
+                           sport=49284, dport=53, proto="udp", appproto="",
+                           history="Dd", starttime=100000, interface="eth0")
+
+    async def process_reply(delay: float) -> None:
+        """Process a DNS response during the simulated log-order grace period.
+
+        Parameters:
+            delay: Existing wait requested by the detector.
+        """
+        assert delay == 15
+        if reply_arrives:
+            reply = SimpleNamespace(**{**vars(flow), "type_": "dns", "query": "example.org",
+                                       "rcode_name": "NOERROR"})
+            assert conn.remember_working_dns_server(reply)
+
+    mocker.patch("modules.conn_analyzer.conn_analyzer.asyncio.sleep", side_effect=process_reply)
+    assert await conn.check_connection_without_dns_resolution(profileid, twid, flow) is (not reply_arrives)
+    assert conn.set_evidence.conn_without_dns.call_count == int(not reply_arrives)
+
+
+async def test_conn_analyzer_consumes_dns_responder_messages(mocker: Any) -> None:
+    """Route parsed DNS replies into resolver recognition in the module worker.
+
+    Parameters:
+        mocker: Patch helper for isolated channel messages.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = SimpleNamespace(type_="dns", daddr="95.211.15.53", dport=53,
+                           proto="udp", query="example.org", rcode_name="NOERROR",
+                           starttime=100, interface="eth0")
+    message = {"data": json.dumps({"flow": vars(flow)})}
+    conn.classifier.convert_to_flow_obj = Mock(return_value=flow)
+    mocker.patch.object(conn, "get_msg", side_effect=lambda channel: message if channel == "new_dns" else None)
+    await conn.main()
+    assert conn.working_dns_servers[("eth0", "95.211.15.53")] == 100
+    conn.subscribe_to_channels()
+    assert "new_dns" in conn.channels
+
+
+@pytest.mark.parametrize(
     "profileid, daddr, mock_get_the_other_ip_version_return_value, "
     "mock_get_dns_resolution_return_value, expected_result",
     [

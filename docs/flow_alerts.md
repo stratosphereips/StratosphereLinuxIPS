@@ -87,6 +87,18 @@ This detection will ignore certain IP addresses for which a connection without D
 - Multicast IPs
 - Broadcast IPs only if they are private
 - Well known organizations
+- DNS service connections over UDP or TCP port 53 to configured DNS servers,
+  or to servers observed returning `NOERROR` or `NXDOMAIN` DNS replies. A resolver
+  is normally contacted directly by IP, so it does not need a preceding lookup
+  of its own address. This also applies when Zeek leaves the connection's
+  application protocol blank. The detector rechecks after its existing
+  15-second processing grace period so a reply processed later can establish
+  the resolver. Observed responders are kept separately per interface in a
+  bounded 4,096-entry cache and qualify within 24 hours of the connection's
+  capture time. Queries without replies and `SERVFAIL`/`REFUSED` responses do
+  not establish a working resolver. A decoded reply can establish the responder
+  even when Zeek could not retain its question. This exception only affects
+  `CONNECTION_WITHOUT_DNS`; DNS anomaly and threat-intelligence checks still run.
 
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips
