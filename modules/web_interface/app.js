@@ -5831,7 +5831,7 @@ function protocolDetails(type, flow) {
   const excluded = new Set([
     "uid", "starttime", "endtime", "saddr", "daddr", "sport", "dport", "proto",
     "appproto", "interface", "type", "type_", "flow_source", "ground_truth_label",
-    "detailed_ground_truth_label",
+    "detailed_ground_truth_label", "label", "detailedlabel",
   ]);
   return Object.entries(flow).filter(([name, value]) =>
     !excluded.has(name) && hasProtocolValue(value)).slice(0, 16).map(([name, value]) => [
@@ -5905,6 +5905,20 @@ function protocolFlowCard(record) {
   return card;
 }
 
+/** Read a label supplied by the input, excluding Slips's stored default label.
+ * @param {object} record Parsed flow or host-table row containing its raw flow.
+ * @returns {string} Supplied label, or an empty string for unlabeled input.
+ */
+function inputFlowLabel(record) {
+  const flow = record?.raw || record?.flow || record || {};
+  for (const key of ["ground_truth_label", "detailed_ground_truth_label"]) {
+    const value = flow[key];
+    if (typeof value === "string" && value.trim()
+        && !["-", "(empty)"].includes(value.trim())) return value.trim();
+  }
+  return "";
+}
+
 /** Show nonduplicate stored fields in a compact table, with empty fields on demand.
  * @param {object} flow Parsed Zeek flow fields.
  * @param {string[]} displayedFields Fields already shown in the flow summary.
@@ -5914,6 +5928,10 @@ function flowFieldList(flow, displayedFields = []) {
   const container = document.createElement("div");
   container.className = "evidence-flow-fields";
   const omitted = new Set(displayedFields);
+  if (!inputFlowLabel(flow)) {
+    ["label", "ground_truth_label", "detailed_ground_truth_label", "detailedlabel"]
+      .forEach((key) => omitted.add(key));
+  }
   const fields = Object.entries(flow || {}).filter(([key]) => !omitted.has(key));
   if (!fields.length) return container;
   const empty = ([, value]) => value === "" || value === null || value === undefined
@@ -6032,7 +6050,8 @@ function flowCard(group, position = 1, total = 1, title = null) {
       ["State", flowValue(flow, "state", "conn_state") || "—"],
       ["Packets", compact(packets)], ["Bytes", formatBytes(bytes)],
       ["Duration", numeric(flowValue(flow, "dur", "duration")).toFixed(3) + " s"],
-      ["Label", record.label || flow.label || "—"], ["Interface", flow.interface || "—"],
+      ...(inputFlowLabel(flow) ? [["Input label", inputFlowLabel(flow)]] : []),
+      ["Interface", flow.interface || "—"],
     ].forEach(([label, value]) => {
       const metric = document.createElement("div");
       metric.className = "flow-metric";
@@ -6063,7 +6082,7 @@ function flowCard(group, position = 1, total = 1, title = null) {
         "daddr", "dst_ip", "id.resp_h", "sport", "src_port", "id.orig_p", "dport",
         "dst_port", "id.resp_p", "proto", "protocol", "appproto", "app_proto", "service",
         "state", "conn_state", "pkts", "packets", "spkts", "dpkts", "bytes", "sbytes",
-        "dbytes", "dur", "duration", "label", "interface"];
+        "dbytes", "dur", "duration", "label", "ground_truth_label", "interface"];
       connection.append(metrics, flowFieldList(flow, displayed), rawBlock(record, "flow"));
       return connection;
     }]);
@@ -7055,7 +7074,9 @@ function showHostActivity(name) {
   };
   const grouping = byId("host-activity-group");
   grouping.replaceChildren(new Option("No grouping", ""),
-    ...choices[name].map(([value, label]) => new Option(label, value)));
+    ...choices[name].filter(([value]) => name !== "flows" || value !== "label"
+      || state.pages.hostFlows.items.some((row) => inputFlowLabel(row)))
+      .map(([value, label]) => new Option(value === "label" ? "Input label" : label, value)));
   grouping.value = state.hostActivityGroups[name];
   byId("host-activity-threat").value = state.hostActivityThreats[name];
   byId("host-activity-threat-label").firstChild.textContent = name === "flows" ? "Linked threat " : "Threat ";
@@ -7121,7 +7142,7 @@ function hostActivityGroupValue(kind, row) {
   if (group === "protocol") return [row.proto, row.app_proto].filter(Boolean).join(" / ") || "Unknown protocol";
   if (group === "direction") return row.direction || "Unknown direction";
   if (group === "peer") return row.peer || "Unknown peer";
-  if (group === "label") return row.label || "No label";
+  if (group === "label") return inputFlowLabel(row) || "No input label";
   if (group === "state") return row.state || "Unknown state";
   return "";
 }
@@ -7160,7 +7181,7 @@ function addHostTableGroups(kind, tableId, rows) {
     const heading = document.createElement("tr");
     heading.className = "host-activity-group-row";
     const cell = document.createElement("th");
-    cell.colSpan = byId(tableId).querySelectorAll("thead th").length;
+    cell.colSpan = byId(tableId).querySelectorAll("thead th:not([hidden])").length;
     cell.scope = "rowgroup";
     cell.textContent = `${label} · ${counts.get(label)} on this page`;
     heading.append(cell);
@@ -7436,8 +7457,25 @@ async function openHostFlow(row) {
  */
 function renderHostFlows() {
   const page = state.pages.hostFlows;
+  const hasLabels = page.items.some((row) => inputFlowLabel(row));
+  byId("host-flows-table").querySelector('th[data-sort="label"]').hidden = !hasLabels;
+  if (!hasLabels) {
+    if (state.localSorts["host-flows-table"].key === "label") {
+      state.localSorts["host-flows-table"] = { key: "event_time", order: "desc" };
+    }
+    if (state.hostActivityGroups.flows === "label") state.hostActivityGroups.flows = "";
+  }
+  if (state.hostActivity === "flows") {
+    const grouping = byId("host-activity-group");
+    const option = grouping.querySelector('option[value="label"]');
+    if (hasLabels && !option) grouping.add(new Option("Input label", "label"));
+    else if (!hasLabels && option) option.remove();
+    grouping.value = state.hostActivityGroups.flows;
+    byId("host-activity-group-note").hidden = !grouping.value;
+  }
   const rows = groupHostPageRows("flows", sortLocalRows("host-flows-table", page.items.map((row) => ({
     ...row,
+    label: inputFlowLabel(row),
     protocol: [row.proto, row.app_proto].filter(Boolean).join(" / "),
     ports: transportFields(row),
   }))));
@@ -7451,7 +7489,7 @@ function renderHostFlows() {
     (row) => compact(row.packets),
     (row) => formatBytes(row.bytes),
     (row) => `${numeric(row.duration).toFixed(3)} s`,
-    (row) => row.label || "—",
+    ...(hasLabels ? [(row) => inputFlowLabel(row) || "—"] : []),
     (row) => row.linked_threat_level ? threat(row.linked_threat_level) : "—",
   ], openHostFlow);
   addHostTableGroups("flows", "host-flows-table", rows);

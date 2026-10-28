@@ -136,6 +136,17 @@ JSON text. This includes evidence, alerts, connection and protocol records, P2P
 messages, and cached host threat intelligence. Copying keeps the current pane
 open. Browsers without clipboard API access use a copy-command fallback, which
 also supports remote pages opened over plain HTTP.
+Flow tables, detail cards and grouping controls show **Input label** only when
+labels were supplied with the input. Slips's default stored `benign`/`normal`
+label is not shown as an input label. The host flow table offers this column
+and grouping when its loaded page contains supplied labels; unlabeled rows on
+a mixed page show a dash. Empty label fields are also omitted from Additional
+fields. This applies when reopening saved analyses, without reprocessing them.
+`labels.config` belongs to the external `netflowlabeler` tool: it labels the
+logs before Slips reads them. Slips recognizes the resulting input fields
+`ground_truth_label` and `detailed_ground_truth_label`; merely placing a label
+configuration beside a PCAP does not label its traffic. Original stored JSON,
+training labels, analyst reviews and host tags are preserved.
 Machine learning findings use the short labels **ML suspicious flow · Linear**
 and **ML suspicious flow · Online**. **ML** means **Machine learning**; the type
 label's tooltip explains it, and the detail header spells it out. Linear uses

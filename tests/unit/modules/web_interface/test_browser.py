@@ -1826,12 +1826,16 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: str) -> None:
+@pytest.mark.parametrize("input_label", [None, "Malicious"])
+def test_host_flow_inspector_uses_shared_cards_in_chrome(
+    tmp_path: Path, theme: str, input_label: str | None,
+) -> None:
     """Inspect host flows with readable cards, related records, JSON and resizing.
 
     Parameters:
         tmp_path: Isolated retained flow database.
         theme: Browser color theme.
+        input_label: Label supplied in the input, distinct from stored defaults.
     """
     _module_factory = ModuleFactory()
     playwright = pytest.importorskip("playwright.sync_api")
@@ -1847,6 +1851,12 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: 
         {"uid":"tls-flow", "starttime":80,"saddr":"2001:db8::10","daddr":source,"sport":443,"dport":50001,"proto":"tcp","appproto":"ssl","pkts":4,"bytes":500},
         {"uid":"plain-flow", "starttime":70,"saddr":source,"daddr":"192.0.2.11","sport":2000,"dport":2001,"proto":"udp","pkts":1,"bytes":5},
     ]
+    if input_label:
+        flows[0]["ground_truth_label"] = input_label
+        flows[0]["detailed_ground_truth_label"] = "Malicious RAT"
+    else:
+        flows[0]["ground_truth_label"] = ""
+        flows[0]["detailed_ground_truth_label"] = ""
     rows = [{"uid":flow["uid"],"raw":flow,"event_time":flow["starttime"],"src_ip":flow["saddr"],"dst_ip":flow["daddr"],
         "src_port":flow["sport"],"dst_port":flow["dport"],"proto":flow["proto"],"app_proto":flow.get("appproto",""),
         "direction":"inbound" if flow["uid"] == "tls-flow" else "outbound", "peer":flow["saddr"] if flow["uid"] == "tls-flow" else flow["daddr"],
@@ -1910,6 +1920,17 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: 
         }""", {"theme":theme,"rows":rows,"source":source})
         assert requests == []
         table = page.locator("#host-flows-table")
+        assert table.locator('th[data-sort="label"]').is_visible() is bool(input_label)
+        assert "benign" not in table.inner_text()
+        assert page.locator('#host-activity-group option[value="label"]').count() == int(bool(input_label))
+        if not input_label:
+            page.evaluate("""() => {
+                state.hostActivityGroups.flows='label';
+                state.localSorts['host-flows-table']={key:'label',order:'asc'};
+                renderHostFlows();
+            }""")
+            assert page.evaluate("state.hostActivityGroups.flows") == ""
+            assert page.evaluate("state.localSorts['host-flows-table'].key") == "event_time"
         table.locator("tbody tr").first.click()
         page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('20 of 23')")
         page.evaluate("clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer); clearError();")
@@ -1919,7 +1940,14 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: 
         assert inspector.locator(".flow-path .host-name").first.text_content() == "Android"
         assert "ff02::fb" in inspector.locator(".flow-path").inner_text()
         assert "Port 5353" in inspector.locator(".flow-path").inner_text()
-        assert inspector.locator(".flow-metric").count() == 9
+        assert inspector.locator(".flow-metric").count() == (9 if input_label else 8)
+        label_metric = inspector.locator(".flow-metric").filter(has_text="Input label")
+        assert label_metric.count() == int(bool(input_label))
+        if input_label:
+            assert input_label in label_metric.inner_text()
+        else:
+            assert not any("ground truth label" in value for value in
+                           inspector.locator(".evidence-flow-fields").all_text_contents())
         assert "8.194 s" in inspector.inner_text()
         assert "1.0 KiB" in inspector.inner_text()
         assert inspector.locator(".json-details pre").count() == 0
@@ -1961,7 +1989,7 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(tmp_path: Path, theme: 
             page.locator("#drawer-close").click()
         table.locator("tbody tr").nth(3).click()
         page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('No related')")
-        assert inspector.locator(".flow-metric").count() == 9
+        assert inspector.locator(".flow-metric").count() == 8
         assert "192.0.2.11" in inspector.locator(".flow-path").inner_text()
         page.locator("#drawer-close").click()
         fail_http = True
