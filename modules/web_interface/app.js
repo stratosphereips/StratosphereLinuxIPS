@@ -900,12 +900,7 @@ function evidenceTypeLabel(record) {
   if (types.length) return types.map(alertTypeName).join(" + ");
   if (record.archived_report || record.evidence_type === "P2P_REPORT") return "Type unavailable";
   if (["report", "blame"].includes(record.message_type)) return "Type not supplied";
-  if (record.evidence_type && String(record.module || "").split(",").includes("p2p_trust")) return alertTypeName(record.evidence_type);
-  if (String(record.evidence_type || "").startsWith("SMB_")) return alertTypeName(record.evidence_type);
-  if (MACHINE_LEARNING_EVIDENCE[record.evidence_type]) return alertTypeName(record.evidence_type);
-  if (["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN", "HTTP_IP_HOST",
-    "HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE", "HTTP_BINARY_RESPONSE_AS_HTML"].includes(record.evidence_type)) return alertTypeName(record.evidence_type);
-  return record.evidence_type || record.message_type || "All types";
+  return record.evidence_type ? alertTypeName(record.evidence_type) : record.message_type || "All types";
 }
 
 /** Display a detection name with a separate, explicit P2P origin badge.
@@ -956,7 +951,7 @@ function peerDetectionPanel(record) {
     card.append(peerConnectionDiagram(item, record));
     const facts = document.createElement("dl");
     facts.className = "p2p-message-facts";
-    const values = [["Reported type", item.evidence_type], ["Reported detector", item.module]];
+    const values = [["Reported type", alertTypeName(item.evidence_type)], ["Reported detector", item.module]];
     if (item.observed_at) values.push(["Detected by peer at", formatTime(item.observed_at)]);
     if (item.proto) values.push(["Reported protocol", item.proto.toUpperCase()]);
     if (isIcmpProtocol(item.proto)) {
@@ -2572,9 +2567,12 @@ function alertEvidenceTypes(record) {
     .sort((left, right) => right.count - left.count || left.type.localeCompare(right.type));
 }
 
-/** Give a detector type a readable name in alert summaries. */
+/** Format local and peer detection names consistently without changing their IDs.
+ * @param {string} type Stored evidence identifier or previously readable name.
+ * @returns {string} Title Case name with protocol and technical acronyms preserved.
+ */
 function alertTypeName(type) {
-  if (MACHINE_LEARNING_EVIDENCE[type]) return MACHINE_LEARNING_EVIDENCE[type].name;
+  const key = String(type || "").trim().replace(/\s+/g, "_").toUpperCase();
   const names = {
     CONNECTION_TO_PRIVATE_IP: "Private IP connection",
     UNKNOWN_PORT: "Unknown port",
@@ -2603,14 +2601,18 @@ function alertTypeName(type) {
     INCOMPATIBLE_CN: "TLS provider mismatch",
     P2P_REPORT: "P2P report",
   };
-  return names[type] || String(type || "Unknown detection").replaceAll("_", " ").toLowerCase()
-    .replace(/^./, (first) => first.toUpperCase());
+  const name = MACHINE_LEARNING_EVIDENCE[key]?.name || names[key] || String(type || "Unknown Detection").replaceAll("_", " ");
+  return name.replace(/\b[a-z][a-z0-9]*\b/gi, (word) => {
+    const upper = word.toUpperCase();
+    return /^(?:ARP|ARPA|ASN|C2|CN|DGA|DHCP|DNS|FTP|GPS|GRE|HTTP|HTTPS|ICMP|IP|JA3|JA3S|JA4|JARM|MAC|MIME|MITM|ML|NXDOMAINS|P2P|POST|SMB|SMTP|SSH|SSL|TCP|TI|TLS|UDP|URI|URL)$/.test(upper)
+      ? upper : word[0].toUpperCase() + word.slice(1).toLowerCase();
+  });
 }
 
 /** Summarize every linked detection type in one alert-list row. */
 function alertComposition(record) {
   const types = alertEvidenceTypes(record);
-  if (!types.length) return record.summary || record.evidence_type || record.label || "Alert";
+  if (!types.length) return record.summary || (record.evidence_type ? alertTypeName(record.evidence_type) : record.label || "Alert");
   const leading = types.slice(0, 3).map(({ type, count }) =>
     `${alertTypeName(type)} (${compact(count)})`).join(" · ");
   return types.length > 3 ? `${leading} · +${types.length - 3} more types` : leading;
@@ -3302,7 +3304,7 @@ function renderEvidenceEmptyState() {
       const fill = document.createElement("span");
       fill.style.width = `${Math.max(1, 100 * count / max)}%`;
       track.append(fill);
-      row.append(text("span", MACHINE_LEARNING_EVIDENCE[type]?.name || type, "evidence-bar-label"), track,
+      row.append(text("span", alertTypeName(type), "evidence-bar-label"), track,
         text("span", compact(count), "evidence-bar-count"));
       if (typeCounts.has(type)) row.addEventListener("click", () => {
         state.evidenceWorkspace.typeFilter = type;
@@ -3700,7 +3702,7 @@ async function loadEvidence() {
   const activeType = byId("evidence-active-type");
   activeType.hidden = !state.evidenceWorkspace.typeFilter;
   activeType.textContent = state.evidenceWorkspace.typeFilter
-    ? `${MACHINE_LEARNING_EVIDENCE[state.evidenceWorkspace.typeFilter]?.name || state.evidenceWorkspace.typeFilter} ×` : "";
+    ? `${alertTypeName(state.evidenceWorkspace.typeFilter)} ×` : "";
   byId("evidence-count").textContent = mode === "individual"
     ? `${compact(payload.total)} records`
     : `${compact(payload.total)} groups · ${recordsLabel}`;
@@ -4433,7 +4435,7 @@ function whitelistEditor(kind, record = null, host = null) {
   const typeNames = new Set(state.whitelists?.evidence_types || []);
   if (record?.evidence_type) typeNames.add(record.evidence_type);
   typeNames.forEach((name) => {
-    const option = text("option", MACHINE_LEARNING_EVIDENCE[name]?.name || name);
+    const option = text("option", alertTypeName(name));
     option.value = name;
     evidenceType.append(option);
   });
@@ -4569,7 +4571,7 @@ function renderWhitelists() {
     (row) => row.type === "MAC address" ? macIdentity(row.value) : text("code", row.value),
     (row) => row.type === "Request URI" ? "Request" : row.direction === "both" ? "Source or destination" : row.direction === "src" ? "Source" : "Destination",
     (row) => row.type === "Request URI" ? "Flow and detections" : row.ignore === "blocking" ? "Blocking only (keep alerts)" : row.ignore === "both" ? "Flows and alerts" : row.ignore === "alerts" ? "Evidence and alerts" : "Flows",
-    (row) => MACHINE_LEARNING_EVIDENCE[row.evidence_type]?.name || row.evidence_type || "All",
+    (row) => row.evidence_type ? alertTypeName(row.evidence_type) : "All",
     (row) => row.dst_port || "Any",
     (row) => row.effect,
     (row) => row.source,
@@ -4611,7 +4613,7 @@ async function loadWhitelists() {
     all.value = "";
     select.append(all);
     (payload.evidence_types || []).forEach((name) => {
-      const option = text("option", MACHINE_LEARNING_EVIDENCE[name]?.name || name);
+      const option = text("option", alertTypeName(name));
       option.value = name;
       select.append(option);
     });
@@ -4753,7 +4755,7 @@ function renderArpPoisoning() {
       (row) => formatTime(row.timestamp),
       (row) => hostIdentity(row.profile_ip),
       (row) => threat(row.threat_level),
-      (row) => text("code", row.evidence_type),
+      (row) => text("span", alertTypeName(row.evidence_type)),
       (row) => `${Math.round(numeric(row.confidence) * 100)}%`,
       (row) => compact(row.flow_count),
       (row) => compact(row.alert_count),
@@ -5170,7 +5172,7 @@ function renderP2PPeers() {
       if (!items.length && !row.agreed_reports) return text("span", "Not validated", "muted");
       const value = text("span", `${row.agreed_reports ? `Agreed ${row.agreed_reports} · ` : ""}TP ${row.confirmed_reports || 0} · FP ${row.false_reports || 0}`);
       value.title = `${row.agreed_reports || 0} distinct targets corroborated by local detections and other peer IDs.\n`
-        + items.map((item) => `${item.evidence_type} · ${item.rule_version.slice(0, 8)}: ${item.confirmed} TP, ${item.false_positive} FP, review adjustment ${item.adjustment.toFixed(3)}`).join("\n");
+        + items.map((item) => `${alertTypeName(item.evidence_type)} · ${item.rule_version.slice(0, 8)}: ${item.confirmed} TP, ${item.false_positive} FP, review adjustment ${item.adjustment.toFixed(3)}`).join("\n");
       return value;
     },
     (row) => formatP2PTime(row.last_seen),
@@ -6380,7 +6382,7 @@ function evidenceDetailHeadline(record, groups = []) {
       return `${source} connected to unknown port ${port}${protocol ? `/${String(protocol).toUpperCase()}` : ""} on ${state.ownAddresses.has(destination) ? "this device" : destination}`;
     }
   }
-  return String(record.description || record.evidence_type || "Evidence")
+  return String(record.description || (record.evidence_type ? alertTypeName(record.evidence_type) : "Evidence"))
     .split(/\.(?:\s|$)/)[0];
 }
 
@@ -7323,8 +7325,8 @@ function hostActivityGroupValue(kind, row) {
   if (group === "type") {
     const types = alertEvidenceTypes(row);
     const type = peerDetections(row)[0]?.evidence_type || row.evidence_type;
-    return kind === "alerts" ? types.length ? types.map((item) => MACHINE_LEARNING_EVIDENCE[item.type]?.name || item.type).join(" + ") : "Unknown type"
-      : MACHINE_LEARNING_EVIDENCE[type]?.name || type || "Unknown type";
+    return kind === "alerts" ? types.length ? types.map((item) => alertTypeName(item.type)).join(" + ") : "Unknown type"
+      : type ? alertTypeName(type) : "Unknown type";
   }
   if (group === "module") {
     if (kind === "evidence") return row.module || "Unknown module";

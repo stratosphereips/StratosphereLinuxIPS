@@ -1222,7 +1222,7 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             .inner_text()
         )
         assert (
-            evidence_type.startswith("Unknown port")
+            evidence_type.startswith("Unknown Port")
             and "From P2P" in evidence_type
         )
         detail = page.locator("#evidence-detail-content")
@@ -1263,7 +1263,7 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             .nth(2)
             .inner_text()
         )
-        assert host_type.startswith("Unknown port") and "From P2P" in host_type
+        assert host_type.startswith("Unknown Port") and "From P2P" in host_type
         page.evaluate("""() => {
             state.p2p={activity:[window.peerTestActivity], peers:[{peer_id:'peer-A',ip:'192.0.2.2'}]};
             renderP2PMessages(); openP2PMessage(window.peerTestActivity);
@@ -1274,7 +1274,7 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             .nth(2)
             .inner_text()
         )
-        assert "Unknown port" in p2p_type and "Long connection" in p2p_type
+        assert "Unknown Port" in p2p_type and "Long Connection" in p2p_type
         message = page.locator("#p2p-message-detail")
         assert "Connection to unknown TCP port 8123" in message.inner_text()
         assert "Connection lasted one hour" in message.inner_text()
@@ -1293,6 +1293,17 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             )
             == "Type not supplied"
         )
+        for raw, expected in [
+            ("UNKNOWN_PORT", "Unknown Port"), ("Unknown port", "Unknown Port"),
+            ("unknown port", "Unknown Port"), ("ARP_SCAN", "ARP Scan"),
+            ("CONNECTION_WITHOUT_DNS", "Connection Without DNS"),
+            ("ML_ONLINE_MALICIOUS_FLOW", "ML Suspicious Flow · Online"),
+            ("TLS_PROVIDER_IMPERSONATION", "Suspected TLS Provider Impersonation"),
+            ("HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE", "Binary HTTP POST Without Content-Type"),
+        ]:
+            assert page.evaluate("value => evidenceTypeLabel({evidence_type:value,module:'conn_analyzer'})", raw) == expected
+            assert page.evaluate("value => alertTypeName(value)", raw) == expected
+        assert record["peer_report"]["provenance"][0]["evidence_type"] == "UNKNOWN_PORT"
         assert page.evaluate("evidenceTypeCell({evidence_type:'UNKNOWN_PORT',module:'conn_analyzer,p2p_trust'}).textContent").endswith("Includes P2P")
         assert page.evaluate("evidenceTypeLabel({message_type:'report',archived_report:true})") == "Type unavailable"
         assert page.evaluate("""() => {
@@ -1339,11 +1350,11 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
             assert banner.locator(".peer-evidence-summary").evaluate("summary => summary.scrollWidth <= summary.clientWidth")
         page.set_viewport_size({"width": 1600, "height": 1100})
         for detection, expected in [
-            ({"evidence_type":"ARP_SCAN","module":"arp","description":"ARP scan"}, "ARP scan · report about 192.168.1.163"),
-            ({"evidence_type":"UNKNOWN_PORT","module":"conn_analyzer","description":"No endpoints supplied"}, "Unknown port · report about 192.168.1.163"),
+            ({"evidence_type":"ARP_SCAN","module":"arp","description":"ARP scan"}, "ARP Scan · report about 192.168.1.163"),
+            ({"evidence_type":"UNKNOWN_PORT","module":"conn_analyzer","description":"No endpoints supplied"}, "Unknown Port · report about 192.168.1.163"),
             ({"evidence_type":"UNKNOWN_PORT","src_ip":"192.168.1.170","dst_ip":"192.168.1.163","dst_port":22}, "192.168.1.170 connected to unknown port 22 on 192.168.1.163"),
-            ({"evidence_type":"UNKNOWN_PORT","dst_ip":"192.168.1.170","dst_port":55000}, "Unknown port · report about 192.168.1.163"),
-            ({"evidence_type":"LONG_CONNECTION","src_ip":"2001:db8::1","dst_ip":"2001:db8::2","proto":"icmp","src_port":8,"dst_port":0}, "Long connection: 2001:db8::1 → 2001:db8::2"),
+            ({"evidence_type":"UNKNOWN_PORT","dst_ip":"192.168.1.170","dst_port":55000}, "Unknown Port · report about 192.168.1.163"),
+            ({"evidence_type":"LONG_CONNECTION","src_ip":"2001:db8::1","dst_ip":"2001:db8::2","proto":"icmp","src_port":8,"dst_port":0}, "Long Connection: 2001:db8::1 → 2001:db8::2"),
         ]:
             variant = {**screenshot_record, "peer_report": {**screenshot_record["peer_report"], "provenance": [detection]}}
             assert page.evaluate("record => evidenceDetailHeadline(record)", variant) == expected
@@ -3683,6 +3694,7 @@ def test_source_destination_port_whitelist_editor_in_chrome(source: str, encoded
         selects = editor.locator("select")
         assert selects.nth(1).input_value() == "src"
         assert selects.nth(1).is_disabled()
+        assert selects.nth(3).locator('option[value="UNKNOWN_PORT"]').inner_text() == "Unknown Port"
         selects.nth(3).select_option("UNKNOWN_PORT")
         editor.get_by_role("button", name="Add rule", exact=True).click()
         page.wait_for_function("() => window.savedWhitelist")
@@ -3864,7 +3876,7 @@ def test_arp_investigation_explains_actual_decision(familiar: bool, theme: str) 
         assert "at least 5 requests" not in content
         assert "Observed replies:" in content
         assert "observed two-way application traffic:" in content
-        assert ("ARP_DISCOVERY" if familiar else "ARP_SCAN") in content
+        assert detail.locator(".type-chip").first.inner_text() == ("ARP Discovery" if familiar else "ARP Scan")
         assert ("info" if familiar else "low") in detail.locator(".evidence-detail-stats").inner_text()
         assert detail.locator(".whitelist-dst-port").evaluate("el => el.closest('label').hidden")
         assert errors == []

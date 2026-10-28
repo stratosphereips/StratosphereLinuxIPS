@@ -209,8 +209,15 @@ logs before Slips reads them. Slips recognizes the resulting input fields
 `ground_truth_label` and `detailed_ground_truth_label`; merely placing a label
 configuration beside a PCAP does not label its traffic. Original stored JSON,
 training labels, analyst reviews and host tags are preserved.
-Machine learning findings use the short labels **ML suspicious flow · Linear**
-and **ML suspicious flow · Online**. **ML** means **Machine learning**; the type
+
+Evidence type names use the same Title Case throughout Evidence, Hosts,
+Alerts, P2P, charts and whitelist controls. For example, `UNKNOWN_PORT` and
+`Unknown port` both display as **Unknown Port**. Acronyms such as DNS, HTTP,
+SMB and ML remain uppercase. Stored identifiers, JSON, whitelist rule values
+and exports retain their original values.
+
+Machine learning findings use the short labels **ML Suspicious Flow · Linear**
+and **ML Suspicious Flow · Online**. **ML** means **Machine learning**; the type
 label's tooltip explains it, and the detail header spells it out. Linear uses
 the classifier trained in batches; Online uses the classifier trained one flow
 at a time. The same names appear in Evidence, Hosts, Alerts and P2P reports,
