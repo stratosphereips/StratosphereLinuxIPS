@@ -252,6 +252,8 @@ tbody tr:hover { background: #1b2a3540; }
 #p2p-peers-table .status { padding: 0; background: transparent; font-size: .67rem; }
 .p2p-reliability { display: flex; align-items: center; gap: .45rem; }
 .p2p-reliability code { min-width: 3rem; }
+.p2p-trust-value { display: grid; gap: .2rem; }
+.p2p-trust-value small { color: var(--muted); font-size: .68rem; }
 .p2p-reliability-track { display: block; min-width: 30px; height: 4px; flex: 1; border-radius: 4px; background: #20303e; }
 .p2p-reliability-track > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .p2p-panel-foot, .p2p-chart-note { margin: 0; padding: .42rem .7rem; color: #718797; font-size: .64rem; }

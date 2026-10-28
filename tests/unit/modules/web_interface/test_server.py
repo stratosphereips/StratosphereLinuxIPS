@@ -7361,6 +7361,15 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
             "ip": "192.0.2.10",
             "connected": True,
             "trust": (0.75 * 0.7) / 2,
+            "trust_details": {
+                "trust": (0.75 * 0.7) / 2,
+                "communication": (0.75 * 0.7) / 2,
+                "local_behavior": 0.0,
+                "local_assessed": False,
+                "local_maliciousness": None,
+                "local_confidence": 0.0,
+                "communication_limit": 0.35,
+            },
             "report_accuracy": [],
             "confirmed_reports": 0,
             "false_reports": 0,
@@ -7387,11 +7396,13 @@ def test_p2p_uses_redis_identity_and_live_peer_state(
 @pytest.mark.parametrize(
     "cached_trust,expected_trust", [(None, 0.305), ("0.61", 0.305)]
 )
+@pytest.mark.parametrize("with_validation", [False, True])
 def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     cached_trust: str | None,
     expected_trust: float,
+    with_validation: bool,
 ) -> None:
     """Ignore a loopback peer update and retain the authenticated endpoint.
 
@@ -7400,6 +7411,7 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
         monkeypatch: Changes to that isolated directory.
         cached_trust: Optional current model cache entry.
         expected_trust: Trust recomputed from reliable local inputs.
+        with_validation: Use the run's configured decay when validation is available.
     """
     _module_factory = ModuleFactory()
     monkeypatch.chdir(tmp_path)
@@ -7426,7 +7438,7 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     reader.redis.get.return_value = None
     reader.redis.hget.return_value = None
     reader.redis.hgetall.side_effect = lambda key: {
-        "analysis": {"analysis_start": "0"},
+        "analysis": {"analysis_start": "0", "interface": "en0"},
         "peer_info": {
             "QmLostPeer": json.dumps(
                 {"ip": "127.0.0.1", "timestamp": 300, "reliability": 0.8}
@@ -7438,11 +7450,35 @@ def test_p2p_uses_verified_peer_ip_and_persistent_trust_inputs(
     }.get(key, {})
     reader.redis.zrange.return_value = []
     reader.redis.lrange.return_value = []
-
-    peer = reader.p2p()["peers"][0]
+    validator = Mock()
+    validator.local_report.return_value = (0.8, 0.5, [])
+    validator.peer_feedback.return_value = []
+    if with_validation:
+        trust_path.with_name("report_validation.sqlite").touch()
+        metadata = output_dir / "metadata"
+        metadata.mkdir()
+        (metadata / "run.yaml").write_text("local_p2p:\n  local_reputation_half_life_hours: 48\n")
+        reader.redis.hget.side_effect = lambda key, field: (
+            json.dumps({"connected": True, "local_network": "192.168.1.0/24",
+                        "gateway_mac": "aa:bb:cc:dd:ee:ff"})
+            if key == "network_states" else None
+        )
+    with patch("modules.web_interface.server.ReportValidator", return_value=validator):
+        peer = reader.p2p()["peers"][0]
+    if with_validation:
+        assert validator.local_report.call_args.kwargs == {
+            "max_age": None, "decay_half_life": 172800,
+        }
+        expected_trust = 0.13
 
     assert peer["ip"] == "192.168.1.249"
     assert peer["trust"] == pytest.approx(expected_trust)
+    assert peer["trust_details"]["trust"] == pytest.approx(expected_trust)
+    assert peer["trust_details"]["communication"] == pytest.approx(0.28)
+    assert peer["trust_details"]["local_behavior"] == pytest.approx(-0.15 if with_validation else 0.025)
+    assert peer["trust_details"]["local_assessed"] is True
+    assert peer["trust_details"]["local_maliciousness"] == (0.8 if with_validation else 0)
+    assert peer["trust_details"]["local_confidence"] == (0.5 if with_validation else 0.05)
 
 
 @pytest.mark.parametrize("interfaces", ["en0", "en0,en1"])

@@ -125,6 +125,55 @@ reliability weight of 0.7. Even a benign assessment with confidence 1 and
 reliability 1 produces trust 0.85. Without a local benign or malicious
 assessment, reliability 1 produces trust 0.35.
 
+#### Why trust can stay near 0.3
+
+In Dita Hollmannová's thesis, section 3.2, equation 3.1, good communication is
+only one input to trust. For example, reliability 0.978 with no local assessment
+gives `0.7 × 0.978 / 2 = 0.3423`. More successful interactions can move reliability
+toward 1, but their contribution to trust stops at 0.35. A peer does not earn
+unlimited trust by staying online. A flat value near 0.34 can therefore mean
+communication is consistently working, rather than that updates have stopped.
+
+The P2P table labels this case **Communication only**. Hover over the value for
+the communication and local-behavior contributions, their sum, and the local
+assessment's confidence. The web, P2P report evaluation, and history sampling
+use the same calculation. The plot shows base trust; **Report accuracy** shows
+the separate adjustments earned by validated reports for each evidence type
+and detector version. Unreviewed reports earn no automatic credit just because
+their sender is reachable or other peers repeat them. This distinction follows
+the risks discussed in the thesis's section 8.1.4.
+
+An explicit benign assessment can raise base trust above 0.35; a malicious
+assessment reduces it. Missing evidence, informational observations and a flow's
+default `benign` label do not establish benign behavior. The formula permits a
+benign assessment, but ordinary Slips detections primarily supply malicious
+observations: a quiet peer normally remains in the communication-only case.
+Confirmed and rejected reports can still change the detector-specific trust
+used when evaluating those reports, as described below.
+
+#### Recovery after an old local detection
+
+An old detection previously kept its full penalty for as long as it remained
+in the validation database. The P2P worker now reduces confidence in old local
+assessments of a reporting peer. The first hour keeps full confidence. After
+that, confidence is multiplied by `2 ** (−age / half_life)`, where age is the
+time beyond that first hour. This implements the fading idea discussed in
+section 8.1.5 of Dita's thesis; it is an extension of the original equation.
+
+Set `local_p2p.local_reputation_half_life_hours` in `config/slips.yaml` to choose
+how many hours halve the remaining confidence. The default is 24. For example,
+an assessment with confidence 1 has confidence 0.5 after 25 hours and 0.25 after
+49 hours. Larger values keep past detections influential longer. Values must
+be positive; invalid values use 24 hours. Restart Slips to apply a change.
+
+The P2P worker, report evaluator and web all use the same decay. A new malicious
+observation has full weight immediately. Aging returns trust toward the
+communication-only baseline; it does not create a benign observation or learn
+a tested port as normal. It affects only how the reporter is weighted, not the
+evidence's severity, saved review, host alert score or outgoing fresh reports.
+No evidence or old trust samples are deleted or rewritten. Confirmed/false
+report adjustments retain their separate 30-day half-life described below.
+
 Only locally produced detections update the local score used to evaluate a
 reporter. A peer's report is retained as evidence, but cannot raise its own
 reporter's local score or be sent back as a first-hand assessment. After an

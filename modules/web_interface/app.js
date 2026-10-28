@@ -5133,7 +5133,19 @@ function renderP2PPeers() {
       if (row.trust === null || row.trust === undefined) return "—";
       const value = text("code", numeric(row.trust).toFixed(3));
       value.title = "Slips peer trust calculated from reliability and local reputation";
-      return value;
+      const inputs = row.trust_details;
+      if (!inputs) return value;
+      const wrapper = document.createElement("div");
+      wrapper.className = "p2p-trust-value";
+      wrapper.append(value, text("small", inputs.local_assessed ? "Local assessment" : "Communication only"));
+      wrapper.title = `Base trust: ${numeric(inputs.communication).toFixed(5)} from communication`
+        + ` ${numeric(inputs.local_behavior) < 0 ? "−" : "+"} ${Math.abs(numeric(inputs.local_behavior)).toFixed(5)} from local behavior`
+        + ` = ${numeric(row.trust).toFixed(5)}. `
+        + (inputs.local_assessed
+          ? `Local maliciousness ${numeric(inputs.local_maliciousness).toFixed(3)}; confidence ${numeric(inputs.local_confidence).toFixed(3)}. `
+          : `No local benign or malicious assessment. Communication alone contributes at most ${numeric(inputs.communication_limit).toFixed(3)}. `)
+        + "Validated reports adjust trust separately for each evidence type and detector version; see Report accuracy.";
+      return wrapper;
     },
     (row) => {
       const value = document.createElement("div");

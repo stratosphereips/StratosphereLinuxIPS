@@ -2384,7 +2384,9 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
         "counts": {"connected": 1, "known": 2},
         "peers": [
             {"peer_id": first_id, "ip": "192.168.1.170", "connected": True,
-             "trust": 0.350, "reliability": 1, "first_seen": 50, "last_seen": 200},
+             "trust": 0.350, "reliability": 1, "first_seen": 50, "last_seen": 200,
+             "trust_details": {"communication": 0.35, "local_behavior": 0,
+                               "local_assessed": False, "communication_limit": 0.35}},
             {"peer_id": second_id, "ip": "192.168.1.248", "connected": False,
              "trust": 0.34125, "reliability": 0.975, "first_seen": 75, "last_seen": 300},
         ],
@@ -2443,7 +2445,13 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
         assert "table’s Reliability column" in page.locator(".p2p-chart-heading p").inner_text()
         assert page.locator("#p2p-range").get_attribute("aria-label") == "Peer reliability and trust history range"
         rows = page.locator("#p2p-peers-table tbody tr")
-        assert rows.nth(0).locator("td").nth(3).inner_text() == "0.350"
+        trust_cell = rows.nth(0).locator("td").nth(3)
+        assert trust_cell.locator("code").inner_text() == "0.350"
+        assert trust_cell.locator("small").inner_text() == "Communication only"
+        explanation = trust_cell.locator(".p2p-trust-value").get_attribute("title")
+        assert "0.35000 from communication + 0.00000 from local behavior = 0.35000" in explanation
+        assert "No local benign or malicious assessment" in explanation
+        assert "most 0.350" in explanation
         assert rows.nth(0).locator("td").nth(4).inner_text() == "1.000"
         assert rows.nth(1).locator("td").nth(3).inner_text() == "0.341"
         assert rows.nth(1).locator("td").nth(4).inner_text() == "0.975"

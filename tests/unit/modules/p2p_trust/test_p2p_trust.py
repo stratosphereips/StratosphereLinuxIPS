@@ -1141,6 +1141,7 @@ def test_trust_samples_use_current_network_and_skip_offline_peers(
     _module_factory = ModuleFactory()
     trust = create_trust()
     trust._network_identity = Mock(return_value="network-a")
+    trust.local_reputation_half_life = 86400
     trust.db.get_authenticated_p2p_connections.return_value = [
         {"peer_id": "peer-a", "remote_ip": "192.0.2.1"},
         {"peer_id": "peer-a", "remote_ip": "192.0.2.9"},
@@ -1163,4 +1164,6 @@ def test_trust_samples_use_current_network_and_skip_offline_peers(
     assert samples == [("peer-a", "192.0.2.1", "network-a", pytest.approx(expected), 1.0)]
     assert timestamp == 100 and days == 90
     trust.trust_db.store_peer_trust_samples.assert_called_once()
-    trust.report_validation.local_report.assert_called_once_with("network-a|192.0.2.1", max_age=None)
+    trust.report_validation.local_report.assert_called_once_with(
+        "network-a|192.0.2.1", max_age=None, decay_half_life=86400
+    )

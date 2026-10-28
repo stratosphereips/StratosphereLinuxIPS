@@ -26,6 +26,25 @@ PEER_FINDINGS = {"P2P_REPORT", "MALICIOUS_IP_FROM_P2P_NETWORK"}
 MAX_CREDIT = 0.20
 HALF_LIFE = 30 * 86400
 MATCH_WINDOW = 3600
+LOCAL_REPUTATION_HALF_LIFE = 86400
+
+
+def local_reputation_half_life(hours: object) -> float:
+    """Read positive half-life hours, falling back to 24 hours for invalid values.
+
+    Parameters:
+        hours: Value of local_p2p.local_reputation_half_life_hours.
+
+    Returns:
+        Half-life in seconds for aging local assessments of reporting peers.
+    """
+    try:
+        value = float(hours) * 3600
+        if not isinstance(hours, bool) and math.isfinite(value) and value > 0:
+            return value
+    except (TypeError, ValueError, OverflowError):
+        pass
+    return LOCAL_REPUTATION_HALF_LIFE
 
 
 def observation_record(
@@ -1146,17 +1165,23 @@ class ReportValidator:
             return self._validation(connection, report)[0]
 
     def local_report(
-        self, target: str, max_age: float | None = MATCH_WINDOW
+        self,
+        target: str,
+        max_age: float | None = MATCH_WINDOW,
+        decay_half_life: float | None = None,
     ) -> tuple[float | None, float | None, list[dict[str, Any]]]:
         """Build an outgoing assessment from recent, unrejected local evidence.
 
         Parameters:
             target: Receiver-scoped network and host identity.
             max_age: Observation lifetime in seconds; None retains local peer history.
+            decay_half_life: Optional confidence half-life in seconds after the
+                first hour; used only when assessing a reporting peer's behavior.
 
         Returns:
             Score, adjusted confidence and provenance, or an unknown assessment.
         """
+        now = time.time()
         with self.connect() as connection:
             records = [
                 json.loads(row[0])
@@ -1164,7 +1189,7 @@ class ReportValidator:
                     "SELECT data FROM observations WHERE target_key=? AND observed_at>=? ORDER BY observed_at DESC",
                     (
                         target,
-                        time.time() - max_age if max_age is not None else 0,
+                        now - max_age if max_age is not None else 0,
                     ),
                 )
             ]
@@ -1181,6 +1206,15 @@ class ReportValidator:
             (
                 record["score"],
                 record["confidence"]
+                * (
+                    2
+                    ** (
+                        -max(0, now - record["observed_at"] - MATCH_WINDOW)
+                        / decay_half_life
+                    )
+                    if decay_half_life
+                    else 1
+                )
                 * self.detector_weight(
                     record["evidence_type"],
                     record["provenance"]["rule_version"],

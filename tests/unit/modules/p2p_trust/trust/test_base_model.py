@@ -3,6 +3,59 @@
 import pytest
 from unittest.mock import Mock
 from tests.module_factory import ModuleFactory
+from modules.p2p_trust.trust.base_model import peer_trust_details
+
+
+@pytest.mark.parametrize(
+    "reliability,score,confidence,communication,local,expected",
+    [
+        (0.5, None, None, 0.175, 0, 0.175),
+        (0.8, None, 0, 0.28, 0, 0.28),
+        (0.978, None, 0, 0.3423, 0, 0.3423),
+        (1.0, 0.5, 0, 0.35, 0, 0.35),
+        (1.0, 0.0, 0, 0.35, 0, 0.35),
+        (1.0, 0.0, 1, 0.35, 0.5, 0.85),
+        (1.0, 1.0, 1, 0.35, -0.5, -0.15),
+        (0.0, 1.0, 1, 0, -0.5, -0.5),
+        (0.978, 0.2, 0.8, 0.3423, 0.24, 0.5823),
+    ],
+)
+def test_peer_trust_details_match_worker(
+    reliability: float, score: float | None, confidence: float | None,
+    communication: float, local: float, expected: float,
+) -> None:
+    """Explain thesis trust without mistaking unknown behavior for benign behavior.
+
+    Parameters:
+        reliability: Measured communication reliability.
+        score: Local maliciousness, or an unknown assessment.
+        confidence: Local assessment confidence.
+        communication: Expected communication contribution.
+        local: Expected local behavior contribution.
+        expected: Expected total trust.
+    """
+    model = ModuleFactory().create_base_model_obj()
+    details = peer_trust_details(reliability, score, confidence)
+    assert details["trust"] == pytest.approx(expected)
+    assert details["communication"] == pytest.approx(communication)
+    assert details["local_behavior"] == pytest.approx(local)
+    assert details["communication_limit"] == 0.35
+    assert details["local_assessed"] == (score is not None and bool(confidence))
+    assert model.compute_peer_trust(
+        reliability, score if score is not None else 0.5, confidence or 0
+    ) == pytest.approx(expected)
+
+
+def test_time_alone_does_not_raise_peer_trust() -> None:
+    """Raise trust for improved measurements, not repeated sampling or uptime."""
+    model = ModuleFactory().create_base_model_obj()
+    initial = model.compute_peer_trust(0.978, 0.5, 0)
+    for _ in range(100):
+        assert model.compute_peer_trust(0.978, 0.5, 0) == initial
+    assert model.compute_peer_trust(1, 0.5, 0) > initial
+    assert model.compute_peer_trust(1, 0.5, 0) == 0.35
+    assert model.compute_peer_trust(1, 0, 1) > 0.35
+    assert model.compute_peer_trust(1, 1, 1) < initial
 
 
 @pytest.mark.parametrize(

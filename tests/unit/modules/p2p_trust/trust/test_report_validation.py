@@ -20,6 +20,7 @@ from modules.p2p_trust.trust.report_validation import (
     provenance_for_evidence,
     queue_review_event,
     validate_provenance,
+    local_reputation_half_life,
 )
 from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
@@ -116,6 +117,99 @@ def review(
         "verdict": verdict,
         "records": [record],
     }
+
+
+@pytest.mark.parametrize("hours,expected", [
+    (24, 86400), ("48", 172800), (0.5, 1800),
+    (None, 86400), (0, 86400), (-1, 86400), (True, 86400),
+    ("bad", 86400), (float("nan"), 86400), (float("inf"), 86400),
+    (1e308, 86400),
+])
+def test_local_reputation_half_life(hours: object, expected: float) -> None:
+    """Read hours safely without allowing invalid or unbounded decay intervals.
+
+    Parameters:
+        hours: Configured half-life value.
+        expected: Half-life in seconds, including the fallback for invalid input.
+    """
+    _factory = ModuleFactory()
+    assert local_reputation_half_life(hours) == expected
+
+
+@pytest.mark.parametrize("age_hours,half_life_hours,expected", [
+    (0, 24, 1), (1, 24, 1), (25, 24, 0.5),
+    (49, 24, 0.25), (97, 24, 0.0625), (49, 48, 0.5),
+])
+def test_local_peer_penalty_fades_without_becoming_benign(
+    tmp_path: Path, age_hours: float, half_life_hours: float, expected: float,
+) -> None:
+    """Age local peer penalties while keeping evidence and outgoing policy intact.
+
+    Parameters:
+        tmp_path: Isolated validation database.
+        age_hours: Time since the local detection.
+        half_life_hours: Configured interval for halving old confidence.
+        expected: Confidence remaining after the first full-confidence hour.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    record = observation()
+    now = record["observed_at"]
+    record["observed_at"] -= age_hours * 3600
+    record["provenance"]["observed_at"] = record["observed_at"]
+    validator.observe_local(record)
+    with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=now):
+        score, confidence, _ = validator.local_report(
+            record["target_key"], max_age=None,
+            decay_half_life=half_life_hours * 3600,
+        )
+        assert score == 1
+        assert confidence == pytest.approx(expected)
+        assert validator.local_report(record["target_key"], max_age=None)[:2] == (1, 1)
+        model = BaseModel.__new__(BaseModel)
+        model.reliability_weight = 0.7
+        trust = model.compute_peer_trust(1, score, confidence)
+        assert trust == pytest.approx(0.35 - expected / 2)
+        assert trust < 0.35
+    with validator.connect() as connection:
+        assert json.loads(connection.execute("SELECT data FROM observations").fetchone()[0]) == record
+    if age_hours > 1:
+        fresh = observation(identifier="fresh")
+        fresh["observed_at"] = now
+        validator.observe_local(fresh)
+        with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=now):
+            assert validator.local_report(
+                record["target_key"], max_age=None, decay_half_life=86400
+            )[:2] == (1, 1)
+
+
+@pytest.mark.parametrize("age_hours,expected_confidence", [(0, 0), (97, 0.31875)])
+def test_report_weight_uses_aged_peer_assessment(
+    tmp_path: Path, age_hours: float, expected_confidence: float,
+) -> None:
+    """Apply recovery to actual report weighting, not only to displayed trust.
+
+    Parameters:
+        tmp_path: Isolated validation database.
+        age_hours: Age of the local malicious observation about the reporter.
+        expected_confidence: Network opinion confidence after weighting its report.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    local = observation()
+    now = local["observed_at"]
+    local["observed_at"] -= age_hours * 3600
+    validator.observe_local(local)
+    target = "198.51.100.10"
+    validator.observe_report(report(target=target))
+    trustdb = Mock()
+    trustdb.get_ip_of_peer.return_value = (now, local["target"])
+    trustdb.get_reporter_reliability.return_value = 1
+    model = BaseModel(Mock(), trustdb, Mock(), validator, lambda: "gateway:home")
+    with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=now):
+        score, confidence = model.get_opinion_on_ip(target)
+    assert score == 1
+    assert confidence == pytest.approx(expected_confidence)
 
 
 @pytest.mark.parametrize("peers", [1, 2, 10])

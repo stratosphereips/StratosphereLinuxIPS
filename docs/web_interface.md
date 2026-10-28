@@ -878,6 +878,18 @@ correct when the measured reliability and local assessment remain unchanged;
 receiving more reports alone does not increase the peer's base trust. Updates
 received within the same second retain their insertion order, so the table,
 chart and trust model use the same latest measurement.
+The table labels trust as **Communication only** when no local assessment is
+available, or **Local assessment** otherwise. Hover to see each contribution,
+their sum and the local assessment's confidence. The equation is also shown
+below the charts. Communication alone is limited to 0.35, so a stable, reachable
+peer can correctly stay near 0.34. Higher uptime does not validate reports;
+the separate **Report accuracy** column shows any detector-specific adjustments.
+Old local detections lose influence after the first hour, using
+`local_p2p.local_reputation_half_life_hours` (24 hours by default). Their confidence
+halves each interval, so an old test cannot keep its full penalty indefinitely.
+The worker, table and newly recorded trust samples apply the same aging; saved
+evidence and earlier plot samples remain unchanged. A new detection has full
+weight immediately. See [P2P trust and recovery](P2P.md#recovery-after-an-old-local-detection).
 
 The reports and message activity table combines bounded send/receive telemetry with retained reports from the current run. Filter chips show all messages, reports, requests, or connection changes. The Show menu also keeps received reports, sent reports, and blame reports available. Every column is sortable; Load more exposes the remaining retained rows. Selecting a row opens its content beside the table, including Copy JSON. When only the trust database record survives, the detail view shows its stored report fields and identifies the missing original message. An enabled module with zero connected peers is shown as healthy and listening.
 

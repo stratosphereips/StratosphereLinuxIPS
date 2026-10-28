@@ -28,6 +28,7 @@ import modules.p2p_trust.utils.utils as p2p_utils
 from modules.p2p_trust.trust.report_validation import (
     ReportValidator,
     observation_record,
+    local_reputation_half_life,
 )
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from modules.supported_module_names import Modules
@@ -200,6 +201,11 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
         self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.local_reputation_half_life = local_reputation_half_life(
+            conf.read_configuration(
+                "local_p2p", "local_reputation_half_life_hours", 24
+            )
+        )
         self.rendezvous: str = conf.read_configuration(
             "local_p2p", "rendezvous", "slips"
         )
@@ -238,6 +244,7 @@ class Trust(IModule):
             self.db,
             self.report_validation,
             self._network_identity,
+            self.local_reputation_half_life,
         )
 
         self.go_director = GoDirector(
@@ -1465,7 +1472,9 @@ class Trust(IModule):
             score, confidence = self.trust_db.get_reporter_reputation(ip)
             if isinstance(validator, ReportValidator):
                 score, confidence, _ = validator.local_report(
-                    f"{network}|{ip}", max_age=None
+                    f"{network}|{ip}",
+                    max_age=None,
+                    decay_half_life=self.local_reputation_half_life,
                 )
             score = 0.5 if score is None else score
             confidence = 0.0 if confidence is None else confidence

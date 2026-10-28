@@ -1754,6 +1754,11 @@ local_p2p:
    use_p2p : False
    # Dedicated TCP listener. SLIPS does not scan ephemeral ports for P2P.
    listen_port: 6668
+   # How quickly an old local detection loses influence on a peer's trust.
+   # Keep full confidence for the first hour, then halve it every 24 hours.
+   # Larger values keep penalties longer; smaller values allow faster recovery.
+   # This returns trust toward the communication baseline, not a benign verdict.
+   local_reputation_half_life_hours: 24
    # Authenticated connection records are refreshed by successful activity.
    connection_ttl: 30
    # Briefly hold candidate handshake flows while authentication completes.

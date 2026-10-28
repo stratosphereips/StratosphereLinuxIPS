@@ -9,6 +9,7 @@ from slips_files.core.database.database_manager import DBManager
 from slips_files.core.output import Output
 from modules.p2p_trust.trust.report_validation import (
     MATCH_WINDOW,
+    LOCAL_REPUTATION_HALF_LIFE,
     ReportValidator,
 )
 
@@ -25,6 +26,41 @@ def local_maliciousness_to_thesis_score(maliciousness: float) -> float:
         Peer-behavior score, from 1 (benign) to -1 (malicious).
     """
     return 1 - 2 * maliciousness
+
+
+def peer_trust_details(
+    reliability: float,
+    score: float | None,
+    confidence: float | None,
+    reliability_weight: float = RELIABILITY_WEIGHT,
+) -> dict[str, float | bool | None]:
+    """Calculate thesis trust and expose the contribution of each input.
+
+    Parameters:
+        reliability: Locally measured communication reliability, from 0 to 1.
+        score: Local maliciousness, from 0 to 1; None means unknown.
+        confidence: Confidence in the local assessment; None means unknown.
+        reliability_weight: Weight limiting communication's influence.
+
+    Returns:
+        Trust, its communication/local contributions and assessment inputs.
+    """
+    assessed = score is not None and confidence is not None and confidence > 0
+    local = (
+        local_maliciousness_to_thesis_score(score) * confidence
+        if assessed
+        else 0.0
+    )
+    communication = reliability * reliability_weight
+    return {
+        "trust": (communication + local) / 2,
+        "communication": communication / 2,
+        "local_behavior": local / 2,
+        "local_assessed": assessed,
+        "local_maliciousness": score if assessed else None,
+        "local_confidence": confidence if assessed else 0.0,
+        "communication_limit": reliability_weight / 2,
+    }
 
 
 class BaseModel:
@@ -47,6 +83,7 @@ class BaseModel:
         main_slips_db: DBManager,
         report_validation: ReportValidator | None = None,
         network_identity: Callable[[], str] | None = None,
+        local_reputation_half_life: float = LOCAL_REPUTATION_HALF_LIFE,
     ):
         self.trustdb = trustdb
         self.main_slips_db = main_slips_db
@@ -54,6 +91,7 @@ class BaseModel:
         self.reliability_weight = RELIABILITY_WEIGHT
         self.report_validation = report_validation
         self.network_identity = network_identity
+        self.local_reputation_half_life = local_reputation_half_life
         self.last_corroboration = {"target": "", "support": 0, "peers": []}
 
     def print(self, *args, **kwargs):
@@ -134,7 +172,9 @@ class BaseModel:
                 continue
             local_score, local_confidence, _ = (
                 self.report_validation.local_report(
-                    f"{self.network_identity()}|{reporter_ip}", max_age=None
+                    f"{self.network_identity()}|{reporter_ip}",
+                    max_age=None,
+                    decay_half_life=self.local_reputation_half_life,
                 )
             )
             if local_score is None or local_confidence is None:
@@ -234,22 +274,19 @@ class BaseModel:
     def compute_peer_trust(
         self, reliability: float, score: float, confidence: float
     ) -> float:
-        """
-        Compute the opinion value from a peer by multiplying his report data
-        and his reputation
+        """Compute base peer trust using thesis equation 3.1.
 
-        :param reliability: trust value for the peer, obtained from the go
-        level
-        :param score: score by slips for the peer's IP address
-        :param confidence: confidence by slips for the peer's IP address
-        :return: The trust we should put in the report given by this peer
-        """
+        Parameters:
+            reliability: Communication reliability measured by Pigeon.
+            score: Local maliciousness of the reporter's IP, from 0 to 1.
+            confidence: Confidence in that local assessment, from 0 to 1.
 
-        local_score = local_maliciousness_to_thesis_score(score)
-        return (
-            (reliability * self.reliability_weight)
-            + (local_score * confidence)
-        ) / 2
+        Returns:
+            Base trust before detector-specific report-accuracy adjustments.
+        """
+        return peer_trust_details(
+            reliability, score, confidence, self.reliability_weight
+        )["trust"]
 
     def normalize_peer_reputations(self, peers: list) -> (float, float, list):
         """

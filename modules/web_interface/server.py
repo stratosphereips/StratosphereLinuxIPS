@@ -55,13 +55,13 @@ from modules.supported_module_names import Modules
 from modules.smb_analyzer.settings import RULES as SMB_RULES
 from modules.arp.scan_settings import ARP_SCAN_EXPLANATIONS
 from modules.p2p_trust.trust.base_model import (
-    RELIABILITY_WEIGHT,
-    local_maliciousness_to_thesis_score,
+    peer_trust_details,
 )
 from modules.p2p_trust.trust.report_validation import (
     ReportValidator,
     observation_record,
     queue_review_event,
+    local_reputation_half_life,
 )
 from slips_files.core.helpers.whitelist.whitelist_parser import (
     backup_local_whitelist,
@@ -382,6 +382,13 @@ class RunDataReader:
         name = path.rsplit(".", 1)[-1]
         label = cls._setting_label(name).lower()
         explicit = {
+            "local_p2p.local_reputation_half_life_hours": (
+                "Hours needed to halve the confidence of an old local detection "
+                "when weighting a peer's reports. The first hour keeps full "
+                "confidence; the default then halves it every 24 hours. Larger "
+                "values keep penalties longer. Recovery approaches the "
+                "communication baseline; it does not mark the peer benign."
+            ),
             "parameters.time_window_width": (
                 "How long evidence is accumulated together before Slips starts "
                 "a new analysis time window, in seconds. For PCAP/log analysis, "
@@ -10339,6 +10346,12 @@ class RunDataReader:
             else ""
         )
         peers = []
+        config, _ = self._run_config()
+        reputation_half_life = local_reputation_half_life(
+            (config.get("local_p2p") or {}).get(
+                "local_reputation_half_life_hours", 24
+            )
+        )
         for peer_id in peer_ids:
             info = peer_info.get(peer_id, {})
             pairing = peer_ips.get(peer_id, {})
@@ -10351,13 +10364,16 @@ class RunDataReader:
                 except (KeyError, TypeError, ValueError):
                     reliability_value = None
             trust_value = None
+            trust_details = None
             if reliability_value is not None and ip:
                 score, confidence = reputations.get(ip, (0.5, 0.0))
                 if validator is not None and validation_network:
                     try:
                         reviewed_score, reviewed_confidence, _ = (
                             validator.local_report(
-                                f"{validation_network}|{ip}", max_age=None
+                                f"{validation_network}|{ip}",
+                                max_age=None,
+                                decay_half_life=reputation_half_life,
                             )
                         )
                         score, confidence = (
@@ -10367,10 +10383,10 @@ class RunDataReader:
                         )
                     except sqlite3.Error:
                         pass
-                trust_value = (
-                    reliability_value * RELIABILITY_WEIGHT
-                    + local_maliciousness_to_thesis_score(score) * confidence
-                ) / 2
+                trust_details = peer_trust_details(
+                    reliability_value, score, confidence
+                )
+                trust_value = trust_details["trust"]
             accuracy = []
             if validator is not None:
                 try:
@@ -10383,6 +10399,7 @@ class RunDataReader:
                     "ip": ip,
                     "connected": peer_id in connected,
                     "trust": trust_value,
+                    "trust_details": trust_details,
                     "report_accuracy": accuracy,
                     "confirmed_reports": sum(
                         item["confirmed"] for item in accuracy
