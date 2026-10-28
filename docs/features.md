@@ -292,6 +292,14 @@ Slips considers an IP belongs to an org if:
 
 Otherwise, Slips triggers and "unknown port" evidence.
 
+After a host is detected scanning, Slips suppresses repeated Unknown Port
+findings for its failed connection attempts. Established connections still
+receive the normal known-service checks, even while the scanner flag is
+active. For example, a host scanning TCP 445 and then establishing a TLS
+connection to an unknown TCP 9001 produces separate scan and Unknown Port
+evidence. A scan must not hide other services used by the same host.
+
+
 For live local monitoring, high-numbered UDP traffic from the monitored
 computer to a peer on its current subnet is exempt from this evidence only
 when Zeek records distinct source and destination MACs, neither destination

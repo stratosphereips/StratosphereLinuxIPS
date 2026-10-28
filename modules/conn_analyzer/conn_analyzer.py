@@ -214,10 +214,18 @@ class ConnAnalyzer(IAsyncModule):
 
         return False
 
-    def check_unknown_port(self, profileid, twid, flow):
-        """
-        Checks dports that are not in our
-        slips_files/ports_info/services.csv
+    def check_unknown_port(
+        self, profileid: str, twid: str, flow: Any
+    ) -> bool | None:
+        """Detect unknown destination services without repeating failed scan probes.
+
+        Parameters:
+            profileid: Source host profile identifier.
+            twid: Time window containing the connection.
+            flow: Parsed connection with its interpreted connection state.
+
+        Returns:
+            True when evidence is generated; False or None for excluded flows.
         """
         if not tcp_initiator_is_known(
             flow.proto, getattr(flow, "history", None)
@@ -234,9 +242,9 @@ class ConnAnalyzer(IAsyncModule):
             # the protocol is unrecognized by zeek. not tcp or udp.
             return
 
-        if self.db.is_a_port_scanner(flow.saddr, twid):
-            # avoid setting unknown port evidence for each port
-            # scanned from this attacker
+        is_established = getattr(flow, "interpreted_state", "") == ESTAB
+        if not is_established and self.db.is_a_port_scanner(flow.saddr, twid):
+            # Failed probes are covered by scan evidence; successful services are not.
             return False
 
         proto = str(flow.proto or "").lower()

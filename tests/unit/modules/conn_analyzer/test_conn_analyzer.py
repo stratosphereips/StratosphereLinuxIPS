@@ -169,8 +169,8 @@ def test_is_p2p(
         "expected_result",
     ),
     [
-        # Case 1: attacker already classified as port scanner → False
-        ("1337", "udp", None, False, False, True, False),
+        # Successful connections are checked even after the source was a scanner.
+        ("1337", "udp", None, False, False, True, True),
         # Case 2: unknown port, not scanner, not org-owned → True
         ("1337", "udp", None, False, False, False, True),
     ],
@@ -2250,3 +2250,58 @@ def test_unknown_port_ignores_known_p2p_flow(mocker) -> None:
 
     assert conn.check_unknown_port(profileid, twid, flow) is None
     evidence.assert_not_called()
+
+
+@pytest.mark.parametrize("proto,state,history,known_service,expected", [
+    ("tcp", "S1", "ShADadt", None, True),
+    ("tcp", "SF", "ShADadfF", None, True),
+    ("tcp", "S1", "ShADadt", "known-service", False),
+    ("tcp", "S0", "S", None, False),
+    ("tcp", "REJ", "Sr", None, False),
+    ("udp", "SF", "Dd", None, True),
+    ("udp", "S0", "D", None, False),
+])
+def test_scanner_keeps_established_unknown_service(proto: str, state: str, history: str, known_service: str | None, expected: bool) -> None:
+    """Keep a scanner's successful services visible while suppressing failed probes.
+
+    Parameters:
+        proto: TCP or UDP transport.
+        state: Zeek connection state.
+        history: Recorded packet flags relative to the final endpoints.
+        known_service: Existing service catalogue match, if any.
+        expected: Whether Unknown Port evidence must be generated.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    from modules.conn_analyzer.set_evidence import SetEvidenceHelper
+    from slips_files.core.database.redis_db.scan_detections_db import ScanDetectionsHandler
+    from slips_files.core.structures.evidence import EvidenceType, ThreatLevel
+
+    raw = {"ts": 321.97754, "uid": "scanner-established-9001", "id.orig_h": "192.168.1.120",
+           "id.orig_p": 49722, "id.resp_h": "212.129.49.59", "id.resp_p": 9001,
+           "proto": proto, "service": "ssl" if proto == "tcp" and state == "S1" else "-",
+           "duration": 10, "conn_state": state, "history": history,
+           "orig_pkts": 357, "resp_pkts": 756, "orig_bytes": 207599, "resp_bytes": 902535}
+    flow, error = ZeekJSON(factory.logger).process_line({"type": "conn.log", "interface": "default", "data": raw})
+    assert error == ""
+    flow.interpreted_state = ScanDetectionsHandler.get_final_state_from_flags(conn.db, flow.state, flow.pkts)
+    conn.db.is_a_port_scanner.return_value = True
+    conn.db.get_port_info.return_value = known_service
+    conn.db.is_ftp_port.return_value = False
+    conn.db.is_p2p_related_flow.return_value = False
+    conn.port_belongs_to_an_org = Mock(return_value=False)
+    conn.is_local_apple_peer_flow = Mock(return_value=False)
+    conn.is_broadcast_or_multicast_flow = Mock(return_value=False)
+    conn.set_evidence = SetEvidenceHelper(conn.db)
+
+    assert conn.check_unknown_port(f"profile_{flow.saddr}", "timewindow1", flow) is expected
+    assert conn.db.set_evidence.call_count == int(expected)
+    if expected:
+        evidence = conn.db.set_evidence.call_args.args[0]
+        assert evidence.evidence_type == EvidenceType.UNKNOWN_PORT
+        assert evidence.threat_level == ThreatLevel.HIGH
+        assert evidence.profile.ip == "192.168.1.120"
+        assert evidence.attacker.value == "192.168.1.120"
+        assert evidence.victim.value == "212.129.49.59"
+        assert str(evidence.dst_port) == "9001"
+        assert evidence.uid == [flow.uid]
