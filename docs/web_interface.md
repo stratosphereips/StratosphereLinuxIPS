@@ -126,6 +126,10 @@ The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
+With evidence grouping set to **None**, the middle record-list pane is hidden.
+Select evidence directly in the left table to open its details on the right;
+the divider resizes these two panes. Closing the details gives the table the
+full width. Grouped views retain their group, record-list and detail panes.
 **Evidence record** is collapsed by default. Expand it for identifiers, detection
 metadata and alert links; P2P records also retain reporting-peer metadata there.
 Source and destination hosts remain in the description and triggering flows

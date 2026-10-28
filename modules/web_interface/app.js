@@ -140,7 +140,7 @@ function saveViewPreferences() {
     columns[input.dataset.hostColumn] = input.checked;
   });
   const paneWidths = {};
-  [["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width"]],
+  [["evidence-workspace", ["--evidence-left-width", "--evidence-detail-group-width", "--evidence-detail-record-width", "--evidence-individual-list-width"]],
     ["host-workspace", ["--host-evidence-list-width"]]]
     .forEach(([id, names]) => {
       const element = byId(id);
@@ -3037,6 +3037,19 @@ function updateEvidenceViewportHeight() {
   byId("evidence").style.setProperty("--evidence-panel-height", `${Math.max(380, window.innerHeight - bottom)}px`);
 }
 
+/** Show only the evidence list and inspector when grouping is None. */
+function updateEvidencePaneLayout() {
+  const workspace = byId("evidence-workspace");
+  const individual = byId("evidence-view").value === "individual";
+  const hasDetail = workspace.classList.contains("has-detail");
+  workspace.classList.toggle("individual", individual);
+  byId("evidence-right").hidden = individual;
+  byId("evidence-group-divider").hidden = individual && !hasDetail;
+  byId("evidence-group-divider").setAttribute("aria-label", individual
+    ? "Resize evidence table and details" : "Resize evidence table and records");
+  byId("evidence-detail-divider").hidden = individual || !hasDetail;
+}
+
 /** Resize the evidence table or records pane while keeping the inspector usable.
  * @param {string} kind Pane before the dragged divider.
  * @param {number} desiredWidth Requested pane width in pixels.
@@ -3053,7 +3066,10 @@ function resizeEvidencePane(kind, desiredWidth) {
   const width = workspace.getBoundingClientRect().width;
   const hasDetail = workspace.classList.contains("has-detail");
   const left = workspace.querySelector(".evidence-left").getBoundingClientRect().width;
-  if (kind === "group") {
+  if (workspace.classList.contains("individual")) {
+    if (hasDetail) workspace.style.setProperty("--evidence-individual-list-width",
+      `${Math.round(Math.max(240, Math.min(desiredWidth, width - 320 - 8)))}px`);
+  } else if (kind === "group") {
     const records = byId("evidence-right").getBoundingClientRect().width;
     const remaining = hasDetail ? records + 320 + 16 : 240 + 8;
     workspace.style.setProperty(hasDetail ? "--evidence-detail-group-width" : "--evidence-left-width", `${Math.round(Math.max(240, Math.min(desiredWidth, width - remaining)))}px`);
@@ -3149,6 +3165,7 @@ function renderEvidenceThreatChips() {
 
 /** Render grouping controls for the four Evidence table modes. */
 function renderEvidenceGroupControls() {
+  updateEvidencePaneLayout();
   const mode = byId("evidence-view").value;
   const container = byId("evidence-group-controls");
   container.replaceChildren();
@@ -3229,16 +3246,18 @@ function evidenceClock(timestamp) {
 
 /** Draw the overview shown before an Evidence group is selected. */
 function renderEvidenceEmptyState() {
+  updateEvidencePaneLayout();
   const right = byId("evidence-right");
   right.replaceChildren();
   const payload = state.pages.evidence;
   const mode = byId("evidence-view").value;
+  if (mode === "individual") return;
   const prompt = document.createElement("div");
   prompt.className = "evidence-right-panel";
   prompt.append(text("h3", mode === "individual" ? "Select a record to inspect it" : "Select a group to see its records"),
     text("p", "Use ↑↓ and Enter in the table. Selecting a record opens its full details and triggering flows. The summary below covers the groups loaded on this page."));
   right.append(prompt);
-  if (mode === "individual" || !payload.items.length) return;
+  if (!payload.items.length) return;
   const typeCounts = new Map();
   const hostScores = new Map();
   payload.items.forEach((item) => {
@@ -3411,11 +3430,16 @@ function evidenceReporter(record) {
   return legacy ? legacy[1] : "Peer not recorded";
 }
 
-/** Render grouped or ungrouped records beside the evidence details. */
+/** Render the selected group's records beside the evidence details. */
 function renderEvidenceGroup() {
+  updateEvidencePaneLayout();
   const workspace = state.evidenceWorkspace;
   const group = workspace.group;
   const individual = byId("evidence-view").value === "individual";
+  if (individual) {
+    byId("evidence-right").replaceChildren();
+    return;
+  }
   if (!group && !individual) return renderEvidenceEmptyState();
   const records = individual ? state.pages.evidence.items : workspace.records;
   const total = individual ? state.pages.evidence.total : workspace.total;
@@ -6279,7 +6303,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   if (inPane) {
     const workspace = byId("evidence-workspace");
     workspace.classList.add("has-detail");
-    byId("evidence-detail-divider").hidden = false;
+    updateEvidencePaneLayout();
     workspace.append(page);
   }
   if (inAlertPane) {

@@ -490,6 +490,55 @@ def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, them
         page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
         assert page.locator("#evidence-detail").is_visible()
         assert table.is_visible()
+        page.evaluate("renderEvidenceGroupControls()")
+        page.locator("#evidence-group-controls").get_by_role("button", name="None", exact=True).click()
+        page.wait_for_function("!state.requests.has('evidence') && state.pages.evidence.items.length > 1")
+        workspace = page.locator("#evidence-workspace")
+        evidence_list = page.locator(".evidence-left")
+        assert page.locator("#evidence-right").is_hidden()
+        assert page.locator("#evidence-group-divider").is_hidden()
+        assert page.locator("#evidence-detail-divider").is_hidden()
+        assert evidence_list.bounding_box()["width"] == workspace.bounding_box()["width"]
+        page.locator("#evidence-table tbody tr[data-clickable]").first.click()
+        page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+        assert page.locator("#evidence-right").is_hidden()
+        assert page.locator("#evidence-right").inner_html() == ""
+        assert page.locator("#evidence-detail-divider").is_hidden()
+        assert .49 < evidence_list.bounding_box()["width"] / workspace.bounding_box()["width"] < .51
+        assert page.locator("#evidence-detail").bounding_box()["width"] > .48 * workspace.bounding_box()["width"]
+        divider = page.locator("#evidence-group-divider")
+        assert divider.is_visible()
+        width = evidence_list.bounding_box()["width"]
+        divider.focus()
+        divider.press("ArrowLeft")
+        assert evidence_list.bounding_box()["width"] == pytest.approx(width - 24, abs=1)
+        width = evidence_list.bounding_box()["width"]
+        first_id = page.evaluate("state.evidenceDetail.record.id")
+        second = page.locator("#evidence-table tbody tr[data-clickable]").nth(1)
+        second.focus()
+        second.press("Enter")
+        page.wait_for_function("id => state.evidenceDetail.record.id !== id", arg=first_id)
+        assert second.get_attribute("class") and "selected" in second.get_attribute("class")
+        page.evaluate("() => loadEvidence()")
+        assert page.locator("#evidence-right").is_hidden()
+        assert evidence_list.bounding_box()["width"] == width
+        assert page.locator("#evidence-detail").is_visible()
+        page.evaluate("closeEvidenceDetail()")
+        assert evidence_list.bounding_box()["width"] == workspace.bounding_box()["width"]
+        assert divider.is_hidden()
+        page.locator("#evidence-table tbody tr[data-clickable]").first.click()
+        page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+        assert evidence_list.bounding_box()["width"] == width
+        page.locator("#evidence-group-controls").get_by_role("button", name="Type", exact=True).click()
+        page.wait_for_function("!state.requests.has('evidence') && state.pages.evidence.items.length > 0")
+        assert page.locator("#evidence-right").is_visible()
+        assert divider.is_visible()
+        page.locator("#evidence-table tbody tr[data-clickable]").first.click()
+        page.wait_for_function("state.evidenceWorkspace.recordsLoaded && !state.requests.has('evidenceGroupPane')")
+        page.locator("#evidence-records-table tbody tr[data-clickable]").first.click()
+        page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+        assert page.locator("#evidence-right").is_visible()
+        assert page.locator("#evidence-detail-divider").is_visible()
         assert not errors
         browser.close()
 
@@ -2950,9 +2999,9 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
         assert page.locator(".evidence-detail-flow-list .json-details pre").count() == 0
         assert page.locator(".evidence-flow-status").inner_text() == "20 of 1.1k linked flows loaded"
         first = page.locator(".flow-group").first
-        first.get_by_role("tab", name="Related DNS · 8", exact=True).click()
+        first.get_by_role("tab", name="Related DNS · 1", exact=True).click()
         assert "query-7.example" in first.inner_text()
-        assert first.locator(".protocol-card").count() == 2
+        assert first.locator(".protocol-card").count() == 1
         first.get_by_role("tab", name="conn · flow", exact=True).click()
         first.locator("[role=tabpanel]:not([hidden]) summary").click()
         page.wait_for_function("document.querySelector('.flow-group .json-details pre') !== null")
