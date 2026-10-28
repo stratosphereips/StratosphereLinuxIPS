@@ -598,21 +598,25 @@ def test_subnet_findings_keep_source_and_destination_roles(theme: str) -> None:
         page.evaluate("""({theme}) => {
             clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
             setTheme(theme); state.activeTab='evidence'; state.deviceView=false;
+            document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='evidence'));
+            document.body.classList.add('evidence-active');
             state.whitelists={evidence_types:[]};
         }""", {"theme": theme})
-        for record, own_label, other_label in (
-            (records[0], "Connecting host / source", "Receiving host / destination"),
-            (records[1], "Receiving host / destination", "Connecting host / source"),
-        ):
+        for record in records:
             page.evaluate("async (record) => { await openEvidence(record); }", record)
             detail = page.locator("#evidence-detail-content")
-            cards = detail.locator(".evidence-detail-record .entity-card")
-            assert cards.count() == 2
-            assert own_label in cards.nth(0).inner_text()
-            assert record["profile_ip"] in cards.nth(0).inner_text()
-            assert f'Direction: {record["attacker"]["direction"]}' in cards.nth(0).inner_text()
-            assert other_label in cards.nth(1).inner_text()
-            assert record["victim"]["value"] in cards.nth(1).inner_text()
+            metadata = detail.locator("details.evidence-detail-record")
+            assert not metadata.evaluate("el => el.open")
+            assert metadata.locator(".entity-card").count() == 0
+            assert not metadata.locator(".detail-row").first.is_visible()
+            assert metadata.get_by_role("button", name="Copy ID", exact=True).is_visible()
+            assert metadata.get_by_role("button", name="JSON", exact=True).is_visible()
+            metadata.get_by_text("Evidence record", exact=True).click()
+            assert metadata.evaluate("el => el.open")
+            assert record["id"] in metadata.inner_text()
+            assert metadata.locator(".detail-row .ip-link").count() == 0
+            metadata.locator("summary").press("Enter")
+            assert not metadata.evaluate("el => el.open")
             assert record["description"].split(". ")[0] == detail.locator("h2").inner_text()
             assert "ICMP type: 11; code: 0" in detail.inner_text()
             assert "Source port" not in detail.locator(".evidence-detail-record").inner_text()
@@ -766,10 +770,14 @@ def test_peer_detection_details_lead_in_evidence_hosts_and_p2p(
         assert "Reported by 192.0.2.2" in summary.inner_text()
         assert summary.locator("button").count() == 3
         assert "Connection to unknown TCP port 8123" in detail.inner_text()
+        metadata = detail.locator("details.evidence-detail-record")
+        assert not metadata.evaluate("el => el.open")
+        metadata.evaluate("el => el.open = true")
         assert (
             "peer-A" in detail.inner_text()
             and "192.0.2.2" in detail.inner_text()
         )
+        metadata.evaluate("el => el.open = false")
         assert not any(path.endswith("/flows") for path in requests)
         connection_nodes = detail.locator(".peer-connection .peer-role-node")
         assert "Source" in connection_nodes.nth(0).inner_text()

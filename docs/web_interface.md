@@ -126,6 +126,11 @@ The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
+**Evidence record** is collapsed by default. Expand it for identifiers, detection
+metadata and alert links; P2P records also retain reporting-peer metadata there.
+Source and destination hosts remain in the description and triggering flows
+without duplicate host cards in this section. **Copy ID** and **JSON** remain
+available beside the collapsed heading. Review controls stay visible below it.
 Saving a review keeps the same alert or evidence detail pane open, including
 evidence opened from Hosts or Alerts. The saved decision appears in place while
 the lists refresh. If the new decision no longer matches a list's Review filter,

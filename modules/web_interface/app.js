@@ -5631,24 +5631,6 @@ function evidenceCard(record, contextRecords = null, inAlertPane = false) {
   return button;
 }
 
-/** Render an attacker or victim with its direction and indicator type. */
-function evidenceEntity(label, entity) {
-  const card = document.createElement("div");
-  card.className = "entity-card";
-  card.append(text("small", label));
-  const value = entity?.value;
-  const indicatorType = String(entity?.ioc_type || "").toUpperCase();
-  card.append(indicatorType === "IP" ? hostLink(value) : text("code", value || "Unknown"));
-  const metadata = document.createElement("div");
-  metadata.className = "entity-meta";
-  metadata.append(
-    text("span", entity?.direction ? `Direction: ${entity.direction}` : "Direction unknown"),
-    text("span", indicatorType ? `Indicator: ${indicatorType}` : "Indicator type unknown"),
-  );
-  card.append(metadata);
-  return card;
-}
-
 /** Read one normalized field from a stored network or protocol record. */
 function flowValue(flow, ...names) {
   for (const name of names) {
@@ -6326,11 +6308,11 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   flowSection.append(flowHeading, flowList);
   const side = document.createElement("aside");
   side.className = "evidence-detail-side";
-  const recordCard = document.createElement("section");
+  const recordCard = document.createElement("details");
   recordCard.className = "surface evidence-detail-record";
-  const recordHead = document.createElement("div");
+  const recordHead = document.createElement("summary");
   recordHead.className = "evidence-detail-record-head";
-  recordHead.append(text("h3", "Evidence record"));
+  recordHead.append(text("span", "Evidence record"));
   const recordActions = document.createElement("div");
   const copyId = text("button", "Copy ID", "evidence-detail-link");
   copyId.type = "button";
@@ -6341,7 +6323,6 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   recordCard.append(recordHead,
     detailRow("Evidence ID", text("code", record.id || "—")),
     detailRow(isPeerReport(record) ? "Received" : "Detected", formatTime(record.timestamp)),
-    detailRow("Profile host", hostLink(record.profile_ip)),
     detailRow("Network", networkContext(record)),
     detailRow("Time window", record.twid || record.timewindow?.number || "—"),
     detailRow("Module", record.module || "—"),
@@ -6355,14 +6336,6 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   if (record.evidence_type === "MALICIOUS_IP_FROM_P2P_NETWORK") {
     recordCard.append(detailRow("Reporting peers", reportingPeers(record)));
   }
-  const subnetRoles = record.evidence_type === "DIFFERENT_LOCALNET" ? {
-    SRC: "Connecting host / source", DST: "Receiving host / destination",
-  } : {};
-  if (isPeerReport(record)) recordCard.append(detailRow("Reported host", hostLink(record.profile_ip || record.attacker?.value)));
-  else if (record.attacker) recordCard.append(evidenceEntity(record.evidence_type === "TLS_PROVIDER_IMPERSONATION"
-    ? "Server / suspected impersonator" : subnetRoles[record.attacker.direction] || "Attacker / source", record.attacker));
-  if (record.victim) recordCard.append(evidenceEntity(subnetRoles[record.victim.direction]
-    || (record.evidence_type === "TLS_PROVIDER_IMPERSONATION" ? "Connecting client" : "Victim / destination"), record.victim));
   if (alertCount) {
     const links = document.createElement("div");
     links.className = "evidence-detail-alert-links";
