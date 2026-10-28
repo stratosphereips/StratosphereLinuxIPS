@@ -302,7 +302,21 @@ establish that devices belong to the same person. Private Wi-Fi addresses can
 prevent vendor identification; when the required MAC evidence is missing,
 Slips keeps the unknown-port detection.
 
-For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
+Apple services follow [Apple's documented TCP/UDP ports](https://support.apple.com/en-hk/103229).
+Fixed services include APNs on TCP 5223 and 2197, Remote Desktop and
+Classroom, AirPlay, Bonjour, printing, and device pairing on TCP 62078.
+TCP and UDP are separate entries; knowing TCP 5223 does not exempt UDP 5223.
+
+Broad application ranges (TCP 8000–8999 and 42000–42999, UDP 3478–3497 and
+16384–16472, and TCP/UDP 49152–65535) remain in the organization-specific
+file. They count as known only when the existing Apple identity checks
+match. This keeps arbitrary high ports on other hosts eligible for
+Unknown Port detection. These entries do not whitelist traffic; other
+behavioral and threat-intelligence detections still run.
+
+The feed updater imports changed port files into the shared cache at
+startup. Restart Slips after updating the files to load the new entries.
+Existing evidence is retained.
 
 The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
 
