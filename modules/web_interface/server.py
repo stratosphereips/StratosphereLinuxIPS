@@ -79,6 +79,7 @@ from modules.web_interface.history import (
     initialize_history,
     network_connection_scope,
 )
+from modules.p2p_trust.catchup import CatchupStore, network_scope
 from slips_files.core.database.redis_db.redis_auth import (
     ensure_web_password_matches_redis_password,
     try_connect_with_and_without_password,
@@ -10132,7 +10133,7 @@ class RunDataReader:
             item = self._loads(raw, {})
             if (
                 isinstance(item, dict)
-                and item.get("message_type") in {"report", "blame"}
+                and item.get("message_type") in {"report", "blame", "catchup"}
                 and item.get("direction") in {"sent", "received"}
                 and (
                     not run_start
@@ -10211,6 +10212,41 @@ class RunDataReader:
             "message_limit": 1000,
             "report_limit": 200,
         }
+
+    def resume_p2p_catchup(self, peer: str) -> dict[str, Any]:
+        """Resume one bounded peer transfer; peer must belong to the current network journal."""
+        if not self.redis.hget("PIDs", Modules.P2P_TRUST):
+            raise ValueError("P2P is not running")
+        path = self._report_validation_path().with_name("catchup.sqlite")
+        network = self._catchup_network_identity()
+        if not isinstance(peer, str) or not path.exists():
+            raise ValueError("Unknown peer transfer")
+        with sqlite3.connect(path, timeout=0.2) as connection:
+            row = connection.execute(
+                "SELECT data FROM transfers WHERE network=? AND peer=?",
+                (network, peer),
+            ).fetchone()
+            if row is None:
+                raise ValueError(
+                    "No catch-up transfer for this peer on this network"
+                )
+            data = json.loads(row[0])
+            if data.get("state") == "receiving":
+                return {"status": "receiving"}
+            data.update(state="pending", waiting=False)
+            connection.execute(
+                "UPDATE transfers SET data=?,updated=? WHERE network=? AND peer=?",
+                (json.dumps(data), time.time(), network, peer),
+            )
+        return {"status": "pending"}
+
+    def _catchup_network_identity(self) -> str:
+        """Identify the monitored router and subnet for the catch-up journal."""
+        interface = self.redis.hget("analysis", "interface")
+        state = self._loads(
+            self.redis.hget("network_states", interface or ""), {}
+        )
+        return network_scope(state) if isinstance(state, dict) else ""
 
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -10592,6 +10628,13 @@ class RunDataReader:
             except OSError:
                 pass
         current_reports = [item for item in reports if item["this_run"]]
+        try:
+            catchup = CatchupStore.view(
+                validation_path.with_name("catchup.sqlite"),
+                self._catchup_network_identity(),
+            )
+        except (sqlite3.Error, OSError, ValueError):
+            catchup = {"transfers": [], "incidents": [], "total": 0}
         return {
             "enabled": bool(self.redis.hget("PIDs", Modules.P2P_TRUST)),
             "listener": listener,
@@ -10603,6 +10646,7 @@ class RunDataReader:
             ),
             "trust_range": trust_range,
             "reports": current_reports[:200],
+            "catch_up": catchup,
             "activity": [
                 item
                 for item in activity
@@ -11044,6 +11088,7 @@ class RequestHandler(BaseHTTPRequestHandler):
             "/api/whitelists",
             "/api/alert-review",
             "/api/evidence-review",
+            "/api/p2p-catchup/resume",
         }:
             self._send_json({"error": "Not found"}, HTTPStatus.NOT_FOUND)
             return
@@ -11089,7 +11134,11 @@ class RequestHandler(BaseHTTPRequestHandler):
             if not isinstance(payload, dict):
                 raise ValueError("Expected an object")
             self.server.reader.validate_run_identity()
-            if path == "/api/whitelists":
+            if path == "/api/p2p-catchup/resume":
+                saved = self.server.reader.resume_p2p_catchup(
+                    payload.get("peer")
+                )
+            elif path == "/api/whitelists":
                 arguments = (
                     payload.get("action"),
                     payload.get("value"),

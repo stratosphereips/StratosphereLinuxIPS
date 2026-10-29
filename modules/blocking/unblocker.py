@@ -280,6 +280,22 @@ class Unblocker(IUnblocker):
             f"Timestamp to unblock: {tw_to_unblock_at.end_time}) "
         )
 
+    def release_owned(self, ip: str, owner: str) -> bool:
+        """Release ip only when its current block belongs to owner; return success."""
+        with self.requests_lock:
+            request = self.requests.get(ip)
+            if (
+                not request
+                or request.get("flags", {}).get("lease_owner") != owner
+            ):
+                return False
+            if not self._unblock(ip, request["flags"]):
+                return False
+            self.db.del_blocked_ip(ip)
+            self.db.del_firewall_block_state(ip)
+            self.requests.pop(ip, None)
+            return True
+
     def del_request(self, ip):
         """Delete an unblocking request from self.requests"""
         if ip in self.requests:

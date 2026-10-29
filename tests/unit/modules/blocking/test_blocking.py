@@ -89,7 +89,9 @@ def test_pre_main_clears_exempt_block_before_recovery(firewall: str) -> None:
 
 
 @pytest.mark.parametrize("firewall", ["iptables", "pf"])
-def test_pre_main_retains_state_when_exempt_rule_removal_fails(firewall: str) -> None:
+def test_pre_main_retains_state_when_exempt_rule_removal_fails(
+    firewall: str,
+) -> None:
     """Keep recovery metadata when an old firewall block cannot be removed.
 
     Parameters:
@@ -129,14 +131,21 @@ def test_file_rule_removes_existing_block_during_capture(
     blocking = factory.create_blocking_obj()
     path = tmp_path / "whitelist.conf"
     path.write_text("")
-    blocking.blocking_whitelist = factory.create_blocking_whitelist_obj(str(path))
+    blocking.blocking_whitelist = factory.create_blocking_whitelist_obj(
+        str(path)
+    )
     blocking.firewall = firewall
     blocking.pf = Mock()
     ip = "192.0.2.10"
-    clock = "slips_files.core.helpers.whitelist.blocking_whitelist.time.monotonic"
+    clock = (
+        "slips_files.core.helpers.whitelist.blocking_whitelist.time.monotonic"
+    )
     with (
         patch(clock, return_value=10) as now,
-        patch("modules.blocking.blocking.delete_slips_rules_for_ip", return_value=True) as delete,
+        patch(
+            "modules.blocking.blocking.delete_slips_rules_for_ip",
+            return_value=True,
+        ) as delete,
     ):
         blocking._sync_blocking_whitelist()
         path.write_text(f"ip,{ip},both,blocking\n")
@@ -701,3 +710,50 @@ def test_main_tw_closed_triggers_update(last_closed_tw, msg_data, should_call):
                 mock_update.assert_called_once()
             else:
                 mock_update.assert_not_called()
+
+
+@pytest.mark.parametrize("already_owned", [False, True])
+def test_catchup_lease_is_short_and_does_not_take_other_blocks(
+    already_owned: bool,
+) -> None:
+    """Clamp lease duration and preserve unrelated Slips firewall ownership."""
+    blocking = ModuleFactory().create_blocking_obj()
+    import time
+
+    blocking.blocking_whitelist = Mock(is_exempt=Mock(return_value=False))
+    blocking.firewall = "pf"
+    blocking.pf = Mock(rules={})
+    blocking.db.get_blocking_timestamp.return_value = None
+    blocking.unblocker = Mock(
+        requests={"8.8.4.4": {"flags": {}}} if already_owned else {}
+    )
+    with patch.object(blocking, "_block_ip", return_value=True) as install:
+        blocking._catchup_lease(
+            {
+                "ip": "8.8.4.4",
+                "block": True,
+                "lease_owner": "p2p-catchup:test",
+                "lease_until": time.time() + 86400,
+            }
+        )
+    assert install.called is not already_owned
+    if not already_owned:
+        request = blocking.unblocker.register_unblock_request.call_args.args[1]
+        from slips_files.common.slips_utils import utils
+
+        deadline = float(
+            utils.convert_ts_format(
+                request["tw_to_unblock"].end_time, "unixtimestamp"
+            )
+        )
+        assert 0 < deadline - time.time() <= 300
+
+
+def test_shutdown_releases_only_catchup_owned_requests() -> None:
+    """Normal firewall shutdown removes temporary catch-up blocks without removing local blocks."""
+    blocking = ModuleFactory().create_blocking_obj()
+    blocking.unblocker = Mock(requests={"8.8.4.4":{"flags":{"lease_owner":"p2p-catchup:a"}},
+                                       "8.8.8.8":{"flags":{}}})
+    blocking.unblocker.unblocker_thread.is_alive.return_value = False
+    blocking.shutdown_gracefully()
+    blocking.unblocker.release_owned.assert_called_once_with("8.8.4.4","p2p-catchup:a")

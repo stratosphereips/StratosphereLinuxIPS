@@ -243,6 +243,13 @@
       <article id="p2p-disabled" class="surface empty-state" hidden><p>P2P not enabled in this run.</p></article>
       <div id="p2p-stats">
         <div id="p2p-summary" class="summary-grid p2p-summary"></div>
+        <article class="surface table-surface" id="p2p-catchup">
+          <div class="table-heading"><div><h3>Network catch-up</h3><p id="p2p-catchup-status">Waiting for peer history.</p></div></div>
+          <div id="p2p-catchup-transfers" class="p2p-panel-foot"></div>
+          <div class="table-wrap"><table id="p2p-catchup-table"><thead><tr><th data-sort="last_seen">Last observed</th><th data-sort="target">Source</th><th data-sort="evidence_type">Behavior</th><th data-sort="threat">Threat</th><th data-sort="confidence">Original confidence</th><th data-sort="author">Author / delivered by</th><th data-sort="state">State</th></tr></thead><tbody></tbody></table></div>
+          <div id="p2p-catchup-detail" class="p2p-panel-foot" hidden></div>
+          <p class="p2p-panel-foot">Imported history is separate from current host scores. Original observation times and expiry are preserved.</p>
+        </article>
         <div class="p2p-two-column">
         <article class="surface table-surface p2p-peers-panel"><div class="table-heading"><div><h3>Peers <span id="p2p-peer-count" class="muted"></span></h3><p>Live connectivity and latest persistent trust</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th data-sort="ip">Peer</th><th data-sort="peer_id">Peer ID</th><th data-sort="connected">Connectivity</th><th data-sort="trust" title="Calculated trust ranges from −0.5 to 0.85 with reliability weight 0.7; it is not a probability.">Trust</th><th data-sort="reliability" title="Measured only on the peer's confirmed local network; preserved while away.">Reliability</th><th data-sort="reports_received">Reports</th><th data-sort="confirmed_reports" title="Validated distinct hosts; accuracy adjustments apply separately to each evidence type and detector version. Hover for details.">Report accuracy</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div><div class="p2p-panel-foot">Trust “—” = not yet computed. Reliability is preserved while away from the peer’s network. Click a peer to filter messages.</div></article>
         <article class="surface p2p-trust-history">

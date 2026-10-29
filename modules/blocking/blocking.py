@@ -8,10 +8,13 @@ import json
 import subprocess
 from typing import Any, Dict
 import time
+import ipaddress
+import math
 from threading import Lock
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import TimeWindow
 from .exec_iptables_cmd import (
     LEGACY_SLIPS_COMMENT,
     delete_slips_rules_for_ip,
@@ -338,6 +341,12 @@ class Blocking(IModule, RecoveryMixin):
         return True
 
     def shutdown_gracefully(self):
+        requests = getattr(self.unblocker, "requests", {})
+        if isinstance(requests, dict):
+            for ip, request in list(requests.items()):
+                owner = request.get("flags", {}).get("lease_owner", "")
+                if isinstance(owner, str) and owner.startswith("p2p-catchup:"):
+                    self.unblocker.release_owned(ip, owner)
         self.unblocker.unblocker_thread.join(30)
         if self.unblocker.unblocker_thread.is_alive():
             self.print("Problem shutting down unblocker thread.")
@@ -393,6 +402,65 @@ class Blocking(IModule, RecoveryMixin):
             return current_twid
         return max(current_twid, int(evidence_tw))
 
+    def _catchup_lease(self, data: dict[str, Any]) -> None:
+        """Apply a bounded owned firewall request from data without taking another block's ownership."""
+        ip, owner = data.get("ip"), data.get("lease_owner")
+        try:
+            address = ipaddress.ip_address(ip)
+        except (ValueError, TypeError):
+            return
+        if (
+            not isinstance(owner, str)
+            or not owner.startswith("p2p-catchup:")
+            or len(owner) > 160
+            or address.is_multicast
+            or address.is_loopback
+            or address.is_unspecified
+            or self.blocking_whitelist.is_exempt(ip)
+        ):
+            return
+        if data.get("block") is False:
+            self.unblocker.release_owned(ip, owner)
+            return
+        existing = self.unblocker.requests.get(ip)
+        if existing and existing.get("flags", {}).get("lease_owner") != owner:
+            return
+        if not existing and (
+            self.db.get_blocking_timestamp(ip) is not None
+            or (
+                self.firewall == "iptables" and self._is_ip_already_blocked(ip)
+            )
+            or (self.firewall == "pf" and ip in self.pf.rules)
+        ):
+            return
+        try:
+            deadline = min(float(data["lease_until"]), time.time() + 300)
+        except (KeyError, TypeError, ValueError):
+            return
+        if not math.isfinite(deadline) or deadline <= time.time():
+            return
+        now = time.time()
+        flags = {
+            "from_": True,
+            "to": True,
+            "interface": data.get("interface"),
+            "lease_owner": owner,
+            "_blocked_at": now,
+            "_origin_run": "p2p-catchup",
+            "rule_comment": format_slips_rule_comment(
+                now, deadline, "p2p-catchup"
+            ),
+        }
+        request = {
+            "tw_to_unblock": TimeWindow(
+                number=-1, end_time=utils.convert_ts_format(deadline, "iso")
+            ),
+            "block_this_ip_for": 0,
+            "flags": flags,
+        }
+        if self._block_ip(ip, flags):
+            self.unblocker.register_unblock_request(ip, request)
+
     def main(self) -> None:
         self._sync_blocking_whitelist()
         if msg := self.get_msg("new_blocking"):
@@ -416,6 +484,9 @@ class Blocking(IModule, RecoveryMixin):
             #   self.db.publish('new_blocking', blocking_data )
 
             data = json.loads(msg["data"])
+            if data.get("lease_owner"):
+                self._catchup_lease(data)
+                return
             ip = data.get("ip")
             if self.blocking_whitelist.is_exempt(ip):
                 return

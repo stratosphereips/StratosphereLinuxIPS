@@ -1759,6 +1759,42 @@ local_p2p:
    # Larger values keep penalties longer; smaller values allow faster recovery.
    # This returns trust toward the communication baseline, not a benign verdict.
    local_reputation_half_life_hours: 24
+   catch_up:
+      # Request missed network warnings automatically after connecting to a peer.
+      # Historical records do not increase current host scores or trigger blocking.
+      enabled: true
+      # A warning is recent when malicious behavior was observed within 15 minutes.
+      # Receiving or forwarding it does not renew this observation time.
+      fresh_minutes: 15
+      # Prefer these recent incidents before older history; expressed in hours.
+      recent_hours: 24
+      # Keep and request at most this many days of incident history.
+      history_days: 7
+      # Compare up to three connected sources; cap simultaneous page requests.
+      max_peers: 3
+      parallel_pages: 2
+      # Stop a page at either limit. Byte limits include signed record contents.
+      page_records: 50
+      page_bytes: 65536
+      # Bound each incident's description, provenance and signature payload.
+      record_bytes: 8192
+      # Total outgoing catch-up budget, shared across peers, in KiB per second.
+      transfer_kib_per_second: 64
+      # Stop automatic history after this many MiB per source; show partial coverage.
+      initial_transfer_mib: 2
+      # Bound the permanent incident journal across all retained networks.
+      max_records: 10000
+      max_store_mib: 64
+      # Brief disconnects must not trigger repeated full catch-up exchanges.
+      reconnect_cooldown_seconds: 60
+      protection:
+         # Only when firewall blocking is already enabled. Never ARP poison from catch-up.
+         # Require a fresh concrete local confirmation, or two enrolled authors
+         # using independent detector families. Old history cannot authorize a block.
+         enabled: true
+         # Optional authenticated peer IDs allowed to support remote-only protection.
+         # Empty means local confirmation is required; discovery alone grants no authority.
+         peer_ids: []
    report_agreement:
       # Increase peer trust when our own detection and other peers agree.
       enabled: true

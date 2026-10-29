@@ -1561,3 +1561,11 @@ ordinary DNS, and the 64-binding bound. It skips if Zeek or Scapy is unavailable
 It does not capture from a live interface.
 
 `tests/unit/modules/web_interface/test_browser.py` uses Playwright and an installed Chrome to exercise the shipped HTML, JavaScript and styles against isolated API fixtures. It checks a grouped device record with 1,051 linked flows, protocol tabs, lazy JSON, flow paging, close/reopen, and saving host marks, labels and notes. It also checks the contextual host whitelist request and current-network inventory refresh across multiple loaded pages, including the separation of current observations from saved network history. It skips when Playwright or Chrome is unavailable; neither is required to run Slips. The regular server tests verify durable persistence, configured whitelist-file writes, and filtering independently of browser availability.
+
+### Network catch-up
+
+The P2P tab includes network catch-up progress, original-author incident history,
+expiry and withdrawals, Resume/Check again, sortable columns and copyable JSON
+details. P2P Graph includes accepted catch-up deliveries. Historical imports do
+not increase current host scores. See [network catch-up](p2p_catchup.md) for
+configuration, protection requirements, retention and coverage limits.

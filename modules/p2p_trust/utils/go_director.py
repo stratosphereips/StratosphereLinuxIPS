@@ -27,6 +27,7 @@ from modules.p2p_trust.trust.report_validation import (
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.p2p_reports import reported_detections
+from modules.p2p_trust.catchup import Catchup
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -65,6 +66,7 @@ class GoDirector:
         is_slips_started_by_an_update: bool = False,
         report_validation: ReportValidator | None = None,
         network_identity: Callable[[], str] | None = None,
+        catchup: Catchup | None = None,
     ):
         self.printer = Printer(logger, self.name)
 
@@ -76,6 +78,7 @@ class GoDirector:
         self.trustdb = trustdb
         self.report_validation = report_validation
         self.network_identity = network_identity
+        self.catchup = catchup
         self.pygo_channel = pygo_channel
         self.storage_name = storage_name
         self.override_p2p = override_p2p
@@ -272,6 +275,22 @@ class GoDirector:
         message = report[key_message]
         # decode b64
         message_type, data = self.validate_message(message)
+
+        catchup = getattr(self, "catchup", None)
+        if message_type in {"catchup_request", "catchup_page"}:
+            if isinstance(catchup, Catchup):
+                catchup.handle(reporter, data)
+                self.db.record_p2p_message(
+                    "received",
+                    {
+                        "message_type": message_type,
+                        "peer": reporter,
+                        "records": len(data.get("items", [])),
+                        "lane": data.get("lane"),
+                        "network": data.get("network"),
+                    },
+                )
+            return
 
         self.db.record_p2p_message(
             "received",
@@ -838,6 +857,9 @@ class GoDirector:
         if not isinstance(connected, bool):
             self.print("Peer connectivity is not a boolean", 2, 0)
             return
+        catchup = getattr(self, "catchup", None)
+        if isinstance(catchup, Catchup):
+            catchup.peer(peerid, connected, data.get("catchup") is True)
 
         stored_state = self.db.get_peer_trust_data(peerid)
         if isinstance(stored_state, bytes):

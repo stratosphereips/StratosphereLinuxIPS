@@ -1,6 +1,6 @@
 # Proposed P2P catch-up when returning to a network
 
-Status: design proposal; the protocol and configuration below are not implemented.
+Status: original design proposal. See [implemented behavior and configuration](p2p_catchup.md) for the delivered feature, protection policy and operational limits. This document retains the design rationale and proposed validation scenarios.
 
 ## Goal
 

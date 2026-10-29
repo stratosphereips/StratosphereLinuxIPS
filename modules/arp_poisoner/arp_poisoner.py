@@ -465,6 +465,8 @@ class ARPPoisoner(IModule):
 
         if msg := self.get_msg("new_blocking"):
             data = json.loads(msg["data"])
+            if data.get("lease_owner"):
+                return
             ip = data.get("ip")
             tw: int = data.get("tw")
             interface: str = data.get("interface")

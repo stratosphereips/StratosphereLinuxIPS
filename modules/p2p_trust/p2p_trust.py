@@ -14,9 +14,19 @@ import time
 from pathlib import Path
 from typing import Dict, Optional
 import json
+import base64
+import hashlib
+
+from modules.p2p_trust.catchup import (
+    Catchup,
+    CatchupSettings,
+    CatchupStore,
+    network_scope,
+)
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
+from slips_files.common.mac import normalize_mac, classify_mac
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
@@ -234,6 +244,32 @@ class Trust(IModule):
 
     def _configure(self):
         self.trust_db = self.db.trust_db
+        settings = CatchupSettings.from_config(
+            ConfigParser().read_configuration("local_p2p", "catch_up", {})
+        )
+        catchup_config = ConfigParser().read_configuration(
+            "local_p2p", "catch_up", {}
+        )
+        self.catchup_protection = (
+            catchup_config.get("protection", {})
+            if isinstance(catchup_config, dict)
+            else {}
+        )
+        self.catchup = (
+            Catchup(
+                CatchupStore(
+                    Path(self.db.get_p2p_trust_dir()) / "catchup.sqlite",
+                    settings,
+                ),
+                self._catchup_network_identity,
+                self._catchup_own_id,
+                self._send_catchup,
+                self._catchup_imported,
+                self._catchup_left_network,
+            )
+            if settings.enabled
+            else None
+        )
         self.report_validation = ReportValidator(
             Path(self.db.get_p2p_trust_dir()) / "report_validation.sqlite",
             ConfigParser().read_configuration(
@@ -267,7 +303,197 @@ class Trust(IModule):
             ),
             report_validation=self.report_validation,
             network_identity=self._network_identity,
+            catchup=self.catchup,
         )
+
+    def _catchup_own_id(self) -> str:
+        """Return the authenticated local Pigeon identity, or empty before startup."""
+        address = str(self.db.get_multiaddr() or "")
+        return (
+            address.rsplit("/p2p/", 1)[-1].strip()
+            if "/p2p/" in address
+            else ""
+        )
+
+    def _catchup_network_identity(self) -> str:
+        """Return the monitored router and subnet identity, or empty while disconnected."""
+        state = self.db.get_network_state(getattr(self.args, "interface", ""))
+        return network_scope(state) if isinstance(state, dict) else ""
+
+    def _send_catchup(self, peer: str, message: dict) -> None:
+        """Send a bounded directed catch-up message to peer; retain compact telemetry."""
+        payload = base64.b64encode(
+            json.dumps(message, allow_nan=False).encode()
+        ).decode()
+        self.db.publish(
+            self.pygo_channel,
+            json.dumps({"recipient": peer, "message": payload}),
+        )
+        self.db.record_p2p_message(
+            "sent",
+            {
+                "message_type": message["message_type"],
+                "peer": peer,
+                "records": len(message.get("items", [])),
+                "network": message["network"],
+                "lane": message["lane"],
+            },
+        )
+
+    def _catchup_imported(self, peer: str, record: dict) -> None:
+        """Record one accepted historical delivery for P2P Graph; peer delivered record."""
+        self.db.record_p2p_message(
+            "received",
+            {
+                "message_type": "catchup",
+                "peer": peer,
+                "target": record["target"],
+                "origin_peer": record["author"],
+                "observed_at": record["last_seen"],
+                "incident": record["incident"],
+                "state": record["state"],
+                "reported_detections": [
+                    {
+                        "evidence_type": record.get("evidence_type", ""),
+                        "description": record.get("description", ""),
+                        "module": record.get("module", ""),
+                        "observed_at": record["last_seen"],
+                    }
+                ],
+            },
+        )
+        self._consider_catchup_protection(record)
+
+    def _catchup_left_network(self, network: str) -> None:
+        """Release only catch-up-owned protection from the departed network."""
+        for action in self.catchup.store.active_actions(network):
+            self.db.publish(
+                "new_blocking",
+                json.dumps(
+                    {
+                        "ip": action["target"],
+                        "block": False,
+                        "lease_owner": action["owner"],
+                    }
+                ),
+            )
+            self.catchup.store.action(
+                network,
+                action["target"],
+                action["owner"],
+                time.time(),
+                "release requested",
+            )
+
+    def _consider_catchup_protection(self, record: dict) -> None:
+        """Request an owned short firewall block for independently supported fresh record."""
+        from modules.p2p_trust.trust.report_validation import dependency_family
+
+        catchup = getattr(self, "catchup", None)
+        policy = getattr(self, "catchup_protection", {})
+        if (
+            not isinstance(catchup, Catchup)
+            or not isinstance(policy, dict)
+            or policy.get("enabled", True) is not True
+        ):
+            return
+        if not self.db.get_pid_of(Modules.BLOCKING):
+            return
+        target, network = record["target"], self._catchup_network_identity()
+        if target in utils.get_own_ips(ret="List", include_public=False):
+            return
+        state = (
+            self.db.get_network_state(getattr(self.args, "interface", ""))
+            or {}
+        )
+        if target == state.get("gateway_ip"):
+            return
+        score, confidence, provenance = self.report_validation.local_report(
+            f"{self._network_identity()}|{target}", max_age=300
+        )
+        local = bool(
+            score is not None
+            and score >= 0.8
+            and confidence >= 0.9
+            and any(
+                item.get("method") in {"SIGNATURE", "INTEGRITY", "HONEYPOT"}
+                for item in provenance
+            )
+        )
+        pinned = policy.get("peer_ids", [])
+        pinned = set(pinned[:64]) if isinstance(pinned, list) else set()
+        support = catchup.store.fresh_support(
+            network, target, None if local else sorted(pinned)
+        )
+        if ipaddress.ip_address(target).is_private:
+            mac = normalize_mac(
+                self.db.get_mac_addr_from_profile(f"profile_{target}")
+            )
+            support = [
+                item
+                for item in support
+                if classify_mac(mac)
+                in {"locally_administered", "universally_administered"}
+                and normalize_mac(item.get("target_mac")) == mac
+            ]
+        peers = {
+            item["author"] for item in support if item["author"] in pinned
+        }
+        families = {
+            dependency_family(
+                item.get("evidence_type", ""), item.get("module", "")
+            )
+            for item in support
+            if item["author"] in pinned
+        }
+        qualified = bool(
+            support and (local or (len(peers) >= 2 and len(families) >= 2))
+        )
+        prior = catchup.store.action(network, target)
+        owner = (
+            "p2p-catchup:"
+            + hashlib.sha256(f"{network}|{target}".encode()).hexdigest()
+        )
+        if not qualified:
+            if (
+                prior.get("state") == "requested"
+                and prior.get("expires", 0) > time.time()
+            ):
+                self.db.publish(
+                    "new_blocking",
+                    json.dumps(
+                        {"ip": target, "block": False, "lease_owner": owner}
+                    ),
+                )
+                catchup.store.action(
+                    network, target, owner, time.time(), "release requested"
+                )
+            return
+        if (
+            prior.get("state") != "requested"
+            or prior.get("expires", 0) <= time.time()
+        ) and len(catchup.store.active_actions(network)) >= 32:
+            return
+        until = min(
+            time.time() + 300, max(item["last_seen"] for item in support) + 300
+        )
+        self.db.publish(
+            "new_blocking",
+            json.dumps(
+                {
+                    "ip": target,
+                    "block": True,
+                    "from": True,
+                    "to": True,
+                    "lease_owner": owner,
+                    "lease_until": until,
+                    "interface": utils.get_interface_of_ip(
+                        target, self.db, self.args
+                    ),
+                }
+            ),
+        )
+        catchup.store.action(network, target, owner, until, "requested")
 
     def _network_identity(self) -> str:
         """Identify the current network without reusing private IPs across networks.
@@ -333,6 +559,9 @@ class Trust(IModule):
                 self, "last_feedback_context", None
             ):
                 self.trust_db.execute("DELETE FROM opinion_cache")
+                catchup = getattr(self, "catchup", None)
+                if isinstance(catchup, Catchup):
+                    catchup.apply_reviews(validator)
                 self.last_feedback_context = (revision, network)
             validator.prune()
         except (sqlite3.Error, OSError) as error:
@@ -488,6 +717,32 @@ class Trust(IModule):
         except json.decoder.JSONDecodeError:
             return
         evidence: Evidence = dict_to_evidence(evidence)
+        catchup = getattr(self, "catchup", None)
+        if isinstance(catchup, Catchup):
+            raw = utils.to_dict(evidence)
+            state = (
+                self.db.get_network_state(getattr(self.args, "interface", ""))
+                or {}
+            )
+            try:
+                if ipaddress.ip_address(
+                    evidence.attacker.value
+                ) in ipaddress.ip_network(state.get("local_network", "")):
+                    raw["target_mac"] = normalize_mac(
+                        self.db.get_mac_addr_from_profile(
+                            f"profile_{evidence.attacker.value}"
+                        )
+                    )
+            except ValueError:
+                pass
+            try:
+                catchup.store.observe(
+                    raw,
+                    self._catchup_network_identity(),
+                    self._catchup_own_id(),
+                )
+            except (sqlite3.Error, OSError, ValueError) as error:
+                self.print(f"P2P catch-up observation deferred: {error}", 0, 1)
         validator = getattr(self, "report_validation", None)
         provenance = []
         if isinstance(validator, ReportValidator):
@@ -929,9 +1184,13 @@ class Trust(IModule):
         if bootstrap_peers and self._pigeon_supports_flag("-bootstrap-peers"):
             params["-bootstrap-peers"] = ",".join(bootstrap_peers)
 
-        return [str(self.pigeon_binary)] + [
+        command = [str(self.pigeon_binary)] + [
             utils.sanitize(item) for pair in params.items() for item in pair
         ]
+        if self._pigeon_supports_flag("-catchup-enabled"):
+            enabled = isinstance(getattr(self, "catchup", None), Catchup)
+            command.append(f"-catchup-enabled={str(enabled).lower()}")
+        return command
 
     def _get_bootstrap_peer_addresses(self) -> list[str]:
         """Build authenticated peer endpoints from this network's history.
@@ -1180,6 +1439,20 @@ class Trust(IModule):
                 f"Did you include it in PATH?. Exiting process."
             )
             return
+
+        if isinstance(
+            getattr(self, "catchup", None), Catchup
+        ) and not self._pigeon_supports_flag("-catchup-version"):
+            if not self._build_pigeon_binary(
+                "for authenticated network catch-up"
+            ):
+                self.print(
+                    "Network catch-up needs the updated Pigeon binary; live P2P remains available.",
+                    0,
+                    1,
+                )
+                self.catchup = None
+                self.go_director.catchup = None
 
         executable = self._get_pigeon_command()
 
@@ -1527,6 +1800,19 @@ class Trust(IModule):
 
         self._refresh_pigeon_address()
         self._record_pigeon_connections()
+        catchup = getattr(self, "catchup", None)
+        if isinstance(catchup, Catchup):
+            try:
+                if (
+                    time.monotonic()
+                    - getattr(self, "last_catchup_bootstrap", 0)
+                    >= 1
+                ):
+                    catchup.bootstrap(self.report_validation)
+                    self.last_catchup_bootstrap = time.monotonic()
+                catchup.tick()
+            except (sqlite3.Error, OSError, ValueError) as error:
+                self.print(f"P2P catch-up deferred: {error}", 0, 1)
 
         if self.pigeon is None:
             self.termination_event.wait(0.05)

@@ -4156,3 +4156,56 @@ def test_readable_views_omit_internal_scoring_intervals(theme: str) -> None:
             assert not errors, errors
         finally:
             browser.close()
+
+
+def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
+    """Show catch-up provenance, observation times, state, sorting and copyable detail safely."""
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors = []
+
+    def respond(route: Any) -> None:
+        """Serve local UI assets to route and isolate it from active capture APIs."""
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated browser fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1400, "height": 1100})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderP2PCatchup === 'function'")
+            page.evaluate("""() => {
+              clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+              state.activeTab='p2p'; document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='p2p'));
+              byId('p2p-stats').hidden=false;
+              const base={author:'original-author',via:'forwarding-peer',target:'192.0.2.4',evidence_type:'SMB_SCAN',confidence:.95,threat:3,description:'<img src=x onerror=alert(1)>',first_seen:100,last_seen:200,received:300,expires:250,state:'observed'};
+              state.p2p={catch_up:{total:3,transfers:[{peer:'forwarding-peer',state:'partial',bytes:1024,received:3,coverage_start:100}],incidents:[
+                {...base,incident:'old',expired:true}, {...base,incident:'fresh',expired:false,last_seen:400}, {...base,incident:'withdrawn',state:'withdrawn',expired:true,last_seen:500}]}};
+              renderP2PCatchup(state.p2p.catch_up);
+            }""")
+            table = page.locator("#p2p-catchup-table")
+            assert "Historical · expired" in table.inner_text()
+            assert "Recently observed" in table.inner_text()
+            assert "Withdrawn" in table.inner_text()
+            assert "original-author via forwarding-peer" in table.inner_text()
+            assert "Partial history" in page.locator("#p2p-catchup-status").inner_text()
+            assert page.locator("#p2p-catchup-transfers").get_by_role("button", name="Resume").is_visible()
+            table.locator("tbody tr").first.click()
+            detail = page.locator("#p2p-catchup-detail")
+            assert "Observed by original-author → forwarded by forwarding-peer → this Slips" in detail.inner_text()
+            assert detail.locator("img").count() == 0
+            detail.locator("summary").click()
+            assert detail.get_by_role("button", name="Copy JSON").is_visible()
+            assert '"author": "original-author"' in detail.locator("pre").inner_text()
+            table.locator('th[data-sort="last_seen"]').click()
+            assert table.locator('th[data-sort="last_seen"]').get_attribute("aria-sort") == "ascending"
+            assert not errors
+        finally:
+            browser.close()

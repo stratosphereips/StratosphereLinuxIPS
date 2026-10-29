@@ -80,6 +80,7 @@ const state = {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
+    "p2p-catchup-table": { key: "last_seen", order: "desc" },
     "p2p-activity-table": { key: "timestamp", order: "desc" },
     "p2p-peers-table": { key: "connected", order: "desc" },
     "logs-table": { key: "event_time", order: "desc" },
@@ -5223,7 +5224,7 @@ function p2pGraphPeer(id, payload) {
  */
 function p2pGraphGroups(payload) {
   const bounded = { ...payload, activity: (payload.activity || []).slice(0, 1000), reports: (payload.reports || []).slice(0, 200) };
-  const rows = p2pMessageRows(bounded).filter((row) => ["report", "blame"].includes(row.message_type)
+  const rows = p2pMessageRows(bounded).filter((row) => ["report", "blame", "catchup"].includes(row.message_type)
     && ["sent", "received"].includes(row.direction));
   const range = byId("p2p-graph-range").value;
   const seconds = ({ "1h": 3600, "24h": 86400, "7d": 604800 })[range];
@@ -5513,11 +5514,73 @@ function bindP2PGraph() {
   });
 }
 
+/** Show signed network history and per-peer catch-up progress without mixing live scores.
+ * @param {object} payload Bounded catch-up history and transfer summaries.
+ */
+function renderP2PCatchup(payload = {}) {
+  const records = sortLocalRows("p2p-catchup-table", payload.incidents || []);
+  const transfers = payload.transfers || [];
+  const status = byId("p2p-catchup-status");
+  const receiving = transfers.filter((item) => item.state === "receiving").length;
+  const partial = transfers.some((item) => item.state === "partial");
+  status.textContent = receiving ? `Receiving network history from ${receiving} peers…`
+    : partial ? "Partial history received; transfer limits or a timeout left gaps."
+    : transfers.some((item) => item.state === "complete") ? "Catch-up complete with responding peers."
+    : "Waiting for peers that support network catch-up.";
+  status.textContent += ` ${compact(payload.total || 0)} incident summaries retained${records.length < (payload.total || 0) ? ` · showing ${records.length}` : ""}.`;
+  const progress = byId("p2p-catchup-transfers");
+  progress.replaceChildren();
+  transfers.forEach((item) => {
+    const line = text("p", `${item.peer} · ${item.state} · ${item.lane || ""} · ${item.received || 0} accepted · ${item.skipped || 0} duplicate or rejected · ${formatBytes(item.bytes || 0)}`);
+    if (item.coverage_start) line.append(text("span", ` · history collection started ${formatTime(item.coverage_start)}`, "muted"));
+    if (["partial", "complete"].includes(item.state)) {
+      const resume = text("button", item.state === "partial" ? "Resume" : "Check again", "secondary");
+      resume.type = "button";
+      resume.addEventListener("click", async () => {
+        resume.disabled = true;
+        try {
+          await api("p2pCatchupResume", "/api/p2p-catchup/resume", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({peer: item.peer})});
+          await loadP2P();
+        } finally { resume.disabled = false; }
+      });
+      line.append(document.createTextNode(" "), resume);
+    }
+    progress.append(line);
+  });
+  const body = byId("p2p-catchup-table").querySelector("tbody");
+  body.replaceChildren();
+  records.forEach((record) => {
+    const row = document.createElement("tr");
+    const labels = ["info", "low", "medium", "high", "critical"];
+    const values = [formatTime(record.last_seen), record.target, alertTypeName(record.evidence_type),
+      labels[record.threat] || "unknown", `${Math.round(numeric(record.confidence) * 100)}%`,
+      `${record.author}${record.via && record.author !== record.via ? ` via ${record.via}` : ""}`,
+      `${record.state === "withdrawn" ? "Withdrawn" : record.expired ? "Historical · expired" : "Recently observed"}${record.protection?.state && record.protection.expires > Date.now()/1000 ? ` · firewall ${record.protection.state} until ${formatTime(record.protection.expires)}` : ""}`];
+    values.forEach((value) => row.append(text("td", value)));
+    row.title = `${record.description || ""}\nFirst observed: ${formatTime(record.first_seen)}\nReceived: ${formatTime(record.received)}\nExpires: ${formatTime(record.expires)}\n${record.count || 1} observations · ${record.victim?.value ? `affected host ${record.victim.value}` : "affected host not supplied"}`;
+    row.dataset.clickable = "true";
+    row.tabIndex = 0;
+    const inspect = () => {
+      const detail = byId("p2p-catchup-detail"); detail.hidden = false; detail.replaceChildren();
+      detail.append(text("h4", `${alertTypeName(record.evidence_type)} · ${record.target}`), text("p", record.description || ""),
+        text("p", `${record.target} → ${record.victim?.value || "affected host not supplied"}${record.dst_port ? ` · destination port ${record.dst_port}` : ""}`),
+        text("p", `Observed by ${record.author} → ${record.via && record.author !== record.via ? `forwarded by ${record.via} → ` : ""}this Slips`),
+        text("p", `First observed ${formatTime(record.first_seen)} · last observed ${formatTime(record.last_seen)} · received ${formatTime(record.received)} · expires ${formatTime(record.expires)}`));
+      detail.append(rawBlock(record, "Network catch-up incident"));
+    };
+    row.addEventListener("click", inspect);
+    row.addEventListener("keydown", (event) => { if (event.key === "Enter") inspect(); });
+    body.append(row);
+  });
+  if (!records.length) { const row = document.createElement("tr"); const cell = text("td", "No imported incidents in this network.", "empty-state"); cell.colSpan = 7; row.append(cell); body.append(row); }
+}
+
 async function loadP2P() {
   const range = byId("p2p-range").value;
   const payload = await api("p2p", `/api/p2p?range=${encodeURIComponent(range)}`);
   if (!payload) return;
   state.p2p = payload;
+  renderP2PCatchup(payload.catch_up);
   const counts = payload.counts || {};
   byId("p2p-badge").textContent = compact(counts.connected);
   byId("p2p-disabled").hidden = payload.enabled;
@@ -8750,6 +8813,7 @@ byId("p2p-load-more").addEventListener("click", () => {
   renderP2PMessages();
 });
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
+bindLocalTableSort("p2p-catchup-table", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-peers-table", renderP2PPeers);
 bindLocalTableSort("logs-table", () => loadLogs().catch(() => {}));
 byId("logs-history-source").addEventListener("change", () => loadLogs().catch(() => {}));
