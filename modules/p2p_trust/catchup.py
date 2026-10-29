@@ -13,6 +13,42 @@ from pathlib import Path
 from typing import Any, Callable, Iterator
 
 
+def message_summary(message: dict[str, Any]) -> dict[str, Any]:
+    """Return bounded request/reply metadata from message without signature envelopes."""
+    items = message.get("items", [])
+    items = items if isinstance(items, list) else []
+    summary = {
+        key: message.get(key)
+        for key in (
+            "message_type",
+            "network",
+            "lane",
+            "nonce",
+            "since",
+            "after",
+            "cursor",
+            "more",
+            "requested_since",
+        )
+    }
+    summary["records"] = len(items)
+    summary["incidents"] = [
+        {
+            key: str(item["record"].get(key, ""))[:256]
+            for key in (
+                "target",
+                "evidence_type",
+                "author",
+                "state",
+                "last_seen",
+            )
+        }
+        for item in items[:50]
+        if isinstance(item, dict) and isinstance(item.get("record"), dict)
+    ]
+    return summary
+
+
 def network_scope(state: dict[str, Any]) -> str:
     """Return a connected router-and-subnet scope from state, or empty when ambiguous."""
     from slips_files.common.mac import normalize_mac, classify_mac
@@ -550,7 +586,7 @@ class CatchupStore:
         ) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
-                "SELECT data,via,received,expires,state FROM incidents WHERE network=? ORDER BY (state='withdrawn') DESC,(expires>?) DESC,threat DESC,last_seen DESC LIMIT ?",
+                "SELECT data,via,received,expires,state FROM incidents WHERE network=? ORDER BY (via<>'') DESC,(state='withdrawn') DESC,(expires>?) DESC,threat DESC,last_seen DESC LIMIT ?",
                 (network, time.time(), limit),
             ).fetchall()
             transfers = conn.execute(
@@ -559,6 +595,10 @@ class CatchupStore:
             ).fetchall()
             total = conn.execute(
                 "SELECT COUNT(*) FROM incidents WHERE network=?", (network,)
+            ).fetchone()[0]
+            local_total = conn.execute(
+                "SELECT COUNT(*) FROM incidents WHERE network=? AND via=''",
+                (network,),
             ).fetchone()[0]
             actions = {
                 row["target"]: dict(row)
@@ -589,6 +629,8 @@ class CatchupStore:
                 for row in rows
             ],
             "total": total,
+            "local_total": local_total,
+            "imported_total": total - local_total,
             "limit": limit,
         }
 

@@ -1564,7 +1564,11 @@ It does not capture from a live interface.
 
 ### Network catch-up
 
-The P2P tab includes network catch-up progress, original-author incident history,
+The P2P tab separates local summaries available to share from incidents actually
+received from peers. Its sortable Requests and replies table shows incoming
+and outgoing requests, their scope, peers, and the records carried in replies.
+Queuing a message to Pigeon is distinct from receiving a peer's reply.
+The panel also includes catch-up progress, original-author incident history,
 expiry and withdrawals, Resume/Check again, sortable columns and copyable JSON
 details. P2P Graph includes accepted catch-up deliveries. Historical imports do
 not increase current host scores. See [network catch-up](p2p_catchup.md) for

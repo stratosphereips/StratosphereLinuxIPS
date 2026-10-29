@@ -7595,6 +7595,36 @@ def test_identity_returns_current_named_network_in_any_tab(interfaces: str, conn
     reader.redis.hset.assert_not_called()
 
 
+def test_p2p_catchup_activity_is_bounded_to_current_network_and_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Expose catch-up requests and replies without mixing other networks, runs or live reports."""
+    _factory = ModuleFactory()
+    monkeypatch.chdir(tmp_path)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path / "run"
+    reader.output_dir.mkdir()
+    reader.redis = Mock()
+    reader.redis.get.return_value = None
+    reader.redis.hget.return_value = None
+    now = time.time()
+    reader.redis.hgetall.side_effect = lambda key: {"analysis_start": str(now - 60)} if key == "analysis" else {}
+    reader.redis.zrange.return_value = []
+    reader._catchup_network_identity = Mock(return_value="gateway:current")
+    base = {"timestamp": now, "network": "gateway:current", "message_type": "catchup_request", "direction": "sent", "peer": "remote"}
+    excluded = [
+        {**base, "network": "gateway:other"},
+        {**base, "timestamp": now - 120},
+        {**base, "message_type": "report"},
+    ]
+    reader.redis.lrange.return_value = [json.dumps(item) for item in [*excluded, base, *[{**base, "message_type": "catchup_page", "direction": "received", "records": 1} for _ in range(110)]]]
+    result = reader.p2p()["catch_up"]
+    assert result["network"] == "gateway:current"
+    assert result["connected_peers"] == 0
+    assert len(result["activity"]) == 100
+    assert result["activity"][0]["message_type"] == "catchup_request"
+    assert result["activity"][1]["message_type"] == "catchup_page"
+    assert all(item["network"] == "gateway:current" and item["timestamp"] >= now - 60 for item in result["activity"])
+
+
 def test_p2p_marks_recently_active_message_sender_online(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

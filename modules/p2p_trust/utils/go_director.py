@@ -27,7 +27,7 @@ from modules.p2p_trust.trust.report_validation import (
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.p2p_reports import reported_detections
-from modules.p2p_trust.catchup import Catchup
+from modules.p2p_trust.catchup import Catchup, message_summary
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -283,11 +283,8 @@ class GoDirector:
                 self.db.record_p2p_message(
                     "received",
                     {
-                        "message_type": message_type,
+                        **message_summary(data),
                         "peer": reporter,
-                        "records": len(data.get("items", [])),
-                        "lane": data.get("lane"),
-                        "network": data.get("network"),
                     },
                 )
             return

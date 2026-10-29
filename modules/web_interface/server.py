@@ -10635,6 +10635,19 @@ class RunDataReader:
             )
         except (sqlite3.Error, OSError, ValueError):
             catchup = {"transfers": [], "incidents": [], "total": 0}
+        catchup["network"] = self._catchup_network_identity()
+        catchup["activity"] = [
+            item
+            for item in activity
+            if isinstance(item, dict)
+            and item.get("message_type") in {"catchup_request", "catchup_page"}
+            and item.get("network") == catchup["network"]
+            and (
+                not run_start
+                or self._event_timestamp(item.get("timestamp")) >= run_start
+            )
+        ][:100]
+        catchup["connected_peers"] = len(connected)
         return {
             "enabled": bool(self.redis.hget("PIDs", Modules.P2P_TRUST)),
             "listener": listener,

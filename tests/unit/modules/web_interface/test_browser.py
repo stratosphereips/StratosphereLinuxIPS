@@ -4206,6 +4206,37 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
             assert '"author": "original-author"' in detail.locator("pre").inner_text()
             table.locator('th[data-sort="last_seen"]').click()
             assert table.locator('th[data-sort="last_seen"]').get_attribute("aria-sort") == "ascending"
+            page.evaluate("""() => {
+              state.p2p.catch_up={connected_peers:0,total:4,local_total:4,imported_total:0,transfers:[],incidents:[{author:'this-peer',via:'',target:'10.0.0.218',incident:'own',last_seen:100}]};
+              renderP2PCatchup(state.p2p.catch_up);
+            }""")
+            assert "No peers connected" in page.locator("#p2p-catchup-status").inner_text()
+            assert "4 local summaries available to share" in page.locator("#p2p-catchup-status").inner_text()
+            assert "0 incident summaries received from peers" in page.locator("#p2p-catchup-status").inner_text()
+            assert "10.0.0.218" not in table.inner_text()
+            assert not detail.is_visible()
+            exchanges = page.locator("#p2p-catchup-exchanges")
+            assert "No catch-up requests or replies recorded" in exchanges.inner_text()
+            page.evaluate("""() => {
+              const request={message_type:'catchup_request',peer:'remote-peer',lane:'history',since:100,timestamp:200};
+              const reply={...request,message_type:'catchup_page',records:1,incidents:[{target:'192.0.2.40',evidence_type:'SMB_SCAN',author:'original-author',state:'observed',last_seen:150}]};
+              state.p2p.catch_up.activity=[{...request,direction:'sent'},{...request,direction:'received'}, {...reply,direction:'sent'}, {...reply,direction:'received'}];
+              renderP2PCatchup(state.p2p.catch_up);
+            }""")
+            assert exchanges.locator("tbody tr").count() == 4
+            assert "This Slips → peer" in exchanges.inner_text()
+            assert "Peer → this Slips" in exchanges.inner_text()
+            exchanges.locator("tbody tr").nth(2).click()
+            exchange_detail = page.locator("#p2p-catchup-exchange-detail")
+            assert "This Slips queued a reply to remote-peer" in exchange_detail.inner_text()
+            assert "192.0.2.40" in exchange_detail.inner_text()
+            assert "original-author" in exchange_detail.inner_text()
+            exchanges.locator("tbody tr").nth(3).click()
+            assert "This Slips received a reply from remote-peer" in exchange_detail.inner_text()
+            exchanges.locator('th[data-sort="direction"]').click()
+            assert exchanges.locator('th[data-sort="direction"]').get_attribute("aria-sort") == "descending"
+            assert exchange_detail.is_visible()
+            assert "This Slips received a reply from remote-peer" in exchange_detail.inner_text()
             assert not errors
         finally:
             browser.close()

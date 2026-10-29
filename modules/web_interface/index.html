@@ -246,6 +246,11 @@
         <article class="surface table-surface" id="p2p-catchup">
           <div class="table-heading"><div><h3>Network catch-up</h3><p id="p2p-catchup-status">Waiting for peer history.</p></div></div>
           <div id="p2p-catchup-transfers" class="p2p-panel-foot"></div>
+          <h4 class="p2p-panel-foot">Requests and replies</h4>
+          <p class="p2p-panel-foot">Outgoing messages were queued to Pigeon; a reply confirms the peer responded.</p>
+          <div class="table-wrap"><table id="p2p-catchup-exchanges"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="direction">Direction</th><th data-sort="peer">Peer</th><th data-sort="message_type">Message</th><th data-sort="lane">Requested information</th><th data-sort="records">Records in reply</th></tr></thead><tbody></tbody></table></div>
+          <div id="p2p-catchup-exchange-detail" class="p2p-panel-foot" hidden></div>
+          <h4 class="p2p-panel-foot">Incidents received from peers</h4>
           <div class="table-wrap"><table id="p2p-catchup-table"><thead><tr><th data-sort="last_seen">Last observed</th><th data-sort="target">Source</th><th data-sort="evidence_type">Behavior</th><th data-sort="threat">Threat</th><th data-sort="confidence">Original confidence</th><th data-sort="author">Author / delivered by</th><th data-sort="state">State</th></tr></thead><tbody></tbody></table></div>
           <div id="p2p-catchup-detail" class="p2p-panel-foot" hidden></div>
           <p class="p2p-panel-foot">Imported history is separate from current host scores. Original observation times and expiry are preserved.</p>

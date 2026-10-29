@@ -140,7 +140,21 @@ records, transferred bytes, collection start and partial/unsupported status.
 **Resume** continues a limited or timed-out transfer with another bounded
 allowance; **Check again** requests a current update from a completed source.
 
-The incident table separates recently observed, historical/expired and withdrawn
+**Requests and replies** lists incoming and outgoing catch-up messages for the
+current run and network: who requested information, whether they asked for recent
+warnings or history, and how many records each reply contained. Click a reply
+to see the hosts, behaviors and original authors it carried; click a request
+to see its history start and request ID. Outgoing messages are labelled as
+queued to Pigeon, because queuing alone does not establish delivery. A received
+reply establishes that the peer responded. The list uses the newest 100
+catch-up messages still present in the existing 1,000-message P2P activity log.
+
+Your own detection summaries are **local summaries available to share**.
+Storing them does not send them, and their storage time is not a reception time.
+They do not appear in **Incidents received from peers**. With no connected
+peers and no exchanges, the panel says so rather than implying a transfer.
+
+The received-incident table separates recently observed, historical/expired and withdrawn
 records. It shows original confidence, last observed, author and delivering peer.
 Columns are sortable. Clicking a row shows the source and affected host/service,
 the author-to-forwarder-to-local delivery path, original and receipt times,

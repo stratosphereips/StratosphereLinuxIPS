@@ -81,6 +81,7 @@ const state = {
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
     "p2p-catchup-table": { key: "last_seen", order: "desc" },
+    "p2p-catchup-exchanges": { key: "timestamp", order: "desc" },
     "p2p-activity-table": { key: "timestamp", order: "desc" },
     "p2p-peers-table": { key: "connected", order: "desc" },
     "logs-table": { key: "event_time", order: "desc" },
@@ -5518,7 +5519,13 @@ function bindP2PGraph() {
  * @param {object} payload Bounded catch-up history and transfer summaries.
  */
 function renderP2PCatchup(payload = {}) {
-  const records = sortLocalRows("p2p-catchup-table", payload.incidents || []);
+  const allRecords = payload.incidents || [];
+  const records = sortLocalRows("p2p-catchup-table", allRecords.filter((record) => Boolean(record.via)));
+  const localTotal = payload.local_total ?? allRecords.filter((record) => !record.via).length;
+  const importedTotal = payload.imported_total ?? Math.max(0, numeric(payload.total) - localTotal);
+  const connected = payload.connected_peers ?? state.p2p?.counts?.connected;
+  const messages = sortLocalRows("p2p-catchup-exchanges", (payload.activity || state.p2p?.activity || []).filter((item) =>
+    ["catchup_request", "catchup_page"].includes(item.message_type) && (!payload.network || item.network === payload.network)).slice(0, 100));
   const transfers = payload.transfers || [];
   const status = byId("p2p-catchup-status");
   const receiving = transfers.filter((item) => item.state === "receiving").length;
@@ -5527,7 +5534,46 @@ function renderP2PCatchup(payload = {}) {
     : partial ? "Partial history received; transfer limits or a timeout left gaps."
     : transfers.some((item) => item.state === "complete") ? "Catch-up complete with responding peers."
     : "Waiting for peers that support network catch-up.";
-  status.textContent += ` ${compact(payload.total || 0)} incident summaries retained${records.length < (payload.total || 0) ? ` · showing ${records.length}` : ""}.`;
+  if (connected === 0) status.textContent = "No peers connected.";
+  status.textContent += ` ${compact(importedTotal)} incident summaries received from peers${records.length < importedTotal ? ` · showing ${records.length}` : ""}. ${compact(localTotal)} local summaries available to share; storing them does not send them.`;
+  const exchangeDetail = byId("p2p-catchup-exchange-detail");
+  exchangeDetail.hidden = true;
+  exchangeDetail.replaceChildren();
+  const exchangeKey = (item) => JSON.stringify([item.timestamp, item.direction, item.peer, item.message_type, item.nonce, item.after, item.cursor]);
+  const inspectExchange = (item) => {
+    state.p2pCatchupSelection = {kind: "exchange", key: exchangeKey(item)};
+    byId("p2p-catchup-detail").hidden = true;
+    exchangeDetail.hidden = false;
+    exchangeDetail.replaceChildren();
+    const request = item.message_type === "catchup_request";
+    const action = item.direction === "sent"
+      ? request ? `This Slips requested information from ${item.peer}` : `This Slips queued a reply to ${item.peer}`
+      : request ? `${item.peer} requested information from this Slips` : `This Slips received a reply from ${item.peer}`;
+    exchangeDetail.append(text("h4", action), text("p", `${formatTime(item.timestamp)} · ${item.lane === "fresh" ? "Recent warnings and withdrawals" : "Incident history"}`));
+    if (item.since || item.requested_since) exchangeDetail.append(text("p", `Requested observations since ${formatTime(item.since || item.requested_since)}`));
+    if (!request) {
+      exchangeDetail.append(text("p", `${numeric(item.records)} records in this reply${item.more ? " · more pages available" : ""}`));
+      const list = document.createElement("ul");
+      (item.incidents || []).forEach((record) => list.append(text("li", `${record.target} · ${alertTypeName(record.evidence_type)} · observed by ${record.author} · ${record.state} · ${formatTime(record.last_seen)}`)));
+      exchangeDetail.append(list);
+    }
+    exchangeDetail.append(rawBlock(item, "Catch-up request or reply"));
+  };
+  renderTable("p2p-catchup-exchanges", messages, [
+    (item) => formatP2PTime(item.timestamp),
+    (item) => item.direction === "sent" ? "This Slips → peer" : "Peer → this Slips",
+    (item) => p2pPeerIdentity(item.peer),
+    (item) => item.message_type === "catchup_request" ? "Request" : "Reply",
+    (item) => item.lane === "fresh" ? "Recent warnings and withdrawals" : "Incident history",
+    (item) => item.message_type === "catchup_page" ? numeric(item.records) : "—",
+  ], inspectExchange);
+  const selectedExchange = state.p2pCatchupSelection?.kind === "exchange"
+    ? messages.find((item) => exchangeKey(item) === state.p2pCatchupSelection.key) : null;
+  if (selectedExchange) inspectExchange(selectedExchange);
+  if (!messages.length) byId("p2p-catchup-exchanges").querySelector("tbody td").textContent = "No catch-up requests or replies recorded in this run for this network.";
+  const incidentDetail = byId("p2p-catchup-detail");
+  incidentDetail.hidden = true;
+  incidentDetail.replaceChildren();
   const progress = byId("p2p-catchup-transfers");
   progress.replaceChildren();
   transfers.forEach((item) => {
@@ -5560,7 +5606,10 @@ function renderP2PCatchup(payload = {}) {
     row.title = `${record.description || ""}\nFirst observed: ${formatTime(record.first_seen)}\nReceived: ${formatTime(record.received)}\nExpires: ${formatTime(record.expires)}\n${record.count || 1} observations · ${record.victim?.value ? `affected host ${record.victim.value}` : "affected host not supplied"}`;
     row.dataset.clickable = "true";
     row.tabIndex = 0;
+    const incidentKey = JSON.stringify([record.author, record.incident]);
     const inspect = () => {
+      state.p2pCatchupSelection = {kind: "incident", key: incidentKey};
+      exchangeDetail.hidden = true;
       const detail = byId("p2p-catchup-detail"); detail.hidden = false; detail.replaceChildren();
       detail.append(text("h4", `${alertTypeName(record.evidence_type)} · ${record.target}`), text("p", record.description || ""),
         text("p", `${record.target} → ${record.victim?.value || "affected host not supplied"}${record.dst_port ? ` · destination port ${record.dst_port}` : ""}`),
@@ -5571,6 +5620,7 @@ function renderP2PCatchup(payload = {}) {
     row.addEventListener("click", inspect);
     row.addEventListener("keydown", (event) => { if (event.key === "Enter") inspect(); });
     body.append(row);
+    if (state.p2pCatchupSelection?.kind === "incident" && state.p2pCatchupSelection.key === incidentKey) inspect();
   });
   if (!records.length) { const row = document.createElement("tr"); const cell = text("td", "No imported incidents in this network.", "empty-state"); cell.colSpan = 7; row.append(cell); body.append(row); }
 }
@@ -8814,6 +8864,7 @@ byId("p2p-load-more").addEventListener("click", () => {
 });
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
 bindLocalTableSort("p2p-catchup-table", () => renderP2PCatchup(state.p2p?.catch_up));
+bindLocalTableSort("p2p-catchup-exchanges", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-peers-table", renderP2PPeers);
 bindLocalTableSort("logs-table", () => loadLogs().catch(() => {}));
 byId("logs-history-source").addEventListener("change", () => loadLogs().catch(() => {}));

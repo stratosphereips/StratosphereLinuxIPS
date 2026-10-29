@@ -32,6 +32,41 @@ def incident(author: str = "origin", **changes: object) -> dict:
     }
 
 
+def test_web_counts_local_storage_separately_and_prioritizes_imports(tmp_path: Path) -> None:
+    """Local summaries remain shareable but cannot displace imported rows from a bounded web page."""
+    _factory = ModuleFactory()
+    store = CatchupStore(tmp_path / "catchup.sqlite", CatchupSettings())
+    for index in range(4):
+        assert store.save(incident("me", incident=f"own-{index}", threat=4))
+    assert store.save(incident("other", incident="remote", threat=1), "signed", "relay")
+    view = CatchupStore.view(store.path, "gateway:aa", limit=1)
+    assert view["local_total"] == 4
+    assert view["imported_total"] == 1
+    assert view["incidents"][0]["incident"] == "remote"
+    assert not view["transfers"]
+    page = store.page({"network": "gateway:aa", "nonce": "a" * 32, "lane": "fresh", "since": time.time() - 3600}, "me", "requester")
+    assert sum(item["record"]["author"] == "me" for item in page["items"]) == 4
+
+
+@pytest.mark.parametrize("reply", [False, True])
+def test_request_reply_summary_retains_contents_without_signature_envelopes(reply: bool) -> None:
+    """Keep bounded exchange details for the UI without logging sealed payloads."""
+    _factory = ModuleFactory()
+    from modules.p2p_trust.catchup import message_summary
+
+    message = {"message_type": "catchup_page" if reply else "catchup_request", "network": "gateway:aa", "lane": "history", "nonce": "a" * 32, "since": 123}
+    if reply:
+        message["items"] = [{"record": incident(description="private packet body"), "seal": "signature-envelope"} for _ in range(60)]
+    summary = message_summary(message)
+    assert summary["nonce"] == "a" * 32
+    assert summary["since"] == 123
+    assert len(summary["incidents"]) == (50 if reply else 0)
+    assert "signature-envelope" not in json.dumps(summary)
+    assert "private packet body" not in json.dumps(summary)
+    if reply:
+        assert summary["incidents"][0]["evidence_type"] == "HORIZONTAL_PORT_SCAN"
+
+
 @pytest.mark.parametrize(
     "changes",
     [

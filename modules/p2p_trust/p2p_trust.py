@@ -21,6 +21,7 @@ from modules.p2p_trust.catchup import (
     Catchup,
     CatchupSettings,
     CatchupStore,
+    message_summary,
     network_scope,
 )
 
@@ -332,11 +333,8 @@ class Trust(IModule):
         self.db.record_p2p_message(
             "sent",
             {
-                "message_type": message["message_type"],
+                **message_summary(message),
                 "peer": peer,
-                "records": len(message.get("items", [])),
-                "network": message["network"],
-                "lane": message["lane"],
             },
         )
 
