@@ -157,6 +157,7 @@ class Daemon:
 
     def notify_started(self) -> None:
         """Tell the terminal that the daemon has started its core workers."""
+        self.print(f"Slips daemon core workers started. [PID {os.getpid()}]")
         self._report_startup("ready", str(os.getpid()))
 
     def _wait_for_startup(self, descriptor: int) -> int:
@@ -207,7 +208,10 @@ class Daemon:
                         return 1
             if pid and self.is_pid_running(pid):
                 print(
-                    f"Slips daemon PID {pid} is still starting. Check {self.logsfile} and {self.stderr}.",
+                    f"Slips daemon PID {pid} is running. Initialization continues "
+                    "in the background after the 30-second wait. "
+                    f"Startup confirmation and progress: {self.logsfile}. "
+                    f"Errors: {self.stderr}.",
                     flush=True,
                 )
                 return 0

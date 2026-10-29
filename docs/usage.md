@@ -130,8 +130,15 @@ live capture still needs the normal interface-capture permissions.
 The launcher waits up to 30 seconds for startup feedback. It prints the daemon
 PID and log path when core workers start. If startup takes longer but the daemon
 is alive, it reports that startup is continuing and returns the terminal;
-`--list-instances` can already find the daemon. An early startup failure is
-reported in the terminal with a nonzero exit code and its error-log path.
+`--list-instances` can already find the daemon. The 30-second limit stops waiting
+in the terminal; it does not stop or restart the background process. Restoring
+saved state and starting workers can take longer. After a P2P update, the P2P
+worker can also rebuild its Go binary while capture starts independently.
+The log records `Slips daemon core workers started` when core startup finishes;
+individual modules report their own readiness, such as the web URL and P2P
+listening address. Follow progress with `tail -f <output-folder>/slips.log`.
+An early startup failure is reported in the terminal with a nonzero exit code
+and its error-log path.
 
 Only one daemon is supported at a time. Use `--stop` to stop it when it is the
 only running Slips instance, or `--stop PID` to select it when other analyses

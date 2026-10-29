@@ -489,3 +489,42 @@ def test_startup_pipe_reports_success_failure_and_unexpected_exit(status: str, e
         os.write(write_fd, (json.dumps({"status": status, "message": "12345"}) + "\n").encode())
     os.close(write_fd)
     assert daemon._wait_for_startup(read_fd) == expected
+
+
+@pytest.mark.parametrize("alive", [True, False])
+def test_startup_wait_distinguishes_background_initialization_from_exit(alive: bool, capsys: pytest.CaptureFixture) -> None:
+    """A wait timeout leaves a live daemon running and reports a dead daemon as failure.
+
+    Parameters:
+        alive: Whether the detached PID remains alive after the wait.
+        capsys: Captures the terminal status message.
+    """
+    daemon = ModuleFactory().create_daemon_object()
+    read_fd, write_fd = os.pipe()
+    os.write(write_fd, b'{"status":"starting","message":"12345"}\n')
+    os.close(write_fd)
+    with patch("slips.daemon.select.select", side_effect=[([read_fd], [], []), ([], [], [])]), patch.object(daemon, "is_pid_running", return_value=alive):
+        assert daemon._wait_for_startup(read_fd) == (0 if alive else 1)
+    captured = capsys.readouterr()
+    if alive:
+        assert "12345 is running" in captured.out
+        assert "Initialization continues in the background" in captured.out
+        assert "Startup confirmation and progress:" in captured.out
+    else:
+        assert "exited before startup completed" in captured.err
+
+
+def test_late_startup_confirmation_is_logged_after_terminal_disconnect(tmp_path: Path) -> None:
+    """Keep a startup confirmation in the log after the terminal stops waiting.
+
+    Parameters:
+        tmp_path: Isolated directory for the daemon log.
+    """
+    daemon = ModuleFactory().create_daemon_object()
+    daemon.logsfile = str(tmp_path / "slips.log")
+    read_fd, write_fd = os.pipe()
+    os.close(read_fd)
+    daemon._startup_write_fd = write_fd
+    daemon.notify_started()
+    assert daemon._startup_write_fd is None
+    assert f"Slips daemon core workers started. [PID {os.getpid()}]" in Path(daemon.logsfile).read_text()
