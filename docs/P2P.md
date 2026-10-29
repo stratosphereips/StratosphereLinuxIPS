@@ -94,6 +94,10 @@ peer message also marks its authenticated sender active for 15 minutes. A
 disconnect removes the connection immediately; the active list is cleared
 when the P2P module starts and stops.
 
+For the proposed mechanism to receive missed network warnings after returning,
+see [P2P catch-up design](p2p_catchup_plan.md). This is a proposal, not an
+available protocol or configuration yet.
+
 ## Scores, trust, and blames
 
 Slips and Pigeon exchange a maliciousness score from 0 (benign) to 1
