@@ -643,6 +643,26 @@ def _trainable(tmp_path, balancing=""):
     return m
 
 
+def test_learning_rate_scales_the_adam_step(tmp_path):
+    """From a fresh Adam state the first step (incl. decoupled weight decay)
+    is linear in the learning rate: doubling it doubles every weight change."""
+    deltas = []
+    for lr in (0.01, 0.02):
+        m = _trainable(tmp_path / str(lr))
+        m.local_training_epochs = 1
+        m.learning_rate = lr
+        m.model = _net(tmp_path, "slips-a")
+        before = {k: v.clone() for k, v in m.model.state_dict().items()}
+        m.fit_incremental_model(
+            np.stack(m.training_buffer_x), m.training_buffer_y
+        )
+        after = m.model.state_dict()
+        deltas.append({k: after[k] - before[k] for k in before})
+    assert any(d.abs().sum() > 0 for d in deltas[0].values())
+    for k in deltas[0]:
+        assert torch.allclose(deltas[1][k], 2 * deltas[0][k], atol=1e-6)
+
+
 def test_warm_start_keeps_its_scaler_through_the_base_read_model(
     tmp_path, monkeypatch
 ):

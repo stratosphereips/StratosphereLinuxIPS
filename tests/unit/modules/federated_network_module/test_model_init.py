@@ -185,6 +185,25 @@ def test_run_seed_from_config(value, expected):
     assert fnm.run_seed_from_config(value) == expected
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, 0.01),
+        ("", 0.01),
+        ("x", 0.01),
+        ("0", 0.01),
+        (-0.1, 0.01),
+        ("nan", 0.01),
+        ("inf", 0.01),
+        ("0.03", 0.03),
+        (0.1, 0.1),
+        (1, 1.0),
+    ],
+)
+def test_learning_rate_from_config(value, expected):
+    assert fnm.learning_rate_from_config(value) == expected
+
+
 def test_window_offset_seed_without_run_seed_is_the_peer_id_hash():
     import hashlib
 

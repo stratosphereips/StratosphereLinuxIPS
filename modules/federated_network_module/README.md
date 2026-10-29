@@ -248,6 +248,7 @@ federated_network_module:
   seed: 1111
   evidence_detection_threshold: 0.20
   # run_seed: 2   # optional, for repeat runs (see below)
+  # learning_rate: 0.01   # optional, Adam step size (see below)
 ```
 
 `run_seed` (optional, unset by default) gives repeat experiments run-to-run
@@ -255,6 +256,11 @@ variation while keeping the model start fixed: it re-seeds each peer's window
 offset and the undersampling draw, while the random projection and the
 trainable-layer init still come from `seed`, so every repeat starts from the
 same model. Unset = the previous behaviour.
+
+`learning_rate` (optional, default 0.01) is the Adam step size of every
+training stage: local training and both head fine-tunes (local and merged), so
+local and merged stay comparable. Invalid or non-positive values fall back to
+0.01.
 
 ### Hyperparameter Summary
 
@@ -268,7 +274,7 @@ same model. Unset = the previous behaviour.
 \midrule
 $E_{\text{local}}$  & 15  & Local training epochs (fc1 + head) \\
 $E_{\text{merge}}$  & 5   & Merge fine-tuning epochs (head-only) \\
-$\eta$              & 0.005 & Initial learning rate (Adam) \\
+$\eta$              & 0.01 & Learning rate (Adam, \texttt{learning\_rate}) \\
 $\lambda$           & $10^{-4}$ & L2 weight decay \\
 $B_{\text{min}}$    & 30  & Minimum training batch size \\
 $T_w$               & 1200 s & Sub-window width \\
@@ -288,7 +294,7 @@ $s_{\text{thresh}}$ & 0.20 & Slips evidence detection threshold \\
 - **Merge fine-tuning**: 5 epochs head-only after model aggregation
 
 ### Learning Rate
-- Adam optimizer with $\eta = 0.005$, weight decay $\lambda = 10^{-4}$
+- Adam optimizer with $\eta = 0.01$ (config `learning_rate`), weight decay $\lambda = 10^{-4}$
 - L2 penalty applied to all learnable parameters (fc1 + head)
 
 ## Feature Handling

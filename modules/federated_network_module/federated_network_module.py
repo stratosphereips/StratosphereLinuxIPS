@@ -46,6 +46,7 @@ import pickle
 import random
 import copy
 import hashlib
+import math
 import shutil
 import sqlite3
 import time
@@ -65,6 +66,8 @@ from slips_files.core.structures.evidence import EvidenceType
 
 BENIGN = ml_base.BENIGN
 MALICIOUS = ml_base.MALICIOUS
+# Adam step size of every training stage (local, local head, merged head)
+DEFAULT_LEARNING_RATE = 0.01
 
 
 def shared_random_projection(
@@ -107,6 +110,22 @@ def run_seed_from_config(value) -> Optional[int]:
         return int(value)
     except (TypeError, ValueError):
         return None
+
+
+def learning_rate_from_config(value) -> float:
+    """Parse the optional Adam learning rate.
+
+    :param value: the raw `learning_rate` config value
+    :return: the rate as a positive float, or DEFAULT_LEARNING_RATE when
+        unset or invalid (no change)
+    """
+    try:
+        lr = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_LEARNING_RATE
+    if not math.isfinite(lr) or lr <= 0:
+        return DEFAULT_LEARNING_RATE
+    return lr
 
 
 def window_offset_seed(peer_id: str, run_seed: Optional[int]) -> int:
@@ -994,6 +1013,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             conf.read_configuration(section, "run_seed", None)
         )
         self.print(f"run_seed: {self.run_seed}", 0, 2)
+        # Adam step size, shared by local training and both head fine-tunes
+        # so local and merged stay comparable. Unset = 0.01 (unchanged).
+        self.learning_rate = learning_rate_from_config(
+            conf.read_configuration(section, "learning_rate", None)
+        )
+        self.print(f"learning_rate: {self.learning_rate}", 0, 2)
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )
@@ -1401,7 +1426,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.model.train()
 
         # Manual Adam (fork-safe, no torch.optim)
-        lr = 0.01
+        lr = getattr(self, "learning_rate", DEFAULT_LEARNING_RATE)
         wd = 1e-4
         beta1 = 0.9
         beta2 = 0.999
