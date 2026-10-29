@@ -135,6 +135,11 @@ apply changes. These settings do not change capture or profiling behavior.
 
 ## Web interface
 
+Peer labels show the IP address when known and a short peer ID, for example
+`192.168.1.170 · QmejkJgt…3GTWQu`. Hover to see the full ID; expandable JSON and
+Copy JSON retain the full identities. This applies to progress, requests,
+replies and original-author/forwarder details.
+
 Open **P2P → Network catch-up**. It shows per-peer progress, accepted and skipped
 records, transferred bytes, collection start and partial/unsupported status.
 **Resume** continues a limited or timed-out transfer with another bounded

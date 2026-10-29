@@ -4194,12 +4194,12 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
             assert "Historical · expired" in table.inner_text()
             assert "Recently observed" in table.inner_text()
             assert "Withdrawn" in table.inner_text()
-            assert "original-author via forwarding-peer" in table.inner_text()
+            assert "original-author via forwarding-peer" in " ".join(table.inner_text().split())
             assert "Partial history" in page.locator("#p2p-catchup-status").inner_text()
             assert page.locator("#p2p-catchup-transfers").get_by_role("button", name="Resume").is_visible()
             table.locator("tbody tr").first.click()
             detail = page.locator("#p2p-catchup-detail")
-            assert "Observed by original-author → forwarded by forwarding-peer → this Slips" in detail.inner_text()
+            assert "Observed by original-author → forwarded by forwarding-peer → this Slips" in " ".join(detail.inner_text().split())
             assert detail.locator("img").count() == 0
             detail.locator("summary").click()
             assert detail.get_by_role("button", name="Copy JSON").is_visible()
@@ -4237,6 +4237,39 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
             assert exchanges.locator('th[data-sort="direction"]').get_attribute("aria-sort") == "descending"
             assert exchange_detail.is_visible()
             assert "This Slips received a reply from remote-peer" in exchange_detail.inner_text()
+            author = "QmejkJgtcQieUDUUFSnDz1Eup3a9GAd3Lo8y7Heq3GTWQu"
+            forwarder = "QmU2Dn5x1yZGdqWxBvSRUiJoXpjH9TGDixeF8dSjHM85xv"
+            page.evaluate("""([author, forwarder]) => {
+              state.p2p.peers=[{peer_id:author,ip:'192.168.1.170'},{peer_id:forwarder,ip:'192.168.1.196'}];
+              state.p2p.catch_up={connected_peers:2,total:1,imported_total:1,
+                transfers:[{peer:forwarder,state:'complete'}],
+                incidents:[{author,via:forwarder,target:'192.0.2.4',incident:'compact',evidence_type:'SMB_SCAN',last_seen:500,threat:3,confidence:.95}],
+                activity:[{peer:forwarder,direction:'received',message_type:'catchup_page',records:1,incidents:[{target:'192.0.2.4',evidence_type:'SMB_SCAN',author,state:'observed',last_seen:500}]}]};
+              renderP2PCatchup(state.p2p.catch_up);
+            }""", [author, forwarder])
+            assert "192.168.1.170" in table.inner_text()
+            assert "192.168.1.196" in table.inner_text()
+            assert "QmejkJgt…3GTWQu" in table.inner_text()
+            assert author not in table.inner_text()
+            assert forwarder not in table.inner_text()
+            assert table.locator(f'[title="{author}"]').count() > 0
+            progress = page.locator("#p2p-catchup-transfers")
+            assert "192.168.1.196 · QmU2Dn5x…HM85xv" in progress.inner_text()
+            assert progress.locator(f'[title="{forwarder}"]').count() == 1
+            table.locator("tbody tr").click()
+            assert "192.168.1.170" in detail.inner_text()
+            assert "192.168.1.196" in detail.inner_text()
+            detail.locator("summary").click()
+            assert author in detail.locator("pre").inner_text()
+            assert forwarder in detail.locator("pre").inner_text()
+            exchanges.locator("tbody tr").click()
+            assert "192.168.1.196 · QmU2Dn5x…HM85xv" in exchange_detail.locator("h4").inner_text()
+            assert "192.168.1.170 · QmejkJgt…3GTWQu" in exchange_detail.locator("li").inner_text()
+            assert exchange_detail.locator("h4").get_attribute("title") == forwarder
+            assert page.evaluate("p2pPeerLabel('QmUnknownPeerIdentityThatIsLong123456')") == "QmUnknow…123456"
+            assert page.evaluate("p2pPeerLabel('192.168.1.170')") == "192.168.1.170"
+            assert page.evaluate("p2pPeerLabel('*')") == "* all peers"
+            assert page.evaluate("p2pPeerLabel('short-id', '192.168.1.200')") == "192.168.1.200 · short-id"
             assert not errors
         finally:
             browser.close()

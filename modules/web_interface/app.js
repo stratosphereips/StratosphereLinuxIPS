@@ -3439,7 +3439,7 @@ async function loadEvidenceGroupRecords(reset = true) {
  */
 function evidenceReporter(record) {
   const peer = record.peer_report;
-  if (peer?.peer_id) return `${peer.peer_ip ? `${peer.peer_ip} · ` : ""}${peer.peer_id}`;
+  if (peer?.peer_id) return p2pPeerLabel(peer.peer_id, peer.peer_ip);
   const description = String(record.description || "");
   const received = description.match(/Received from P2P peer (.+?): reputation report/i);
   if (received) return received[1];
@@ -3561,7 +3561,7 @@ function renderEvidenceGroup() {
     (record) => {
       const label = document.createElement("div");
       label.append(evidenceTypeCell(record), text("small", record.module || "Module unknown", "muted"));
-      if (isPeerReport(record)) { const peer = text("small", evidenceReporter(record), "muted"); peer.title = peer.textContent; label.append(peer); }
+      if (isPeerReport(record)) { const peer = text("small", evidenceReporter(record), "muted"); peer.title = record.peer_report?.peer_id || peer.textContent; label.append(peer); }
       if (record.review_status && record.review_status !== "unreviewed") label.append(text("small", record.review_status.replaceAll("_", " "), "review-state"));
       return label;
     },
@@ -5030,6 +5030,28 @@ function p2pMessageContent(record) {
       : record;
 }
 
+/** Resolve a peer's known address without making a network lookup.
+ * @param {string} peerId Full peer identity.
+ * @param {string} hint Address supplied by the recorded report.
+ * @returns {string} Known IP address, or an empty string.
+ */
+function p2pPeerAddress(peerId, hint = "") {
+  const peers = [...(state.p2p?.peers || []), ...(state.p2pGraph?.payload?.peers || [])];
+  const peer = peers.find((item) => item.peer_id === peerId);
+  return peerAddress(hint) || peerAddress(peer?.ip) || peerAddress(peerId);
+}
+
+/** Name a peer with its IP when known and a shortened identity.
+ * @param {string} peerId Full peer identity or broadcast marker.
+ * @param {string} hint Address supplied by the recorded report.
+ * @returns {string} Compact label; the stored identity is unchanged.
+ */
+function p2pPeerLabel(peerId, hint = "") {
+  if (peerId === "*") return "* all peers";
+  const ip = p2pPeerAddress(peerId, hint);
+  return `${ip && ip !== peerId ? `${ip} · ` : ""}${shortPeerId(peerId)}`;
+}
+
 /** Show a message sender with its known peer address and host name.
  * @param {string} peerId Sender peer ID or broadcast marker.
  * @returns {HTMLElement} Sender label for the activity table.
@@ -5041,11 +5063,14 @@ function p2pPeerIdentity(peerId) {
     wrapper.textContent = "* all peers";
     return wrapper;
   }
-  const id = text("code", shortPeerId(peerId));
-  id.title = peerId || "";
-  wrapper.append(id);
-  const match = state.p2p?.peers?.find((peer) => peer.peer_id === peerId);
-  if (match?.ip) wrapper.append(hostIdentity(match.ip));
+  wrapper.title = peerId || "";
+  const ip = p2pPeerAddress(peerId);
+  if (ip) wrapper.append(hostIdentity(ip));
+  if (ip !== peerId) {
+    const id = text("code", shortPeerId(peerId));
+    id.title = peerId || "";
+    wrapper.append(id);
+  }
   return wrapper;
 }
 
@@ -5070,13 +5095,12 @@ function renderP2PMessageDetail(record) {
   heading.append(title, copy);
   panel.append(heading);
   if (["report", "blame"].includes(record.message_type)) panel.append(peerDetectionPanel(record));
-  const peerAddress = state.p2p?.peers?.find((peer) => peer.peer_id === record.peer)?.ip;
   const facts = [
     ["Time", formatTime(record.timestamp)],
     ["Direction", record.direction],
     ["Type", record.message_type],
     ["Peer", record.peer === "*" ? "* (broadcast to all peers)" :
-      `${shortPeerId(record.peer)}${peerAddress ? ` · ${peerAddress}` : ""}`],
+      p2pPeerLabel(record.peer)],
     ["Target", record.target || "—"],
     ["Maliciousness score (1 = fully malicious)", record.score === null || record.score === undefined ? "—" : numeric(record.score).toFixed(3)],
     ["Confidence", record.confidence === null || record.confidence === undefined
@@ -5085,7 +5109,11 @@ function renderP2PMessageDetail(record) {
   if (record.report_time) facts.splice(1, 0, ["Peer report time", formatTime(record.report_time)]);
   const list = document.createElement("dl");
   list.className = "p2p-message-facts";
-  facts.forEach(([label, value]) => list.append(text("dt", label), text("dd", value)));
+  facts.forEach(([label, value]) => {
+    const detail = text("dd", value);
+    if (label === "Peer") detail.title = record.peer || "";
+    list.append(text("dt", label), detail);
+  });
   panel.append(list, text("h4", record.archived_report ? "Stored report fields" : "Payload"));
   if (record.archived_report) panel.append(text("p", "The original message is no longer retained; these report fields remain in the trust database.", "muted"));
   const payload = text("pre", "", "p2p-message-content");
@@ -5547,14 +5575,20 @@ function renderP2PCatchup(payload = {}) {
     exchangeDetail.replaceChildren();
     const request = item.message_type === "catchup_request";
     const action = item.direction === "sent"
-      ? request ? `This Slips requested information from ${item.peer}` : `This Slips queued a reply to ${item.peer}`
-      : request ? `${item.peer} requested information from this Slips` : `This Slips received a reply from ${item.peer}`;
-    exchangeDetail.append(text("h4", action), text("p", `${formatTime(item.timestamp)} · ${item.lane === "fresh" ? "Recent warnings and withdrawals" : "Incident history"}`));
+      ? request ? `This Slips requested information from ${p2pPeerLabel(item.peer)}` : `This Slips queued a reply to ${p2pPeerLabel(item.peer)}`
+      : request ? `${p2pPeerLabel(item.peer)} requested information from this Slips` : `This Slips received a reply from ${p2pPeerLabel(item.peer)}`;
+    const heading = text("h4", action);
+    heading.title = item.peer || "";
+    exchangeDetail.append(heading, text("p", `${formatTime(item.timestamp)} · ${item.lane === "fresh" ? "Recent warnings and withdrawals" : "Incident history"}`));
     if (item.since || item.requested_since) exchangeDetail.append(text("p", `Requested observations since ${formatTime(item.since || item.requested_since)}`));
     if (!request) {
       exchangeDetail.append(text("p", `${numeric(item.records)} records in this reply${item.more ? " · more pages available" : ""}`));
       const list = document.createElement("ul");
-      (item.incidents || []).forEach((record) => list.append(text("li", `${record.target} · ${alertTypeName(record.evidence_type)} · observed by ${record.author} · ${record.state} · ${formatTime(record.last_seen)}`)));
+      (item.incidents || []).forEach((record) => {
+        const line = text("li", `${record.target} · ${alertTypeName(record.evidence_type)} · observed by ${p2pPeerLabel(record.author)} · ${record.state} · ${formatTime(record.last_seen)}`);
+        line.title = record.author || "";
+        list.append(line);
+      });
       exchangeDetail.append(list);
     }
     exchangeDetail.append(rawBlock(item, "Catch-up request or reply"));
@@ -5577,7 +5611,8 @@ function renderP2PCatchup(payload = {}) {
   const progress = byId("p2p-catchup-transfers");
   progress.replaceChildren();
   transfers.forEach((item) => {
-    const line = text("p", `${item.peer} · ${item.state} · ${item.lane || ""} · ${item.received || 0} accepted · ${item.skipped || 0} duplicate or rejected · ${formatBytes(item.bytes || 0)}`);
+    const line = text("p", `${p2pPeerLabel(item.peer)} · ${item.state} · ${item.lane || ""} · ${item.received || 0} accepted · ${item.skipped || 0} duplicate or rejected · ${formatBytes(item.bytes || 0)}`);
+    line.title = item.peer || "";
     if (item.coverage_start) line.append(text("span", ` · history collection started ${formatTime(item.coverage_start)}`, "muted"));
     if (["partial", "complete"].includes(item.state)) {
       const resume = text("button", item.state === "partial" ? "Resume" : "Check again", "secondary");
@@ -5598,11 +5633,14 @@ function renderP2PCatchup(payload = {}) {
   records.forEach((record) => {
     const row = document.createElement("tr");
     const labels = ["info", "low", "medium", "high", "critical"];
+    const authors = document.createElement("span");
+    authors.append(p2pPeerIdentity(record.author));
+    if (record.via && record.author !== record.via) authors.append(text("span", " via "), p2pPeerIdentity(record.via));
     const values = [formatTime(record.last_seen), record.target, alertTypeName(record.evidence_type),
       labels[record.threat] || "unknown", `${Math.round(numeric(record.confidence) * 100)}%`,
-      `${record.author}${record.via && record.author !== record.via ? ` via ${record.via}` : ""}`,
+      authors,
       `${record.state === "withdrawn" ? "Withdrawn" : record.expired ? "Historical · expired" : "Recently observed"}${record.protection?.state && record.protection.expires > Date.now()/1000 ? ` · firewall ${record.protection.state} until ${formatTime(record.protection.expires)}` : ""}`];
-    values.forEach((value) => row.append(text("td", value)));
+    values.forEach((value) => row.append(cell(value)));
     row.title = `${record.description || ""}\nFirst observed: ${formatTime(record.first_seen)}\nReceived: ${formatTime(record.received)}\nExpires: ${formatTime(record.expires)}\n${record.count || 1} observations · ${record.victim?.value ? `affected host ${record.victim.value}` : "affected host not supplied"}`;
     row.dataset.clickable = "true";
     row.tabIndex = 0;
@@ -5611,9 +5649,13 @@ function renderP2PCatchup(payload = {}) {
       state.p2pCatchupSelection = {kind: "incident", key: incidentKey};
       exchangeDetail.hidden = true;
       const detail = byId("p2p-catchup-detail"); detail.hidden = false; detail.replaceChildren();
+      const delivery = text("p", "Observed by ");
+      delivery.append(p2pPeerIdentity(record.author));
+      if (record.via && record.author !== record.via) delivery.append(text("span", " → forwarded by "), p2pPeerIdentity(record.via));
+      delivery.append(text("span", " → this Slips"));
       detail.append(text("h4", `${alertTypeName(record.evidence_type)} · ${record.target}`), text("p", record.description || ""),
         text("p", `${record.target} → ${record.victim?.value || "affected host not supplied"}${record.dst_port ? ` · destination port ${record.dst_port}` : ""}`),
-        text("p", `Observed by ${record.author} → ${record.via && record.author !== record.via ? `forwarded by ${record.via} → ` : ""}this Slips`),
+        delivery,
         text("p", `First observed ${formatTime(record.first_seen)} · last observed ${formatTime(record.last_seen)} · received ${formatTime(record.received)} · expires ${formatTime(record.expires)}`));
       detail.append(rawBlock(record, "Network catch-up incident"));
     };
