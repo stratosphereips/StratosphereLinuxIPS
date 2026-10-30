@@ -82,6 +82,7 @@ const state = {
     "arp-poisoning-evidence-table": { key: "timestamp", order: "desc" },
     "p2p-catchup-table": { key: "last_seen", order: "desc" },
     "p2p-catchup-exchanges": { key: "timestamp", order: "desc" },
+    "p2p-catchup-transfers-table": { key: "peer", order: "asc" },
     "p2p-activity-table": { key: "timestamp", order: "desc" },
     "p2p-peers-table": { key: "connected", order: "desc" },
     "logs-table": { key: "event_time", order: "desc" },
@@ -5583,6 +5584,21 @@ function bindP2PGraph() {
   });
 }
 
+/** Request another bounded catch-up transfer from a known peer.
+ * @param {string} peer Full authenticated peer ID from the transfer journal.
+ * @returns {Promise<object>} Queued or currently receiving transfer status.
+ */
+async function continueP2PCatchup(peer) {
+  const response = await fetch("/api/p2p-catchup/resume", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({peer}),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
+  return payload;
+}
+
 /** Show signed network history and per-peer catch-up progress without mixing live scores.
  * @param {object} payload Bounded catch-up history and transfer summaries.
  */
@@ -5603,7 +5619,19 @@ function renderP2PCatchup(payload = {}) {
     : transfers.some((item) => item.state === "complete") ? "Catch-up complete with responding peers."
     : "Waiting for peers that support network catch-up.";
   if (connected === 0) status.textContent = "No peers connected.";
-  status.textContent += ` ${compact(importedTotal)} incident summaries received from peers${records.length < importedTotal ? ` · showing ${records.length}` : ""}. ${compact(localTotal)} local summaries available to share; storing them does not send them.`;
+  const counts = byId("p2p-catchup-counts");
+  counts.replaceChildren();
+  [[importedTotal, "Received"], [records.length, "Shown"], [localTotal, "Available to share"]].forEach(([value, label]) => {
+    const metric = text("span", "");
+    metric.append(text("strong", compact(value)), text("small", label));
+    counts.append(metric);
+  });
+  counts.title = `${importedTotal} incident summaries received from peers; ${records.length} shown. ${localTotal} local summaries available to share; storing them does not send them.`;
+  const exchanges = byId("p2p-catchup-exchange-section");
+  if (!exchanges.dataset.initialized || (exchanges.dataset.hasMessages === "false" && messages.length)) exchanges.open = messages.length > 0;
+  exchanges.dataset.initialized = "true";
+  exchanges.dataset.hasMessages = String(messages.length > 0);
+  byId("p2p-catchup-exchange-count").textContent = compact(messages.length);
   const exchangeDetail = byId("p2p-catchup-exchange-detail");
   exchangeDetail.hidden = true;
   exchangeDetail.replaceChildren();
@@ -5648,26 +5676,43 @@ function renderP2PCatchup(payload = {}) {
   const incidentDetail = byId("p2p-catchup-detail");
   incidentDetail.hidden = true;
   incidentDetail.replaceChildren();
-  const progress = byId("p2p-catchup-transfers");
-  progress.replaceChildren();
-  transfers.forEach((item) => {
-    const line = text("p", `${p2pPeerLabel(item.peer)} · ${item.state} · ${item.lane || ""} · ${item.received || 0} accepted · ${item.skipped || 0} duplicate or rejected · ${formatBytes(item.bytes || 0)}`);
-    line.title = item.peer || "";
-    if (item.coverage_start) line.append(text("span", ` · history collection started ${formatTime(item.coverage_start)}`, "muted"));
-    if (["partial", "complete"].includes(item.state)) {
-      const resume = text("button", item.state === "partial" ? "Resume" : "Check again", "secondary");
+  const transferRows = sortLocalRows("p2p-catchup-transfers-table", transfers);
+  renderTable("p2p-catchup-transfers-table", transferRows, [
+    (item) => p2pPeerIdentity(item.peer),
+    (item) => {
+      const stateNames = {partial: "Paused", complete: "Complete", receiving: "Receiving", pending: "Queued", unsupported: "Unsupported", cooldown: "Waiting"};
+      const progress = text("span", "", "p2p-transfer-progress");
+      progress.append(text("strong", stateNames[item.state] || item.state || "Waiting", `p2p-transfer-state ${item.state || ""}`),
+        text("small", item.lane === "fresh" ? "Recent activity" : item.lane === "history" ? "Incident history" : ""));
+      if (item.coverage_start) progress.append(text("small", `History since ${formatTime(item.coverage_start)}`));
+      return progress;
+    },
+    (item) => compact(item.received || 0),
+    (item) => compact(item.skipped || 0),
+    (item) => formatBytes(item.bytes || 0),
+    (item) => {
+      if (!["partial", "complete"].includes(item.state)) return "—";
+      const resume = text("button", item.state === "partial" ? "Continue catch-up" : "Check again", "secondary");
       resume.type = "button";
+      resume.title = item.state === "partial" ? "Request another bounded transfer after a timeout or transfer limit" : "Ask this peer for newer incident summaries";
       resume.addEventListener("click", async () => {
+        const feedback = byId("p2p-catchup-action-status");
+        feedback.hidden = false;
+        feedback.classList.remove("error");
+        feedback.textContent = `Requesting catch-up from ${p2pPeerLabel(item.peer)}…`;
         resume.disabled = true;
         try {
-          await api("p2pCatchupResume", "/api/p2p-catchup/resume", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({peer: item.peer})});
+          const result = await continueP2PCatchup(item.peer);
+          feedback.textContent = result.status === "receiving" ? `Already receiving from ${p2pPeerLabel(item.peer)}.` : `Catch-up queued for ${p2pPeerLabel(item.peer)}; waiting for the peer.`;
           await loadP2P();
+        } catch (error) {
+          feedback.classList.add("error");
+          feedback.textContent = `Could not continue catch-up: ${error.message}`;
         } finally { resume.disabled = false; }
       });
-      line.append(document.createTextNode(" "), resume);
-    }
-    progress.append(line);
-  });
+      return resume;
+    },
+  ]);
   const body = byId("p2p-catchup-table").querySelector("tbody");
   body.replaceChildren();
   records.forEach((record) => {
@@ -8975,6 +9020,7 @@ byId("p2p-load-more").addEventListener("click", () => {
   renderP2PMessages();
 });
 bindLocalTableSort("p2p-activity-table", renderP2PMessages);
+bindLocalTableSort("p2p-catchup-transfers-table", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-catchup-table", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-catchup-exchanges", () => renderP2PCatchup(state.p2p?.catch_up));
 bindLocalTableSort("p2p-peers-table", renderP2PPeers);

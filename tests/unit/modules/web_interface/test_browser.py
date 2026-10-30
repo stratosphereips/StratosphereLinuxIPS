@@ -2503,6 +2503,7 @@ def test_p2p_chart_matches_reliability_column_in_chrome(theme: str) -> None:
             assert endpoint == pytest.approx(100 - trust / 0.85 * 88, abs=0.01)
             assert trust_chart.locator(f".peer-trust-line-{index}").get_attribute("clip-path")
         assert page.evaluate("() => state.p2p.calculated_trust_history[0].trust") == -0.5
+        trust_chart.scroll_into_view_if_needed()
         area = trust_chart.locator(".chart-hit-area").bounding_box()
         page.mouse.move(area["x"] + area["width"] * 0.999, area["y"] + area["height"] / 2)
         assert trust_chart.locator("..").locator(".chart-tooltip").inner_text().endswith(": 0.341")
@@ -4205,7 +4206,7 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
             assert "Withdrawn" in table.inner_text()
             assert "original-author via forwarding-peer" in " ".join(table.inner_text().split())
             assert "Partial history" in page.locator("#p2p-catchup-status").inner_text()
-            assert page.locator("#p2p-catchup-transfers").get_by_role("button", name="Resume").is_visible()
+            assert page.locator("#p2p-catchup-transfers").get_by_role("button", name="Continue catch-up").is_visible()
             table.locator("tbody tr").first.click()
             detail = page.locator("#p2p-catchup-detail")
             assert "Observed by original-author → forwarded by forwarding-peer → this Slips" in " ".join(detail.inner_text().split())
@@ -4220,11 +4221,13 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
               renderP2PCatchup(state.p2p.catch_up);
             }""")
             assert "No peers connected" in page.locator("#p2p-catchup-status").inner_text()
-            assert "4 local summaries available to share" in page.locator("#p2p-catchup-status").inner_text()
-            assert "0 incident summaries received from peers" in page.locator("#p2p-catchup-status").inner_text()
+            assert "4 local summaries available to share" in page.locator("#p2p-catchup-counts").get_attribute("title")
+            assert "0 incident summaries received from peers" in page.locator("#p2p-catchup-counts").get_attribute("title")
             assert "10.0.0.218" not in table.inner_text()
             assert not detail.is_visible()
             exchanges = page.locator("#p2p-catchup-exchanges")
+            assert page.locator("#p2p-catchup-exchange-section").get_attribute("open") is None
+            page.locator("#p2p-catchup-exchange-section > summary").click()
             assert "No catch-up requests or replies recorded" in exchanges.inner_text()
             page.evaluate("""() => {
               const request={message_type:'catchup_request',peer:'remote-peer',lane:'history',since:100,timestamp:200};
@@ -4263,8 +4266,9 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
             assert forwarder not in table.inner_text()
             assert table.locator(f'[title="{author}"]').count() > 0
             progress = page.locator("#p2p-catchup-transfers")
-            assert "192.168.1.196 · QmU2Dn5x…HM85xv" in progress.inner_text()
-            assert progress.locator(f'[title="{forwarder}"]').count() == 1
+            assert "192.168.1.196" in progress.inner_text()
+            assert "QmU2Dn5x…HM85xv" in progress.inner_text()
+            assert progress.locator(f'[title="{forwarder}"]').count() >= 1
             table.locator("tbody tr").click()
             assert "192.168.1.170" in detail.inner_text()
             assert "192.168.1.196" in detail.inner_text()
@@ -4468,6 +4472,107 @@ def test_connection_range_tracks_reconnections_and_filters_real_history(
                     assert option.get_attribute("disabled") is not None, (unavailable, name)
                     assert option.get_attribute("hidden") is not None, (unavailable, name)
                     assert page.locator(f'#{name}-range').input_value() == "all"
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme,width,status", [
+    ("light", 1280, 200), ("light", 1920, 200),
+    ("dark", 1280, 400), ("dark", 1920, 200),
+])
+def test_p2p_catchup_continue_posts_and_has_readable_sections(
+    theme: str, width: int, status: int,
+) -> None:
+    """Keep catch-up readable and send one JSON POST when continuing a transfer.
+
+    Parameters:
+        theme: Browser color theme.
+        width: Laptop or wide desktop viewport.
+        status: Successful request or peer validation failure.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    posts = []
+    errors = []
+    peer = "QmejkJgtcQieUDUUFSnDz1Eup3a9GAd3Lo8y7Heq3GTWQu"
+    payload = {"enabled": True, "counts": {"connected": 1, "known": 1},
+        "local_peer_id": "QmQCZRaj3FPMxgsDmA8GLSZ4BeoEbERNBGwSUy8g6aNDTx",
+        "peers": [{"peer_id": peer, "ip": "192.168.1.170", "connected": True,
+            "trust": .386, "reliability": .979, "reports_received": 1}],
+        "catch_up": {"connected_peers": 1, "total": 19, "local_total": 99, "imported_total": 18,
+            "transfers": [{"peer": peer, "state": "partial", "lane": "fresh", "received": 0, "skipped": 0, "bytes": 0}],
+            "incidents": [{"author": peer, "via": peer, "target": "192.168.1.196", "last_seen": 1793307160,
+                "evidence_type": "DNS_ARPA_SCAN", "confidence": .7, "threat": 2, "state": "observed"}]}}
+
+    def respond(route: Any) -> None:
+        """Accept only the documented mutation method and serve local assets.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/p2p-catchup/resume":
+            posts.append((route.request.method, route.request.post_data_json))
+            if route.request.method != "POST":
+                route.fulfill(status=404, json={"error": "Not found"})
+            elif status == 200:
+                payload["catch_up"]["transfers"][0]["state"] = "pending"
+                route.fulfill(json={"status": "pending"})
+            else:
+                route.fulfill(status=status, json={"error": "No transfer for this peer on this network"})
+        elif path == "/api/p2p":
+            route.fulfill(json=payload)
+        elif path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated catch-up fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1100})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof continueP2PCatchup === 'function'")
+            page.evaluate("""async theme => {
+              clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+              setTheme(theme);state.activeTab='p2p';
+              document.querySelectorAll('.panel').forEach(panel=>panel.classList.toggle('active',panel.id==='p2p'));
+              await loadP2P();
+            }""", theme)
+            assert page.locator("#p2p-catchup-transfers-table tbody tr").count() == 1
+            assert page.locator("#p2p-catchup-exchange-section").get_attribute("open") is None
+            assert "18" in page.locator("#p2p-catchup-counts").inner_text()
+            assert "99" in page.locator("#p2p-catchup-counts").inner_text()
+            assert "DNS ARPA Scan" in page.locator("#p2p-catchup-table").inner_text()
+            heading = page.locator("#p2p-transfers-title")
+            table_header = page.locator("#p2p-catchup-transfers-table th").first
+            assert heading.evaluate("e=>parseFloat(getComputedStyle(e).fontSize)") > table_header.evaluate("e=>parseFloat(getComputedStyle(e).fontSize)")
+            assert int(table_header.evaluate("e=>getComputedStyle(e).fontWeight")) >= 700
+            assert table_header.evaluate("e=>getComputedStyle(e).backgroundColor") != page.locator("#p2p-catchup-transfers-table td").first.evaluate("e=>getComputedStyle(e).backgroundColor")
+            assert page.evaluate("document.documentElement.scrollWidth<=innerWidth")
+            button = page.locator("#p2p-catchup-transfers").get_by_role("button", name="Continue catch-up")
+            assert "bounded transfer" in button.get_attribute("title")
+            button.click()
+            feedback = page.locator("#p2p-catchup-action-status")
+            if status == 200:
+                page.wait_for_function("byId('p2p-catchup-action-status').textContent.includes('queued')")
+                page.locator("#p2p-catchup-transfers-table").get_by_text("Queued", exact=True).wait_for()
+                assert not feedback.evaluate("e=>e.classList.contains('error')")
+            else:
+                page.wait_for_function("byId('p2p-catchup-action-status').textContent.includes('Could not continue')")
+                assert "No transfer for this peer" in feedback.inner_text()
+                assert button.is_enabled()
+                assert not page.locator("#error-banner").is_visible()
+            assert posts == [("POST", {"peer": peer})]
+            output = Path("output/p2p-catchup-layout")
+            output.mkdir(exist_ok=True, parents=True)
+            page.screenshot(path=str(output / f"{theme}-{width}.png"), full_page=True)
             assert not errors, errors
         finally:
             browser.close()

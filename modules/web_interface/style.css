@@ -232,22 +232,52 @@ tbody tr:hover { background: #1b2a3540; }
 .p2p-summary .summary-card:first-child { background: #0b211d; border-color: #1b433b; }
 .p2p-summary .summary-card span { font-size: .68rem; }
 .p2p-summary .summary-card strong { margin-top: .18rem; font-size: 1.18rem; }
-.p2p-two-column { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: .55rem; margin-bottom: .55rem; }
+.p2p-two-column { display: grid; grid-template-columns: minmax(0, 1fr); gap: .85rem; margin-top: .85rem; }
+.p2p-message-workspace { grid-template-columns: minmax(0, 1.5fr) minmax(340px, 1fr); }
 .p2p-two-column > * { min-width: 0; }
-#p2p .table-heading { gap: .5rem; min-height: 43px; padding: .52rem .7rem; }
-#p2p .table-heading h3 { display: inline; margin: 0; font-size: .8rem; }
-#p2p .table-heading p { display: inline; margin-left: .3rem; font-size: .7rem; }
+#p2p .table-heading { gap: .75rem; min-height: 56px; padding: .8rem .9rem; align-items: center; }
+#p2p .table-heading h3 { display: block; margin: 0; color: var(--text); font-size: .92rem; font-weight: 750; }
+#p2p .table-heading p { display: block; margin: .25rem 0 0; font-size: .74rem; line-height: 1.45; }
 #p2p .table-heading select { min-width: 0; padding: .27rem .35rem; font-size: .68rem; }
 #p2p .table-wrap { max-height: none; overflow: auto; }
-#p2p th { padding: .38rem .5rem; background: #101c27; font-size: .59rem; }
-#p2p td { height: 31px; padding: .3rem .5rem; border-color: #1a2935; font-size: .7rem; vertical-align: middle; }
+#p2p th { padding: .6rem .7rem; border-bottom: 2px solid var(--line); background: var(--surface-2); color: var(--text); font-size: .69rem; font-weight: 750; letter-spacing: .035em; }
+#p2p td { height: auto; padding: .55rem .7rem; border-color: var(--line); font-size: .75rem; line-height: 1.4; vertical-align: middle; }
+#p2p tbody tr:nth-child(even):not(.selected) { background: color-mix(in srgb, var(--surface-2) 35%, transparent); }
+#p2p tbody tr[data-clickable]:hover:not(.selected) { background: var(--surface-2); }
+#p2p .table-wrap { scrollbar-width: thin; }
+#p2p-catchup { margin-top: .85rem; overflow: hidden; }
+#p2p .p2p-catchup-heading { display: flex; justify-content: space-between; flex-wrap: wrap; }
+.p2p-catchup-counts { display: flex; flex-wrap: wrap; gap: .65rem 1.5rem; }
+.p2p-catchup-counts > span { display: grid; gap: .12rem; }
+.p2p-catchup-counts strong { color: var(--text); font-size: .95rem; font-variant-numeric: tabular-nums; }
+.p2p-catchup-counts small { color: var(--muted); font-size: .7rem; }
+.p2p-catchup-section { min-width: 0; border-top: 1px solid var(--line); }
+#p2p .p2p-section-title { display: block; margin: 0; padding: .7rem .9rem; color: var(--text); font-size: .8rem; font-weight: 700; line-height: 1.4; }
+#p2p summary.p2p-section-title { display: list-item; margin-left: 1.05rem; padding-left: 0; cursor: pointer; }
+.p2p-section-title > .muted { margin-left: .35rem; font-size: inherit; font-weight: 500; }
+#p2p .p2p-catchup-section .table-wrap { max-height: 330px; }
+.p2p-transfer-progress { display: grid; gap: .15rem; }
+.p2p-transfer-progress small { color: var(--muted); font-size: .7rem; }
+.p2p-transfer-state { font-size: inherit; font-weight: 600; }
+.p2p-transfer-state.partial { color: var(--warn); }
+.p2p-transfer-state.complete, .p2p-transfer-state.receiving { color: var(--accent); }
+#p2p-catchup-transfers-table td:last-child { width: 10rem; }
+#p2p-catchup-transfers-table button { padding: .35rem .55rem; white-space: nowrap; font-size: .72rem; }
+#p2p-catchup-transfers-table .p2p-activity-peer { flex-wrap: wrap; }
+.p2p-action-status { margin: 0; padding: .65rem .9rem; border-top: 1px solid var(--line); color: var(--accent); font-size: .75rem; }
+.p2p-action-status.error { color: var(--danger); }
+.p2p-catchup-help { border-top: 1px solid var(--line); padding: .65rem .9rem; color: var(--muted); font-size: .73rem; line-height: 1.5; }
+.p2p-catchup-help > summary { cursor: pointer; }
+.p2p-catchup-help p { max-width: 85ch; margin: .6rem 0 0; }
 #p2p tbody tr.selected { background: #132630; box-shadow: inset 3px 0 var(--accent); }
 #p2p tbody tr[data-clickable]:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 #p2p-peers-table .host-label { display: inline-flex; gap: .4rem; align-items: baseline; max-width: 100%; }
 #p2p-peers-table .host-label small { display: inline; min-width: 0; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 #p2p-peers-table .host-label code { flex: none; font-weight: 700; }
-#p2p-peers-table td:nth-child(1) { width: 29%; }
-#p2p-peers-table td:nth-child(2) { width: 20%; }
+#p2p-peers-table td:nth-child(1) { width: 23%; }
+#p2p-peers-table td:nth-child(2) { width: 13%; }
+#p2p-peers-table .host-label small { font-size: inherit; white-space: normal; }
+#p2p-peers-table th { white-space: normal; }
 .p2p-short-id { display: block; max-width: 120px; overflow: hidden; color: var(--muted); text-overflow: ellipsis; white-space: nowrap; }
 #p2p-peers-table .status { padding: 0; background: transparent; font-size: .67rem; }
 .p2p-reliability { display: flex; align-items: center; gap: .45rem; }
@@ -262,6 +292,8 @@ tbody tr:hover { background: #1b2a3540; }
 #p2p .p2p-trust-legend { min-height: 26px; padding: .35rem .7rem .2rem; font-size: .64rem; }
 #p2p .p2p-trust-chart-grid { padding: 0 .7rem; }
 #p2p .p2p-trust-chart-grid .compact-line-chart { height: 145px; min-height: 145px; border: 0; background: transparent; }
+#p2p .p2p-trust-chart-grid .compact-line-chart:not(:has(.chart-line)) { height: 64px; min-height: 64px; }
+#p2p .p2p-activity-peer > code { max-width: none; overflow: visible; }
 .p2p-chart-note { padding-top: .15rem; }
 .p2p-activity-heading { flex-wrap: wrap; }
 .p2p-activity-title { display: flex; align-items: center; gap: .7rem; flex-wrap: wrap; }
@@ -273,7 +305,7 @@ tbody tr:hover { background: #1b2a3540; }
 .p2p-peer-filter { display: inline-flex; align-items: center; gap: .25rem; color: var(--accent); font-size: .68rem; }
 .p2p-peer-filter[hidden] { display: none; }
 .p2p-peer-filter button { border: 0; background: transparent; color: inherit; cursor: pointer; }
-#p2p .table-actions { gap: .4rem; font-size: .65rem; }
+#p2p .table-actions { gap: .4rem; font-size: .73rem; }
 #p2p-activity-table td { white-space: nowrap; }
 #p2p-activity-table td:nth-child(4) { width: 30%; max-width: 300px; }
 #p2p-activity-table td:nth-child(5) { max-width: 230px; overflow: hidden; text-overflow: ellipsis; }

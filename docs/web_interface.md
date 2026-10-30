@@ -1591,7 +1591,10 @@ received from peers. Its sortable Requests and replies table shows incoming
 and outgoing requests, their scope, peers, and the records carried in replies.
 Queuing a message to Pigeon is distinct from receiving a peer's reply.
 The panel also includes catch-up progress, original-author incident history,
-expiry and withdrawals, Resume/Check again, sortable columns and copyable JSON
-details. P2P Graph includes accepted catch-up deliveries. Historical imports do
+expiry and withdrawals, Continue catch-up/Check again, sortable columns and
+copyable JSON details. Transfers use a dedicated table; the peer inventory uses
+the full panel width. Section titles, column headers and rows have distinct
+styles in both themes. Empty request history stays collapsed. Trust calculation
+and catch-up explanations remain available in expandable help. P2P Graph includes accepted catch-up deliveries. Historical imports do
 not increase current host scores. See [network catch-up](p2p_catchup.md) for
 configuration, protection requirements, retention and coverage limits.

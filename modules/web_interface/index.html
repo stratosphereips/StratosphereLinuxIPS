@@ -244,16 +244,24 @@
       <div id="p2p-stats">
         <div id="p2p-summary" class="summary-grid p2p-summary"></div>
         <article class="surface table-surface" id="p2p-catchup">
-          <div class="table-heading"><div><h3>Network catch-up</h3><p id="p2p-catchup-status">Waiting for peer history.</p></div></div>
-          <div id="p2p-catchup-transfers" class="p2p-panel-foot"></div>
-          <h4 class="p2p-panel-foot">Requests and replies</h4>
-          <p class="p2p-panel-foot">Outgoing messages were queued to Pigeon; a reply confirms the peer responded.</p>
-          <div class="table-wrap"><table id="p2p-catchup-exchanges"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="direction">Direction</th><th data-sort="peer">Peer</th><th data-sort="message_type">Message</th><th data-sort="lane">Requested information</th><th data-sort="records">Records in reply</th></tr></thead><tbody></tbody></table></div>
-          <div id="p2p-catchup-exchange-detail" class="p2p-panel-foot" hidden></div>
-          <h4 class="p2p-panel-foot">Incidents received from peers</h4>
-          <div class="table-wrap"><table id="p2p-catchup-table"><thead><tr><th data-sort="last_seen">Last observed</th><th data-sort="target">Source</th><th data-sort="evidence_type">Behavior</th><th data-sort="threat">Threat</th><th data-sort="confidence">Original confidence</th><th data-sort="author">Author / delivered by</th><th data-sort="state">State</th></tr></thead><tbody></tbody></table></div>
-          <div id="p2p-catchup-detail" class="p2p-panel-foot" hidden></div>
-          <p class="p2p-panel-foot">Imported history is separate from current host scores. Original observation times and expiry are preserved.</p>
+          <div class="table-heading p2p-catchup-heading"><div><h3>Network catch-up</h3><p id="p2p-catchup-status">Waiting for peer history.</p></div><div id="p2p-catchup-counts" class="p2p-catchup-counts"></div></div>
+          <p id="p2p-catchup-action-status" class="p2p-action-status" role="status" hidden></p>
+          <section class="p2p-catchup-section" aria-labelledby="p2p-transfers-title">
+            <h4 id="p2p-transfers-title" class="p2p-section-title">Peer transfers</h4>
+            <div id="p2p-catchup-transfers" class="table-wrap"><table id="p2p-catchup-transfers-table"><thead><tr><th data-sort="peer">Peer</th><th data-sort="state">Progress</th><th data-sort="received">Accepted</th><th data-sort="skipped" title="Duplicate or rejected summaries">Skipped</th><th data-sort="bytes">Received data</th><th>Action</th></tr></thead><tbody></tbody></table></div>
+          </section>
+          <details id="p2p-catchup-exchange-section" class="p2p-catchup-section">
+            <summary class="p2p-section-title">Requests and replies <span id="p2p-catchup-exchange-count" class="muted">0</span></summary>
+            <p class="p2p-panel-foot">A queued message awaits delivery; a reply confirms the peer responded.</p>
+            <div class="table-wrap"><table id="p2p-catchup-exchanges"><thead><tr><th data-sort="timestamp">Time</th><th data-sort="direction">Direction</th><th data-sort="peer">Peer</th><th data-sort="message_type">Message</th><th data-sort="lane">Requested information</th><th data-sort="records">Reply records</th></tr></thead><tbody></tbody></table></div>
+            <div id="p2p-catchup-exchange-detail" class="p2p-panel-foot" hidden></div>
+          </details>
+          <section class="p2p-catchup-section" aria-labelledby="p2p-incidents-title">
+            <h4 id="p2p-incidents-title" class="p2p-section-title">Incidents received from peers</h4>
+            <div class="table-wrap"><table id="p2p-catchup-table"><thead><tr><th data-sort="last_seen">Last observed</th><th data-sort="target">Source</th><th data-sort="evidence_type">Behavior</th><th data-sort="threat">Threat</th><th data-sort="confidence">Confidence</th><th data-sort="author">Author / delivered by</th><th data-sort="state">State</th></tr></thead><tbody></tbody></table></div>
+            <div id="p2p-catchup-detail" class="p2p-panel-foot" hidden></div>
+          </section>
+          <details class="p2p-catchup-help"><summary>How catch-up works</summary><p>Peers share recent warnings and incident history from this network. Continue catch-up requests another bounded transfer after a timeout or transfer limit. Check again asks a completed peer for updates.</p><p>Local summaries are available to share; storing them does not send them. Imported history keeps original confidence, observation times and expiry, separately from current host scores.</p></details>
         </article>
         <div class="p2p-two-column">
         <article class="surface table-surface p2p-peers-panel"><div class="table-heading"><div><h3>Peers <span id="p2p-peer-count" class="muted"></span></h3><p>Live connectivity and latest persistent trust</p></div></div><div class="table-wrap"><table id="p2p-peers-table"><thead><tr><th data-sort="ip">Peer</th><th data-sort="peer_id">Peer ID</th><th data-sort="connected">Connectivity</th><th data-sort="trust" title="Calculated trust ranges from −0.5 to 0.85 with reliability weight 0.7; it is not a probability.">Trust</th><th data-sort="reliability" title="Measured only on the peer's confirmed local network; preserved while away.">Reliability</th><th data-sort="reports_received">Reports</th><th data-sort="confirmed_reports" title="Validated distinct hosts; accuracy adjustments apply separately to each evidence type and detector version. Hover for details.">Report accuracy</th><th data-sort="last_seen">Last seen</th></tr></thead><tbody></tbody></table></div><div class="p2p-panel-foot">Trust “—” = not yet computed. Reliability is preserved while away from the peer’s network. Click a peer to filter messages.</div></article>
@@ -267,8 +275,10 @@
           <h4 class="p2p-trust-subheading">Peer trust history <span class="muted">0 to 0.85</span></h4>
           <div id="p2p-calculated-trust-legend" class="p2p-trust-legend"></div>
           <div class="chart-grid p2p-trust-chart-grid"><svg id="p2p-calculated-trust-chart" class="line-chart compact-line-chart" viewBox="0 0 1200 130" role="img" aria-label="Calculated peer trust history"></svg></div>
+          <details class="p2p-catchup-help"><summary>How trust is calculated</summary>
           <p class="p2p-chart-note">Trust is sampled every minute while connected. Its history starts when sampling is enabled.</p>
           <p class="p2p-chart-note">Trust = (0.7 × reliability + (1 − 2 × local maliciousness) × local confidence) / 2 + agreement credit, capped at 0.85. Communication alone contributes at most 0.35. Old local assessments lose confidence over time. Matching local detections and at least two peer IDs earn a small reward once per peer and target IP. “Agreed” counts these targets; TP/FP counts separate validations. Hover over trust for its inputs. Offline peers stop at last seen.</p>
+          </details>
         </article>
         </div>
         <div class="p2p-two-column p2p-message-workspace">

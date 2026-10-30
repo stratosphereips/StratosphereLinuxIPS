@@ -142,8 +142,20 @@ replies and original-author/forwarder details.
 
 Open **P2P → Network catch-up**. It shows per-peer progress, accepted and skipped
 records, transferred bytes, collection start and partial/unsupported status.
-**Resume** continues a limited or timed-out transfer with another bounded
-allowance; **Check again** requests a current update from a completed source.
+**Continue catch-up** requests another bounded transfer after
+a timeout or transfer limit; **Check again** requests newer summaries from a
+completed source. A request first shows **Queued**, then **Receiving** when the
+worker starts it. Offline peers cannot respond until they reconnect. The action
+uses `POST /api/p2p-catchup/resume` with `{"peer": "full-peer-id"}`; a GET does not
+change transfer state. Request failures appear beside the action without marking
+the whole dashboard unavailable.
+
+The transfer table separates peer identity, progress, accepted/skipped counts,
+received bytes and actions. Section titles and column headers have distinct
+styles, and tables scroll within their sections. Empty **Requests and replies**
+stays collapsed; new exchanges open it automatically. **How catch-up works**
+keeps the local/imported-history explanation available without repeating it in
+each row.
 
 **Requests and replies** lists incoming and outgoing catch-up messages for the
 current run and network: who requested information, whether they asked for recent
