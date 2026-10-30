@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 from types import SimpleNamespace
 from urllib.parse import parse_qs, unquote, urlparse
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -4374,6 +4374,100 @@ def test_p2p_graph_opens_original_evidence_across_connection_boundary(
             assert evidence_queries[-1].get("range") == ["all"]
             assert (evidence_queries[-1].get("network") == ["current"]) is not expand
             assert page.evaluate("localStorage.getItem('slips-network-only')") == "1"
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_connection_range_tracks_reconnections_and_filters_real_history(
+    tmp_path: Path, theme: str,
+) -> None:
+    """Filter persisted activity by the latest connection without the global toggle.
+
+    Parameters:
+        tmp_path: Isolated historical evidence and flow databases.
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    reader = _network_scope_reader(tmp_path)
+    assets = Path("modules/web_interface")
+    errors = []
+
+    def respond(route: Any) -> None:
+        """Serve real UI assets without accessing an active capture.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated connection fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1500, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof updateConnectionRangeAvailability === 'function'")
+            page.evaluate("""theme => {
+              clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+              setTheme(theme);state.networkOnly=false;state.deviceView=false;
+              window.connectionViews=['alerts','evidence','hosts','host','p2p','p2p-graph'];
+            }""", theme)
+            for start, expected in [(1_999_999_400, 1), (1_999_999_950, 0), (None, 0)]:
+                reader._current_network_start = Mock(return_value=start)
+                queries = page.evaluate("""start => {
+                  updateNetworkFilterAvailability({input_type:'interface',network_filter_supported:true,current_network_start:start});
+                  return Object.fromEntries(window.connectionViews.map(name=>{
+                    byId(`${name}-range`).value='connection';
+                    return [name,rangeQuery(name).toString()];
+                  }));
+                }""", start)
+                assert page.evaluate("state.networkOnly") is False
+                for name, encoded in queries.items():
+                    query = parse_qs(encoded)
+                    assert query["network"] == ["current"], name
+                    assert query["range"] == ["custom"], name
+                    if start is not None:
+                        assert float(query["from"][0]) == start
+                query = parse_qs(queries["evidence"])
+                with patch("modules.web_interface.server.time.time", return_value=2_000_000_000):
+                    assert reader.evidence(query)["total"] == expected
+                    assert reader.alerts(query)["total"] == expected
+                    assert reader.flows_for_host("192.168.1.20", query)["total"] == expected
+                    hosts = reader.hosts(query)
+                assert "192.168.12.1" not in {host["ip"] for host in hosts["items"]}
+                counts = page.evaluate("""start => {
+                  const activity=[{timestamp:1999999300,peer:'old-peer',target:'192.0.2.4',direction:'received',message_type:'report'},
+                    {timestamp:1999999900,peer:'new-peer',target:'192.0.2.5',direction:'received',message_type:'report'}];
+                  state.p2p={activity,reports:[]};renderP2PMessages();
+                  return [p2pGraphGroups(state.p2p).length,byId('p2p-activity-table').querySelectorAll('tbody tr[data-clickable]').length];
+                }""", start)
+                assert counts == [expected, expected]
+            page.evaluate("""() => {
+              state.networkOnly=false;byId('evidence-range').value='all';
+            }""")
+            full_query = parse_qs(page.evaluate("rangeQuery('evidence').toString()"))
+            with patch("modules.web_interface.server.time.time", return_value=2_000_000_000):
+                assert reader.evidence(full_query)["total"] == 2
+            for unavailable in ("pcap", "saved", "archive"):
+                page.evaluate("""kind => {
+                  state.archiveSource=kind==='archive'?'archive.sqlite':'';
+                  updateNetworkFilterAvailability({input_type:kind==='pcap'?'pcap':'interface',network_filter_supported:kind!=='saved',current_network_start:100});
+                  window.connectionViews.forEach(name=>byId(`${name}-range`).value='connection');
+                  updateConnectionRangeAvailability();
+                }""", unavailable)
+                for name in queries:
+                    option = page.locator(f'#{name}-range option[value="connection"]')
+                    assert option.get_attribute("disabled") is not None, (unavailable, name)
+                    assert option.get_attribute("hidden") is not None, (unavailable, name)
+                    assert page.locator(f'#{name}-range').input_value() == "all"
             assert not errors, errors
         finally:
             browser.close()

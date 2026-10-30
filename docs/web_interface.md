@@ -57,9 +57,17 @@ continuous network connection began. Host traffic totals, flow pages, peers,
 protocols, and score plots use the same boundary. Selected time ranges intersect
 this connection period. **Full run** still respects **Current network only**;
 turn that filter off to include earlier connections. A host with no activity
-on this connection offers **Show earlier activity** as a shortcut. The choice is
-saved in this browser. Turning it off restores the selected time range across
-the full run.
+on this connection offers **Show earlier activity** as a shortcut. The global
+filter choice is saved in this browser.
+
+The **This connection** time range selects activity since the latest reconnection
+to this network, independently of the global filter. It is available in Alerts,
+Evidence, Hosts, host details, P2P history/messages and P2P Graph during live
+interface capture. It follows a new reconnection automatically, shows no activity
+while disconnected, and preserves the connection boundary across a Slips restart
+on the same router. It excludes earlier visits to the same network. Packet
+captures, saved views and archives do not offer this range.
+
 With `--keep-history`, restarting on the same router keeps this boundary, so
 **Full run** still includes the earlier saved evidence, alerts and hosts. The web
 worker saves the boundary in `web_interface/history.sqlite` inside that output
