@@ -50,33 +50,33 @@ daylight and dark themes. The choice is saved in this browser and restored when
 the page is reopened, including after a Slips restart. The default is the light
 (white) theme. Saved browser choices take precedence over the defaults.
 
-For live interface capture, the header offers **Current network only** on every
-tab, enabled by default. It limits alert and evidence lists, their grouped views,
-the Overview counts, and the Hosts inventory to activity recorded since the current
-continuous network connection began. Host traffic totals, flow pages, peers,
-protocols, and score plots use the same boundary. Selected time ranges intersect
-this connection period. **Full run** still respects **Current network only**;
-turn that filter off to include earlier connections. A host with no activity
-on this connection offers **Show earlier activity** as a shortcut. The global
-filter choice is saved in this browser.
+For live interface capture, **Current network only** is enabled by default. It
+selects activity recorded on the connected network, including **earlier visits**
+within the chosen time range. For example, **7 days** on Home Wi-Fi includes
+retained Home Wi-Fi detections from the whole week, even after visiting other
+networks. **Full run** includes all retained activity on that network. Turn the
+switch off to include other networks. The browser saves this choice.
 
-The **This connection** time range selects activity since the latest reconnection
-to this network, independently of the global filter. It is available in Alerts,
-Evidence, Hosts, host details, P2P history/messages and P2P Graph during live
-interface capture. It follows a new reconnection automatically, shows no activity
-while disconnected, and preserves the connection boundary across a Slips restart
-on the same router. It excludes earlier visits to the same network. Packet
-captures, saved views and archives do not offer this range.
+**This connection** is a separate time range: it includes only activity since
+the latest reconnection to this network. It is available in Alerts, Evidence,
+Hosts, host details, P2P history/messages and P2P Graph during live interface
+capture. It follows a new reconnection automatically, shows no activity while
+disconnected, and preserves its boundary across a Slips restart on the same
+router with `--keep-history`. Packet captures, saved views and archives do not
+offer this range.
 
-With `--keep-history`, restarting on the same router keeps this boundary, so
-**Full run** still includes the earlier saved evidence, alerts and hosts. The web
-worker saves the boundary in `web_interface/history.sqlite` inside that output
-folder. A detected disconnection or a different router starts a new connection
-period. This bookkeeping runs in the web worker, outside capture and profiling.
-When the monitored interface disconnects, the scoped lists are empty until a
-network is connected. If the router MAC is unavailable, Slips uses the most
-recent network-settings change as the conservative boundary. The switch is
-hidden for file analyses and until the running web server advertises support.
+Evidence, linked alerts and their grouped counts use the network identity saved
+with each detection, rather than the host's present IP or its most recent visit.
+The web worker also retains up to 4096 network transitions in
+`web_interface/history.sqlite` to scope traffic and older records without an
+explicit network identity. A legacy record whose network cannot be established
+remains available with **Current network only** off; Slips does not assign it to
+the current network by guessing. Networks without a router MAC conservatively
+use their current connection. This bookkeeping runs outside capture and profiling.
+
+Grouped Evidence views label both **groups** and **records** explicitly. A single
+device row can contain many evidence records; its group count is not the number
+of detections. Selecting **None** shows individual records.
 
 **Device view** is enabled by default when supported. It combines local IPv4
 and IPv6 profiles that have the same recorded unicast MAC address. It affects the Hosts inventory, grouped Alerts,
@@ -892,10 +892,9 @@ Such reports are marked in the detail pane. Selecting
 a message shows the supplied detection descriptions, network source and
 destination, reporting peer, recipient and expandable JSON with Copy JSON.
 **Open local evidence** and **Open local alerts** open the reported host's
-existing investigation view with **Full run** selected. For a sent report whose
-original detection predates the current connection, these buttons and its
-reported-host links also switch off **Current network only**, visibly, so the
-original record is included. A toast explains the scope change; the saved browser
+existing investigation view with **Full run** selected. When **This connection** hides a sent report's original detection, these buttons
+and reported-host links widen the view to include that history. A seven-day or
+full-run view already includes earlier visits to the same network. A toast explains the scope change; the saved browser
 default is preserved. Other reports retain the selected network scope.
 These buttons show findings stored by this Slips;
 they do not imply that a remote peer supplied its alert records or flow data.
@@ -903,7 +902,7 @@ they do not imply that a remote peer supplied its alert records or flow data.
 Search matches peer IDs, IPs, known names, reported hosts, evidence names and
 descriptions. Direction, peer, evidence type and time filters narrow the graph
 without extra database queries. The global **Current network only** filter
-also applies when a current-network boundary is available. Reset filters
+also applies by recorded network membership, across earlier visits. Reset filters
 restores the 24-hour view. Use the route limit, zoom buttons, Fit width and
 the graph's scroll area for larger views. Selection survives refreshes, and
 unchanged data keeps the existing graph and detail nodes.
@@ -1358,7 +1357,7 @@ are kept separately in `permanent/host_profiles/hosts.sqlite`; older runs can
 still establish activity through retained flows and detections. Refreshing the
 inventory replaces every loaded page, so an old row beyond the first page does
 not survive a filter or network change. Device view includes only addresses
-observed during the selected connection.
+observed on the selected network and within the selected time range.
 For a live interface capture, the operating system verifies which current
 IPv4 and IPv6 addresses belong to the monitored interface's MAC. Those
 addresses form one Device even after roaming or address rotation leaves more
@@ -1376,7 +1375,7 @@ clues from all networks**, without supplying the current network summary. With
 **Current network only** off, the host subtitle explicitly says **Saved network:
 … · full history**. That saved network describes the address's identity history,
 not the Wi-Fi connection currently shown in the page header. A
-previously selected host with no observations on the current connection shows
+previously selected host with no observations in the selected network and time range shows
 an explanation and empty scoped activity.
 
 Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens a rule editor beside the host, with its IP filled in and **Both sides** selected. Suppression and evidence type remain editable. In Device view, a checkbox can save one rule for each known address; addresses learned later need their own rules. Rules use the existing persistence mechanism and the run's configured whitelist file, including a custom personal whitelist path.

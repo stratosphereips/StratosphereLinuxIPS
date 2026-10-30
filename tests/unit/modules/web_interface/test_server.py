@@ -838,6 +838,11 @@ def test_current_network_does_not_fall_back_when_disconnected(
     )
     reader = _network_scope_reader(tmp_path)
     reader._current_network_start = Mock(return_value=None)
+    original_hget = reader.redis.hget.side_effect
+    reader.redis.hget.side_effect = lambda key, field: (
+        json.dumps({"connected": False, "changed_at": 2_000_000_000})
+        if key == "network_states" else original_hget(key, field)
+    )
     query = {
         "network": ["current"],
         "range": ["all"],
@@ -1389,7 +1394,9 @@ def test_every_static_web_table_header_has_a_sort_key() -> None:
     assert len(tables) >= 13
     for table in tables:
         table_id = re.search(r'id="([^"]+)"', table)
-        for header in re.findall(r"<th\b([^>]*)>", table):
+        for header, label in re.findall(r"<th\b([^>]*)>(.*?)</th>", table):
+            if label == "Action":
+                continue
             assert 'data-sort="' in header, table_id.group(1) if table_id else table
 
 
@@ -5306,7 +5313,10 @@ def test_current_network_scope_stops_at_prior_connection(
     reader.redis.hgetall.return_value = {
         "input_type": "interface", "interface": "en0"
     }
-    reader.redis.hget.return_value = json.dumps(network_state)
+    reader.redis.hget.side_effect = lambda key, field: (
+        "interface" if (key, field) == ("analysis", "input_type")
+        else json.dumps(network_state)
+    )
 
     assert reader._current_network_start() == expected
     assert reader._scoped_start({"network": ["current"]}, 180) == (
@@ -8120,7 +8130,7 @@ def test_p2p_reliability_chart_uses_compact_range_control() -> None:
     assert 'id="p2p-range"' in html_source
     assert 'id="p2p-trust-chart"' in html_source
     assert "function renderP2PMetricChart" in app_source
-    assert "/api/p2p?range=${encodeURIComponent(range)}" in app_source
+    assert "/api/p2p?${params}" in app_source
     assert 'byId("p2p-range").addEventListener("change"' in app_source
     assert (
         ".compact-line-chart { height: 130px; min-height: 130px; }"
@@ -8663,5 +8673,5 @@ def test_p2p_graph_api_uses_lightweight_reader() -> None:
     handler.server.reader.p2p_graph.return_value = {"activity": [], "peers": []}
     result = handler._api_response("/api/p2p-graph", {})
     assert result["activity"] == []
-    handler.server.reader.p2p_graph.assert_called_once_with()
+    handler.server.reader.p2p_graph.assert_called_once_with({})
     handler.server.reader.p2p.assert_not_called()

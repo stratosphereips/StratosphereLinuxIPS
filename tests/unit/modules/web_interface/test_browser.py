@@ -4290,7 +4290,7 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
 
 @pytest.mark.parametrize("navigation", ["button", "host_link"])
 @pytest.mark.parametrize("direction,earlier,expand", [
-    ("sent", True, True), ("sent", False, False), ("received", True, False),
+    ("sent", True, False), ("sent", False, False), ("received", True, False),
 ])
 def test_p2p_graph_opens_original_evidence_across_connection_boundary(
     navigation: str, direction: str, earlier: bool, expand: bool,
@@ -4320,14 +4320,14 @@ def test_p2p_graph_opens_original_evidence_across_connection_boundary(
         if parsed.path in {"/", "/app.js", "/style.css"}:
             route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
         elif parsed.path == "/api/hosts/192.168.1.100":
-            hidden = direction == "sent" and earlier and query.get("network") == ["current"]
+            hidden = query.get("network") == ["connection"]
             route.fulfill(json={"ip": "192.168.1.100", "all_ips": ["192.168.1.100"],
                 "scope": "local", "evidence_count": 0 if hidden else 1, "alert_count": 0,
                 "alert_score": 0, "alert_threshold": 5, "load": {"flows": 0},
                 "seen_on_current_network": not hidden})
         elif parsed.path == "/api/evidence":
             evidence_queries.append(query)
-            hidden = direction == "sent" and earlier and query.get("network") == ["current"]
+            hidden = query.get("network") == ["connection"]
             items = [] if hidden else [{"id": "original-detection", "profile_ip": "192.168.1.100",
                 "evidence_type": "DEVICE_CHANGING_IP", "module": "conn_analyzer", "threat_level": "medium",
                 "description": "Original finding retained in SQLite", "timestamp": 100, "confidence": .8, "alert_ids": []}]
@@ -4436,7 +4436,7 @@ def test_connection_range_tracks_reconnections_and_filters_real_history(
                 assert page.evaluate("state.networkOnly") is False
                 for name, encoded in queries.items():
                     query = parse_qs(encoded)
-                    assert query["network"] == ["current"], name
+                    assert query["network"] == ["connection"], name
                     assert query["range"] == ["custom"], name
                     if start is not None:
                         assert float(query["from"][0]) == start
@@ -4573,6 +4573,80 @@ def test_p2p_catchup_continue_posts_and_has_readable_sections(
             output = Path("output/p2p-catchup-layout")
             output.mkdir(exist_ok=True, parents=True)
             page.screenshot(path=str(output / f"{theme}-{width}.png"), full_page=True)
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_seven_day_network_history_and_group_counts_in_browser(
+    tmp_path: Path, theme: str,
+) -> None:
+    """Keep older Home evidence visible and distinguish device groups from records.
+
+    Parameters:
+        tmp_path: Isolated repeated-visit databases.
+        theme: Browser theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    from tests.unit.modules.web_interface.test_network_scope import repeated_visits
+
+    reader = repeated_visits(tmp_path)
+    assets = Path("modules/web_interface")
+    queries = []
+    errors = []
+
+    def respond(route: Any) -> None:
+        """Serve real evidence queries against the repeated-network fixture.
+
+        Parameters:
+            route: Browser request.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/evidence":
+            query = parse_qs(parsed.query)
+            queries.append(query)
+            with patch("modules.web_interface.server.time.time", return_value=2_000_000_000):
+                route.fulfill(json=reader.evidence(query))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated network fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1500, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof loadEvidence === 'function'")
+            page.evaluate("""async theme => {
+              clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+              setTheme(theme);state.activeTab='evidence';state.networkOnly=true;state.networkFilterSupported=true;
+              state.currentNetworkStart=1999999400;state.deviceView=false;state.hideExcluded=true;
+              document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='evidence'));
+              byId('evidence-view').value='host';byId('evidence-range').value='7d';
+              await loadEvidence();
+            }""", theme)
+            assert queries[-1]["network"] == ["current"]
+            assert queries[-1]["range"] == ["7d"]
+            assert "4 records" in page.locator("#evidence-count").inner_text()
+            assert page.locator('#evidence-threat-chips button[data-level=""]').inner_text() == "All 1 group"
+            assert page.locator("#evidence-badge").inner_text() == "4"
+            assert page.locator("#evidence-count").is_visible()
+            page.evaluate("""async () => {
+              byId('evidence-range').value='connection';await loadEvidence();
+            }""")
+            assert queries[-1]["network"] == ["connection"]
+            assert "2 records" in page.locator("#evidence-count").inner_text()
+            assert page.evaluate("state.networkOnly") is True
+            page.evaluate("""async () => {
+              byId('evidence-range').value='7d';byId('evidence-view').value='individual';await loadEvidence();
+            }""")
+            assert page.locator('#evidence-threat-chips button[data-level=""]').inner_text() == "All 4 records"
+            assert page.locator("#evidence-table tbody tr").count() == 4
             assert not errors, errors
         finally:
             browser.close()

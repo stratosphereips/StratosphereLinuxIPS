@@ -22,7 +22,7 @@
     </div>
     <div class="topbar-actions">
       <label id="history-source-label" class="network-filter" hidden>Detection history <select id="history-source" aria-label="Detection history source"><option value="">Active · last 90 days</option></select></label>
-      <label id="network-filter-label" class="network-filter" title="Show detections from the current continuous network connection only" hidden><input id="network-filter" type="checkbox" checked disabled><span>Current network only</span></label>
+      <label id="network-filter-label" class="network-filter" title="Show activity recorded on this network, including earlier visits within the selected time range" hidden><input id="network-filter" type="checkbox" checked disabled><span>Current network only</span></label>
       <label id="device-view-label" class="network-filter" title="Group local IPv4 and IPv6 hosts that have the same verified MAC address" hidden><input id="device-view" type="checkbox" checked disabled><span>Device view</span></label>
       <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch to dark theme"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-label">Dark</span></button>
       <div class="run-state">
@@ -141,6 +141,7 @@
     <section id="evidence" class="panel" aria-labelledby="evidence-title">
       <div class="evidence-toolbar">
         <h2 id="evidence-title">Evidence</h2>
+        <span id="evidence-count" class="result-count"></span>
         <input id="evidence-search" type="search" placeholder="Search description, type, host…" aria-label="Search evidence">
         <label class="review-filter-label">Review <select id="evidence-review" aria-label="Evidence review filter"><option value="all" selected>All evidence</option><option value="unreviewed">Unreviewed</option><option value="in_review">In review</option><option value="true_positive">True positive</option><option value="false_positive">False positive</option><option value="expected_behavior">Expected behavior</option><option value="inconclusive">Inconclusive</option></select></label>
         <button id="evidence-active-type" class="evidence-active-type" type="button" hidden></button>
@@ -156,7 +157,6 @@
           <input id="evidence-from" class="custom-time" type="datetime-local" aria-label="From time" hidden>
           <input id="evidence-to" class="custom-time" type="datetime-local" aria-label="To time" hidden>
         </div>
-        <span id="evidence-count" class="result-count"></span>
         <a id="evidence-export" class="secondary evidence-export" href="/api/flows/export" download="reviewed_flows.tsv" title="Export retained flows with detector label and human review">Export reviewed flows</a>
         <span id="evidence-range-badge" class="status ok">Live</span>
       </div>

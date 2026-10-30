@@ -1316,20 +1316,21 @@ function resetPage(name) {
   }
 }
 
-/** Check whether a view limits activity to the current network connection.
+/** Check whether a view limits activity to the current network.
  * @param {string} prefix View whose time selector is being inspected.
- * @returns {boolean} Whether the global filter or time range selects this connection.
+ * @returns {boolean} Whether the global filter or time range selects this network.
  */
-function connectionScoped(prefix) {
+function usesNetworkScope(prefix) {
   return state.networkFilterSupported && (state.networkOnly || byId(`${prefix}-range`)?.value === "connection");
 }
 
 function rangeQuery(prefix) {
   const range = byId(`${prefix}-range`).value;
   const params = new URLSearchParams({ range });
-  if (connectionScoped(prefix)) params.set("network", "current");
+  if (usesNetworkScope(prefix)) params.set("network", "current");
   if (state.deviceView && state.deviceViewSupported) params.set("device", "1");
   if (range === "connection") {
+    params.set("network", "connection");
     params.set("range", "custom");
     params.set("from", String(state.currentNetworkStart ?? Number.MAX_VALUE));
   }
@@ -3176,8 +3177,10 @@ function renderEvidenceThreatChips() {
   [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"],
     ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]
     .forEach(([level, label]) => {
+      const count = counts.get(level) || 0;
+      const unit = byId("evidence-view").value === "individual" ? "record" : "group";
       const button = text("button", level.endsWith("_or_more")
-        ? label : `${label} ${compact(counts.get(level) || 0)}`, "evidence-chip");
+        ? label : `${label} ${compact(count)} ${unit}${count === 1 ? "" : "s"}`, "evidence-chip");
       button.type = "button";
       button.dataset.level = level;
       button.classList.toggle("active", level === selected);
@@ -3713,16 +3716,14 @@ async function loadEvidence() {
   const loadedRecords = mode === "individual"
     ? payload.items.length
     : payload.items.reduce((sum, item) => sum + numeric(item.evidence_count), 0);
-  const recordsLabel = payload.page_size === payload.total
-    ? `${compact(loadedRecords)} records`
-    : `${compact(loadedRecords)} records on this page`;
+  const recordsLabel = `${compact(payload.matching_total ?? loadedRecords)} records`;
   const activeType = byId("evidence-active-type");
   activeType.hidden = !state.evidenceWorkspace.typeFilter;
   activeType.textContent = state.evidenceWorkspace.typeFilter
     ? `${alertTypeName(state.evidenceWorkspace.typeFilter)} ×` : "";
   byId("evidence-count").textContent = mode === "individual"
     ? `${compact(payload.total)} records`
-    : `${compact(payload.total)} groups · ${recordsLabel}`;
+    : recordsLabel;
   const selectedRange = byId("evidence-range");
   byId("evidence-range-badge").textContent = selectedRange.selectedOptions[0]?.textContent || "Full run";
   byId("evidence-summary").textContent = `${payload.page_size} of ${compact(payload.total)} ${mode === "individual" ? "records" : "groups"}${state.evidenceWorkspace.typeFilter ? ` · ${state.evidenceWorkspace.typeFilter}` : ""}`;
@@ -5273,8 +5274,7 @@ function p2pGraphGroups(payload) {
   const range = byId("p2p-graph-range").value;
   const seconds = ({ "1h": 3600, "24h": 86400, "7d": 604800 })[range];
   const cutoff = Math.max(seconds ? Date.now() / 1000 - seconds : 0,
-    range === "connection" ? state.currentNetworkStart ?? Infinity
-      : state.networkOnly && state.currentNetworkStart ? Number(state.currentNetworkStart) : 0);
+    range === "connection" ? state.currentNetworkStart ?? Infinity : 0);
   const search = byId("p2p-graph-search").value.trim().toLowerCase();
   const direction = byId("p2p-graph-direction").value;
   const peer = byId("p2p-graph-peer").value;
@@ -5420,7 +5420,7 @@ function drawP2PGraph(groups) {
  * @returns {boolean} Whether the current-network filter hides original activity.
  */
 function p2pReportPredatesConnection(record) {
-  const start = connectionScoped("p2p-graph") ? numeric(state.currentNetworkStart) : 0;
+  const start = numeric(state.currentNetworkStart);
   return start > 0 && peerDetections(record).some((item) => numeric(item.observed_at) > 0 && numeric(item.observed_at) < start);
 }
 
@@ -5432,7 +5432,8 @@ async function openP2PGraphHost(target, activity) {
   const graph = state.p2pGraph;
   const group = graph.groups.find((item) => item.key === graph.selected);
   const report = group?.records.find((item) => p2pMessageKey(item) === graph.message) || group?.records[0];
-  const includeEarlier = report?.direction === "sent" && p2pReportPredatesConnection(report);
+  const includeEarlier = report?.direction === "sent" && p2pReportPredatesConnection(report)
+    && byId("p2p-graph-range").value === "connection";
   if (includeEarlier) {
     state.networkOnly = false;
     byId("network-filter").checked = false;
@@ -5536,7 +5537,7 @@ function renderP2PGraph() {
 
 /** Fetch lightweight bounded graph data without requesting metric histories. */
 async function loadP2PGraph() {
-  const payload = await api("p2p-graph", "/api/p2p-graph");
+  const payload = await api("p2p-graph", `/api/p2p-graph?${rangeQuery("p2p-graph")}`);
   if (!payload) return;
   state.p2pGraph.payload = payload;
   const replaceOptions = (id, options, first) => {
@@ -7702,7 +7703,7 @@ function renderHostNetworkClues(profiles) {
  * @returns {object[]} Identity profiles visible beside current activity.
  */
 function hostVisibleProfiles(host) {
-  return connectionScoped("host") && Array.isArray(host?.current_network_profiles)
+  return usesNetworkScope("host") && Array.isArray(host?.current_network_profiles)
     ? host.current_network_profiles : host?.permanent_profiles || [];
 }
 
@@ -7710,7 +7711,7 @@ function hostVisibleProfiles(host) {
  * @param {object} host Current host workspace data.
  */
 function renderHostScope(host) {
-  const scoped = connectionScoped("host");
+  const scoped = usesNetworkScope("host");
   const capture = host.capture_network;
   const label = capture?.name || state.headerNetwork?.name || "current network";
   const identityNetwork = hostVisibleProfiles(host)[0]?.network_label || "identity network not recorded";
@@ -7724,15 +7725,19 @@ function renderHostScope(host) {
     ? "History · saved identity clues from all networks" : "All saved identity clues and network names";
   const notice = byId("host-network-scope-note");
   notice.hidden = !scoped || host.seen_on_current_network !== false;
-  const scopeReason = byId("host-range").value === "connection"
-    ? "This connection excludes earlier activity." : "Full run still respects Current network only.";
-  notice.replaceChildren(text("span", `No activity was observed for this host during the current network connection. ${scopeReason} `));
-  const earlier = text("button", "Show earlier activity", "secondary");
+  const thisConnection = byId("host-range").value === "connection";
+  notice.replaceChildren(text("span", thisConnection
+    ? "No activity was observed for this host during this connection. "
+    : `No activity was recorded for this host on ${label} in the selected time range. `));
+  const earlier = text("button", thisConnection ? "Show earlier activity" : "Show all networks", "secondary");
   earlier.type = "button";
   earlier.addEventListener("click", () => {
     byId("host-range").value = "all";
-    byId("network-filter").checked = false;
-    byId("network-filter").dispatchEvent(new Event("change"));
+    if (thisConnection) byId("host-range").dispatchEvent(new Event("change"));
+    else {
+      byId("network-filter").checked = false;
+      byId("network-filter").dispatchEvent(new Event("change"));
+    }
   });
   notice.append(earlier);
 }
@@ -7743,7 +7748,7 @@ function renderHostCards(host) {
   byId("host-title").replaceChildren(deviceIdentity(host));
   renderHostScope(host);
   const scopedProfiles = hostVisibleProfiles(host);
-  const networkScoped = connectionScoped("host");
+  const networkScoped = usesNetworkScope("host");
   const verifiedNetworks = (host.permanent_profiles || [])
     .filter((profile) => hostProfileNetworkObservation(profile).verified).length;
   const exactAggregates = host.exact_aggregates !== false;
@@ -8795,7 +8800,7 @@ function updateNetworkFilterAvailability(identity) {
   byId("network-filter").disabled = !supported || start === null || Boolean(state.archiveSource);
   label.title = start === null
     ? "Waiting for a monitored network connection"
-    : "Show hosts, traffic, alerts and evidence observed during the current continuous network connection only";
+    : "Show hosts, traffic, alerts and evidence recorded on this network, including earlier visits within the selected time range";
   const connectionRange = document.querySelector('select option[value="connection"]:checked');
   if (changed && (state.networkOnly || connectionRange) && supported && state.overview) {
     refreshNetworkScopedViews();

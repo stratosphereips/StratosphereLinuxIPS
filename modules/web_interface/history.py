@@ -285,6 +285,9 @@ class HistoryCollector:
             states = self.redis.hgetall("network_states")
         except redis.RedisError:
             states = None
+        visits_changed = not getattr(
+            self, "_network_visits_initialized", False
+        )
         with connect_history(self.history_path) as connection:
             self._metadata_set(connection, BACKEND_HEARTBEAT_KEY, heartbeat)
             self._metadata_set(connection, BACKEND_DISCONNECTED_KEY, 0)
@@ -301,9 +304,26 @@ class HistoryCollector:
                         )
                 serialized = json.dumps(scopes, sort_keys=True)
                 if serialized != old:
+                    visits_changed = True
                     self._metadata_set(
                         connection, NETWORK_SCOPES_KEY, serialized
                     )
+        if visits_changed and isinstance(states, dict) and states:
+            from modules.web_interface.network_scope import (
+                record_network_visits,
+            )
+
+            for interface, raw in states.items():
+                state = self._json_value(raw, {})
+                if isinstance(state, dict):
+                    record_network_visits(
+                        self.history_path,
+                        interface,
+                        state,
+                        f"{self.output_dir}:{self.root_pid}",
+                        saved.get(interface),
+                    )
+            self._network_visits_initialized = True
         return heartbeat
 
     def mark_backend_disconnected(self, now: Optional[float] = None) -> float:
