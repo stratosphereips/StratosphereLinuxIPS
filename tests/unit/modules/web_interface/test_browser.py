@@ -3157,6 +3157,15 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
             in page.locator("#host-subtitle").inner_text()
         )
         assert page.locator("#host-network-scope-note").is_visible()
+        historical_subtitle = page.evaluate("""() => {
+            state.networkOnly=false;
+            renderHostScope({scope:'local',live:true,permanent_profiles:[{network_label:'Eduroam'}]});
+            const label=byId('host-subtitle').textContent;
+            state.networkOnly=true; renderHostScope(state.host);
+            return label;
+        }""")
+        assert "Saved network: Eduroam · full history" in historical_subtitle
+        assert "live metadata" not in historical_subtitle
         assert (
             page.locator("#host-networks-seen").inner_text()
             == "No observations on the current network."

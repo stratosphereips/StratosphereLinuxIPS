@@ -7656,7 +7656,7 @@ function renderHostScope(host) {
   const identityNetwork = hostVisibleProfiles(host)[0]?.network_label || "identity network not recorded";
   const status = scoped && capture ? host.seen_on_current_network
     ? `Observed on ${label}` : `No observed activity on ${label}`
-    : `${identityNetwork} · ${host.live ? "live metadata" : "saved metadata"}`;
+    : `Saved network: ${identityNetwork} · full history`;
   byId("host-subtitle").replaceChildren(
     document.createTextNode(`${host.scope || "unknown scope"} · ${status} · ${host.mac_vendor || "vendor unknown"} · `),
     host.mac ? macIdentity(host.mac) : document.createTextNode("MAC unknown"));

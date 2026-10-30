@@ -1364,7 +1364,10 @@ outside the local subnet can still appear when traffic involving it was
 observed from this network; this does not assert that the endpoint belongs to
 the local subnet. The Host workspace names the capture network explicitly.
 Older network identities remain available under **History · saved identity
-clues from all networks**, without supplying the current network summary. A
+clues from all networks**, without supplying the current network summary. With
+**Current network only** off, the host subtitle explicitly says **Saved network:
+… · full history**. That saved network describes the address's identity history,
+not the Wi-Fi connection currently shown in the page header. A
 previously selected host with no observations on the current connection shows
 an explanation and empty scoped activity.
 
