@@ -55,8 +55,11 @@ tab, enabled by default. It limits alert and evidence lists, their grouped views
 the Overview counts, and the Hosts inventory to activity recorded since the current
 continuous network connection began. Host traffic totals, flow pages, peers,
 protocols, and score plots use the same boundary. Selected time ranges intersect
-this connection period. The choice is saved in this browser. Turning it off
-restores the selected time range across the full run.
+this connection period. **Full run** still respects **Current network only**;
+turn that filter off to include earlier connections. A host with no activity
+on this connection offers **Show earlier activity** as a shortcut. The choice is
+saved in this browser. Turning it off restores the selected time range across
+the full run.
 With `--keep-history`, restarting on the same router keeps this boundary, so
 **Full run** still includes the earlier saved evidence, alerts and hosts. The web
 worker saves the boundary in `web_interface/history.sqlite` inside that output
@@ -874,11 +877,19 @@ known IPs and stored host names make them easier to recognize. Hover over
 a peer for its full ID.
 
 Select a card or arrow, with a click or Enter/Space, to inspect its messages.
-The right pane lists the report times, evidence types and confidence. Selecting
+The right pane lists message times, evidence types and confidence. A report can
+be sent now about a detection recorded before the current connection. The graph
+filters by message time; host evidence filters by original detection time.
+Such reports are marked in the detail pane. Selecting
 a message shows the supplied detection descriptions, network source and
 destination, reporting peer, recipient and expandable JSON with Copy JSON.
 **Open local evidence** and **Open local alerts** open the reported host's
-existing investigation view. These buttons show findings stored by this Slips;
+existing investigation view with **Full run** selected. For a sent report whose
+original detection predates the current connection, these buttons and its
+reported-host links also switch off **Current network only**, visibly, so the
+original record is included. A toast explains the scope change; the saved browser
+default is preserved. Other reports retain the selected network scope.
+These buttons show findings stored by this Slips;
 they do not imply that a remote peer supplied its alert records or flow data.
 
 Search matches peer IDs, IPs, known names, reported hosts, evidence names and

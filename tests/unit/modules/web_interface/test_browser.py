@@ -4273,3 +4273,98 @@ def test_p2p_catchup_distinguishes_history_and_shows_original_authors() -> None:
             assert not errors
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("navigation", ["button", "host_link"])
+@pytest.mark.parametrize("direction,earlier,expand", [
+    ("sent", True, True), ("sent", False, False), ("received", True, False),
+])
+def test_p2p_graph_opens_original_evidence_across_connection_boundary(
+    navigation: str, direction: str, earlier: bool, expand: bool,
+) -> None:
+    """Open original evidence when a recent report describes an older connection.
+
+    Parameters:
+        navigation: Graph action button or reported-host link.
+        direction: Delivery direction relative to this Slips.
+        earlier: Whether detection predates the current connection.
+        expand: Whether navigation must include earlier connection history.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors = []
+    evidence_queries = []
+
+    def respond(route: Any) -> None:
+        """Serve evidence with the same connection filter as the live API.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        parsed = urlparse(route.request.url)
+        query = parse_qs(parsed.query)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/hosts/192.168.1.100":
+            hidden = direction == "sent" and earlier and query.get("network") == ["current"]
+            route.fulfill(json={"ip": "192.168.1.100", "all_ips": ["192.168.1.100"],
+                "scope": "local", "evidence_count": 0 if hidden else 1, "alert_count": 0,
+                "alert_score": 0, "alert_threshold": 5, "load": {"flows": 0},
+                "seen_on_current_network": not hidden})
+        elif parsed.path == "/api/evidence":
+            evidence_queries.append(query)
+            hidden = direction == "sent" and earlier and query.get("network") == ["current"]
+            items = [] if hidden else [{"id": "original-detection", "profile_ip": "192.168.1.100",
+                "evidence_type": "DEVICE_CHANGING_IP", "module": "conn_analyzer", "threat_level": "medium",
+                "description": "Original finding retained in SQLite", "timestamp": 100, "confidence": .8, "alert_ids": []}]
+            route.fulfill(json={"items": items, "total": len(items), "page_size": len(items)})
+        elif parsed.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated graph fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1500, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderP2PGraph === 'function'")
+            page.evaluate("""({direction,earlier}) => {
+              clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+              localStorage.setItem('slips-network-only','1');
+              state.networkOnly=true; state.networkFilterSupported=true;
+              state.currentNetworkStart=Date.now()/1000-3600;
+              byId('network-filter').checked=true;
+              state.activeTab='p2p-graph';
+              document.querySelectorAll('.panel').forEach(panel=>panel.classList.toggle('active',panel.id==='p2p-graph'));
+              const observed_at=Date.now()/1000-(earlier?7200:60);
+              state.p2pGraph.payload={local_peer_id:'this-peer',peers:[],reports:[],activity:[{
+                peer:'*',target:'192.168.1.100',direction,timestamp:Date.now()/1000,message_type:'report',
+                message:{key:'192.168.1.100',evaluation:{score:.5,confidence:.8,provenance:[{
+                  evidence_type:'DEVICE_CHANGING_IP',module:'conn_analyzer',observed_at,
+                  evidence_id:'original-detection',src_ip:'192.168.1.100',description:'Original finding retained in SQLite'}]}}}]};
+              renderP2PGraph(); selectP2PGraphRoute(state.p2pGraph.groups[0].key);
+            }""", {"direction": direction, "earlier": earlier})
+            detail = page.locator("#p2p-graph-detail")
+            assert detail.locator(".p2p-graph-history-note").count() == int(earlier)
+            assert "message time" in detail.locator("thead").inner_text().lower()
+            assert ("Detected locally at" if direction == "sent" else "Detected by peer at") in detail.inner_text()
+            if navigation == "button":
+                detail.get_by_role("button", name="Open local evidence", exact=True).click()
+            else:
+                detail.locator(".peer-connection .ip-link").first.click()
+            page.wait_for_function("state.activeTab==='hosts' && state.hostActivity==='evidence' && !state.requests.has('hostEvidence')")
+            table = page.locator("#host-evidence-table")
+            table.get_by_text("Original finding retained in SQLite", exact=True).wait_for(state="visible")
+            assert "Original finding retained in SQLite" in table.inner_text()
+            assert page.evaluate("state.networkOnly") is not expand
+            assert page.locator("#network-filter").is_checked() is not expand
+            assert evidence_queries[-1].get("range") == ["all"]
+            assert (evidence_queries[-1].get("network") == ["current"]) is not expand
+            assert page.evaluate("localStorage.getItem('slips-network-only')") == "1"
+            assert not errors, errors
+        finally:
+            browser.close()

@@ -960,7 +960,7 @@ function peerDetectionPanel(record) {
     const facts = document.createElement("dl");
     facts.className = "p2p-message-facts";
     const values = [["Reported type", alertTypeName(item.evidence_type)], ["Reported detector", item.module]];
-    if (item.observed_at) values.push(["Detected by peer at", formatTime(item.observed_at)]);
+    if (item.observed_at) values.push([record.direction === "sent" ? "Detected locally at" : "Detected by peer at", formatTime(item.observed_at)]);
     if (item.proto) values.push(["Reported protocol", item.proto.toUpperCase()]);
     if (isIcmpProtocol(item.proto)) {
       if (item.icmp_type !== undefined || item.src_port !== undefined) values.push(["Reported ICMP type", String(item.icmp_type ?? item.src_port)]);
@@ -5399,16 +5399,38 @@ function drawP2PGraph(groups) {
   scroll.scrollLeft = savedScroll[0]; scroll.scrollTop = savedScroll[1];
 }
 
+/** Check whether a report carries a detection from before this connection.
+ * @param {object} record Recorded P2P message with original detection times.
+ * @returns {boolean} Whether the current-network filter hides original activity.
+ */
+function p2pReportPredatesConnection(record) {
+  const start = state.networkOnly && state.networkFilterSupported ? numeric(state.currentNetworkStart) : 0;
+  return start > 0 && peerDetections(record).some((item) => numeric(item.observed_at) > 0 && numeric(item.observed_at) < start);
+}
+
 /** Open actual local evidence or alerts for a reported host on demand.
  * @param {string} target Reported IP address.
  * @param {string} activity Host activity tab to select.
  */
 async function openP2PGraphHost(target, activity) {
+  const graph = state.p2pGraph;
+  const group = graph.groups.find((item) => item.key === graph.selected);
+  const report = group?.records.find((item) => p2pMessageKey(item) === graph.message) || group?.records[0];
+  const includeEarlier = report?.direction === "sent" && p2pReportPredatesConnection(report);
+  if (includeEarlier) {
+    state.networkOnly = false;
+    byId("network-filter").checked = false;
+    refreshNetworkScopedViews(false);
+  }
   byId("host-range").value = "all";
   byId("host-from").hidden = byId("host-to").hidden = true;
   state.hostActivity = activity;
   state.hostActivityPreferred = true;
   await inspectHost(target);
+  if (includeEarlier) {
+    loadLiveTitleCounts().catch(() => {});
+    toast("Showing full-run history across network connections to include the original detection.");
+  }
 }
 
 /** Show the selected route's report records and their original detection detail. */
@@ -5422,7 +5444,7 @@ function renderP2PGraphDetail() {
     return;
   }
   const selected = group.records.find((record) => p2pMessageKey(record) === graph.message) || group.records[0];
-  const signature = JSON.stringify([group.key, group.records, p2pMessageKey(selected), graph.detailLimit, group.sender, group.receiver]);
+  const signature = JSON.stringify([group.key, group.records, p2pMessageKey(selected), graph.detailLimit, group.sender, group.receiver, state.networkOnly, state.currentNetworkStart]);
   if (signature === graph.detailSignature) return;
   graph.detailSignature = signature;
   const preserveRaw = graph.detailSelection === p2pMessageKey(selected)
@@ -5435,6 +5457,9 @@ function renderP2PGraphDetail() {
   summary.append(text("strong", group.sender.label), document.createTextNode(" → "), text("strong", group.receiver.label));
   panel.append(summary, text("p", `${group.records.length} recorded message${group.records.length === 1 ? "" : "s"} · ${group.types.size} evidence type${group.types.size === 1 ? "" : "s"}`, "muted"));
   if (group.receiver.id === "*") panel.append(text("p", "Sent as a broadcast. Individual recipients are not recorded.", "muted"));
+  if (p2pReportPredatesConnection(selected)) {
+    panel.append(text("p", `Originally detected before the current network connection; this graph shows when the report was ${selected.direction === "sent" ? "sent" : "received"}.${selected.direction === "sent" ? " Open local evidence or alerts to include the original detection history." : ""}`, "muted p2p-graph-history-note"));
+  }
   const ip = peerAddress(group.target);
   if (ip) {
     const actions = text("div", "", "p2p-graph-detail-actions");
@@ -5448,7 +5473,7 @@ function renderP2PGraphDetail() {
   const table = document.createElement("table"); table.className = "p2p-graph-report-list";
   table.setAttribute("aria-label", "Reports on selected route");
   const head = document.createElement("thead"), headings = document.createElement("tr");
-  ["Time", "Evidence", "Confidence"].forEach((label) => headings.append(text("th", label)));
+  ["Message time", "Evidence", "Confidence"].forEach((label) => headings.append(text("th", label)));
   head.append(headings); table.append(head);
   const body = document.createElement("tbody");
   group.records.slice(0, graph.detailLimit || 20).forEach((record) => {
@@ -6003,7 +6028,10 @@ function hostLink(ip) {
   button.disabled = !ip;
   button.addEventListener("click", (event) => {
     event.stopPropagation();
-    inspectHost(ip).catch(() => {});
+    const graph = state.p2pGraph;
+    const group = button.closest("#p2p-graph-detail") && graph.groups.find((item) => item.key === graph.selected);
+    if (group?.target === ip) openP2PGraphHost(ip, "evidence").catch(() => {});
+    else inspectHost(ip).catch(() => {});
   });
   return button;
 }
@@ -7636,7 +7664,14 @@ function renderHostScope(host) {
     ? "History · saved identity clues from all networks" : "All saved identity clues and network names";
   const notice = byId("host-network-scope-note");
   notice.hidden = !scoped || host.seen_on_current_network !== false;
-  notice.textContent = "No activity was observed for this host during the current network connection. Its saved identity history is available below; switch off Current network only to inspect older activity.";
+  notice.replaceChildren(text("span", "No activity was observed for this host during the current network connection. Full run still respects Current network only. "));
+  const earlier = text("button", "Show earlier activity", "secondary");
+  earlier.type = "button";
+  earlier.addEventListener("click", () => {
+    byId("network-filter").checked = false;
+    byId("network-filter").dispatchEvent(new Event("change"));
+  });
+  notice.append(earlier);
 }
 
 const HOST_REVIEW_LABELS = { to_analyze: "To analyze", in_review: "Under review", reviewed: "Reviewed" };
@@ -8690,8 +8725,10 @@ function updateNetworkFilterAvailability(identity) {
   }
 }
 
-/** Reload all detection views after changing the network scope. */
-function refreshNetworkScopedViews() {
+/** Reset detection views after changing the network scope.
+ * @param {boolean} reload Whether to reload immediately or let navigation load its destination.
+ */
+function refreshNetworkScopedViews(reload = true) {
   ["alerts", "evidence", "hosts", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
   document.activeElement?.blur();
   state.filteredBadgeCounts = { alerts: null, evidence: null, hosts: null };
@@ -8708,6 +8745,7 @@ function refreshNetworkScopedViews() {
   state.overviewAlertQuery = "";
   state.overviewAlertGroups = null;
   state.overviewEvidence = null;
+  if (!reload) return;
   loadLiveTitleCounts().catch(() => {});
   if (state.activeTab !== "hosts") loadHosts().catch(() => {});
   if (state.activeTab === "overview") loadOverview().catch(() => {});
