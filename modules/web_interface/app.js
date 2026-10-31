@@ -362,6 +362,54 @@ const formatTime = (value) => {
   }
   return new Date(amount * 1000).toLocaleString();
 };
+/** Normalize a displayed timestamp without interpreting durations as dates.
+ * @param {number|string|Date|null} value Unix seconds, milliseconds or an ISO date.
+ * @returns {number} Timestamp in seconds, or NaN when unavailable.
+ */
+function timeSeconds(value) {
+  if (value === null || value === undefined || value === "") return NaN;
+  if (value instanceof Date) return value.getTime() / 1000;
+  let seconds = Number(value);
+  if (!Number.isFinite(seconds) && typeof value === "string" && /^\d{4}-\d{2}-\d{2}(?:[T ]|$)/.test(value)) {
+    seconds = Date.parse(value) / 1000;
+  }
+  return seconds >= 1e12 ? seconds / 1000 : seconds;
+}
+
+const fullTimeFormat = new Intl.DateTimeFormat(undefined, {
+  weekday: "long", year: "numeric", month: "long", day: "numeric",
+  hour: "2-digit", minute: "2-digit", second: "2-digit", timeZoneName: "longOffset",
+});
+
+/** Describe the full local calendar date, clock time and timezone on hover.
+ * @param {number|string|Date|null} value Recorded timestamp.
+ * @returns {string} Full date or the available relative capture time.
+ */
+function timeTitle(value) {
+  const seconds = timeSeconds(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return "";
+  if (seconds < 946684800) return `${formatTime(seconds)} · Relative capture time; original calendar date unavailable`;
+  const date = new Date(seconds * 1000);
+  return Number.isFinite(date.getTime()) ? fullTimeFormat.format(date) : "";
+}
+
+/** Render a time with a full-date tooltip while retaining its compact label.
+ * @param {number|string|Date|null} value Recorded timestamp.
+ * @param {Function} formatter Visible timestamp formatter.
+ * @param {string} className Optional presentation class.
+ * @returns {HTMLTimeElement} Timestamp with its original date attached.
+ */
+function timeValue(value, formatter = formatTime, className = "") {
+  const seconds = timeSeconds(value);
+  const element = document.createElement("time");
+  element.textContent = Number.isFinite(seconds) ? formatter(seconds) : "—";
+  const title = timeTitle(value);
+  if (title) element.title = title;
+  if (seconds >= 946684800 && title) element.dateTime = new Date(seconds * 1000).toISOString();
+  if (className) element.className = className;
+  return element;
+}
+
 /** Format a recent event as a short age for the Overview alert list. */
 function formatAge(value) {
   const seconds = Math.max(0, Math.floor(Date.now() / 1000 - numeric(value)));
@@ -404,14 +452,24 @@ function displayData(value) {
 }
 const text = (tag, value, className = "") => {
   const element = document.createElement(tag);
-  element.textContent = displayValue(value);
+  if (value instanceof Node) element.append(value);
+  else if (Array.isArray(value) && value.some(item => item instanceof Node)) element.append(...value);
+  else {
+    element.textContent = displayValue(value);
+    if ((element.textContent !== String(value) || typeof value === "string" && /^\d{4}-\d{2}-\d{2}[T ]/.test(value))
+      && timeSeconds(value) >= 946684800) element.title = timeTitle(value);
+  }
   if (className) element.className = className;
   return element;
 };
 const cell = (value, className = "") => {
   const td = document.createElement("td");
   if (value instanceof Node) td.append(value);
-  else td.textContent = displayValue(value);
+  else {
+    td.textContent = displayValue(value);
+    if ((td.textContent !== String(value) || typeof value === "string" && /^\d{4}-\d{2}-\d{2}[T ]/.test(value))
+      && timeSeconds(value) >= 946684800) td.title = timeTitle(value);
+  }
   if (className) td.className = className;
   return td;
 };
@@ -896,7 +954,7 @@ function peerDeliveryDiagram(record) {
     figure.append(about);
   }
   figure.append(text("p", "The reporting Slips sent this report. The receiver may not have observed the reported activity.", "muted peer-context-note"));
-  if (record.timestamp) figure.append(text("p", `${sent ? "Sent" : "Received"}: ${formatTime(record.timestamp)}`, "muted peer-context-note"));
+  if (record.timestamp) figure.append(text("p", [`${sent ? "Sent" : "Received"}: `, timeValue(record.timestamp)], "muted peer-context-note"));
   return figure;
 }
 
@@ -961,7 +1019,7 @@ function peerDetectionPanel(record) {
     const facts = document.createElement("dl");
     facts.className = "p2p-message-facts";
     const values = [["Reported type", alertTypeName(item.evidence_type)], ["Reported detector", item.module]];
-    if (item.observed_at) values.push([record.direction === "sent" ? "Detected locally at" : "Detected by peer at", formatTime(item.observed_at)]);
+    if (item.observed_at) values.push([record.direction === "sent" ? "Detected locally at" : "Detected by peer at", timeValue(item.observed_at)]);
     if (item.proto) values.push(["Reported protocol", item.proto.toUpperCase()]);
     if (isIcmpProtocol(item.proto)) {
       if (item.icmp_type !== undefined || item.src_port !== undefined) values.push(["Reported ICMP type", String(item.icmp_type ?? item.src_port)]);
@@ -1025,6 +1083,7 @@ function renderConnectionState(connected, savedView = false) {
   const dot = byId("state-dot");
   const label = byId("run-state");
   const updated = byId("updated-at");
+  updated.title = timeTitle(state.lastSuccessfulRequest);
   if (savedView) {
     state.runUptimeRunning = false;
     dot.className = "state-dot";
@@ -1452,7 +1511,7 @@ function bindChartHover(svg, target, points, series, formatValue, maximum, left,
     const values = series.filter((item) => point[item.key] !== null
       && point[item.key] !== undefined && Number.isFinite(Number(point[item.key])))
       .map((item) => `${item.label || item.key.replaceAll("_", " ")}: ${formatValue(point[item.key], maximum)}`);
-    tooltip.textContent = `${formatTime(point.ts)}\n${values.join("\n")}`;
+    tooltip.textContent = `${timeTitle(point.ts) || formatTime(point.ts)}\n${values.join("\n")}`;
     tooltip.hidden = false;
     const containerBounds = svg.parentElement.getBoundingClientRect();
     tooltip.style.left = `${Math.max(4, Math.min(event.clientX - containerBounds.left + 12,
@@ -1550,6 +1609,9 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     label.setAttribute("text-anchor", ratio === 0 ? "start" : ratio === 1 ? "end" : "middle");
     label.setAttribute("class", "chart-label chart-time-label");
     label.textContent = formatChartTime(timestamp, span);
+    const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+    title.textContent = timeTitle(timestamp);
+    label.append(title);
     svg.append(label);
   });
   for (const item of series) {
@@ -1594,7 +1656,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     marker.setAttribute("y2", String(height - bottom));
     marker.setAttribute("class", "chart-reset-line");
     const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
-    title.textContent = `${formatTime(point.ts)} · ${point.reset_reason === "time window changed" ? "Score reset" : point.reset_reason}`;
+    title.textContent = `${timeTitle(point.ts) || formatTime(point.ts)} · ${point.reset_reason === "time window changed" ? "Score reset" : point.reset_reason}`;
     marker.append(title);
     svg.append(marker);
   });
@@ -1877,8 +1939,8 @@ function renderOverviewStatus(data) {
       hostIdentity(host.ip_alerted),
       text("span", `${compact(host.alert_count)} alerts`, "overview-alert-count"),
       text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2), "overview-alert-score"),
-      text("span", formatAge(host.alert_time), "overview-alert-time"));
-    row.title = `Last alert ${formatTime(host.alert_time)}`;
+      text("span", timeValue(host.alert_time, formatAge), "overview-alert-time"));
+    row.title = `Last alert ${timeTitle(host.alert_time)}`;
     row.addEventListener("click", () => inspectHost(host.ip_alerted).catch(() => {}));
     list.append(row);
   });
@@ -2140,7 +2202,7 @@ function openLog(record) {
   openDrawer("RUNTIME LOG", record.module || "Slips");
   const body = byId("drawer-body");
   body.append(investigationStats([
-    ["Time", formatTime(record.event_time)],
+    ["Time", timeValue(record.event_time)],
     ["Module", record.module || "unknown"],
     ["Level", text("span", severity, `log-level ${severity}`)],
   ]));
@@ -2158,7 +2220,7 @@ function openLog(record) {
   const line = document.createElement("div");
   line.className = "log-console-line";
   line.append(
-    text("span", new Date(record.event_time * 1000).toLocaleString(), "log-console-time"),
+    text("span", timeValue(record.event_time), "log-console-time"),
     text("span", `[${record.module || "unknown"}]`, "log-console-module"),
     text("strong", severity, `log-console-level ${severity}`),
   );
@@ -2192,8 +2254,9 @@ function renderLogs(payload) {
     ? "All retained runs in this output directory"
     : payload.run_started_at ? `This run started ${new Date(payload.run_started_at * 1000).toLocaleString()}`
       : "Run start unavailable; select All retained runs to browse saved errors.";
+  byId("logs-scope-note").title = payload.scope === "history" ? "" : timeTitle(payload.run_started_at);
   renderTable("logs-table", errors, [
-    (row) => new Date(row.event_time * 1000).toLocaleString(),
+    (row) => timeValue(row.event_time),
     (row) => text("span", logSeverity(row), `log-level ${logSeverity(row)}`),
     (row) => text("code", row.module, "log-module"),
     (row) => {
@@ -2675,7 +2738,7 @@ function renderAlertHostList() {
       row.classList.toggle("selected", record.alert_id === state.alertsWorkspace.alert?.alert_id);
       const top = document.createElement("div");
       top.className = "alerts-alert-row-top";
-      top.append(text("span", formatTime(record.alert_time)),
+      top.append(text("span", timeValue(record.alert_time, formatTime)),
         text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
       const summary = alertComposition(record);
       row.title = summary;
@@ -2698,7 +2761,7 @@ function renderAlertHostList() {
       deviceIdentity(host, "ip_alerted"),
       text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2),
         `alerts-host-score threat-${host.threat_level || "info"}`),
-      text("span", `${compact(host.alert_count)} · ${formatAge(host.alert_time)}`, "alerts-host-meta"),
+      text("span", [`${compact(host.alert_count)} · `, timeValue(host.alert_time, formatAge)], "alerts-host-meta"),
     );
     row.title = `${host.alert_count} alerts · ${host.evidence_count} evidence links`;
     row.addEventListener("click", () => selectAlertHostPane(host));
@@ -2815,7 +2878,7 @@ function renderAlertTimeline() {
     row.classList.toggle("selected", record.alert_id === workspace.alert?.alert_id);
     const top = document.createElement("div");
     top.className = "alerts-alert-row-top";
-    top.append(text("span", formatTime(record.alert_time)),
+    top.append(text("span", timeValue(record.alert_time, formatTime)),
       text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
     const title = alertComposition(record);
     row.title = title;
@@ -2861,7 +2924,7 @@ function renderAlertDetailPane(record) {
   header.className = "alerts-detail-head";
   const context = document.createElement("div");
   context.append(threat(record.threat_level),
-    text("small", `alert · ${formatTime(record.alert_time)} · ${record.label || "unclassified"}`));
+    text("small", ["alert · ", timeValue(record.alert_time), ` · ${record.label || "unclassified"}`]));
   const actions = document.createElement("div");
   actions.className = "alerts-detail-actions";
   const back = text("button", "← Back to alerts", "secondary");
@@ -3235,7 +3298,7 @@ function renderEvidenceTable(payload) {
     ["Alerts", "alert"],
   ], loadEvidence);
   renderTable("evidence-table", payload.items, [
-    (row) => evidenceClock(row.timestamp),
+    (row) => timeValue(row.timestamp, evidenceClock),
     (row) => row.profile_ip ? deviceIdentity(row, "profile_ip") : "All hosts",
     (row) => {
       const cell = document.createElement("span");
@@ -3492,7 +3555,7 @@ function renderEvidenceGroup() {
     head.className = "evidence-right-head";
     const label = document.createElement("div");
     label.append(evidenceTypeCell(group),
-      text("small", `${group.module || "Module unknown"} · ${compact(group.evidence_count)} records · ${formatTime(group.timestamp)}`, "muted"));
+      text("small", [`${group.module || "Module unknown"} · ${compact(group.evidence_count)} records · `, timeValue(group.timestamp)], "muted"));
     const close = text("button", "×");
     close.type = "button";
     close.title = "Close evidence group";
@@ -3573,7 +3636,7 @@ function renderEvidenceGroup() {
   list.append(tableWrap);
   right.append(list);
   renderTable(table.id, records, [
-    (record) => { const clock = text("span", evidenceClock(record.timestamp)); clock.title = formatTime(record.timestamp); return clock; },
+    (record) => { return timeValue(record.timestamp, evidenceClock); },
     (record) => {
       const label = document.createElement("div");
       label.append(evidenceTypeCell(record), text("small", record.module || "Module unknown", "muted"));
@@ -4000,7 +4063,8 @@ function renderThreatIntelligence() {
   byId("ti-count").textContent = payload.available
     ? `${rows.length} of ${items.length} sources · status read ${formatTime(payload.checked_at)}`
     : "Shared TI cache is unavailable.";
-  const date = (value) => value ? formatTime(value) : "Not recorded";
+  byId("ti-count").title = timeTitle(payload.checked_at);
+  const date = (value) => value ? timeValue(value) : "Not recorded";
   renderTable("ti-sources-table", sortLocalRows("ti-sources-table", rows), [
     (row) => {
       const cell = document.createElement("div");
@@ -4153,7 +4217,8 @@ function reviewEditor(entity, record) {
   availability.hidden = state.reviewAvailable;
   panel.append(availability);
   const current = record.review_status || (entity === "alert" ? "active" : "unreviewed");
-  const currentStatus = text("p", `Current: ${current.replaceAll("_", " ")}${record.review_updated_at ? ` · ${formatTime(record.review_updated_at)}` : ""}`, "muted");
+  const currentStatus = text("p", `Current: ${current.replaceAll("_", " ")}`, "muted");
+  if (record.review_updated_at) currentStatus.append(" · ", timeValue(record.review_updated_at));
   panel.append(currentStatus);
   const status = document.createElement("select");
   const states = entity === "alert"
@@ -4726,8 +4791,8 @@ function renderFirewall(payload) {
     (row) => deviceIdentity(row),
     (row) => text("span", row.status, `status ${["blocked", "overdue", "stale"].includes(row.status) ? "bad" : "warn"}`),
     (row) => row.origin,
-    (row) => formatTime(row.blocked_at),
-    (row) => row.unblock_at ? formatTime(row.unblock_at) : "Schedule unavailable",
+    (row) => timeValue(row.blocked_at, formatTime),
+    (row) => row.unblock_at ? timeValue(row.unblock_at) : "Schedule unavailable",
     (row) => row.remaining_seconds === null ? "Schedule unavailable" : formatDuration(row.remaining_seconds),
     (row) => compact(row.stopped_packets),
     (row) => compact(row.stopped_flows),
@@ -4742,7 +4807,7 @@ function renderFirewall(payload) {
   historyPage.next = payload.history_next_cursor || null;
   byId("firewall-history-count").textContent = `${payload.history_total || 0} block/unblock event${payload.history_total === 1 ? "" : "s"} match this view.`;
   renderTable("firewall-history-table", history, [
-    (row) => formatTime(row.timestamp),
+    (row) => timeValue(row.timestamp, formatTime),
     (row) => hostIdentity(row.ip),
     (row) => text("span", row.action, `status ${row.action === "unblocked" ? "ok" : "bad"}`),
     (row) => enforcementEventText(row.details),
@@ -4766,25 +4831,25 @@ function renderArpPoisoning() {
       (row) => hostIdentity(row.ip),
       (row) => text("span", row.status,
         `status ${row.status === "released" ? "ok" : "bad"}`),
-      (row) => formatTime(row.poisoned_at),
-      (row) => formatTime(row.unblock_at),
-      (row) => formatTime(row.released_at),
+      (row) => timeValue(row.poisoned_at, formatTime),
+      (row) => timeValue(row.unblock_at, formatTime),
+      (row) => timeValue(row.released_at, formatTime),
       (row) => row.remaining_seconds === null
         ? "—" : formatDuration(row.remaining_seconds),
       (row) => macIdentity(row.mac),
     ], (row) => openHost(row.ip));
   renderTable("arp-poisoning-events-table",
     sortLocalRows("arp-poisoning-events-table", events), [
-      (row) => formatTime(row.timestamp),
+      (row) => timeValue(row.timestamp, formatTime),
       (row) => hostIdentity(row.ip),
       (row) => text("span", row.action,
         `status ${row.action === "released" ? "ok" : "bad"}`),
-      (row) => formatTime(row.unblock_at),
+      (row) => timeValue(row.unblock_at, formatTime),
       (row) => enforcementEventText(row.details),
     ], (row) => openHost(row.ip));
   renderTable("arp-poisoning-evidence-table",
     sortLocalRows("arp-poisoning-evidence-table", evidence), [
-      (row) => formatTime(row.timestamp),
+      (row) => timeValue(row.timestamp, formatTime),
       (row) => hostIdentity(row.profile_ip),
       (row) => threat(row.threat_level),
       (row) => text("span", alertTypeName(row.evidence_type)),
@@ -5009,7 +5074,7 @@ function renderP2PMessages() {
   more.hidden = shown.length >= sorted.length;
   more.textContent = `Load more (${sorted.length - shown.length} remaining)`;
   renderTable("p2p-activity-table", shown, [
-    (row) => formatP2PTime(row.timestamp),
+    (row) => timeValue(row.timestamp, formatP2PTime),
     (row) => row.direction,
     (row) => ["report", "blame"].includes(row.message_type) ? evidenceTypeCell(row) : row.message_type,
     (row) => p2pPeerIdentity(row.peer),
@@ -5103,7 +5168,7 @@ function renderP2PMessageDetail(record) {
   const heading = document.createElement("div");
   heading.className = "p2p-detail-heading";
   const title = document.createElement("div");
-  title.append(text("h3", ["report", "blame"].includes(record.message_type) ? evidenceTypeLabel(record) : `Message · ${formatTime(record.timestamp)}`),
+  title.append(text("h3", ["report", "blame"].includes(record.message_type) ? evidenceTypeLabel(record) : ["Message · ", timeValue(record.timestamp)]),
     text("strong", `${record.message_type} · ${record.direction}`));
   const copy = text("button", "Copy JSON", "secondary");
   copy.type = "button";
@@ -5112,7 +5177,7 @@ function renderP2PMessageDetail(record) {
   panel.append(heading);
   if (["report", "blame"].includes(record.message_type)) panel.append(peerDetectionPanel(record));
   const facts = [
-    ["Time", formatTime(record.timestamp)],
+    ["Time", timeValue(record.timestamp)],
     ["Direction", record.direction],
     ["Type", record.message_type],
     ["Peer", record.peer === "*" ? "* (broadcast to all peers)" :
@@ -5122,7 +5187,7 @@ function renderP2PMessageDetail(record) {
     ["Confidence", record.confidence === null || record.confidence === undefined
       ? "—" : numeric(record.confidence).toFixed(3)],
   ];
-  if (record.report_time) facts.splice(1, 0, ["Peer report time", formatTime(record.report_time)]);
+  if (record.report_time) facts.splice(1, 0, ["Peer report time", timeValue(record.report_time)]);
   const list = document.createElement("dl");
   list.className = "p2p-message-facts";
   facts.forEach(([label, value]) => {
@@ -5237,7 +5302,7 @@ function renderP2PPeers() {
         + items.map((item) => `${alertTypeName(item.evidence_type)} · ${item.rule_version.slice(0, 8)}: ${item.confirmed} TP, ${item.false_positive} FP, review adjustment ${item.adjustment.toFixed(3)}`).join("\n");
       return value;
     },
-    (row) => formatP2PTime(row.last_seen),
+    (row) => timeValue(row.last_seen, formatP2PTime),
   ], (row) => {
     state.p2pSelectedPeer = state.p2pSelectedPeer?.peer_id === row.peer_id ? null : row;
     state.p2pVisibleMessages = 12;
@@ -5392,7 +5457,7 @@ function drawP2PGraph(groups) {
     const card = p2pGraphSvg("g", { class: "p2p-graph-report" });
     const names = [...group.types].map(alertTypeName).join(" + ") || "Evidence type unavailable";
     card.append(p2pGraphSvg("rect", { x: 442, y: y - 38, width: 348, height: 76, rx: 10 }),
-      p2pGraphSvg("title", {}, `${group.target}\n${names}\n${group.records.length} recorded messages`),
+      p2pGraphSvg("title", {}, `${group.target}\n${names}\n${group.records.length} recorded messages\nLast report: ${timeTitle(group.latest)}`),
       p2pGraphSvg("text", { x: 458, y: y - 16, class: "p2p-graph-target" }, short(`About ${group.target}`, 37)),
       p2pGraphSvg("text", { x: 458, y: y + 6, class: "p2p-graph-evidence" }, short(names, 44)),
       p2pGraphSvg("text", { x: 458, y: y + 26, class: "p2p-graph-meta" }, `${group.records.length} report${group.records.length === 1 ? "" : "s"} · ${formatP2PTime(group.latest)}`));
@@ -5496,7 +5561,8 @@ function renderP2PGraphDetail() {
   group.records.slice(0, graph.detailLimit || 20).forEach((record) => {
     const row = document.createElement("tr"); const key = p2pMessageKey(record);
     row.classList.toggle("selected", key === p2pMessageKey(selected));
-    const time = document.createElement("td"), button = text("button", formatP2PTime(record.timestamp), "p2p-graph-report-select");
+    const time = document.createElement("td"), button = text("button", timeValue(record.timestamp, formatP2PTime), "p2p-graph-report-select");
+    button.title = timeTitle(record.timestamp);
     button.type = "button"; button.setAttribute("aria-label", `Inspect report ${formatP2PTime(record.timestamp)} ${evidenceTypeLabel(record)}`);
     button.addEventListener("click", () => { graph.message = key; renderP2PGraphDetail(); });
     time.append(button);
@@ -5648,13 +5714,13 @@ function renderP2PCatchup(payload = {}) {
       : request ? `${p2pPeerLabel(item.peer)} requested information from this Slips` : `This Slips received a reply from ${p2pPeerLabel(item.peer)}`;
     const heading = text("h4", action);
     heading.title = item.peer || "";
-    exchangeDetail.append(heading, text("p", `${formatTime(item.timestamp)} · ${item.lane === "fresh" ? "Recent warnings and withdrawals" : "Incident history"}`));
-    if (item.since || item.requested_since) exchangeDetail.append(text("p", `Requested observations since ${formatTime(item.since || item.requested_since)}`));
+    exchangeDetail.append(heading, text("p", [timeValue(item.timestamp), ` · ${item.lane === "fresh" ? "Recent warnings and withdrawals" : "Incident history"}`]));
+    if (item.since || item.requested_since) exchangeDetail.append(text("p", ["Requested observations since ", timeValue(item.since || item.requested_since)]));
     if (!request) {
       exchangeDetail.append(text("p", `${numeric(item.records)} records in this reply${item.more ? " · more pages available" : ""}`));
       const list = document.createElement("ul");
       (item.incidents || []).forEach((record) => {
-        const line = text("li", `${record.target} · ${alertTypeName(record.evidence_type)} · observed by ${p2pPeerLabel(record.author)} · ${record.state} · ${formatTime(record.last_seen)}`);
+        const line = text("li", [`${record.target} · ${alertTypeName(record.evidence_type)} · observed by ${p2pPeerLabel(record.author)} · ${record.state} · `, timeValue(record.last_seen)]);
         line.title = record.author || "";
         list.append(line);
       });
@@ -5663,7 +5729,7 @@ function renderP2PCatchup(payload = {}) {
     exchangeDetail.append(rawBlock(item, "Catch-up request or reply"));
   };
   renderTable("p2p-catchup-exchanges", messages, [
-    (item) => formatP2PTime(item.timestamp),
+    (item) => timeValue(item.timestamp, formatP2PTime),
     (item) => item.direction === "sent" ? "This Slips → peer" : "Peer → this Slips",
     (item) => p2pPeerIdentity(item.peer),
     (item) => item.message_type === "catchup_request" ? "Request" : "Reply",
@@ -5685,7 +5751,7 @@ function renderP2PCatchup(payload = {}) {
       const progress = text("span", "", "p2p-transfer-progress");
       progress.append(text("strong", stateNames[item.state] || item.state || "Waiting", `p2p-transfer-state ${item.state || ""}`),
         text("small", item.lane === "fresh" ? "Recent activity" : item.lane === "history" ? "Incident history" : ""));
-      if (item.coverage_start) progress.append(text("small", `History since ${formatTime(item.coverage_start)}`));
+      if (item.coverage_start) progress.append(text("small", ["History since ", timeValue(item.coverage_start)]));
       return progress;
     },
     (item) => compact(item.received || 0),
@@ -5722,12 +5788,14 @@ function renderP2PCatchup(payload = {}) {
     const authors = document.createElement("span");
     authors.append(p2pPeerIdentity(record.author));
     if (record.via && record.author !== record.via) authors.append(text("span", " via "), p2pPeerIdentity(record.via));
-    const values = [formatTime(record.last_seen), record.target, alertTypeName(record.evidence_type),
+    const values = [timeValue(record.last_seen), record.target, alertTypeName(record.evidence_type),
       labels[record.threat] || "unknown", `${Math.round(numeric(record.confidence) * 100)}%`,
       authors,
-      `${record.state === "withdrawn" ? "Withdrawn" : record.expired ? "Historical · expired" : "Recently observed"}${record.protection?.state && record.protection.expires > Date.now()/1000 ? ` · firewall ${record.protection.state} until ${formatTime(record.protection.expires)}` : ""}`];
+      text("span", [record.state === "withdrawn" ? "Withdrawn" : record.expired ? "Historical · expired" : "Recently observed",
+        ...(record.protection?.state && record.protection.expires > Date.now()/1000
+          ? [` · firewall ${record.protection.state} until `, timeValue(record.protection.expires)] : [])])];
     values.forEach((value) => row.append(cell(value)));
-    row.title = `${record.description || ""}\nFirst observed: ${formatTime(record.first_seen)}\nReceived: ${formatTime(record.received)}\nExpires: ${formatTime(record.expires)}\n${record.count || 1} observations · ${record.victim?.value ? `affected host ${record.victim.value}` : "affected host not supplied"}`;
+    row.title = `${record.description || ""}\nFirst observed: ${timeTitle(record.first_seen)}\nReceived: ${timeTitle(record.received)}\nExpires: ${timeTitle(record.expires)}\n${record.count || 1} observations · ${record.victim?.value ? `affected host ${record.victim.value}` : "affected host not supplied"}`;
     row.dataset.clickable = "true";
     row.tabIndex = 0;
     const incidentKey = JSON.stringify([record.author, record.incident]);
@@ -5742,7 +5810,7 @@ function renderP2PCatchup(payload = {}) {
       detail.append(text("h4", `${alertTypeName(record.evidence_type)} · ${record.target}`), text("p", record.description || ""),
         text("p", `${record.target} → ${record.victim?.value || "affected host not supplied"}${record.dst_port ? ` · destination port ${record.dst_port}` : ""}`),
         delivery,
-        text("p", `First observed ${formatTime(record.first_seen)} · last observed ${formatTime(record.last_seen)} · received ${formatTime(record.received)} · expires ${formatTime(record.expires)}`));
+        text("p", ["First observed ", timeValue(record.first_seen), " · last observed ", timeValue(record.last_seen), " · received ", timeValue(record.received), " · expires ", timeValue(record.expires)]));
       detail.append(rawBlock(record, "Network catch-up incident"));
     };
     row.addEventListener("click", inspect);
@@ -5770,7 +5838,7 @@ async function loadP2P() {
   byId("p2p-status").textContent = counts.connected
     ? `Collaborative intelligence · ${counts.connected} of ${counts.known || 0} known peers connected`
     : "P2P is running and listening; no peers are connected now.";
-  byId("p2p-updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+  byId("p2p-updated").replaceChildren(document.createTextNode("Updated "), timeValue(Date.now(), formatShortTime));
   const reliability = (payload.peers || []).filter((peer) => peer.reliability !== null
     && peer.reliability !== undefined).map((peer) => Number(peer.reliability))
     .filter((value) => Number.isFinite(value));
@@ -5911,7 +5979,7 @@ function renderHostsPage() {
     (row) => formatBytes(row.load?.bytes),
     (row) => compact(row.evidence_count),
     (row) => compact(row.alert_count),
-    (row) => formatShortTime(row.last_seen || row.load?.last_seen || row.observed_at),
+    (row) => timeValue(row.last_seen || row.load?.last_seen || row.observed_at, formatShortTime),
     (row) => row.hostname || "—",
     (row) => tiFeeds(row),
     (row) => slipsScore(row),
@@ -5935,7 +6003,7 @@ function renderHostsPage() {
 /** Format inventory timestamps without repeating the date in every row. */
 function formatShortTime(value) {
   if (!numeric(value)) return "—";
-  return new Date(numeric(value) * 1000).toLocaleTimeString();
+  return evidenceClock(value);
 }
 
 /** Draw the peak score and threshold in a single compact table cell. */
@@ -6019,7 +6087,7 @@ function reverseDnsDetails(host) {
   const value = info.reverse_dns || labels[lookup.status] || "No lookup result recorded yet";
   const element = text("span", Array.isArray(value) ? value.join(", ") : value);
   element.title = lookup.checked_at
-    ? `System resolver lookup: ${formatTime(lookup.checked_at)}. This is a current lookup, not a DNS answer captured in the traffic.`
+    ? `System resolver lookup: ${timeTitle(lookup.checked_at)}. This is a current lookup, not a DNS answer captured in the traffic.`
     : "Reverse DNS is looked up in the background. An empty result does not mean the host has no name.";
   return element;
 }
@@ -6122,7 +6190,7 @@ function renderDnsDetails(dns) {
     fact.append(text("small", label), value instanceof Node ? value : text("strong", value));
     facts.append(fact);
   };
-  addFact("Last DNS observation", dns.ts ? formatTime(dns.ts) : "Unknown");
+  addFact("Last DNS observation", dns.ts ? timeValue(dns.ts) : "Unknown");
   addFact("Latest DNS flow UID", dns.uid ? text("code", dns.uid) : "Unknown");
   container.append(facts);
 
@@ -6350,7 +6418,7 @@ function alertCard(record) {
   const heading = document.createElement("div");
   heading.className = "investigation-card-head";
   heading.append(
-    text("span", formatTime(record.alert_time), "investigation-card-title"),
+    text("span", timeValue(record.alert_time, formatTime), "investigation-card-title"),
     threat(level),
   );
   const metadata = document.createElement("div");
@@ -6386,7 +6454,7 @@ function evidenceCard(record, contextRecords = null, inAlertPane = false) {
   const metadata = document.createElement("div");
   metadata.className = "investigation-card-meta";
   metadata.append(
-    text("span", formatTime(record.timestamp)),
+    text("span", timeValue(record.timestamp, formatTime)),
     text("span", `${compact(record.flow_count)} triggering flows`),
     text("span", record.module ? `Module: ${record.module}` : "Module unknown"),
   );
@@ -6608,7 +6676,7 @@ function protocolFlowCard(record) {
   if (timestamp !== null && timestamp !== undefined && timestamp !== "") {
     const observed = Number.isFinite(Number(timestamp))
       ? formatTime(timestamp) : String(timestamp);
-    context.append(text("span", "Observed: " + observed));
+    context.append(text("span", "Observed: "), timeValue(timestamp, () => observed));
   }
   const grid = document.createElement("div");
   grid.className = "protocol-details";
@@ -6778,7 +6846,7 @@ function flowCard(group, position = 1, total = 1, title = null) {
     metrics = document.createElement("div");
     metrics.className = "flow-metrics";
     [
-      ["Observed", observed],
+      ["Observed", timeValue(timestamp, () => observed)],
       ["Transport", flowValue(flow, "proto", "protocol") || "—"],
       ["Application", flowValue(flow, "appproto", "app_proto", "service") || "—"],
       ["State", flowValue(flow, "state", "conn_state") || "—"],
@@ -7096,7 +7164,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   meta.className = "evidence-detail-meta";
   meta.append(evidenceTypeCell(record),
     text("span", record.module || "Unknown module"),
-    text("span", formatTime(record.timestamp)),
+    text("span", timeValue(record.timestamp, formatTime)),
     networkContext(record));
   if (MACHINE_LEARNING_EVIDENCE[record.evidence_type]
       || peerDetections(record).some((item) => MACHINE_LEARNING_EVIDENCE[item.evidence_type])) {
@@ -7151,7 +7219,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   recordHead.append(recordActions);
   recordCard.append(recordHead,
     detailRow("Evidence ID", text("code", record.id || "—")),
-    detailRow(isPeerReport(record) ? "Received" : "Detected", formatTime(record.timestamp)),
+    detailRow(isPeerReport(record) ? "Received" : "Detected", timeValue(record.timestamp)),
     detailRow("Network", networkContext(record)),
     detailRow("Module", record.module || "—"),
     detailRow("Method", record.method || "—"),
@@ -7329,7 +7397,7 @@ async function openAlert(record) {
   }
   body.append(
     investigationStats([
-      ["Created", formatTime(record.alert_time)],
+      ["Created", timeValue(record.alert_time)],
       ["Affected host", hostLink(record.ip_alerted)],
       ["Network", networkContext(record)],
       ["Highest threat", threat(record.threat_level)],
@@ -7399,7 +7467,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
     group.append(title);
     const observation = hostProfileNetworkObservation(profile);
     group.append(text("small", observation.label, "host-network-observation muted"));
-    group.append(text("small", `Record first saved ${formatTime(profile.first_seen)} · Last updated ${formatTime(profile.last_seen)}`, "muted"));
+    group.append(text("small", ["Record first saved ", timeValue(profile.first_seen), " · Last updated ", timeValue(profile.last_seen)], "muted"));
     const annotationKey = JSON.stringify([profile.network_id, profile.ip]);
     const annotation = document.createElement("form");
     annotation.className = "host-annotation-form";
@@ -7616,7 +7684,7 @@ function renderPermanentProfiles(profiles, currentEditorTarget = null, currentNe
       values.forEach((fact) => {
         const item = document.createElement("li");
         item.append(kind === "mac" ? macIdentity(fact.value) : text("span", fact.value, "host-profile-value"));
-        item.append(text("small", `Seen ${compact(fact.observations)}× · ${formatTime(fact.first_seen)} to ${formatTime(fact.last_seen)}`, "muted"));
+        item.append(text("small", [`Seen ${compact(fact.observations)}× · `, timeValue(fact.first_seen), " to ", timeValue(fact.last_seen)], "muted"));
         list.append(item);
       });
       details.append(list);
@@ -7677,7 +7745,7 @@ function renderHostNetworkClues(profiles) {
   sortedNames.slice(0, 4).forEach(([name, details]) => {
     const row = document.createElement("div");
     row.className = "host-clue-row";
-    row.append(text("code", name), text("small", `${compact(details.observations)}× · ${formatShortTime(details.last_seen)}`));
+    row.append(text("code", name), text("small", [`${compact(details.observations)}× · `, timeValue(details.last_seen, formatShortTime)]));
     mdns.append(row);
   });
   if (!sortedNames.length) mdns.append(text("p", "No mDNS address record owners recorded.", "muted"));
@@ -7689,7 +7757,9 @@ function renderHostNetworkClues(profiles) {
     row.className = "host-clue-row";
     row.title = observation.label;
     row.append(text("strong", profile.network_label || profile.network_id || "Unidentified network"),
-      text("small", `${observation.source === "mac" ? "MAC observed" : "IP traffic"} · ${new Date(numeric(observation.first) * 1000).toLocaleDateString()} – ${new Date(numeric(observation.last) * 1000).toLocaleDateString()}`));
+      text("small", [`${observation.source === "mac" ? "MAC observed" : "IP traffic"} · `,
+        timeValue(observation.first, stamp => new Date(stamp * 1000).toLocaleDateString()), " – ",
+        timeValue(observation.last, stamp => new Date(stamp * 1000).toLocaleDateString())]));
     networks.append(row);
   });
   if (!observed.length) networks.append(text("p", "No verified device network history recorded.", "muted"));
@@ -7805,7 +7875,7 @@ function renderHostCards(host) {
     if (host.seen_on_current_network) {
       const row = text("div", "", "host-clue-row");
       row.append(text("strong", host.capture_network.name || "Current monitored network"),
-        text("small", `IP traffic observed ${formatTime(host.last_seen)}`));
+        text("small", ["IP traffic observed ", timeValue(host.last_seen)]));
       networks.append(row);
     } else networks.append(text("p", "No observations on the current network.", "muted"));
   }
@@ -8069,7 +8139,7 @@ async function loadHostAlerts() {
     button.className = "host-alert-chip";
     button.classList.add(String(item.threat_level || "info").toLowerCase());
     button.append(
-      text("time", formatTime(item.alert_time)),
+      timeValue(item.alert_time),
       threat(item.threat_level),
       text("strong", alertComposition(item), "host-alert-label"),
       text("span", `${compact(item.evidence_count)} evidence`, "count-chip"),
@@ -8114,7 +8184,7 @@ async function loadHostEvidence() {
     (search ? " matching search" : "");
   const groupedRows = groupHostPageRows("evidence", payload.items);
   renderTable("host-evidence-table", groupedRows, [
-    (row) => formatTime(row.timestamp),
+    (row) => timeValue(row.timestamp, formatTime),
     (row) => threat(row.threat_level),
     (row) => evidenceTypeCell(row),
     (row) => reportingPeers(row),
@@ -8262,7 +8332,7 @@ function renderHostFlows() {
     ports: transportFields(row),
   }))));
   renderTable("host-flows-table", rows, [
-    (row) => formatTime(row.event_time),
+    (row) => timeValue(row.event_time, formatTime),
     (row) => text("span", row.direction, `status ${row.direction === "inbound" ? "ok" : "warn"}`),
     (row) => hostIdentity(row.peer),
     (row) => row.protocol,
@@ -8718,7 +8788,7 @@ async function loadArchiveCatalog() {
   select.replaceChildren(new Option("Active detection history", ""));
   (payload.items || []).forEach((item) => {
     const option = new Option(archiveChoiceLabel(item), item.id);
-    option.title = `${item.id} · ${formatBytes(item.size_bytes)} · dates in your local timezone`;
+    option.title = `${item.id} · ${formatBytes(item.size_bytes)}\nFrom ${timeTitle(item.start_time) || "unknown"}\nTo ${timeTitle(item.end_time) || "unknown"}`;
     select.add(option);
   });
   byId("history-source-label").hidden = !payload.items?.length;
@@ -8732,7 +8802,7 @@ async function loadArchiveCatalog() {
   const storage = byId("history-storage-status");
   storage.replaceChildren();
   [["Monthly archives", `${payload.items?.length || 0} · ${formatBytes(payload.archive_size_bytes)}`],
-    ["Last maintenance pass", status.last_run ? formatTime(status.last_run) : "Waiting for the next pass"],
+    ["Last maintenance pass", status.last_run ? timeValue(status.last_run) : "Waiting for the next pass"],
     ["History maintenance", status.disk_pressure ? "Paused: low disk space" : status.pending_hours || status.pending_archives
       ? `Catching up · ${compact(status.pending_hours || 0)} hours pending · ${status.pending_archives || 0} transfers pending` : "Up to date"]]
     .forEach(([label, value]) => storage.append(detailRow(label, value)));

@@ -4650,3 +4650,93 @@ def test_seven_day_network_history_and_group_counts_in_browser(
             assert not errors, errors
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("timezone,offset,clock", [
+    ("Europe/Prague", "GMT+02:00", "09:08:09"),
+    ("America/New_York", "GMT-04:00", "03:08:09"),
+])
+def test_timestamp_hover_exposes_original_date_across_views(
+    timezone: str, offset: str, clock: str,
+) -> None:
+    """Expose dates for compact clocks without inventing dates for relative captures.
+
+    Parameters:
+        timezone: Browser timezone used to interpret event timestamps.
+        offset: Expected event-time UTC offset.
+        clock: Expected compact local clock for the old observation.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors = []
+
+    def respond(route: Any) -> None:
+        """Serve the real UI without contacting the active capture.
+
+        Parameters:
+            route: Request to fulfill with local assets or an isolated response.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated timestamp fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(locale="en-GB", timezone_id=timezone)
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof timeValue === 'function'")
+            result = page.evaluate("""() => {
+              clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+              const stamp=Date.parse('2026-10-20T07:08:09Z')/1000;
+              const record={id:'old-finding',profile_ip:'192.0.2.1',timestamp:stamp,
+                evidence_type:'UNKNOWN_PORT',module:'conn_analyzer',threat_level:'medium',alert_ids:[]};
+              state.activeTab='evidence';
+              document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='evidence'));
+              byId('evidence-view').value='individual';state.pages.evidence.items=[record];
+              updateEvidenceViewportHeight();renderEvidenceTable({items:[record]});
+              const evidence=byId('evidence-table').querySelector('tbody time');
+              const formats=[formatShortTime,formatP2PTime,formatTime,formatAge];
+              const samples=formats.map(formatter=>{
+                const node=timeValue(stamp,formatter);document.body.append(node);
+                return {label:node.textContent,title:node.title,dateTime:node.dateTime};
+              });
+              const combined=text('p',['Observed ',timeValue(stamp),' then ',timeValue(stamp+86400)]);
+              document.body.append(combined);
+              const relative=timeValue(150,formatShortTime),missing=timeValue(null),invalid=timeValue('bad');
+              const flow=flowCard({uid:'old-flow',event_time:stamp,flow:{saddr:'192.0.2.1',daddr:'192.0.2.2',proto:'tcp'}});
+              document.body.append(flow);
+              renderLineChart('cpu-chart',[{ts:stamp,cpu:1},{ts:stamp+60,cpu:2}], [{key:'cpu'}]);
+              state.lastSuccessfulRequest=new Date(stamp*1000);renderConnectionState(true);
+              return {evidence:{label:evidence.textContent,title:evidence.title,dateTime:evidence.dateTime},samples,
+                combined:[...combined.querySelectorAll('time')].map(node=>node.title),
+                relative:{label:relative.textContent,title:relative.title,dateTime:relative.dateTime},
+                missing:missing.title,invalid:invalid.title,
+                observed:flow.querySelector('.flow-metric time').title,
+                chart:byId('cpu-chart').querySelector('.chart-time-label title').textContent,
+                header:byId('updated-at').title,
+                daylight:[timeTitle(Date.parse('2026-10-25T00:30:00Z')/1000),timeTitle(Date.parse('2026-10-25T01:30:00Z')/1000)],
+                iso:timeValue('2026-10-20T07:08:09Z').title,milliseconds:timeValue(stamp*1000).title,
+                raw:text('span','2026-10-20T07:08:09Z').title};
+            }""")
+            assert result["evidence"]["label"] == clock
+            for title in [result["evidence"]["title"], result["observed"], result["chart"], result["header"], result["iso"], result["milliseconds"], result["raw"], *[sample["title"] for sample in result["samples"]]]:
+                assert "20 October 2026" in title
+                assert clock in title and offset in title
+            assert result["evidence"]["dateTime"] == "2026-10-20T07:08:09.000Z"
+            assert "21 October 2026" in result["combined"][1]
+            assert result["relative"]["label"] == "T+00:02:30"
+            assert "original calendar date unavailable" in result["relative"]["title"]
+            assert result["relative"]["dateTime"] == result["missing"] == result["invalid"] == ""
+            if timezone == "Europe/Prague":
+                assert "GMT+02:00" in result["daylight"][0]
+                assert "GMT+01:00" in result["daylight"][1]
+            page.locator("#evidence-table tbody time").hover(force=True)
+            assert not errors, errors
+        finally:
+            browser.close()
