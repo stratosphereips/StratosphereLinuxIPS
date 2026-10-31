@@ -204,6 +204,29 @@ traffic from more than one private network, so this finding alone does not
 prove an attack. The fix applies to newly analyzed flows; rerun a recording
 into a new output directory to replace previously generated duplicate results.
 
+## Device IP changes across networks
+
+During live interface capture, `conn_analyzer` learns the first valid private
+IPv4 source for each MAC separately on each network visit. Router identity,
+configured IPv4 subnets and reconnect history determine the visit. Moving from
+Home Wi-Fi to a hotspot, or returning to Home Wi-Fi, starts a new baseline when
+the new address fits that interface's configured subnets. The global MAC cache
+from other networks and previous runs is not used as evidence of a live change.
+A new detector process also learns fresh live baselines.
+
+A different IPv4 source for the same MAC later on the same visit still produces
+`DEVICE_CHANGING_IP` at medium threat and 80% confidence. DNS-only updates do not
+reset the baseline. Multiple IPv4 addresses explicitly assigned by the OS to the
+monitored interface's own MAC are accepted. Queued flows use their capture-time
+network settings, so an earlier visit cannot overwrite the current baseline.
+
+Addresses outside the new subnets and flows without usable network settings
+retain the existing check. Recorded analyses keep their existing behavior.
+All new bookkeeping stays in the connection-analyzer worker: at most 4096 MAC
+baselines, 8192 seen source associations and 64 network boundaries, evicting
+least recently used entries. No capture/profiling work or Redis keys are added.
+The change applies to future detections; existing evidence is retained.
+
 ## Bruteforcing Module
 
 The `Bruteforcing` module is responsible for SSH bruteforcing detection.

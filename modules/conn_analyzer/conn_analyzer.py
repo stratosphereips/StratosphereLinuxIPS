@@ -42,6 +42,9 @@ class ConnAnalyzer(IAsyncModule):
         "exfiltration, connections without DNS resolution, etc."
     )
     authors = ["Kamila Babayeva", "Sebastian Garcia", "Alya Gomaa"]
+    DEVICE_IP_BASELINE_LIMIT = 4096
+    DEVICE_IP_SEEN_LIMIT = 8192
+    DEVICE_NETWORK_LIMIT = 64
 
     def init(self):
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
@@ -68,6 +71,13 @@ class ConnAnalyzer(IAsyncModule):
         self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
         self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
         self.ssl_recognized_flows_lock = Lock()
+        self.device_ip_baselines: OrderedDict[tuple, tuple[float, str]] = (
+            OrderedDict()
+        )
+        self.device_ip_seen: OrderedDict[tuple, None] = OrderedDict()
+        self.device_network_boundaries: OrderedDict[tuple, float] = (
+            OrderedDict()
+        )
         self.working_dns_servers: OrderedDict[tuple[str, str], float] = (
             OrderedDict()
         )
@@ -609,6 +619,144 @@ class ConnAnalyzer(IAsyncModule):
         # its ok to change ips from a link local ip to another private ip
         return ip in SPECIAL_IPV4 or ipaddress.ip_address(ip).is_link_local
 
+    @staticmethod
+    def _device_network_identity(
+        state: dict[str, Any],
+    ) -> tuple[str, tuple[str, ...]] | None:
+        """Identify an interface network using its router and IPv4 subnets.
+
+        Parameters:
+            state: Interface settings captured with the flow.
+
+        Returns:
+            Router and subnet identity, or None without usable settings.
+        """
+        router = str(
+            state.get("gateway_mac") or state.get("gateway_ip") or ""
+        ).lower()
+        cidrs = [state.get("local_network", "")]
+        cidrs.extend(
+            item.get("network", "")
+            for item in state.get("addresses", [])
+            if isinstance(item, dict)
+        )
+        networks = set()
+        for cidr in cidrs:
+            try:
+                network = ipaddress.ip_network(cidr, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if (
+                isinstance(network, ipaddress.IPv4Network)
+                and network.prefixlen >= 8
+            ):
+                networks.add(str(network))
+        return (
+            (router, tuple(sorted(networks))) if router and networks else None
+        )
+
+    def _live_device_ip_change(self, flow: Any) -> tuple[bool, str]:
+        """Compare IPv4 ownership only within the flow's live network visit.
+
+        Parameters:
+            flow: Private IPv4 source and its Ethernet address.
+
+        Returns:
+            Whether live context handled the flow and the conflicting prior IP.
+        """
+        settings = self.db.get_network_state(flow.interface)
+        if not isinstance(settings, dict):
+            return False, ""
+        state = network_state_for_flow(self.db, flow, settings)
+        if not state:
+            return False, ""
+        if state.get("connected") is False:
+            return True, ""
+        identity = self._device_network_identity(state)
+        if not identity:
+            return False, ""
+        address = ipaddress.ip_address(flow.saddr)
+        networks = [ipaddress.ip_network(cidr) for cidr in identity[1]]
+        if not any(
+            address in network
+            and (
+                network.prefixlen >= 31
+                or address
+                not in {network.network_address, network.broadcast_address}
+            )
+            for network in networks
+        ):
+            return False, ""
+        if flow.smac.lower() == str(
+            state.get("gateway_mac") or ""
+        ).lower() or flow.saddr == state.get("gateway_ip"):
+            return True, ""
+        try:
+            stamp = float(flow.starttime)
+        except (AttributeError, TypeError, ValueError):
+            return False, ""
+        if not math.isfinite(stamp):
+            return False, ""
+        boundary = 0.0
+        history = settings.get("history", [])
+        for previous in history[-10:] if isinstance(history, list) else []:
+            if not isinstance(previous, dict):
+                continue
+            try:
+                changed = float(previous.get("changed_at", 0))
+            except (TypeError, ValueError):
+                continue
+            if (
+                math.isfinite(changed)
+                and changed <= stamp
+                and (
+                    previous.get("connected") is False
+                    or self._device_network_identity(previous) != identity
+                )
+            ):
+                boundary = max(boundary, changed)
+        network_key = (flow.interface, *identity)
+        saved_boundary = self.device_network_boundaries.get(network_key, 0.0)
+        if saved_boundary <= stamp:
+            boundary = max(boundary, saved_boundary)
+        if boundary >= saved_boundary:
+            self.device_network_boundaries[network_key] = boundary
+            self.device_network_boundaries.move_to_end(network_key)
+            if len(self.device_network_boundaries) > self.DEVICE_NETWORK_LIMIT:
+                self.device_network_boundaries.popitem(last=False)
+        key = (*network_key, boundary, flow.smac.lower())
+        baseline = self.device_ip_baselines.get(key)
+        if baseline:
+            self.device_ip_baselines.move_to_end(key)
+        if baseline and stamp < baseline[0]:
+            self.device_ip_baselines[key] = (stamp, flow.saddr)
+            self.device_ip_baselines.move_to_end(key)
+            return True, ""
+        seen_key = (*key, flow.saddr)
+        if seen_key in self.device_ip_seen:
+            self.device_ip_seen.move_to_end(seen_key)
+            return True, ""
+        self.device_ip_seen[seen_key] = None
+        if len(self.device_ip_seen) > self.DEVICE_IP_SEEN_LIMIT:
+            self.device_ip_seen.popitem(last=False)
+        previous_ip = baseline[1] if baseline else ""
+        if not previous_ip:
+            self.device_ip_baselines[key] = (stamp, flow.saddr)
+        self.device_ip_baselines.move_to_end(key)
+        if len(self.device_ip_baselines) > self.DEVICE_IP_BASELINE_LIMIT:
+            self.device_ip_baselines.popitem(last=False)
+        assigned = {
+            item.get("ip")
+            for item in state.get("addresses", [])
+            if isinstance(item, dict)
+        }
+        if (
+            flow.smac.lower() == str(state.get("mac") or "").lower()
+            and {previous_ip, flow.saddr} <= assigned
+        ):
+            return True, ""
+        return True, previous_ip if previous_ip != flow.saddr else ""
+
     def check_device_changing_ips(self, twid: str, flow: Any) -> None:
         """Check whether a new private source uses another private host's MAC.
 
@@ -633,6 +781,13 @@ class ConnAnalyzer(IAsyncModule):
 
         if self._is_it_ok_for_ip_to_change(flow.saddr):
             return
+
+        if self.input_type == InputType.INTERFACE:
+            handled, old_ip = self._live_device_ip_change(flow)
+            if handled:
+                if old_ip:
+                    self.set_evidence.device_changing_ips(twid, flow, old_ip)
+                return
 
         if self.db.was_ip_seen_in_connlog_before(flow.saddr):
             return

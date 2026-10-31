@@ -2333,3 +2333,142 @@ def test_scanner_keeps_established_unknown_service(proto: str, state: str, histo
         assert evidence.victim.value == "212.129.49.59"
         assert str(evidence.dst_port) == "9001"
         assert evidence.uid == [flow.uid]
+
+
+@pytest.mark.parametrize("guest_subnet,guest_ip,guest_router", [
+    ("172.20.10.0/28", "172.20.10.2", "00:11:22:33:44:66"),
+    ("192.168.1.0/24", "192.168.1.24", "00:11:22:33:44:66"),
+    ("10.0.0.0/24", "10.0.0.7", "00:11:22:33:44:55"),
+])
+def test_device_ip_change_separates_network_visits(
+    guest_subnet: str, guest_ip: str, guest_router: str,
+) -> None:
+    """Roaming and returning establish new baselines; same-visit conflicts remain.
+
+    Parameters:
+        guest_subnet: New interface subnet, including overlapping private ranges.
+        guest_ip: Valid device address assigned on the new network.
+        guest_router: Router MAC distinguishing overlapping networks.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    conn.db.was_ip_seen_in_connlog_before.return_value = True
+    conn.db.get_ip_of_mac.return_value = json.dumps(["192.168.1.131"])
+    home = {"changed_at": 100, "connected": True, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24"}
+    guest = {"changed_at": 200, "connected": True, "gateway_mac": guest_router, "local_network": guest_subnet}
+    back = {**home, "changed_at": 300}
+    for state, previous, source in [(home, [], "192.168.1.131"), (guest, [home], guest_ip), (back, [home, guest], "192.168.1.100")]:
+        conn.db.get_network_state.return_value = {**state, "history": previous}
+        flow = SimpleNamespace(type_="conn", saddr=source, smac="50:ed:3c:39:bc:d9", interface="en0", starttime=state["changed_at"]+1)
+        conn.check_device_changing_ips("timewindow1", flow)
+    conn.set_evidence.device_changing_ips.assert_not_called()
+    # A pruned transition history must not revert to the previous Home visit.
+    conn.db.get_network_state.return_value = {**back, "changed_at": 400, "history": []}
+    conflicting = SimpleNamespace(type_="conn", saddr="192.168.1.101", smac=flow.smac, interface="en0", starttime=401)
+    conn.check_device_changing_ips("timewindow1", conflicting)
+    conn.check_device_changing_ips("timewindow1", conflicting)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", conflicting, "192.168.1.100")
+    conn.db.get_ip_of_mac.assert_not_called()
+    conn.db.was_ip_seen_in_connlog_before.assert_not_called()
+
+
+def test_device_ip_change_uses_old_visit_for_delayed_flows() -> None:
+    """An old queued flow cannot change the active network's MAC baseline."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    home = {"changed_at": 100, "connected": True, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24"}
+    guest = {"changed_at": 200, "connected": True, "gateway_mac": "00:11:22:33:44:66", "local_network": "10.0.0.0/24"}
+    conn.db.get_network_state.return_value = {**home, "changed_at": 300, "history": [home, guest]}
+    old = SimpleNamespace(type_="conn", saddr="192.168.1.10", smac="50:ed:3c:39:bc:d9", interface="en0", starttime=110)
+    current = SimpleNamespace(**{**vars(old), "saddr": "192.168.1.100", "starttime": 310})
+    conn.check_device_changing_ips("timewindow1", old)
+    conn.check_device_changing_ips("timewindow1", current)
+    conn.check_device_changing_ips("timewindow1", old)
+    conflict = SimpleNamespace(**{**vars(old), "saddr": "192.168.1.101", "starttime": 320})
+    conn.check_device_changing_ips("timewindow1", conflict)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", conflict, "192.168.1.100")
+
+
+@pytest.mark.parametrize("change", ["dns", "disconnect", "assigned_alias", "other_interface"])
+def test_device_ip_change_distinguishes_network_and_address_updates(change: str) -> None:
+    """Keep DNS-only updates scoped while allowing reconnections and assigned aliases.
+
+    Parameters:
+        change: Network update or interface context between two source addresses.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    state = {"changed_at": 100, "connected": True, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24", "mac": "50:ed:3c:39:bc:d9"}
+    conn.db.get_network_state.return_value = state
+    first = SimpleNamespace(type_="conn", saddr="192.168.1.100", smac=state["mac"], interface="en0", starttime=110)
+    conn.check_device_changing_ips("timewindow1", first)
+    update = {**state, "changed_at": 200, "history": [state]}
+    if change == "dns":
+        update["dns_servers"] = ["192.168.1.1"]
+    elif change == "disconnect":
+        update["history"].append({"connected": False, "changed_at": 150})
+    elif change == "assigned_alias":
+        update["addresses"] = [{"ip": ip, "network": "192.168.1.0/24"} for ip in ["192.168.1.100", "192.168.1.101"]]
+    conn.db.get_network_state.return_value = update
+    second = SimpleNamespace(**{**vars(first), "saddr": "192.168.1.101", "starttime": 210, "interface": "en1" if change == "other_interface" else "en0"})
+    conn.check_device_changing_ips("timewindow1", second)
+    if change == "dns":
+        conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", second, first.saddr)
+    else:
+        conn.set_evidence.device_changing_ips.assert_not_called()
+
+
+@pytest.mark.parametrize("subnet,source", [("10.0.0.0/24", "192.168.1.100"), ("invalid", "192.168.1.100")])
+def test_device_ip_change_does_not_exempt_inconsistent_network_addresses(subnet: str, source: str) -> None:
+    """Unknown settings or an address outside the new subnet retain the original check.
+
+    Parameters:
+        subnet: Current network prefix, or invalid metadata.
+        source: Source that cannot be verified as an address in the new network.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    conn.db.get_network_state.return_value = {"connected": True, "changed_at": 100, "gateway_mac": "00:11:22:33:44:55", "local_network": subnet}
+    conn.db.was_ip_seen_in_connlog_before.return_value = False
+    conn.db.get_ip_of_mac.return_value = json.dumps(["192.168.1.131"])
+    flow = SimpleNamespace(type_="conn", saddr=source, smac="50:ed:3c:39:bc:d9", interface="en0", starttime=110)
+    conn.check_device_changing_ips("timewindow1", flow)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", flow, "192.168.1.131")
+
+
+def test_device_ip_change_context_is_bounded() -> None:
+    """Keep baseline, deduplication and network context bounded in the module worker."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.DEVICE_IP_BASELINE_LIMIT = 2
+    conn.DEVICE_IP_SEEN_LIMIT = 3
+    conn.DEVICE_NETWORK_LIMIT = 2
+    conn.set_evidence.device_changing_ips = Mock()
+    for index in range(10):
+        conn.db.get_network_state.return_value = {"connected": True, "changed_at": 100+index, "gateway_mac": f"00:11:22:33:44:{index:02x}", "local_network": "192.168.1.0/24"}
+        flow = SimpleNamespace(type_="conn", saddr="192.168.1.100", smac="50:ed:3c:39:bc:d9", interface="en0", starttime=200+index)
+        conn.check_device_changing_ips("timewindow1", flow)
+    assert len(conn.device_ip_baselines) <= 2
+    assert len(conn.device_ip_seen) <= 3
+    assert len(conn.device_network_boundaries) <= 2
+    conn.set_evidence.device_changing_ips.assert_not_called()
+
+
+def test_device_ip_change_does_not_accuse_older_completed_session() -> None:
+    """A long session completed late cannot be mistaken for a newly acquired IP."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    conn.db.get_network_state.return_value = {"connected": True, "changed_at": 100, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24"}
+    newer = SimpleNamespace(type_="conn", saddr="192.168.1.100", smac="50:ed:3c:39:bc:d9", interface="en0", starttime=150)
+    older = SimpleNamespace(**{**vars(newer), "saddr": "192.168.1.99", "starttime": 110})
+    conn.check_device_changing_ips("timewindow1", newer)
+    conn.check_device_changing_ips("timewindow1", older)
+    conn.set_evidence.device_changing_ips.assert_not_called()
+    conflict = SimpleNamespace(**{**vars(newer), "saddr": "192.168.1.101", "starttime": 160})
+    conn.check_device_changing_ips("timewindow1", conflict)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", conflict, "192.168.1.99")
