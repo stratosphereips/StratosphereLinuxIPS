@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Iterable
 
 from slips_files.common.slips_utils import utils
+from slips_files.common.network_context import network_state_at
 
 MAX_FACTS_PER_KIND = 200
 MAX_VALUE_LENGTH = 2048
@@ -1113,30 +1114,19 @@ class HostProfileStore:
 
     @staticmethod
     def _observation_network(
-        state: dict[str, Any], observed_at: float
+        state: dict[str, Any], observed_at: float, flow: Any = None
     ) -> dict[str, Any]:
         """Select capture settings at packet time when replaying retained flows.
 
         Parameters:
             state: Current cached interface settings and bounded history.
             observed_at: Packet observation time.
+            flow: Optional endpoints and hardware addresses for polling gaps.
 
         Returns:
             Recorded settings, or an unidentified network if history is missing.
         """
-        if observed_at >= float(state.get("changed_at") or 0):
-            return state
-        candidates = [
-            item
-            for item in state.get("history", [])
-            if isinstance(item, dict)
-            and float(item.get("changed_at") or 0) <= observed_at
-        ]
-        return max(
-            candidates,
-            key=lambda item: float(item.get("changed_at") or 0),
-            default={},
-        )
+        return network_state_at(state, observed_at, flow) or {}
 
     def _identity(
         self, ip: str, interface: str, state: dict[str, Any] | None = None
@@ -1203,6 +1193,7 @@ class HostProfileStore:
         facts: list[tuple[str, str]],
         observed_traffic: bool = False,
         from_packet: bool = False,
+        capture_state: dict[str, Any] | None = None,
     ) -> None:
         """Upsert a sighting and bounded distinct facts in one transaction.
 
@@ -1213,9 +1204,14 @@ class HostProfileStore:
             facts: Kind and value pairs learned from this observation.
             observed_traffic: Whether a parsed packet flow caused the sighting.
             from_packet: Use capture-time settings for DNS-advertised metadata.
+            capture_state: Already selected packet-time network settings.
         """
-        state = self._network_state(interface)
-        if observed_traffic or from_packet:
+        state = (
+            self._network_state(interface)
+            if capture_state is None
+            else capture_state
+        )
+        if capture_state is None and (observed_traffic or from_packet):
             state = self._observation_network(state, observed_at)
         identity = self._identity(ip, interface, state)
         if identity is None:
@@ -1418,12 +1414,12 @@ class HostProfileStore:
         source = str(getattr(flow, "saddr", "") or "")
         target = str(getattr(flow, "daddr", "") or "")
         kind = str(getattr(flow, "type_", "") or "").lower()
+        state = self._observation_network(
+            self._network_state(interface), observed_at, flow
+        )
         source_facts: list[tuple[str, str]] = []
         target_facts: list[tuple[str, str]] = []
         if kind in {"arp", "conn"}:
-            state = self._observation_network(
-                self._network_state(interface), observed_at
-            )
             if kind == "arp":
                 source_mac = str(
                     getattr(flow, "src_hw", "")
@@ -1485,6 +1481,7 @@ class HostProfileStore:
                             observed_at,
                             [("mdns_hostname", hostname)],
                             from_packet=True,
+                            capture_state=state,
                         )
             for answer in getattr(flow, "answers", []) or []:
                 if isinstance(answer, dict):
@@ -1496,12 +1493,23 @@ class HostProfileStore:
                     observed_at,
                     [] if mdns else [("dns_name", query)],
                     from_packet=True,
+                    capture_state=state,
                 )
         self._save(
-            source, interface, observed_at, source_facts, observed_traffic=True
+            source,
+            interface,
+            observed_at,
+            source_facts,
+            observed_traffic=True,
+            capture_state=state,
         )
         self._save(
-            target, interface, observed_at, target_facts, observed_traffic=True
+            target,
+            interface,
+            observed_at,
+            target_facts,
+            observed_traffic=True,
+            capture_state=state,
         )
 
     def observe_flows(self, flows: Iterable[Any]) -> None:

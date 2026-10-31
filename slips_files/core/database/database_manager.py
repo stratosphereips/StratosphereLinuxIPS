@@ -945,13 +945,17 @@ class DBManager:
                 state = (
                     self.rdb.get_network_state(interface) if interface else {}
                 )
+                observed_at = utils.convert_ts_format(
+                    evidence.timestamp, "unixtimestamp"
+                )
+                state = self.sqlite.evidence_network_state(
+                    state, observed_at, evidence.uid
+                )
                 metadata["network_id"] = HostProfileStore.network_id_for_state(
                     state if isinstance(state, dict) else {},
                     f"{self.output_dir}:{self.main_pid}",
                 )
-                metadata["observed_at"] = utils.convert_ts_format(
-                    evidence.timestamp, "unixtimestamp"
-                )
+                metadata["observed_at"] = observed_at
                 evidence.detection_provenance = metadata
         evidence_set = self.rdb.set_evidence(evidence, notify=False)
         if evidence_set:

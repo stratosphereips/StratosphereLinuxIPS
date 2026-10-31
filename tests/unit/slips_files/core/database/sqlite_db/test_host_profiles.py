@@ -13,6 +13,61 @@ from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("delayed", [False, True])
+def test_poll_gap_keeps_hotspot_hosts_on_the_hotspot(
+    tmp_path: Path, delayed: bool
+) -> None:
+    """Persist frame hardware and observations under the corroborated network.
+
+    Parameters:
+        tmp_path: Isolated host archive.
+        delayed: Whether Home Wi-Fi is already current during processing.
+    """
+    _factory = ModuleFactory()
+    home = {
+        "changed_at": 1793385000,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "d8:58:d7:1:ff:e1",
+    }
+    hotspot = {
+        "changed_at": 1793385863.053489,
+        "local_network": "172.20.10.0/28",
+        "host_ip": "172.20.10.2",
+        "mac": "12:5b:07:66:c0:22",
+        "gateway_ip": "172.20.10.1",
+        "gateway_mac": "ce:3f:36:4b:ad:64",
+    }
+    state = (
+        dict(home, changed_at=1793385953.500989, history=[home, hotspot])
+        if delayed
+        else dict(hotspot, history=[home])
+    )
+    path = tmp_path / "hosts.sqlite"
+    store = HostProfileStore(path, "roaming", lambda _: state, ["en0"])
+    store.observe_flow(
+        SimpleNamespace(
+            type_="conn",
+            interface="en0",
+            starttime=1793385861.47659,
+            saddr="172.20.10.1",
+            daddr="172.20.10.2",
+            smac="ce:3f:36:4b:ad:64",
+            dmac="12:5b:07:66:c0:22",
+        )
+    )
+    for address, mac in [
+        ("172.20.10.1", "ce:3f:36:4b:ad:64"),
+        ("172.20.10.2", "12:5b:07:66:c0:22"),
+    ]:
+        profiles = HostProfileStore.read(path, address)
+        assert len(profiles) == 1
+        assert profiles[0]["network_id"] == "gateway:ce:3f:36:4b:ad:64"
+        assert any(
+            fact["kind"] == "mac" and fact["value"] == mac
+            for fact in profiles[0]["facts"]
+        )
+
+
 @pytest.mark.parametrize("known_network", [False, True])
 def test_arp_name_follows_mac_and_does_not_follow_a_reused_ip(
     tmp_path: Path, known_network: bool

@@ -452,3 +452,175 @@ def test_host_threat_updates_follow_the_source_and_destination_profiles() -> (
         call.args[0] for call in manager.sqlite.add_evidence.call_args_list
     ]
     assert [item.profile.ip for item in stored] == ["10.0.2.2", "10.0.2.15"]
+
+
+@pytest.mark.parametrize("delayed", [False, True])
+@pytest.mark.parametrize("matching_mac", [False, True])
+@pytest.mark.parametrize("analyzer", ["conn", "dns"])
+def test_roaming_poll_gap_does_not_create_a_different_localnet_finding(
+    delayed: bool,
+    matching_mac: bool,
+    analyzer: str,
+) -> None:
+    """Reproduce the hotspot frame captured 1.6 seconds before its settings.
+
+    Parameters:
+        delayed: Whether processing happens after reconnecting to Home Wi-Fi.
+        matching_mac: Whether packet hardware addresses prove hotspot context.
+        analyzer: Worker invoking the shared subnet detector.
+    """
+    factory = ModuleFactory()
+    module = (
+        factory.create_conn_analyzer_obj()
+        if analyzer == "conn"
+        else factory.create_dns_analyzer_obj()
+    )
+    home = {
+        "changed_at": 1793385000,
+        "local_network": "192.168.1.0/24",
+        "host_ip": "192.168.1.100",
+        "mac": "50:ed:3c:39:bc:d9",
+    }
+    hotspot = {
+        "changed_at": 1793385863.053489,
+        "local_network": "172.20.10.0/28",
+        "host_ip": "172.20.10.2",
+        "mac": "12:5b:07:66:c0:22",
+        "gateway_ip": "172.20.10.1",
+        "gateway_mac": "ce:3f:36:4b:ad:64",
+    }
+    module.db.get_network_state.return_value = (
+        dict(home, changed_at=1793385953.500989, history=[home, hotspot])
+        if delayed
+        else dict(hotspot, history=[home])
+    )
+    module.db.is_official_dns_server.return_value = False
+    flow = SimpleNamespace(
+        saddr="172.20.10.1",
+        daddr="172.20.10.2",
+        proto="udp" if analyzer == "dns" else "tcp",
+        sport=59357,
+        dport=53 if analyzer == "dns" else 57059,
+        interface="en0",
+        starttime=1793385861.47659,
+        uid="CJafrb3AGdGjJpO91f",
+        smac="ce:3f:36:4b:ad:64" if matching_mac else "",
+        dmac="12:5b:07:66:c0:22" if matching_mac else "",
+    )
+
+    module.check_different_localnet_usage("timewindow1", flow)
+
+    if matching_mac:
+        module.db.set_evidence.assert_not_called()
+    else:
+        findings = [
+            call.args[0] for call in module.db.set_evidence.call_args_list
+        ]
+        assert [item.threat_level for item in findings] == [
+            ThreatLevel.HIGH,
+            ThreatLevel.INFO,
+        ]
+        assert all("192.168.1.0/24" in item.description for item in findings)
+    module.db.get_local_network.assert_not_called()
+
+
+@pytest.mark.parametrize("known_history", [False, True])
+def test_evidence_provenance_uses_capture_network(known_history: bool) -> None:
+    """Attribute delayed evidence without using the processing-time network.
+
+    Parameters:
+        known_history: Whether capture-time settings are still retained.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_conn_analyzer_set_evidence_helper()
+    helper.different_localnet_usage(
+        "timewindow1",
+        SimpleNamespace(
+            saddr="10.0.2.2",
+            daddr="10.0.2.15",
+            proto="tcp",
+            sport=40000,
+            dport=80,
+            interface="en0",
+            starttime=150,
+            uid="queued-subnet-flow",
+        ),
+        "both",
+        "192.168.0.0/16",
+    )
+    evidence = helper.db.set_evidence.call_args_list[0].args[0]
+    manager = SimpleNamespace(
+        rdb=Mock(),
+        sqlite=Mock(),
+        conf=Mock(),
+        trust_db=Mock(),
+        output_dir="output/unit-subnet-provenance",
+        main_pid=os.getpid(),
+        source_module=Modules.CONN_ANALYZER.value,
+        _get_evidence_interface=Mock(return_value="en0"),
+        update_threat_level=Mock(),
+    )
+    manager.conf.disabled_detections.return_value = []
+    manager.sqlite.is_evidence_whitelisted.return_value = False
+    manager.rdb.set_evidence.return_value = True
+    manager.rdb.get_network_state.return_value = {
+        "changed_at": 300,
+        "gateway_mac": "ce:3f:36:4b:ad:64",
+        "history": (
+            [{"changed_at": 100, "gateway_mac": "d8:58:d7:1:ff:e1"}]
+            if known_history
+            else []
+        ),
+    }
+    manager.sqlite.evidence_network_state.side_effect = (
+        lambda state, observed_at, uids: SQLiteDB.evidence_network_state(
+            manager.sqlite, state, observed_at, uids
+        )
+    )
+
+    assert DBManager.set_evidence(manager, evidence) is True
+
+    assert evidence.detection_provenance["network_id"] == (
+        "gateway:d8:58:d7:1:ff:e1"
+        if known_history
+        else f"run:{manager.output_dir}:{manager.main_pid}"
+    )
+    assert evidence.detection_provenance["observed_at"] == 150
+    manager.rdb.get_network_state.assert_called_once_with("en0")
+
+
+def test_roaming_does_not_exempt_connections_outside_the_new_subnet() -> None:
+    """Keep a real outside-subnet finding even during a proven network change."""
+    factory = ModuleFactory()
+    module = factory.create_conn_analyzer_obj()
+    module.db.get_network_state.return_value = {
+        "changed_at": 1793385863.053489,
+        "local_network": "172.20.10.0/28",
+        "host_ip": "172.20.10.2",
+        "mac": "12:5b:07:66:c0:22",
+        "history": [
+            {"changed_at": 1793385000, "local_network": "192.168.1.0/24"}
+        ],
+    }
+    module.db.is_official_dns_server.return_value = False
+    flow = SimpleNamespace(
+        saddr="172.20.10.2",
+        daddr="10.1.2.3",
+        smac="12:5b:07:66:c0:22",
+        dmac="ce:3f:36:4b:ad:64",
+        proto="tcp",
+        sport=59357,
+        dport=57059,
+        interface="en0",
+        starttime=1793385861.47659,
+        uid="outside-hotspot",
+    )
+
+    module.check_different_localnet_usage("timewindow1", flow)
+
+    findings = [call.args[0] for call in module.db.set_evidence.call_args_list]
+    assert len(findings) == 2
+    assert all(
+        "private destination address" in item.description for item in findings
+    )
+    assert all("172.20.10.0/28" in item.description for item in findings)

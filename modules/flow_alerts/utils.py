@@ -5,6 +5,7 @@ import ipaddress
 from datetime import datetime
 
 from slips_files.common.ips import SPECIAL_IPV4_ADDRESSES
+from slips_files.common.network_context import network_state_at
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.structures.evidence import (
@@ -44,16 +45,7 @@ def network_state_for_flow(
         timestamp = float(flow.starttime)
     except (AttributeError, TypeError, ValueError):
         return state
-    matching = [
-        item
-        for item in [*state.get("history", []), state]
-        if float(item.get("changed_at", 0)) <= timestamp
-    ]
-    return (
-        max(matching, key=lambda item: item["changed_at"])
-        if matching
-        else None
-    )
+    return network_state_at(state, timestamp, flow)
 
 
 def get_ip_to_check(flow: Any, what_to_check: str) -> str:

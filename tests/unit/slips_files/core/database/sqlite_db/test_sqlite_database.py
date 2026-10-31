@@ -25,6 +25,84 @@ def db(tmp_path):
     return SQLiteDB(logger, str(tmp_path), 12345)
 
 
+@pytest.mark.parametrize(
+    "packet", ["matching", "wrong-mac", "older", "missing", "malformed"]
+)
+def test_evidence_poll_gap_reads_one_linked_frame(
+    tmp_path: Path, packet: str
+) -> None:
+    """Attribute queued evidence with packet IP/MAC proof and bounded reads.
+
+    Parameters:
+        tmp_path: Isolated flow database.
+        packet: Stored frame variant or an unavailable primary flow.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    home = {
+        "changed_at": 1793385000,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": "d8:58:d7:1:ff:e1",
+    }
+    hotspot = {
+        "changed_at": 1793385863.053489,
+        "local_network": "172.20.10.0/28",
+        "host_ip": "172.20.10.2",
+        "mac": "12:5b:07:66:c0:22",
+        "gateway_ip": "172.20.10.1",
+        "gateway_mac": "ce:3f:36:4b:ad:64",
+    }
+    state = dict(home, changed_at=1793385953.500989, history=[home, hotspot])
+    observed_at = 1793385861.47659
+    flow = {
+        "starttime": observed_at if packet != "older" else observed_at - 60,
+        "saddr": "172.20.10.1",
+        "daddr": "172.20.10.2",
+        "smac": "ce:3f:36:4b:ad:64" if packet != "wrong-mac" else "",
+        "dmac": "12:5b:07:66:c0:22" if packet != "wrong-mac" else "",
+    }
+    if packet != "missing":
+        database.execute(
+            "INSERT INTO flows(uid,flow) VALUES (?,?)",
+            ("roaming", json.dumps(flow) if packet != "malformed" else "{"),
+        )
+    with patch.object(database, "get_flow", wraps=database.get_flow) as lookup:
+        chosen = database.evidence_network_state(
+            state, observed_at, ["roaming", "unread"]
+        )
+        assert chosen is (hotspot if packet == "matching" else home)
+        lookup.assert_called_once_with("roaming")
+    database.close()
+
+
+@pytest.mark.parametrize(
+    "observed_at, uids", [(1793385900, ["unread"]), (1793385861.47659, [])]
+)
+def test_evidence_outside_poll_gap_needs_no_flow_lookup(
+    tmp_path: Path,
+    observed_at: float,
+    uids: list[str],
+) -> None:
+    """Avoid extra database work for ordinary evidence and missing links.
+
+    Parameters:
+        tmp_path: Isolated flow database.
+        observed_at: Evidence observation timestamp.
+        uids: Available triggering flow identifiers.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    state = {
+        "changed_at": 1793385863.053489,
+        "local_network": "172.20.10.0/28",
+    }
+    with patch.object(database, "get_flow") as lookup:
+        chosen = database.evidence_network_state(state, observed_at, uids)
+        assert chosen is (state if observed_at > state["changed_at"] else None)
+        lookup.assert_not_called()
+    database.close()
+
+
 @pytest.mark.parametrize("table", ["flows", "altflows"])
 def test_profile_timewindow_lookup_avoids_retained_flow_scan(
     tmp_path: Path, table: str

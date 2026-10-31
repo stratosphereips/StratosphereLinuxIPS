@@ -9,6 +9,7 @@ import math
 import time
 import sqlite3
 from dataclasses import asdict
+from types import SimpleNamespace
 from modules.supported_module_names import Modules
 
 from slips_files.common.abstracts.isqlite import ISQLite
@@ -16,6 +17,10 @@ from slips_files.common.output_paths import get_this_db_path_inside_output_dir
 from slips_files.common.printer import Printer
 from slips_files.common.p2p_reports import evidence_display_type
 from slips_files.common.slips_utils import utils
+from slips_files.common.network_context import (
+    NETWORK_POLL_GRACE_SECONDS,
+    network_state_at,
+)
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.output import Output
@@ -540,6 +545,39 @@ class SQLiteDB(ISQLite):
         res = self.select("flows", condition=condition, params=tuple(params))
         res = res[0][1] if res else {}
         return {uid: res}
+
+    def evidence_network_state(
+        self, state: dict | None, observed_at: float, uids: list[str]
+    ) -> dict | None:
+        """Resolve local evidence context, reading one frame only near a poll.
+
+        Parameters:
+            state: Interface settings loaded by the submitting module worker.
+            observed_at: Evidence observation timestamp.
+            uids: Linked connection identifiers; at most the first is read.
+
+        Returns:
+            Capture-time settings, or None if the network is unknown.
+        """
+        active = network_state_at(state, observed_at)
+        after_poll = network_state_at(
+            state, observed_at + NETWORK_POLL_GRACE_SECONDS
+        )
+        if active is after_poll or not uids:
+            return active
+        row = self.get_flow(uids[0]).get(uids[0])
+        try:
+            flow = json.loads(row) if isinstance(row, str) else row
+            if not isinstance(flow, dict) or not math.isclose(
+                float(flow.get("starttime", -1)),
+                observed_at,
+                rel_tol=0,
+                abs_tol=0.001,
+            ):
+                return active
+        except (TypeError, ValueError):
+            return active
+        return network_state_at(state, observed_at, SimpleNamespace(**flow))
 
     @staticmethod
     def _flow_event_time(flow) -> float:

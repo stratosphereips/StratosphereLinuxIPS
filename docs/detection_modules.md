@@ -197,7 +197,19 @@ Descriptions distinguish initiating a connection from receiving it. The stored
 source and destination directions are also preserved for scoring and exports.
 
 For live capture, the comparison and its description use the subnet that was
-active at the flow's capture time. For recorded input, Slips uses a private
+active at the flow's capture time. Settings are polled, so the first packets
+after a network change can precede its recorded settings by a few seconds.
+Within a maximum 10-second gap, Slips accepts the following settings only when
+the packet's IP/MAC pairs match the interface's assigned address or the new
+gateway (with its other endpoint inside the new subnet). Matching private
+address ranges alone does not bypass the detection. A packet matching the
+previous interface settings stays on that network. The same selection applies
+to device-IP changes and persistent host observations. Delayed evidence uses
+its observation time for network attribution, rather than processing time.
+This work runs in module workers with at most ten recent snapshots; it adds no
+capture/profiling lookups, network polling, or Redis keys.
+
+For recorded input, Slips uses a private
 network from `parameters.client_ips`, when configured; otherwise it learns a
 private range from the first eligible source address. A recording can contain
 traffic from more than one private network, so this finding alone does not
