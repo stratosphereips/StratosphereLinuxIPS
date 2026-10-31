@@ -53,6 +53,8 @@ def test_kill_skips_web_launcher_with_deferred_status() -> None:
     process_manager.main.conf.web_interface_port = 55000
     process_manager.web_interface_shutdown = False
     web_launcher = Mock(pid=1234)
+    web_launcher.name = Modules.WEB_INTERFACE.value
+    web_launcher.is_alive.return_value = False
     process_manager.children = [web_launcher]
     process_manager.deferred_stopped_modules = {Modules.WEB_INTERFACE.value}
     process_manager.main.db.get_name_of_module_at.return_value = (
@@ -107,6 +109,10 @@ def test_ask_user_to_stop_web_interface(
         result = process_manager._ask_user_to_stop_web_interface()
 
     assert result is expected_stop
+    process_manager.main.print.assert_any_call(
+        "Slips analysis has stopped. Stop the web interface? [y/N]",
+        log_to_logfiles_only=True,
+    )
 
 
 def test_stop_web_interface_reports_status_after_server_stops() -> None:

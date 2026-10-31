@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from distutils.dir_util import copy_tree
 from typing import Set
 import logging
 
@@ -23,6 +22,10 @@ from managers.timewindow_manager import TimewindowManager
 from managers.ui_manager import UIManager
 from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.parsers.analysis_config import (
+    prepare_analysis_files,
+    validate_analysis_paths,
+)
 from slips_files.common.performance_paths import get_performance_plots_dir
 from slips_files.common.printer import Printer
 from slips_files.common.sqlite_flock import SQLiteFlock
@@ -37,8 +40,10 @@ from slips_files.common.style import (
 from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
+from slips_files.core.helpers.whitelist.whitelist_parser import (
+    ensure_local_whitelist,
+)
 from slips_files.core.helpers.checker import Checker
-
 
 logging.basicConfig(level=logging.WARNING)
 
@@ -72,31 +77,48 @@ class Main:
             self.args = self.conf.get_args()
             self.profilers_manager = ProfilersManager(self)
             self.pid = os.getpid()
+            if self.conf.isolated_analysis:
+                validate_analysis_paths(
+                    self.conf.source_config,
+                    self.args.output,
+                    self.args.config,
+                    self.args.filepath,
+                )
             self.checker.verify_given_flags()
+            self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
-            if not self.args.stopdaemon:
-                self.input_type: InputType
-                (
-                    self.input_type,
-                    self.input_information,
-                    self.line_type,
-                ) = self.checker.get_input_type()
-                self.checker.verify_flags_that_require_an_interface(
-                    self.input_type
+            if self.conf.enable_local_whitelist():
+                whitelist = self.conf.local_whitelist_path()
+                if self.conf.isolated_analysis:
+                    whitelist = (
+                        self.conf.source_config.get("whitelists") or {}
+                    ).get("local_whitelist_path", "config/whitelist.conf")
+                ensure_local_whitelist(whitelist)
+            self.input_type: InputType
+            (
+                self.input_type,
+                self.input_information,
+                self.line_type,
+            ) = self.checker.get_input_type()
+            self.checker.verify_flags_that_require_an_interface(
+                self.input_type
+            )
+            self.input_information = os.path.normpath(self.input_information)
+            self.input_information = self.input_information.replace(",", "_")
+            self.check_zeek_or_bro()
+            self.prepare_output_dir()
+            if self.conf.isolated_analysis:
+                prepare_analysis_files(
+                    self.conf.source_config, self.conf.config
                 )
-                self.input_information = os.path.normpath(
-                    self.input_information
+                print(
+                    f"Independent analysis data: {self.conf.permanent_dir()}"
                 )
-                self.input_information = self.input_information.replace(
-                    ",", "_"
-                )
-                self.check_zeek_or_bro()
-                self.prepare_output_dir()
-                self.redis_man.start_redis_cache_if_not_running()
-                self.twid_width = self.conf.get_tw_width()
-                # should be initialised after self.input_type is set
-                self.host_ip_man = HostIPManager(self)
-                self.ap_manager = APManager(self)
+            self.redis_man.start_redis_cache_if_not_running()
+            self.twid_width = self.conf.get_tw_width()
+            # should be initialised after self.input_type is set
+            self.host_ip_man = HostIPManager(self)
+            self.ap_manager = APManager(self)
 
     def check_zeek_or_bro(self):
         """
@@ -143,7 +165,7 @@ class Main:
                 return
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
-            copy_tree(zeek_dir, dest_zeek_dir)
+            shutil.copytree(zeek_dir, dest_zeek_dir, dirs_exist_ok=True)
             print(f"[Main] Stored a copy of zeek files to {dest_zeek_dir}")
 
     def delete_zeek_files(self):
@@ -188,6 +210,15 @@ class Main:
             # we should append to existing files in the output dir,
             # and never overwrite them.
             return
+
+        if getattr(self.args, "keep_history", False) is True:
+            if self.redis_man.validate_keep_history():
+                os.chmod(self.args.output, 0o777)
+                return
+            print(
+                f"No detection history found in {self.args.output}; "
+                "starting a fresh run."
+            )
 
         if not self.args.output:
             # the user didnt give slips an output dir to use, construct one
@@ -718,6 +749,23 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                if self.conf.enable_local_whitelist():
+                    whitelist_path = self.conf.local_whitelist_path()
+                    if not os.path.isfile(whitelist_path):
+                        try:
+                            ensure_local_whitelist(whitelist_path)
+                            self.print(
+                                "Restored missing local whitelist from its "
+                                f"recovery copy: {whitelist_path}",
+                                1,
+                                0,
+                            )
+                        except (OSError, ValueError) as error:
+                            self.print(
+                                f"Local whitelist is missing: {error}",
+                                1,
+                                1,
+                            )
                 self.proc_man.print_disabled_modules()
 
                 self.print_gw_info()
@@ -733,7 +781,12 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.host_ip_man.update_host_ip(host_ips, modified_profiles)
+                host_ips = (
+                    self.host_ip_man.update_host_ip(
+                        host_ips, modified_profiles
+                    )
+                    or {}
+                )
                 if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 

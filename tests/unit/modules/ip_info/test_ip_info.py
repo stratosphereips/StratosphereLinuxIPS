@@ -3,12 +3,14 @@
 """Unit test for modules/ip_info/ip_info.py"""
 
 import asyncio
+from queue import Queue
 
 
 from tests.module_factory import ModuleFactory
 import maxminddb
 import pytest
 from unittest.mock import (
+    ANY,
     AsyncMock,
     Mock,
     patch,
@@ -25,6 +27,52 @@ from slips_files.core.structures.evidence import (
     IoCType,
     Direction,
 )
+
+
+def test_pending_mac_queries_stay_inside_ip_info_process() -> None:
+    """Use a thread queue for MAC lookups to avoid named semaphores."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+
+    assert isinstance(ip_info.pending_mac_queries, Queue)
+
+
+def test_local_lookup_source_ips_use_current_interfaces() -> None:
+    """Discard loopback and IPv6 scope suffixes before marking WHOIS."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    with (
+        patch("modules.ip_info.ip_info.netifaces.interfaces", return_value=["en0"]),
+        patch(
+            "modules.ip_info.ip_info.netifaces.ifaddresses",
+            return_value={
+                socket.AF_INET: [
+                    {"addr": "192.0.2.10"}, {"addr": "127.0.0.1"}
+                ],
+                socket.AF_INET6: [{"addr": "2001:db8::10%en0"}],
+            },
+        ),
+    ):
+        assert ip_info._local_lookup_source_ips() == [
+            "192.0.2.10", "2001:db8::10"
+        ]
+
+
+def test_query_whois_marks_external_command_before_lookup() -> None:
+    """Suppress command-originated WHOIS flows without skipping enrichment."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.main_pid = 123
+    result = Mock()
+    with (
+        patch.object(
+            ip_info, "_local_lookup_source_ips", return_value=["192.0.2.10"]
+        ),
+        patch("modules.ip_info.ip_info.whois.query", return_value=result) as query,
+    ):
+        assert ip_info.query_whois("example.com") is result
+
+    ip_info.db.record_slips_own_service_port.assert_called_once_with(
+        123, "tcp", 43, ["192.0.2.10"]
+    )
+    query.assert_called_once_with("example.com", timeout=2.0)
 
 
 def test_start_mac_db_reader_returns_without_running_loop() -> None:
@@ -82,6 +130,24 @@ async def test_get_vendor_from_database(mocker):
     (ip_info.db.get_mac_vendor_from_profile.assert_called_once_with(profileid))
     mocker.patch.object(ip_info, "get_vendor_offline").assert_not_called()
     mocker.patch.object(ip_info, "get_vendor_online").assert_not_called()
+
+
+@pytest.mark.parametrize("mac", ["A2:D7:7B:FA:6A:55", "02:00:00:00:00:01", "52:54:00:12:34:56"])
+async def test_local_mac_classification_does_not_query_manufacturer(mac: str) -> None:
+    """Local MAC prefixes cannot identify an IEEE hardware manufacturer.
+
+    Parameters:
+        mac: Private, manually assigned or virtual interface MAC.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.get_vendor_offline = Mock()
+    ip_info.run_lookup = AsyncMock()
+    result = await ip_info.get_vendor_async(mac, "profile_192.168.1.20")
+    assert result == {"MAC": mac, "Vendor": "Unknown", "mac_address_type": "locally_administered"}
+    ip_info.db.get_mac_vendor_from_profile.assert_not_called()
+    ip_info.get_vendor_offline.assert_not_called()
+    ip_info.run_lookup.assert_not_awaited()
+    ip_info.db.set_mac_vendor_to_profile.assert_not_called()
 
 
 async def test_get_vendor_from_offline(
@@ -235,7 +301,7 @@ def test_get_rdns_valid_ip():
         mock_gethostbyaddr.assert_called_once_with(ip_address)
         mock_inet_pton.assert_called_once()
         ip_info.db.set_ip_info.assert_called_once_with(
-            ip_address, expected_rdns
+            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
         )
 
 
@@ -263,6 +329,62 @@ def test_get_rdns_negative_cache_skips_second_lookup():
         assert ip_info.get_rdns(ip_address) is False
 
         mock_gethostbyaddr.assert_called_once_with(ip_address)
+
+
+@pytest.mark.parametrize("error,status,delay", [
+    (socket.herror(1, "Unknown host"), "no_record", 86400),
+    (socket.herror(2, "Try again"), "error", 300),
+    (socket.gaierror(socket.EAI_AGAIN, "Temporary failure"), "error", 300),
+    (OSError("Resolver unavailable"), "error", 300),
+])
+def test_rdns_records_lookup_outcome(error: OSError, status: str, delay: int) -> None:
+    """Distinguish an absent reverse name from a temporary resolver failure.
+
+    Parameters:
+        error: Resolver result to simulate.
+        status: Expected stored outcome.
+        delay: Minimum time before another background attempt.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    with patch("socket.gethostbyaddr", side_effect=error), patch(
+        "modules.ip_info.ip_info.time.time", return_value=1000
+    ):
+        assert ip_info.get_rdns("8.8.8.8") is False
+    ip_info.db.set_ip_info.assert_called_once_with("8.8.8.8", {
+        "reverse_dns_lookup": {"status": status, "checked_at": 1000, "retry_after": 1000 + delay}
+    })
+
+
+def test_rdns_negative_result_survives_module_restart() -> None:
+    """Reuse saved negative results instead of repeating DNS on every run."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_ip_info.return_value = {"status": "no_record", "retry_after": 2000}
+    with patch("socket.gethostbyaddr") as lookup, patch(
+        "modules.ip_info.ip_info.time.time", return_value=1000
+    ):
+        assert ip_info.get_rdns("8.8.8.8") is False
+    lookup.assert_not_called()
+
+
+async def test_rdns_is_not_skipped_when_asn_lookup_fails() -> None:
+    """Resolve the name before an unrelated remote ASN lookup can fail."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.db.get_rdns_info.return_value = None
+    ip_info.get_rdns_async = AsyncMock()
+    ip_info.asn.get_asn_async = AsyncMock(side_effect=OSError("ASN offline"))
+    with pytest.raises(OSError):
+        await ip_info.handle_new_ip_async("8.8.8.8")
+    ip_info.get_rdns_async.assert_awaited_once_with("8.8.8.8")
+    assert ip_info.pending_ip_lookups == set()
+
+
+async def test_duplicate_ip_enrichment_is_coalesced() -> None:
+    """Keep repeated source and destination requests to one active lookup."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.pending_ip_lookups.add("8.8.8.8")
+    ip_info.get_rdns_async = AsyncMock()
+    await ip_info.handle_new_ip_async("8.8.8.8")
+    ip_info.get_rdns_async.assert_not_awaited()
 
 
 def test_get_rdns_no_reverse_dns():
@@ -305,7 +427,7 @@ def test_get_rdns_localhost():
         mock_gethostbyaddr.assert_called_once_with(ip_address)
         mock_inet_pton.assert_called_once()
         ip_info.db.set_ip_info.assert_called_once_with(
-            ip_address, expected_rdns
+            ip_address, {**expected_rdns, "reverse_dns_lookup": ANY}
         )
 
 
@@ -436,6 +558,30 @@ async def tmp_function():
     await asyncio.sleep(1)
 
 
+async def test_shutdown_cancels_mac_database_retry_and_drains_lookups() -> None:
+    """Do not wait for optional MAC data after all flows are processed."""
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.channels = {}
+    ip_info.shutdown_gracefully = AsyncMock()
+    reader = ip_info.create_task(asyncio.sleep, 600)
+    ip_info.reading_mac_db_task = reader
+    completed: list[bool] = []
+
+    async def finish_lookup() -> None:
+        """Mark a required lookup as finished."""
+        completed.append(True)
+
+    ip_info.create_task(finish_lookup)
+
+    await asyncio.wait_for(
+        ip_info.gather_tasks_and_shutdown_gracefully(), timeout=1
+    )
+
+    assert reader.cancelled()
+    assert completed == [True]
+    ip_info.shutdown_gracefully.assert_awaited_once()
+
+
 async def test_shutdown_gracefully(
     mocker,
 ):
@@ -504,6 +650,30 @@ def test_get_gateway_ip_if_interface_args_interface(
         "slips_files.common.slips_utils.Utils.get_gateway_for_iface",
         return_value=gw_return,
     )
+
+
+@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
+def test_gateway_discovery_skips_invalid_addresses(
+    mocker, gateway: str | None
+) -> None:
+    """Ignore interfaces for which the OS reports no valid gateway.
+
+    Parameters:
+        mocker: Pytest mock fixture.
+        gateway: Missing or malformed gateway returned by the OS.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.is_running_non_stop = True
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.get_all_interfaces",
+        return_value=["en0"],
+    )
+    mocker.patch(
+        "modules.ip_info.ip_info.utils.get_gateway_for_iface",
+        return_value=gateway,
+    )
+
+    assert ip_info.get_gateway_ip_if_interface() == {}
 
 
 # def test_get_gateway_ip_if_interface_args_access_point():
@@ -692,6 +862,23 @@ def test_mac_found_in_db_or_not(ip_info, gw_ips, mac_in_db, expected):
     result = ip_info.get_gateway_mac(gw_ips)
 
     assert result == expected
+
+
+@pytest.mark.parametrize("gateway", [None, "not-an-ip"])
+def test_gateway_mac_skips_invalid_addresses(gateway: str | None) -> None:
+    """Do not query gateway data or OS neighbor tools for invalid addresses.
+
+    Parameters:
+        gateway: Missing or malformed gateway value.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info._get_mac_using_ip_neigh = Mock()
+    ip_info._get_mac_using_arp_cache = Mock()
+
+    assert ip_info.get_gateway_mac({"en0": gateway}) is None
+    ip_info.db.get_mac_addr_from_profile.assert_not_called()
+    ip_info._get_mac_using_ip_neigh.assert_not_called()
+    ip_info._get_mac_using_arp_cache.assert_not_called()
 
 
 def test_non_stop_false_skips_mac_lookup():

@@ -1,18 +1,33 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import errno
+import ipaddress
 import os
 import shutil
 import signal
+import socket
+import sqlite3
 import subprocess
+import netifaces
+import psutil
 import time
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional
 import json
-import socket
+import base64
+import hashlib
+
+from modules.p2p_trust.catchup import (
+    Catchup,
+    CatchupSettings,
+    CatchupStore,
+    message_summary,
+    network_scope,
+)
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.common.style import green
+from slips_files.common.mac import normalize_mac, classify_mac
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
@@ -21,6 +36,13 @@ from slips_files.core.database.redis_db.redis_auth import (
 )
 import modules.p2p_trust.trust.base_model as reputation_model
 import modules.p2p_trust.utils.utils as p2p_utils
+from modules.p2p_trust.trust.report_validation import (
+    ReportValidator,
+    observation_record,
+    local_reputation_half_life,
+)
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+from modules.supported_module_names import Modules
 from modules.p2p_trust.utils.go_director import GoDirector
 from slips_files.core.structures.evidence import (
     dict_to_evidence,
@@ -62,9 +84,7 @@ def validate_slips_data(message_data: str) -> (str, int):
         message_data = json.loads(message_data)
         ip_address = message_data.get("ip")
         # time_since_cached = int(message_data.get('cache_age', 0))
-        return (
-            message_data if p2p_utils.validate_ip_address(ip_address) else None
-        )
+        return message_data if p2p_utils.is_unicast_ip(ip_address) else None
     except ValueError:
         # message has wrong format
         print(
@@ -95,6 +115,13 @@ class Trust(IModule):
     # levels.
     blame_threshold = 0.5
     start_pigeon = True
+    active_p2p_connection_ttl = 300
+    p2p_connection_heartbeat_interval = 60
+    pigeon_socket_scan_interval = 5
+    local_ip_check_interval = 5
+    max_bootstrap_peers = 50
+    report_min_interval = 300
+    report_cache_limit = 4096
     # or make sure the binary is in $PATH
     pigeon_binary_dir = Path.cwd() / "p2p4slips"
     pigeon_binary = pigeon_binary_dir / "p2p4slips"
@@ -104,6 +131,7 @@ class Trust(IModule):
 
     def init(self, *args, **kwargs):
         self.read_configuration()
+        self.db.clear_peer_trust()
         # pigeon generate keys and stores them in the following dir, if this
         # is placed in the <output> dir,
         # when restarting slips, it will look for the old keys in the new
@@ -115,6 +143,7 @@ class Trust(IModule):
 
         self.port = self.p2p_listen_port
         self.host = self.get_local_IP()
+        self.last_local_ip_check = time.monotonic()
         str_port = str(self.port) if self.rename_with_port else ""
 
         self.gopy_channel = self.gopy_channel_raw + str_port
@@ -142,6 +171,11 @@ class Trust(IModule):
         self.mutliaddress_printed = False
         self.last_log_rotation_time = time.time()
         self.rotation_period = 86400  # 1 day in seconds
+        self.last_report_compaction_time = 0
+        self.report_compaction_interval = 5
+        self.report_compaction_batch_size = 1000
+        self.last_sent_evidence_reports: dict[tuple[str, float], float] = {}
+        self.last_p2p_connection_heartbeat_time = 0
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("report_to_peers")
@@ -150,10 +184,12 @@ class Trust(IModule):
         self.c2 = self.db.subscribe(self.p2p_data_request_channel)
         # this channel receives peers requests/updates
         self.c3 = self.db.subscribe(self.gopy_channel)
+        self.c_alert = self.db.subscribe("new_alert")
         self.channels = {
             "report_to_peers": self.c1,
             self.p2p_data_request_channel: self.c2,
             self.gopy_channel: self.c3,
+            "new_alert": self.c_alert,
         }
 
     def _init_log_files(self):
@@ -176,18 +212,79 @@ class Trust(IModule):
         conf = ConfigParser()
         self.create_p2p_logfile: bool = conf.create_p2p_logfile()
         self.p2p_listen_port: int = conf.p2p_listen_port()
+        self.local_reputation_half_life = local_reputation_half_life(
+            conf.read_configuration(
+                "local_p2p", "local_reputation_half_life_hours", 24
+            )
+        )
+        self.rendezvous: str = conf.read_configuration(
+            "local_p2p", "rendezvous", "slips"
+        )
 
-    def get_local_IP(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
+    def get_local_IP(self) -> str:
+        """Return the capture interface's IPv4 address without Internet access.
+
+        Returns:
+            IPv4 address on the selected interface or default-route interface.
+        """
+        interface = self.args.interface
+        if not interface:
+            gateway = (
+                netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+            )
+            interface = gateway[1] if gateway else None
+        if interface:
+            for address in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                if address.get("addr"):
+                    return address["addr"]
+        raise ValueError(
+            "Local P2P requires an interface with an IPv4 address."
+        )
 
     def _configure(self):
         self.trust_db = self.db.trust_db
+        settings = CatchupSettings.from_config(
+            ConfigParser().read_configuration("local_p2p", "catch_up", {})
+        )
+        catchup_config = ConfigParser().read_configuration(
+            "local_p2p", "catch_up", {}
+        )
+        self.catchup_protection = (
+            catchup_config.get("protection", {})
+            if isinstance(catchup_config, dict)
+            else {}
+        )
+        self.catchup = (
+            Catchup(
+                CatchupStore(
+                    Path(self.db.get_p2p_trust_dir()) / "catchup.sqlite",
+                    settings,
+                ),
+                self._catchup_network_identity,
+                self._catchup_own_id,
+                self._send_catchup,
+                self._catchup_imported,
+                self._catchup_left_network,
+            )
+            if settings.enabled
+            else None
+        )
+        self.report_validation = ReportValidator(
+            Path(self.db.get_p2p_trust_dir()) / "report_validation.sqlite",
+            ConfigParser().read_configuration(
+                "local_p2p", "report_agreement", {}
+            ),
+        )
+        self.trust_db.execute("DELETE FROM opinion_cache")
         self.reputation_model = reputation_model.BaseModel(
-            self.logger, self.trust_db, self.db
+            self.logger,
+            self.trust_db,
+            self.db,
+            self.report_validation,
+            self._network_identity,
+            self.local_reputation_half_life,
         )
 
         self.go_director = GoDirector(
@@ -205,7 +302,268 @@ class Trust(IModule):
             is_slips_started_by_an_update=getattr(
                 self.args, "is_slips_started_by_an_update", False
             ),
+            report_validation=self.report_validation,
+            network_identity=self._network_identity,
+            catchup=self.catchup,
         )
+
+    def _catchup_own_id(self) -> str:
+        """Return the authenticated local Pigeon identity, or empty before startup."""
+        address = str(self.db.get_multiaddr() or "")
+        return (
+            address.rsplit("/p2p/", 1)[-1].strip()
+            if "/p2p/" in address
+            else ""
+        )
+
+    def _catchup_network_identity(self) -> str:
+        """Return the monitored router and subnet identity, or empty while disconnected."""
+        state = self.db.get_network_state(getattr(self.args, "interface", ""))
+        return network_scope(state) if isinstance(state, dict) else ""
+
+    def _send_catchup(self, peer: str, message: dict) -> None:
+        """Send a bounded directed catch-up message to peer; retain compact telemetry."""
+        payload = base64.b64encode(
+            json.dumps(message, allow_nan=False).encode()
+        ).decode()
+        self.db.publish(
+            self.pygo_channel,
+            json.dumps({"recipient": peer, "message": payload}),
+        )
+        self.db.record_p2p_message(
+            "sent",
+            {
+                **message_summary(message),
+                "peer": peer,
+            },
+        )
+
+    def _catchup_imported(self, peer: str, record: dict) -> None:
+        """Record one accepted historical delivery for P2P Graph; peer delivered record."""
+        self.db.record_p2p_message(
+            "received",
+            {
+                "message_type": "catchup",
+                "peer": peer,
+                "target": record["target"],
+                "origin_peer": record["author"],
+                "observed_at": record["last_seen"],
+                "incident": record["incident"],
+                "state": record["state"],
+                "reported_detections": [
+                    {
+                        "evidence_type": record.get("evidence_type", ""),
+                        "description": record.get("description", ""),
+                        "module": record.get("module", ""),
+                        "observed_at": record["last_seen"],
+                    }
+                ],
+            },
+        )
+        self._consider_catchup_protection(record)
+
+    def _catchup_left_network(self, network: str) -> None:
+        """Release only catch-up-owned protection from the departed network."""
+        for action in self.catchup.store.active_actions(network):
+            self.db.publish(
+                "new_blocking",
+                json.dumps(
+                    {
+                        "ip": action["target"],
+                        "block": False,
+                        "lease_owner": action["owner"],
+                    }
+                ),
+            )
+            self.catchup.store.action(
+                network,
+                action["target"],
+                action["owner"],
+                time.time(),
+                "release requested",
+            )
+
+    def _consider_catchup_protection(self, record: dict) -> None:
+        """Request an owned short firewall block for independently supported fresh record."""
+        from modules.p2p_trust.trust.report_validation import dependency_family
+
+        catchup = getattr(self, "catchup", None)
+        policy = getattr(self, "catchup_protection", {})
+        if (
+            not isinstance(catchup, Catchup)
+            or not isinstance(policy, dict)
+            or policy.get("enabled", True) is not True
+        ):
+            return
+        if not self.db.get_pid_of(Modules.BLOCKING):
+            return
+        target, network = record["target"], self._catchup_network_identity()
+        if target in utils.get_own_ips(ret="List", include_public=False):
+            return
+        state = (
+            self.db.get_network_state(getattr(self.args, "interface", ""))
+            or {}
+        )
+        if target == state.get("gateway_ip"):
+            return
+        score, confidence, provenance = self.report_validation.local_report(
+            f"{self._network_identity()}|{target}", max_age=300
+        )
+        local = bool(
+            score is not None
+            and score >= 0.8
+            and confidence >= 0.9
+            and any(
+                item.get("method") in {"SIGNATURE", "INTEGRITY", "HONEYPOT"}
+                for item in provenance
+            )
+        )
+        pinned = policy.get("peer_ids", [])
+        pinned = set(pinned[:64]) if isinstance(pinned, list) else set()
+        support = catchup.store.fresh_support(
+            network, target, None if local else sorted(pinned)
+        )
+        if ipaddress.ip_address(target).is_private:
+            mac = normalize_mac(
+                self.db.get_mac_addr_from_profile(f"profile_{target}")
+            )
+            support = [
+                item
+                for item in support
+                if classify_mac(mac)
+                in {"locally_administered", "universally_administered"}
+                and normalize_mac(item.get("target_mac")) == mac
+            ]
+        peers = {
+            item["author"] for item in support if item["author"] in pinned
+        }
+        families = {
+            dependency_family(
+                item.get("evidence_type", ""), item.get("module", "")
+            )
+            for item in support
+            if item["author"] in pinned
+        }
+        qualified = bool(
+            support and (local or (len(peers) >= 2 and len(families) >= 2))
+        )
+        prior = catchup.store.action(network, target)
+        owner = (
+            "p2p-catchup:"
+            + hashlib.sha256(f"{network}|{target}".encode()).hexdigest()
+        )
+        if not qualified:
+            if (
+                prior.get("state") == "requested"
+                and prior.get("expires", 0) > time.time()
+            ):
+                self.db.publish(
+                    "new_blocking",
+                    json.dumps(
+                        {"ip": target, "block": False, "lease_owner": owner}
+                    ),
+                )
+                catchup.store.action(
+                    network, target, owner, time.time(), "release requested"
+                )
+            return
+        if (
+            prior.get("state") != "requested"
+            or prior.get("expires", 0) <= time.time()
+        ) and len(catchup.store.active_actions(network)) >= 32:
+            return
+        until = min(
+            time.time() + 300, max(item["last_seen"] for item in support) + 300
+        )
+        self.db.publish(
+            "new_blocking",
+            json.dumps(
+                {
+                    "ip": target,
+                    "block": True,
+                    "from": True,
+                    "to": True,
+                    "lease_owner": owner,
+                    "lease_until": until,
+                    "interface": utils.get_interface_of_ip(
+                        target, self.db, self.args
+                    ),
+                }
+            ),
+        )
+        catchup.store.action(network, target, owner, until, "requested")
+
+    def _network_identity(self) -> str:
+        """Identify the current network without reusing private IPs across networks.
+
+        Returns:
+            Gateway identity, or a run-scoped fallback.
+        """
+        interface = getattr(self.args, "interface", "")
+        state = self.db.get_network_state(interface)
+        return HostProfileStore.network_id_for_state(
+            state if isinstance(state, dict) else {},
+            f"{self.parent_output_dir}:{self.db.main_pid}",
+        )
+
+    def _review_observation(self, raw: dict) -> dict:
+        """Resolve saved feedback without assigning old evidence to today's network.
+
+        Parameters:
+            raw: Durable evidence object.
+
+        Returns:
+            Validation snapshot with saved or historically resolved network.
+        """
+        record = observation_record(
+            raw, f"run:{self.parent_output_dir}:{self.db.main_pid}"
+        )
+        if (
+            record
+            and not raw.get("detection_provenance")
+            and not raw.get("peer_report")
+        ):
+            path = (
+                self.report_validation.path.parent.parent
+                / "host_profiles"
+                / "hosts.sqlite"
+            )
+            network = HostProfileStore.network_for_observation(
+                path, record["target"], record["observed_at"]
+            ).get("network_id")
+            if network and "," not in network:
+                record["network_id"] = network
+                record["target_key"] = f"{network}|{record['target']}"
+        return record
+
+    def _drain_review_feedback(self) -> None:
+        """Apply durable web verdicts and invalidate stale network opinions."""
+        validator = getattr(self, "report_validation", None)
+        now = time.monotonic()
+        if (
+            not isinstance(validator, ReportValidator)
+            or now - getattr(self, "last_feedback_check", 0) < 5
+        ):
+            return
+        self.last_feedback_check = now
+        try:
+            validator.drain_reviews(self.db.sqlite.get_db_path())
+            validator.import_reviews(
+                self.db.sqlite.get_db_path(), self._review_observation
+            )
+            revision = validator.feedback_revision()
+            network = self._network_identity()
+            if (revision, network) != getattr(
+                self, "last_feedback_context", None
+            ):
+                self.trust_db.execute("DELETE FROM opinion_cache")
+                catchup = getattr(self, "catchup", None)
+                if isinstance(catchup, Catchup):
+                    catchup.apply_reviews(validator)
+                self.last_feedback_context = (revision, network)
+            validator.prune()
+        except (sqlite3.Error, OSError) as error:
+            self.print(f"P2P feedback will be retried: {error}", 0, 1)
 
     def _should_rebuild_pigeon_binary(self) -> bool:
         """
@@ -316,10 +674,14 @@ class Trust(IModule):
         decides whether to report the given evidence to other
         peers
         """
-        if evidence.profile.ip in utils.get_own_ips():
+        own_ips = utils.get_own_ips(ret="List", include_public=False)
+        if evidence.attacker.value in own_ips:
             return False
 
-        if evidence.evidence_type == EvidenceType.P2P_REPORT:
+        if evidence.evidence_type in {
+            EvidenceType.P2P_REPORT,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+        }:
             # we shouldn't re-share evidence reported by other peers
             return False
 
@@ -327,12 +689,15 @@ class Trust(IModule):
             # we only share ips with other peers.
             return False
 
+        if not p2p_utils.is_unicast_ip(evidence.attacker.value):
+            return False
+
         confidence = self.extract_confidence(evidence)
         if not confidence:
             return False
 
         threat_level: ThreatLevel = self.extract_threat_level(evidence)
-        if not threat_level:
+        if not threat_level or threat_level.value <= 0:
             return False
 
         return True
@@ -350,52 +715,140 @@ class Trust(IModule):
         except json.decoder.JSONDecodeError:
             return
         evidence: Evidence = dict_to_evidence(evidence)
+        catchup = getattr(self, "catchup", None)
+        if isinstance(catchup, Catchup):
+            raw = utils.to_dict(evidence)
+            state = (
+                self.db.get_network_state(getattr(self.args, "interface", ""))
+                or {}
+            )
+            try:
+                if ipaddress.ip_address(
+                    evidence.attacker.value
+                ) in ipaddress.ip_network(state.get("local_network", "")):
+                    raw["target_mac"] = normalize_mac(
+                        self.db.get_mac_addr_from_profile(
+                            f"profile_{evidence.attacker.value}"
+                        )
+                    )
+            except ValueError:
+                pass
+            try:
+                catchup.store.observe(
+                    raw,
+                    self._catchup_network_identity(),
+                    self._catchup_own_id(),
+                )
+            except (sqlite3.Error, OSError, ValueError) as error:
+                self.print(f"P2P catch-up observation deferred: {error}", 0, 1)
+        validator = getattr(self, "report_validation", None)
+        provenance = []
+        if isinstance(validator, ReportValidator):
+            record = observation_record(
+                utils.to_dict(evidence), self._network_identity()
+            )
+            if record and not record.get("peer_id"):
+                validator.observe_local(record)
+                if record["provenance"].get("module") in {
+                    item.value for item in Modules
+                }:
+                    provenance = [record["provenance"]]
 
         if not self.should_share(evidence):
             return
 
-        # todo what we're currently sharing is the threat level(int)
-        #  of the evidence caused by this ip
-
-        # todo when we generate a new evidence,
-        #  we give it a score and a tl, but we don't update the
-        #  IP_Info and give this ip a score in th db!
-
-        # TODO: discuss - only share score if confidence is high enough?
-        # compare slips data with data in go
-        data_already_reported = True
-        try:
-            cached_opinion: Tuple = self.trust_db.get_cached_network_opinion(
-                "ip", evidence.attacker.value
-            )
-            # get the cached network opinion about this ip
+        # A cached peer opinion says nothing about whether this local
+        # detection was shared. Bound repeats without suppressing updates
+        # indefinitely or allowing the cache to grow for the whole run.
+        now = time.monotonic()
+        cache = getattr(self, "last_sent_evidence_reports", None)
+        if cache is None:
+            cache = self.last_sent_evidence_reports = {}
+        key = (
+            evidence.attacker.value,
+            evidence.threat_level.value,
+            evidence.evidence_type.name,
+            provenance[0]["rule_version"] if provenance else "legacy",
             (
-                cached_score,
-                cached_confidence,
-                network_score,
-                timestamp,
-            ) = cached_opinion
-            # if we don't have info about this ip from the p2p network,
-            # report it to the p2p network
-            if not cached_score:
-                data_already_reported = False
-        except KeyError:
-            data_already_reported = False
-        except IndexError:
-            # data saved in local db have wrong structure,
-            # this is an invalid state
+                record["network_id"]
+                if isinstance(validator, ReportValidator) and record
+                else ""
+            ),
+        )
+        if now - cache.get(key, -self.report_min_interval) < (
+            self.report_min_interval
+        ):
             return
-
-        if not data_already_reported:
-            # send the peer report to other peers
-            p2p_utils.send_evaluation_to_go(
-                evidence.attacker.value,
-                evidence.threat_level.value,
-                evidence.confidence,
-                "*",
-                self.pygo_channel,
-                self.db,
+        cache.pop(key, None)
+        cache[key] = now
+        if len(cache) > self.report_cache_limit:
+            cache.pop(next(iter(cache)))
+        confidence = evidence.confidence
+        if provenance:
+            confidence *= validator.detector_weight(
+                provenance[0]["evidence_type"],
+                provenance[0]["rule_version"],
+                record["network_id"] + "|",
             )
+        arguments = [
+            evidence.attacker.value,
+            evidence.threat_level.value,
+            confidence,
+            "*",
+            self.pygo_channel,
+            self.db,
+        ]
+        if provenance:
+            arguments.append(provenance)
+        p2p_utils.send_evaluation_to_go(*arguments)
+
+    def new_alert_callback(self, msg: Dict[str, str]) -> None:
+        """Broadcast one locally detected malicious host as a blame.
+
+        Parameters:
+            msg: The serialized ``new_alert`` Redis message.
+        """
+        try:
+            alert = json.loads(msg["data"])
+            ip = str(alert["profile"]["ip"])
+            last_evidence_type = alert["last_evidence"]["evidence_type"]
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+            return
+        if last_evidence_type in (
+            EvidenceType.P2P_REPORT.name,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK.name,
+        ):
+            return
+        if not p2p_utils.is_unicast_ip(ip) or ip in utils.get_own_ips(
+            ret="List", include_public=False
+        ):
+            return
+        score, confidence = p2p_utils.get_ip_info_from_slips(ip, self.db)
+        if score is None or confidence is None or score <= 0:
+            return
+        provenance = []
+        validator = getattr(self, "report_validation", None)
+        if isinstance(validator, ReportValidator):
+            rows = self.db.alert_evidence_records(str(alert.get("id", "")))
+            for raw in rows:
+                record = observation_record(raw, self._network_identity())
+                if record and not record.get("peer_id"):
+                    validator.observe_local(record)
+            score, confidence, provenance = validator.local_report(
+                f"{self._network_identity()}|{ip}"
+            )
+            if score is None or confidence is None:
+                return
+        arguments = [
+            ip,
+            min(1.0, max(0.0, score)),
+            min(1.0, max(0.0, confidence)),
+            self.pygo_channel,
+            self.db,
+        ]
+        if provenance:
+            arguments.append(provenance)
+        p2p_utils.send_blame_to_go(*arguments)
 
     def gopy_callback(self, msg: Dict):
         """
@@ -408,6 +861,29 @@ class Trust(IModule):
         self.go_director.handle_gopy_data(data)
         # except Exception as e:
         #     self.printer.print(f'Exception in gopy_callback: {e} ', 0, 1)
+
+    def is_msg_version_compatible(self, message: dict, channel: str) -> bool:
+        """Validate Go envelopes separately from versioned Slips messages.
+
+        Parameters:
+            message: Redis message from a subscribed channel.
+            channel: Channel on which the message was received.
+
+        Returns:
+            Whether the message matches the channel's expected protocol.
+        """
+        if message and channel == self.gopy_channel:
+            try:
+                payload = json.loads(message["data"])
+            except (KeyError, TypeError, ValueError):
+                return False
+            return (
+                isinstance(payload, dict)
+                and payload.get("message_type")
+                in ("peer_update", "connection_update", "go_data")
+                and isinstance(payload.get("message_contents"), dict)
+            )
+        return super().is_msg_version_compatible(message, channel)
 
     # def update_callback(self, msg: Dict):
     #     try:
@@ -431,7 +907,7 @@ class Trust(IModule):
 
     def set_evidence_malicious_ip(
         self, ip_info: dict, threat_level: float, confidence: float
-    ):
+    ) -> None:
         """
         Set an evidence for a malicious IP met in the timewindow
         ip_info format is json serialized {
@@ -451,6 +927,24 @@ class Trust(IModule):
         :param confidence: how confident the network opinion is about this opinion
         """
         attacker_ip: str = ip_info.get("ip")
+        report_after_id = ip_info.get("report_after_id")
+        peer_ids = sorted(
+            self.trust_db.get_reporter_peerids_for_ip(
+                attacker_ip, report_after_id
+            )
+        )
+        peer_labels = []
+        for peer_id in peer_ids:
+            _last_seen, peer_ip = self.trust_db.get_ip_of_peer(peer_id)
+            peer_labels.append(
+                f"{peer_id} ({peer_ip})" if peer_ip else peer_id
+            )
+        peer_source = (
+            f" Replied to this lookup, peer{'s' if len(peer_ids) != 1 else ''}: "
+            f"{', '.join(peer_labels)}."
+            if peer_ids
+            else " No peer reply was recorded for this lookup."
+        )
         profileid = ip_info.get("profileid")
         saddr = profileid.split("_")[-1]
 
@@ -461,30 +955,30 @@ class Trust(IModule):
         if "src" in ip_info.get("ip_state"):
             description = (
                 f"Connection from blacklisted IP {attacker_ip} "
-                f"to {saddr} Source: Slips P2P network."
+                f"to {saddr} Source: Slips P2P network.{peer_source}"
             )
         else:
             description = (
                 f"Connection to blacklisted IP {attacker_ip} "
-                f"from {saddr} Source: Slips P2P network."
+                f"from {saddr} Source: Slips P2P network.{peer_source}"
             )
 
-        for ip in (saddr, attacker_ip):
-            evidence = Evidence(
-                evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
-                attacker=Attacker(
-                    direction=Direction.SRC, ioc_type=IoCType.IP, value=ip
-                ),
-                threat_level=threat_level,
-                confidence=confidence,
-                description=description,
-                profile=ProfileID(ip=attacker_ip),
-                timewindow=TimeWindow(number=twid_int),
-                uid=[ip_info.get("uid")],
-                timestamp=str(ip_info.get("stime")),
-            )
-
-            self.db.set_evidence(evidence)
+        evidence = Evidence(
+            evidence_type=EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            attacker=Attacker(
+                direction=Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=attacker_ip,
+            ),
+            threat_level=threat_level,
+            confidence=confidence,
+            description=description,
+            profile=ProfileID(ip=attacker_ip),
+            timewindow=TimeWindow(number=twid_int),
+            uid=[ip_info.get("uid")],
+            timestamp=str(ip_info.get("stime")),
+        )
+        self.db.set_evidence(evidence)
 
     def handle_data_request(self, message_data: str) -> None:
         """
@@ -557,8 +1051,12 @@ class Trust(IModule):
         #       I do not remember writing this comment. I have no idea
         #       in which cases there is no need to wait? Maybe
         #       when everybody responds asap?
+        report_after_id = self.trust_db.get_latest_report_id()
         p2p_utils.send_request_to_go(ip_address, self.pygo_channel, self.db)
-        self.print(f"[Slips -> The Network] request about {ip_address}")
+        self.print(
+            f"[Slips -> The Network] request about {ip_address}",
+            log_to_logfiles_only=True,
+        )
 
         # go will send a reply in no longer than 10s (or whatever the
         # timeout there is set to). The reply will be
@@ -571,7 +1069,11 @@ class Trust(IModule):
         (
             combined_score,
             combined_confidence,
-        ) = self.reputation_model.get_opinion_on_ip(ip_address)
+        ) = self.reputation_model.get_opinion_on_ip(
+            ip_address, report_after_id
+        )
+
+        ip_info["report_after_id"] = report_after_id
 
         self.process_network_response(
             ip_address,
@@ -591,10 +1093,17 @@ class Trust(IModule):
         stores the reported score and confidence about the ip and adds an
         evidence if necessary like when the peers report a malicious ip
         """
+        if not p2p_utils.is_unicast_ip(ip):
+            return
         # no data in db - this happens when testing,
         # if there is not enough data on peers
         if combined_score is None or combined_confidence is None:
-            self.print(f"No data received from the network about {ip}\n", 0, 2)
+            self.print(
+                f"No data received from the network about {ip}\n",
+                0,
+                2,
+                log_to_logfiles_only=True,
+            )
             return
 
         self.print(
@@ -603,6 +1112,7 @@ class Trust(IModule):
             f"confidence={combined_confidence} saving it now!\n",
             0,
             2,
+            log_to_logfiles_only=True,
         )
 
         if combined_score * combined_confidence > 0:
@@ -622,9 +1132,163 @@ class Trust(IModule):
         """
         pass
 
+    def _pigeon_supports_flag(self, flag: str) -> bool:
+        """Check whether the installed Pigeon binary accepts a CLI flag.
+
+        Parameters:
+            flag: Command-line flag to look for in Pigeon's help output.
+
+        Returns:
+            True when the binary advertises the flag, otherwise False.
+        """
+        try:
+            result = subprocess.run(
+                [str(self.pigeon_binary), "-help"],
+                capture_output=True,
+                check=False,
+                text=True,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return False
+        return flag in f"{result.stdout}\n{result.stderr}"
+
+    def _get_pigeon_command(self) -> list[str]:
+        """Build a command compatible with the installed Pigeon binary.
+
+        Returns:
+            Sanitized Pigeon command and arguments.
+        """
+        params = {
+            "-port": str(self.port),
+            "-host": "0.0.0.0",
+            "-rendezvous": self.rendezvous,
+            "-key-file": self.pigeon_key_file,
+            "-peerstore-file": "pigeon.peerstore.json",
+            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
+            "-redis-auth-conf": get_redis_auth_conf_path(),
+            "-redis-channel-pygo": self.pygo_channel_raw,
+            "-redis-channel-gopy": self.gopy_channel_raw,
+        }
+        if self._pigeon_supports_flag("-slips-version"):
+            params["-slips-version"] = self.slips_version
+        else:
+            self.print(
+                "Warning: The installed p2p4slips binary does not support "
+                "-slips-version; starting in legacy compatibility mode."
+            )
+
+        bootstrap_peers = self._get_bootstrap_peer_addresses()
+        if bootstrap_peers and self._pigeon_supports_flag("-bootstrap-peers"):
+            params["-bootstrap-peers"] = ",".join(bootstrap_peers)
+
+        command = [str(self.pigeon_binary)] + [
+            utils.sanitize(item) for pair in params.items() for item in pair
+        ]
+        if self._pigeon_supports_flag("-catchup-enabled"):
+            enabled = isinstance(getattr(self, "catchup", None), Catchup)
+            command.append(f"-catchup-enabled={str(enabled).lower()}")
+        return command
+
+    def _get_bootstrap_peer_addresses(self) -> list[str]:
+        """Build authenticated peer endpoints from this network's history.
+
+        Returns:
+            Recent peer multiaddresses on the monitored IPv4 subnet.
+        """
+        trust_db = getattr(self, "trust_db", None)
+        if trust_db is None:
+            return []
+
+        try:
+            subnets = self._get_local_subnets()
+        except (OSError, ValueError):
+            subnets = set()
+
+        addresses: dict[str, str] = {}
+        try:
+            known_addresses = trust_db.get_recent_peer_addresses(
+                self.max_bootstrap_peers
+            )
+        except (AttributeError, TypeError):
+            known_addresses = []
+        if isinstance(known_addresses, (list, tuple)):
+            for peer_id, address, port, _timestamp in known_addresses:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), port, subnets
+                )
+
+        try:
+            known_ips = trust_db.get_recent_peer_ips(self.max_bootstrap_peers)
+        except (AttributeError, TypeError):
+            known_ips = []
+        if isinstance(known_ips, (list, tuple)):
+            for peer_id, address, _timestamp in known_ips:
+                self._add_bootstrap_address(
+                    addresses, str(peer_id), str(address), self.port, subnets
+                )
+
+        return list(addresses.values())[: self.max_bootstrap_peers]
+
+    def _add_bootstrap_address(
+        self,
+        addresses: dict[str, str],
+        peer_id: str,
+        address: str,
+        port: int,
+        subnets: set[ipaddress.IPv4Network],
+    ) -> None:
+        """Add a valid peer endpoint once, if it belongs to this subnet.
+
+        Parameters:
+            addresses: Output mapping keyed by peer ID.
+            peer_id: Authenticated P2P identity.
+            address: Last observed IPv4 address.
+            port: Last observed P2P listening port.
+            subnet: Current monitored subnet, when available.
+        """
+        if peer_id in addresses:
+            return
+        try:
+            peer_ip = ipaddress.IPv4Address(address)
+            peer_port = int(port)
+        except (ipaddress.AddressValueError, TypeError, ValueError):
+            return
+        if peer_port < 1 or peer_port > 65535:
+            return
+        if subnets and not any(peer_ip in subnet for subnet in subnets):
+            return
+        if address == getattr(self, "host", ""):
+            return
+        addresses[peer_id] = f"/ip4/{peer_ip}/tcp/{peer_port}/p2p/{peer_id}"
+
+    def _get_local_subnets(self) -> set[ipaddress.IPv4Network]:
+        """Return directly connected IPv4 networks on local interfaces.
+
+        Returns:
+            IPv4 subnets for non-loopback interfaces with usable netmasks.
+        """
+        subnets = set()
+        for interface in netifaces.interfaces():
+            if interface == "lo0":
+                continue
+            for entry in netifaces.ifaddresses(interface).get(
+                netifaces.AF_INET, []
+            ):
+                address, netmask = entry.get("addr"), entry.get("netmask")
+                if not address or not netmask:
+                    continue
+                local_ip = ipaddress.IPv4Address(address)
+                if local_ip.is_loopback or local_ip.is_link_local:
+                    continue
+                subnets.add(
+                    ipaddress.ip_network(f"{address}/{netmask}", strict=False)
+                )
+        return subnets
+
     def evaluate_blame_report(
         self, reporter: str, report_time: int, data: dict
-    ):
+    ) -> None:
         """
         Decide whether a peer's "blame" (a request to block an IP)
         should be forwarded to the blocking module.
@@ -655,6 +1319,8 @@ class Trust(IModule):
             return
 
         key = data["key"]
+        if not p2p_utils.is_unicast_ip(key):
+            return
 
         # the network's trust-weighted opinion on this IP, aggregated
         # over every peer that reported on it so far (not just this
@@ -668,6 +1334,7 @@ class Trust(IModule):
                 f"Not forwarding this blame report.",
                 0,
                 2,
+                log_to_logfiles_only=True,
             )
             return
         network_opinion = network_score * network_confidence
@@ -678,28 +1345,73 @@ class Trust(IModule):
         local_opinion = (
             0 if local_score is None else local_score * local_confidence
         )
+        validator = getattr(self, "report_validation", None)
+        if isinstance(validator, ReportValidator):
+            local_score, local_confidence, provenance = validator.local_report(
+                f"{self._network_identity()}|{key}"
+            )
+            local_opinion = (
+                0 if local_score is None else local_score * local_confidence
+            )
+            details = getattr(self.reputation_model, "last_corroboration", {})
+            if (
+                isinstance(details, dict)
+                and details.get("target")
+                == f"{self._network_identity()}|{key}"
+                and provenance
+            ):
+                family = provenance[0].get("family")
+                units = details.get("families", {})
+                if family in units and not units[family].get("validated"):
+                    independent = [
+                        unit for name, unit in units.items() if name != family
+                    ]
+                    network_opinion = (
+                        (
+                            sum(unit["score"] for unit in independent)
+                            * sum(unit["confidence"] for unit in independent)
+                            / len(independent) ** 2
+                        )
+                        if independent
+                        else 0
+                    )
 
         prediction = (
             self.ips_weight * local_opinion
             + (1 - self.ips_weight) * network_opinion
         )
 
-        if prediction < self.blame_threshold:
+        corroboration = getattr(
+            self.reputation_model, "last_corroboration", {}
+        )
+        peer_support = (
+            float(corroboration.get("support", 0))
+            if (
+                isinstance(corroboration, dict)
+                and isinstance(validator, ReportValidator)
+                and corroboration.get("target")
+                == f"{self._network_identity()}|{key}"
+            )
+            else 0
+        )
+        if prediction < self.blame_threshold and peer_support < 0.85:
             self.print(
                 f"Blame report about {key} from {reporter} doesn't meet "
                 f"the blame_threshold ({prediction} < "
                 f"{self.blame_threshold}). Not blocking it.",
                 0,
                 2,
+                log_to_logfiles_only=True,
             )
             return
 
         self.print(
             f"Blame report about {key} confirmed by the network "
-            f"(prediction={prediction}). Forwarding {key} to the blocking "
+            f"(prediction={prediction}, independent blame support={peer_support}). Forwarding {key} to the blocking "
             f"module.",
             0,
             2,
+            log_to_logfiles_only=True,
         )
         # give the report to evidenceProcess to decide whether to block or not
         self.db.publish("new_blame", json.dumps(data))
@@ -726,31 +1438,34 @@ class Trust(IModule):
             )
             return
 
-        params = {
-            "-port": str(self.port),
-            "-host": self.host,
-            "-key-file": self.pigeon_key_file,
-            "--redis-db": f"{LOCALHOST_HOSTNAME}:{self.redis_port}",
-            # slips starts every redis-server with the shared requirepass
-            # from this conf, so the pigeon reads its password from it too
-            "-redis-auth-conf": get_redis_auth_conf_path(),
-            "-redis-channel-pygo": self.pygo_channel_raw,
-            "-redis-channel-gopy": self.gopy_channel_raw,
-            "-slips-version": self.slips_version,
-        }
-        self.print(f"P2P is listening on {self.host} port {self.port}.")
-        executable = [self.pigeon_binary] + [
-            utils.sanitize(item) for pair in params.items() for item in pair
-        ]
+        if isinstance(
+            getattr(self, "catchup", None), Catchup
+        ) and not self._pigeon_supports_flag("-catchup-version"):
+            if not self._build_pigeon_binary(
+                "for authenticated network catch-up"
+            ):
+                self.print(
+                    "Network catch-up needs the updated Pigeon binary; live P2P remains available.",
+                    0,
+                    1,
+                )
+                self.catchup = None
+                self.go_director.catchup = None
+
+        executable = self._get_pigeon_command()
 
         if self.create_p2p_logfile:
-            outfile = open(self.pigeon_logfile, "+w")
+            pigeon_log_path = self.pigeon_logfile
         else:
-            outfile = open(os.devnull, "+w")
+            pigeon_log_path = os.devnull
+        outfile = open(pigeon_log_path, "+w")
 
         try:
             self.pigeon = subprocess.Popen(
-                executable, cwd=self.p2p_trust_runtime_dir, stdout=outfile
+                executable,
+                cwd=self.p2p_trust_runtime_dir,
+                stdout=outfile,
+                stderr=subprocess.STDOUT,
             )
         except OSError as error:
             if error.errno != errno.ENOEXEC:
@@ -767,19 +1482,92 @@ class Trust(IModule):
                 return
 
             try:
+                executable = self._get_pigeon_command()
                 self.pigeon = subprocess.Popen(
                     executable,
                     cwd=self.p2p_trust_runtime_dir,
                     stdout=outfile,
+                    stderr=subprocess.STDOUT,
                 )
             except OSError as retry_error:
                 self.print(
                     "Warning: Failed to start p2p4slips after rebuilding. "
                     f"Error: {retry_error}"
                 )
+                return
 
-    def shutdown_gracefully(self):
+        time.sleep(0.1)
+        return_code = self.pigeon.poll()
+        if return_code is not None:
+            self.print(
+                "Warning: p2p4slips exited during startup with return code "
+                f"{return_code}. Check {pigeon_log_path}."
+            )
+            self.pigeon = None
+            return
+
+        self.print(f"P2P is listening on {self.host} port {self.port}.")
+
+    def _record_pigeon_connections(self) -> None:
+        """Mark exact live Pigeon sockets so capture skips Slips P2P traffic."""
+        pigeon = getattr(self, "pigeon", None)
+        if pigeon is None or pigeon.poll() is not None:
+            return
+        if not isinstance(getattr(pigeon, "pid", None), int):
+            return
+        now = time.monotonic()
+        if now - getattr(self, "_last_pigeon_socket_scan", 0) < (
+            self.pigeon_socket_scan_interval
+        ):
+            return
+        self._last_pigeon_socket_scan = now
+        try:
+            connections = psutil.Process(pigeon.pid).net_connections(
+                kind="inet"
+            )
+        except (psutil.Error, OSError):
+            return
+        for connection in connections:
+            if not connection.laddr or not connection.raddr:
+                continue
+            protocol = (
+                "tcp"
+                if connection.type == socket.SOCK_STREAM
+                else "udp" if connection.type == socket.SOCK_DGRAM else ""
+            )
+            if not protocol:
+                continue
+            local_ip, local_port = connection.laddr[:2]
+            remote_ip, remote_port = connection.raddr[:2]
+            try:
+                local_ip = str(ipaddress.ip_address(local_ip))
+                remote_ip = str(ipaddress.ip_address(remote_ip))
+            except ValueError:
+                continue
+            if ipaddress.ip_address(remote_ip).is_loopback:
+                continue
+            # Zeek can record either endpoint as the flow origin.
+            self.db.record_slips_own_connection(
+                self.db.main_pid,
+                protocol,
+                local_ip,
+                local_port,
+                remote_ip,
+                remote_port,
+            )
+            self.db.record_slips_own_connection(
+                self.db.main_pid,
+                protocol,
+                remote_ip,
+                remote_port,
+                local_ip,
+                local_port,
+            )
+
+    def shutdown_gracefully(self) -> None:
+        """Stop and reap the Go peer before closing its trust database."""
         self._stop_pigeon()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         if hasattr(self, "trust_db"):
             self.trust_db.__del__()
@@ -816,6 +1604,80 @@ class Trust(IModule):
 
         self.pigeon = None
 
+    def _local_network_identity(self) -> tuple[tuple[str, str, str], ...]:
+        """Read the monitored interfaces' subnet and gateway identities.
+
+        Returns:
+            Stable network identities, excluding host-address and DNS changes.
+        """
+        interface = getattr(self.args, "interface", None)
+        interfaces = [interface] if isinstance(interface, str) else []
+        access_point = getattr(self.args, "access_point", None)
+        if not interfaces and isinstance(access_point, str):
+            interfaces = access_point.split(",")
+        identities = []
+        for interface in interfaces:
+            state = self.db.get_network_state(interface.strip())
+            if not isinstance(state, dict) or not state.get("connected"):
+                continue
+            identities.append(
+                (
+                    interface.strip(),
+                    state.get("local_network", ""),
+                    state.get("gateway_mac", ""),
+                )
+            )
+        return tuple(sorted(identities))
+
+    def _refresh_pigeon_address(self) -> None:
+        """Restart Pigeon when the monitored address or network changes.
+
+        Wi-Fi and Ethernet interfaces can change addresses while Slips is
+        running. Pigeon binds to its startup address and advertises that
+        address through mDNS, so it must be restarted to join the new network.
+        """
+        now = time.monotonic()
+        if (
+            now - getattr(self, "last_local_ip_check", 0)
+            < self.local_ip_check_interval
+        ):
+            return
+        self.last_local_ip_check = now
+
+        if not hasattr(self, "host"):
+            return
+
+        try:
+            current_ip = self.get_local_IP()
+        except (OSError, ValueError):
+            return
+
+        network_identity = self._local_network_identity()
+        previous_network = getattr(
+            self, "_pigeon_network_identity", network_identity
+        )
+        network_changed = network_identity != previous_network
+        self._pigeon_network_identity = network_identity
+        if (
+            current_ip == self.host
+            and not network_changed
+            and getattr(self, "pigeon", None) is not None
+        ):
+            return
+
+        if current_ip != self.host or network_changed:
+            self.print(
+                f"Monitored network changed (IP {self.host} -> "
+                f"{current_ip}); restarting Pigeon to reconnect to local peers."
+            )
+            self._stop_pigeon()
+            self.db.clear_authenticated_p2p_connections()
+            self.db.store_connected_peers([])
+            self.host = current_ip
+            self.mutliaddress_printed = False
+
+        self._start_pigeon()
+
     def run(self) -> None:
         """Run p2p_trust and guarantee its Go child cannot be orphaned."""
         try:
@@ -827,6 +1689,8 @@ class Trust(IModule):
         utils.drop_root_privs_permanently()
         self._init_log_files()
         self._configure()
+        self._pigeon_network_identity = self._local_network_identity()
+        self.db.clear_authenticated_p2p_connections()
         self.db.store_connected_peers([])
         self._start_pigeon()
         # check if it was possible to start up pigeon
@@ -840,7 +1704,71 @@ class Trust(IModule):
         # should call self.update_callback
         # self.c4 = self.db.subscribe(self.slips_update_channel)
 
+    def should_stop(self) -> bool:
+        """Stop peer callbacks as soon as Slips begins shutting down.
+
+        Returns:
+            True when the shared termination event is set.
+        """
+        return self.termination_event.is_set()
+
+    def _sample_peer_trust(self, now: float) -> None:
+        """Save current trust once a minute, including while the UI is closed.
+
+        Parameters:
+            now: Current Unix timestamp.
+        """
+        if now - getattr(self, "_last_trust_sample", 0) < 60:
+            return
+        self._last_trust_sample = now
+        network = self._network_identity()
+        samples = []
+        seen = set()
+        validator = getattr(self, "report_validation", None)
+        connections = sorted(
+            self.db.get_authenticated_p2p_connections(),
+            key=lambda row: str(row.get("remote_ip") or ""),
+        )
+        for connection in connections:
+            peer = connection.get("peer_id")
+            ip = connection.get("remote_ip")
+            if (
+                not peer
+                or peer in seen
+                or connection.get("connected") is False
+                or not p2p_utils.is_unicast_ip(ip)
+            ):
+                continue
+            seen.add(peer)
+            reliability = self.trust_db.get_reporter_reliability(peer)
+            if reliability is None:
+                continue
+            score, confidence = self.trust_db.get_reporter_reputation(ip)
+            agreement_credit = 0.0
+            if isinstance(validator, ReportValidator):
+                score, confidence, _ = validator.local_report(
+                    f"{network}|{ip}",
+                    max_age=None,
+                    decay_half_life=self.local_reputation_half_life,
+                )
+                agreement_credit = validator.peer_agreement(peer)["adjustment"]
+            score = 0.5 if score is None else score
+            confidence = 0.0 if confidence is None else confidence
+            trust = self.reputation_model.compute_peer_trust(
+                reliability,
+                score,
+                confidence,
+                agreement_credit=agreement_credit,
+            )
+            samples.append((peer, ip, network, trust, reliability))
+        self.trust_db.store_peer_trust_samples(
+            samples,
+            now,
+            ConfigParser().detection_history_policy()["active_days"],
+        )
+
     def main(self):
+        self._drain_review_feedback()
         if self.create_p2p_logfile:
             # rotates p2p.log file every 1 day
             now = time.time()
@@ -850,6 +1778,9 @@ class Trust(IModule):
 
         if msg := self.get_msg("report_to_peers"):
             self.new_evidence_callback(msg)
+
+        if msg := self.get_msg("new_alert"):
+            self.new_alert_callback(msg)
 
         if msg := self.get_msg(self.p2p_data_request_channel):
             self.data_request_callback(msg)
@@ -864,6 +1795,26 @@ class Trust(IModule):
                     0,
                     1,
                 )
+
+        self._refresh_pigeon_address()
+        self._record_pigeon_connections()
+        catchup = getattr(self, "catchup", None)
+        if isinstance(catchup, Catchup):
+            try:
+                if (
+                    time.monotonic()
+                    - getattr(self, "last_catchup_bootstrap", 0)
+                    >= 1
+                ):
+                    catchup.bootstrap(self.report_validation)
+                    self.last_catchup_bootstrap = time.monotonic()
+                catchup.tick()
+            except (sqlite3.Error, OSError, ValueError) as error:
+                self.print(f"P2P catch-up deferred: {error}", 0, 1)
+
+        if self.pigeon is None:
+            self.termination_event.wait(0.05)
+            return
 
         ret_code = self.pigeon.poll()
         if ret_code not in (None, 0):
@@ -884,3 +1835,33 @@ class Trust(IModule):
 
         except Exception:
             pass
+
+        now = time.time()
+        try:
+            self._sample_peer_trust(now)
+        except sqlite3.OperationalError as error:
+            self.print(f"Deferring P2P trust sampling: {error}", 0, 1)
+        if now - getattr(
+            self, "last_p2p_connection_heartbeat_time", 0
+        ) >= getattr(self, "p2p_connection_heartbeat_interval", 60):
+            self.db.refresh_authenticated_p2p_connections(
+                getattr(self, "active_p2p_connection_ttl", 300)
+            )
+            self.last_p2p_connection_heartbeat_time = now
+
+        if now - getattr(self, "last_report_compaction_time", now) >= getattr(
+            self, "report_compaction_interval", 5
+        ):
+            try:
+                self.trust_db.compact_reports(
+                    getattr(self, "report_compaction_batch_size", 1000)
+                )
+            except sqlite3.OperationalError as error:
+                if "locked" not in str(error).lower():
+                    raise
+                self.print(f"Deferring P2P report compaction: {error}", 0, 1)
+            self.last_report_compaction_time = now
+
+        # Channel reads are nonblocking. Yield between polls so an idle
+        # P2P module does not consume a CPU core.
+        self.termination_event.wait(0.05)

@@ -2,6 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
 import json
+from pathlib import Path
+import yaml
 from unittest.mock import (
     patch,
     MagicMock,
@@ -11,6 +13,58 @@ from unittest.mock import (
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
+from slips_files.common.parsers.analysis_config import isolated_analysis_config
+
+
+def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
+    """Show the effective private paths without changing the reused YAML.
+
+    Parameters:
+        tmp_path: Original config and independent run output.
+    """
+    manager = ModuleFactory().create_metadata_manager_obj()
+    source = tmp_path / "slips.yaml"
+    original = {"parameters": {"permanent_dir": "live-state"},
+                "web_interface": {"port": 55000}}
+    source.write_text(yaml.safe_dump(original))
+    output = tmp_path / "analysis"
+    output.mkdir()
+    manager.main.args.config = str(source)
+    manager.main.args.output = str(output)
+    manager.main.args.web_port = 55012
+    manager.main.conf.isolated_analysis = True
+    manager.main.conf.config = isolated_analysis_config(original, str(output))
+    manager.main.conf.web_interface_port = 55012
+    manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
+    manager._add_metadata()
+    captured = yaml.safe_load((output / "metadata" / "slips.yaml").read_text())
+    assert captured["parameters"]["permanent_dir"] == str(output / "permanent")
+    assert captured["web_interface"]["bind"] == "localhost"
+    assert captured["web_interface"]["port"] == 55012
+    assert yaml.safe_load(source.read_text()) == original
+
+
+def test_metadata_records_cli_web_port_without_changing_configuration(tmp_path: Path) -> None:
+    """Show the effective web port in the run snapshot while reusing its source.
+
+    Parameters:
+        tmp_path: Isolated config and analysis output.
+    """
+    manager = ModuleFactory().create_metadata_manager_obj()
+    source = tmp_path / "slips.yaml"
+    original = "web_interface:\n  enabled: true\n  port: 55000\n"
+    source.write_text(original)
+    output = tmp_path / "analysis"
+    output.mkdir()
+    manager.main.args.config = str(source)
+    manager.main.args.output = str(output)
+    manager.main.args.web_port = 55002
+    manager.main.conf.web_interface_port = 55002
+    manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
+    manager._add_metadata()
+    captured = yaml.safe_load((output / "metadata" / "slips.yaml").read_text())
+    assert captured["web_interface"]["port"] == 55002
+    assert source.read_text() == original
 
 
 @pytest.mark.parametrize(

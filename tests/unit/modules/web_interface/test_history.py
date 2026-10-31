@@ -1,13 +1,210 @@
 import json
 import sqlite3
+from pathlib import Path
 from unittest.mock import Mock, patch
+
+import pytest
 
 from modules.web_interface.history import (
     HistoryCollector,
     connect_history,
     initialize_history,
+    network_connection_scope,
+    NETWORK_SCOPES_KEY,
 )
 from tests.module_factory import ModuleFactory
+from slips_files.common.sqlite_flock import SQLiteFlock
+
+
+@pytest.mark.parametrize(
+    "states,expected",
+    [
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "aa", "changed_at": 200, "connected": True},
+            ],
+            100,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "bb", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "aa", "changed_at": 150, "connected": False},
+                {"gateway_mac": "aa", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {
+                    "gateway_mac": "aa",
+                    "changed_at": 200,
+                    "connected": True,
+                    "history": [
+                        {
+                            "gateway_mac": "bb",
+                            "changed_at": 150,
+                            "connected": True,
+                        }
+                    ],
+                },
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "", "changed_at": 100, "connected": True},
+                {"gateway_mac": "", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+    ],
+)
+def test_network_scope_is_durable_and_does_not_merge_other_connections(
+    tmp_path: Path,
+    states: list[dict],
+    expected: float,
+) -> None:
+    """Keep same-router history across collector restarts, respecting network changes.
+
+    Parameters:
+        tmp_path: Isolated web history.
+        states: Snapshots observed across independent collector lifetimes.
+        expected: Final lower time boundary.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "history.sqlite"
+    client = Mock()
+    for state in states:
+        client.hgetall.return_value = {"eth0": json.dumps(state)}
+        collector = HistoryCollector(str(tmp_path), path, client, 999999)
+        collector.record_backend_heartbeat()
+    with connect_history(path, read_only=True) as connection:
+        saved = json.loads(
+            connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (NETWORK_SCOPES_KEY,)
+            ).fetchone()[0]
+        )
+    assert saved["eth0"]["start"] == expected
+    assert len(saved) == 1
+
+
+@pytest.mark.parametrize(
+    "changed_at", [None, "bad", float("nan"), float("inf")]
+)
+def test_network_scope_rejects_invalid_timestamps(changed_at: object) -> None:
+    """Keep malformed network snapshots from changing a valid boundary.
+
+    Parameters:
+        changed_at: Invalid snapshot timestamp.
+    """
+    _factory = ModuleFactory()
+    assert network_connection_scope({"changed_at": changed_at}) == {}
+
+
+def test_network_scope_survives_bounded_snapshot_history(
+    tmp_path: Path,
+) -> None:
+    """More than ten same-router setting changes do not hide older evidence.
+
+    Parameters:
+        tmp_path: Independent web history file.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999
+    )
+    history = []
+    for changed_at in range(100, 125):
+        state = {
+            "gateway_mac": "aa",
+            "changed_at": changed_at,
+            "connected": True,
+            "history": history[-10:],
+        }
+        client.hgetall.return_value = {"eth0": json.dumps(state)}
+        collector.record_backend_heartbeat()
+        history.append(
+            {key: value for key, value in state.items() if key != "history"}
+        )
+    with connect_history(collector.history_path, read_only=True) as connection:
+        saved = json.loads(
+            connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (NETWORK_SCOPES_KEY,)
+            ).fetchone()[0]
+        )
+    assert saved["eth0"]["start"] == 100
+    assert "history" not in saved["eth0"]
+
+
+def test_rotated_error_log_resets_offset_even_when_larger(
+    tmp_path: Path,
+) -> None:
+    """Read a replacement file from its beginning using inode checkpoints.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "errors.log"
+    path.write_text("2026/10/09 13:54:02 [first] old\n")
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999
+    )
+    assert collector.tail_errors() == 1
+    path.rename(tmp_path / "rotated.log")
+    path.write_text(
+        "2026/10/09 13:54:03 [second] replacement with a longer message\n"
+    )
+    assert collector.tail_errors() == 1
+    with connect_history(collector.history_path) as connection:
+        assert [
+            row[0]
+            for row in connection.execute(
+                "SELECT module FROM error_events ORDER BY id"
+            )
+        ] == ["first", "second"]
+
+
+@pytest.mark.parametrize(
+    "input_type,expected", [("interface", 3), ("pcap", 0)]
+)
+def test_operational_history_retention_leaves_imported_captures_intact(
+    tmp_path: Path, input_type: str, expected: int
+) -> None:
+    """Expire old metrics, errors and transient hosts only in continuous runs.
+
+    Parameters:
+        tmp_path: Isolated history directory.
+        input_type: Source of the analysis.
+        expected: Number of expired records.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.hget.return_value = input_type
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999
+    )
+    with connect_history(collector.history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time,module,message,line) VALUES (1,'module','message','line')"
+        )
+        connection.execute(
+            "INSERT INTO host_snapshots VALUES ('192.0.2.1',1,'{}')"
+        )
+        connection.execute(
+            "INSERT INTO runtime_metrics_1m VALUES (1,0,0,0,0,0,0,0,1)"
+        )
+    assert collector.prune_operational_history(2_000_000_000.0) == expected
 
 
 def create_flow_database(path) -> None:
@@ -21,6 +218,166 @@ def create_flow_database(path) -> None:
             "CREATE TABLE alerts (alert_id TEXT PRIMARY KEY, alert_time REAL, "
             "ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT)"
         )
+
+
+def test_detection_backfill_coordinates_with_capture_writers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Use the capture's writer lock during legacy detection recovery.
+
+    Parameters:
+        tmp_path: Isolated run output.
+        monkeypatch: Scope the writer lock and recovery probe.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks"))
+    output_dir = tmp_path / "run"
+    create_flow_database(output_dir / "databases" / "flows.sqlite")
+    client = Mock()
+    client.hget.return_value = "other-run"
+    collector = HistoryCollector(str(output_dir), output_dir / "history.sqlite", client, 12345)
+    probe = SQLiteFlock("sqlite_db", 12345)
+
+    def check_writer(connection: sqlite3.Connection) -> int:
+        """Probe the lock while the backfill operation owns its connection.
+
+        Parameters:
+            connection: Protected active database connection.
+
+        Returns:
+            Synthetic recovery record count.
+        """
+        assert isinstance(connection, sqlite3.Connection)
+        with probe.try_acquire() as acquired:
+            assert acquired is False
+        return 1
+
+    monkeypatch.setattr(collector, "_backfill_alert_file", check_writer)
+    assert collector.backfill_detections() == 1
+    with probe.try_acquire() as acquired:
+        assert acquired is True
+
+
+def test_detection_backfill_resumes_after_short_work_budget(tmp_path: Path) -> None:
+    """Commit a bounded import and resume its file offset without duplication.
+
+    Parameters:
+        tmp_path: Isolated legacy capture directory.
+    """
+    _factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    create_flow_database(output_dir / "databases" / "flows.sqlite")
+    alerts_path = output_dir / "alerts" / "alerts.json"
+    alerts_path.parent.mkdir()
+    alerts_path.write_text("".join(json.dumps({
+        "Status": "Event", "ID": f"bounded-{index}",
+        "StartTime": "2026-10-23T10:00:00+00:00", "Confidence": 0.5,
+    }) + "\n" for index in range(5)))
+    client = Mock()
+    client.hget.return_value = "another-run"
+    collector = HistoryCollector(str(output_dir), output_dir / "history.sqlite", client, 999999)
+    with patch("modules.web_interface.history.time.monotonic", side_effect=[0, 0, .01, .06]):
+        assert collector.backfill_detections() == 2
+    with connect_history(collector.history_path, read_only=True) as connection:
+        offset = int(collector._metadata_get(connection, "alerts_json_offset"))
+    assert 0 < offset < alerts_path.stat().st_size
+    assert collector.backfill_detections() == 3
+    assert collector.backfill_detections() == 0
+    with sqlite3.connect(collector.flows_path) as connection:
+        assert connection.execute("SELECT count(*) FROM evidence").fetchone()[0] == 5
+
+
+def test_tail_errors_retains_traceback_across_polls(tmp_path) -> None:
+    """Keep continuation lines with their event when they arrive later."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    first = "2026/10/09 13:54:02.445783 [brute_force_detector] Traceback (most recent call last):"
+    second = "2026/10/09 13:54:03.000000 [other_module] Another error"
+    error_path.write_text(f"{first}\n  File \"detector.py\", line 461\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+
+    assert collector.tail_errors() == 1
+    with error_path.open("a") as handle:
+        handle.write(f"RecursionError: maximum recursion depth exceeded\n{second}\n")
+    assert collector.tail_errors() == 1
+
+    with connect_history(history_path, read_only=True) as connection:
+        rows = connection.execute(
+            "SELECT module, message, line FROM error_events ORDER BY id"
+        ).fetchall()
+    assert len(rows) == 2
+    assert rows[0]["module"] == "brute_force_detector"
+    assert rows[0]["message"] == "Traceback (most recent call last):"
+    assert '  File "detector.py", line 461' in rows[0]["line"]
+    assert "RecursionError: maximum recursion depth exceeded" in rows[0]["line"]
+    assert rows[1]["line"] == second
+
+
+def test_tail_errors_backfills_existing_header_only_events(tmp_path) -> None:
+    """Repair an already imported traceback without duplicating its row."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    header = "2026/10/09 13:54:02.445783 [brute_force_detector] Traceback (most recent call last):"
+    error_path.write_text(f"{header}\n  File \"detector.py\", line 461\nValueError: bad data\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "brute_force_detector", "Traceback (most recent call last):", header),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            ("error_offset:errors.log", str(error_path.stat().st_size)),
+        )
+
+    assert collector.tail_errors() == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = connection.execute("SELECT line FROM error_events").fetchall()
+    assert len(rows) == 1
+    assert '  File "detector.py", line 461' in rows[0]["line"]
+    assert rows[0]["line"].endswith("ValueError: bad data")
+
+
+def test_tail_errors_backfill_preserves_repeated_event_order(tmp_path) -> None:
+    """Match repeated headers to the correct historical occurrence."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    header = "2026/10/09 13:54:02.445783 [worker] Traceback (most recent call last):"
+    first = f"{header}\nValueError: first"
+    error_path.write_text(f"{first}\n{header}\nValueError: second\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "worker", "Traceback (most recent call last):", first),
+        )
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "worker", "Traceback (most recent call last):", header),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            ("error_offset:errors.log", str(error_path.stat().st_size)),
+        )
+
+    assert collector.tail_errors() == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = [row[0] for row in connection.execute(
+            "SELECT line FROM error_events ORDER BY id"
+        )]
+    assert rows == [first, f"{header}\nValueError: second"]
 
 
 def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
@@ -62,6 +419,120 @@ def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
     assert rows[0]["bytes"] == 200
     assert rows[0]["source_packets"] == 1
     assert checkpoint == "2"
+
+
+def test_flow_index_reconciles_pruned_raw_flows(tmp_path) -> None:
+    """Clear stale host traffic rows after raw retention removes them."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = {
+        "starttime": 10,
+        "saddr": "10.0.0.1",
+        "daddr": "8.8.8.8",
+        "proto": "tcp",
+        "bytes": 100,
+        "pkts": 2,
+    }
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                ("keep", json.dumps(flow), "benign"),
+                ("expire", json.dumps(flow), "benign"),
+            ],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 2
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows WHERE uid = 'expire'")
+
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history_path, read_only=True) as connection:
+        assert [
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        ] == ["keep"]
+
+
+def test_flow_index_restarts_after_sqlite_reuses_rowids(tmp_path) -> None:
+    """Index new traffic even if retention removed the previous tail row."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = {
+        "starttime": 10,
+        "saddr": "10.0.0.1",
+        "daddr": "8.8.8.8",
+        "proto": "tcp",
+        "bytes": 100,
+        "pkts": 2,
+    }
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                (f"old-{index}", json.dumps(flow), "benign")
+                for index in range(3)
+            ],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 3
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows")
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("new", json.dumps(flow), "benign"),
+        )
+
+    assert collector.index_new_flows() == 1
+    assert collector.reconcile_flow_index() == 3
+    with connect_history(history_path, read_only=True) as connection:
+        assert [
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        ] == ["new"]
+
+
+def test_flow_index_detects_same_rowid_reused_for_new_uid(tmp_path) -> None:
+    """A replacement of the checkpoint row must still be indexed."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = json.dumps(
+        {
+            "starttime": 10,
+            "saddr": "10.0.0.1",
+            "daddr": "8.8.8.8",
+            "proto": "tcp",
+            "bytes": 100,
+            "pkts": 2,
+        }
+    )
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [("old-1", flow, "benign"), ("old-2", flow, "benign")],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 2
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows WHERE uid = 'old-2'")
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("new", flow, "benign"),
+        )
+
+    assert collector.index_new_flows() == 2
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history_path, read_only=True) as connection:
+        assert {
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        } == {"old-1", "new"}
 
 
 def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
@@ -141,6 +612,47 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     assert flow == ("evidence-1", "flow-1")
     assert collector.backfill_detections() == 0
     assert redis_client.scan_iter.call_count == redis_scan_calls
+
+
+def test_detection_backfill_does_not_restore_deleted_records(tmp_path) -> None:
+    """Review tombstones prevent old alerts.json entries from reappearing."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with sqlite3.connect(flows_path) as connection:
+        collector._detection_schema(connection)
+        connection.execute(
+            "CREATE TABLE review_deletions(entity TEXT, record_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO review_deletions VALUES (?, ?)",
+            [("evidence", "evidence-1"), ("alert", "alert-1")],
+        )
+        collector._backfill_alert_record(connection, {
+            "Status": "Event", "ID": "evidence-1"
+        })
+        collector._backfill_alert_record(connection, {
+            "Status": "Incident", "ID": "alert-1"
+        })
+        collector._backfill_alert_record(connection, {
+            "Status": "Incident", "ID": "alert-2",
+            "CreateTime": "2026-10-11T00:00:00+00:00",
+            "StartTime": "2026-10-11T00:00:00+00:00",
+            "Source": [{"IP": "10.0.0.1"}],
+            "CorrelID": ["evidence-1"], "Note": "{}",
+        })
+        assert connection.execute(
+            "SELECT COUNT(*) FROM evidence"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT alert_id FROM alerts"
+        ).fetchall() == [("alert-2",)]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM alert_evidence"
+        ).fetchone()[0] == 0
 
 
 def test_backfill_skips_redis_scan_when_evidence_is_already_durable(
@@ -410,3 +922,26 @@ def test_collector_records_heartbeat_and_clean_disconnect(tmp_path) -> None:
         "backend_heartbeat_at": "100.0",
         "backend_disconnected_at": "101.0",
     }
+
+
+def test_score_recovery_preserves_canonical_data_and_existing_scores(tmp_path: Path) -> None:
+    """Fill old missing scores without replacing evidence or erasing real zero.
+
+    Parameters:
+        tmp_path: Isolated older run directory.
+    """
+    factory = ModuleFactory()
+    from slips_files.core.database.sqlite_db.database import SQLiteDB
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    database.execute("INSERT INTO evidence(evidence_id,data) VALUES ('missing','{\"canonical\":true}')")
+    database.execute("INSERT INTO evidence(evidence_id,data,accumulated_threat_level,accumulated_ratl) VALUES ('zero','{}',0,0)")
+    collector = HistoryCollector(str(tmp_path), tmp_path / 'history.sqlite', Mock(), 12345)
+    for identifier in ('missing', 'zero'):
+        record = {'ID': identifier, 'Status': 'Event', 'StartTime': '2026-10-25T10:00:00Z',
+                  'Source': [{'IP': '1.2.3.4'}], 'Note': json.dumps({'accumulated_threat_level':1.28,
+                  'risk_accumulated_threat_level':.4096, 'timewindow':1})}
+        collector._backfill_alert_record(database.conn, record)
+    database.conn.commit()
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl,data FROM evidence WHERE evidence_id='missing'").fetchone() == (1.28,.4096,'{"canonical":true}')
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='zero'").fetchone() == (0,0)
+    database.close()

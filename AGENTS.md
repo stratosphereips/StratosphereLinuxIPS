@@ -70,6 +70,14 @@ These rules MUST be followed:
 - always use modules/supported_module_names.py instead of hardcoding module names.
 - when creating a new branch use the following format: my_name/fix_x.
 - be brief and avoid being verbose with comments in the code, .yml files, Dockerfiles etc. unless absolutely necessary.
+- Evidence descriptions must state observed facts and detection reasons. Omit recurring disclaimers about benign explanations, proof of attack or unconfirmed exploitation; document detector limitations in docs/.
+
+### Core performance:
+- Core capture, parsing, profiling and routing throughput takes priority over detection features.
+- Keep detection, correlation and expensive processing in module workers.
+- Keep essential core integration minimal; do not add detection-specific lookups, scans or waits to the core flow path.
+- Slower modules must not block the core. Bound their memory and queued work to avoid exhausting shared resources.
+- Verify core throughput when changing core integration for a module.
 
 ### Paths:
 - NEVER use absolute paths

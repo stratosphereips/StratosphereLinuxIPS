@@ -95,6 +95,7 @@ parameters:
   # This directory stores databases and runtime-generated files that must
   # persist across different slips runs and should not be overwritten.
   # this dir is inside slips root dir.
+  # With -m -f <input> -o <dir>, runtime data uses <dir>/permanent automatically.
   permanent_dir: permanent
 
   # Default pcap packet filter. Used with zeek pcapfilter : 'ip or not ip'
@@ -115,12 +116,11 @@ parameters:
   # detections, but the TCP standard defines 1hs.
   tcp_inactivity_timeout: 60
 
-  # Should Slips delete the previously stored data in the Redis DB when
-  # it starts?
-  # If Slips does not delete the DB, it can remember all the past
-  # detections and TI information.
-  # Redis will keep the data as long as it is not stopped.
-  # The persistence is in memory, not disk.
+  # Clear the current run's Redis database 0 at startup. Database 1 on
+  # port 6379 is the shared cache and is not cleared by this setting.
+  # Set false only for workflows that manage Redis state explicitly;
+  # it does not preserve the output directory or safely resume a run.
+  # Use --keep-history to retain old live-interface detections in SQLite.
   # deletePrevdb : false
   deletePrevdb: true
 
@@ -182,6 +182,44 @@ parameters:
   # client_ips : [10.0.0.1, 11.0.0.0/24]
   client_ips: []
 
+# Live-interface raw-flow retention. Detection history has separate limits;
+# ordinary raw flows expire sooner than flows linked to non-excluded evidence.
+# This does not run when importing a capture file.
+flow_retention:
+  enabled: true
+  ordinary_hours: 24
+  # Under size pressure, keep unlinked flows for at least this long so
+  # detectors can still attach evidence to recent traffic.
+  size_min_age_minutes: 60
+  linked_days: 30
+  batch_size: 500
+  interval_seconds: 60
+  # Target logical SQLite size. Under pressure, unlinked flows older than
+  # size_min_age_minutes go first; linked flows are ordered by their latest
+  # evidence and protected for ordinary_hours after that evidence.
+  # 0 disables the size cap.
+  max_size_mb: 512
+
+#############################
+detection_history:
+  enabled: true
+  active_days: 90
+  # Rotate older details sooner under size pressure, preserving the last day.
+  max_active_size_mb: 2048
+  min_active_hours: 24
+  # Monthly SQLite archives expire 30 days after their last write.
+  archive_retention_days: 30
+  archive_file_size_mb: 256
+  # Expire the oldest completed segments sooner if archives exceed this cap.
+  max_archive_size_mb: 4096
+  batch_size: 200
+  interval_seconds: 10
+  work_budget_ms: 250
+  min_free_disk_mb: 1024
+  # Rotate Slips logs at this size; retain rotated logs for the archive age.
+  log_max_size_mb: 64
+  log_backup_count: 30
+
 #############################
 Debug:
   # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
@@ -195,8 +233,9 @@ Debug:
 #############################
 detection:
   # Evidence detection threshold is used for non-live traffic only, such as
-  # pcaps and Zeek directories. It is the minimum accumulated threat level per
-  # time window needed to generate an alert for that IP in non-live analysis.
+  # pcaps and Zeek directories. The alert threshold for one host/time window is
+  # evidence_detection_threshold * time_window_width (seconds) / 60.
+  # Compare this threshold with the sum of threat value * confidence.
   # It controls how sensitive Slips is.
   # The default 0.25 value gives you balanced detections with
   # the optimal false positive rate and TPR.
@@ -215,13 +254,14 @@ detection:
   # Make Slips pop up alerts? Both Linux and Macos
   popup_alerts: false
 
-  # these risk weights define different sensitivity levels in slips.
-  # the higher the risk weight, the more sensitive slips is, the more alerts you will get.
+  # Live score = sum of threat value * confidence, multiplied by the active risk weight.
+  # Risk starts low and rises after alerts; the highest reached weight is shared across hosts.
+  # These levels are separate from evidence threat levels. Higher weight means more sensitive.
   low_risk_weight: 0.32
   medium_risk_weight: 1
   high_risk_weight: 1.72
-  # When the accumulated evidence weights reach this threshold, slips sets an evidence.
-  # the lower this value is, the more alerts slips will generate.
+  # Generate a live alert when the live score reaches this value.
+  # Lower means more sensitive. PCAP/log analysis uses evidence_detection_threshold instead.
   risk_accumulated_threat_level: 5
 
 #############################
@@ -235,6 +275,8 @@ modules:
   # ml_linear_model, ml_online_model
   disable:
     - template
+    # Numeric beaconing replaces the legacy RNN by default. Remove to compare both.
+    - rnn_cc_detection
 
   # For each line in timeline file there is a timestamp.
   # By default the timestamp is seconds in unix time. However
@@ -693,56 +735,617 @@ brute_force_detector:
   ssh_attempt_threshold: 9
 
 #############################
+arp:
+  # Seconds of ARP requests considered together, using packet timestamps.
+  # Each target expires separately, so old questions cannot inflate a new burst.
+  scan_window_seconds: 30
+
+  # Distinct target IPs needed before examining a burst. Retries count once.
+  # Reaching this count alone does not generate evidence.
+  scan_min_targets: 5
+
+  # Minimum targets without prior successful communication from this device.
+  # An ordered search needs this many unfamiliar targets to suggest a scan.
+  # With no prior source contacts, this many targets must also be unobserved on the network.
+  scan_min_unfamiliar_targets: 10
+
+  # Required share of unfamiliar targets: 0.8 means at least 80%.
+  # This prevents a few new neighbours among many familiar ones causing alerts.
+  scan_min_unfamiliar_ratio: 0.8
+
+  # This many unfamiliar targets can suggest a scan even in random order.
+  # A burst this large without enough scan indicators is informational
+  # ARP_DISCOVERY evidence instead; it adds nothing to the alert score.
+  scan_broad_targets: 32
+
+  # Required share of successive distinct requests to adjacent IPs (either direction).
+  # 0.7 means 70%; this supports smaller ordered sweeps. It is not required for large scans.
+  scan_ordered_ratio: 0.7
+
+  # Brief wait after a burst becomes a candidate, allowing observed replies
+  # and arriving connection records to add context. Missing records are unknown.
+  scan_context_wait_seconds: 3
+
+  # Minimum seconds between findings of the same source device/address/network.
+  # A scan can still be reported during an earlier informational discovery cooldown.
+  # Stronger confidence also bypasses it: 95% needs at least twice the unfamiliar
+  # threshold (minimum 20) and 90% unfamiliar; 100% needs ten times (minimum 100)
+  # and 95% unfamiliar. Novelty/search checks must still pass; heavy normal use
+  # keeps confidence lower. At 100%, replace target records with a 1 KiB counter
+  # and 20 sample IDs, reporting near 1000, 10000, etc. Familiar neighbours never
+  # add to that counter. This value also sets the quiet gap before tracking resets.
+  scan_alert_cooldown_seconds: 300
+
+  # Two successful TCP/UDP contacts must be separated by at least these seconds
+  # before a neighbour is familiar. Both directions must carry application bytes;
+  # ARP requests/replies and empty connection probes never establish familiarity.
+  scan_familiar_min_interval_seconds: 300
+
+  # Expire source-to-neighbour history after this many days without successful use.
+  # Live history survives restarts and is separated by gateway, subnet and source MAC.
+  scan_familiar_retention_days: 30
+
+  # Seconds between private history checkpoints. No disk writes occur per packet.
+  # A clean stop saves immediately; a crash can lose this many seconds of learning.
+  scan_checkpoint_seconds: 120
+
+  # Maximum source device/address/network groups in memory. Oldest-used groups
+  # are discarded at capacity; a warning explains when context has been lost.
+  scan_max_sources: 256
+
+  # Maximum target IPs and representative request UIDs kept per source group.
+  # At capacity, discard oldest-used targets and mark evidence counts as partial.
+  scan_max_targets: 512
+
+  # Maximum successful source-to-neighbour records, and separate sender/UID caches.
+  # Old contacts are discarded at capacity; increasing this preserves more history
+  # on large networks but uses more memory and checkpoint space.
+  scan_max_relationships: 8192
+
+#############################
+network_discovery:
+  # Detect horizontal scans using distinct destination IPs on the same port.
+  # Detection starts immediately; 443 and the first minutes are not exempt.
+  # See docs/horizontal_port_scans.md for packet rules and limitations.
+
+  # Seconds covered by the fast scan check, independent of Slips time windows.
+  # A short period catches bursts without adding unrelated failures all hour.
+  horizontal_fast_window_seconds: 60
+
+  # Distinct new targets needed inside the fast period. Retries count once.
+  # Higher values reduce sensitivity to small scans and reconnection bursts.
+  horizontal_fast_min_targets: 10
+
+  # Seconds covered by the separate slow scan check. This catches attempts
+  # spread over time, including across Slips time-window boundaries.
+  horizontal_slow_window_seconds: 1800
+
+  # Distinct new targets needed inside the slow period. A larger count than
+  # the fast check avoids treating occasional failed connections as a scan.
+  horizontal_slow_min_targets: 25
+
+  # Minimum share of recent distinct targets with failed probes. Successful traffic lowers this share. Does not gate the separate
+  # check for short connections to open services without application data.
+  horizontal_min_failure_ratio: 0.8
+
+  # Remember successful use of a destination on this port for these seconds.
+  # Failed reconnections to it are excluded from NEW-target scan counts until
+  # this expires. This is bounded, in-memory context, not a permanent whitelist.
+  horizontal_success_history_seconds: 3600
+
+  # Minimum seconds between findings of the same probe kind/source/port.
+  # A stronger threat or confidence bypasses this cooldown. Strong scan patterns
+  # reach 95% at 2x the target threshold (at least 20 targets), then 100% at
+  # 10x (at least 100), with at least 90% and 95% failed targets respectively.
+  # At 100%, replace full target records with a fixed 1 KiB distinct-IP counter.
+  # Report continuing growth near 1000, 10000, 100000, etc. as approximate totals.
+  # Check batches of 32 probes, retaining at most 20 sample flows. Reset after
+  # probes pause for this many seconds; no repeated expensive scan checks.
+  # Confidence rates the observed scan pattern; it is not malware probability.
+  horizontal_alert_cooldown_seconds: 300
+
+  # Minimum seconds between full checks of a source/port group. New targets
+  # also trigger a check each minimum target count, so a fast burst need not
+  # wait for a later flow. Set 0 to check every flow, at higher CPU cost.
+  horizontal_evaluation_interval_seconds: 1
+
+  # Maximum network/source/protocol/port groups held in memory. At capacity,
+  # discard the least recently used group; its old context is then forgotten.
+  horizontal_max_groups: 256
+
+  # Maximum destination IPs remembered per group, including successful ones.
+  # Must cover both target thresholds. The oldest used target is discarded
+  # at capacity. More targets improve coverage but use more memory and CPU.
+  horizontal_max_targets: 256
+
+  # Seconds in the vertical scan check: one source trying many ports of one
+  # destination. One hour also catches slow probes. Uses incoming flows only,
+  # with no Redis scan-total searches; shorter periods require a tighter burst.
+  vertical_window_seconds: 3600
+
+  # Distinct failed destination ports needed for the initial finding. Repeated
+  # attempts to the same port count once; increasing this misses smaller scans.
+  vertical_min_ports: 10
+
+  # Seconds between ordinary vertical findings, and the probe-free gap that
+  # ends a continuing scan. Higher confidence bypasses the ordinary cooldown.
+  # Confirmed SYN/UDP scans reach 95% at 2x the threshold (minimum 20 ports),
+  # then 100% at 10x (minimum 100). Replace exact records with a 1 KiB counter
+  # and at most 20 IDs; report growth near 1000 and 10000 distinct ports.
+  # Missing history and ACK/FIN-only traffic retain their lower confidence.
+  vertical_alert_cooldown_seconds: 300
+
+  # Maximum source/destination/protocol/probe-family/network groups in memory.
+  # Allocate a group after a second distinct port. A separate cache remembers
+  # at most four times this many single-port contacts; rotating that cache is
+  # normal during horizontal scans. Oldest-used groups are discarded at capacity.
+  vertical_max_groups: 256
+
+  # Maximum exact failed ports per unconfirmed group. Must cover min_ports;
+  # values below the full-confidence threshold can prevent compact tracking.
+  # Confirmed groups release this list and keep only the small counter.
+  vertical_max_ports: 256
+
+  # Maximum client groups for DHCP requests and, separately, ICMP notice groups.
+  # This bounds memory even when many clients scan. DHCP also separates client
+  # MACs and Slips time windows; ICMP relies on host counts supplied by Zeek.
+  other_scan_max_groups: 256
+
+  # A gap this many seconds long starts fresh DHCP/ICMP tracking. Continuing
+  # confirmed DHCP requests use compact distinct-IP counting and powers-of-ten
+  # reports; duplicate ICMP notices are suppressed until their count grows.
+  other_scan_quiet_seconds: 300
+
+  # Distinct addresses requested by one DHCP client before reporting broad
+  # requests. Renewals of the same address do not add up. Confidence starts at
+  # 80%, rises to 95% at twice this count (minimum 20), and reaches 100% at ten
+  # times (minimum 100). Range 2-100 keeps pre-confirmation memory bounded.
+  dhcp_min_addresses: 4
+
+#############################
+
+#############################
+smb_analyzer:
+  # Start the SMB behavior detector. It reads Zeek records, not packet bodies.
+  enabled: true
+  # Record the first read/write per file handle and file closes in new Zeek runs.
+  # Needed for executable writes, reported file sizes and rapid file changes.
+  log_file_operations: true
+  # Keep failed SMB session-setup replies, without logging every SMB command.
+  # Needed when NTLM records do not contain a definite authentication result.
+  log_authentication_failures: true
+  # Treat these TCP destination ports as SMB candidates. Other ports need RPC context.
+  ports: [139, 445]
+  # Count distinct scanned hosts, shares, failed logins and changed files over this
+  # many capture seconds. Shorter periods require more concentrated activity.
+  window_seconds: 60
+  # Connect scanning with later transfers, and executable writes with later service
+  # requests, for this many capture seconds. This is not a training period.
+  correlation_seconds: 900
+  # Accept records arriving this far behind the newest capture timestamp. Allows
+  # parallel parsing and long connections without mixing unrelated days of activity.
+  max_lateness_seconds: 1800
+  # Require this many distinct SMB targets before calling the behavior a scan.
+  scan_min_hosts: 20
+  # Scan confidence is based on distinct hosts: 95% requires twice this count
+  # (minimum 20) with at least 90% explicit failed SYNs; 100% requires ten times
+  # (minimum 100) and 95%. Then release probe records, retain a fixed 1 KiB
+  # distinct-host counter and 20 sample IDs, and report near 1000, 10000, etc.
+  # Missing SYN history cannot acquire full confidence from volume alone.
+  # At least this fraction of those targets must have failed to establish TCP.
+  # A successful connection to a busy file server does not count as a failed probe.
+  scan_min_failure_ratio: 0.8
+  # Broad share access: trigger at this many servers OR this many share names.
+  # One ordinary IPC$ or C$ access is insufficient.
+  share_min_hosts: 8
+  share_min_names: 10
+  # Require the same literal IP inside a share path to disagree with this many
+  # actual destination IPs before the medium-threat repeated-mismatch finding.
+  # Each individual mismatch is reported separately as SMB_SHARE_IP_MISMATCH.
+  mismatch_min_hosts: 3
+  # Raise suspected propagation only when repeated path mismatches also accompany
+  # probing or share access involving this many hosts. No fixed malware IP/domain.
+  propagation_min_hosts: 20
+  # Report an established SMB session sending OR receiving at least this many
+  # bytes. Default is 4 MiB. Ordinary volume is informational; sending this much
+  # with recent scanning or repeated mismatched share paths produces the stronger finding.
+  large_transfer_bytes: 4194304
+  # Report an accessed file whose recorded size reaches this many bytes (100 MiB).
+  # Reported file size does not prove the whole file was uploaded or downloaded.
+  large_file_bytes: 104857600
+  # Require this many distinct connections with explicit authentication failures.
+  # Duplicate NTLM/SMB reports for one connection count once. Unknown results,
+  # unfinished negotiations and TCP failures are not failed password attempts.
+  auth_min_failures: 10
+  # Count these SMB session-setup results as rejected credentials. Generic access
+  # denial, password expiry and unfinished negotiation are excluded by default.
+  authentication_failure_statuses: [LOGON_FAILURE, WRONG_PASSWORD, NO_SUCH_USER]
+  # After enough failures, flag possible spraying across this many known accounts
+  # OR servers. Password values are unavailable; reuse of one password is unproven.
+  spray_min_accounts: 5
+  spray_min_hosts: 5
+  # Flag a burst affecting this many distinct files. Repeated chunks of one file
+  # cannot meet this threshold. Backups and bulk administration can also do this.
+  file_change_min_files: 30
+  # The stronger possible-ransomware finding requires BOTH this many distinct
+  # renamed files and this many files written/deleted during window_seconds.
+  # These records cannot establish encryption or see changes made only locally.
+  ransomware_min_renames: 20
+  ransomware_min_other_changes: 10
+  # Recognize these filename suffixes when correlating an executable write with
+  # a later remote service request. A filename alone does not prove execution.
+  executable_extensions: [.exe, .dll, .scr, .ps1, .bat, .cmd, .vbs, .msi]
+  # Approved external SMB servers/subnets, e.g. [203.0.113.10/32]. Suppresses only
+  # external-connection findings. Other behaviors still run; use whitelist.conf
+  # for evidence-specific exceptions to known authorized activity.
+  external_allowed_networks: []
+  # Shares used to correlate executable writes with remote service requests.
+  admin_shares: [admin$, c$]
+  # RPC operations considered service creation/start after an executable write.
+  # A request does not prove that Windows successfully executed the service.
+  remote_service_operations: [CreateServiceW, CreateServiceA, CreateServiceWOW64W, StartServiceW, StartServiceA]
+  # Wait this many capture seconds before repeating the same rule for one source
+  # (or source/server for transfer/external/service findings). Limits alert floods.
+  # Stronger confidence for SMB_SCAN / SMB_SHARE_SWEEP bypasses this cooldown.
+  # Confirmed scans/share sweeps report powers-of-ten growth and reset after
+  # this many seconds without their qualifying probes/mappings. Share sweeps
+  # compact the confirmed dimension (distinct hosts or distinct share names).
+  # Other SMB correlations keep their own bounded records and unchanged rules.
+  cooldown_seconds: 300
+  # Recalculate scan counters after this many capture seconds or another
+  # scan_min_hosts probes (so a fast burst is detected immediately). SMB
+  # share, authentication and file events are evaluated immediately.
+  evaluation_interval_seconds: 1
+  # Resource ceilings. Evict older context when a ceiling is reached and report
+  # that loss of detection context. Raw events already saved on disk remain saved.
+  # Most initiating clients tracked at once; older client context is discarded.
+  max_sources: 256
+  # Most distinct targets, file actions, login results and correlations per client.
+  max_events_per_source: 2048
+  # Combined observation ceiling across all clients, to bound total memory use.
+  max_total_events: 32768
+  # Most connection summaries kept while joining SMB operations to their sessions.
+  max_sessions: 4096
+  # Most source/rule/server repeat timers retained to limit repeated findings.
+  max_cooldowns: 4096
+  # Each rule can be disabled or assigned a different threat/confidence below.
+  # Threat describes the seriousness of the behavior. Confidence describes how
+  # strongly the available records establish that behavior, NOT malware probability.
+  # Volume alone is info; combined propagation/execution-like behavior is high.
+  # For SMB_SCAN / SMB_SHARE_SWEEP, confidence is the starting value and grows
+  # with verified distinct hosts/shares; for other rules it stays fixed.
+  rules:
+    SMB_SCAN: {enabled: true, threat_level: medium, confidence: 0.85}
+    SMB_SHARE_SWEEP: {enabled: true, threat_level: medium, confidence: 0.8}
+    SMB_SHARE_PATH_MISMATCH: {enabled: true, threat_level: medium, confidence: 0.75}
+    # A literal IP in the requested share differs from the connected server IP.
+    # Report the first occurrence; cooldown_seconds limits repeats per source/server.
+    SMB_SHARE_IP_MISMATCH: {enabled: true, threat_level: low, confidence: 0.9}
+    SMB_SUSPECTED_PROPAGATION: {enabled: true, threat_level: high, confidence: 0.9}
+    SMB_EXTERNAL_CONNECTION: {enabled: true, threat_level: low, confidence: 0.8}
+    SMB_LARGE_TRANSFER: {enabled: true, threat_level: info, confidence: 0.95}
+    SMB_LARGE_FILE: {enabled: true, threat_level: info, confidence: 0.8}
+    SMB_SUSPICIOUS_TRANSFER: {enabled: true, threat_level: high, confidence: 0.85}
+    SMB_REMOTE_EXECUTION: {enabled: true, threat_level: high, confidence: 0.85}
+    SMB_PASSWORD_GUESSING: {enabled: true, threat_level: medium, confidence: 0.85}
+    SMB_PASSWORD_SPRAYING: {enabled: true, threat_level: high, confidence: 0.85}
+    SMB_RAPID_FILE_CHANGES: {enabled: true, threat_level: medium, confidence: 0.8}
+    SMB_RANSOMWARE_BEHAVIOR: {enabled: true, threat_level: high, confidence: 0.85}
+
+beaconing:
+  # Analyze numeric connection timing and sizes. Restart Slips to change this.
+  # Disable rnn_cc_detection in modules.disable to avoid running two C2 detectors and TensorFlow.
+  enabled: true
+
+  packet_timing:
+    # Collect packet timing inside individual TCP connections. Opt in because
+    # Zeek must handle packet events; disabled leaves the capture path unchanged.
+    enabled: false
+    # Also examine pure ACKs and TCP keepalive probes. These produce info only.
+    # Leave off to reduce ordinary transport-maintenance records.
+    include_acks: false
+    # Events needed in ONE direction of ONE connection before judging a rhythm.
+    # More reduces accidental patterns but delays detection of slow callbacks.
+    min_events: 12
+    # Recent event times and sizes retained per direction/kind; bounds memory.
+    window_events: 64
+    # Additional events between summary records sent to the Python worker.
+    # Larger values reduce logging and processing but delay recognition of changes.
+    emit_every: 8
+    # Maximum concurrently tracked TCP connections in the Zeek collector.
+    # At capacity, additional connections wait for space rather than growing state.
+    max_connections: 2048
+    # Ignore early handshake/startup traffic for this many seconds per connection.
+    min_connection_age_seconds: 30.0
+    # Minimum interval between events. Faster bursts reset the timing window
+    # instead of being downsampled into an artificial regular pattern.
+    min_interval_seconds: 1.0
+    # Require this many seconds of observations before reporting periodic packets.
+    min_span_seconds: 60.0
+    # Data packets larger than this reset the small-packet window in that direction.
+    # Keeps bulk transfers out of heartbeat analysis; payload bytes are never logged.
+    max_payload_bytes: 512
+    # Fraction of intervals that must fit a period for an informational finding.
+    min_support: 0.9
+    # Allowed error as a fraction of the period: 0.1 permits +/-10%.
+    jitter_tolerance: 0.1
+    # Stronger suspicious-heartbeat finding requires this fraction of fitting gaps.
+    suspicious_min_support: 0.95
+    # Maximum robust relative timing variation for the stronger finding (5%).
+    suspicious_max_jitter: 0.05
+    # Largest typical application message size for the stronger finding, in bytes.
+    small_payload_bytes: 128
+    # Fraction of messages that must have the same size for the stronger finding.
+    uniform_size_fraction: 0.9
+    # On these server ports, regular small client data without a recognized
+    # application protocol is suspicious. Requires handshake and server data;
+    # recognized TLS/HTTP/etc., ACKs and keepalives remain informational.
+    expected_tls_ports: [443]
+    # Severity and confidence of the stronger heartbeat finding. Medium * 0.85
+    # contributes 0.425 to the source host score. Lower severity to reduce its impact.
+    suspicious_threat_level: medium
+    suspicious_confidence: 0.85
+    # Confidence for ordinary packet periodicity, which always has info threat
+    # and contributes zero to the host score, including ACK/keepalive rhythms.
+    periodic_confidence: 0.6
+
+  # Connections needed in a channel before judging repetition. More reduces
+  # accidental patterns but takes longer to detect slow beacons. Range: 6-512.
+  min_connections: 12
+  # Recent connections kept per client/server/port/protocol. Older ones are
+  # replaced, so changed behavior eventually replaces the old pattern. Range: 12-512.
+  window_connections: 128
+  # Seconds the observations must span. Prevents a brief burst of requests from
+  # appearing to be a sustained beacon; lower for short tests. Range: 0-31536000.
+  min_span_seconds: 30.0
+  # Shortest repeating interval to examine, in seconds. Smaller values include
+  # faster request loops and can find more ordinary application traffic. Range: 0.001-86400.
+  min_period_seconds: 0.1
+  # Longest repeating interval, in seconds. Daily callbacks need many days of
+  # observations; increase retention_hours to cover those observations. Range: 0.001-604800.
+  max_period_seconds: 86400.0
+  # Allowed timing error as a fraction of one interval: 0.25 permits +/-25%.
+  # Larger values tolerate more irregular timing but also match more benign traffic.
+  # Range: 0.01-0.45. Applies to start times, delays after replies, and burst starts.
+  jitter_tolerance: 0.25
+  # Fraction of intervals that must follow the recurring pattern. 0.8 requires
+  # 80%. Lower values tolerate interruptions but produce more chance matches.
+  # Range: 0.6-1. At least half must still be single, directly observed cycles.
+  min_support: 0.8
+  # Missing callbacks allowed between observed connections. 2 allows gaps of
+  # two or three intervals; larger gaps count against support. Range: 0-4.
+  max_missed: 2
+  # New connections required between checks. More reduces CPU work but delays
+  # discovering a new or changed pattern. Range: 1-128.
+  evaluate_every: 4
+  # Minimum seconds between checks of one channel. Limits repeated work on fast
+  # streams; offline analysis uses packet time. Range: 0-3600.
+  evaluate_interval_seconds: 5.0
+  # After a pattern is found, require this many new connections between checks.
+  # Reduces repeated fitting/classification while the rolling window still tracks
+  # current traffic. A failed check resumes evaluate_every. Range: 1-512.
+  stable_evaluate_every: 32
+  # Minimum seconds between checks of an established pattern. Raising this saves
+  # CPU but delays recognizing changes; offline runs use packet time. Range: 0-3600.
+  stable_evaluate_interval_seconds: 60.0
+  # Maximum mature channels with at least min_connections observations. Shorter
+  # sequences have a separate limit below, so scan targets and one-off connections
+  # cannot evict mature windows. More uses more memory. Range: 16-16384.
+  max_channels: 2048
+  # Maximum short sequences awaiting min_connections observations. Each keeps
+  # at most min_connections records. At capacity the least recently used candidate
+  # is forgotten; it must collect observations again. Range: 16-65536.
+  max_candidates: 4096
+  # Report a new pattern once, then at powers of this connection count: with 10,
+  # the default first finding at 12 is followed near 100, 1000, 10000, etc. Checks
+  # must still confirm the pattern. Larger values reduce evidence/DB writes.
+  # A suspected-C2 upgrade has its own progress and can be reported immediately.
+  # Range: 2-100. Reports can arrive after a milestone because checks are spaced.
+  report_growth_factor: 10
+  # Hours of packet history retained across time windows and restarts of this
+  # output directory. Expired windows are removed at checkpoint. Range: 1-8760.
+  # Must cover max_period_seconds; twelve daily connections need at least 264 hours.
+  retention_hours: 72.0
+  # Seconds before re-reporting a pattern lost and then found again in one channel.
+  # Continuing count milestones, a changed timing method or a period changing by
+  # at least 2x can report earlier. A silence longer than this value and four
+  # periods (with default max_missed) starts fresh observation collection.
+  # Range: 1-2592000.
+  alert_cooldown_seconds: 3600.0
+  # Seconds between saving changed windows to this run's private SQLite file.
+  # More reduces disk work but loses more recent observations after a crash. Range: 5-300.
+  flush_interval_seconds: 30.0
+  # Reviewed numeric classifier for resemblance to C2 examples. Empty string
+  # disables classification while retaining strong-periodicity findings. No pickle is loaded.
+  model_file: modules/beaconing/model.json
+  # Minimum pattern score for a LOW suspected-C2 finding, never a malware probability.
+  # Slips also enforces the model's validation threshold and trained protocols.
+  # Raising this reduces findings but misses more C2 examples. Range: 0.5-1.
+  c2_score_threshold: 0.5
+
+#############################
+anomaly_detection_services:
+  # Turn on learning and warnings for new local services, unfamiliar clients,
+  # unusual connection hours and lengths. A service is one computer's TCP/UDP port.
+  enabled: false
+  # auto: learn normal connections, then report unusual ones.
+  # train: only learn; use this to teach Slips about legitimate changes.
+  # detect: check connections using saved learning; do not accept new habits.
+  mode: auto
+  # Local timezone for learning usual connection hours, e.g. Europe/Prague.
+  # Use your network's timezone so working hours are understood correctly.
+  # Changing it clears learned connection hours, but preserves known clients and lengths.
+  timezone: UTC
+  # Hours learning each local host's usual answering ports, and each service's normal clients.
+  # Per-service learning starts at the first reply; host learning starts at first activity.
+  # The capture computer starts at capture startup even when quiet. Uses connection start times.
+  # 168 = 7 days; 0.0167 is about 1 minute. Client/time/length checks also need
+  # min_training_connections and min_training_days, so time alone does not finish their training.
+  training_hours: 168
+  # Report a local port first seen answering after its host's training window, even if
+  # that host had no incoming connections during training. Unanswered probes do not count.
+  # Such a port stays unusual until accepted with mode: train. false disables this check.
+  detect_new_services: true
+  # Maximum local computers whose answering ports are remembered. Bounds memory use;
+  # hosts beyond this limit are skipped, rather than judged from incomplete learning.
+  max_hosts: 1024
+  # Maximum new-service warnings for one host per UTC hour, using connection start times.
+  # Limits warning floods across all its ports; other checks use max_alerts_per_service_hour.
+  max_new_services_per_host_hour: 10
+  # Successful connections needed before client/time/length findings for one service.
+  # More connections give Slips more examples; failed attempts cannot teach normality.
+  min_training_connections: 30
+  # Different UTC dates with successful connections needed for per-service findings.
+  # This prevents one busy day from being treated as several days of learning.
+  # This, min_training_connections and training_hours must all pass; new-port checks need only hours.
+  min_training_days: 3
+  # Different local dates with learned connections needed before reporting unusual hours.
+  # This gives Slips time to learn when people normally connect; empty days do not count.
+  time_min_days: 14
+  # For weekday checks, require connections on this many different weekday dates.
+  # For weekend checks, require weekend dates instead, so weekday habits do not judge weekends.
+  time_min_matching_days: 3
+  # Report an unusual hour only when its learned half-hour frequency is below this limit.
+  # Higher values report more times as unusual; this is not the chance of an attack.
+  time_probability_threshold: 0.01
+  # How much learned activity must gather around usual hours before checking unusual hours (0-1).
+  # Higher values need a clearer routine, avoiding warnings for irregular hours. 0 checks any routine.
+  time_min_concentration: 0.35
+  # Normally completed TCP connections needed before checking their length in seconds.
+  # More examples give a better idea of usual lengths; UDP and unfinished TCP do not count.
+  duration_min_samples: 50
+  # Maximum learned TCP connection lengths kept per client and for the whole service.
+  # More use more memory and retain older habits; fewer replace old examples sooner.
+  # Must be at least duration_min_samples, so enough examples can be kept to start checking.
+  duration_samples: 128
+  # How far a connection length must differ, relative to the variation in learned lengths.
+  # Higher values require a larger difference. This is not a number of seconds or a length ratio.
+  duration_zscore: 4.5
+  # Extra length check: exceed the learned upper end times this value,
+  # or fall below the lower end divided by it. Avoids reporting small length changes.
+  duration_ratio: 3
+  # Also require this many seconds of difference from the learned lower/upper end.
+  # Avoids reporting tiny absolute changes; all three length checks must pass.
+  duration_min_difference_seconds: 30
+  # Keep learning from successful, usual connections by known clients after initial training.
+  # Lets habits change gradually; false stops this learning. mode: train can still accept changes.
+  # This does not add unfamiliar clients after training or accept newly active ports.
+  adapt_known_clients: true
+  # Days of learned connection times kept for the usual-hours check.
+  # Limits memory and forgets old schedules; does not delete known clients or learned lengths.
+  history_days: 56
+  # Forget inactive hosts, answering ports and clients after this many days of connection time.
+  # Removes old learning to limit memory and disk use; returning hosts need fresh training.
+  # Host activity does not keep every port active: an unused port can expire on an active host.
+  retention_days: 90
+  # Maximum services with learned clients, and separately the total ports remembered across hosts.
+  # Each list has this cap to limit memory. Extra service records are skipped when full.
+  # An incomplete host port list stops new-port warnings, so missing learning cannot cause false alarms.
+  max_services: 4096
+  # Maximum client-to-service records across all services; limits memory.
+  # A computer connecting to two services uses two records.
+  # An incomplete client list stops unfamiliar-client warnings for the affected service.
+  max_clients: 4096
+  # Maximum clients remembered for one service; prevents one busy port using all memory.
+  # If a client list is incomplete, Slips stops reporting unfamiliar clients for that service.
+  max_clients_per_service: 64
+  # Seconds of connection timestamps to wait before repeating the same warning
+  # for a client/service and combination of reasons. Reduces repeated evidence; 0 disables this wait.
+  # For new-service warnings, the wait is per host/port, across all clients.
+  alert_cooldown_seconds: 3600
+  # Maximum client/hour/length evidence records for one service per UTC hour of connection time.
+  # Limits warning floods across clients. New ports use max_new_services_per_host_hour instead.
+  max_alerts_per_service_hour: 10
+  # Real seconds between saving what Slips has learned to disk.
+  # Shorter intervals reduce loss after a crash but cause more disk writes.
+  # Normal shutdown also saves learning; this interval does not delay connection checks.
+  flush_interval_seconds: 30
+
+#############################
 anomaly_detection_https:
-  # Number of initial hours used to train the baseline model assuming benign traffic.
-  # If set to 0, detection starts immediately and baseline is learned online.
+  # Hours of observed HTTPS activity per host used to learn normal behavior before warning.
+  # Counts closed clock-hour groups with traffic, not empty hours or real time spent running.
+  # Use whole numbers. 0 skips this training wait; numerical checks still need min_baseline_points.
   training_hours: 2
-  # Training fit technique: welford or ewma.
+  # How to learn normal averages and variation during training:
+  # welford gives every training example equal weight; ewma favors recent examples.
+  # Choose ewma if normal behavior changes during training and recent examples should matter more.
   training_fit_method: welford
-  # Training adaptation strength:
-  # 1.0 = Welford benign fit (strongest, equal-weight fit),
-  # <1.0 = EWMA-style training with this alpha (used when training_fit_method=ewma).
+  # Weight of new measurements when training_fit_method is ewma (0.001-1).
+  # Higher values change learned averages faster; lower values remember older examples longer.
+  # Ignored with welford. 1 uses the newest value for the average; it does not select welford.
   training_alpha: 1
 
-  # Thresholds for anomaly detection in hourly and per-flow checks.
+  # How different an hourly HTTPS count or data volume must be from learned behavior to warn.
+  # Higher values give fewer warnings; this measures difference relative to usual variation.
+  # Used when training has not supplied a learned limit; see empirical_threshold_quantile.
   hourly_zscore_threshold: 3.0
+  # How different one connection's byte count to a known server must be to warn.
+  # Higher values give fewer byte-count warnings; new-server warnings are separate.
+  # Used when no limit was learned for that server; it is not seconds or bytes.
   flow_zscore_threshold: 3.5
 
-  # If hourly anomaly score is lower than this, treat it as drift and adapt.
+  # Largest combined anomaly score treated as a small change when choosing how fast to learn.
+  # Higher values allow larger changes to use drift_alpha rather than suspicious_alpha.
+  # max_small_flow_anomalies must also pass; this does not decide whether to produce evidence.
+  # With ADWIN off, individual-connection updates use the anomaly count alone.
   adaptation_score_threshold: 2.0
 
-  # Adaptation speed for baseline updates.
+  # Weight of new measurements in routine average/variation updates after training (0.001-1).
+  # Higher values follow changes faster. With ADWIN enabled, used whenever it finds no lasting change,
+  # even if an individual measurement was unusual; without ADWIN, used for normal connections.
   baseline_alpha: 0.5
+  # Weight for average/variation updates when a change is classified as small (0.001-1).
+  # Lower values accept new habits more slowly; used only after ADWIN reports a change when enabled.
   drift_alpha: 0.05
+  # Weight for average/variation updates when a change is classified as suspicious (0-1).
+  # Keep small to slow acceptance of suspicious behavior. 0 skips these updates.
+  # With ADWIN enabled, used only after it reports a lasting change.
   suspicious_alpha: 0.005
 
-  # Minimum baseline history required before z-score checks are applied.
+  # Previous measurements needed before checking numerical differences: hours for hourly checks,
+  # connections to that server for byte-count checks. More examples reduce early false alarms.
+  # This does not delay direct warnings about a new server or a new server TLS fingerprint.
   min_baseline_points: 6
 
-  # Max flow anomalies in an hour still considered "small drift".
+  # Maximum unusual connections in an hour allowed when treating a change as small.
+  # For individual connections, also limits the number of unusual reasons treated as small.
+  # Higher values allow more anomalies before choosing the slower suspicious_alpha updates.
   max_small_flow_anomalies: 1
 
-  # Optional ADWIN-based drift trigger (river).
-  # If true, drift/suspicious update is decided only after ADWIN signals drift.
-  # If false, Slips uses the previous threshold-only drift logic.
+  # Use ADWIN, which compares older and newer measurements to find a lasting behavior change.
+  # true: choose drift_alpha/suspicious_alpha only after that signal; otherwise use baseline_alpha.
+  # false, or missing river package: choose updates directly from anomaly scores/counts.
+  # This changes how Slips learns after training, not whether anomaly checks run.
   use_adwin_drift: true
+  # How easily ADWIN accepts a difference between older and newer measurements as a change (0.000001-1).
+  # Higher values report changes more readily; lower values require stronger evidence of change.
   adwin_delta: 0.01
+  # Check for a lasting change every this many measurements; 1 checks each measurement.
+  # Higher values reduce checking work but can delay recognizing changed habits.
+  # A measurement is one hourly value or one connection value, depending on the check.
   adwin_clock: 1
+  # Minimum measurements ADWIN must collect before checking for a lasting change.
+  # Higher values wait for more examples and reduce decisions from very little data.
+  # This counts measurements, not seconds, and is separate from training_hours.
   adwin_grace_period: 5
+  # Minimum measurements in each older/newer group that ADWIN compares.
+  # Higher values need more support for a change; lower values react sooner but can mistake noise for change.
   adwin_min_window_length: 5
+  # Where to place learned warning limits among differences seen during training.
+  # 0.995 uses the 99.5th percentile. Higher values generally give fewer warnings.
+  # With fewer than 10 training examples for a check, its fixed zscore threshold is used instead.
   empirical_threshold_quantile: 0.995
 
-
-  # JA3 statistical fallback gate used only when training_hours = 0.
-  # If there is no benign training period, ja3_changes is not scored
-  # until this minimum hourly value is reached.
+  # Used only with training_hours: 0. JA3 is a fingerprint of how client software starts TLS.
+  # Minimum hourly total of new client fingerprints across a host's server connections before
+  # checking that total for anomalies. Higher values avoid warnings from just a few changes.
+  # Despite this key's name, the limit is on the host's hourly total, not each server separately.
   ja3_min_variants_per_server: 3
 
-  # Operational logging verbosity:
-  # 0: disabled
-  # 1: important events only (detections, drift, training fit, stop/start)
-  # 2: + hourly summaries (recommended)
-  # 3: + per-flow arrivals and model update details
+  # Detail in this module's log: 0 none; 1 warnings, learning changes and start/stop;
+  # 2 also hourly summaries; 3 also every connection and learning update.
+  # Lower values reduce log volume and disk writes without disabling detection.
   log_verbosity: 3
 
 #############################
@@ -994,10 +1597,10 @@ DisabledAlerts:
   # All the following detections are turned on by default
   # Turn them off by adding any of the following detections to the
   # disabled_detections list
-  # ARP_SCAN, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
+  # ARP_SCAN, ARP_DISCOVERY, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
   # YOUNG_DOMAIN, MULTIPLE_SSH_VERSIONS, DIFFERENT_LOCALNET,
   # DEVICE_CHANGING_IP, NON_HTTP_PORT_80_CONNECTION, NON_SSL_PORT_443_CONNECTION
-  # WEIRD_HTTP_METHOD, INCOMPATIBLE_CN, DGA_NXDOMAINS, DNS_WITHOUT_CONNECTION,
+  # WEIRD_HTTP_METHOD, TLS_PROVIDER_IMPERSONATION, DGA_NXDOMAINS, DNS_WITHOUT_CONNECTION,
   # PASTEBIN_DOWNLOAD, CONNECTION_WITHOUT_DNS, DNS_ARPA_SCAN, UNKNOWN_PORT,
   # PASSWORD_GUESSING, HORIZONTAL_PORT_SCAN, CONNECTION_TO_PRIVATE_IP,
   # GRE_TUNNEL, VERTICAL_PORT_SCAN, SSH_SUCCESSFUL, LONG_CONNECTION,
@@ -1007,7 +1610,14 @@ DisabledAlerts:
   # DATA_UPLOAD, BAD_SMTP_LOGIN, SMTP_LOGIN_BRUTEFORCE, MALICIOUS_SSL_CERT,
   # ANOMALOUS_FLOW, MALICIOUS_FLOW, SUSPICIOUS_USER_AGENT, EMPTY_CONNECTIONS,
   # INCOMPATIBLE_USER_AGENT, EXECUTABLE_MIME_TYPE, MULTIPLE_USER_AGENT,
+  # SMB_SCAN, SMB_SHARE_SWEEP, SMB_SHARE_IP_MISMATCH, SMB_SHARE_PATH_MISMATCH,
+  # SMB_SUSPECTED_PROPAGATION,
+  # SMB_EXTERNAL_CONNECTION, SMB_LARGE_TRANSFER, SMB_LARGE_FILE, SMB_SUSPICIOUS_TRANSFER,
+  # SMB_REMOTE_EXECUTION, SMB_PASSWORD_GUESSING, SMB_PASSWORD_SPRAYING,
+  # SMB_RAPID_FILE_CHANGES, SMB_RANSOMWARE_BEHAVIOR,
   # HTTP_TRAFFIC, MALICIOUS_JARM, NETWORK_GPS_LOCATION_LEAKED,
+  # HTTP_IP_HOST, HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE, HTTP_BINARY_RESPONSE_AS_HTML,
+  # PERIODIC_PACKETS, SUSPICIOUS_PACKET_HEARTBEAT,
   # ICMP_TIMESTAMP_SCAN, ICMP_ADDRESS_SCAN, ICMP_ADDRESS_MASK_SCAN,
   #  DHCP_SCAN, MALICIOUS_IP_FROM_P2P_NETWORK, P2P_REPORT,
   # COMMAND_AND_CONTROL_CHANNEL, THREAT_INTELLIGENCE_BLACKLISTED_ASN,
@@ -1035,6 +1645,10 @@ EvidenceSignals:
   # they are emitted by anomaly-detection modules. You can also override
   # additional evidence types here.
   overrides:
+    PERIODIC_CONNECTION: DAMP
+    SUSPECTED_C2_CHANNEL: DAMP
+    PERIODIC_PACKETS: DAMP
+    SUSPICIOUS_PACKET_HEARTBEAT: DAMP
     ANOMALOUS_FLOW: DAMP
     MALICIOUS_FLOW: DAMP
     UNSOLICITED_ARP: DAMP
@@ -1114,7 +1728,7 @@ web_interface:
   # Listen only on localhost, or on the IPv4 address of the monitored interface.
   # Allowed values: localhost, interface
   bind: localhost
-  # Define the port to use
+  # Web listener port. Override for one run with ./slips.py -w --web-port 55002.
   port: 55000
   # Require the shared redis/web password to log in before granting access.
   # Only disable this for CI/tests - never on a machine reachable beyond
@@ -1128,6 +1742,8 @@ global_p2p:
    # running slips on an interface
    use_global_p2p: False
    iris_conf: config/iris_config.yaml
+   # Path relative to the repository root; use a native build on macOS.
+   iris_binary: modules/iris/iris
    bootstrapping_node: False
    bootstrapping_modules: ["fides", "iris"]
 
@@ -1138,7 +1754,62 @@ local_p2p:
    use_p2p : False
    # Dedicated TCP listener. SLIPS does not scan ephemeral ports for P2P.
    listen_port: 6668
+   # How quickly an old local detection loses influence on a peer's trust.
+   # Keep full confidence for the first hour, then halve it every 24 hours.
+   # Larger values keep penalties longer; smaller values allow faster recovery.
+   # This returns trust toward the communication baseline, not a benign verdict.
+   local_reputation_half_life_hours: 24
+   catch_up:
+      # Request missed network warnings automatically after connecting to a peer.
+      # Historical records do not increase current host scores or trigger blocking.
+      enabled: true
+      # A warning is recent when malicious behavior was observed within 15 minutes.
+      # Receiving or forwarding it does not renew this observation time.
+      fresh_minutes: 15
+      # Prefer these recent incidents before older history; expressed in hours.
+      recent_hours: 24
+      # Keep and request at most this many days of incident history.
+      history_days: 7
+      # Compare up to three connected sources; cap simultaneous page requests.
+      max_peers: 3
+      parallel_pages: 2
+      # Stop a page at either limit. Byte limits include signed record contents.
+      page_records: 50
+      page_bytes: 65536
+      # Bound each incident's description, provenance and signature payload.
+      record_bytes: 8192
+      # Total outgoing catch-up budget, shared across peers, in KiB per second.
+      transfer_kib_per_second: 64
+      # Stop automatic history after this many MiB per source; show partial coverage.
+      initial_transfer_mib: 2
+      # Bound the permanent incident journal across all retained networks.
+      max_records: 10000
+      max_store_mib: 64
+      # Brief disconnects must not trigger repeated full catch-up exchanges.
+      reconnect_cooldown_seconds: 60
+      protection:
+         # Only when firewall blocking is already enabled. Never ARP poison from catch-up.
+         # Require a fresh concrete local confirmation, or two enrolled authors
+         # using independent detector families. Old history cannot authorize a block.
+         enabled: true
+         # Optional authenticated peer IDs allowed to support remote-only protection.
+         # Empty means local confirmation is required; discovery alone grants no authority.
+         peer_ids: []
+   report_agreement:
+      # Increase peer trust when our own detection and other peers agree.
+      enabled: true
+      # Distinct peer IDs, INCLUDING the reporter. Our local detection is also required.
+      min_peers: 2
+      # Minimum confidence in both our own detection and each matching report (0-1).
+      min_confidence: 0.8
+      # All matching detections must occur within this many seconds of one another.
+      window_seconds: 3600
+      # Reward per peer ID and target IP, once across runs, networks and detector versions.
+      # The total agreement increase is capped at 0.20 and halves every 30 days.
+      trust_credit: 0.025
    # Authenticated connection records are refreshed by successful activity.
    connection_ttl: 30
    # Briefly hold candidate handshake flows while authentication completes.
    handshake_pending_seconds: 2
+   # Peers discover other nodes using this mDNS group name.
+   rendezvous: slips

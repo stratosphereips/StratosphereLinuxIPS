@@ -38,7 +38,23 @@ class NfdumpInput(IInputHandler):
         safe_path = utils.validate_safe_path(
             self.input.given_path, must_exist=True
         )
-        command = ["nfdump", "-b", "-N", "-o", "csv", "-q", "-r", safe_path]
+        # The default CSV schema changed in nfdump 1.7. Request the legacy
+        # column order explicitly, which is also supported by nfdump 1.6.
+        output_format = (
+            "fmt:%ts,%te,%td,%sa,%da,%sp,%dp,%pr,%flg,%fwd,%stos,"
+            "%ipkt,%ibyt,%opkt,%obyt,%in,%out,%sas,%das,%smk,%dmk,%dtos,%dir"
+        )
+        command = [
+            "nfdump",
+            "-b",
+            "-N",
+            "-6",
+            "-o",
+            output_format,
+            "-q",
+            "-r",
+            safe_path,
+        ]
         # Execute command
         result = subprocess.run(command, stdout=subprocess.PIPE)
         # Get command output

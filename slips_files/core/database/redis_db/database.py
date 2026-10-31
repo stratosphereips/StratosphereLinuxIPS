@@ -54,6 +54,7 @@ from typing import (
 )
 
 from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.common.mac import classify_mac
 from slips_files.core.structures.risk_weights import RiskWeight
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -110,6 +111,8 @@ class RedisDB(
         "new_software",
         "new_tunnel",
         "new_login",
+        "new_smb",
+        "new_packet_timing",
         "p2p_data_request",
         "remove_old_files",
         "export_evidence",
@@ -140,12 +143,14 @@ class RedisDB(
     _gateway_MAC_found = False
     _conf_file_template = "config/redis.conf.template"
     _conf_file = "config/redis.conf"
-    our_ips: List[str] = utils.get_own_ips(ret="List")
+    # Importing the database must not launch an untracked public-IP request.
+    # Assigned interface addresses still cover direct public-IP interfaces.
+    our_ips: List[str] = utils.get_own_ips(ret="List", include_public=False)
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
     # in case of redis ConnectionErrors, this is how long we'll wait in
     # seconds before retrying.
-    # this will increase exponentially each retry
+    # this increases between retries, capped at two seconds
     backoff = 0.1
     # try to reconnect to redis this amount of times in case of connection
     # errors before terminating
@@ -205,8 +210,8 @@ class RedisDB(
 
             # By default the slips internal time is
             # 0 until we receive something
-            cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
+                cls.set_slips_internal_time(0)
                 cls._set_slips_start_time()
 
         return cls.instances[cls.redis_port]
@@ -235,6 +240,23 @@ class RedisDB(
         os.makedirs(output_dir, exist_ok=True)
         return get_redis_logs_path_inside_output_dir(
             cls.output_dir, f"redis-server-port-{redis_port}.conf"
+        )
+
+    @classmethod
+    def _get_pid_file_path(cls, redis_port: Optional[int] = None) -> str:
+        """Locate a writable, port-specific PID file beside the Redis logs.
+
+        Parameters:
+            redis_port: Server port, defaulting to this instance's port.
+
+        Returns:
+            PID file path resolved before Redis changes its working directory.
+        """
+        port = cls.redis_port if redis_port is None else redis_port
+        return cls._absolute_path(
+            get_redis_logs_path_inside_output_dir(
+                cls.output_dir, f"redis-server-port-{port}.pid"
+            )
         )
 
     @staticmethod
@@ -275,11 +297,8 @@ class RedisDB(
                 setup(self)
 
     @classmethod
-    def _setup_config_file(cls):
-        """
-        Update cls._conf_file (config/redis.conf) based on the params given
-        to slips (e.g -s)
-        """
+    def _setup_config_file(cls) -> None:
+        """Write per-run Redis paths and options from the template."""
         cls._conf_file = cls._get_conf_file_path()
         shutil.copy(cls._conf_file_template, cls._conf_file)
 
@@ -308,7 +327,9 @@ class RedisDB(
                 cls.output_dir, f"redis-server-port-{cls.redis_port}.log"
             )
         )
-        cls._options.update({"logfile": logfile})
+        cls._options.update(
+            {"logfile": logfile, "pidfile": cls._get_pid_file_path()}
+        )
         cls._options.update(
             {
                 # manual SAVE writes the .rdb file to <output_dir>/databases
@@ -377,14 +398,17 @@ class RedisDB(
         these are the cases that we DO NOT flush the db when we
             connect to it, because we need to use it
             -d means Read an analysed file (rdb) from disk.
-            -S stop daemon
             -cb clears the blocking chain
         """
-        will_need_the_db_later = (
-            "-S" in sys.argv or "-cb" in sys.argv or "-d" in sys.argv
-        )
+        will_need_the_db_later = "-cb" in sys.argv or "-d" in sys.argv
         if will_need_the_db_later:
             return False
+
+        if getattr(cls.args, "keep_history", False) is True:
+            # Historical detections live in the retained SQLite run database.
+            # Redis DB 0 contains active process and time-window state and must
+            # start fresh even when deletePrevdb is disabled in the config.
+            return cls.flush_db
 
         return cls.config_flush_db and cls.flush_db
 
@@ -606,11 +630,14 @@ class RedisDB(
             msg.update({"version": VERSION})
         return msg
 
-    def publish(self, channel, msg, pipeline=None):
+    def publish(self, channel, msg, pipeline=None, add_version: bool = True):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
-        the pipeline"""
-        msg = self._add_version_to_msg(msg)
+        the pipeline. Set add_version=False only for external protocols
+        whose version field is not Slips's software version."""
+        # External protocols such as Iris carry their own version field.
+        if add_version:
+            msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:
@@ -660,44 +687,36 @@ class RedisDB(
 
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
-        Wrapper for redis' get_message() to be able to handle
-        redis.exceptions.ConnectionError
-        notice: there has to be a timeout or the channel will wait forever
-        and never receive a new msg
-        :param channel_obj: PubSub obj of the channel
+        Read a PubSub message and retry briefly when Redis disconnects.
+
+        Parameters:
+            channel_obj: PubSub channel to poll.
+            timeout: Maximum wait for one message.
+
+        Returns:
+            Message or None when no message is ready or Redis is recovering.
         """
         try:
             msg = channel_obj.get_message(timeout=timeout)
+            self.connection_retry = 0
+            self.backoff = 0.1
             if msg:
                 self._track_flow_processing_rate(msg)
             return msg
         except redis.exceptions.ConnectionError as ex:
-            # make sure we log the error only once
-            if not self.is_connection_error_logged():
-                self.mark_connection_error_as_logged()
-
+            # Redis cannot be used to record a Redis outage. Keep retry state
+            # local to this process and avoid recursive calls or huge backoffs.
+            self.connection_retry += 1
+            if self.connection_retry == 1:
+                self.print(f"Redis connection lost; retrying: {ex}", 0, 1)
             if self.connection_retry >= self.max_retries:
-                self.publish_stop()
-                self.print(
-                    f"Stopping slips due to redis.exceptions.ConnectionError: {ex}",
-                    1,
-                    1,
-                )
-            else:
-                # don't log this each retry
-                if self.connection_retry % 10 == 0:
-                    # retry to connect after backing off for a while
-                    self.print(
-                        f"redis.exceptions.ConnectionError: "
-                        f"retrying to connect in {self.backoff}s. "
-                        f"Retries to far: {self.connection_retry}",
-                        0,
-                        1,
-                    )
-                time.sleep(self.backoff)
-                self.backoff = self.backoff * 2
-                self.connection_retry += 1
-                self.get_message(channel_obj, timeout)
+                raise RuntimeError(
+                    f"Redis unavailable after {self.max_retries} retries"
+                ) from None
+            delay = min(self.backoff, 2.0)
+            time.sleep(delay)
+            self.backoff = min(delay * 2, 2.0)
+            return None
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -772,6 +791,88 @@ class RedisDB(
 
     def get_local_network(self, interface):
         return self.r.hget(self.constants.LOCAL_NETWORK, interface)
+
+    def get_network_state(self, interface: str) -> dict | None:
+        """Read current live network settings for one interface.
+
+        Parameters:
+            interface: Monitored interface name.
+
+        Returns:
+            Current settings, or None before first collection.
+        """
+        value = self.r.hget(self.constants.NETWORK_STATES, interface)
+        return json.loads(value) if value else None
+
+    def replace_network_state(self, interface: str, state: dict) -> None:
+        """Replace current live addressing and service data together.
+
+        Parameters:
+            interface: Monitored interface name.
+            state: Collected settings, including its change version.
+        """
+        states = {
+            name: json.loads(value)
+            for name, value in self.r.hgetall(
+                self.constants.NETWORK_STATES
+            ).items()
+        }
+        previous = states.get(interface, {})
+        states[interface] = state
+        configured_dns = {
+            address
+            for item in states.values()
+            for address in item.get("dns_servers", [])
+        }
+        with self.r.pipeline(transaction=True) as pipe:
+            pipe.hset(
+                self.constants.NETWORK_STATES, interface, json.dumps(state)
+            )
+            if state.get("local_network"):
+                pipe.hset(
+                    self.constants.LOCAL_NETWORK,
+                    interface,
+                    state["local_network"],
+                )
+            else:
+                pipe.hdel(self.constants.LOCAL_NETWORK, interface)
+            gateway = {
+                key: value
+                for key, value in (
+                    ("IP", state.get("gateway_ip")),
+                    ("MAC", state.get("gateway_mac")),
+                )
+                if value
+            }
+            if gateway:
+                pipe.hset(
+                    self.constants.DEFAULT_GATEWAY,
+                    interface,
+                    json.dumps(gateway),
+                )
+            else:
+                pipe.hdel(self.constants.DEFAULT_GATEWAY, interface)
+            host_key = f"host_ip_{interface}"
+            pipe.delete(host_key)
+            if state.get("host_ip"):
+                pipe.zadd(host_key, {state["host_ip"]: state["version"]})
+            # Traffic-observed resolvers belong to the old network. They can
+            # be learned again; configured resolvers of all live links stay.
+            network_changed = any(
+                previous.get(key) != state.get(key)
+                for key in (
+                    "host_ip",
+                    "local_network",
+                    "gateway_ip",
+                    "gateway_mac",
+                    "dns_servers",
+                )
+            )
+            if network_changed:
+                pipe.delete(self.constants.OFFICIAL_DNS_SERVERS)
+            if configured_dns:
+                pipe.sadd(self.constants.OFFICIAL_DNS_SERVERS, *configured_dns)
+            pipe.execute()
 
     def get_total_recognized_localnets(self):
         """
@@ -990,6 +1091,123 @@ class RedisDB(
         )
         return InputType.coerce(input)
 
+    def record_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int,
+        dst_ip: str,
+        dst_port: int,
+    ) -> None:
+        """Keep one module-owned socket tuple for a bounded live interval.
+
+        Parameters:
+            run_id: Main Slips process ID, separating retained Redis runs.
+            proto: TCP or UDP transport.
+            src_ip: Local socket address.
+            src_port: Local socket port.
+            dst_ip: Remote socket address.
+            dst_port: Remote socket port.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{proto}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        sources = f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}"
+        ttl = self.constants.SLIPS_OWN_CONNECTION_TTL
+        pipe = self.r.pipeline(transaction=False)
+        pipe.set(key, "1", ex=ttl)
+        pipe.sadd(sources, src_ip)
+        pipe.expire(sources, ttl)
+        pipe.execute()
+
+    def is_slips_own_source_ip(self, run_id: int, ip: str) -> bool:
+        """Check whether a Slips module recently opened a socket from an IP.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            ip: Flow source address.
+
+        Returns:
+            True when a tracked socket used this source IP.
+        """
+        return bool(
+            self.r.sismember(
+                f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}", ip
+            )
+        )
+
+    def is_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int | str,
+        dst_ip: str,
+        dst_port: int | str,
+    ) -> bool:
+        """Match a captured flow to one exact Slips-owned socket tuple.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            src_ip: Flow source IP.
+            src_port: Flow source port.
+            dst_ip: Flow destination IP.
+            dst_port: Flow destination port.
+
+        Returns:
+            True when the full tuple was registered by a Slips process.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{str(proto).lower()}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        return bool(self.r.exists(key))
+
+    def record_slips_own_service_port(
+        self, run_id: int, proto: str, dst_port: int, source_ips: list[str]
+    ) -> None:
+        """Mark local addresses for a brief external lookup command.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            dst_port: Service port used by the external command.
+            source_ips: Current local interface addresses.
+        """
+        if not source_ips:
+            return
+        key = (
+            f"{self.constants.SLIPS_OWN_SERVICE_PORT_PREFIX}{run_id}:"
+            f"{proto.lower()}:{dst_port}"
+        )
+        pipe = self.r.pipeline(transaction=False)
+        pipe.sadd(key, *source_ips)
+        pipe.expire(key, self.constants.SLIPS_OWN_SERVICE_PORT_TTL)
+        pipe.execute()
+
+    def is_slips_own_service_port(
+        self, run_id: int, proto: str, dst_port: int | str, src_ip: str
+    ) -> bool:
+        """Check a short lived external lookup allowance.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            dst_port: Flow destination port.
+            src_ip: Flow source IP.
+
+        Returns:
+            True when this source and service port were marked for this run.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_SERVICE_PORT_PREFIX}{run_id}:"
+            f"{proto.lower()}:{dst_port}"
+        )
+        return bool(self.r.sismember(key, src_ip))
+
     def get_interface(self) -> str:
         return self.r.hget(
             self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE
@@ -1003,23 +1221,31 @@ class RedisDB(
             self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR
         )
 
-    def belongs_to_run(self, output_dir: str) -> bool:
+    def belongs_to_run(
+        self, output_dir: str, main_pid: int | None = None
+    ) -> bool:
         """
         Check whether Redis belongs to the requested Slips run.
         # A process from a completed/replaced run must never publish evidence
         # into the Redis database now owned by another run.
         Parameters:
             output_dir: Output directory owned by the caller.
+            main_pid: Original coordinator PID; reused output paths alone
+                cannot authorize a worker from an earlier run.
 
         Returns:
-            True only when Redis advertises the same output directory.
+            True when the output directory and supplied coordinator agree.
         """
         redis_output_dir = self.get_output_dir()
         if not redis_output_dir:
             return False
-        return os.path.normpath(str(redis_output_dir)) == os.path.normpath(
-            os.fspath(output_dir)
-        )
+        same_output = os.path.normpath(
+            str(redis_output_dir)
+        ) == os.path.normpath(os.fspath(output_dir))
+        if not same_output or main_pid is None:
+            return same_output
+        owner = self.r.hget(self.constants.PIDS, "main")
+        return owner is not None and str(owner) == str(main_pid)
 
     def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
         """
@@ -1296,39 +1522,50 @@ class RedisDB(
         )
 
     def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
-        """
-        Detects the MAC of the gateway if 1 mac is seen
-        assigned to 1 public destination IP
-        :param ip: dst ip that should be associated with the given MAC info
+        """Check the gateway stored by any worker for this interface.
+
+        Parameters:
+            mac_addr: Candidate Ethernet address.
+            interface: Capture interface.
+
+        Returns:
+            Whether this interface's known gateway has that address.
         """
 
         if not validators.mac_address(mac_addr):
             return False
 
-        if self._gateway_MAC_found:
-            # gateway MAC already set using this function
-            return self.get_gateway_mac(interface) == mac_addr
+        return (
+            str(self.get_gateway_mac(interface) or "").lower()
+            == mac_addr.lower()
+        )
 
-    def _determine_gw_mac(self, ip, mac, interface: str):
+    def _determine_gw_mac(self, ip: str, mac: str, interface: str) -> bool:
+        """Infer a missing gateway from an Ethernet hop to a public IP.
+
+        Parameters:
+            ip: Endpoint address observed through the hop.
+            mac: Observed unicast Ethernet address.
+            interface: Capture interface receiving the gateway information.
+
+        Returns:
+            Whether a previously unknown gateway MAC was stored.
         """
-        sets the gw mac if the given ip is public and is assigned a mc
-        """
-        if self._gateway_MAC_found:
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except ValueError:
             return False
-        # since we don't have a mac gw in the db, see if
-        # this given mac is the gw mac
-        ip_obj = ipaddress.ip_address(ip)
-        if not utils.is_private_ip(ip_obj):
-            # now we're given a public ip and a MAC that's supposedly
-            # belongs to it
-            # we are sure this is the gw mac
-            # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac, interface)
-
-            # mark the gw mac as found so we don't look for it again
-            self._gateway_MAC_found = True
-            return True
-        return False
+        if (
+            not ip_obj.is_global
+            or ip_obj.is_multicast
+            or classify_mac(mac)
+            not in {"locally_administered", "universally_administered"}
+            or self.get_gateway_mac(interface)
+        ):
+            return False
+        self.set_default_gateway(self.constants.MAC, mac, interface)
+        self._gateway_MAC_found = True
+        return True
 
     def get_ip_of_mac(self, mac_addr: str):
         """
@@ -1608,9 +1845,13 @@ class RedisDB(
                 and not self.get_gateway_mac_vendor(interface)
             )
         ):
-            gw_info = json.dumps({address_type: address})
-
-            self.r.hset(self.constants.DEFAULT_GATEWAY, interface, gw_info)
+            gw_info = self._get_gw_info(interface) or {}
+            gw_info[address_type] = address
+            self.r.hset(
+                self.constants.DEFAULT_GATEWAY,
+                interface,
+                json.dumps(gw_info),
+            )
 
     def get_domain_resolution(self, domain) -> List[str]:
         """
@@ -1922,14 +2163,28 @@ class RedisDB(
         self, org: str, first_octet: str
     ) -> List[str] | None:
         """
-        checks if the given first octet in the org's octets
-        :param org: supported orgs are ('google', 'microsoft', 'apple',
-         'facebook', 'twitter')
-        :param ip: ip to check
-        :return: a list of cidrs the given ip may belong to, None otherwise
+        Read organization ranges from the shared cache where they are stored.
+
+        Parameters:
+            org: Supported organization name.
+            first_octet: IPv4 first octet or IPv6 first segment.
+
+        Returns:
+            Decoded network ranges, or None for absent or invalid cache data.
         """
         key = f"{org}_IPs"
-        return self.r.hget(key, first_octet)
+        cached = self.rcache.hget(key, first_octet)
+        if not cached:
+            return None
+        try:
+            ranges = json.loads(cached)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(ranges, list) or not all(
+            isinstance(network, str) for network in ranges
+        ):
+            return None
+        return ranges
 
     def get_org_ips(self, org: str) -> Dict[str, str]:
         """
@@ -2167,6 +2422,7 @@ class RedisDB(
                     "dbfilename": os.path.basename(safe_backup_file),
                     "dir": os.path.dirname(safe_backup_file),
                     "port": 32850,
+                    "pidfile": RedisDB._get_pid_file_path(32850),
                 }
             )
 

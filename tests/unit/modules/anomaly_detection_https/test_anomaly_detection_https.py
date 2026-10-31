@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import Mock, patch
+from pathlib import Path
+
+from tests.module_factory import ModuleFactory
 
 from modules.anomaly_detection_https.anomaly_detection_https import (
     AnomalyDetectionHTTPS,
@@ -70,6 +73,32 @@ def test_https_anomaly_module_is_instantiable_and_subscribes_to_new_ssl(
 
     db.subscribe.assert_called_once_with("new_ssl")
     assert module.channels == {"new_ssl": "ssl_channel"}
+
+
+def test_https_operational_log_rotates_without_losing_events(tmp_path: Path) -> None:
+    """Apply shared size rotation to the module's existing operational log.
+
+    Parameters:
+        tmp_path: Isolated module output directory.
+    """
+    _factory = ModuleFactory()
+    module, _db = _create_https_anomaly_module(tmp_path)
+    module.log_verbosity = 3
+    module.operational_log.policy = {
+        "enabled": True,
+        "log_max_size_mb": 1,
+        "archive_retention_days": 30,
+        "log_backup_count": 2,
+    }
+    path = Path(module.operational_log_path)
+    previous = "existing event\n" * 80000
+    path.write_text(previous)
+    module.log_event(1, "module_start", "new event")
+    segments = list((path.parent / "rotated").glob(f"{path.name}.*"))
+    assert len(segments) == 1
+    assert segments[0].read_text() == previous
+    assert "new event" in path.read_text()
+    assert "existing event" not in path.read_text()
 
 
 

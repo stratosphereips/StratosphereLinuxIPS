@@ -5,10 +5,16 @@ import math
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Optional, Set, List, Any
 
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.anomaly_detection import (
+    quantile,
+    robust_location_scale,
+)
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.log_rotation import RotatingTextLog
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -108,28 +114,23 @@ class EWMAStats:
 
     @staticmethod
     def _quantile(values: List[float], q: float) -> float:
-        if not values:
-            return 0.0
-        q = min(1.0, max(0.0, float(q)))
-        xs = sorted(values)
-        if len(xs) == 1:
-            return xs[0]
-        pos = q * (len(xs) - 1)
-        lo = int(math.floor(pos))
-        hi = int(math.ceil(pos))
-        if lo == hi:
-            return xs[lo]
-        frac = pos - lo
-        return xs[lo] * (1.0 - frac) + xs[hi] * frac
+        """Calculate an interpolated quantile using shared statistics.
 
-    def update_min_std_floor(self):
+        Parameters:
+            values: Empirical sample.
+            q: Percentile fraction.
+
+        Returns:
+            Interpolated sample quantile.
+        """
+        return quantile(values, q)
+
+    def update_min_std_floor(self) -> None:
+        """Update the bounded, smoothed scale floor from recent residuals."""
         if len(self.residuals) < 5:
             return
         q10 = self._quantile(self.residuals, 0.10)
-        med = self._quantile(self.residuals, 0.50)
-        abs_dev = [abs(x - med) for x in self.residuals]
-        mad = self._quantile(abs_dev, 0.50)
-        sigma_mad = 1.4826 * mad
+        _, sigma_mad = robust_location_scale(self.residuals, min_scale=0.0)
         candidate = self.floor_scale * max(q10, sigma_mad, self.floor_min)
         candidate = min(self.floor_max, max(self.floor_min, candidate))
         beta = min(1.0, max(0.0, self.floor_update_beta))
@@ -146,31 +147,37 @@ class EWMAStats:
         if len(self.value_window) > self.value_window_size:
             self.value_window.pop(0)
 
-    @staticmethod
-    def _median(values: List[float]) -> float:
-        return EWMAStats._quantile(values, 0.50)
-
     def robust_zscore(self, value: float) -> float:
+        """Score a value against recent robust statistics or early moments.
+
+        Parameters:
+            value: Transformed feature value.
+
+        Returns:
+            Absolute deviation in estimated standard deviations.
+        """
         values = self.value_window
         if len(values) < 7:
             return self.zscore(value)
-        med = self._median(values)
-        abs_dev = [abs(x - med) for x in values]
-        mad = self._median(abs_dev)
-        robust_sigma = max(1.4826 * mad, self.min_std_floor)
+        med, robust_sigma = robust_location_scale(values, self.min_std_floor)
         return abs(float(value) - med) / robust_sigma
 
     def calibrate_empirical_threshold(
         self, default_threshold: float, quantile: float = 0.995
-    ):
+    ) -> None:
+        """Calibrate a bounded threshold from benign training deviations.
+
+        Parameters:
+            default_threshold: Fallback when training support is insufficient.
+            quantile: Training-score percentile used for calibration.
+        """
         if len(self.training_values) < 10:
             self.empirical_threshold = float(default_threshold)
             return
 
-        med = self._median(self.training_values)
-        abs_dev = [abs(x - med) for x in self.training_values]
-        mad = self._median(abs_dev)
-        robust_sigma = max(1.4826 * mad, self.min_std_floor)
+        med, robust_sigma = robust_location_scale(
+            self.training_values, self.min_std_floor
+        )
         if robust_sigma <= 0:
             self.empirical_threshold = float(default_threshold)
             return
@@ -227,6 +234,9 @@ class AnomalyDetectionHTTPS(IModule):
         self.operational_log_path = self.get_module_specific_output_path(
             "anomaly_detection_https.log"
         )
+        self.operational_log = RotatingTextLog(
+            Path(self.operational_log_path), self.log_rotation_policy
+        )
         self.host_states: Dict[str, HostState] = {}
 
     def subscribe_to_channels(self):
@@ -262,6 +272,7 @@ class AnomalyDetectionHTTPS(IModule):
             conf.https_anomaly_empirical_threshold_quantile()
         )
         self.log_verbosity = conf.https_anomaly_log_verbosity()
+        self.log_rotation_policy = conf.detection_history_policy()
         # Operational logs always use emojis and colors.
         self.log_emojis = True
         self.log_colors = True
@@ -401,10 +412,7 @@ class AnomalyDetectionHTTPS(IModule):
         )
         if color:
             line = f"{color}{line}{reset}"
-        with open(
-            self.operational_log_path, "a", encoding="utf-8"
-        ) as log_file:
-            log_file.write(f"{line}\n")
+        self.operational_log.write(f"{line}\n")
 
     @staticmethod
     def get_hour_start(ts: float) -> int:

@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import asyncio
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import pytest
 
@@ -130,3 +130,38 @@ def test_handle_loop_exception_logs_message() -> None:
     flowalerts.handle_loop_exception(Mock(), {"message": "boom"})
 
     flowalerts.print.assert_called_once_with("Unhandled loop error: boom")
+
+
+async def test_runner_executes_tasks_scheduled_by_main() -> None:
+    """Run scheduled work before calling a non-yielding main again."""
+    module_factory = ModuleFactory()
+    flowalerts = module_factory.create_flowalerts_obj()
+    flowalerts._pre_main = Mock(return_value=False)
+    flowalerts.should_stop = Mock(return_value=False)
+    flowalerts.shutdown_gracefully = AsyncMock()
+    flowalerts.channels = {}
+    task_completed = False
+    observed_completion: list[bool] = []
+
+    async def complete_task() -> None:
+        """Mark the scheduled task complete."""
+        nonlocal task_completed
+        task_completed = True
+
+    async def main() -> bool | None:
+        """Schedule a task, then inspect it on the next iteration.
+
+        Returns:
+            True after the task has had a chance to run.
+        """
+        if not flowalerts.tasks:
+            flowalerts.create_task(complete_task)
+            return None
+        observed_completion.append(task_completed)
+        return True
+
+    flowalerts.main = main
+
+    await flowalerts._run_pre_main_and_main()
+
+    assert observed_completion == [True]

@@ -3,7 +3,10 @@
 """Unit test for modules/conn_analyzer/conn_analyzer.py"""
 
 from dataclasses import asdict
+from typing import Any
+from types import SimpleNamespace
 from slips_files.core.flows.zeek import Conn
+from slips_files.core.input_profilers.zeek import ZeekJSON
 from tests.module_factory import ModuleFactory
 import json
 from unittest.mock import (
@@ -23,6 +26,52 @@ timestamp = 1635765895.037696
 saddr = "192.168.1.1"
 daddr = "192.168.1.2"
 dst_profileid = f"profile_{daddr}"
+
+
+@pytest.mark.parametrize("history,expected", [
+    ("AdDTafF", False),
+    ("^AdDTafF", False),
+    ("S^", False),
+    ("ShA^Dd", False),
+    ("ShADadFf", True),
+    ("^ShADadFf", True),
+    ("H^SADadFf", True),
+    ("Hs^ADdFf", True),
+])
+def test_unknown_port_requires_supported_initiator(history: str, expected: bool) -> None:
+    """Do not treat an ongoing SSH response as a new incoming connection.
+
+    Parameters:
+        history: Packet flags, including role changes before the final record.
+        expected: Whether the final source has evidence of initiating TCP.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    raw = {
+        "ts": 1792947092.783236, "uid": "midstream-ssh",
+        "id.orig_h": "147.32.80.37", "id.orig_p": 902,
+        "id.resp_h": "192.168.1.163", "id.resp_p": 59148,
+        "proto": "tcp", "duration": 1.781255, "orig_bytes": 5824,
+        "resp_bytes": 10295264, "conn_state": "SF", "history": history,
+        "orig_pkts": 1638, "resp_pkts": 7418,
+    }
+    flow, error = ZeekJSON(factory.logger).process_line(
+        {"type": "conn.log", "interface": "en0", "data": raw}
+    )
+    assert error == ""
+    conn.db.is_a_port_scanner.return_value = False
+    conn.db.get_port_info.return_value = None
+    conn.db.is_ftp_port.return_value = False
+    conn.db.is_p2p_related_flow.return_value = False
+    conn.port_belongs_to_an_org = Mock(return_value=False)
+    conn.is_local_apple_peer_flow = Mock(return_value=False)
+    conn.set_evidence.unknown_port = Mock()
+    assert conn.check_unknown_port(f"profile_{flow.saddr}", twid, flow) is expected
+    assert conn.set_evidence.unknown_port.call_count == int(expected)
+    assert (flow.saddr, flow.sport, flow.daddr, flow.dport) == (
+        raw["id.orig_h"], raw["id.orig_p"], raw["id.resp_h"], raw["id.resp_p"]
+    )
+    assert (flow.history, flow.sbytes, flow.dbytes) == (history, 5824, 10295264)
 
 
 @pytest.mark.parametrize(
@@ -120,8 +169,8 @@ def test_is_p2p(
         "expected_result",
     ),
     [
-        # Case 1: attacker already classified as port scanner → False
-        ("1337", "udp", None, False, False, True, False),
+        # Successful connections are checked even after the source was a scanner.
+        ("1337", "udp", None, False, False, True, True),
         # Case 2: unknown port, not scanner, not org-owned → True
         ("1337", "udp", None, False, False, False, True),
     ],
@@ -194,7 +243,7 @@ def test_check_unknown_port_true_case(mocker):
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="ShADadFf",
     )
     conn.db.is_a_port_scanner = Mock(return_value=False)
     flow.interpreted_state = "Established"
@@ -207,6 +256,263 @@ def test_check_unknown_port_true_case(mocker):
 
     assert conn.check_unknown_port(profileid, twid, flow)
     mock_set_evidence.assert_called_once_with(twid, flow)
+
+
+@pytest.mark.parametrize(
+    "saddr, daddr",
+    [
+        ("192.168.1.20", "224.0.0.251"),
+        ("224.0.0.251", "192.168.1.20"),
+        ("192.168.1.20", "ff02::1"),
+        ("192.168.1.20", "255.255.255.255"),
+        ("192.168.1.20", "192.168.1.255"),
+    ],
+)
+def test_broadcast_and_multicast_flows_do_not_create_evidence(
+    saddr: str, daddr: str
+) -> None:
+    """Skip unknown-port and private-IP evidence for broadcast traffic.
+
+    Parameters:
+        saddr: Flow source address.
+        daddr: Flow destination address.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_local_network.return_value = "192.168.1.0/24"
+    conn.set_evidence.unknown_port = Mock()
+    conn.set_evidence.conn_to_private_ip = Mock()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="broadcast-flow",
+        saddr=saddr,
+        daddr=daddr,
+        dur=1,
+        proto="udp",
+        appproto="",
+        sport="12345",
+        dport="12345",
+        spkts=1,
+        dpkts=1,
+        sbytes=10,
+        dbytes=10,
+        smac="",
+        dmac="",
+        state="Established",
+        history="S",
+    )
+
+    assert conn.check_unknown_port(f"profile_{saddr}", twid, flow) is None
+    conn.check_connection_to_local_ip(twid, flow)
+
+    conn.set_evidence.unknown_port.assert_not_called()
+    conn.set_evidence.conn_to_private_ip.assert_not_called()
+
+
+@pytest.mark.parametrize("dmac,interface", [
+    ("ff:ff:ff:ff:ff:ff", "en0"),
+    ("FF-FF-FF-FF-FF-FF", "default"),
+    ("01:00:5e:00:00:fb", "en0"),
+    ("33:33:00:00:00:01", ""),
+])
+def test_group_destination_mac_suppresses_private_and_unknown_port_evidence(
+    dmac: str, interface: str,
+) -> None:
+    """Recognize broadcast discovery even when the current subnet differs.
+
+    Parameters:
+        dmac: Broadcast or multicast destination hardware address.
+        interface: Live, offline or missing interface identifier.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_local_network.return_value = "192.168.160.0/24"
+    conn.set_evidence.conn_to_private_ip = Mock()
+    conn.set_evidence.unknown_port = Mock()
+    flow = SimpleNamespace(
+        saddr="192.168.1.116", daddr="192.168.1.255", sport=137,
+        dport=137, proto="udp", history="D", dmac=dmac,
+        interface=interface, starttime=1792502017.916054,
+    )
+    conn.check_connection_to_local_ip(twid, flow)
+    conn.check_unknown_port(f"profile_{flow.saddr}", twid, flow)
+    conn.set_evidence.conn_to_private_ip.assert_not_called()
+    conn.set_evidence.unknown_port.assert_not_called()
+    conn.db.get_network_state.assert_not_called()
+    conn.db.get_local_network.assert_not_called()
+
+
+@pytest.mark.parametrize("timestamp,destination,expected", [
+    (150, "192.168.1.255", True),
+    (150, "192.168.160.255", False),
+    (250, "192.168.160.255", True),
+    (250, "192.168.1.255", False),
+    (50, "192.168.1.255", False),
+])
+def test_broadcast_uses_subnet_at_flow_time(
+    timestamp: int, destination: str, expected: bool,
+) -> None:
+    """Choose the capture subnet for delayed flows after a network change.
+
+    Parameters:
+        timestamp: Capture time before or after the interface changed networks.
+        destination: Address whose broadcast status depends on the subnet.
+        expected: Whether the address was broadcast when captured.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = {
+        "changed_at": 200, "local_network": "192.168.160.0/24",
+        "history": [{"changed_at": 100, "local_network": "192.168.1.0/24"}],
+    }
+    conn.db.get_local_network.return_value = "192.168.160.0/24"
+    flow = SimpleNamespace(saddr="192.168.1.116", daddr=destination,
+        interface="en0", starttime=timestamp, dmac="")
+    assert conn.is_broadcast_or_multicast_flow(flow) is expected
+    flow.starttime = 250 if timestamp < 200 else 150
+    assert conn.is_broadcast_or_multicast_flow(flow) is (not expected if timestamp >= 100 else False)
+    conn.db.get_network_state.assert_called_once_with("en0")
+    conn.db.get_local_network.assert_not_called()
+
+
+@pytest.mark.parametrize("subnet,destination,expected", [
+    ("192.168.1.0/24", "192.168.1.255", True),
+    ("192.168.0.0/23", "192.168.0.255", False),
+    ("192.168.0.0/23", "192.168.1.255", True),
+    ("192.168.1.254/31", "192.168.1.255", False),
+    ("192.168.1.255/32", "192.168.1.255", False),
+    ("", "192.168.1.255", False),
+    ("192.168.1.0/24", "192.168.1.116", False),
+])
+def test_broadcast_does_not_guess_from_last_octet(
+    subnet: str, destination: str, expected: bool,
+) -> None:
+    """Retain valid unicast addresses ending in .255 and unknown subnets.
+
+    Parameters:
+        subnet: Known recording subnet, or empty when unavailable.
+        destination: Destination IPv4 address.
+        expected: Whether this is a broadcast under the specified prefix.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = None
+    conn.db.get_local_network.return_value = subnet
+    conn.set_evidence.conn_to_private_ip = Mock()
+    flow = SimpleNamespace(saddr="192.168.1.20", daddr=destination,
+        interface="default", starttime=150, dmac="02:00:00:00:00:01",
+        proto="udp", sport=137, dport=137, history="D")
+    assert conn.is_broadcast_or_multicast_flow(flow) is expected
+    conn.check_connection_to_local_ip(twid, flow)
+    assert conn.set_evidence.conn_to_private_ip.call_count == int(not expected)
+
+
+@pytest.mark.parametrize(
+    "daddr,dport,proto,dmac,dst_vendor,host_ip,gateway_mac,expected",
+    [
+        ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", True),
+        ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Other", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "udp", "", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "udp", "00:11:22:33:44:55", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.2.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.100", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "57558", "tcp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+        ("192.168.1.163", "5353", "udp", "aa:bb:cc:00:00:02", "Apple, Inc.", "192.168.1.247", "00:11:22:33:44:55", False),
+    ],
+)
+def test_local_apple_peer_requires_direct_pair(
+    mocker: Any,
+    daddr: str,
+    dport: str,
+    proto: str,
+    dmac: str,
+    dst_vendor: str,
+    host_ip: str,
+    gateway_mac: str,
+    expected: bool,
+) -> None:
+    """Skip only local high-port UDP flows with two identified Apple MACs.
+
+    Parameters:
+        mocker: Patches the offline MAC vendor lookup.
+        daddr: Destination IP under test.
+        dport: Destination port under test.
+        proto: Transport protocol under test.
+        dmac: Destination MAC from the flow.
+        dst_vendor: Vendor associated with the destination MAC.
+        host_ip: Computer IP in the network snapshot.
+        gateway_mac: Router MAC in the network snapshot.
+        expected: Whether the local Apple pair is recognized.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = {
+        "host_ip": host_ip,
+        "local_network": "192.168.1.0/24",
+        "gateway_mac": gateway_mac,
+        "changed_at": 0,
+    }
+    src_mac = "aa:bb:cc:00:00:01"
+    mocker.patch(
+        "modules.conn_analyzer.conn_analyzer.utils.get_mac_vendor_from_mac_addr",
+        side_effect=lambda mac: "Apple, Inc." if mac == src_mac else dst_vendor,
+    )
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="apple-peer",
+        saddr="192.168.1.247",
+        daddr=daddr,
+        dur=1,
+        proto=proto,
+        appproto="",
+        sport="50000",
+        dport=dport,
+        spkts=1,
+        dpkts=1,
+        sbytes=10,
+        dbytes=10,
+        smac=src_mac,
+        dmac=dmac,
+        state="Established",
+        history="Dd",
+        interface="en0",
+    )
+
+    assert conn.is_local_apple_peer_flow(flow) is expected
+
+
+def test_unknown_port_skips_identified_local_apple_peer(mocker: Any) -> None:
+    """Suppress only unknown-port evidence for an identified Apple pair.
+
+    Parameters:
+        mocker: Replaces unrelated database checks and evidence output.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    flow = Conn(
+        starttime="1726249372.312124",
+        uid="apple-peer",
+        saddr="192.168.1.247",
+        daddr="192.168.1.163",
+        dur=1,
+        proto="udp",
+        appproto="",
+        sport="50000",
+        dport="57558",
+        spkts=1,
+        dpkts=1,
+        sbytes=10,
+        dbytes=10,
+        smac="aa:bb:cc:00:00:01",
+        dmac="aa:bb:cc:00:00:02",
+        state="Established",
+        history="Dd",
+    )
+    conn.db.is_a_port_scanner.return_value = False
+    conn.db.get_port_info.return_value = None
+    mocker.patch.object(conn, "port_belongs_to_an_org", return_value=False)
+    mocker.patch.object(conn, "is_local_apple_peer_flow", return_value=True)
+    evidence = mocker.patch.object(conn.set_evidence, "unknown_port")
+
+    assert conn.check_unknown_port("profile_192.168.1.247", twid, flow) is False
+    evidence.assert_not_called()
 
 
 def test_check_unknown_port_uses_lowercase_protocol_for_known_ports(mocker):
@@ -307,7 +613,7 @@ def test_check_multiple_telnet_reconnection_attempts(
             smac="",
             dmac="",
             state=origstate,
-            history="",
+            history="Sr",
         )
         flow.interpreted_state = interpreted_state
         conn.check_multiple_telnet_reconnection_attempts(profileid, twid, flow)
@@ -379,7 +685,7 @@ def test_check_multiple_reconnection_attempts(
             smac="",
             dmac="",
             state=origstate,
-            history="",
+            history="Sr",
         )
         flow.interpreted_state = "Established"
         conn.check_multiple_reconnection_attempts(profileid, twid, flow)
@@ -448,6 +754,34 @@ def test_get_sent_bytes(all_flows, expected_bytes_sent):
     conn = ModuleFactory().create_conn_analyzer_obj()
     bytes_sent = conn.get_sent_bytes(all_flows)
     assert bytes_sent == expected_bytes_sent
+
+
+@pytest.mark.parametrize("current_bytes,expected_count", [(0, 0), (150 * 1024 * 1024, 1)])
+def test_upload_totals_do_not_reuse_other_periods(
+    current_bytes: int, expected_count: int,
+) -> None:
+    """Ignore earlier uploads when evaluating a newly closed analysis period.
+
+    Parameters:
+        current_bytes: Bytes uploaded during the current period.
+        expected_count: Findings supported by that period alone.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.data_exfiltration_threshold = 100
+    conn.is_ignored_ip_data_upload = Mock(return_value=False)
+    previous = {"old-uid": {"daddr": "8.8.8.8", "sbytes": 200 * 1024 * 1024, "starttime": 1000}}
+    current = {"new-uid": {"daddr": "8.8.8.8", "sbytes": current_bytes, "starttime": 2000}}
+    conn.db.get_all_flows_in_profileid.return_value = {**previous, **current}
+    conn.db.get_all_flows_in_profileid_twid.return_value = current
+    conn.set_evidence.data_exfiltration = Mock()
+    conn.detect_data_upload_in_twid(profileid, "timewindow2")
+    conn.db.get_all_flows_in_profileid_twid.assert_called_once_with(profileid, "timewindow2")
+    conn.db.get_all_flows_in_profileid.assert_not_called()
+    assert conn.set_evidence.data_exfiltration.call_count == expected_count
+    if expected_count:
+        args = conn.set_evidence.data_exfiltration.call_args.args
+        assert args[4] == ["new-uid"]
+        assert args[5] == 2000
 
 
 @pytest.mark.parametrize(
@@ -662,7 +996,7 @@ def test_should_ignore_conn_without_dns(
         smac="",
         dmac="",
         state="",
-        history="",
+        history="ShADadFf",
         type_=flow_type,
     )
 
@@ -677,6 +1011,174 @@ def test_should_ignore_conn_without_dns(
     )
 
     assert conn.should_ignore_conn_without_dns(flow) is expected_result
+
+
+@pytest.mark.parametrize(
+    "rcode, port, proto, query, server, timestamp, expected",
+    [
+        ("NOERROR", 53, "udp", "example.org", "95.211.15.53", 100, True),
+        ("NXDOMAIN", "53", "TCP", "absent.example.org", "95.211.15.53", 100, True),
+        ("NOERROR", 53, "tcp", "example.org", "2606:4700:4700::1111", 100, True),
+        ("-", 53, "udp", "example.org", "95.211.15.53", 100, False),
+        ("SERVFAIL", 53, "udp", "example.org", "95.211.15.53", 100, False),
+        ("REFUSED", 53, "udp", "example.org", "95.211.15.53", 100, False),
+        ("NOERROR", 5353, "udp", "example.org", "95.211.15.53", 100, False),
+        ("NOERROR", 53, "icmp", "example.org", "95.211.15.53", 100, False),
+        ("NOERROR", 53, "udp", "-", "95.211.15.53", 100, True),
+        ("NXDOMAIN", 53, "tcp", "", "95.211.15.53", 100, True),
+        ("NOERROR", 53, "udp", "example.org", "224.0.0.251", 100, False),
+        ("NOERROR", 53, "udp", "example.org", "invalid", 100, False),
+        ("NOERROR", 53, "udp", "example.org", "95.211.15.53", float("nan"), False),
+    ],
+)
+def test_remember_working_dns_server(
+    rcode: str, port: int | str, proto: str, query: str,
+    server: str, timestamp: float, expected: bool,
+) -> None:
+    """Learn actual resolver replies rather than trusting a destination port.
+
+    Parameters:
+        rcode: Observed DNS response code, or query-only marker.
+        port: Destination service port.
+        proto: Transport protocol.
+        query: DNS question.
+        server: Responder address.
+        timestamp: Capture time of the DNS transaction.
+        expected: Whether a working responder should be remembered.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = SimpleNamespace(type_="dns", daddr=server, dport=port, proto=proto,
+                           query=query, rcode_name=rcode, starttime=timestamp,
+                           interface="eth0", answers=[])
+    assert conn.remember_working_dns_server(flow) is expected
+    assert len(conn.working_dns_servers) == int(expected)
+
+
+@pytest.mark.parametrize(
+    "port, proto, configured, learned, interface, age, expected",
+    [
+        (53, "udp", True, False, "eth0", 0, True),
+        ("53", "TCP", True, False, "eth0", 0, True),
+        (53, "udp", False, True, "eth0", 100, True),
+        (53, "tcp", False, True, "eth0", -1, True),
+        (53, "udp", False, True, "eth0", 86401, False),
+        (53, "udp", False, True, "other-interface", 0, False),
+        (53, "udp", False, False, "eth0", 0, False),
+        (443, "tcp", True, True, "eth0", 0, False),
+        (53, "icmp", True, True, "eth0", 0, False),
+    ],
+)
+def test_working_dns_exemption_is_scoped(
+    port: int | str, proto: str, configured: bool, learned: bool,
+    interface: str, age: float, expected: bool,
+) -> None:
+    """Exempt resolver service traffic without exempting unrelated connections.
+
+    Parameters:
+        port: Connection destination port.
+        proto: Connection transport.
+        configured: Whether the address is a configured resolver.
+        learned: Whether a valid DNS reply was observed.
+        interface: Connection capture interface.
+        age: Time difference from the observed DNS reply, in seconds.
+        expected: Whether the connection should be excluded.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.is_official_dns_server.return_value = configured
+    conn.db.get_network_state.return_value = None
+    conn.db.is_doh_server.return_value = False
+    conn.db.is_dhcp_server.return_value = False
+    conn.is_running_non_stop = False
+    conn.client_ips = []
+    reply = SimpleNamespace(type_="dns", daddr="95.211.15.53", dport=53,
+                            proto="udp", query="example.org", rcode_name="NOERROR",
+                            starttime=100000, interface="eth0")
+    if learned:
+        assert conn.remember_working_dns_server(reply)
+    flow = SimpleNamespace(type_="conn", saddr="10.0.2.111", daddr=reply.daddr,
+                           sport=49284, dport=port, proto=proto.lower(), appproto="",
+                           history="ShADadFf", starttime=100000 + age, interface=interface)
+    assert conn.is_working_dns_connection(flow) is expected
+    if proto != "icmp":
+        assert conn.should_ignore_conn_without_dns(flow) is expected
+
+
+def test_working_dns_cache_is_bounded() -> None:
+    """Bound resolver state and ignore older updates from reordered logs."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = SimpleNamespace(type_="dns", daddr="95.211.15.53", dport=53,
+                           proto="udp", query="example.org", rcode_name="NOERROR",
+                           starttime=100, interface="eth0")
+    for number in range(4097):
+        flow.daddr = str(ip_address(int(ip_address("100.64.0.1")) + number))
+        assert conn.remember_working_dns_server(flow)
+    assert len(conn.working_dns_servers) == 4096
+    assert ("eth0", "100.64.0.1") not in conn.working_dns_servers
+    flow.starttime = 99
+    assert conn.remember_working_dns_server(flow)
+    assert conn.working_dns_servers[("eth0", flow.daddr)] == 100
+
+
+@pytest.mark.parametrize("reply_arrives", [True, False])
+async def test_without_dns_rechecks_responder_after_grace(
+    mocker: Any, reply_arrives: bool,
+) -> None:
+    """Honor a DNS reply processed after the connection before reporting evidence.
+
+    Parameters:
+        mocker: Patch helper for the existing processing grace period.
+        reply_arrives: Whether a valid DNS response arrives while waiting.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.is_official_dns_server.return_value = False
+    conn.db.get_network_state.return_value = None
+    conn.db.is_doh_server.return_value = False
+    conn.db.is_dhcp_server.return_value = False
+    conn.db.is_ip_resolved.return_value = False
+    conn.is_running_non_stop = False
+    conn.client_ips = []
+    conn.input_type = InputType.PCAP
+    conn.check_if_resolution_was_made_by_different_version = Mock(return_value=False)
+    conn.is_well_known_org = Mock(return_value=False)
+    conn.set_evidence.conn_without_dns = Mock()
+    flow = SimpleNamespace(type_="conn", saddr="10.0.2.111", daddr="95.211.15.53",
+                           sport=49284, dport=53, proto="udp", appproto="",
+                           history="Dd", starttime=100000, interface="eth0")
+
+    async def process_reply(delay: float) -> None:
+        """Process a DNS response during the simulated log-order grace period.
+
+        Parameters:
+            delay: Existing wait requested by the detector.
+        """
+        assert delay == 15
+        if reply_arrives:
+            reply = SimpleNamespace(**{**vars(flow), "type_": "dns", "query": "example.org",
+                                       "rcode_name": "NOERROR"})
+            assert conn.remember_working_dns_server(reply)
+
+    mocker.patch("modules.conn_analyzer.conn_analyzer.asyncio.sleep", side_effect=process_reply)
+    assert await conn.check_connection_without_dns_resolution(profileid, twid, flow) is (not reply_arrives)
+    assert conn.set_evidence.conn_without_dns.call_count == int(not reply_arrives)
+
+
+async def test_conn_analyzer_consumes_dns_responder_messages(mocker: Any) -> None:
+    """Route parsed DNS replies into resolver recognition in the module worker.
+
+    Parameters:
+        mocker: Patch helper for isolated channel messages.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    flow = SimpleNamespace(type_="dns", daddr="95.211.15.53", dport=53,
+                           proto="udp", query="example.org", rcode_name="NOERROR",
+                           starttime=100, interface="eth0")
+    message = {"data": json.dumps({"flow": vars(flow)})}
+    conn.classifier.convert_to_flow_obj = Mock(return_value=flow)
+    mocker.patch.object(conn, "get_msg", side_effect=lambda channel: message if channel == "new_dns" else None)
+    await conn.main()
+    assert conn.working_dns_servers[("eth0", "95.211.15.53")] == 100
+    conn.subscribe_to_channels()
+    assert "new_dns" in conn.channels
 
 
 @pytest.mark.parametrize(
@@ -964,6 +1466,48 @@ def test_port_belongs_to_an_org(
 
 
 @pytest.mark.parametrize(
+    "src_vendor,dst_vendor,expected",
+    [
+        ("Apple, Inc.", "Apple, Inc.", True),
+        ("Apple, Inc.", "", False),
+        ("", "Apple, Inc.", False),
+        ("Apple, Inc.", "Other vendor", False),
+    ],
+)
+def test_org_port_requires_both_mac_vendors(
+    mocker: Any, src_vendor: str, dst_vendor: str, expected: bool
+) -> None:
+    """Accept a MAC-only org match only when both endpoints match.
+
+    Parameters:
+        mocker: Patches the organization IP lookup.
+        src_vendor: Source profile MAC vendor.
+        dst_vendor: Destination profile MAC vendor.
+        expected: Whether the vendor pair matches Apple's port entry.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_organization_of_port.return_value = json.dumps(
+        {"ip": [], "org_name": ["Apple"]}
+    )
+    conn.db.get_mac_vendor_from_profile.side_effect = [
+        src_vendor,
+        dst_vendor,
+    ]
+    conn.db.get_ip_identification.return_value = {}
+    mocker.patch.object(
+        conn.whitelist.org_analyzer, "is_ip_in_org", return_value=False
+    )
+
+    assert (
+        conn.port_belongs_to_an_org(
+            "192.168.1.163", "57558/tcp", "profile_192.168.1.247"
+        )
+        is expected
+    )
+
+
+@pytest.mark.parametrize(
     "flow_type, smac, old_ip_list, saddr, expected_calls",
     [
         # Test case 1: New IP for existing MAC
@@ -1037,6 +1581,60 @@ def test_check_device_changing_ips(
     )
     conn.check_device_changing_ips(twid, flow)
     assert conn.set_evidence.device_changing_ips.call_count == expected_calls
+
+
+@pytest.mark.parametrize(
+    "source,mac,old_ips,gateway_ip,gateway_mac,expected_old",
+    [
+        ("172.18.0.1", "b6:49:9f:96:b2:d4", ["147.32.82.228"], None, None, None),
+        ("172.18.0.1", "b6:49:9f:96:b2:d4", ["172.18.0.9"], "172.18.0.1", "b6:49:9f:96:b2:d4", None),
+        ("172.18.0.8", "b6:49:9f:96:b2:d4", ["172.18.0.9"], "172.18.0.1", "b6:49:9f:96:b2:d4", None),
+        ("172.18.0.8", "ca:ef:de:b4:f3:fc", ["147.32.82.228", "172.18.0.9"], "172.18.0.1", "b6:49:9f:96:b2:d4", "172.18.0.9"),
+        ("172.18.0.8", "ca:ef:de:b4:f3:fc", ["172.18.0.8"], None, None, None),
+        ("172.18.0.8", "ff:ff:ff:ff:ff:ff", ["172.18.0.9"], None, None, None),
+    ],
+)
+def test_device_ip_change_rejects_routed_mac_ownership(
+    source: str, mac: str, old_ips: list[str], gateway_ip: str | None,
+    gateway_mac: str | None, expected_old: str | None,
+) -> None:
+    """Ignore router hops and old public associations, retaining local changes."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.was_ip_seen_in_connlog_before.return_value = False
+    conn.db.get_ip_of_mac.return_value = json.dumps(old_ips)
+    conn.db.get_network_state.return_value = None
+    conn.db.get_gateway_ip.return_value = gateway_ip
+    conn.db.get_gateway_mac.return_value = gateway_mac
+    conn.set_evidence.device_changing_ips = Mock()
+    flow = SimpleNamespace(type_="conn", saddr=source, smac=mac, interface="eth0", starttime=1793026866.0)
+
+    conn.check_device_changing_ips("timewindow2", flow)
+
+    if expected_old:
+        conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow2", flow, expected_old)
+    else:
+        conn.set_evidence.device_changing_ips.assert_not_called()
+
+
+def test_device_ip_change_uses_gateway_at_flow_time() -> None:
+    """A delayed flow must use its previous network's gateway."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.db.was_ip_seen_in_connlog_before.return_value = False
+    conn.db.get_ip_of_mac.return_value = json.dumps(["172.18.0.9"])
+    conn.db.get_network_state.return_value = {
+        "changed_at": 200.0, "gateway_mac": "00:11:22:33:44:55",
+        "gateway_ip": "192.168.1.1", "history": [{
+            "changed_at": 100.0, "gateway_mac": "b6:49:9f:96:b2:d4",
+            "gateway_ip": "172.18.0.1",
+        }],
+    }
+    conn.set_evidence.device_changing_ips = Mock()
+    flow = SimpleNamespace(type_="conn", saddr="172.18.0.8", smac="b6:49:9f:96:b2:d4", interface="eth0", starttime=150.0)
+
+    conn.check_device_changing_ips("timewindow2", flow)
+
+    conn.set_evidence.device_changing_ips.assert_not_called()
+    conn.db.get_gateway_mac.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -1128,7 +1726,7 @@ def test_is_well_known_org(
 
 
 @pytest.mark.parametrize(
-    "saddr, daddr, dport, proto, what_to_check, expected_calls",
+    "saddr, daddr, dport, proto, expected_calls",
     [
         (  # Test case 1: Different local network usage (dstip),
             # evidence should be set
@@ -1136,7 +1734,6 @@ def test_is_well_known_org(
             "10.0.0.1",
             80,
             "tcp",
-            "dstip",
             1,
         ),
         (  # Test case 2: Same local network usage, no evidence
@@ -1144,7 +1741,6 @@ def test_is_well_known_org(
             "192.168.1.2",
             80,
             "tcp",
-            "dstip",
             0,
         ),
         (  # Test case 3: Different local network usage (srcip),
@@ -1153,7 +1749,6 @@ def test_is_well_known_org(
             "192.168.1.2",
             80,
             "tcp",
-            "srcip",
             1,
         ),
         (  # Test case 4:  Public IP used, no evidence
@@ -1161,7 +1756,6 @@ def test_is_well_known_org(
             "192.168.1.2",
             80,
             "tcp",
-            "srcip",
             0,
         ),
         (  # Test case 5: Different IPv6 local network usage (dstip)
@@ -1169,7 +1763,6 @@ def test_is_well_known_org(
             "fd00:2::20",
             80,
             "tcp",
-            "dstip",
             1,
         ),
         (  # Test case 6: Same IPv6 local network usage, no evidence
@@ -1177,13 +1770,12 @@ def test_is_well_known_org(
             "fd00:1::20",
             80,
             "tcp",
-            "dstip",
             0,
         ),
     ],
 )
 def test_check_different_localnet_usage(
-    saddr, daddr, dport, proto, what_to_check, expected_calls
+    saddr, daddr, dport, proto, expected_calls
 ):
     """
     Tests the check_different_localnet_usage function
@@ -1211,26 +1803,25 @@ def test_check_different_localnet_usage(
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="ShADadFf",
     )
     conn.check_different_localnet_usage(
         twid,
         flow,
-        what_to_check=what_to_check,
     )
     call_count = conn.set_evidence.different_localnet_usage.call_count
     assert call_count == expected_calls
 
 
 @pytest.mark.parametrize(
-    "what_to_check, sport, dport",
+    "saddr, daddr, sport, dport",
     [
-        ("dstip", "40000", "53"),
-        ("srcip", "53", "40000"),
+        ("fd00:1::10", "fd00:2::53", "40000", "53"),
+        ("fd00:2::53", "fd00:1::10", "53", "40000"),
     ],
 )
 def test_check_different_localnet_usage_ignores_official_dns_server(
-    what_to_check, sport, dport
+    saddr, daddr, sport, dport
 ):
     conn = ModuleFactory().create_conn_analyzer_obj()
     conn.set_evidence.different_localnet_usage = Mock()
@@ -1239,8 +1830,8 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
-        saddr="fd00:2::53",
-        daddr="fd00:3::53",
+        saddr=saddr,
+        daddr=daddr,
         dur=1,
         proto="tcp",
         appproto="",
@@ -1259,7 +1850,6 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
     conn.check_different_localnet_usage(
         twid,
         flow,
-        what_to_check=what_to_check,
     )
 
     conn.set_evidence.different_localnet_usage.assert_not_called()
@@ -1291,6 +1881,10 @@ def test_check_different_localnet_usage_ignores_official_dns_server(
             "192.168.1.1",
             0,
         ),
+        ("192.168.1.2", 0, "icmp", "192.168.1.1", 0),
+        ("fd00::2", 0, "icmp6", "fd00::1", 0),
+        ("192.168.1.158", 5353, "udp", "192.168.1.163", 0),
+        ("224.0.0.251", 5353, "udp", "192.168.1.163", 0),
     ],
 )
 def test_check_connection_to_local_ip(
@@ -1319,7 +1913,7 @@ def test_check_connection_to_local_ip(
         smac="",
         dmac="",
         state="Established",
-        history="",
+        history="ShADadFf",
     )
     conn.check_connection_to_local_ip(twid, flow)
     assert conn.set_evidence.conn_to_private_ip.call_count == expected_calls
@@ -1684,3 +2278,197 @@ def test_unknown_port_ignores_known_p2p_flow(mocker) -> None:
 
     assert conn.check_unknown_port(profileid, twid, flow) is None
     evidence.assert_not_called()
+
+
+@pytest.mark.parametrize("proto,state,history,known_service,expected", [
+    ("tcp", "S1", "ShADadt", None, True),
+    ("tcp", "SF", "ShADadfF", None, True),
+    ("tcp", "S1", "ShADadt", "known-service", False),
+    ("tcp", "S0", "S", None, False),
+    ("tcp", "REJ", "Sr", None, False),
+    ("udp", "SF", "Dd", None, True),
+    ("udp", "S0", "D", None, False),
+])
+def test_scanner_keeps_established_unknown_service(proto: str, state: str, history: str, known_service: str | None, expected: bool) -> None:
+    """Keep a scanner's successful services visible while suppressing failed probes.
+
+    Parameters:
+        proto: TCP or UDP transport.
+        state: Zeek connection state.
+        history: Recorded packet flags relative to the final endpoints.
+        known_service: Existing service catalogue match, if any.
+        expected: Whether Unknown Port evidence must be generated.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    from modules.conn_analyzer.set_evidence import SetEvidenceHelper
+    from slips_files.core.database.redis_db.scan_detections_db import ScanDetectionsHandler
+    from slips_files.core.structures.evidence import EvidenceType, ThreatLevel
+
+    raw = {"ts": 321.97754, "uid": "scanner-established-9001", "id.orig_h": "192.168.1.120",
+           "id.orig_p": 49722, "id.resp_h": "212.129.49.59", "id.resp_p": 9001,
+           "proto": proto, "service": "ssl" if proto == "tcp" and state == "S1" else "-",
+           "duration": 10, "conn_state": state, "history": history,
+           "orig_pkts": 357, "resp_pkts": 756, "orig_bytes": 207599, "resp_bytes": 902535}
+    flow, error = ZeekJSON(factory.logger).process_line({"type": "conn.log", "interface": "default", "data": raw})
+    assert error == ""
+    flow.interpreted_state = ScanDetectionsHandler.get_final_state_from_flags(conn.db, flow.state, flow.pkts)
+    conn.db.is_a_port_scanner.return_value = True
+    conn.db.get_port_info.return_value = known_service
+    conn.db.is_ftp_port.return_value = False
+    conn.db.is_p2p_related_flow.return_value = False
+    conn.port_belongs_to_an_org = Mock(return_value=False)
+    conn.is_local_apple_peer_flow = Mock(return_value=False)
+    conn.is_broadcast_or_multicast_flow = Mock(return_value=False)
+    conn.set_evidence = SetEvidenceHelper(conn.db)
+
+    assert conn.check_unknown_port(f"profile_{flow.saddr}", "timewindow1", flow) is expected
+    assert conn.db.set_evidence.call_count == int(expected)
+    if expected:
+        evidence = conn.db.set_evidence.call_args.args[0]
+        assert evidence.evidence_type == EvidenceType.UNKNOWN_PORT
+        assert evidence.threat_level == ThreatLevel.HIGH
+        assert evidence.profile.ip == "192.168.1.120"
+        assert evidence.attacker.value == "192.168.1.120"
+        assert evidence.victim.value == "212.129.49.59"
+        assert str(evidence.dst_port) == "9001"
+        assert evidence.uid == [flow.uid]
+
+
+@pytest.mark.parametrize("guest_subnet,guest_ip,guest_router", [
+    ("172.20.10.0/28", "172.20.10.2", "00:11:22:33:44:66"),
+    ("192.168.1.0/24", "192.168.1.24", "00:11:22:33:44:66"),
+    ("10.0.0.0/24", "10.0.0.7", "00:11:22:33:44:55"),
+])
+def test_device_ip_change_separates_network_visits(
+    guest_subnet: str, guest_ip: str, guest_router: str,
+) -> None:
+    """Roaming and returning establish new baselines; same-visit conflicts remain.
+
+    Parameters:
+        guest_subnet: New interface subnet, including overlapping private ranges.
+        guest_ip: Valid device address assigned on the new network.
+        guest_router: Router MAC distinguishing overlapping networks.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    conn.db.was_ip_seen_in_connlog_before.return_value = True
+    conn.db.get_ip_of_mac.return_value = json.dumps(["192.168.1.131"])
+    home = {"changed_at": 100, "connected": True, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24"}
+    guest = {"changed_at": 200, "connected": True, "gateway_mac": guest_router, "local_network": guest_subnet}
+    back = {**home, "changed_at": 300}
+    for state, previous, source in [(home, [], "192.168.1.131"), (guest, [home], guest_ip), (back, [home, guest], "192.168.1.100")]:
+        conn.db.get_network_state.return_value = {**state, "history": previous}
+        flow = SimpleNamespace(type_="conn", saddr=source, smac="50:ed:3c:39:bc:d9", interface="en0", starttime=state["changed_at"]+1)
+        conn.check_device_changing_ips("timewindow1", flow)
+    conn.set_evidence.device_changing_ips.assert_not_called()
+    # A pruned transition history must not revert to the previous Home visit.
+    conn.db.get_network_state.return_value = {**back, "changed_at": 400, "history": []}
+    conflicting = SimpleNamespace(type_="conn", saddr="192.168.1.101", smac=flow.smac, interface="en0", starttime=401)
+    conn.check_device_changing_ips("timewindow1", conflicting)
+    conn.check_device_changing_ips("timewindow1", conflicting)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", conflicting, "192.168.1.100")
+    conn.db.get_ip_of_mac.assert_not_called()
+    conn.db.was_ip_seen_in_connlog_before.assert_not_called()
+
+
+def test_device_ip_change_uses_old_visit_for_delayed_flows() -> None:
+    """An old queued flow cannot change the active network's MAC baseline."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    home = {"changed_at": 100, "connected": True, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24"}
+    guest = {"changed_at": 200, "connected": True, "gateway_mac": "00:11:22:33:44:66", "local_network": "10.0.0.0/24"}
+    conn.db.get_network_state.return_value = {**home, "changed_at": 300, "history": [home, guest]}
+    old = SimpleNamespace(type_="conn", saddr="192.168.1.10", smac="50:ed:3c:39:bc:d9", interface="en0", starttime=110)
+    current = SimpleNamespace(**{**vars(old), "saddr": "192.168.1.100", "starttime": 310})
+    conn.check_device_changing_ips("timewindow1", old)
+    conn.check_device_changing_ips("timewindow1", current)
+    conn.check_device_changing_ips("timewindow1", old)
+    conflict = SimpleNamespace(**{**vars(old), "saddr": "192.168.1.101", "starttime": 320})
+    conn.check_device_changing_ips("timewindow1", conflict)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", conflict, "192.168.1.100")
+
+
+@pytest.mark.parametrize("change", ["dns", "disconnect", "assigned_alias", "other_interface"])
+def test_device_ip_change_distinguishes_network_and_address_updates(change: str) -> None:
+    """Keep DNS-only updates scoped while allowing reconnections and assigned aliases.
+
+    Parameters:
+        change: Network update or interface context between two source addresses.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    state = {"changed_at": 100, "connected": True, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24", "mac": "50:ed:3c:39:bc:d9"}
+    conn.db.get_network_state.return_value = state
+    first = SimpleNamespace(type_="conn", saddr="192.168.1.100", smac=state["mac"], interface="en0", starttime=110)
+    conn.check_device_changing_ips("timewindow1", first)
+    update = {**state, "changed_at": 200, "history": [state]}
+    if change == "dns":
+        update["dns_servers"] = ["192.168.1.1"]
+    elif change == "disconnect":
+        update["history"].append({"connected": False, "changed_at": 150})
+    elif change == "assigned_alias":
+        update["addresses"] = [{"ip": ip, "network": "192.168.1.0/24"} for ip in ["192.168.1.100", "192.168.1.101"]]
+    conn.db.get_network_state.return_value = update
+    second = SimpleNamespace(**{**vars(first), "saddr": "192.168.1.101", "starttime": 210, "interface": "en1" if change == "other_interface" else "en0"})
+    conn.check_device_changing_ips("timewindow1", second)
+    if change == "dns":
+        conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", second, first.saddr)
+    else:
+        conn.set_evidence.device_changing_ips.assert_not_called()
+
+
+@pytest.mark.parametrize("subnet,source", [("10.0.0.0/24", "192.168.1.100"), ("invalid", "192.168.1.100")])
+def test_device_ip_change_does_not_exempt_inconsistent_network_addresses(subnet: str, source: str) -> None:
+    """Unknown settings or an address outside the new subnet retain the original check.
+
+    Parameters:
+        subnet: Current network prefix, or invalid metadata.
+        source: Source that cannot be verified as an address in the new network.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    conn.db.get_network_state.return_value = {"connected": True, "changed_at": 100, "gateway_mac": "00:11:22:33:44:55", "local_network": subnet}
+    conn.db.was_ip_seen_in_connlog_before.return_value = False
+    conn.db.get_ip_of_mac.return_value = json.dumps(["192.168.1.131"])
+    flow = SimpleNamespace(type_="conn", saddr=source, smac="50:ed:3c:39:bc:d9", interface="en0", starttime=110)
+    conn.check_device_changing_ips("timewindow1", flow)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", flow, "192.168.1.131")
+
+
+def test_device_ip_change_context_is_bounded() -> None:
+    """Keep baseline, deduplication and network context bounded in the module worker."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.DEVICE_IP_BASELINE_LIMIT = 2
+    conn.DEVICE_IP_SEEN_LIMIT = 3
+    conn.DEVICE_NETWORK_LIMIT = 2
+    conn.set_evidence.device_changing_ips = Mock()
+    for index in range(10):
+        conn.db.get_network_state.return_value = {"connected": True, "changed_at": 100+index, "gateway_mac": f"00:11:22:33:44:{index:02x}", "local_network": "192.168.1.0/24"}
+        flow = SimpleNamespace(type_="conn", saddr="192.168.1.100", smac="50:ed:3c:39:bc:d9", interface="en0", starttime=200+index)
+        conn.check_device_changing_ips("timewindow1", flow)
+    assert len(conn.device_ip_baselines) <= 2
+    assert len(conn.device_ip_seen) <= 3
+    assert len(conn.device_network_boundaries) <= 2
+    conn.set_evidence.device_changing_ips.assert_not_called()
+
+
+def test_device_ip_change_does_not_accuse_older_completed_session() -> None:
+    """A long session completed late cannot be mistaken for a newly acquired IP."""
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.input_type = InputType.INTERFACE
+    conn.set_evidence.device_changing_ips = Mock()
+    conn.db.get_network_state.return_value = {"connected": True, "changed_at": 100, "gateway_mac": "00:11:22:33:44:55", "local_network": "192.168.1.0/24"}
+    newer = SimpleNamespace(type_="conn", saddr="192.168.1.100", smac="50:ed:3c:39:bc:d9", interface="en0", starttime=150)
+    older = SimpleNamespace(**{**vars(newer), "saddr": "192.168.1.99", "starttime": 110})
+    conn.check_device_changing_ips("timewindow1", newer)
+    conn.check_device_changing_ips("timewindow1", older)
+    conn.set_evidence.device_changing_ips.assert_not_called()
+    conflict = SimpleNamespace(**{**vars(newer), "saddr": "192.168.1.101", "starttime": 160})
+    conn.check_device_changing_ips("timewindow1", conflict)
+    conn.set_evidence.device_changing_ips.assert_called_once_with("timewindow1", conflict, "192.168.1.99")

@@ -8,19 +8,26 @@ import json
 import subprocess
 from typing import Any, Dict
 import time
+import ipaddress
+import math
 from threading import Lock
 
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
+from slips_files.core.structures.evidence import TimeWindow
 from .exec_iptables_cmd import (
     LEGACY_SLIPS_COMMENT,
+    delete_slips_rules_for_ip,
     exec_iptables_command,
     format_slips_rule_comment,
     sync_slips_rule_comment,
 )
 from modules.blocking.unblocker import Unblocker
 from modules.blocking.recovery import RecoveryMixin
-
+from modules.blocking.macos_pf import MacOSPF
+from slips_files.core.helpers.whitelist.blocking_whitelist import (
+    BlockingWhitelist,
+)
 
 OUTPUT_TO_DEV_NULL = ">/dev/null 2>&1"
 
@@ -34,14 +41,20 @@ class Blocking(IModule, RecoveryMixin):
     description = "Block malicious IPs connecting to this device"
     authors = ["Sebastian Garcia, Alya Gomaa"]
 
-    def init(self):
-        if platform.system() == "Darwin":
-            self.print("Mac OS blocking is not supported yet.")
-            sys.exit()
-
-        self.firewall = self._determine_linux_firewall()
+    def init(self) -> None:
+        self.blocking_whitelist = BlockingWhitelist(self)
+        self._applied_exemptions: set[str] = set()
         self.sudo = utils.get_sudo_according_to_env()
-        self._init_chains_in_firewall()
+        self.firewall = (
+            "pf"
+            if platform.system() == "Darwin"
+            else self._determine_linux_firewall()
+        )
+        self.pf = (
+            MacOSPF(self.sudo, self.db) if self.firewall == "pf" else None
+        )
+        if self.firewall == "iptables":
+            self._init_chains_in_firewall()
         self.blocking_log_path = self.get_module_specific_output_path(
             "blocking.log"
         )
@@ -292,10 +305,21 @@ class Blocking(IModule, RecoveryMixin):
         returns true if the ip is successfully blocked
         """
 
-        if self.firewall != "iptables":
+        if not isinstance(
+            ip_to_block, str
+        ) or self.blocking_whitelist.is_exempt(ip_to_block):
             return False
 
-        if not isinstance(ip_to_block, str):
+        if self.firewall == "pf":
+            if not self.pf.block(ip_to_block, flags):
+                self.print(
+                    f"Unable to install PF block for {ip_to_block}.", 0, 1
+                )
+                return False
+            self._store_blocked_ip_ts_in_db(ip_to_block, flags)
+            self.log(f"Blocked {ip_to_block} with macOS PF.")
+            return True
+        if self.firewall != "iptables":
             return False
 
         if self._is_ip_already_blocked(ip_to_block):
@@ -317,15 +341,48 @@ class Blocking(IModule, RecoveryMixin):
         return True
 
     def shutdown_gracefully(self):
+        requests = getattr(self.unblocker, "requests", {})
+        if isinstance(requests, dict):
+            for ip, request in list(requests.items()):
+                owner = request.get("flags", {}).get("lease_owner", "")
+                if isinstance(owner, str) and owner.startswith("p2p-catchup:"):
+                    self.unblocker.release_owned(ip, owner)
         self.unblocker.unblocker_thread.join(30)
         if self.unblocker.unblocker_thread.is_alive():
             self.print("Problem shutting down unblocker thread.")
 
-    def pre_main(self):
-        self._recover_firewall_rules()
+    def pre_main(self) -> None:
+        if self.firewall == "pf":
+            if not self.pf.restore():
+                self.print("Unable to restore macOS PF blocks.", 0, 1)
+        self._sync_blocking_whitelist()
+        if self.firewall != "pf":
+            self._recover_firewall_rules()
         self.unblocker = Unblocker(
-            self.db, self.sudo, self.should_stop, self.logger, self.log
+            self.db,
+            self.sudo,
+            self.should_stop,
+            self.logger,
+            self.log,
+            pf=self.pf,
         )
+
+    def _sync_blocking_whitelist(self) -> None:
+        """Remove existing blocks when a blocking-only file rule is added."""
+        exempt_ips = self.blocking_whitelist.addresses()
+        for ip in exempt_ips - self._applied_exemptions:
+            removed = (
+                self.pf.unblock(ip)
+                if self.firewall == "pf"
+                else delete_slips_rules_for_ip(self.sudo, ip, {})
+            )
+            if not removed:
+                raise RuntimeError(f"Unable to remove exempt IP block: {ip}")
+            self.db.del_blocked_ip(ip)
+            self.db.del_firewall_block_state(ip)
+            if hasattr(self, "unblocker"):
+                self.unblocker.del_request(ip)
+        self._applied_exemptions = set(exempt_ips)
 
     def _get_timewindow_to_block_in(self, evidence_tw: int | None) -> int:
         """
@@ -345,7 +402,67 @@ class Blocking(IModule, RecoveryMixin):
             return current_twid
         return max(current_twid, int(evidence_tw))
 
-    def main(self):
+    def _catchup_lease(self, data: dict[str, Any]) -> None:
+        """Apply a bounded owned firewall request from data without taking another block's ownership."""
+        ip, owner = data.get("ip"), data.get("lease_owner")
+        try:
+            address = ipaddress.ip_address(ip)
+        except (ValueError, TypeError):
+            return
+        if (
+            not isinstance(owner, str)
+            or not owner.startswith("p2p-catchup:")
+            or len(owner) > 160
+            or address.is_multicast
+            or address.is_loopback
+            or address.is_unspecified
+            or self.blocking_whitelist.is_exempt(ip)
+        ):
+            return
+        if data.get("block") is False:
+            self.unblocker.release_owned(ip, owner)
+            return
+        existing = self.unblocker.requests.get(ip)
+        if existing and existing.get("flags", {}).get("lease_owner") != owner:
+            return
+        if not existing and (
+            self.db.get_blocking_timestamp(ip) is not None
+            or (
+                self.firewall == "iptables" and self._is_ip_already_blocked(ip)
+            )
+            or (self.firewall == "pf" and ip in self.pf.rules)
+        ):
+            return
+        try:
+            deadline = min(float(data["lease_until"]), time.time() + 300)
+        except (KeyError, TypeError, ValueError):
+            return
+        if not math.isfinite(deadline) or deadline <= time.time():
+            return
+        now = time.time()
+        flags = {
+            "from_": True,
+            "to": True,
+            "interface": data.get("interface"),
+            "lease_owner": owner,
+            "_blocked_at": now,
+            "_origin_run": "p2p-catchup",
+            "rule_comment": format_slips_rule_comment(
+                now, deadline, "p2p-catchup"
+            ),
+        }
+        request = {
+            "tw_to_unblock": TimeWindow(
+                number=-1, end_time=utils.convert_ts_format(deadline, "iso")
+            ),
+            "block_this_ip_for": 0,
+            "flags": flags,
+        }
+        if self._block_ip(ip, flags):
+            self.unblocker.register_unblock_request(ip, request)
+
+    def main(self) -> None:
+        self._sync_blocking_whitelist()
         if msg := self.get_msg("new_blocking"):
             # message['data'] in the new_blocking channel is a dictionary that contains
             # the ip and the blocking options
@@ -367,7 +484,12 @@ class Blocking(IModule, RecoveryMixin):
             #   self.db.publish('new_blocking', blocking_data )
 
             data = json.loads(msg["data"])
+            if data.get("lease_owner"):
+                self._catchup_lease(data)
+                return
             ip = data.get("ip")
+            if self.blocking_whitelist.is_exempt(ip):
+                return
             evidence_tw: int | None = data.get("tw")
             tw = self._get_timewindow_to_block_in(evidence_tw)
             block = data.get("block")

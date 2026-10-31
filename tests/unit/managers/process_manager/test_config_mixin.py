@@ -16,6 +16,18 @@ def test_process_manager_includes_config_mixin() -> None:
     assert isinstance(process_manager, ConfigMixin)
 
 
+@pytest.mark.parametrize("enabled", [True, False])
+def test_service_anomaly_feature_flag_controls_module_start(enabled: bool) -> None:
+    """Do not start the optional service detector when its flag is disabled.
+
+    Parameters:
+        enabled: Configured module flag.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    manager.main.conf.service_anomaly_enabled.return_value = enabled
+    assert (Modules.ANOMALY_DETECTION_SERVICES in manager._get_feature_toggled_disabled_modules()) is (not enabled)
+
+
 @pytest.mark.parametrize(
     "module_name, modules_to_ignore, expected",
     [

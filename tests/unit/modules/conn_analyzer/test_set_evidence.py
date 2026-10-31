@@ -248,6 +248,7 @@ def test_unknown_port(
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
     assert evidence.description == expected_description
+    assert evidence.proto == flow.proto
 
 
 @pytest.mark.parametrize(

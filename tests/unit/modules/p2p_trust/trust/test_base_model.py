@@ -3,6 +3,59 @@
 import pytest
 from unittest.mock import Mock
 from tests.module_factory import ModuleFactory
+from modules.p2p_trust.trust.base_model import peer_trust_details
+
+
+@pytest.mark.parametrize(
+    "reliability,score,confidence,communication,local,expected",
+    [
+        (0.5, None, None, 0.175, 0, 0.175),
+        (0.8, None, 0, 0.28, 0, 0.28),
+        (0.978, None, 0, 0.3423, 0, 0.3423),
+        (1.0, 0.5, 0, 0.35, 0, 0.35),
+        (1.0, 0.0, 0, 0.35, 0, 0.35),
+        (1.0, 0.0, 1, 0.35, 0.5, 0.85),
+        (1.0, 1.0, 1, 0.35, -0.5, -0.15),
+        (0.0, 1.0, 1, 0, -0.5, -0.5),
+        (0.978, 0.2, 0.8, 0.3423, 0.24, 0.5823),
+    ],
+)
+def test_peer_trust_details_match_worker(
+    reliability: float, score: float | None, confidence: float | None,
+    communication: float, local: float, expected: float,
+) -> None:
+    """Explain thesis trust without mistaking unknown behavior for benign behavior.
+
+    Parameters:
+        reliability: Measured communication reliability.
+        score: Local maliciousness, or an unknown assessment.
+        confidence: Local assessment confidence.
+        communication: Expected communication contribution.
+        local: Expected local behavior contribution.
+        expected: Expected total trust.
+    """
+    model = ModuleFactory().create_base_model_obj()
+    details = peer_trust_details(reliability, score, confidence)
+    assert details["trust"] == pytest.approx(expected)
+    assert details["communication"] == pytest.approx(communication)
+    assert details["local_behavior"] == pytest.approx(local)
+    assert details["communication_limit"] == 0.35
+    assert details["local_assessed"] == (score is not None and bool(confidence))
+    assert model.compute_peer_trust(
+        reliability, score if score is not None else 0.5, confidence or 0
+    ) == pytest.approx(expected)
+
+
+def test_time_alone_does_not_raise_peer_trust() -> None:
+    """Raise trust for improved measurements, not repeated sampling or uptime."""
+    model = ModuleFactory().create_base_model_obj()
+    initial = model.compute_peer_trust(0.978, 0.5, 0)
+    for _ in range(100):
+        assert model.compute_peer_trust(0.978, 0.5, 0) == initial
+    assert model.compute_peer_trust(1, 0.5, 0) > initial
+    assert model.compute_peer_trust(1, 0.5, 0) == 0.35
+    assert model.compute_peer_trust(1, 0, 1) > 0.35
+    assert model.compute_peer_trust(1, 1, 1) < initial
 
 
 @pytest.mark.parametrize(
@@ -59,11 +112,11 @@ def test_get_opinion_on_ip_no_reports():
     "reliability, score, confidence, expected_trust",
     [
         # testcase1: compute peer trust with normal values
-        (0.8, 0.9, 0.7, 0.595),
+        (0.8, 0.9, 0.7, 0.0),
         # testcase2: compute peer trust with mid-range values
-        (0.5, 0.6, 0.8, 0.415),
+        (0.5, 0.6, 0.8, 0.095),
         # testcase3: compute peer trust with maximum values
-        (1.0, 1.0, 1.0, 0.85),
+        (1.0, 1.0, 1.0, -0.15),
         # testcase4: compute peer trust with minimum values
         (0.0, 0.0, 0.0, 0.0),
     ],
@@ -74,19 +127,42 @@ def test_compute_peer_trust(reliability, score, confidence, expected_trust):
     assert pytest.approx(result, 0.001) == expected_trust
 
 
+def test_local_maliciousness_reduces_peer_trust() -> None:
+    """A locally malicious reporter must receive less trust than a benign one."""
+    base_model = ModuleFactory().create_base_model_obj()
+    benign = base_model.compute_peer_trust(0.8, 0.0, 1.0)
+    malicious = base_model.compute_peer_trust(0.8, 1.0, 1.0)
+    assert benign == pytest.approx(0.78)
+    assert malicious == pytest.approx(-0.22)
+
+
+def test_locally_benign_reporter_has_more_weight_in_network_opinion() -> None:
+    """The corrected trust polarity must affect the final network score."""
+    base_model = ModuleFactory().create_base_model_obj()
+    score, confidence = base_model.assemble_peer_opinion(
+        [
+            (1.0, 1.0, 1.0, 0.0, 1.0, "192.0.2.10"),
+            (0.0, 1.0, 1.0, 1.0, 1.0, "192.0.2.11"),
+        ]
+    )
+
+    assert score == pytest.approx(0.925 / (0.925 + 0.425))
+    assert confidence == pytest.approx(0.425)
+
+
 @pytest.mark.parametrize(
     "data, expected_score, expected_confidence",
     [
         # testcase1: assemble opinion with one report
-        ([(0.8, 0.9, 0.7, 0.8, 0.9, "192.168.1.2")], 0.8, 0.5445),
+        ([(0.8, 0.9, 0.7, 0.8, 0.9, "192.168.1.2")], 0.8, 0.0),
         # testcase2: assemble opinion with multiple reports
         (
             [
                 (0.6, 0.7, 0.8, 0.7, 0.8, "192.168.1.2"),
                 (0.7, 0.8, 0.9, 0.8, 0.9, "192.168.1.3"),
             ],
-            0.6517774343122101,
-            0.46599999999999997,
+            0.6482678983833718,
+            0.05999999999999997,
         ),
         # testcase3: assemble opinion with diverse reports
         (
@@ -95,8 +171,8 @@ def test_compute_peer_trust(reliability, score, confidence, expected_trust):
                 (0.5, 0.6, 0.9, 0.8, 0.7, "192.168.1.3"),
                 (0.3, 0.4, 0.7, 0.6, 0.5, "192.168.1.4"),
             ],
-            0.5707589285714285,
-            0.30233333333333334,
+            0.5540298507462686,
+            0.06033333333333333,
         ),
     ],
 )
@@ -107,6 +183,28 @@ def test_assemble_peer_opinion(data, expected_score, expected_confidence):
 
     assert pytest.approx(score, 0.0001) == expected_score
     assert pytest.approx(confidence, 0.0001) == expected_confidence
+
+
+def test_aggregated_peer_reports_match_the_raw_report_opinion():
+    base_model = ModuleFactory().create_base_model_obj()
+    raw_reports = [
+        (0.4, 0.8, 0.7, 0.6, 0.9, "192.168.1.2"),
+        (0.8, 0.2, 0.7, 0.6, 0.9, "192.168.1.2"),
+        (0.3, 0.5, 0.9, 0.8, 0.7, "192.168.1.3"),
+    ]
+    aggregated_reports = [
+        (1.2, 1.0, 0.7, 0.6, 0.9, "192.168.1.2", 2),
+        (0.3, 0.5, 0.9, 0.8, 0.7, "192.168.1.3", 1),
+    ]
+
+    raw_opinion = base_model.assemble_peer_opinion(raw_reports)
+    aggregated_opinion = base_model.assemble_peer_opinion(
+        aggregated_reports
+    )
+
+    assert aggregated_opinion == pytest.approx(
+        raw_opinion, rel=1e-12, abs=1e-12
+    )
 
 
 @pytest.mark.parametrize(

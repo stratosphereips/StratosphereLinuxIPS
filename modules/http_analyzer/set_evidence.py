@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-2.0-only
 from uuid import uuid4
 from slips_files.common.slips_utils import utils
-from slips_files.core.flows.zeek import Weird
+from slips_files.core.flows.zeek import HTTP, Weird
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -13,12 +13,79 @@ from slips_files.core.structures.evidence import (
     EvidenceType,
     IoCType,
     Direction,
+    Proto,
 )
 
 
 class SetEvidenceHelper:
     def __init__(self, db):
         self.db = db
+
+    def http_header_anomaly(
+        self,
+        twid: str,
+        flow: HTTP,
+        evidence_type: EvidenceType,
+        threat_level: ThreatLevel,
+        description: str,
+        server: bool = False,
+        observed_mime_types: list[str] | None = None,
+    ) -> None:
+        """Store an HTTP header finding against the endpoint that sent it.
+
+        :param twid: Transaction's time window.
+        :param flow: Zeek HTTP transaction.
+        :param evidence_type: Independent check that matched.
+        :param threat_level: Severity of this behavior.
+        :param description: Explanation including the communicating endpoints.
+        :param server: Whether the response sender is responsible.
+        :param observed_mime_types: Binary types identified by Zeek signatures.
+        """
+        responsible = flow.daddr if server else flow.saddr
+        other = flow.saddr if server else flow.daddr
+        evidence = Evidence(
+            evidence_type=evidence_type,
+            attacker=Attacker(
+                direction=Direction.DST if server else Direction.SRC,
+                ioc_type=IoCType.IP,
+                value=responsible,
+            ),
+            victim=Victim(
+                direction=Direction.SRC if server else Direction.DST,
+                ioc_type=IoCType.IP,
+                value=other,
+            ),
+            threat_level=threat_level,
+            confidence=0.9 if observed_mime_types else 1.0,
+            description=description,
+            profile=ProfileID(ip=responsible),
+            timewindow=TimeWindow(number=int(twid.replace("timewindow", ""))),
+            uid=[flow.uid],
+            timestamp=flow.starttime,
+            proto=Proto.TCP,
+            src_port=getattr(flow, "sport", "") or None,
+            dst_port=getattr(flow, "dport", "") or None,
+            detection_details={
+                "http_transaction": getattr(flow, "trans_depth", ""),
+                "host_header": flow.host,
+                "method": flow.method,
+                "uri": flow.uri,
+                "observed_mime_types": observed_mime_types or [],
+                "request_headers_complete": getattr(
+                    flow, "request_headers_complete", False
+                ),
+                "response_headers_complete": getattr(
+                    flow, "response_headers_complete", False
+                ),
+                "request_content_type": getattr(
+                    flow, "request_content_type", ""
+                ),
+                "response_content_type": getattr(
+                    flow, "response_content_type", ""
+                ),
+            },
+        )
+        self.db.set_evidence(evidence)
 
     def weird_http_method(
         self, twid: str, weird_flow: Weird, flow: dict
@@ -252,14 +319,23 @@ class SetEvidenceHelper:
 
         return True
 
-    def incompatible_user_agent(self, twid, flow, user_agent, vendor):
+    def incompatible_user_agent(
+        self, twid: str, flow: HTTP, user_agent: dict, vendor: str
+    ) -> None:
+        """Record a user-agent/vendor mismatch with readable OS names.
 
-        os_type: str = user_agent.get("os_type", "").lower()
-        os_name: str = user_agent.get("os_name", "").lower()
-        browser: str = user_agent.get("browser", "").lower()
-        user_agent: str = user_agent.get("user_agent", "")
+        Parameters:
+            twid: Detection time window.
+            flow: HTTP connection associated with the mismatch.
+            user_agent: Parsed OS and browser names and the original agent.
+            vendor: MAC manufacturer associated with the source profile.
+        """
+        os_type: str = user_agent.get("os_type") or "Unknown"
+        os_name: str = user_agent.get("os_name") or "Unknown"
+        browser: str = user_agent.get("browser") or "Unknown"
+        raw_user_agent: str = user_agent.get("user_agent", "")
         description: str = (
-            f"using incompatible user-agent ({user_agent}) "
+            f"using incompatible user-agent ({raw_user_agent}) "
             f"that belongs to OS: {os_name} "
             f"type: {os_type} browser: {browser}. "
             f"while connecting to {flow.host}{flow.uri}. "
@@ -284,7 +360,13 @@ class SetEvidenceHelper:
 
         self.db.set_evidence(evidence)
 
-    def executable_mime_type(self, twid, flow):
+    def executable_mime_type(self, twid: str, flow: HTTP) -> None:
+        """Record executable downloads as medium threat for both endpoints.
+
+        Parameters:
+            twid: Detection time window identifier.
+            flow: HTTP transaction with the executable response MIME type.
+        """
         description: str = (
             f"Download of an executable with MIME type: {flow.resp_mime_types} "
             f"by {flow.saddr} from {flow.daddr}."
@@ -302,7 +384,7 @@ class SetEvidenceHelper:
                 ioc_type=IoCType.IP,
                 value=flow.saddr,
             ),
-            threat_level=ThreatLevel.LOW,
+            threat_level=ThreatLevel.MEDIUM,
             confidence=1,
             description=description,
             profile=ProfileID(ip=flow.saddr),
@@ -322,7 +404,7 @@ class SetEvidenceHelper:
                 ioc_type=IoCType.IP,
                 value=flow.daddr,
             ),
-            threat_level=ThreatLevel.LOW,
+            threat_level=ThreatLevel.MEDIUM,
             confidence=1,
             description=description,
             profile=ProfileID(ip=flow.daddr),

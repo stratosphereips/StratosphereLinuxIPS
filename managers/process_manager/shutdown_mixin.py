@@ -4,9 +4,11 @@
 # and final cleanup for ProcessManager.
 import multiprocessing
 import os
+import platform
 import select
 import signal
 import sys
+import threading
 import time
 from datetime import datetime
 from multiprocessing import Process
@@ -14,6 +16,8 @@ from multiprocessing.process import BaseProcess
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
+from managers.process_manager.owned_processes import OwnedProcesses
+from slips_files.common.input_type import InputType
 from slips_files.common.plotter import Plotter
 from slips_files.common.slips_utils import utils
 from slips_files.common.style import print_separator
@@ -35,6 +39,59 @@ except ImportError:
 class ShutdownMixin:
     """Provide shutdown orchestration and process cleanup helpers."""
 
+    INTERRUPT_SHUTDOWN_GRACE_SECONDS = 30
+
+    def cleanup_failed_startup(self) -> None:
+        """Stop and reap this run's workers after an incomplete startup."""
+        self.children = multiprocessing.active_children()
+        self._remember_shutdown_processes()
+        self._finish_owned_processes()
+        for process in self.children:
+            process.join(1)
+
+    def _notify_shutdown_event(self, event: object, deadline: float) -> bool:
+        """Signal workers without letting a damaged shared lock block main.
+
+        Parameters:
+            event: Shared stop event for modules or the evidence handler.
+            deadline: Monotonic end of the shared shutdown grace period.
+
+        Returns:
+            Whether notification completed successfully before the deadline.
+        """
+        notifications = getattr(self, "_shutdown_notifications", None)
+        if notifications is None:
+            notifications = self._shutdown_notifications = {}
+        key = id(event)
+        if key not in notifications:
+            errors = []
+
+            def notify() -> None:
+                """Record signalling failures for the shutdown coordinator."""
+                try:
+                    event.set()
+                except Exception as error:
+                    errors.append(error)
+
+            thread = threading.Thread(
+                target=notify,
+                daemon=True,
+                name=f"shutdown_notification_{len(notifications)}",
+            )
+            notifications[key] = (thread, errors)
+            utils.start_thread(thread, self.main.db)
+        thread, errors = notifications[key]
+        thread.join(max(0.0, deadline - time.monotonic()))
+        if thread.is_alive() or errors:
+            self.main.print(
+                "Could not deliver the stop signal before the shutdown deadline; "
+                "terminating the remaining workers.",
+                0,
+                1,
+            )
+            return False
+        return True
+
     def kill_process_tree(self, pid: int) -> None:
         """
         Kill a process and its descendants.
@@ -42,41 +99,68 @@ class ShutdownMixin:
         Parameters:
             pid: PID at the root of the process tree.
         """
-        # Get descendants before killing their parent so they do not get
-        # reparented and disappear from pgrep's results.
-        try:
-            process_list = os.popen(f"pgrep -P {pid}").read().splitlines()
-        except Exception:
-            process_list = []
+        owned = OwnedProcesses()
+        owned.remember(pid)
+        owned.stop()
 
-        for child_pid in process_list:
-            self.kill_process_tree(int(child_pid))
+    def _remember_shutdown_processes(self) -> None:
+        """Snapshot workers and subprocesses before any shutdown joins."""
+        if not hasattr(self, "_owned_shutdown_processes"):
+            self._owned_shutdown_processes = OwnedProcesses()
+        for process in [*self.processes, *getattr(self, "children", [])]:
+            if isinstance(process.pid, int):
+                self._owned_shutdown_processes.remember(process.pid)
+        self._owned_shutdown_processes.refresh()
 
-        try:
-            os.kill(pid, signal.SIGKILL)
-        except OSError:
-            pass
+    def _finish_owned_processes(self, keep_web: bool = False) -> None:
+        """Verify cleanup even for descendants whose module already exited.
 
-    def kill_all_children(self) -> None:
+        Parameters:
+            keep_web: Retain the owned HTTP server until its existing prompt.
         """
-        Kills all slips child processes.
+        owned = getattr(self, "_owned_shutdown_processes", None)
+        if owned is None:
+            return
+        web_pid = (
+            self.main.db.get_pid_of("Web Interface") if keep_web else None
+        )
+        excluded = (
+            frozenset({web_pid}) if isinstance(web_pid, int) else frozenset()
+        )
+        previous = None
+        if threading.current_thread() is threading.main_thread():
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        try:
+            owned.stop(excluded)
+        finally:
+            if previous is not None:
+                signal.signal(signal.SIGINT, previous)
+
+    def kill_all_children(self, force: bool = False) -> None:
         """
+        Kill remaining Slips children, skipping another wait after timeout.
+
+        Parameters:
+            force: Kill living children immediately after the grace period.
+        """
+        self._remember_shutdown_processes()
+        self._finish_owned_processes(keep_web=True)
         for process in self.children:
-            module_name: str = self.main.db.get_name_of_module_at(process.pid)
-            if not module_name:
-                # if it's a thread started by one of the modules or
-                # by slips.py, we don't have it stored in
-                # the db so just skip it
-                continue
-            if (
+            module_name = process.name
+            already_reported = (
                 module_name in self.stopped_modules
                 or module_name in self.deferred_stopped_modules
-            ):
-                # already stopped
+            )
+            if already_reported and not process.is_alive():
                 continue
 
-            process.join(3)
-            self.kill_process_tree(process.pid)
+            if not force:
+                process.join(3)
+            if process.is_alive():
+                self.kill_process_tree(process.pid)
+                process.join(1 if force else 3)
+            if already_reported:
+                continue
             if self._should_defer_web_interface_stopped_message(module_name):
                 self.deferred_stopped_modules.add(module_name)
                 continue
@@ -161,13 +245,16 @@ class ShutdownMixin:
         return to_kill_first, to_kill_last
 
     def wait_for_processes_to_finish(
-        self, processes_to_wait_for: List[Process]
+        self,
+        processes_to_wait_for: List[Process],
+        deadline: Optional[float] = None,
     ) -> List[Process]:
         """
         Wait briefly for processes to exit.
 
         Parameters:
             processes_to_wait_for: Processes to wait for.
+            deadline: Monotonic deadline for an interrupt-driven shutdown.
 
         Returns:
             Processes that remained alive after waiting.
@@ -176,8 +263,12 @@ class ShutdownMixin:
         # go through all processes to kill and see which
         # of them still need time
         for process in processes_to_wait_for:
-            # wait 3s for it to stop
-            process.join(3)
+            wait = (
+                3
+                if deadline is None
+                else max(0, min(0.25, deadline - time.monotonic()))
+            )
+            process.join(wait)
 
             if process.is_alive():
                 # reached timeout
@@ -319,7 +410,11 @@ class ShutdownMixin:
 
         failed_modules: List[Tuple[str, Optional[int]]] = []
 
-        if self.main.db.is_running_non_stop():
+        stdin_finished = (
+            self.main.input_type == InputType.STDIN
+            and self.is_input_done_event.is_set()
+        )
+        if self.main.db.is_running_non_stop() and not stdin_finished:
             # Slips is continuously receiving flows,
             # none of these modules should stop or "finish"
             if not input_running:
@@ -383,10 +478,19 @@ class ShutdownMixin:
         # these are the cases where slips should be running non-stop
         # when slips is reading from a special module other than the input
         # process this module should handle the stopping of slips
-        return self.is_debugger_active() or self.main.db.is_running_non_stop()
+        stdin_finished = (
+            self.main.input_type == InputType.STDIN
+            and self.is_input_done_event.is_set()
+        )
+        return self.is_debugger_active() or (
+            self.main.db.is_running_non_stop() and not stdin_finished
+        )
 
     def shutdown_interactive(
-        self, to_kill_first: List[Process], to_kill_last: List[Process]
+        self,
+        to_kill_first: List[Process],
+        to_kill_last: List[Process],
+        deadline: Optional[float] = None,
     ) -> Tuple[Optional[List[Process]], Optional[List[Process]]]:
         """
         Shut down children in interactive mode.
@@ -394,6 +498,7 @@ class ShutdownMixin:
         Parameters:
             to_kill_first: Processes to stop before the final group.
             to_kill_last: Processes that should stop after the first group.
+            deadline: Monotonic deadline for an interrupt-driven shutdown.
 
         Returns:
             Remaining first-group and last-group processes, or None values
@@ -401,7 +506,9 @@ class ShutdownMixin:
         """
         # wait for the processes to be killed first as long as they want
         # maximum time to wait is timeout_seconds
-        alive_processes = self.wait_for_processes_to_finish(to_kill_first)
+        alive_processes = self.wait_for_processes_to_finish(
+            to_kill_first, deadline
+        )
         if alive_processes:
             # the 2 lists combined are all the children that are still alive
             self.warn_about_pending_modules(alive_processes + to_kill_last)
@@ -409,9 +516,19 @@ class ShutdownMixin:
 
         to_kill_first = []
         # tell evidence to stop since all the modules are done
-        self.evidence_handler_termination_event.set()
+        notification_deadline = (
+            deadline
+            if deadline is not None
+            else time.monotonic() + self.INTERRUPT_SHUTDOWN_GRACE_SECONDS
+        )
+        if not self._notify_shutdown_event(
+            self.evidence_handler_termination_event, notification_deadline
+        ):
+            return to_kill_first, to_kill_last
 
-        alive_processes = self.wait_for_processes_to_finish(to_kill_last)
+        alive_processes = self.wait_for_processes_to_finish(
+            to_kill_last, deadline
+        )
         if alive_processes:
             self.warn_about_pending_modules(alive_processes)
             return to_kill_first, alive_processes
@@ -600,6 +717,10 @@ class ShutdownMixin:
 
     def _handle_firewall_after_analysis(self) -> None:
         """Keep or remove managed firewall rules after an interactive run."""
+        if not self.main.args.blocking:
+            return
+        if platform.system() not in {"Linux", "Darwin"}:
+            return
         if has_slips_firewall_rules is None or not has_slips_firewall_rules():
             return
 
@@ -644,6 +765,17 @@ class ShutdownMixin:
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
 
+    def _module_shutdown_timeout(self) -> float:
+        """Bound signal-driven shutdown even when normal runs wait longer.
+
+        Returns:
+            Maximum seconds to wait for module exit.
+        """
+        configured = float(self.main.conf.wait_for_modules_to_finish()) * 60
+        if self.shutdown_signal_received:
+            return min(configured, self.INTERRUPT_SHUTDOWN_GRACE_SECONDS)
+        return configured
+
     def shutdown_gracefully(self) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
@@ -653,22 +785,28 @@ class ShutdownMixin:
         """
         normal_completion = self._did_slips_finish_normally()
         try:
+            self.children = multiprocessing.active_children()
+            self._remember_shutdown_processes()
             print = self.get_print_function()
+            self.main.logger._flush_startup_queue()
 
             self._generate_plots()
 
-            if not self.main.args.stopdaemon:
-                print_separator()
+            print_separator()
 
             print("Stopping Slips")
 
             self.children: List[BaseProcess] = (
                 multiprocessing.active_children()
             )
-            method_start_time = time.time()
-            timeout: float = self.main.conf.wait_for_modules_to_finish()
-            # convert to seconds
-            timeout *= 60
+            method_start_time = time.monotonic()
+            timeout = self._module_shutdown_timeout()
+            if self.shutdown_signal_received:
+                print(
+                    f"Waiting up to {timeout:g} seconds for modules to stop. "
+                    "Press CTRL-C again to force an immediate stop."
+                )
+            deadline = method_start_time + timeout
 
             if not self.is_slips_live_updating_event.is_set():
                 # close all tws
@@ -676,61 +814,72 @@ class ShutdownMixin:
 
             graceful_shutdown = True
             shutdown_reason = ""
-            if self.main.mode == "daemonized":
-                self.kill_daemon_children()
-                profiles_len: int = self.main.db.get_profiles_len()
-                self.main.daemon.print(f"Total analyzed IPs: {profiles_len}.")
-                self.main.daemon.delete_pidfile()
-            else:
-                flows_count: int = self.main.db.get_flows_count()
-                print(
-                    f"Total flows read (without altflows): {flows_count}",
-                    log_to_logfiles_only=True,
-                )
+            flows_count: int = self.main.db.get_flows_count()
+            print(
+                f"Total flows read (without altflows): {flows_count}",
+                log_to_logfiles_only=True,
+            )
 
-                to_kill_first, to_kill_last = self.get_hitlist_in_order()
-                self.termination_event.set()
+            to_kill_first, to_kill_last = self.get_hitlist_in_order()
+            stop_notified = self._notify_shutdown_event(
+                self.termination_event, deadline
+            )
 
-                try:
-                    if self.core_module_failure:
-                        # dont wait for failed core modules to stop
-                        self.kill_all_children()
-                        shutdown_reason = "Core module failure."
-                        graceful_shutdown = False
-                    else:
-                        # Wait timeout_seconds for all the processes to finish
-                        while time.time() - method_start_time < timeout:
-                            (
-                                to_kill_first,
-                                to_kill_last,
-                            ) = self.shutdown_interactive(
-                                to_kill_first, to_kill_last
-                            )
-                            if not to_kill_first and not to_kill_last:
-                                break
-                except KeyboardInterrupt:
-                    # either the user wants to kill the remaining modules
-                    # (pressed ctrl +c again)
-                    # or slips was stuck looping for too long that the OS
-                    # sent an automatic sigint to kill slips
-                    # pass to kill the remaining modules
+            try:
+                if self.core_module_failure or not stop_notified:
+                    # dont wait for failed core modules to stop
+                    self.kill_all_children(force=True)
                     shutdown_reason = (
-                        "User pressed ctr+c or Slips was killed by the OS"
+                        "Core module failure."
+                        if self.core_module_failure
+                        else "Worker stop notification failed."
                     )
                     graceful_shutdown = False
                     normal_completion = False
-                    self.shutdown_signal_received = True
                     self.force_shutdown_requested = True
-                if time.time() - method_start_time >= timeout:
-                    # getting here means we're killing them bc of the timeout
-                    # not getting here means we're killing them bc of double
-                    # ctr+c OR they terminated successfully
-                    shutdown_reason = f"Killing modules that took more than {timeout} mins to finish."
-                    print(shutdown_reason)
-                    graceful_shutdown = False
-                    normal_completion = False
+                else:
+                    # Wait timeout_seconds for all the processes to finish
+                    while time.monotonic() < deadline:
+                        self._remember_shutdown_processes()
+                        (
+                            to_kill_first,
+                            to_kill_last,
+                        ) = self.shutdown_interactive(
+                            to_kill_first,
+                            to_kill_last,
+                            deadline,
+                        )
+                        if not to_kill_first and not to_kill_last:
+                            break
+            except KeyboardInterrupt:
+                # either the user wants to kill the remaining modules
+                # (pressed ctrl +c again)
+                # or slips was stuck looping for too long that the OS
+                # sent an automatic sigint to kill slips
+                # pass to kill the remaining modules
+                shutdown_reason = (
+                    "User pressed ctr+c or Slips was killed by the OS"
+                )
+                graceful_shutdown = False
+                normal_completion = False
+                self.shutdown_signal_received = True
+                self.force_shutdown_requested = True
+            if time.monotonic() >= deadline:
+                # getting here means we're killing them bc of the timeout
+                # not getting here means we're killing them bc of double
+                # ctr+c OR they terminated successfully
+                shutdown_reason = (
+                    f"Killing modules that did not stop within "
+                    f"{timeout:g} seconds."
+                )
+                print(shutdown_reason)
+                graceful_shutdown = False
+                normal_completion = False
+                self.force_shutdown_requested = True
 
-                self.kill_all_children()
+            self.kill_all_children(force=not graceful_shutdown)
+            if self.main.mode == "daemonized":
+                self.main.daemon.delete_pidfile()
 
             analysis_time, end_date = self.get_analysis_time()
             self.main.metadata_man.set_analysis_end_date(end_date)
@@ -759,8 +908,21 @@ class ShutdownMixin:
             )
         except KeyboardInterrupt:
             self.shutdown_signal_received = True
+            self.force_shutdown_requested = True
+            self.children = multiprocessing.active_children()
+            self.kill_all_children(force=True)
             if self._is_web_interface_enabled():
                 port = int(self.main.conf.web_interface_port)
                 self._stop_web_interface(port)
             return False
+        finally:
+            self._finish_owned_processes()
+            # These queues are owned by the main process. Close them after
+            # children have stopped so their pipe handles do not survive
+            # until interpreter shutdown.
+            self.profiler_queue.close()
+            self.aid_queue.close()
+            self.evidence_worker_queue.close()
+            self.evidence_logger_q.close()
+            self.main.logger._startup_queue.close()
         return None

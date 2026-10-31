@@ -20,6 +20,7 @@
 # Contact: eldraco@gmail.com, sebastian.garcia@agents.fel.cvut.cz,
 # stratosphere@aic.fel.cvut.cz
 
+from multiprocessing.synchronize import SEM_VALUE_MAX
 import json
 import multiprocessing
 import threading
@@ -27,6 +28,7 @@ import time
 from typing import List
 
 from multiprocessing import Process
+from multiprocessing.queues import Queue as MultiprocessingQueue
 
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.abstracts.icore import ICore
@@ -43,7 +45,6 @@ from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
 )
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
-
 
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
@@ -65,7 +66,19 @@ class EvidenceHandler(ICore):
     )
     show_popup = EvidenceHandlerWorker.show_popup
 
-    def init(self, total_processes_to_start: int = 1):
+    def init(
+        self,
+        total_processes_to_start: int = 1,
+        evidence_worker_queue: MultiprocessingQueue | None = None,
+        evidence_logger_q: MultiprocessingQueue | None = None,
+    ) -> None:
+        """Set up evidence workers and their main-owned queues.
+
+        Parameters:
+            total_processes_to_start: Expected startup announcement count.
+            evidence_worker_queue: Queue shared with evidence workers.
+            evidence_logger_q: Queue shared with the evidence logger.
+        """
         # shared with every evidence worker this process starts, so
         # they all announce themselves against the same run-wide total
         self.total_processes_to_start = total_processes_to_start
@@ -82,12 +95,20 @@ class EvidenceHandler(ICore):
         # read from there, in that case all workers will process the same
         # msg. instead we use a queue, so that each worker processes a
         # unique msg.
-        self.evidence_worker_queue = multiprocessing.Queue(maxsize=30000000)
+        self.evidence_worker_queue = (
+            evidence_worker_queue
+            if evidence_worker_queue is not None
+            else multiprocessing.Queue(maxsize=min(30000000, SEM_VALUE_MAX))
+        )
         self.evidence_worker_child_processes: List[Process] = []
 
         # A thread that handing I/O to disk (writing evidence to log files)
         self.logger_stop_signal = threading.Event()
-        self.evidence_logger_q = multiprocessing.Queue(maxsize=30000000)
+        self.evidence_logger_q = (
+            evidence_logger_q
+            if evidence_logger_q is not None
+            else multiprocessing.Queue(maxsize=min(30000000, SEM_VALUE_MAX))
+        )
         self.evidence_logger = EvidenceLogger(
             logger_stop_signal=self.logger_stop_signal,
             evidence_logger_q=self.evidence_logger_q,
@@ -282,7 +303,7 @@ class EvidenceHandler(ICore):
 
     def start_evidence_worker(self, worker_id: int = None):
         worker_name = f"evidence_handler_worker_process_{worker_id}"
-        worker = EvidenceHandlerWorker(
+        worker = EvidenceHandlerWorker.create_process(
             logger=self.logger,
             output_dir=self.parent_output_dir,
             redis_port=self.redis_port,

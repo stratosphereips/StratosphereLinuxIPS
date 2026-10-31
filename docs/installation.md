@@ -62,6 +62,90 @@ Check the alerts slips generated that are stored in the host:
 
 #### MacOS Hosts
 
+##### Native installation
+
+Run the following commands from the repository root. Use Python 3.11 in a
+virtual environment: the pinned scientific dependencies in
+`install/requirements.txt` were verified with this version on Apple Silicon.
+Do not use the system's default Python 3.14 with these dependency pins.
+
+```bash
+brew install python@3.11 redis zeek yara
+python3.11 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r install/requirements.txt
+python slips.py -h
+python slips.py -e 1 -f dataset/test7-malicious.pcap -o output/macos-test
+```
+
+Slips starts its local Redis cache when needed. Zeek is needed for PCAPs and
+interfaces; existing Zeek logs can also be analyzed with `-f`. YARA enables
+the leak detector; extracting details from a matching packet additionally
+requires Wireshark's `tshark` command. Building `netifaces` requires Apple's
+command-line developer tools if they are not already installed.
+
+The native process implementation uses macOS's default `spawn` method.
+Do not force `fork` or disable Apple's fork-safety checks. Modules, database
+connections, and background threads are initialized in their child processes.
+
+On shutdown, the process manager reaps every owned child that is still alive,
+even if it already reported completion or its Redis PID entry was lost. It
+uses the process handles directly so a Redis outage cannot skip cleanup and
+leave an older module consuming traffic after a restart. A malformed DNS
+message is logged by Flow Alerts; the DNS timeout thread continues with the
+next message instead of failing in its error handler.
+
+Native live capture and file analysis have been verified on Apple Silicon.
+Live interfaces need permission to capture through macOS BPF devices. For
+example, after granting capture access, run from the repository root:
+
+```bash
+python slips.py -i en0 -w -o output/macos-live
+```
+
+Choose the interface appropriate to your machine. Daemon startup, instance
+listing and stop have also been verified on Apple Silicon. The daemon's PID
+file uses the configured permanent directory, and startup failures are reported
+to the terminal; see [daemon mode](usage.md#daemonized-vs-interactive-mode).
+Intel Macs and other optional integrations have not been validated by these checks. The Linux
+access-point workflow remains Linux-specific. On macOS, active
+blocking uses the Slips-owned `com.apple/slips` Packet Filter anchor and
+requires running Slips with root privileges.
+
+Alerts are written to `output/macos-test/alerts/`; diagnostic output is in
+`output/macos-test/slips.log` and `output/macos-test/errors.log`. Remote feed
+updates can delay shutdown while downloads finish; that is separate from
+process compatibility.
+
+##### Native global P2P (Iris)
+
+The bundled Iris executable targets Linux. Build a native executable from
+the checked-out Iris submodule and select it in your Slips configuration:
+
+```bash
+brew install go
+mkdir -p output/bin
+go -C iris build -buildvcs=false -o ../output/bin/iris cmd/peercli.go
+```
+
+```yaml
+global_p2p:
+  use_global_p2p: true
+  iris_conf: config/iris_config.yaml
+  iris_binary: output/bin/iris
+```
+
+Merge these settings into the existing configuration. Paths are relative to
+the repository root. Global P2P still requires an interface (`-i`, optionally
+with `-g` for growing Zeek logs). The verification used two loopback peers
+with external bootstrapping disabled; it does not establish public-network or
+Fides reputation correctness. The separate `local_p2p`/`p2p4slips` backend uses
+the checked-out Pigeon submodule and its pinned Go toolchain. Follow the
+[local P2P build instructions](P2P.md#installation) rather than building
+that backend with an older Go version.
+
+##### Docker
+
 ###### Analyse your own traffic
     docker run --platform linux/amd64 --rm -it -p 55000:55000 --cpu-shares "700" --memory="8g" --memory-swap="8g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output -v $(pwd)/dataset:/StratosphereLinuxIPS/dataset --name slips stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eno1
 
@@ -396,18 +480,50 @@ follow the official docker [installation instructions for Debian](https://docs.d
 ## Enabling the memory protection for Docker
 The default raspbian image disables by default the memory protection that Docker needs.
 
-To test if your rpi is correctly configured you can do 
+To test if your rpi is correctly configured you can do
 
 	grep -qw memory /sys/fs/cgroup/cgroup.controllers && echo "PASS: memory cgroups enabled" || echo "FAIL: memory cgroups disabled"
 
-If your rpi is not correctly configured, you can correctly configured it with
+If your Pi is not correctly configured, inspect `/proc/cmdline` first. If it
+contains `cgroup_disable=memory`, remove that option from
+`/boot/firmware/cmdline.txt` with administrator privileges. Add
+`cgroup_enable=memory` to that same single line, then reboot and repeat the
+check above. Adding `cgroup_enable=memory` while leaving
+`cgroup_disable=memory` in place does not enable the controller.
+
+For a Pi without `cgroup_disable=memory`, enable the controller with
 
 	sudo sed -i.bak '/cgroup_enable=memory/! s/[[:space:]]*$/ cgroup_enable=memory/' /boot/firmware/cmdline.txt
 	reboot
 
+The controller is also required for a native systemd service's `MemoryMax`
+setting. Without it, `MemoryMax` cannot protect the Pi, even if the unit
+accepts the setting. A native service can use `CPUQuota` immediately.
+
+### Resource limits and updates
+
+Use a hard CPU limit such as `--cpus=2`; CPU shares only change scheduling
+priority under contention. Reserve memory for the operating system and other
+applications. For an 8 GiB Pi, `--memory=6g --memory-swap=6g` caps Slips at
+6 GiB and prevents container swap. A 16 GiB Pi can use a 10 GiB cap. Check
+the running container's `/sys/fs/cgroup/memory.max` and
+`/sys/fs/cgroup/cpu.max` to verify enforcement.
+
+Before replacing a container, stop it gracefully and back up its configuration
+and `permanent/` directory, including the whitelist, peer private key, trust
+database and authentication files. Bind mount these directories and `output/`
+into the replacement container. Keep each Pi's state separate so peer keys
+are never shared between devices. Retain the stopped container for rollback.
+
+For an existing live interface output, use `--keep-history` with the same
+interface and output directory to retain its SQLite history. Verify the new
+image on Linux/ARM before replacing the running container; in particular,
+host names, notes and reviews must resolve with the installed SQLite version
+(including SQLite 3.37 on Ubuntu 22.04 images).
+
 ## Running Slips' Docker in the Pi
 
-This command 
+This command
 
 	docker run --restart unless-stopped -d --cpu-shares "700" --memory="14g" --memory-swap="40g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output --name slips_rpi stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eth0 -w -p -c config/slips.yaml -o output/slips_rpi
 

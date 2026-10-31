@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 """Unit test for modules/blocking/blocking.py"""
+
 from tests.module_factory import ModuleFactory
 from unittest.mock import patch
 import pytest
@@ -205,3 +206,24 @@ def test__unblock(flags, unblock_success):
             unblocker.log.assert_called_once_with(
                 f"An errror occured. Unable to unblock {ip}"
             )
+
+
+@pytest.mark.parametrize(
+    "owner,matches", [("p2p-catchup:a", True), ("p2p-catchup:b", False)]
+)
+def test_release_owned_does_not_remove_another_decision(
+    owner: str, matches: bool
+) -> None:
+    """Only the decision owning an active request may revoke its firewall rules."""
+    unblocker = ModuleFactory().create_unblocker_obj()
+    from threading import Lock
+    from unittest.mock import Mock
+
+    unblocker.requests_lock = Lock()
+    unblocker.requests = {
+        "8.8.4.4": {"flags": {"lease_owner": "p2p-catchup:a"}}
+    }
+    unblocker._unblock = Mock(return_value=True)
+    assert unblocker.release_owned("8.8.4.4", owner) is matches
+    assert unblocker._unblock.called is matches
+    assert ("8.8.4.4" not in unblocker.requests) is matches

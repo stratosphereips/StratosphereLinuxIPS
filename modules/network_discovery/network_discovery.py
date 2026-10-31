@@ -1,13 +1,22 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+import time
+import math
+import ipaddress
+from collections import OrderedDict
+from dataclasses import dataclass, field
 from typing import List
+from slips_files.common.scan_progress import ConfirmedScan, scan_confidence
 
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 from modules.network_discovery.horizontal_portscan import HorizontalPortscan
 from modules.network_discovery.vertical_portscan import VerticalPortscan
+from modules.network_discovery.scan_settings import ScanSettings
+from modules.supported_module_names import Modules
+from slips_files.common.input_type import InputType
 from slips_files.core.structures.evidence import (
     Evidence,
     ProfileID,
@@ -20,26 +29,58 @@ from slips_files.core.structures.evidence import (
 )
 
 
+@dataclass(slots=True)
+class AddressRequests:
+    """Bound DHCP address observations until a compact counter replaces them."""
+
+    started: float
+    last: float
+    addresses: OrderedDict[str, str] = field(default_factory=OrderedDict)
+    confidence: float = 0
+    progress: ConfirmedScan | None = None
+
+
 class NetworkDiscovery(IModule):
     """
     A class process to find port scans
     This should be converted into a module that wakesup alone when a new alert arrives
     """
 
-    name = "network_discovery"
+    name = Modules.NETWORK_DISCOVERY.value
     description = "Detects Horizonal, Vertical, and DHCP Scans."
     authors = ["Sebastian Garcia", "Alya Gomaa"]
 
-    def init(self):
-        self.horizontal_ps = HorizontalPortscan(self.db)
-        self.vertical_ps = VerticalPortscan(self.db)
+    def init(self) -> None:
+        """Initialize bounded horizontal analysis and the existing scan checks."""
+        self.horizontal_ps = HorizontalPortscan(
+            self.db,
+            ScanSettings.from_config(self.conf),
+            live=self.db.get_input_type() == InputType.INTERFACE
+            or bool(self.args.growing),
+            interfaces=(
+                (self.args.interface,)
+                if isinstance(self.args.interface, str)
+                else tuple(self.args.interface or [])
+            ),
+        )
+        self.vertical_ps = VerticalPortscan(
+            self.db, self.horizontal_ps.settings, self.horizontal_ps.scope
+        )
+        self.horizontal_capacity_reported = 0
+        self.horizontal_next_warning = 0.0
+        self.vertical_capacity_reported = 0
+        self.vertical_next_warning = 0.0
         # To make sure each evidence has more pkts than the last one
         self.cached_thresholds_per_tw = {}
         self.separator = "_"
         self.pingscan_minimum_scanned_ips = 5
         # when a client is seen requesting this minimum addresses in 1 tw,
         # slips sets dhcp scan evidence
-        self.minimum_requested_addrs = 4
+        self.minimum_requested_addrs = (
+            self.horizontal_ps.settings.dhcp_min_addresses
+        )
+        self.dhcp_groups: OrderedDict[tuple, AddressRequests] = OrderedDict()
+        self.notice_groups: OrderedDict[tuple, tuple] = OrderedDict()
         self.classifier = FlowClassifier()
 
     def subscribe_to_channels(self):
@@ -54,10 +95,12 @@ class NetworkDiscovery(IModule):
             "tw_closed": self.c4,
         }
 
-    def check_icmp_sweep(self, twid, flow):
-        """
-        Use our own Zeek scripts to detect ICMP scans.
-        Threshold is defined in the scripts and it is 25 ICMP flows
+    def check_icmp_sweep(self, twid: str, flow: object) -> None:
+        """Report Zeek's distinct-host counts at confidence/growth milestones.
+
+        Parameters:
+            twid: Evidence attribution time window.
+            flow: Parsed scan notice containing Zeek's observed host count.
         """
         scan_mapping = {
             "TimestampScan": EvidenceType.ICMP_TIMESTAMP_SCAN,
@@ -73,9 +116,46 @@ class NetworkDiscovery(IModule):
             # unsupported notice type
             return
 
-        hosts_scanned = int(flow.msg.split("on ")[1].split(" hosts")[0])
+        try:
+            hosts_scanned = int(flow.msg.split("on ")[1].split(" hosts")[0])
+            ts = float(flow.starttime)
+        except (ValueError, TypeError, IndexError):
+            return
+        if (
+            hosts_scanned < self.pingscan_minimum_scanned_ips
+            or not math.isfinite(ts)
+            or ts < 0
+        ):
+            return
         # get the confidence from 0 to 1 based on the number of hosts scanned
-        confidence = 1 / (255 - 5) * (hosts_scanned - 255) + 1
+        confidence = scan_confidence(
+            0.65, hosts_scanned, self.pingscan_minimum_scanned_ips
+        )
+        settings = self.horizontal_ps.settings
+        key = (
+            getattr(flow, "interface", "default"),
+            flow.saddr,
+            evidence_type,
+        )
+        previous = self.notice_groups.get(key)
+        if (
+            previous
+            and ts - previous[0] < settings.other_scan_quiet_seconds
+            and hosts_scanned >= previous[2]
+        ):
+            next_count = 10 ** (int(math.log10(max(1, previous[2]))) + 1)
+            if confidence <= previous[1] and hosts_scanned < next_count:
+                self.notice_groups[key] = (
+                    max(ts, previous[0]),
+                    previous[1],
+                    previous[2],
+                )
+                self.notice_groups.move_to_end(key)
+                return
+        self.notice_groups[key] = (ts, confidence, hosts_scanned)
+        self.notice_groups.move_to_end(key)
+        while len(self.notice_groups) > settings.other_scan_max_groups:
+            self.notice_groups.popitem(last=False)
         twid = int(twid.replace("timewindow", ""))
         # this one is detected by Zeek, so we can't track the UIDs causing it
         evidence = Evidence(
@@ -97,12 +177,29 @@ class NetworkDiscovery(IModule):
         self.db.set_evidence(evidence)
 
     def set_evidence_dhcp_scan(
-        self, profileid, twid, flow, number_of_requested_addrs
-    ):
+        self,
+        profileid: str,
+        twid: str,
+        flow: object,
+        number_of_requested_addrs: int,
+        confidence: float = 0.8,
+        approximate: bool = False,
+        uids: list[str] | None = None,
+    ) -> None:
+        """Store a distinct-address DHCP finding with bounded representative IDs.
+
+        Parameters:
+            profileid: Requesting client's profile.
+            twid: Evidence attribution window.
+            flow: Triggering DHCP record.
+            number_of_requested_addrs: Exact initial or estimated ongoing count.
+            confidence: Support for the observed multi-address request pattern.
+            approximate: Whether compact continuation counting was used.
+            uids: Sample IDs, or the triggering record's IDs when omitted.
+        """
         srcip = profileid.split("_")[-1]
-        confidence = 0.8
         description = (
-            f"Performing a DHCP scan by requesting "
+            f"{'Continuing a confirmed DHCP scan: approximately ' if approximate else 'Performing a DHCP scan by requesting '}"
             f"{number_of_requested_addrs} different IP addresses. "
             f"Confidence: {confidence}. by Slips"
         )
@@ -117,54 +214,93 @@ class NetworkDiscovery(IModule):
             description=description,
             profile=ProfileID(ip=srcip),
             timewindow=TimeWindow(number=twid_number),
-            uid=flow.uids,
+            uid=flow.uids if uids is None else uids,
             timestamp=flow.starttime,
         )
 
         self.db.set_evidence(evidence)
 
-    def check_dhcp_scan(self, profileid, twid, flow):
-        """
-        Detects DHCP scans, when a client requests 4+ different IPs in the
-        same tw
-        """
-        if not flow.requested_addr:
-            # we are only interested in DHCPREQUEST flows,
-            # where a client is requesting an IP
-            return
-        # dhcp_flows format is a set of requested_addr
+    def check_dhcp_scan(self, profileid: str, twid: str, flow: object) -> None:
+        """Count requested addresses locally and compact confirmed broad requests.
 
-        dhcp_flows = self.db.get_dhcp_requested_addrs(profileid, twid)
-
-        if dhcp_flows:
-            # client was seen requesting an addr before in this tw
-            # was it requesting the same addr?
-            if flow.requested_addr in dhcp_flows:
-                # a client requesting the same addr twice isn't a scan
+        Parameters:
+            profileid: Source client profile, isolated further by client MAC.
+            twid: DHCP request time window.
+            flow: Parsed DHCP request with its original supporting IDs.
+        """
+        try:
+            address = ipaddress.ip_address(flow.requested_addr)
+            ts = float(flow.starttime)
+            uid = str(flow.uids[0])
+            if (
+                not math.isfinite(ts)
+                or ts < 0
+                or address.is_multicast
+                or address.is_unspecified
+                or str(address) == "255.255.255.255"
+            ):
                 return
-
-            # it was requesting a different addr, keep track of it and its uid
-            self.db.add_dhcp_requested_addr(
-                profileid, twid, flow.requested_addr
-            )
-        else:
-            # first time for this client to make a dhcp request in this tw
-            self.db.add_dhcp_requested_addr(
-                profileid, twid, flow.requested_addr
-            )
+        except (ValueError, TypeError, IndexError):
             return
-
-        # TODO if we are not going to use the requested addr, no need to store it
-        # TODO just store the uids
-        dhcp_flows = self.db.get_dhcp_requested_addrs(profileid, twid)
-
-        # we alert every 4,8,12, etc. requested IPs
-        number_of_requested_addrs = len(dhcp_flows)
-        if number_of_requested_addrs % self.minimum_requested_addrs == 0:
-            flow.uids = []
-            self.set_evidence_dhcp_scan(
-                profileid, twid, flow, number_of_requested_addrs
+        settings = self.horizontal_ps.settings
+        key = (
+            getattr(flow, "interface", "default"),
+            profileid,
+            getattr(flow, "smac", ""),
+            twid,
+        )
+        group = self.dhcp_groups.get(key)
+        if (
+            group is None
+            or ts - group.last >= settings.other_scan_quiet_seconds
+        ):
+            group = AddressRequests(ts, ts)
+            self.dhcp_groups[key] = group
+        if ts < group.started:
+            return
+        group.last = max(group.last, ts)
+        self.dhcp_groups.move_to_end(key)
+        while len(self.dhcp_groups) > settings.other_scan_max_groups:
+            self.dhcp_groups.popitem(last=False)
+        if group.progress:
+            group.progress.observe(str(address), uid, ts)
+            if group.progress.due():
+                self.set_evidence_dhcp_scan(
+                    profileid,
+                    twid,
+                    flow,
+                    group.progress.counter.estimate(),
+                    1.0,
+                    True,
+                    list(group.progress.samples.values()),
+                )
+                group.progress.reported()
+            return
+        group.addresses[str(address)] = uid
+        count = len(group.addresses)
+        if count < self.minimum_requested_addrs:
+            return
+        confidence = scan_confidence(0.8, count, self.minimum_requested_addrs)
+        if confidence <= group.confidence:
+            return
+        group.confidence = confidence
+        self.set_evidence_dhcp_scan(
+            profileid,
+            twid,
+            flow,
+            count,
+            confidence,
+            False,
+            list(group.addresses.values())[-20:],
+        )
+        if confidence == 1.0:
+            group.progress = ConfirmedScan.seed(
+                group.addresses.items(),
+                group.started,
+                ts,
+                "requested addresses",
             )
+            group.addresses.clear()
 
     def cleanup_cache_dicts(self, profile_tw: List[str]):
         """
@@ -175,7 +311,6 @@ class NetworkDiscovery(IModule):
 
         for cache_dict in (
             self.cached_thresholds_per_tw,
-            self.horizontal_ps.cached_thresholds_per_tw,
             self.vertical_ps.cached_thresholds_per_tw,
         ):
             new_cache = {}
@@ -186,11 +321,15 @@ class NetworkDiscovery(IModule):
 
             cache_dict.clear()
             cache_dict.update(new_cache)
+        for key in tuple(self.dhcp_groups):
+            if f"{key[1]}_{key[3]}" == profile_tw:
+                del self.dhcp_groups[key]
 
     def pre_main(self):
         utils.drop_root_privs_permanently()
 
-    def main(self):
+    def main(self) -> None:
+        """Consume scan events and report bounded-context capacity pressure."""
         if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
@@ -208,27 +347,45 @@ class NetworkDiscovery(IModule):
                 return
 
             twid = TimeWindow(number=int(twid.replace("timewindow", "")))
-            # For port scan detection, we will measure different things:
+            self.horizontal_ps.check(
+                profileid,
+                twid,
+                msg.get("flow"),
+                msg.get("interpreted_state", ""),
+            )
+            evictions = self.horizontal_ps.detector.capacity_evictions
+            if evictions > self.horizontal_capacity_reported:
+                now = time.monotonic()
+                if now >= self.horizontal_next_warning:
+                    self.print(
+                        f"Horizontal scan context reached its memory limit: "
+                        f"{evictions} group/target evictions so far. "
+                        "Older context was forgotten; see network_discovery "
+                        "horizontal_max_groups and horizontal_max_targets.",
+                        1,
+                        0,
+                    )
+                    self.horizontal_capacity_reported = evictions
+                    self.horizontal_next_warning = now + 60
+            self.vertical_ps.check(
+                profileid,
+                twid,
+                msg.get("flow"),
+                msg.get("interpreted_state", ""),
+            )
 
-            # 1. Vertical port scan:
-            # (single IP being scanned for multiple ports)
-            # - 1 srcip sends not established flows to > 3 dst ports in the
-            # same dst ip. Any number of packets
-            # 2. Horizontal port scan:
-            #  (scan against a group of IPs for a single port)
-            # - 1 srcip sends not established flows to the same dst ports in
-            # > 3 dst ip.
-            # 3. Too many connections???:
-            # - 1 srcip sends not established flows to the same dst ports,
-            # > 3 pkts, to the same dst ip
-            # 4. Slow port scan. Same as the others but distributed in
-            # multiple time windows
-
-            # Remember that in slips all these port scans can happen
-            # for traffic going IN to an IP or going OUT from the IP.
-
-            self.horizontal_ps.check(profileid, twid)
-            self.vertical_ps.check(profileid, twid)
+            evictions = self.vertical_ps.detector.evictions
+            if (
+                evictions > self.vertical_capacity_reported
+                and time.monotonic() >= self.vertical_next_warning
+            ):
+                self.print(
+                    "Vertical scan candidate memory limit reached; older multi-port context was discarded. Review network_discovery vertical_max_groups and vertical_max_ports.",
+                    1,
+                    0,
+                )
+                self.vertical_capacity_reported = evictions
+                self.vertical_next_warning = time.monotonic() + 60
 
         if msg := self.get_msg("new_notice"):
             data = json.loads(msg["data"])

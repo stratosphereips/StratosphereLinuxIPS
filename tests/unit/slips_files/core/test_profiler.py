@@ -25,6 +25,82 @@ def test_mark_process_as_done_processing(monkeypatch):
     profiler.is_profiler_done_event.set.assert_called_once()
 
 
+def test_flow_retention_runs_in_bounded_background_pass() -> None:
+    """Keep SQLite deletion outside the profiler's flow processing path."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = "eth0"
+    profiler.flow_retention_policy = {
+        "enabled": True,
+        "ordinary_hours": 24,
+        "size_min_age_minutes": 60,
+        "linked_days": 30,
+        "batch_size": 500,
+        "max_size_mb": 512,
+        "interval_seconds": 60,
+    }
+    profiler.did_all_workers_stop = Mock()
+    profiler.did_all_workers_stop.wait.side_effect = [False, True]
+    profiler.db.maintain_flow_retention.return_value = ["old-flow"]
+
+    with patch("slips_files.core.profiler.time.time", return_value=10000000):
+        profiler._run_flow_retention()
+
+    profiler.db.maintain_flow_retention.assert_called_once_with(
+        9913600,
+        7408000,
+        batch_size=500,
+        max_size_bytes=512 * 1024 * 1024,
+        unlinked_size_cutoff=9996400,
+    )
+    profiler.db.remove_flow_index_uids.assert_called_once_with(["old-flow"])
+
+
+def test_offline_analysis_never_starts_retention_work() -> None:
+    """Preserve old PCAP flows even if maintenance is invoked directly."""
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = False
+    profiler._run_flow_retention()
+    profiler.db.maintain_flow_retention.assert_not_called()
+    profiler.db.maintain_detection_history.assert_not_called()
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+def test_deferred_history_does_not_interrupt_flow_retention(persistent: bool) -> None:
+    """Keep capture cleanup running and report only persistent contention.
+
+    Parameters:
+        persistent: Whether every pass remains busy beyond a minute.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.args.interface = "eth0"
+    profiler.flow_retention_policy = {
+        "enabled": True, "ordinary_hours": 24, "linked_days": 30,
+        "interval_seconds": 10, "batch_size": 500, "max_size_mb": 512,
+    }
+    profiler.detection_history_policy = {"enabled": True, "interval_seconds": 10}
+    profiler.did_all_workers_stop = Mock()
+    profiler.did_all_workers_stop.wait.side_effect = [False] * 9 + [True]
+    profiler.db.maintain_detection_history.side_effect = [
+        {"deferred": persistent or index == 0, "phase": "cleanup", "sqlite_errorname": "SQLITE_BUSY"}
+        for index in range(9)
+    ]
+    profiler.db.maintain_flow_retention.return_value = []
+    with (
+        patch("slips_files.core.profiler.time.time", side_effect=[1000 + index * 10 for index in range(9)]),
+        patch("slips_files.core.profiler.expire_rotated_logs"),
+    ):
+        profiler._run_flow_retention()
+    assert profiler.db.maintain_flow_retention.call_count == 9
+    assert profiler.db.maintain_detection_history.call_count == 9
+    assert profiler.print.call_count == int(persistent)
+    if persistent:
+        message, verbosity, debug = profiler.print.call_args.args
+        assert "phase=cleanup" in message
+        assert "SQLITE_BUSY" in message
+        assert debug == 0
+        assert verbosity == 1
+
+
 @pytest.mark.parametrize(
     "msg_from_queue, handler_obj, expected_start_workers",
     [
@@ -188,7 +264,7 @@ def test_shutdown_gracefully(monkeypatch):
     profiler.shutdown_gracefully()
 
     profiler.stop_profiler_workers.assert_called_once()
-    profiler.aid_queue.put.assert_called_once_with("stop")
+    profiler.aid_queue.put.assert_not_called()
     profiler.aid_manager.shutdown.assert_called_once()
     profiler.profiler_queue.cancel_join_thread.assert_called_once()
     profiler.profiler_queue.close.assert_called_once()
@@ -240,7 +316,7 @@ def test_notify_observers_with_correct_message():
     observer_mock.update.assert_called_once_with(test_msg)
 
 
-@patch("slips_files.core.worker_manager_mixin.ProfilerWorker")
+@patch("slips_files.core.worker_manager_mixin.ProfilerWorker.create_process")
 def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     profiler = ModuleFactory().create_profiler_obj()
     worker = mock_worker_cls.return_value
@@ -254,6 +330,8 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
 
     profiler.start_profiler_worker(7)
 
+    submitted_aid_client = mock_worker_cls.call_args.kwargs["aid_manager"]
+    assert vars(submitted_aid_client) == {"_aid_queue": profiler.aid_queue}
     mock_worker_cls.assert_called_once_with(
         logger=profiler.logger,
         output_dir=profiler.parent_output_dir,
@@ -265,9 +343,12 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
         bloom_filters_manager=profiler.bloom_filters,
         name="profiler_worker_process_7",
         profiler_queue=profiler.profiler_queue,
-        input_handler=profiler.input_handler_obj,
+        input_handler=(
+            type(profiler.input_handler_obj),
+            vars(profiler.input_handler_obj),
+        ),
         aid_queue=profiler.aid_queue,
-        aid_manager=profiler.aid_manager,
+        aid_manager=submitted_aid_client,
         is_input_done_event=profiler.is_input_done_event,
         total_processes_to_start=profiler.total_processes_to_start,
     )
@@ -276,3 +357,22 @@ def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     assert profiler.workers == [worker]
     assert profiler.active_profiler_workers == 1
     profiler.db.increment_profiler_workers_started.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "line_type,expected",
+    [("argus", "binetflow"), ("zeek", "zeek"), ("suricata", "suricata")],
+)
+def test_stdin_selects_registered_parser(
+    line_type: str, expected: str
+) -> None:
+    """Map stdin's public format names to registered input parsers.
+
+    Parameters:
+        line_type: Format requested on the command line.
+        expected: Registered parser key.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    assert (
+        profiler.get_input_type({"line_type": line_type}, "stdin") == expected
+    )

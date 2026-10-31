@@ -9,11 +9,13 @@ from pathlib import PosixPath, Path
 import signal
 from typing import Any
 
+import netifaces
 import redis
 
 from modules.fides.messaging.network_bridge import NetworkBridge
 from modules.fides.model.peer import PeerInfo
 from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
+from slips_files.core.database.redis_db.redis_auth import redis_auth_kwargs
 from tests.common_test_utils import (
     allocate_started_redis_port,
     create_output_dir,
@@ -111,7 +113,9 @@ def message_send(port):
     message.update({"version": NetworkBridge.version})
     message = json.dumps(message)
 
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    redis_client = redis.StrictRedis(
+        host="localhost", port=port, db=0, **redis_auth_kwargs()
+    )
     # publish the message to the "network2fides" channel
     redis_client.publish(channel, message)
 
@@ -123,7 +127,9 @@ def message_receive(port):
     import json
 
     # connect to redis database 0
-    redis_client = redis.StrictRedis(host="localhost", port=port, db=0)
+    redis_client = redis.StrictRedis(
+        host="localhost", port=port, db=0, **redis_auth_kwargs()
+    )
 
     # define a callback function to handle received messages
     def message_handler(message):
@@ -250,14 +256,23 @@ def assert_no_fatal_runtime_errors(output_dir: Path) -> None:
                     )
 
 
-def get_main_interface():
-    try:
-        out = subprocess.check_output(
-            ["ip", "-o", "route", "show", "default"], text=True
-        )
-        return out.split(" dev ")[1].split()[0]
-    except Exception:
-        return None
+def get_main_interface() -> str | None:
+    """Return an IPv4 interface without relying on Linux-only commands.
+
+    Returns:
+        Default-route interface, another IPv4 interface, or None.
+    """
+    default_gateway = (
+        netifaces.gateways().get("default", {}).get(netifaces.AF_INET)
+    )
+    if default_gateway:
+        return str(default_gateway[1])
+
+    for interface in netifaces.interfaces():
+        addresses = netifaces.ifaddresses(interface).get(netifaces.AF_INET, [])
+        if any(address.get("addr") for address in addresses):
+            return interface
+    return None
 
 
 def get_runtime_config_dir(output_dir_name: str) -> Path:
@@ -325,7 +340,7 @@ def test_conf_file2(path, output_dir, integration_port_factory):
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir
+        integration_port_factory, output_dir, require_auth=True
     )
     db_name = f"{output_dir.name}_fides_p2p_db.sqlite"
     slips_config, test_db = create_runtime_fides_configs(output_dir, db_name)
@@ -431,7 +446,7 @@ def test_trust_recommendation_response(
     """
     output_dir: PosixPath = create_output_dir(output_dir)
     redis_port = allocate_started_redis_port(
-        integration_port_factory, output_dir
+        integration_port_factory, output_dir, require_auth=True
     )
     db_name = f"{output_dir.name}_fides_test_database.sqlite"
     print(f"db_name: {db_name}")

@@ -1,12 +1,50 @@
 """Unit tests for SQLite flock handling."""
 
 import os
+import fcntl
+import time
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
 
 from slips_files.common import sqlite_flock
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("contended", [False, True])
+def test_sqlite_flock_nonblocking_attempt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, contended: bool
+) -> None:
+    """A failed background attempt leaves the real writer's lock intact.
+
+    Parameters:
+        tmp_path: Isolated lock directory.
+        monkeypatch: Scope lock paths to this test.
+        contended: Whether another descriptor already owns the file lock.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr(sqlite_flock, "SLIPS_LOCKS_DIR", str(tmp_path))
+    flock = sqlite_flock.SQLiteFlock("sqlite_db", 12345)
+    owner = open(flock.lockfile_path, "w")
+    if contended:
+        fcntl.flock(owner, fcntl.LOCK_EX)
+    try:
+        started = time.monotonic()
+        with flock.try_acquire() as acquired:
+            assert acquired is (not contended)
+            assert flock._lock_acquired is acquired
+        assert time.monotonic() - started < 0.1
+        assert flock.lockfile_fd.closed
+        if contended:
+            with open(flock.lockfile_path, "w") as probe:
+                with pytest.raises(BlockingIOError):
+                    fcntl.flock(probe, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    finally:
+        fcntl.flock(owner, fcntl.LOCK_UN)
+        owner.close()
+    with flock.try_acquire() as acquired:
+        assert acquired is True
 
 
 def test_sqlite_flock_creates_world_writable_lockfile(tmp_path):

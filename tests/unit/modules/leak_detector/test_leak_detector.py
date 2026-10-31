@@ -36,6 +36,7 @@ def test_is_yara_installed(
 @patch("shutil.rmtree")
 def test_delete_compiled_rules(mock_rmtree, mock_mkdir, mock_db):
     leak_detector = ModuleFactory().create_leak_detector_obj()
+    mock_mkdir.reset_mock()
     leak_detector.delete_compiled_rules()
     mock_rmtree.assert_called_once_with(leak_detector.compiled_yara_rules_path)
     mock_mkdir.assert_called_once_with(leak_detector.compiled_yara_rules_path)

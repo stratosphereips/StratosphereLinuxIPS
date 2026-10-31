@@ -5,29 +5,31 @@ import bisect
 import contextlib
 import ipaddress
 import json
+import math
 import time
-from multiprocessing import Lock
+from collections import OrderedDict
+from threading import Lock
 from typing import Tuple, List, Dict, Any
 import validators
 
 from modules.conn_analyzer.set_evidence import SetEvidenceHelper
 from modules.flow_alerts.utils import (
     SPECIAL_IPV4,
-    get_ip_to_check,
+    different_localnet_context,
     is_interface_timeout_reached as has_interface_timeout_reached,
-    is_ip_allowed_outside_localnet,
-    is_ip_outside_local_network,
-    is_official_dns_server,
     should_check_different_localnet,
     should_ignore_dns_or_dhcpv6_flow,
+    network_state_for_flow,
+    is_official_dns_server,
 )
 from slips_files.common.abstracts.iasync_module import IAsyncModule
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.input_type import InputType
+from slips_files.common.flow_direction import tcp_initiator_is_known
+from slips_files.common.mac import classify_mac
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
-
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
@@ -40,6 +42,9 @@ class ConnAnalyzer(IAsyncModule):
         "exfiltration, connections without DNS resolution, etc."
     )
     authors = ["Kamila Babayeva", "Sebastian Garcia", "Alya Gomaa"]
+    DEVICE_IP_BASELINE_LIMIT = 4096
+    DEVICE_IP_SEEN_LIMIT = 8192
+    DEVICE_NETWORK_LIMIT = 64
 
     def init(self):
         self.whitelist = Whitelist(self.logger, self.db, self.bloom_filters)
@@ -56,7 +61,9 @@ class ConnAnalyzer(IAsyncModule):
         self.conn_without_dns_interface_wait_time = 30
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
-        self.our_ips: List[str] = utils.get_own_ips(ret="List")
+        self.our_ips: List[str] = utils.get_own_ips(
+            ret="List", include_public=False
+        )
         self.input_type: str = self.db.get_input_type()
         self.multiple_reconnection_attempts_threshold = 5
         # to avoid duplicate evidence
@@ -64,6 +71,16 @@ class ConnAnalyzer(IAsyncModule):
         self.ssl_recognized_flows: Dict[Tuple[str, str], List[float]] = {}
         self.ts_of_last_ssl_recognized_flows_cleanup = time.time()
         self.ssl_recognized_flows_lock = Lock()
+        self.device_ip_baselines: OrderedDict[tuple, tuple[float, str]] = (
+            OrderedDict()
+        )
+        self.device_ip_seen: OrderedDict[tuple, None] = OrderedDict()
+        self.device_network_boundaries: OrderedDict[tuple, float] = (
+            OrderedDict()
+        )
+        self.working_dns_servers: OrderedDict[tuple[str, str], float] = (
+            OrderedDict()
+        )
 
     def read_configuration(self):
         conf = ConfigParser()
@@ -75,9 +92,11 @@ class ConnAnalyzer(IAsyncModule):
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_flow")
         self.c2 = self.db.subscribe("tw_closed")
+        self.c3 = self.db.subscribe("new_dns")
         self.channels = {
             "new_flow": self.c1,
             "tw_closed": self.c2,
+            "new_dns": self.c3,
         }
 
     def pre_main(self):
@@ -142,8 +161,8 @@ class ConnAnalyzer(IAsyncModule):
         1. we have its info in ports_used_by_specific_orgs.csv
 
         - and considers the IP belongs to an org if any of the below:
-        1. both saddr and daddr have the Mac vendor fo this org e.g. apple
-        2. both saddr and daddr belong to the range specified in the
+        1. both saddr and daddr have the MAC vendor for this org e.g. Apple
+        2. daddr belongs to the range specified in the
         ports_used_by_specific_orgs.csv
         3. if the SNI, hostname, rDNS, ASN of this ip belong to this org
         4. match the IPs to orgs that slips has info about (apple, fb,
@@ -184,7 +203,7 @@ class ConnAnalyzer(IAsyncModule):
             org_name = org_name.lower()
             if (
                 org_name in src_mac_vendor.lower()
-                or org_name in dst_mac_vendor.lower()
+                and org_name in dst_mac_vendor.lower()
             ):
                 return True
 
@@ -205,11 +224,27 @@ class ConnAnalyzer(IAsyncModule):
 
         return False
 
-    def check_unknown_port(self, profileid, twid, flow):
+    def check_unknown_port(
+        self, profileid: str, twid: str, flow: Any
+    ) -> bool | None:
+        """Detect unknown destination services without repeating failed scan probes.
+
+        Parameters:
+            profileid: Source host profile identifier.
+            twid: Time window containing the connection.
+            flow: Parsed connection with its interpreted connection state.
+
+        Returns:
+            True when evidence is generated; False or None for excluded flows.
         """
-        Checks dports that are not in our
-        slips_files/ports_info/services.csv
-        """
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return False
+
+        if self.is_broadcast_or_multicast_flow(flow):
+            return
+
         if not flow.dport:
             return
 
@@ -217,9 +252,9 @@ class ConnAnalyzer(IAsyncModule):
             # the protocol is unrecognized by zeek. not tcp or udp.
             return
 
-        if self.db.is_a_port_scanner(flow.saddr, twid):
-            # avoid setting unknown port evidence for each port
-            # scanned from this attacker
+        is_established = getattr(flow, "interpreted_state", "") == ESTAB
+        if not is_established and self.db.is_a_port_scanner(flow.saddr, twid):
+            # Failed probes are covered by scan evidence; successful services are not.
             return False
 
         proto = str(flow.proto or "").lower()
@@ -234,6 +269,9 @@ class ConnAnalyzer(IAsyncModule):
         if self.port_belongs_to_an_org(flow.daddr, portproto, profileid):
             return False
 
+        if self.is_local_apple_peer_flow(flow):
+            return False
+
         if (
             "icmp" not in proto
             and not self.db.is_p2p_related_flow(
@@ -244,6 +282,126 @@ class ConnAnalyzer(IAsyncModule):
             # we don't have info about this port
             self.set_evidence.unknown_port(twid, flow)
             return True
+
+    def is_broadcast_or_multicast_flow(self, flow: Any) -> bool:
+        """Identify group traffic using its destination MAC and capture subnet.
+
+        Parameters:
+            flow: Connection with addresses, optional MACs, time and interface.
+
+        Returns:
+            True for multicast IPs, group destination MACs or IPv4 broadcasts.
+        """
+        if classify_mac(getattr(flow, "dmac", None)) in {
+            "broadcast",
+            "multicast",
+        }:
+            return True
+
+        addresses = []
+        for value in (flow.saddr, flow.daddr):
+            try:
+                address = ipaddress.ip_address(value)
+            except ValueError:
+                continue
+            if address.is_multicast:
+                return True
+            if isinstance(address, ipaddress.IPv4Address):
+                if address == ipaddress.IPv4Address("255.255.255.255"):
+                    return True
+                addresses.append(address)
+
+        if not addresses:
+            return False
+        interface = str(getattr(flow, "interface", "") or "")
+        if not interface:
+            return False
+        now = time.monotonic()
+        network_cache = getattr(self, "_broadcast_network_cache", {})
+        cached = network_cache.get(interface)
+        if not cached or now - cached[0] >= 5:
+            state = self.db.get_network_state(interface)
+            if isinstance(state, dict):
+                cidrs = [
+                    item.get("local_network", "")
+                    for item in [*state.get("history", []), state]
+                ]
+            else:
+                state = None
+                cidrs = [self.db.get_local_network(interface)]
+            networks = {}
+            for cidr in cidrs:
+                try:
+                    networks[cidr] = ipaddress.ip_network(cidr, strict=False)
+                except (TypeError, ValueError):
+                    continue
+            cached = (now, state, networks)
+            network_cache[interface] = cached
+            self._broadcast_network_cache = network_cache
+        if isinstance(cached[1], dict):
+            active = network_state_for_flow(self.db, flow, cached[1])
+            local_network = (
+                cached[2].get(active.get("local_network", ""))
+                if active
+                else None
+            )
+        else:
+            local_network = next(iter(cached[2].values()), None)
+        if isinstance(local_network, ipaddress.IPv4Network):
+            if local_network.prefixlen < 31 and any(
+                address == local_network.broadcast_address
+                for address in addresses
+            ):
+                return True
+        return False
+
+    def is_local_apple_peer_flow(self, flow: Any) -> bool:
+        """Recognize direct high-port UDP traffic between local Apple devices.
+
+        Parameters:
+            flow: Connection with IPs, ports, MACs, and capture interface.
+
+        Returns:
+            True only when both direct MACs identify Apple devices on the
+            monitored local network.
+        """
+        if str(flow.proto).lower() != "udp":
+            return False
+        try:
+            port = int(flow.dport)
+        except (TypeError, ValueError):
+            return False
+        if not 49152 <= port <= 65535:
+            return False
+
+        src_mac = str(getattr(flow, "smac", "") or "").lower()
+        dst_mac = str(getattr(flow, "dmac", "") or "").lower()
+        if not src_mac or not dst_mac or src_mac == dst_mac:
+            return False
+
+        state = network_state_for_flow(self.db, flow)
+        if not state or flow.saddr != state.get("host_ip"):
+            return False
+        try:
+            network = ipaddress.ip_network(
+                state["local_network"], strict=False
+            )
+            if (
+                ipaddress.ip_address(flow.saddr) not in network
+                or ipaddress.ip_address(flow.daddr) not in network
+            ):
+                return False
+        except (KeyError, ValueError):
+            return False
+        if dst_mac == str(state.get("gateway_mac") or "").lower():
+            return False
+
+        try:
+            src_vendor = utils.get_mac_vendor_from_mac_addr(src_mac) or ""
+            dst_vendor = utils.get_mac_vendor_from_mac_addr(dst_mac) or ""
+        except OSError:
+            return False
+        return "apple" in src_vendor.lower() and "apple" in dst_vendor.lower()
 
     def is_telnet(self, flow) -> bool:
         try:
@@ -258,6 +416,10 @@ class ConnAnalyzer(IAsyncModule):
     def check_multiple_telnet_reconnection_attempts(
         self, profileid, twid, flow
     ):
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if flow.interpreted_state != NOT_ESTAB:
             return
 
@@ -298,6 +460,10 @@ class ConnAnalyzer(IAsyncModule):
         Alerts when 5+ reconnection attempts from the same source IP to
         the same destination IP occurs
         """
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if flow.state != "REJ":
             return
 
@@ -379,13 +545,15 @@ class ConnAnalyzer(IAsyncModule):
 
         return bytes_sent
 
-    def detect_data_upload_in_twid(self, profileid, twid):
+    def detect_data_upload_in_twid(self, profileid: str, twid: str) -> None:
+        """Check upload totals using only flows from the closed analysis period.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Closed period whose uploaded bytes are counted.
         """
-        For each contacted ip in this twid,
-        check if the total bytes sent to this ip is >= data_exfiltration_threshold
-        """
-        all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid(
-            profileid
+        all_flows: Dict[str, dict] = self.db.get_all_flows_in_profileid_twid(
+            profileid, twid
         )
         if not all_flows:
             return
@@ -451,17 +619,158 @@ class ConnAnalyzer(IAsyncModule):
         # its ok to change ips from a link local ip to another private ip
         return ip in SPECIAL_IPV4 or ipaddress.ip_address(ip).is_link_local
 
-    def check_device_changing_ips(self, twid, flow):
+    @staticmethod
+    def _device_network_identity(
+        state: dict[str, Any],
+    ) -> tuple[str, tuple[str, ...]] | None:
+        """Identify an interface network using its router and IPv4 subnets.
+
+        Parameters:
+            state: Interface settings captured with the flow.
+
+        Returns:
+            Router and subnet identity, or None without usable settings.
         """
-        Every time we have a flow for a new ip
-            (an ip that we're seeing for the first time)
-        we check if the MAC of this srcip was associated with another ip
-        this check is only done once for each private source ip slips sees
+        router = str(
+            state.get("gateway_mac") or state.get("gateway_ip") or ""
+        ).lower()
+        cidrs = [state.get("local_network", "")]
+        cidrs.extend(
+            item.get("network", "")
+            for item in state.get("addresses", [])
+            if isinstance(item, dict)
+        )
+        networks = set()
+        for cidr in cidrs:
+            try:
+                network = ipaddress.ip_network(cidr, strict=False)
+            except (TypeError, ValueError):
+                continue
+            if (
+                isinstance(network, ipaddress.IPv4Network)
+                and network.prefixlen >= 8
+            ):
+                networks.add(str(network))
+        return (
+            (router, tuple(sorted(networks))) if router and networks else None
+        )
+
+    def _live_device_ip_change(self, flow: Any) -> tuple[bool, str]:
+        """Compare IPv4 ownership only within the flow's live network visit.
+
+        Parameters:
+            flow: Private IPv4 source and its Ethernet address.
+
+        Returns:
+            Whether live context handled the flow and the conflicting prior IP.
+        """
+        settings = self.db.get_network_state(flow.interface)
+        if not isinstance(settings, dict):
+            return False, ""
+        state = network_state_for_flow(self.db, flow, settings)
+        if not state:
+            return False, ""
+        if state.get("connected") is False:
+            return True, ""
+        identity = self._device_network_identity(state)
+        if not identity:
+            return False, ""
+        address = ipaddress.ip_address(flow.saddr)
+        networks = [ipaddress.ip_network(cidr) for cidr in identity[1]]
+        if not any(
+            address in network
+            and (
+                network.prefixlen >= 31
+                or address
+                not in {network.network_address, network.broadcast_address}
+            )
+            for network in networks
+        ):
+            return False, ""
+        if flow.smac.lower() == str(
+            state.get("gateway_mac") or ""
+        ).lower() or flow.saddr == state.get("gateway_ip"):
+            return True, ""
+        try:
+            stamp = float(flow.starttime)
+        except (AttributeError, TypeError, ValueError):
+            return False, ""
+        if not math.isfinite(stamp):
+            return False, ""
+        boundary = 0.0
+        history = settings.get("history", [])
+        for previous in history[-10:] if isinstance(history, list) else []:
+            if not isinstance(previous, dict):
+                continue
+            try:
+                changed = float(previous.get("changed_at", 0))
+            except (TypeError, ValueError):
+                continue
+            if (
+                math.isfinite(changed)
+                and changed <= stamp
+                and (
+                    previous.get("connected") is False
+                    or self._device_network_identity(previous) != identity
+                )
+            ):
+                boundary = max(boundary, changed)
+        network_key = (flow.interface, *identity)
+        saved_boundary = self.device_network_boundaries.get(network_key, 0.0)
+        if saved_boundary <= stamp:
+            boundary = max(boundary, saved_boundary)
+        if boundary >= saved_boundary:
+            self.device_network_boundaries[network_key] = boundary
+            self.device_network_boundaries.move_to_end(network_key)
+            if len(self.device_network_boundaries) > self.DEVICE_NETWORK_LIMIT:
+                self.device_network_boundaries.popitem(last=False)
+        key = (*network_key, boundary, flow.smac.lower())
+        baseline = self.device_ip_baselines.get(key)
+        if baseline:
+            self.device_ip_baselines.move_to_end(key)
+        if baseline and stamp < baseline[0]:
+            self.device_ip_baselines[key] = (stamp, flow.saddr)
+            self.device_ip_baselines.move_to_end(key)
+            return True, ""
+        seen_key = (*key, flow.saddr)
+        if seen_key in self.device_ip_seen:
+            self.device_ip_seen.move_to_end(seen_key)
+            return True, ""
+        self.device_ip_seen[seen_key] = None
+        if len(self.device_ip_seen) > self.DEVICE_IP_SEEN_LIMIT:
+            self.device_ip_seen.popitem(last=False)
+        previous_ip = baseline[1] if baseline else ""
+        if not previous_ip:
+            self.device_ip_baselines[key] = (stamp, flow.saddr)
+        self.device_ip_baselines.move_to_end(key)
+        if len(self.device_ip_baselines) > self.DEVICE_IP_BASELINE_LIMIT:
+            self.device_ip_baselines.popitem(last=False)
+        assigned = {
+            item.get("ip")
+            for item in state.get("addresses", [])
+            if isinstance(item, dict)
+        }
+        if (
+            flow.smac.lower() == str(state.get("mac") or "").lower()
+            and {previous_ip, flow.saddr} <= assigned
+        ):
+            return True, ""
+        return True, previous_ip if previous_ip != flow.saddr else ""
+
+    def check_device_changing_ips(self, twid: str, flow: Any) -> None:
+        """Check whether a new private source uses another private host's MAC.
+
+        Parameters:
+            twid: Detection time window.
+            flow: Connection containing source IP and Ethernet addresses.
         """
         if "conn" not in flow.type_:
             return
 
-        if not flow.smac:
+        if classify_mac(flow.smac) not in {
+            "locally_administered",
+            "universally_administered",
+        }:
             return
 
         saddr_obj = ipaddress.ip_address(flow.saddr)
@@ -473,12 +782,33 @@ class ConnAnalyzer(IAsyncModule):
         if self._is_it_ok_for_ip_to_change(flow.saddr):
             return
 
-        if self.db.was_ip_seen_in_connlog_before(flow.saddr):
-            # we should only check once for the first
-            # time we're seeing this flow
-            return
+        if self.input_type == InputType.INTERFACE:
+            handled, old_ip = self._live_device_ip_change(flow)
+            if handled:
+                if old_ip:
+                    self.set_evidence.device_changing_ips(twid, flow, old_ip)
+                return
 
+        if self.db.was_ip_seen_in_connlog_before(flow.saddr):
+            return
         self.db.mark_srcip_as_seen_in_connlog(flow.saddr)
+
+        state = network_state_for_flow(self.db, flow)
+        gateway_mac = (
+            state.get("gateway_mac")
+            if state
+            else self.db.get_gateway_mac(flow.interface)
+        )
+        gateway_ip = (
+            state.get("gateway_ip")
+            if state
+            else self.db.get_gateway_ip(flow.interface)
+        )
+        if (
+            flow.smac.lower() == str(gateway_mac or "").lower()
+            or flow.saddr == gateway_ip
+        ):
+            return
 
         if old_ip_list := self.db.get_ip_of_mac(flow.smac):
             # old_ip is a list that may contain the ipv6 of this MAC
@@ -486,8 +816,10 @@ class ConnAnalyzer(IAsyncModule):
             # has the given saddr and MAC
             # so this would be fp. so, make sure we're checking the ipv4 only
             for ip in json.loads(old_ip_list):
-                if validators.ipv4(ip) and not self._is_it_ok_for_ip_to_change(
-                    ip
+                if (
+                    validators.ipv4(ip)
+                    and utils.is_private_ip(ip)
+                    and not self._is_it_ok_for_ip_to_change(ip)
                 ):
                     # found an ipv4 associated previously with the flow's smac
                     # is it the same as the flow's srcip?
@@ -550,13 +882,77 @@ class ConnAnalyzer(IAsyncModule):
         self.set_evidence.tor_exit_node(twid, flow)
         return True
 
-    def should_ignore_conn_without_dns(self, flow) -> bool:
+    def remember_working_dns_server(self, flow: Any) -> bool:
+        """Remember a DNS responder without storing per-query state.
+
+        Parameters:
+            flow: Parsed DNS transaction with an observed response code.
+
+        Returns:
+            Whether the transaction establishes a working resolver.
+        """
+        if (
+            flow.type_ != "dns"
+            or str(flow.dport) != "53"
+            or flow.proto.lower() not in {"tcp", "udp"}
+            or flow.rcode_name not in {"NOERROR", "NXDOMAIN"}
+        ):
+            return False
+        try:
+            server = ipaddress.ip_address(flow.daddr)
+            timestamp = float(flow.starttime)
+            if (
+                server.is_multicast
+                or server.is_unspecified
+                or not math.isfinite(timestamp)
+                or timestamp < 0
+            ):
+                return False
+        except (ValueError, TypeError):
+            return False
+        key = (flow.interface, str(server))
+        self.working_dns_servers[key] = max(
+            timestamp, self.working_dns_servers.get(key, timestamp)
+        )
+        self.working_dns_servers.move_to_end(key)
+        while len(self.working_dns_servers) > 4096:
+            self.working_dns_servers.popitem(last=False)
+        return True
+
+    def is_working_dns_connection(self, flow: Any) -> bool:
+        """Recognize resolver service traffic even without Zeek's DNS label.
+
+        Parameters:
+            flow: Connection being checked for a missing DNS lookup.
+
+        Returns:
+            Whether it uses a configured or recently observed resolver on port 53.
+        """
+        if str(flow.dport) != "53" or flow.proto.lower() not in {"tcp", "udp"}:
+            return False
+        key = (flow.interface, flow.daddr)
+        seen = self.working_dns_servers.get(key)
+        if seen is not None:
+            try:
+                timestamp = float(flow.starttime)
+                if math.isfinite(timestamp) and abs(timestamp - seen) <= 86400:
+                    self.working_dns_servers.move_to_end(key)
+                    return True
+            except (ValueError, TypeError):
+                pass
+        return is_official_dns_server(self.db, flow, "dstip")
+
+    def should_ignore_conn_without_dns(self, flow: Any) -> bool:
         """
         checks for the cases that we should ignore the connection without dns
         """
         return (
             flow.type_ != "conn"
+            or not tcp_initiator_is_known(
+                flow.proto, getattr(flow, "history", None)
+            )
             or flow.appproto in ("dns", "icmp")
+            or self.is_working_dns_connection(flow)
             or utils.is_ignored_ip(flow.daddr)
             or self.db.is_dhcp_server(flow.daddr)
             # if the daddr is a client ip, it means that this is a conn
@@ -570,7 +966,11 @@ class ConnAnalyzer(IAsyncModule):
             # connection without dns in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
-            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
+            or (
+                self.is_running_non_stop
+                and flow.saddr not in self.our_ips
+                and flow.saddr != self.db.get_host_ip(flow.interface)
+            )
         )
 
     def check_if_resolution_was_made_by_different_version(
@@ -626,7 +1026,9 @@ class ConnAnalyzer(IAsyncModule):
         # don't alert a Connection Without DNS until 15 seconds has passed
         # in real time from the time of this checking.
         await asyncio.sleep(15)
-        if self.db.is_ip_resolved(flow.daddr, 24):
+        if self.should_ignore_conn_without_dns(flow) or self.db.is_ip_resolved(
+            flow.daddr, 24
+        ):
             return False
 
         # Reaching here means we already waited 15 seconds for the dns
@@ -676,6 +1078,10 @@ class ConnAnalyzer(IAsyncModule):
         )
 
     def detect_connection_to_multiple_ports(self, profileid, twid, flow):
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if flow.proto != "tcp" or flow.interpreted_state != ESTAB:
             return
 
@@ -771,43 +1177,55 @@ class ConnAnalyzer(IAsyncModule):
         """
         return should_check_different_localnet(flow, skip_dns_flows=True)
 
-    def check_different_localnet_usage(self, twid, flow, what_to_check=""):
-        """
-        alerts when a connection to a private ip that
-        doesn't belong to our local network is found
+    def check_different_localnet_usage(self, twid: str, flow: Any) -> None:
+        """Report each host's role when private addresses use another subnet.
 
-        for example:
-            If we are on 192.168.1.0/24 then detect anything
-            coming from/to 10.0.0.0/8
-
-        :param what_to_check: can be 'srcip' or 'dstip'
-        PS: most changes here should be in
-        dns.py::check_different_localnet_usage() so remember to update both:D
+        Parameters:
+            twid: Detection time window.
+            flow: Connection whose source and destination are checked together.
         """
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
         if not self.should_check_diff_localnet(flow):
             return
 
-        if is_official_dns_server(self.db, flow, what_to_check):
-            return
-
-        ip_to_check = get_ip_to_check(flow, what_to_check)
-        if is_ip_allowed_outside_localnet(ip_to_check):
-            return
-
-        if not is_ip_outside_local_network(self.db, flow, ip_to_check):
+        local_network, outside = different_localnet_context(self.db, flow)
+        if not outside:
             return
 
         self.set_evidence.different_localnet_usage(
             twid,
             flow,
-            ip_outside_localnet=what_to_check,
+            ip_outside_localnet=outside,
+            local_network=local_network,
         )
 
     def check_connection_to_local_ip(self, twid, flow):
         """
-        Alerts when there's a connection from a private IP to
-        another private IP except for expected DNS and DHCP service traffic.
+        Alerts when there's a connection from a private IP to another
+        private IP except for expected discovery, DNS, and DHCP traffic.
         """
+
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
+            return
+
+        if flow.proto.lower() in {"icmp", "icmp6", "icmpv6"}:
+            return
+
+        if self.is_broadcast_or_multicast_flow(flow):
+            return
+
+        # mDNS can be sent to a unicast address as well as to its multicast
+        # group. Neither form is an individual private-IP connection alert.
+        if str(flow.proto).lower() == "udp" and "5353" in {
+            str(flow.sport),
+            str(flow.dport),
+        }:
+            return
 
         def is_dhcp_conn(flow):
             # Bootstrap protocol server. Used by DHCP servers to communicate
@@ -924,6 +1342,10 @@ class ConnAnalyzer(IAsyncModule):
         """
         if not self.is_tcp_established_443_non_empty_flow(flow):
             # we're not interested in that flow
+            return False
+        if not tcp_initiator_is_known(
+            flow.proto, getattr(flow, "history", None)
+        ):
             return False
 
         # key for looking up matching ssl flows in ssl_recognized_flows
@@ -1050,6 +1472,11 @@ class ConnAnalyzer(IAsyncModule):
         self.ts_of_last_ssl_recognized_flows_cleanup = now
 
     async def main(self):
+        if msg := self.get_msg("new_dns"):
+            msg = json.loads(msg["data"])
+            self.remember_working_dns_server(
+                self.classifier.convert_to_flow_obj(msg["flow"])
+            )
         if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             profileid = msg["profileid"]
@@ -1065,12 +1492,7 @@ class ConnAnalyzer(IAsyncModule):
                 profileid, twid, flow
             )
             self.check_conn_to_port_0(profileid, twid, flow)
-            self.check_different_localnet_usage(
-                twid, flow, what_to_check="dstip"
-            )
-            self.check_different_localnet_usage(
-                twid, flow, what_to_check="srcip"
-            )
+            self.check_different_localnet_usage(twid, flow)
             self.create_task(
                 self.check_connection_without_dns_resolution,
                 profileid,

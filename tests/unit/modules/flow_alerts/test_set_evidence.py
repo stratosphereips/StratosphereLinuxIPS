@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 import pytest
-import datetime
 from slips_files.core.structures.evidence import (
     ThreatLevel,
     EvidenceType,
@@ -171,143 +170,83 @@ def test_multiple_ssh_versions(
 
 
 @pytest.mark.parametrize(
-    "daddr, dport, proto,ip_outside_localnet, "
-    "expected_attacker_direction, "
-    "expected_victim_direction, "
-    "expected_threat_level, expected_description",
+    "saddr, daddr, dport, proto, outside",
     [
-        # Testcase 1: src IP outside localnet
-        (
-            "10.0.0.1",
-            "80",
-            "udp",
-            "srcip",
-            Direction.SRC,
-            Direction.DST,
-            ThreatLevel.LOW,
-            "A connection from a private IP (192.168.0.1) on port 80/udp "
-            "outside of the used local network 192.168.0.0/16."
-            " To IP: 10.0.0.1 ",
-        ),
-        # # Testcase 2: dst IP outside localnet, using ARP
-        (
-            "192.168.1.1",
-            "0",
-            "arp",
-            "dstip",
-            Direction.DST,
-            Direction.SRC,
-            ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.1) on port 0/arp "
-            "outside of the used "
-            "local network 192.168.0.0/16. From IP: 192.168.0.1 using ARP",
-        ),
-        # Testcase 3: dst IP outside localnet, using port
-        (
-            "192.168.1.2",
-            "443",
-            "tcp",
-            "dstip",
-            Direction.DST,
-            Direction.SRC,
-            ThreatLevel.HIGH,
-            "A connection to a private IP (192.168.1.2) on port 443/tcp"
-            " outside of the used local network 192.168.0.0/16."
-            " From IP: 192.168.0.1 on destination port: 443/TCP",
-        ),
+        ("10.0.0.1", "192.168.0.1", "80", "udp", "srcip"),
+        ("192.168.0.1", "10.0.0.1", "0", "arp", "dstip"),
+        ("192.168.0.1", "10.0.0.1", "443", "tcp", "dstip"),
+        ("10.0.0.1", "10.0.0.2", "0", "icmp", "both"),
     ],
 )
 def test_different_localnet_usage(
-    daddr,
-    dport,
-    proto,
-    ip_outside_localnet,
-    expected_attacker_direction,
-    expected_victim_direction,
-    expected_threat_level,
-    expected_description,
-):
-    """
-    Testing different scenarios for different_localnet_usage method:
-    - src IP outside localnet
-    - dst IP outside localnet using ARP
-    - dst IP outside localnet using port
+    saddr: str, daddr: str, dport: str, proto: str, outside: str,
+) -> None:
+    """Store one finding on each endpoint, with severity fixed by its role.
+
+    Parameters:
+        saddr: Connecting host address.
+        daddr: Receiving host address.
+        dport: Destination port or ICMP code.
+        proto: Transport protocol.
+        outside: Which private addresses are outside the local subnet.
     """
     set_ev = ModuleFactory().create_set_evidence_helper()
     set_ev.db.get_local_network.return_value = "192.168.0.0/16"
-    start_time = datetime.datetime(2023, 5, 6, 12, 0, 0)
-    set_ev.db.get_slips_start_time.return_value = start_time.timestamp()
     flow = Conn(
-        starttime="1726249372.312124",
-        uid="123",
-        saddr="192.168.0.1",
-        daddr=daddr,
-        dur=1,
-        proto=proto,
-        appproto="",
-        sport="0",
-        dport=dport,
-        spkts=0,
-        dpkts=0,
-        sbytes=0,
-        dbytes=0,
-        smac="",
-        dmac="",
-        state="Established",
-        history="",
-    )
-    if expected_attacker_direction == Direction.SRC:
-        profile_ip = flow.saddr
-    else:
-        profile_ip = flow.daddr
-
-    set_ev.different_localnet_usage(
-        "timewindow3",
-        flow,
-        ip_outside_localnet=ip_outside_localnet,
+        starttime="1726249372.312124", uid="123", saddr=saddr,
+        daddr=daddr, dur=1, proto=proto, appproto="", sport="0", dport=dport,
+        spkts=0, dpkts=0, sbytes=0, dbytes=0, smac="", dmac="",
+        state="Established", history="",
     )
 
-    assert set_ev.db.set_evidence.call_count == 1
-    args, _ = set_ev.db.set_evidence.call_args
-    evidence = args[0]
-    assert evidence.evidence_type == EvidenceType.DIFFERENT_LOCALNET
-    assert evidence.attacker.direction == expected_attacker_direction
-    assert evidence.victim.direction == expected_victim_direction
-    assert evidence.threat_level == expected_threat_level
-    assert evidence.profile.ip == profile_ip
-    assert evidence.timewindow.number == 3
-    assert evidence.uid == [flow.uid]
-    assert evidence.description == expected_description
+    set_ev.different_localnet_usage("timewindow3", flow, ip_outside_localnet=outside)
+
+    findings = [call.args[0] for call in set_ev.db.set_evidence.call_args_list]
+    assert len(findings) == 2
+    for evidence, host, direction, other, other_direction, level in (
+        (findings[0], saddr, Direction.SRC, daddr, Direction.DST, ThreatLevel.HIGH),
+        (findings[1], daddr, Direction.DST, saddr, Direction.SRC, ThreatLevel.INFO),
+    ):
+        assert evidence.evidence_type == EvidenceType.DIFFERENT_LOCALNET
+        assert evidence.profile.ip == evidence.attacker.value == host
+        assert evidence.attacker.direction == direction
+        assert evidence.victim.value == other
+        assert evidence.victim.direction == other_direction
+        assert evidence.threat_level == level
+        assert evidence.timewindow.number == 3
+        assert evidence.uid == [flow.uid]
+        assert "outside the local network 192.168.0.0/16" in evidence.description
+    assert findings[0].rel_id == [findings[1].id]
+    assert findings[1].rel_id == [findings[0].id]
 
 
 @pytest.mark.parametrize(
-    "org, daddr, expected_description",
+    "org, daddr",
     [
         # Testcase 1: Regular organization name
         (
             "example",
             "10.0.0.1",
-            "Incompatible certificate CN to IP: 10.0.0.1 domain: x.com. "
-            "The certificate is claiming to belong to Example.",
         ),
         # Testcase 2: Organization name with spaces
         (
             "google llc",
             "8.8.8.8",
-            "Incompatible certificate CN to IP: 8.8.8.8 domain: x.com. "
-            "The certificate is claiming to belong to Google llc.",
         ),
-        # Testcase 3: Empty organization name
+        # Testcase 3: Provider claim for a server on a different network
         (
-            "",
+            "microsoft",
             "192.168.1.1",
-            "Incompatible certificate CN to IP: 192.168.1.1 domain: x.com. "
-            "The certificate is claiming to belong to .",
         ),
     ],
 )
-def test_incompatible_cn(org, daddr, expected_description):
-    """Testing the incompatible_CN method."""
+def test_tls_provider_impersonation(org: str, daddr: str) -> None:
+    """Attribute a high-threat provider claim to the presenting server.
+
+    Parameters:
+        org: Provider named in the certificate.
+        daddr: Destination presenting that certificate.
+    """
     set_ev = ModuleFactory().create_set_evidence_helper()
     set_ev.db.get_ip_identification.return_value = "- Some Information -"
     flow = SSL(
@@ -332,20 +271,27 @@ def test_incompatible_cn(org, daddr, expected_description):
         ja3s="",
         is_DoH="",
     )
-    set_ev.incompatible_cn("timewindow1", flow, org)
+    set_ev.tls_provider_impersonation("timewindow1", flow, org)
 
     assert set_ev.db.set_evidence.call_count == 1
     args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
-    assert evidence.evidence_type == EvidenceType.INCOMPATIBLE_CN
-    assert evidence.attacker.value == flow.saddr
-    assert evidence.victim.value == flow.daddr
-    assert evidence.threat_level == ThreatLevel.MEDIUM
-    assert evidence.profile.ip == flow.saddr
+    assert evidence.evidence_type.name == "TLS_PROVIDER_IMPERSONATION"
+    assert evidence.attacker.value == flow.daddr
+    assert evidence.attacker.direction == Direction.DST
+    assert evidence.victim.value == flow.saddr
+    assert evidence.victim.direction == Direction.SRC
+    assert evidence.threat_level == ThreatLevel.HIGH
+    assert evidence.profile.ip == flow.daddr
     assert evidence.timewindow.number == 1
     assert evidence.uid == [flow.uid]
     assert evidence.confidence == 0.9
-    assert evidence.description == expected_description
+    assert "Suspected TLS provider impersonation" in evidence.description
+    assert org.capitalize() in evidence.description
+    assert flow.daddr in evidence.description
+    assert flow.saddr in evidence.description
+    assert evidence.detection_details["claimed_provider"] == org
+    assert EvidenceType["INCOMPATIBLE_CN"] is EvidenceType.TLS_PROVIDER_IMPERSONATION
 
 
 @pytest.mark.parametrize(
@@ -388,6 +334,7 @@ def test_dga(nxdomains, expected_confidence):
     assert evidence.timewindow.number == 2
     assert evidence.uid == ["1234"]
     assert evidence.confidence == expected_confidence
+    assert "DNS filtering can also cause this" in evidence.description
 
 
 @pytest.mark.parametrize(

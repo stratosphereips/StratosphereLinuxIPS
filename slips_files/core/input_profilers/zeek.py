@@ -8,6 +8,7 @@ from dataclasses import fields, MISSING
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import (
+    BaseFlow,
     Conn,
     DNS,
     HTTP,
@@ -43,7 +44,45 @@ from slips_files.core.input_profilers.zeek_to_slips_maps import (
     login_fields_to_slips_fields_map,
 )
 
+from slips_files.core.flows.smb import (
+    SMBMapping,
+    SMBFile,
+    SMBCommand,
+    NTLM,
+    DCERPC,
+)
+from slips_files.core.flows.packet_timing import PacketTiming
+from slips_files.core.input_profilers.zeek_to_slips_maps import (
+    smb_fields_to_slips_fields_map,
+)
+
 LOG_MAP = {
+    "packet_timing.log": {
+        "ts": "starttime",
+        "uid": "uid",
+        "id.orig_h": "saddr",
+        "id.resp_h": "daddr",
+        "id.orig_p": "sport",
+        "id.resp_p": "dport",
+        **{
+            name: name
+            for name in (
+                "is_orig",
+                "kind",
+                "history",
+                "service",
+                "times",
+                "lengths",
+                "event_count",
+                "orig_bytes",
+                "resp_bytes",
+            )
+        },
+    },
+    **{
+        name + ".log": smb_fields_to_slips_fields_map
+        for name in ("smb_mapping", "smb_files", "smb_cmd", "ntlm", "dce_rpc")
+    },
     "conn.log": conn_fields_to_slips_fields_map,
     "dns.log": dns_fields_to_slips_fields_map,
     "http.log": http_fields_to_slips_fields_map,
@@ -63,6 +102,12 @@ LOG_MAP = {
 
 # define a mapping of log types to their corresponding classes
 LINE_TYPE_TO_SLIPS_CLASS = {
+    "packet_timing.log": PacketTiming,
+    "smb_mapping.log": SMBMapping,
+    "smb_files.log": SMBFile,
+    "smb_cmd.log": SMBCommand,
+    "ntlm.log": NTLM,
+    "dce_rpc.log": DCERPC,
     "conn.log": Conn,
     "dns.log": DNS,
     "http.log": HTTP,
@@ -120,7 +165,9 @@ class Zeek:
         file_type: str = self.get_file_type(new_line)
         return LOG_MAP[file_type]
 
-    def fill_empty_class_fields(self, flow_values: dict, slips_class):
+    def fill_empty_class_fields(
+        self, flow_values: dict, slips_class: type[BaseFlow]
+    ) -> dict:
         """
         - Fill missing dataclass fields with their default value
         (or empty string if no default exists).
@@ -137,6 +184,13 @@ class Zeek:
             name = f.name
             # `type_` is enforced later
             if name == "type_":
+                continue
+
+            # Logs such as notice.log can omit a connection UID. Empty UIDs
+            # overwrite each other in the durable flow table and cannot link
+            # back to evidence, so give each such record its own identifier.
+            if name == "uid" and not flow_values.get("uid"):
+                flow_values["uid"] = utils.generate_uid()
                 continue
 
             if name in flow_values:

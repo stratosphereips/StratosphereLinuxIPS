@@ -59,6 +59,10 @@ class ProfilerWorker(IModule):
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
+        if isinstance(input_handler, tuple):
+            handler_class, handler_state = input_handler
+            self.input_handler = handler_class(self.db)
+            self.input_handler.__dict__.update(handler_state)
         self.read_configuration()
         self.received_lines = 0
         self.localnet_handler = LocalnetHandler(self)
@@ -82,6 +86,22 @@ class ProfilerWorker(IModule):
         self._modified_tws = {}
         self._time_to_update_modified_tws = time.time()
         self._modified_timewindows_update_period = 3  # in seconds
+
+    @property
+    def received_lines(self) -> int:
+        """Return the consumed-line count shared with the profiler parent."""
+        return self._received_lines.value
+
+    @received_lines.setter
+    def received_lines(self, count: int) -> None:
+        """Set the shared consumed-line count.
+
+        Parameters:
+            count: Number of consumed lines.
+        """
+        if not hasattr(self, "_received_lines"):
+            self._received_lines = multiprocessing.Value("Q", 0)
+        self._received_lines.value = count
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_zeek_fields_line")
@@ -292,6 +312,17 @@ class ProfilerWorker(IModule):
             "weird": flow_handler.handle_weird,
             "tunnel": flow_handler.handle_tunnel,
             "login": flow_handler.handle_login,
+            "packet_timing": flow_handler.handle_packet_timing,
+            **{
+                name: flow_handler.handle_smb
+                for name in (
+                    "smb_mapping",
+                    "smb_files",
+                    "smb_cmd",
+                    "ntlm",
+                    "dce_rpc",
+                )
+            },
         }
         try:
             # call the function that handles this flow
@@ -499,6 +530,12 @@ class ProfilerWorker(IModule):
             "weird",
             "tunnel",
             "login",
+            "packet_timing",
+            "smb_mapping",
+            "smb_files",
+            "smb_cmd",
+            "ntlm",
+            "dce_rpc",
         )
         return bool(
             flow.starttime is not None and flow.type_ in supported_types

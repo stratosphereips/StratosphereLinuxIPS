@@ -22,6 +22,7 @@ from pathlib import Path
 from datetime import datetime
 from queue import Empty
 import os
+from slips_files.common.log_rotation import rotate_log
 
 from slips_files.common.abstracts.iobserver import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -37,41 +38,7 @@ class Output(IObserver):
     """
 
     name = "output"
-    # Output is instantiated once in the main process before any of
-    # slips' child processes are forked, so these multiprocessing locks
-    # are inherited by every child and actually serialize writes to the
-    # shared stdout/logfiles across processes. threading.Lock() would not
-    # do that, since each forked process gets its own independent copy of
-    # it, letting concurrent prints from different processes interleave
-    # and corrupt each other's output (e.g. a partial in-place \r update
-    # from one process landing in the middle of another process' line).
-    slips_logfile_lock = multiprocessing.Lock()
-    errors_logfile_lock = multiprocessing.Lock()
-    cli_lock = multiprocessing.Lock()
-    # set while a single-line, in-place-refreshing status line (e.g. the
-    # "Total analyzed IPs" summary) is left on screen without a trailing
-    # newline. shared across all forked processes so that any of them
-    # printing a normal line first closes it out with a newline instead
-    # of overwriting/merging with it.
-    _cli_has_dangling_line = multiprocessing.Value("b", False)
-
-    # While slips' processes/modules are still announcing their startup
-    # (see begin_startup_announcements()), every OTHER printed message
-    # is held here instead of going straight to the cli/logfiles, so it
-    # can't land in the middle of the startup progress report and break
-    # up its lines. Nothing is delayed except the printing itself - the
-    # code that queued the message keeps running normally. Queued
-    # messages are flushed, in the order they arrived, as soon as the
-    # last process/module announces itself.
-    _startup_queue = multiprocessing.Queue()
-    _startup_in_progress = multiprocessing.Value("b", False)
-    _startup_queue_lock = multiprocessing.Lock()
-    # monotonic-clock deadline after which queued messages are
-    # force-flushed even if the expected total was never reached - a
-    # safety net for the case where a module dies/errors out before
-    # announcing itself, which would otherwise stall all cli/logfile
-    # output for the rest of the run
-    _startup_deadline = multiprocessing.Value("d", 0.0)
+    # Each run explicitly shares its logger locks and startup queue with children.
     STARTUP_QUEUE_TIMEOUT_SECS = 120
 
     def __init__(
@@ -86,6 +53,16 @@ class Output(IObserver):
         slips_args=None,
     ):
         super().__init__()
+        # Instance attributes travel with the logger under spawn/forkserver.
+        # Class attributes alone would be recreated independently in children.
+        self.slips_logfile_lock = multiprocessing.Lock()
+        self.errors_logfile_lock = multiprocessing.Lock()
+        self.cli_lock = multiprocessing.Lock()
+        self._cli_has_dangling_line = multiprocessing.Value("b", False)
+        self._startup_queue = multiprocessing.Queue()
+        self._startup_in_progress = multiprocessing.Value("b", False)
+        self._startup_queue_lock = multiprocessing.Lock()
+        self._startup_deadline = multiprocessing.Value("d", 0.0)
         # a fresh Output() means a fresh run for whichever process
         # constructed it - no startup announcements are in progress yet
         self._startup_in_progress.value = False
@@ -125,6 +102,7 @@ class Output(IObserver):
 
     def _read_configuration(self):
         conf = ConfigParser()
+        self.history_policy = conf.detection_history_policy()
         self.printable_twid_width = conf.get_tw_width()
         self.GID = conf.get_GID()
         self.UID = conf.get_UID()
@@ -181,16 +159,20 @@ class Output(IObserver):
 
         date_time = utils.get_human_readable_datetime()
 
-        self.slips_logfile_lock.acquire()
-        with open(self.slips_logfile, "a") as slips_logfile:
-            slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
-        self.slips_logfile_lock.release()
+        with self.slips_logfile_lock:
+            if isinstance(getattr(self, "history_policy", None), dict):
+                rotate_log(Path(self.slips_logfile), self.history_policy)
+            with open(self.slips_logfile, "a") as slips_logfile:
+                slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
 
-    def print(self, sender: str, txt: str, end="\n"):
+    def print(self, sender: str, txt: str, end: str = "\n") -> None:
         """
         prints the given txt whether using tqdm or using print()
         """
-        self.cli_lock.acquire()
+        # A process can die or stop writing while holding this shared lock.
+        # Do not let terminal output halt the main monitoring loop.
+        if not self.cli_lock.acquire(timeout=2):
+            return
         try:
             if sender:
                 to_print = f"[{sender}] {txt}"
@@ -216,10 +198,23 @@ class Output(IObserver):
             # with the next process' output
             sys.stdout.flush()
 
+        except (BrokenPipeError, ValueError):
+            # Shutdown can close a child process' inherited stdout before
+            # its final queued messages are drained. A failed terminal
+            # write must not turn that late message into a module failure.
+            return
         except Exception as e:
-            print(f"Problem printing {txt}. {e}")
+            # Shutdown can close a child process' inherited stdout before
+            # its final queued messages are drained. Preserve diagnostics
+            # for unexpected terminal errors when stderr is still usable.
+            try:
+                if sys.__stderr__ and not sys.__stderr__.closed:
+                    sys.__stderr__.write(f"Problem printing {txt}. {e}\n")
+            except Exception:
+                pass
 
-        self.cli_lock.release()
+        finally:
+            self.cli_lock.release()
 
     def log_error(self, msg: dict):
         """
@@ -227,10 +222,13 @@ class Output(IObserver):
         """
         date_time = utils.get_human_readable_datetime()
 
-        self.errors_logfile_lock.acquire()
-        with open(self.errors_logfile, "a") as errors_logfile:
-            errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
-        self.errors_logfile_lock.release()
+        with self.errors_logfile_lock:
+            if isinstance(getattr(self, "history_policy", None), dict):
+                rotate_log(Path(self.errors_logfile), self.history_policy)
+            with open(self.errors_logfile, "a") as errors_logfile:
+                errors_logfile.write(
+                    f'{date_time} [{msg["from"]}] {msg["txt"]}\n'
+                )
 
     def enough_verbose(self, verbose: int):
         """

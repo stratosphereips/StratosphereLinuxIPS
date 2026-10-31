@@ -59,6 +59,13 @@ class ZeekFileRemover:
         # new log file should be dns.log without the ts
         old_log_file = changed_files["old_file"]
         new_log_file = changed_files["new_file"]
+        if (
+            not isinstance(old_log_file, str)
+            or not isinstance(new_log_file, str)
+            or not old_log_file.endswith(".log")
+            or not new_log_file.endswith(".log")
+        ):
+            return
         new_logfile_without_path = new_log_file.split("/")[-1].split(".")[0]
 
         # ignored files have no open handle, so we should only delete them from disk

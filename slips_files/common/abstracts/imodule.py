@@ -35,6 +35,21 @@ class IModule(ABC, Process):
     # should be filled with the channels each module subscribes to
     channels = {}
 
+    @classmethod
+    def create_process(cls, *args: object, **kwargs: object) -> Process:
+        """Return a process that initializes this module in its child.
+
+        Parameters:
+            args: Positional constructor arguments.
+            kwargs: Keyword constructor arguments.
+
+        Returns:
+            Unstarted process with no parent-owned module resources.
+        """
+        from slips_files.core.module_process import ModuleProcess
+
+        return ModuleProcess(cls, *args, **kwargs)
+
     def __init_subclass__(cls, **kwargs: object) -> None:
         """
         Validate module metadata when subclasses are defined.

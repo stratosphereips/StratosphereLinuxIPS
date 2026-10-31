@@ -21,6 +21,13 @@ daemon/
 
 # Ignore private AGENTS.md, may contain private paths
 private/AGENTS.md
+# Local analyst configuration and whitelist files
+config/slips-*.yaml
+config/*-whitelist.conf
+config/*.conf.bak
+*.web.conf
+*.web.conf.lock
+*.conf.lock
 scripts/
 tasks/*
 
@@ -189,3 +196,4 @@ permanent/
 performance_metrics/
 modules/ml_linear_model/artifacts/
 modules/ml_online_model/artifacts/
+docs/images/

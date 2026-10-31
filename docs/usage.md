@@ -104,34 +104,149 @@ separately. Configuration of the **config/slips.yaml** is described [here](#modi
 
 Slips has 2 modes, interactive and daemonized.
 
-**Daemonized** : Slips runs as a daemon in the background. which means all output, logs and alerts are written in files and nothing is displayed in the terminal.
+**Interactive mode** keeps Slips attached to the terminal; Ctrl-C starts its
+shutdown. **Daemon mode** (`-D`) detaches Slips so the terminal returns while
+capture continues in the background.
 
-In daemonized mode : Slips runs completely in the background, The output is written to``` stdout```, ```stderr``` and
-```logsfile``` files specified in ```config/slips.yaml```
+```bash
+./slips.py -i en0 -w -o output/live --keep-history -D
+./slips.py --list-instances
+./slips.py --restart
+./slips.py --stop
+```
 
-by default, these are the paths used
+Daemon logs use the selected output directory, just like an interactive run.
+The `output.stdout`, `output.stderr` and `output.logs` configuration values
+choose their names; the defaults are `slips.log`, `errors.log` and `slips.log`.
+Starting a daemon does not truncate existing logs. `--keep-history` preserves
+previous detection data under the usual retention policy.
 
-stdout = /var/log/slips/slips.log
-stderr = /var/log/slips/error.log
-logsfile = /var/log/slips/slips.log
+The PID file is `slips_daemon.lock` inside `parameters.permanent_dir`, which
+is `permanent/slips_daemon.lock` by default. This permits ordinary-user startup
+on macOS and Linux without access to a system lock directory. The file records
+the daemon PID, not captured traffic. Do not run with sudo solely to create it;
+live capture still needs the normal interface-capture permissions.
 
-NOTE: Since ```/val/log/``` is owned by root by default, If you want to store the logs in  ```/var/log/slips```,
-create /var/log/slips as root and slips will use it by default.
+The launcher waits up to 30 seconds for startup feedback. It prints the daemon
+PID and log path when core workers start. If startup takes longer but the daemon
+is alive, it reports that startup is continuing and returns the terminal;
+`--list-instances` can already find the daemon. The 30-second limit stops waiting
+in the terminal; it does not stop or restart the background process. Restoring
+saved state and starting workers can take longer. After a P2P update, the P2P
+worker can also rebuild its Go binary while capture starts independently.
+The log records `Slips daemon core workers started` when core startup finishes;
+individual modules report their own readiness, such as the web URL and P2P
+listening address. Follow progress with `tail -f <output-folder>/slips.log`.
+An early startup failure is reported in the terminal with a nonzero exit code
+and its error-log path.
 
-If slips can't write there, slips will store the logs in the ```Slips/output/<some_dir>``` dir by default.
+Only one daemon is supported at a time. Use `--stop` to stop it when it is the
+only running Slips instance, or `--stop PID` to select it when other analyses
+are also running. The same stop option handles every launch mode.
 
-NOTE: if -o <output_dir> is given when slips is in daemonized mode, the output log files will be stored in <output_dir>
- instead of the output_dir specified in `config/slips.yaml`
+### Find, stop and restart running instances
 
+Use these commands from the Slips repository directory, with the same Python
+environment used to run Slips:
 
-This is not the default mode, to use it, run slips with -D
+```bash
+./slips.py --list-instances
+./slips.py --stop
+./slips.py --stop 12345
+./slips.py --stop all
+./slips.py --restart
+./slips.py --restart 12345
+```
 
+`--list-instances` shows accessible running Slips main processes from this
+checkout, with their PID, launch mode, open webpage port, interface or input file, and output
+directory. It finds normal foreground runs, shell background runs (`&` or
+`nohup`), service launches, and `-D` daemons. It excludes worker processes,
+other checkouts, stale PIDs and the management command itself.
+On Linux, forked workers inherit their main process's command line; Slips
+checks their ancestry so these workers are not listed as separate instances.
+The **WEB PORT** column shows the actual listening port, including custom
+ports and saved-result viewers opened with `--view`. A dash means no web
+listener could be verified (disabled, still starting, stopped, or inaccessible).
+Listing inspects processes and sockets; it does not start a server, read the
+analysis databases, or connect to Redis.
 
-```./slips.py -i wlp3s0 -D```
+`--stop` stops the only running instance. If several are running, it lists
+them and asks you to select a PID with `--stop PID`; it does not choose one.
+`--stop all` explicitly stops all accessible instances from this checkout,
+including foreground and PCAP analyses. These management options run on their
+own; do not combine them with capture options such as `-i`, `-f` or `-c`.
 
-To stop the daemon run slips with ```-S```, for example ```./slips.py -S```
+`--restart` selects the only running daemon from this checkout, even when
+foreground or PCAP analyses are also running. Use `--restart PID` to select
+one if several daemons are found. It cannot restart a foreground run or a
+daemon that has already stopped, because it needs the running daemon's launch
+arguments. If no matching daemon exists, it reports the problem and returns
+a nonzero exit status.
 
-Only one instance of the daemon can run at a time.
+Restart first performs the same shutdown as `--stop` and waits for the daemon
+and its observed workers to exit. If shutdown fails or times out, no replacement
+is started. After a successful stop, it launches a new daemon with the original
+Slips arguments, Python interpreter options, and working directory. Arguments
+containing spaces remain separate arguments. Use the same Python environment
+as the original run; for example, on macOS:
+
+```bash
+.venv-macos/bin/python slips.py --restart
+```
+
+The new daemon reads the current configuration files. Restart does not add or
+change capture options: history is retained when the original command included
+`--keep-history`; otherwise normal fresh-start behavior applies. Options such
+as `-c`, `-i`, `-o`, `-w` and `--web-port` keep their original values. Startup
+feedback and failures appear in the terminal just as they do with `-D`.
+
+Restart also works with `--keep-history`: the waiting `--restart` management
+command is not another capture and does not reserve Redis port 6379. A real
+concurrent capture sharing that port is still rejected; the message identifies
+its PID and port so you can locate the process.
+
+Stopping sends SIGTERM to the selected main process, which performs Slips'
+normal shutdown: finish cleanup, save learned information, stop its workers
+and close its web interface. The command waits up to 45 seconds for the main
+process and its observed workers. It reports any remaining PIDs and returns
+a nonzero exit status rather than force-killing them. Review that run's
+`errors.log` if shutdown does not finish. An analysis stopped this way is
+interrupted; unread traffic in a PCAP is not analyzed.
+
+Ctrl-C is handled by the main process. Workers receive its shared stop signal
+so they can save state without being interrupted inside a shared lock.
+The stop notification and module waits share one shutdown deadline (at most
+30 seconds after an interrupt). If a damaged shared lock prevents notification,
+main reports it and terminates remaining workers rather than waiting forever.
+A second Ctrl-C also cleans up workers before main exits.
+
+Before asking modules to stop, Slips records their process identities and their
+descendants, including the Zeek instances it started. This matters because a
+module can exit before its subprocess: that subprocess is then reparented and
+would disappear from a later search under the module's PID. Slips retains the
+original identity through shutdown, force-stops any remaining owned processes
+after the grace period, and verifies that they stopped. PID creation times
+prevent cleanup from signaling a different process that reused an old PID.
+Other Slips runs and independently started Zeek instances are left running.
+
+Zeek shutdown first sends SIGTERM and allows up to two seconds for log flushing,
+then kills and verifies any survivors. Final forced cleanup uses a shared
+two-second verification wait, rather than adding a separate wait per module.
+Further Ctrl-C presses cannot interrupt that last cleanup. The existing option
+to keep the web interface open still applies; only that run's web server is
+retained while Slips waits for your answer. If an owned process cannot be stopped,
+Slips reports the failure instead of claiming a successful shutdown.
+
+Listing and stopping do not start a capture, load a configuration, create logs
+or connect to Redis. They do not flush Redis or delete saved capture history.
+Existing retention and shutdown settings still apply inside the running Slips
+process. `--stop` is the only Slips stop option; it also handles `-D` daemons.
+`-k`/`--killall` manages unused Redis servers.
+
+On macOS, for example, use `.venv-macos/bin/python slips.py --list-instances`
+and `.venv-macos/bin/python slips.py --stop`. You do not need to remember a PID
+when only one instance is running.
 
 **Interactive** : For viewing output, logs and alerts in your terminal.
 
@@ -149,7 +264,15 @@ slips can write to those files.
 
 ## Running Several slips instances
 
-By default, Slips will assume you are running only one instance and will use the redis port 6379 on each run.
+By default, Slips uses Redis port 6379. Logical database 0 on that server holds
+the active run's profiles, time windows, alerts, and other live state. Logical
+database 1 on port 6379 holds the cache shared by all Slips instances,
+including threat intelligence. These are two logical databases in one Redis
+server. A run started with `-m` or `-P` has a second Redis server for its
+database 0 on its own port, while its cache still uses port 6379 database 1.
+The default startup clears database 0 for a new run; it does not clear the
+shared cache. `deletePrevdb: false` can prevent that Redis flush, but does not
+preserve the output directory or safely resume the previous run.
 
 You can run several instances of slips at the same time using the -m flag, and the output of each instance will be stored in
 ```output/filename_timestamp/```  directory.
@@ -157,15 +280,248 @@ You can run several instances of slips at the same time using the -m flag, and t
 If you want Slips to run on a certain port, you can use the ```-P <portnumber>``` parameter to specify the
 port you want Slips to use. but it will always use port 6379 db 1 for the cache db.
 
-Each instance of Slips will connect to redis server on a randomly generated port in the range (32768 to 32850).
+With `-m`, each instance uses an available port in the range 32768 to 32850.
 
 In macos, you will get a popup asking for permission to open and use that random port, press yes to allow it.
 
 However, all instance share 1 cached redis database on redis://localhost:6379 DB 1, to store the IoCs taken from TI files.
 
-Both redis servers, the main sever (DB 0) and the cache server (DB 1) are opened automatically by Slips.
+Slips opens the required Redis servers automatically.
 
-The local web interface is intentionally not a multi-instance viewer. Do not enable `-w` on several concurrent runs. It stays connected only to the Redis port and output directory of the Slips process that launched it.
+To analyze a PCAP alongside a live capture, reuse your usual configuration
+directly. `-m -f ... -o ...` automatically gives the file analysis its own
+runtime data under `<output>/permanent`, as well as a separate Redis instance.
+No configuration or credential files need to be copied by hand. The same
+behavior applies to a completed Zeek log directory passed with `-f`.
+
+Run from the repository root with an independent output directory and an
+unused web port:
+
+```bash
+nice -n 15 .venv-macos/bin/python slips.py -m -w \
+  -c config/slips.yaml \
+  --web-port 55002 \
+  -f dataset/test7-malicious.pcap -o output/pcap-analysis-01
+```
+
+Replace `config/slips.yaml` with your normal `-c` file if you use another one.
+Slips reads its current detection settings on every launch. It copies that
+file's whitelist into the analysis so changes made from the PCAP web page do
+not edit the live whitelist. Redis and web credentials are copied automatically
+with restrictive permissions, keeping the same login password. Saved host
+identities and learned runtime state start independently; the live databases
+are not copied. New ML model files are saved under the analysis output, while
+configured model files can still be read for detection.
+
+The analysis keeps its Zeek files in its own output, listens on localhost, and
+disables automatic Slips code updates. Its web Configuration tab shows the
+effective configuration saved for that run, including these path changes and
+the selected web port. Your source YAML is unchanged. Starting another analysis
+with the same output directory replaces the previous analysis under the normal
+fresh-run rules; use a different `-o` for each result you want to keep.
+
+On a native Linux installation, replace `.venv-macos/bin/python` with your
+Python environment, for example `.venv/bin/python`. Open
+`http://127.0.0.1:55002/` for this PCAP. The live capture keeps its existing
+web port. At the completion prompt, answer `n` or press Enter to keep the
+PCAP web interface available; keep that terminal open. For remote analysis,
+use an interactive SSH session and a separate tunnel:
+
+```bash
+ssh -N -L 127.0.0.1:55002:127.0.0.1:55002 bsyclass
+```
+
+Slips refuses resource conflicts before clearing the second run's output.
+Do not pass `--keep-history` or `--clearcache` to the PCAP run. Concurrent runs
+still share the Redis cache and the computer's CPU and memory. `nice` lowers CPU
+priority but does not limit memory; a machine with little spare RAM should
+analyze PCAPs elsewhere while live capture continues.
+
+### Keep detections across a live-interface restart
+
+Use the same command for the first start and later restarts on the same
+interface and output directory. Stop any previous Slips run before restarting:
+
+```bash
+./slips.py -i en0 -o output/my-network --keep-history -w
+```
+
+If `databases/flows.sqlite` does not exist in that output directory,
+`--keep-history` starts a fresh run and creates the directory as needed.
+No first-run command or empty SQLite file is required. An existing directory
+without that database is reset just as it is for a normal fresh run.
+
+When the database exists, `--keep-history` retains it, web history, and other
+files in that directory. Alerts and evidence are durable SQLite records, so
+the web interface can show detections from before the restart. Redis database 0 starts clean:
+process IDs, time-window state, and other temporary values from the prior run
+must not influence new detections. The shared cache in port 6379 database 1 is
+preserved. Existing history requires the original run's metadata to verify
+the interface. Both fresh and retained runs use port 6379 and refuse
+concurrent runs that share writable data or a web port. An isolated analysis
+using `-m` or a separate `-P` port can run alongside it, as described above.
+It cannot be combined with `-m` or a different `-P` port. Start a normal run
+without the flag when you want a fresh output directory and detection history.
+
+In a live-interface run, `flow_retention` in `config/slips.yaml` keeps ordinary
+raw flows for 24 hours and evidence-linked raw flows for up to 30 days by
+default. It also targets a 512 MiB logical database size. When over that
+target, bounded background batches prune the oldest raw flows without
+non-excluded evidence first. Linked raw flows are ranked by the latest
+non-excluded evidence that cites them, so new evidence takes priority over
+older evidence even when its triggering flow started earlier. Linked flows
+stay protected for at least the configured ordinary-flow age after that
+evidence. Recent evidence-linked flows remain available even when durable
+detection records alone exceed the size target.
+Evidence, alerts, and their relationships remain available after a raw flow is
+removed. Set `max_size_mb: 0` to disable the size target, or `enabled: false`
+to disable all flow retention. Imported captures are not pruned.
+
+Detection history has separate limits in `detection_history`:
+
+```yaml
+detection_history:
+  enabled: true
+  active_days: 90
+  max_active_size_mb: 2048
+  min_active_hours: 24
+  archive_retention_days: 30
+  archive_file_size_mb: 256
+  max_archive_size_mb: 4096
+  batch_size: 200
+  interval_seconds: 10
+  work_budget_ms: 250
+  min_free_disk_mb: 1024
+  log_max_size_mb: 64
+  log_backup_count: 30
+```
+
+Evidence, alerts, analyst reviews and their relationships move to
+`databases/archives/detections-YYYY-MM-NNNN.sqlite` after 90 days. Under the
+2 GiB active-size target, older records move sooner, protecting at least the
+last 24 hours. Each record is committed to its archive before its active copy
+is removed. Interrupted copies resume from saved checkpoints. Raw flows keep
+their independent `flow_retention` policy and are not duplicated in archives.
+
+Archiving keeps the database used by normal web searches small enough for
+continuous capture. Archives store older findings, not complete run backups:
+several starts using `--keep-history` may contribute to one file. The filename's
+month is the copy month, and its number identifies a storage segment. In the
+web's **Detection history** selector, choose the dates of the detections you
+want to investigate. Labels show the actual earliest and latest detection
+dates in each segment, in your local timezone, with a part number to distinguish
+overlapping ranges. See [Detection history](web_interface.md#long-running-behavior) for browsing,
+retention and the separate current-run/historical error-log view.
+
+Maintenance tries the connection and shared writer locks without waiting.
+If capture or another writer is busy, it rolls back only the unfinished
+transaction and resumes at the next configured interval. Cleanup, rollups,
+archive writes, and final status writes all follow this rule. The batch size
+and work budget remain bounded. Contention lasting at least six intervals
+(a minimum of 60 seconds) produces a rate-limited warning with the operation
+phase and last successful pass; genuine SQLite errors remain errors.
+Web detection recovery and analyst reviews share the capture writer lock.
+Legacy alerts.json recovery checks a 50 ms budget between records and resumes
+from its committed file offset.
+
+Archives rotate by UTC month and into segments targeting 256 MiB. Completed
+segments expire 30 days after their last write, or earlier when the 4 GiB
+archive target is exceeded. Change `archive_retention_days` to configure this
+one-month policy. Set either size target to `0` to disable that size limit.
+The web interface's **Detection history** selector opens retained archives on
+demand, with review editing disabled. Expired raw flow details remain unavailable.
+
+Maintenance runs in short batches outside flow processing. Low disk space
+pauses copying instead of removing unarchived detections. Size targets are
+soft: a protected recent window, an unfinished transfer or a large detection
+can temporarily exceed them. A recent alert also protects its supporting
+evidence until that alert becomes eligible for rotation. Existing backlog
+drains gradually. Legacy raw flows with many evidence links use resumable
+classification checkpoints before they become eligible for cleanup. Hourly
+summaries speed compact evidence queries once their backfill catches up;
+dirty or incomplete hours use exact raw queries.
+
+Slips, errors, alerts, HTTPS anomaly and web server logs rotate into a `rotated/` directory
+beside each active log at 64 MiB. Rotated logs use the same 30-day age limit,
+with at most 30 backups per log. Live web error events, minute metrics and
+transient host snapshots expire after `active_days`; one-second metrics roll
+up after 24 hours. Imported captures are not pruned by detection maintenance.
+Restart Slips after changing these settings, keeping the same output directory
+and `--keep-history` when continuing a run.
+
+The size target measures live SQLite pages; deleted pages may remain allocated
+in an older database file until it is compacted offline. Stop Slips before
+running `VACUUM` on that file.
+
+New output databases return deleted pages to the filesystem incrementally.
+For an output database created before flow retention was added, stop Slips
+before compacting it:
+
+```bash
+sqlite3 output/my-network/databases/flows.sqlite 'PRAGMA auto_vacuum=INCREMENTAL; VACUUM;'
+```
+
+SQLite needs temporary free disk space roughly equal to the
+database size during that operation. Normal live retention can reuse freed
+pages in the old database even without this one-time compaction. Setting
+`auto_vacuum` before that offline vacuum also enables incremental reclamation
+for future deletions; plain `VACUUM` alone only shrinks it once.
+
+These are separate budgets, not one limit on the output folder. The default
+active detection target is 2 GiB, archive storage is 4 GiB, and log backups
+can consume up to 30 × 64 MiB **per log**, plus active logs, Zeek logs and
+module databases. The 512 MiB raw-flow target does not cap detection records
+or their relationships in the shared SQLite file. Existing deletion space,
+protected recent evidence and a rotation backlog can increase physical usage
+above the targets. Lower the active/archive caps and log backup count to
+choose a smaller disk budget; keeping 30 days of archives does not require
+keeping 30 backup files for every log.
+
+For a personal live capture targeting **about 4 GiB**, use these overrides in
+the configuration passed with `-c` (applied to the macOS en0 configuration):
+
+```yaml
+detection_history:
+  active_days: 30
+  max_active_size_mb: 1024
+  min_active_hours: 24
+  archive_retention_days: 30
+  archive_file_size_mb: 128
+  max_archive_size_mb: 2048
+  log_max_size_mb: 16
+  log_backup_count: 3
+anomaly_detection_https:
+  log_verbosity: 1
+```
+
+Keep the remaining settings in the existing configuration. This allocates
+1 GiB to the active database and 2 GiB to detection archives. Six rotated
+text logs can use about 384 MiB altogether, including their active segments.
+The remaining space covers web history, Zeek logs, Redis snapshots and module
+state. The existing 512 MiB raw-flow target shares the active database; it is
+not an extra 512 MiB allocation. The last day of recent detections stays
+protected, and archives expire after 30 days or earlier under size pressure.
+Lower HTTPS log verbosity reduces diagnostic writes without changing detection.
+
+This is a working storage target, not a hard total-folder quota. Traffic bursts,
+protected records, legacy deletion space and unfinished maintenance can exceed
+it. Restart Slips to load the settings; old oversized database files still need
+offline compaction. Existing rotated log backups are removed gradually under
+the new retention policy. Shared defaults are unchanged.
+
+Zeek cleanup retains each pending rotated-file deadline until it expires and
+processes the oldest first. A newer file cannot cancel or delay an older
+file's scheduled deletion. Checking a future deadline takes constant time;
+there is no scan of pending files for each input read.
+
+The option preserves past detections in the output directory; it does not
+restore active Redis state after a machine reboot. For an archival Redis
+snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
+
+Each web interface stays connected to the Redis port and output directory of
+the Slips process that launched it. Concurrent runs can each use `-w` with
+separate web ports and writable directories, as in the PCAP example above.
+Open each run's own URL; one page does not combine or switch between runs.
 
 Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
 
@@ -249,6 +605,9 @@ Enable the run-specific local interface with `-w`:
 ```
 
 Then open `http://localhost:55000/`. You can also enable it with `web_interface.enabled: true` in `config/slips.yaml` and change `web_interface.port`.
+Use `-w --web-port 55002` to select a different port for one run without
+changing that file. The flag accepts 1–65535 and overrides the configured port.
+It does not enable the page by itself: use `-w` or `web_interface.enabled: true`.
 
 The interface is read-only, binds only to `127.0.0.1`, and shows exactly the run that launched it. It is not a receiver for remote Slips systems and is not a multi-instance database selector. It reads this run's Redis database, `output/<run>/databases/flows.sqlite`, `output/<run>/error.log`, and current process metrics. Its own operational log is `output/<run>/web_interface/server.log`.
 
@@ -268,34 +627,77 @@ Your .rdb saved database will be stored in the default output dir.
 
 Note: If you try to save the same file twice using ```-s``` the old backup will be overwritten.
 
-You can load it again using ```-d```, For example:
+To reopen the modern webpage, keep the saved database inside its output
+folder and use `--view` as shown below. The legacy `-d` loader does not
+start this webpage.
 
-```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb```
+### Reopen a saved run's webpage
 
-The local interface does not upload, browse, or switch saved Redis databases; loading an `.rdb` remains a separate Slips operation.
+Use `--view` with the original output folder:
 
-Note: saving and loading the database requires **root privileges** and is only supported in linux.
+```bash
+python3 slips.py --view output/pcap-case-18
+```
 
-This feature isn't supported in docker due to problems with redis in docker.
+Slips restores a temporary copy of `databases/dump.rdb`, reads the saved
+`databases/flows.sqlite` and web history, and opens the webpage. It does not
+read the capture again or start Zeek, detection modules, P2P or blocking.
+The original PCAP is not needed. Keep the whole output folder together;
+the Redis snapshot alone does not contain the SQLite flow and evidence data.
 
+The viewer works on macOS and Linux, including native installations inside
+Docker, using the same Python environment as Slips. It needs `redis-server`
+and permission to read and write the output folder; root is not required.
+It starts its own loopback-only Redis instance on an available port,
+including a private cache, so another Slips capture can keep running.
+It refuses to open a folder that is still being analyzed.
 
-_DISCLAIMER_: When saving the database you will see the following
-warning
+The webpage always listens on `127.0.0.1`. Slips prints its URL and viewer
+PID after startup. It reuses the original analysis's web port from its saved
+metadata, including an original `--web-port` override. If that port is occupied,
+the viewer reports an error without replacing its owner or switching ports.
+Use `--web-port` to open the saved results on a different port:
 
-    stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file
+```bash
+python3 slips.py --view output/pcap-case-18 --web-port 55001
+```
 
-This configuration is set by slips so that redis will continue working even if redis
-can't write to dump.rdb.
+`-w`, `-f`, `-i` and `--keep-history` are not needed. `-c config/custom.yaml`
+can select your installation's web password and fallback web port. Only when
+no valid original port was saved does the viewer try that fallback and nearby
+free ports. An explicit `--web-port` always takes precedence. The
+Configuration tab and detection thresholds still come from the saved run's
+metadata. Saved host identities are used when available. A copied or moved
+output folder can be reopened without editing its Redis snapshot.
 
-Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you
-don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and
-the saved database will contain all analyzed flows.
+The header says **Viewing saved results**. Time filters for an old live
+capture use its saved event times rather than today's clock. The viewer
+shows only data retained in that folder; it cannot recover flows already
+deleted by retention. Reviews and other edits in the webpage still update
+the saved SQLite data. The restored Redis copy is discarded when the viewer
+closes.
+
+Ctrl-C stops the foreground viewer and its Redis child. To keep it in the
+background, use the usual `-D` option:
+
+```bash
+python3 slips.py --view output/pcap-case-18 --web-port 55001 -D
+python3 slips.py --list-instances
+python3 slips.py --stop PID
+```
+
+Replace `PID` with the printed viewer PID. `--restart PID` also works for a
+background viewer. The viewer removes its temporary snapshot directory on
+shutdown and records diagnostics in `web_interface/viewer.log`. Remote
+viewing uses your normal SSH tunnel to the printed port.
 
 
 ## Whitelisting
 
-Slips allows you to whitelist some pieces of data in order to avoid its processing.
-In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization.
+Slips whitelist rules can suppress flow processing, evidence and alerts, or
+only firewall blocking and ARP poisoning.
+You can whitelist an IP address, a domain, a MAC address, a supported organization,
+or an exact HTTP request path (`uri`).
 You can choose to whitelist what is going __to__ them, what is coming __from__ them, or both directions.
 You can also choose to whitelist the flows, so they are not processed, or alerts, so
 you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
@@ -306,7 +708,35 @@ request to the DNS server 1.2.3.4 asking for slack.com will still be shown.
 
 This whitelist can be enabled or disabled by changing the ```enable_local_whitelist``` key in `config/slips.yaml`.
 
+When monitoring a live interface, Slips also excludes its own information
+lookup connections from profiling. Python lookup sockets, including update
+checks, are matched by their full source and destination IPs, ports, and
+protocol. The external `whois` command is covered by a ten-second allowance
+for TCP port 43 from the current
+local interface addresses. These automatic exclusions apply only to the
+current Slips run and do not affect imported captures. Redis marks expire
+automatically, including when run history is retained. The database import
+also reads local interface addresses without making a public-IP request;
+public-IP lookups made by running modules use the same socket tracking.
+
 Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
+
+The default file includes destination-specific WHOIS exceptions, for example:
+
+```text
+ip,165.160.32.149:43,dst,alerts
+ip,54.151.0.246:43,dst,alerts
+```
+
+These rules exclude detections for connections to port 43 on those servers;
+their flows remain available. They do not whitelist every destination using
+port 43, or other ports on those IPs. The current default also includes
+`ip,*:43,both,alerts`, which excludes detections whenever either endpoint uses
+port 43, regardless of its IP. To restrict the exception to particular WHOIS
+servers, remove that broader line from your copy and add verified servers in
+the destination-specific form above. Rules apply independently: a narrow rule
+does not cancel an existing broader IP, domain, organization or port rule.
+Adding a rule does not delete historical detections.
 
 Example:
 
@@ -321,7 +751,11 @@ Then set ```local_whitelist_path: config/my_whitelist.conf``` in ```config/my_sl
 ./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
 ```
 
-The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
+Alert suppression checks the attacker and victim of each evidence, including
+their related IPs, DNS resolutions, SNI and CNAMEs. A matching `alerts` or
+`both` rule excludes that evidence from scoring and alerting. Flow suppression
+is separate. A `blocking` rule preserves detections and protects only the
+address targeted by enforcement.
 
 Whitelists now use bloom filters to speed up the process of checking if an IoC is whitelisted or not.
 
@@ -343,7 +777,52 @@ If you whitelist a MAC address, then:
 - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
 
 
+### Blocking Whitelist
+
+To keep flows, evidence and alerts while preventing firewall blocking and ARP
+poisoning, put this rule in your copied whitelist file:
+
+```csv
+ip,192.168.1.128,both,blocking
+```
+
+This mode applies to the IP being blocked, not every host communicating with it.
+Use an individual IPv4 or IPv6 address with `both` directions; ports, subnets,
+other IoC types and evidence types are not supported in `blocking` rules.
+Changes take effect within a few seconds in a running version that supports
+this mode, including removal of existing Slips firewall blocks and cancellation
+of repeated poisoning. Existing alert/flow suppression rules remain independent;
+restart Slips when replacing those rules by editing the file.
+After upgrading to code that introduces this mode, restart Slips once to load
+the new enforcement checks. The web editor's **Blocking only (keep alerts)**
+option writes the same rule into the configured whitelist file.
+
 ### Alerts Whitelist
+
+To suppress one evidence type only when a specific source IP connects to a
+specific **destination port**, add this line to your copied whitelist file:
+
+```csv
+ip,192.168.1.163->*:902,src,alerts,UNKNOWN_PORT
+```
+
+All three conditions must match: the source is `192.168.1.163`, the destination
+port is `902`, and the evidence type is `UNKNOWN_PORT`. `*` means any destination
+IP. The source port can be anything. Other sources, destination ports and evidence
+types remain eligible for alerts. The rule keeps flow processing enabled and
+excludes matching future evidence from alert scoring; it does not remove old
+evidence or alerts. Existing broader whitelist rules still apply independently.
+
+Use `[2001:db8::10]->*:902` for an IPv6 source. The source must be one IP,
+and the destination port must be an integer from 1 to 65535. This syntax requires
+`src,alerts`; ICMP cannot match because it has no ports. Omit the fifth column
+to apply to every evidence type for that source and destination port. The source
+must be recorded directly in the evidence, rather than inferred from a domain.
+
+This differs from `ip,192.168.1.163:902,src,alerts,UNKNOWN_PORT`, which matches
+**source port** 902. Restart Slips once after upgrading to load the new code.
+After that, edits use the normal whitelist refresh; the web editor also supports
+the destination-port condition.
 
 If you whitelist some piece of data not to generate alerts, the process is the following:
 
@@ -358,6 +837,7 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+    - We match organization domains and their subdomains, such as `captive.apple.com` for `apple.com`.
 
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
@@ -391,8 +871,12 @@ Do not edit the default ```config/whitelist.conf``` directly. Copy it, set ```lo
 For example, your copied whitelist file can contain:
 
 
-    "IoCType","IoCValue","Direction","IgnoreType"
+    "IoCType","IoCValue","Direction","IgnoreType","EvidenceType"
     ip,1.2.3.4,both,alerts
+    ip,192.168.1.163:5353,dst,alerts
+    ip,[fe80::1]:5353,dst,alerts
+    ip,192.168.1.10->*:902,src,alerts,UNKNOWN_PORT
+    ip,192.168.1.128,both,blocking
     domain,google.com,src,flows
     domain,apple.com,both,both
     ip,94.23.253.72,both,alerts
@@ -403,22 +887,82 @@ For example, your copied whitelist file can contain:
     organization,google,both,both
     organization,apple,both,both
     organization,twitter,both,both
+    uri,/health,both,flows
 
-The values for each column are the following:
+### Whitelist columns
 
-    Column IoCType
-        - Supported IoCTypes: ip, domain, organization, mac
-    Column IoCValue
-        - Supported organizations: google, microsoft, apple, facebook, twitter.
-    Column Direction
-        - Direction: src, dst or both
-            - Src: Check if the IoCValue is the source
-            - Dst: Check if the IoCValue is the destination
-            - Both: Check if the IoCValue is the source or destination
-    Column IgnoreType
-        - IgnoreType: alerts or flows or both
-            - Ignore alerts: slips reads all the flows, but it just ignores alerting if there is a match.
-            - Ignore flows: the flow will be completely discarded.
+Write one rule per line, with four required columns and an optional fifth:
+
+```text
+IoCType,IoCValue,Direction,IgnoreType,EvidenceType
+```
+
+Use commas between columns and do not quote rule values. Use lowercase names
+for the type, direction and mode. Start explanation lines with `;`; start a
+disabled rule with `#` so Slips removes that matching rule from its whitelist
+cache. Do not put a comment after a rule on the same line.
+
+| Column | What it does and why |
+| --- | --- |
+| `IoCType` | Chooses what to match: `ip`, `domain`, `organization`, `mac` or `uri`. IoC is the item being whitelisted. |
+| `IoCValue` | The actual address, name or request path. For example, `192.168.1.10`, `example.com`, `apple`, `a1:a2:a3:a4:a5:a6` or `/health`. IP values can also include port conditions, described below. |
+| `Direction` | `src` matches the source; `dst` matches the destination; `both` accepts either side. These are the roles in the flow or evidence, regardless of which host profile you opened. An evidence's attacker is not necessarily its source. |
+| `IgnoreType` | Chooses whether to skip flow processing, exclude evidence from scoring and alerts, or prevent enforcement while keeping detections. See the modes below. |
+| `EvidenceType` (optional) | Limits an `ip` rule with mode `alerts` to one detection type, such as `UNKNOWN_PORT` or `ARP_SCAN`. Use the internal name from `EvidenceType` in `slips_files/core/structures/evidence.py`, not a display label such as "Unknown port". Omit it or leave it empty to match all types. Other item types and modes do not support this column. |
+
+The four `IgnoreType` modes have different effects:
+
+| Mode | Effect |
+| --- | --- |
+| `alerts` | Keep processing flows. Exclude matching evidence from host scoring and alert generation. Retained evidence is marked whitelisted/excluded and can be inspected with **Show excluded** in the web. This suppresses the detection's contribution, not just a notification. |
+| `flows` | Skip matching flow records before detection. Those records cannot produce detections. Use `alerts` instead when you still want the flows analyzed. |
+| `both` | Skip matching flows and also exclude matching evidence from scoring and alerts. |
+| `blocking` | Keep flows, evidence, host scores and alerts, but prevent firewall blocking and ARP poisoning of the specified IP. Requires one individual IP, `Direction=both`, and no port or evidence type. It protects that IP, not every host communicating with it. |
+
+Supported values and their limits:
+
+- **IP address:** one IPv4 or IPv6 address. Without a port condition it applies
+  on every port. Subnets and address ranges, such as `192.168.1.0/24`, are not
+  supported.
+- **IP and its own port:** `192.168.1.10:902` or `[2001:db8::10]:902` requires
+  both the address and its port to match on the same side. With `src`, this is
+  the **source port**; with `dst`, it is the **destination port**. With `both`,
+  either endpoint can match, but its IP and port must match together.
+- **Any IP on a port:** `*:902` matches that port on the side selected by
+  `Direction`. These port forms accept a single number from 0 to 65535 without
+  leading zeros. They have no TCP/UDP selector. Use separate lines for additional
+  ports.
+- **Source IP connecting to a destination port:** `192.168.1.10->*:902` matches
+  that source connecting to port 902 on any destination IP, regardless of source
+  port. Use `[2001:db8::10]->*:902` for IPv6. Requires `src,alerts` and a port
+  from 1 to 65535. The evidence must record the source IP and destination port;
+  ICMP cannot match because it has no ports.
+- **Domain:** a domain and its subdomains, without a URL scheme or path. Slips
+  must know the domain's relationship to the host through DNS or protocol data;
+  a missing relationship can prevent a match.
+- **Organization:** one of `google`, `microsoft`, `apple`, `facebook` or `twitter`.
+  Matches known IP ranges, domains and ASNs of that organization; arbitrary
+  organization names are not accepted.
+- **MAC address:** six pairs separated by colons. Slips must have recorded the
+  host's MAC address to match it.
+- **URI:** an exact HTTP request path, including the query string if present,
+  with a maximum of 256 characters and no commas. `/health` does not match
+  `/health?check=1`; this is not a prefix or regular expression. Use `both,flows`
+  or `both,both`. URI matching ignores direction and IP/port, and skips matching
+  request records, not necessarily their parent connections.
+
+For example, this rule keeps flows but excludes only `UNKNOWN_PORT` evidence
+for one source connecting to destination port 902:
+
+```text
+ip,192.168.1.10->*:902,src,alerts,UNKNOWN_PORT
+```
+
+All conditions on that line must match. Other whitelist rules still apply
+independently, so a broader rule can suppress the same traffic regardless of
+this evidence-type restriction. For the same type, value and evidence type,
+the last rule replaces earlier entries even if their directions or modes differ.
+Adding a rule does not delete old evidence or alerts.
 
 ## Popup notifications
 
@@ -426,9 +970,15 @@ Slips Support displaying popup notifications whenever there's an alert.
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.yaml```
 
-This feature is supported in Linux and it requires root privileges.
+On Linux, install `notify-send` (the `libnotify-bin` package on Debian/Ubuntu)
+and run with access to a graphical desktop notification session. Notifications
+do not require root. If Slips runs as root for capture or prevention, it tries
+to send the notification through the logged-in desktop user's session.
 
-This feature is supported in MaOS without root privileges.
+On macOS, Slips uses the built-in `osascript` command without root privileges.
+Allow notifications for **Script Editor** in **System Settings → Notifications**
+and check Focus settings if banners are hidden. Restart Slips after enabling
+`popup_alerts` or updating the notification code.
 
 This feature is not supported in Docker
 
@@ -500,6 +1050,11 @@ update:
 ```
 
 This setting is separate from the runtime ```feeds_update_manager``` module, which only updates TI feeds and related files.
+When a remote TI feed responds with an empty or whitespace-only body, Slips keeps the last valid
+entries for that feed and records the skipped update in `slips.log`. A later
+nonempty version is loaded at the next scheduled check. Invalid individual
+entries are skipped and noted in `slips.log`; they do not stop the rest of a
+valid feed from loading.
 
 Automatic Slips updates may overwrite the default config files shipped with Slips. If you want to keep local config changes safe, do not modify the default config files. Create and use your own config files with different names instead.
 
@@ -683,13 +1238,13 @@ Below is a table showing each level of both.
 
 #### Using errors.log and running.log
 
-Slips also logs all errors to output/errors.log (interactive mode), and /var/log/slips/error.log (daemonized mode)
-whether you're using -e or not.
+Slips logs errors to `errors.log` in the selected output directory in both
+interactive and daemon mode, whether or not `-e` is used.
 See [Daemonized vs interactive](https://stratospherelinuxips.readthedocs.io/en/develop/usage.html#daemonized-vs-interactive-mode)
 for more information about the 2 modes
 
-General slips logs are created in /var/log/slips/running.log in case of daemonized mode and ...#TODO in case of
-interactive mode
+General Slips messages are written to `slips.log` in that directory. The
+`output` configuration section can change these filenames.
 
 ## Reading Input from stdin
 
@@ -766,18 +1321,23 @@ this file can be used for training Slips RNN module.
 - ```-l``` or  ```--createlogfiles``` Create log files with all the traffic info and detections.
 - ```-F``` or  ```--pcapfilter``` Packet filter for Zeek. BPF style.
 - ```-cc``` or  ```--clearcache``` Clear the cache database.
-- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Supported only on Linux.
-- ```-cb``` or  ```--clearblocking``` Flush and delete slipsBlocking iptables chain
+- ```-p``` or  ```--blocking``` Allow Slips to block malicious IPs. Requires root access. Linux uses iptables; macOS uses a dedicated Packet Filter anchor (`com.apple/slips`).
+- ```-cb``` or  ```--clearblocking``` Remove Slips-owned iptables or macOS Packet Filter rules.
 - ```-o``` or  ```--output``` Store alerts.json and alerts.txt in the given folder.
 - ```-s``` or  ```--save``` Save the analysed file db to disk.
 - ```-d``` or  ```--db``` Read an analysed file (rdb) from disk.
 - ```-D``` or  ```--daemon``` Run slips in daemon mode
-- ```-S``` or  ```--stopdaemon``` Stop slips daemon
 - ```-k``` or  ```--killall``` Kill all unused redis servers
+- `--list-instances` List accessible running Slips instances from this checkout.
+- `--stop [PID|all]` Gracefully stop the sole running instance, a selected PID, or all instances from this checkout.
+- `--restart [PID]` Stop a running daemon and start it again with its original arguments and working directory, using the Python environment invoking this command.
 - ```-m``` or  ```--multiinstance``` Run multiple instances of slips, don't overwrite the old one
 - ```-P``` or  ```--port``` The redis-server port to use
+- ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory, or start fresh if no database exists; start with a clean Redis database 0.
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
+- `--web-port PORT` Override `web_interface.port` for this run; use `-w` or enable the web interface in the configuration.
+- `--view OUTPUT_FOLDER` Reopen saved results in the webpage without analyzing traffic again. Supports `--web-port`, `-c` and `-D`.
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
 - ```-ap``` or  ```--access-point``` Used for reading packets from two interfaces when Slips is running as an access point.

@@ -83,11 +83,16 @@ the entropy threshold can be changed in slips.yaml by changing the value of ```e
 
 ### Devices changing IPs
 
-Slips stores the MAC of each new IP it sees in conn.log.
+For a private IPv4 source first seen in conn.log, Slips checks whether its
+unicast MAC was previously associated with a different private IPv4 address.
+If so, it reports "Device changing IPs". Link-local and special addresses are
+excluded.
 
-Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
-
-If so, it alerts "Device changing IPs".
+Public IPs and the capture interface's gateway are excluded from this check.
+For routed traffic, the Ethernet MAC belongs to the local router, not the
+remote IP. Slips must not treat that MAC as proof that a remote host changed
+its address. Public IPs are not saved as device MAC owners; old public entries
+are also ignored by this detector.
 
 
 ## GRE tunnels
@@ -183,15 +188,14 @@ Here's how it works
 
 ## Non-HTTP connections on port 80.
 
-Slips detects established connections on port 80 that are not using SSL
-using zeek's conn.log flows.
-
-if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', it sets and evidence.
-
-If a flow without http as a service is found, slips first checks past and future flows from the
-same src ip + dst ip + port to see if there's a flow with http as a service, if there is, slips ignores the alert.
-This is done to avoid FPs coming from zeek.
+Slips checks established TCP connections to destination port 80 that exchanged
+data but have no recognized HTTP service. A parsed HTTP record linked by the
+same Zeek connection UID also prevents the finding, even if `conn.log` has no
+service label. Unusual HTTP methods can still produce their own evidence.
+Slips checks again after waiting for incoming records and also considers
+recognized HTTP between the same source and destination within five minutes.
+See [Non-HTTP connections on port 80](detection_modules.md#non-http-connections-on-port-80)
+for the matching and waiting rules.
 
 
 ### Connections without DNS resolution
@@ -208,6 +212,12 @@ This detection will ignore certain IP addresses for which a connection without D
 - Multicast IPs
 - Broadcast IPs only if they are private
 - Well known organizations
+- Working DNS servers on UDP or TCP port 53, including connections without
+  Zeek's DNS application label. Configured resolvers and servers observed
+  returning `NOERROR` or `NXDOMAIN` replies are recognized. Other services on
+  the same IP remain subject to this rule. See the
+  [connection-without-DNS exceptions](flow_alerts.md#connections-without-dns-resolution)
+  for timing and memory limits.
 
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips
@@ -276,13 +286,45 @@ These are the cases where Slips marks the port as known and doesn't trigger an a
 Slips considers an IP belongs to an org if:
 
 1. Both `saddr` and `daddr` have the organization's name in their MAC vendor (e.g. Apple.)
-2. Both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv` for that organization.
+2. `daddr` belongs to the range specified in `ports_used_by_specific_orgs.csv` for that organization.
 3. If the SNI, hostname, rDNS, ASN of this IP belong to this organization.
 4. If the IP is hardcoded in any of the organizations IPs in `slips_files/organizations_info/`.
 
 Otherwise, Slips triggers and "unknown port" evidence.
 
-For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
+After a host is detected scanning, Slips suppresses repeated Unknown Port
+findings for its failed connection attempts. Established connections still
+receive the normal known-service checks, even while the scanner flag is
+active. For example, a host scanning TCP 445 and then establishing a TLS
+connection to an unknown TCP 9001 produces separate scan and Unknown Port
+evidence. A scan must not hide other services used by the same host.
+
+
+For live local monitoring, high-numbered UDP traffic from the monitored
+computer to a peer on its current subnet is exempt from this evidence only
+when Zeek records distinct source and destination MACs, neither destination
+MAC is the gateway, and the offline MAC database identifies both vendors as
+Apple. The organization-specific port check also requires both endpoint MAC
+vendors to match when MAC vendor is its only evidence. These checks do not
+establish that devices belong to the same person. Private Wi-Fi addresses can
+prevent vendor identification; when the required MAC evidence is missing,
+Slips keeps the unknown-port detection.
+
+Apple services follow [Apple's documented TCP/UDP ports](https://support.apple.com/en-hk/103229).
+Fixed services include APNs on TCP 5223 and 2197, Remote Desktop and
+Classroom, AirPlay, Bonjour, printing, and device pairing on TCP 62078.
+TCP and UDP are separate entries; knowing TCP 5223 does not exempt UDP 5223.
+
+Broad application ranges (TCP 8000–8999 and 42000–42999, UDP 3478–3497 and
+16384–16472, and TCP/UDP 49152–65535) remain in the organization-specific
+file. They count as known only when the existing Apple identity checks
+match. This keeps arbitrary high ports on other hosts eligible for
+Unknown Port detection. These entries do not whitelist traffic; other
+behavioral and threat-intelligence detections still run.
+
+The feed updater imports changed port files into the shared cache at
+startup. Restart Slips after updating the files to load the new entries.
+Existing evidence is retained.
 
 The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
 
@@ -330,11 +372,11 @@ Check  []() section for more info #todo
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
-To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
-
-Then we alert when there is 10 or more NXDOMAINs.
-
-Every 10,15,20 ..etc slips generates an evidence.
+Slips counts distinct failed DNS names per source IP and time window. Repeated
+lookups and `.lan` search-suffix variants of the same public name count once;
+local service-discovery, reverse, `.local`, and reserved `.invalid` lookups are
+excluded. Evidence starts at 10 distinct failed names and recurs at 15, 20,
+and each additional five distinct names.
 
 ### Connection to multiple ports
 
@@ -498,7 +540,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>https</td>
-    <td>training&test of RandomForest to detect malicious https flows</td>
+    <td>Learns hourly TLS behavior and per-server flow deviations.</td>
     <td>⏳</td>
   </tr>
   <tr>
@@ -601,11 +643,46 @@ This module on runs on pcaps, it uses YARA rules to detect leaks.
 
 You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` and it will be automatically compiled and stored in ```modules/leak_detector/yara_rules/compiled``` and matched against every pcap.
 
+### Service anomaly detection
+
+The optional `anomaly_detection_services` module learns which computers
+normally connect to a service, at what hours, and for how long. It then reports
+newly answering local ports after a host-wide training window, unfamiliar
+clients (including failed attempts), unusual connection hours, and
+unusually short or long completed TCP connections. Slips saves what it learns
+so it can remember normal behavior after a restart, even if old flow records
+have been removed. Settings limit how much it remembers. See
+[Service anomaly detection](service_anomaly_detection.md) for every setting's
+purpose, training requirements, examples, and limits of these checks.
+
 ### Blocking Module
 
 To enable blocking in slips, start slips with the ```-p``` flag.
 
-This feature is only supported in linux using iptables natively and using docker.
+Linux uses iptables, either natively or in a container with the required
+network privileges. Native macOS uses the Slips-owned `com.apple/slips`
+Packet Filter anchor and requires root privileges.
+
+To keep detections while preventing firewall blocking and ARP poisoning, add
+an IP rule to your copied whitelist file (the configured `local_whitelist_path`):
+
+```csv
+ip,192.168.1.138,both,blocking
+```
+
+`blocking` suppresses only enforcement. It preserves flow analysis, evidence,
+scoring and alerts. These rules require an individual IPv4 or IPv6 address,
+`both` directions and no port or evidence type, since enforcement isolates an
+address. Domain, organization, MAC and subnet rules are not supported for this
+mode. Existing `flows`, `alerts` and `both` modes keep their original meaning.
+Other matching suppression rules still apply.
+
+Blocking-only rules are read at startup and checked for file changes at most
+once every two seconds. Adding one also removes existing Slips firewall blocks
+and stops repeated ARP poisoning. Removing one allows future enforcement; it
+does not automatically re-block the host. If replacing an existing rule that
+suppressed flows or alerts by editing the file, restart Slips to refresh those
+existing suppression rules too. The web whitelist editor saves the same syntax.
 
 ### Exporting Alerts Module
 
@@ -872,8 +949,14 @@ The detection techniques are:
 
 #### ARP Scans
 
-Slips considers an IP performing an ARP scan if it sends 5
-or more non-gratuitous ARP to different destination addresses in 30 seconds or less.
+Slips examines bursts of distinct ARP targets using a rolling 30-second window.
+Five targets make a candidate, not an automatic scan. It considers prior
+successful communication by the requesting device and the pattern and size of
+the search. Familiar-neighbour refreshes do not produce scan evidence merely
+because there are many requests. Large ambiguous searches are informational
+`ARP_DISCOVERY` findings, which do not contribute to alerts.
+See [ARP scan detection](arp_scans.md) for the decision rules, persistent history,
+configuration, examples and visibility limitations.
 
 #### ARP to a destination IP outside of local network
 
@@ -1058,15 +1141,12 @@ This avoids generating one port scan alert per flow in a long scan.
 
 #### Horizontal port scans
 
-Slips checks both TCP and UDP connections for horizontal port scans.
-
-Slips considers an IP performing a horizontal port scan if it contacted more than 3
-destination IPs on a specific port with not established connections.
-
-
-Slips reports evidence of a horizontal portscan based on a log scale.
-meaning every 10, 100, 1000 ports scanned will generate an evidence.
-This avoids generating one port scan alert per flow in a long scan.
+Slips checks TCP and UDP probing in bounded fast and slow rolling periods.
+New SYN attempts, short empty connections to open services, small ACK/FIN probes
+and unanswered UDP traffic have separate rules. Closing old connections does not
+count as a new SYN scan. Recent successful use provides temporary reconnection
+context, and ambiguous failures have lower confidence.
+See [Horizontal port scans](horizontal_port_scans.md) for settings and limitations.
 
 
 #### PING Sweeps
@@ -1094,14 +1174,14 @@ The list below contains all connections made by Slips
 useragentstring.com -> For getting user agent info if no info was found in Zeek
 macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
 ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-ipinfo.io/json -> For getting your public IP
+ipinfo.io/json -> For getting your public IP only when the local interface addresses, default route, or gateway MAC change. Slips uses local interface addresses for its own-host checks, so a normal live run does not need to query this service.
 virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs
 cymru.com -> For getting the range of a specific IP to cache the ASN of this range. TXT DNS queries are made to this domain.
 
 
-By default, slips whitelists alerts from or to any of the above domains, witch means that if an alert was detected
-to one of the above alerts, slips does not detect it assuming it's a false positive and the connection was made
-internally by slips.
+During live interface capture, Slips excludes its own Python module connections using the exact source IP, source port, destination IP, destination port, and transport recorded when it opens each socket. It also samples active sockets belonging to its P2P child process, so those connections are excluded in either capture direction. The match lasts for one hour in Redis and is scoped to the current run. This covers IPinfo and other HTTP lookups made by those modules without excluding unrelated applications that happen to contact the same service. The domain rules in the configured local whitelist also suppress alerts about listed service domains, including traffic that cannot be attributed to a Slips socket. They do not exclude those flows from processing.
+
+Per-IP ASN enrichment does not use IPinfo: it checks the local GeoLite database first, then RDAP and ip-api.com if needed. Successful ASN data is reused for 30 days; failed remote lookups are retried after five minutes. IPinfo's datasets are generally updated daily, but the public-IP endpoint reports the current network address, so Slips refreshes it on a detected network change instead of on a data-update timer.
 
 
 You can change this behaviour by copying ```config/whitelist.conf```, updating the copy, and pointing ```whitelists.local_whitelist_path``` in your copied ```slips.yaml``` file to that copied whitelist.

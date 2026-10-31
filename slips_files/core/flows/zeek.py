@@ -101,6 +101,7 @@ class DNS(BaseFlow):
     TTLs: str
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
+    mdns_bindings: List[str] = field(default_factory=list)
 
     answers: List[str] = field(default_factory=list)
     type_: str = field(default="dns")
@@ -110,6 +111,11 @@ class DNS(BaseFlow):
         # so convert to a list
         self.answers = (
             [self.answers] if isinstance(self.answers, str) else self.answers
+        )
+        self.mdns_bindings = (
+            [self.mdns_bindings]
+            if isinstance(self.mdns_bindings, str) and self.mdns_bindings
+            else self.mdns_bindings or []
         )
 
 
@@ -136,13 +142,33 @@ class HTTP(BaseFlow):
     resp_mime_types: str
     resp_fuids: str
 
+    sport: int | str = ""
+    dport: int | str = ""
+    trans_depth: int | str = ""
+    orig_mime_types: list[str] | str = ""
+    orig_fuids: list[str] | str = ""
+    request_content_type: str = ""
+    response_content_type: str = ""
+    request_content_encoding: str = ""
+    response_content_encoding: str = ""
+    request_headers_complete: bool | str = False
+    response_headers_complete: bool | str = False
+
     ground_truth_label: str = ""
     detailed_ground_truth_label: str = ""
 
     type_: str = field(default="http")
 
     def __post_init__(self) -> None:
-        pass
+        """Normalize Zeek TSV's empty-string marker in captured HTTP headers."""
+        for name in (
+            "request_content_type",
+            "response_content_type",
+            "request_content_encoding",
+            "response_content_encoding",
+        ):
+            if getattr(self, name) == "(empty)":
+                setattr(self, name, "")
 
 
 @dataclass(kw_only=True)
@@ -320,6 +346,8 @@ class Notice(BaseFlow):
     def __post_init__(self) -> None:
         # portscan notices don't have id.orig_h or id.resp_h
         # fields, instead they have src and dst
+        if not self.uid:
+            self.uid = utils.generate_uid()
         if not self.saddr:
             self.saddr = self.scanning_ip
 

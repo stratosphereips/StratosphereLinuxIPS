@@ -5,8 +5,11 @@
 
 import contextlib
 import os
+import time
 
 import requests
+
+from modules.feeds_update_manager.feed_status import record_feed_load
 
 from modules.feeds_update_manager.remote_feed_updater_mixin import CHUNK_SIZE
 from slips_files.common.slips_utils import utils
@@ -103,26 +106,41 @@ class WhitelistUpdaterMixin:
 
             self.log("Updating the MAC database.")
             try:
-                self._write_mac_db(response)
+                download_bytes = self._write_mac_db(response)
             except requests.exceptions.RequestException as e:
                 self.log(f"Error downloading the MAC database: {e}")
                 return False
 
-        self._mark_feed_as_updated(self.mac_db_link)
+        self._mark_feed_as_updated(
+            self.mac_db_link,
+            {
+                "downloaded_at": time.time(),
+                "loaded_at": time.time(),
+                "download_bytes": download_bytes,
+            },
+        )
         return True
 
-    def _write_mac_db(self, response) -> None:
+    def _write_mac_db(self, response: requests.Response) -> int:
         """
         Streams the mac db to disk as 1 json per line. It is written to a
         temp file first so a failed download never corrupts the current db.
+
+        Parameters:
+            response: Streamed MAC database response.
+
+        Returns:
+            Downloaded bytes before conversion to one JSON object per line.
         """
         tmp_path = f"{self.path_to_mac_db}.tmp"
+        download_bytes = 0
         try:
             with open(tmp_path, "wb") as mac_db:
                 # a ",{" separator may be split between 2 chunks, so a
                 # trailing "," is held back until the next chunk arrives
                 pending = b""
                 for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    download_bytes += len(chunk)
                     data = pending + chunk
                     pending = b"," if data.endswith(b",") else b""
                     if pending:
@@ -134,6 +152,7 @@ class WhitelistUpdaterMixin:
                     )
                 mac_db.write(pending)
             os.replace(tmp_path, self.path_to_mac_db)
+            return download_bytes
         except Exception:
             with contextlib.suppress(FileNotFoundError):
                 os.remove(tmp_path)
@@ -163,6 +182,13 @@ class WhitelistUpdaterMixin:
             return
 
         self.db.store_tranco_whitelisted_domains(domains)
+        record_feed_load(
+            self.db,
+            "tranco_whitelist",
+            {"allowlisted_domains": len(set(domains))},
+            downloaded_at=time.time(),
+            url=self.online_whitelist,
+        )
 
         self._mark_feed_as_updated("tranco_whitelist")
 

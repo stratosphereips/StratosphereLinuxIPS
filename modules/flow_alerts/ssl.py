@@ -5,6 +5,7 @@ import asyncio
 import json
 from typing import Union, Optional, List
 import re
+from pathlib import Path
 import tldextract
 from slips_files.common.abstracts.iflowalerts_analyzer import (
     IFlowalertsAnalyzer,
@@ -17,8 +18,18 @@ from slips_files.core.flows.zeek import SSL
 
 
 class SSL(IFlowalertsAnalyzer):
-    def init(self):
+    def init(self) -> None:
+        """Load provider domains once for certificate identity checks."""
         self.classifier = FlowClassifier()
+        self.provider_domains: dict[str, tuple[str, ...]] = {}
+        for org in utils.supported_orgs:
+            path = Path("slips_files/organizations_info") / f"{org}_domains"
+            if path.is_file():
+                self.provider_domains[org] = tuple(
+                    line.strip().lower().rstrip(".")
+                    for line in path.read_text().splitlines()
+                    if line.strip() and not line.lstrip().startswith("#")
+                )
 
     def name(self) -> str:
         return "ssl_analyzer"
@@ -92,45 +103,42 @@ class SSL(IFlowalertsAnalyzer):
         if flow.ja3s in malicious_ja3_dict:
             self.set_evidence.malicious_ja3s(twid, flow, malicious_ja3_dict)
 
-    def detect_incompatible_cn(self, twid, flow):
+    def detect_tls_provider_impersonation(self, twid: str, flow: SSL) -> bool:
+        """Flag a provider claim outside its known domains and networks.
+
+        Parameters:
+            twid: Detection time window.
+            flow: TLS record containing the server name and certificate subject.
+
+        Returns:
+            Whether a suspected provider impersonation was recorded.
         """
-        Detects if a certificate claims that it's CN (common name) belongs
-        to an org that the domain doesn't belong to
-        """
-        if not flow.subject:
+        if not (flow.subject and flow.server_name):
             return False
-
-        org_found_in_cn = ""
+        claims = " ".join(
+            re.findall(
+                r"(?:^|(?<!\\),)\s*(?:O|OU)\s*=\s*([^,]+)", flow.subject, re.I
+            )
+        ).lower()
+        domain = flow.server_name.lower().rstrip(".")
         for org in utils.supported_orgs:
-            if org not in flow.subject.lower():
+            if not re.search(rf"\b{re.escape(org)}\b", claims):
                 continue
-
-            # save the org this domain/ip is claiming to belong to,
-            # to use it to set evidence later
-            org_found_in_cn = org
-
-            # check that the ip belongs to that same org
-            if self.whitelist.org_analyzer.is_ip_in_org(flow.daddr, org):
-                return False
-
-            # check that the domain belongs to that same org
-            if (
-                flow.server_name
-                and self.whitelist.org_analyzer.is_domain_in_org(
-                    flow.server_name, org
-                )
+            domains = self.provider_domains.get(org, ())
+            if not domains:
+                continue
+            if any(
+                domain == known or domain.endswith(f".{known}")
+                for known in domains
             ):
                 return False
-
-        if not org_found_in_cn:
-            # the certificate doesn't claim to belong to any of slips known
-            # orgs
-            return False
-
-        # found one of our supported orgs in the cn but
-        # it doesn't belong to any of this org's
-        # domains or ips
-        self.set_evidence.incompatible_cn(twid, flow, org_found_in_cn)
+            if self.whitelist.org_analyzer.is_ip_in_org(flow.daddr, org):
+                return False
+            if self.whitelist.org_analyzer.is_domain_in_org(domain, org):
+                return False
+            self.set_evidence.tls_provider_impersonation(twid, flow, org)
+            return True
+        return False
 
     async def wait_for_new_flows_or_timeout(self, timeout: float):
         """
@@ -269,6 +277,6 @@ class SSL(IFlowalertsAnalyzer):
             )
             self.check_self_signed_certs(twid, flow)
             self.detect_malicious_ja3(twid, flow)
-            self.detect_incompatible_cn(twid, flow)
+            self.detect_tls_provider_impersonation(twid, flow)
             self.detect_doh(twid, flow)
             self.detect_cn_url_mismatch(twid, flow)

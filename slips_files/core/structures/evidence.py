@@ -5,6 +5,7 @@ Contains evidence dataclass that is used in slips
 """
 
 import ipaddress
+import re
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from pprint import pformat
@@ -13,11 +14,11 @@ from typing import (
     List,
     Optional,
     Dict,
+    Any,
 )
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.risk_weights import RiskWeight
-
 
 # IMPORTANT: remember to update dict_to_evidence() function based on the
 # field you add to the evidence class, or any class used by the evidence
@@ -48,6 +49,7 @@ class EvidenceType(Enum):
     """
 
     ARP_SCAN = auto()
+    ARP_DISCOVERY = auto()
     ARP_OUTSIDE_LOCALNET = auto()
     UNSOLICITED_ARP = auto()
     MITM_ARP_ATTACK = auto()
@@ -58,7 +60,8 @@ class EvidenceType(Enum):
     NON_HTTP_PORT_80_CONNECTION = auto()
     NON_SSL_PORT_443_CONNECTION = auto()
     WEIRD_HTTP_METHOD = auto()
-    INCOMPATIBLE_CN = auto()
+    TLS_PROVIDER_IMPERSONATION = auto()
+    INCOMPATIBLE_CN = TLS_PROVIDER_IMPERSONATION
     CN_URL_MISMATCH = auto()
     DGA_NXDOMAINS = auto()
     DNS_WITHOUT_CONNECTION = auto()
@@ -115,6 +118,28 @@ class EvidenceType(Enum):
     THREAT_INTELLIGENCE_MALICIOUS_URL = auto()
     LOGIN = auto()
     TOR_EXIT_NODE = auto()
+    PERIODIC_CONNECTION = auto()
+    SUSPECTED_C2_CHANNEL = auto()
+    HTTP_IP_HOST = auto()
+    HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE = auto()
+    HTTP_BINARY_RESPONSE_AS_HTML = auto()
+
+    SMB_SCAN = auto()
+    SMB_SHARE_SWEEP = auto()
+    SMB_SHARE_PATH_MISMATCH = auto()
+    SMB_SUSPECTED_PROPAGATION = auto()
+    SMB_EXTERNAL_CONNECTION = auto()
+    SMB_LARGE_TRANSFER = auto()
+    SMB_LARGE_FILE = auto()
+    SMB_SUSPICIOUS_TRANSFER = auto()
+    SMB_REMOTE_EXECUTION = auto()
+    SMB_PASSWORD_GUESSING = auto()
+    SMB_PASSWORD_SPRAYING = auto()
+    SMB_RAPID_FILE_CHANGES = auto()
+    SMB_RANSOMWARE_BEHAVIOR = auto()
+    SMB_SHARE_IP_MISMATCH = auto()
+    PERIODIC_PACKETS = auto()
+    SUSPICIOUS_PACKET_HEARTBEAT = auto()
 
     def __str__(self):
         return self.name
@@ -162,6 +187,54 @@ class Proto(Enum):
     TCP = "tcp"
     UDP = "udp"
     ICMP = "icmp"
+    ICMP6 = "icmp6"
+    ICMPV6 = "icmpv6"
+
+
+def is_icmp_protocol(proto: Any) -> bool:
+    """Recognize ICMP transports, including saved names and protocol numbers.
+
+    Parameters:
+        proto: Enum, name or IP protocol number.
+
+    Returns:
+        Whether the transport uses ICMP type/code instead of ports.
+    """
+    return str(getattr(proto, "value", proto)).lower() in {
+        "icmp",
+        "icmp6",
+        "icmpv6",
+        "1",
+        "58",
+    }
+
+
+def normalize_icmp_evidence(record: Dict[str, Any]) -> None:
+    """Separate ICMP type/code from ports and correct legacy port wording.
+
+    Parameters:
+        record: New or saved evidence fields, updated in place.
+    """
+    if not is_icmp_protocol(record.get("proto")):
+        return
+    for target, source in (
+        ("icmp_type", "src_port"),
+        ("icmp_code", "dst_port"),
+    ):
+        if record.get(target) is None:
+            record[target] = record.get(source)
+        record[source] = None
+    record["description"] = re.sub(
+        r"\bon\s+(?:(?:destination|source)\s+)?port\s*:?\s*\d+\s*/\s*icmp(?:v?6)?\b",
+        (
+            "using ICMPv6"
+            if str(getattr(record["proto"], "value", record["proto"])).lower()
+            in {"icmp6", "icmpv6", "58"}
+            else "using ICMP"
+        ),
+        str(record.get("description") or ""),
+        flags=re.IGNORECASE,
+    )
 
 
 @dataclass
@@ -327,6 +400,11 @@ class Evidence:
     evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
     # Canonical name of the module that submitted this evidence.
     source_module: str = field(default="")
+    detection_provenance: dict = field(default_factory=dict)
+    detection_details: dict = field(default_factory=dict)
+    peer_report: dict = field(default_factory=dict)
+    icmp_type: Optional[int] = field(default=None)
+    icmp_code: Optional[int] = field(default=None)
 
     def __post_init__(self):
         if not isinstance(self.uid, list) or not all(
@@ -336,8 +414,34 @@ class Evidence:
         else:
             # remove duplicate uids
             self.uid = list(set(self.uid))
+        if is_icmp_protocol(self.proto):
+            fields = {
+                name: getattr(self, name)
+                for name in (
+                    "proto",
+                    "description",
+                    "src_port",
+                    "dst_port",
+                    "icmp_type",
+                    "icmp_code",
+                )
+            }
+            normalize_icmp_evidence(fields)
+            for name in (
+                "description",
+                "src_port",
+                "dst_port",
+                "icmp_type",
+                "icmp_code",
+            ):
+                setattr(self, name, fields[name])
 
-    def __str__(self):
+    def __str__(self) -> str:
+        transport_fields = (
+            f"  ICMP Type: {self.icmp_type},\n  ICMP Code: {self.icmp_code},\n"
+            if is_icmp_protocol(self.proto)
+            else f"  Destination Port: {self.dst_port},\n  Source Port: {self.src_port},\n"
+        )
         return (
             f"Evidence(\n"
             f"  Evidence Type: {self.evidence_type},\n"
@@ -350,8 +454,7 @@ class Evidence:
             f"  Timestamp: {self.timestamp},\n"
             f"  Victim: {pformat(self.victim)},\n"
             f"  Protocol: {self.proto},\n"
-            f"  Destination Port: {self.dst_port},\n"
-            f"  Source Port: {self.src_port},\n"
+            f"{transport_fields}"
             f"  ID: {self.id},\n"
             f"  Confidence: {self.confidence},\n"
             f"  Risk Level: {self.risk_level},\n"
@@ -401,6 +504,8 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         ),
         "dst_port": evidence["dst_port"] if "dst_port" in evidence else None,
         "src_port": evidence["src_port"] if "src_port" in evidence else None,
+        "icmp_type": evidence.get("icmp_type"),
+        "icmp_code": evidence.get("icmp_code"),
         "id": evidence["id"],
         "rel_id": evidence["rel_id"],
         "confidence": evidence["confidence"],
@@ -412,6 +517,9 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "method": Method[evidence["method"].upper()],
         "evidence_signal": evidence_signal,
         "source_module": str(evidence.get("source_module", "")),
+        "detection_provenance": evidence.get("detection_provenance") or {},
+        "detection_details": evidence.get("detection_details") or {},
+        "peer_report": evidence.get("peer_report") or {},
     }
 
     return Evidence(**evidence_attributes)

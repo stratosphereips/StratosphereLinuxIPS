@@ -7,6 +7,13 @@ Current ML modules:
 - `ml_linear_model`
 - `ml_online_model`
 
+In the web interface their findings are **ML suspicious flow · Linear** and
+**ML suspicious flow · Online**. ML means Machine learning. The linear model
+trains on batches of labeled flows; the online model trains on labeled flows
+one at a time. Both support separate training and testing modes; their names
+do not mean that a detection run automatically retrains them. Configuration
+sections and stored evidence identifiers keep their existing names.
+
 ## Labels used for training
 
 `ml_linear_model` and `ml_online_model` share the same labeling behavior.
@@ -22,6 +29,13 @@ active configuration. Its default is `normal`, so every unlabeled flow is
 trained as Benign. Other values, including `unknown`, are skipped by training.
 The `detailedlabel` field is retained as metadata; it is not the training
 target.
+
+To teach Slips which computers normally connect to a service, when they connect,
+and how long their connections last, see
+[Service anomaly detection](service_anomaly_detection.md). That module learns
+from successful connections without requiring benign labels. It skips learning
+from records explicitly labeled malicious, malware or attack. Its guide explains
+`train`, `auto` and `detect`; the ML training steps below apply to different modules.
 
 ## Reproducible training workflow
 
