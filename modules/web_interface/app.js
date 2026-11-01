@@ -3240,9 +3240,9 @@ function renderEvidenceThreatChips() {
   [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"],
     ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]
     .forEach(([level, label]) => {
-      const count = counts.get(level) || 0;
+      const count = counts.get(level);
       const unit = byId("evidence-view").value === "individual" ? "record" : "group";
-      const button = text("button", level.endsWith("_or_more")
+      const button = text("button", level.endsWith("_or_more") || count === undefined
         ? label : `${label} ${compact(count)} ${unit}${count === 1 ? "" : "s"}`, "evidence-chip");
       button.type = "button";
       button.dataset.level = level;
@@ -3276,7 +3276,6 @@ function renderEvidenceGroupControls() {
       button.addEventListener("click", () => {
         if (mode === value) return;
         byId("evidence-view").value = value;
-        byId("evidence-threat").value = "";
         state.evidenceWorkspace.threatCounts = null;
         clearEvidenceSelection();
         renderEvidenceGroupControls();

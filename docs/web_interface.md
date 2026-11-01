@@ -1149,6 +1149,8 @@ evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN`.
 Evidence threat chips offer **All**, **Critical+**, **High+**, **Medium+**,
 **Low+**, and **Info+**. Each `+` includes that level and all more severe levels.
 Previously saved exact-level selections use the corresponding `+` filter.
+Changing between **Device + type**, **Type**, **Device**, and **None** preserves
+the selected threat filter; changing the threat filter preserves the grouping.
 
 ### Host score history
 

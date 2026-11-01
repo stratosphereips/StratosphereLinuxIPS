@@ -4647,6 +4647,29 @@ def test_seven_day_network_history_and_group_counts_in_browser(
             }""")
             assert page.locator('#evidence-threat-chips button[data-level=""]').inner_text() == "All 4 records"
             assert page.locator("#evidence-table tbody tr").count() == 4
+            for level in ("low_or_more", "critical_or_more", "high_or_more",
+                          "medium_or_more", "info_or_more", ""):
+                chip = page.locator(f'#evidence-threat-chips button[data-level="{level}"]')
+                with page.expect_response(lambda response: urlparse(response.url).path == "/api/evidence"):
+                    chip.click()
+                page.wait_for_function("!state.requests.has('evidence')")
+                for mode, label, group in (
+                    ("grouped", "Host + type", "host_type"),
+                    ("type", "Type", "type"),
+                    ("host", "Host", "host"),
+                    ("individual", "None", None),
+                ):
+                    with page.expect_response(lambda response: urlparse(response.url).path == "/api/evidence"):
+                        page.locator("#evidence-group-controls").get_by_role("button", name=label, exact=True).click()
+                    page.wait_for_function("!state.requests.has('evidence')")
+                    assert page.locator("#evidence-threat").input_value() == level
+                    assert chip.get_attribute("aria-pressed") == "true"
+                    assert page.locator("#evidence-view").input_value() == mode
+                    assert queries[-1].get("threat") == ([level] if level else None)
+                    assert queries[-1].get("group") == ([group] if group else None)
+                    assert queries[-1]["range"] == ["7d"]
+                    assert queries[-1]["network"] == ["current"]
+                    assert "All 0" not in page.locator('#evidence-threat-chips button[data-level=""]').inner_text()
             assert not errors, errors
         finally:
             browser.close()
