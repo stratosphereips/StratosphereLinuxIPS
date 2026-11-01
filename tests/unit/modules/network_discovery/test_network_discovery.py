@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import pytest
+from dataclasses import replace
 from unittest.mock import (
     Mock,
 )
@@ -14,88 +15,22 @@ from slips_files.core.structures.evidence import (
 from tests.module_factory import ModuleFactory
 
 
-@pytest.mark.parametrize(
-    "flow_info, existing_dhcp_flows, "
-    "expected_set_dhcp_flow_calls, "
-    "expected_get_dhcp_flows_calls",
-    [
-        # Testcase 1: First DHCP request in timewindow
-        (
-            {
-                "flow": DHCP(
-                    starttime="1726676568.14378",
-                    uids=["1234"],
-                    client_addr="",
-                    server_addr="",
-                    host_name="",
-                    smac="",
-                    requested_addr="192.168.1.100",
-                ),
-                "twid": "timewindow5",
-            },
-            {},
-            1,
-            1,
-        ),
-        # Testcase 2: Multiple DHCP requests,
-        # but not enough to trigger evidence
-        (
-            {
-                "flow": DHCP(
-                    starttime="1726676568.14378",
-                    uids=["1234"],
-                    client_addr="192.168.1.2",
-                    server_addr="",
-                    host_name="",
-                    smac="",
-                    requested_addr="192.168.1.101",
-                ),
-                "twid": "timewindow5",
-            },
-            {
-                "192.168.1.100": ["uid1234", "uid2345"],
-                "192.168.1.102": ["uid3456", "uid4567"],
-            },
-            1,
-            2,
-        ),
-    ],
-)
-def test_check_dhcp_scan_no_evidence(
-    flow_info,
-    existing_dhcp_flows,
-    expected_set_dhcp_flow_calls,
-    expected_get_dhcp_flows_calls,
-):
-    network_discovery = ModuleFactory().create_network_discovery_obj()
-    network_discovery.minimum_requested_addrs = 4
+@pytest.mark.parametrize("count", [1, 3])
+def test_check_dhcp_scan_no_evidence(count: int) -> None:
+    """Small DHCP request sets stay local and below the evidence threshold.
 
-    network_discovery.db.get_dhcp_requested_addrs = Mock()
-    network_discovery.db.get_dhcp_requested_addrs.return_value = (
-        existing_dhcp_flows
-    )
-    network_discovery.db.add_dhcp_requested_addr = Mock()
-    network_discovery.db.set_evidence = Mock()
-    profileid = flow_info["flow"].saddr
-    network_discovery.check_dhcp_scan(
-        profileid, flow_info["twid"], flow_info["flow"]
-    )
+    Parameters:
+        count: Number of distinct requested addresses below the threshold.
+    """
+    module = ModuleFactory().create_network_discovery_obj()
+    for i in range(count):
+        flow = DHCP(starttime=1000+i, uids=[f"dhcp-{i}"], client_addr="192.0.2.1", server_addr="", host_name="", smac="02:00:00:00:00:01", requested_addr=f"192.0.2.{i+2}")
+        module.check_dhcp_scan("profile_192.0.2.1", "timewindow1", flow)
+    module.db.get_dhcp_requested_addrs.assert_not_called()
+    module.db.add_dhcp_requested_addr.assert_not_called()
+    module.db.set_evidence.assert_not_called()
+    assert len(next(iter(module.dhcp_groups.values())).addresses) == count
 
-    assert (
-        network_discovery.db.get_dhcp_requested_addrs.call_count
-        == expected_get_dhcp_flows_calls
-    )
-    assert (
-        network_discovery.db.add_dhcp_requested_addr.call_count
-        == expected_set_dhcp_flow_calls
-    )
-    assert network_discovery.db.set_evidence.call_count == 0
-
-    network_discovery.db.add_dhcp_requested_addr.assert_called_with(
-        profileid,
-        flow_info["twid"],
-        flow_info["flow"].requested_addr,
-    )
 
 
 def test_check_dhcp_scan_with_evidence():
@@ -127,16 +62,12 @@ def test_check_dhcp_scan_with_evidence():
     network_discovery.db.add_dhcp_requested_addr = Mock()
     network_discovery.db.set_evidence = Mock()
     profileid = f"profile_{flow.saddr}"
+    for address, uids in existing_dhcp_flows.items():
+        network_discovery.check_dhcp_scan(profileid, twid, replace(flow, requested_addr=address, uids=uids))
     network_discovery.check_dhcp_scan(profileid, twid, flow)
-
-    assert network_discovery.db.get_dhcp_requested_addrs.call_count == 2
-    assert network_discovery.db.add_dhcp_requested_addr.call_count == 1
+    network_discovery.db.get_dhcp_requested_addrs.assert_not_called()
+    network_discovery.db.add_dhcp_requested_addr.assert_not_called()
     assert network_discovery.db.set_evidence.call_count == 1
-    network_discovery.db.add_dhcp_requested_addr.assert_called_with(
-        profileid,
-        twid,
-        flow.requested_addr,
-    )
 
     called_evidence = network_discovery.db.set_evidence.call_args[0][0]
     assert called_evidence.evidence_type == EvidenceType.DHCP_SCAN
@@ -145,7 +76,7 @@ def test_check_dhcp_scan_with_evidence():
     assert called_evidence.timewindow.number == int(
         twid.replace("timewindow", "")
     )
-    assert set(called_evidence.uid) == set()
+    assert set(called_evidence.uid) == {uids[0] for uids in existing_dhcp_flows.values()}
     assert called_evidence.timestamp == flow.starttime
 
 

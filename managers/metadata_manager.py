@@ -6,6 +6,7 @@ import sys
 import os
 import shutil
 import json
+import yaml
 from typing import (
     Tuple,
     Set,
@@ -46,10 +47,28 @@ class MetadataManager:
 
         config_file = self.main.args.config or "config/slips.yaml"
         shutil.copy(config_file, metadata_dir)
+        if getattr(self.main.conf, "isolated_analysis", False) is True:
+            captured_config = os.path.join(
+                metadata_dir, os.path.basename(config_file)
+            )
+            with open(captured_config, "w", encoding="utf-8") as target:
+                yaml.safe_dump(self.main.conf.config, target, sort_keys=False)
+        if isinstance(getattr(self.main.args, "web_port", None), int):
+            captured_config = os.path.join(
+                metadata_dir, os.path.basename(config_file)
+            )
+            with open(captured_config, encoding="utf-8") as source:
+                config = yaml.safe_load(source) or {}
+            web_settings = config.get("web_interface") or {}
+            web_settings["port"] = self.main.conf.web_interface_port
+            config["web_interface"] = web_settings
+            with open(captured_config, "w", encoding="utf-8") as target:
+                yaml.safe_dump(config, target, sort_keys=False)
 
         # Add a copy of whitelist.conf
         whitelist = self.main.conf.local_whitelist_path()
-        shutil.copy(whitelist, metadata_dir)
+        if os.path.isfile(whitelist):
+            shutil.copy(whitelist, metadata_dir)
 
         now = utils.get_human_readable_datetime()
 

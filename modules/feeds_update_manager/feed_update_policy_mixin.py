@@ -10,6 +10,8 @@ from typing import Dict, List
 
 import requests
 
+from modules.feeds_update_manager.feed_status import record_feed_status
+
 
 class FeedUpdatePolicyMixin:
     """Decide whether cached feeds need refreshing."""
@@ -57,6 +59,13 @@ class FeedUpdatePolicyMixin:
                 )
 
         if error:
+            record_feed_status(
+                self.db,
+                file_to_download,
+                checked_at=time.time(),
+                status="error",
+                error=error,
+            )
             self.print(f"Warning: {error}", 1, 0)
             return False
 
@@ -78,7 +87,9 @@ class FeedUpdatePolicyMixin:
         last_update = ti_file_info.get("time", float("-inf"))
         return last_update + period <= time.time()
 
-    def _mark_feed_as_updated(self, feed, extra_info: dict = {}):
+    def _mark_feed_as_updated(
+        self, feed: str, extra_info: dict | None = None
+    ) -> None:
         """
         sets the time we're done updating the feed in the db and increases
         the number of loaded ti feeds
@@ -91,8 +102,17 @@ class FeedUpdatePolicyMixin:
         # update the time we last checked this file for update
         self.db.set_feed_last_update_time(feed, now)
 
-        extra_info.update({"time": now})
-        self.db.set_ti_feed_info(feed, extra_info)
+        record_feed_status(
+            self.db,
+            feed,
+            **{
+                **(extra_info or {}),
+                "time": now,
+                "checked_at": now,
+                "status": "ready",
+                "error": "",
+            },
+        )
 
         self.loaded_ti_files += 1
 
@@ -201,6 +221,7 @@ class FeedUpdatePolicyMixin:
             list(self.url_feeds.keys())
             + list(self.ja3_feeds)
             + list(self.ssl_feeds)
+            + list(self.tor_nodes_feeds)
             + [self.mac_db_link]
         )
         for feed in cached_remote_feeds:

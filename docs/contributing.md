@@ -62,6 +62,14 @@ Here's a very simple beginner-level steps on how to create your PR in Slips
 11. Open a PR in Slips, remember to set the base branch as develop.
 12. List your changes in the PR description
 
+## Writing evidence descriptions
+
+State what was observed: the hosts, actions, counts, timing and the reason the
+detector reported it. Keep the text short. For example: "Established SMB session
+192.168.1.10 → 192.168.1.20: client sent 5,410,965 bytes and received 50,910 bytes."
+Keep detector limitations and possible benign explanations in the module's
+documentation instead of repeating them in each evidence description.
+
 ## How to test the auto update functionality
 
 To test Slips auto update using the `testing` channel, follow these steps:
@@ -160,11 +168,13 @@ The goal of suppressing errors by default is the most errors should be handled b
 - The point above means that for each function you add to Redis or SQLite, you need to add a wrapper for it in the database_manager.py to be accessible to all modules.
 
 ### How does Redis communication work?
-- If you run slips without any special arguments, Slips starts redis cache db ( redis server port 6379 db 1) and Redis main db (redis port 6379 db 1)
-- You can start Slips with -m, which starts redis on a random available redis port in the range (32768 to 10000), or -P if you want to start redis on a specific port.
+- If you run Slips without special arguments, its main run state uses Redis port 6379 logical database 0. The shared cache uses port 6379 logical database 1. One Redis server can therefore hold both logical databases.
+- You can start Slips with `-m`, which puts its main database 0 on an available port in the range 32768 to 32850, or `-P` to choose a port. Every instance still connects to the shared cache on port 6379 database 1.
 - Slips starts the redis server if it's not started by default.
 - Slips uses its own redis.conf, it doesn't use the default one. you can find it in config/redis.conf.template.
-- The cache db is shared among all running slips instances, and is persistent, meaning it is not deleted on each run unlike the main redis db (redis port 6379 db 1), which is overwritten every run.
+- Each Slips-started Redis server writes its PID (process number) to `output_dir/redis/redis-server-port-<port>.pid`, beside its generated configuration and log. This avoids Redis's default system PID path, which an ordinary macOS or Linux user may not be allowed to write. The installer uses `permanent/redis-server-port-6379.pid` for the shared cache it starts. PID files identify processes; they do not contain database contents. Redis removes its PID file on a clean shutdown. A pre-existing Redis server keeps its startup PID configuration until it is restarted; Slips does not restart it just to change that path.
+- `ModuleFactory.create_db_manager_obj()` refuses a Redis instance whose `analysis.output_dir` identifies a Slips run. Use an isolated Redis server for database mutation tests. The PID startup integration test allocates separate high ports and stops only the servers it starts.
+- The cache is shared among all running instances and is not flushed on a normal startup. The main Redis database 0 is normally flushed for a new run. Durable flows, alerts, and evidence are also stored in `output_dir/databases/flows.sqlite`; `--keep-history` preserves that output database across live-interface restarts while still clearing stale Redis run state.
 - If you're gonna add a new redis channel to slips, remember to add it to the list of supported_channels in slips_files/core/database/redis_db/database.py
 
 

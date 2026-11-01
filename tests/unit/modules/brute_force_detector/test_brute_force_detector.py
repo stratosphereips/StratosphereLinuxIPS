@@ -159,6 +159,20 @@ def test_notice_confirmation_emits_zeek_evidence_and_confirms_future_alerts():
     assert "Confirmed by Zeek notice.log." in confirmed_evidence.description
 
 
+def test_notice_without_zeek_uid_keeps_a_retrievable_record() -> None:
+    """Assign a stable link to notices lacking a Zeek connection UID."""
+    brute_force_detector = ModuleFactory().create_brute_force_detector_obj()
+    notice = make_notice_flow()
+    notice.uid = ""
+    notice.__post_init__()
+
+    brute_force_detector._handle_notice(PROFILEID, TWID, notice)
+
+    assert notice.uid
+    evidence = brute_force_detector.db.set_evidence.call_args[0][0]
+    assert evidence.uid == [notice.uid]
+
+
 def test_repeated_ssh_sessions_without_auth_attempts_still_trigger_detection():
     brute_force_detector = ModuleFactory().create_brute_force_detector_obj()
     brute_force_detector.db.get_port_info.return_value = "SSH"

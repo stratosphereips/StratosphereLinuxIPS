@@ -28,7 +28,8 @@ class Argus(IInputType):
         # make sure we have a map of each field and its' index
         if not hasattr(self, "column_idx"):
             self.define_columns(new_line)
-            return False, "Defined Columns"
+            if not self.from_stdin:
+                return False, "Defined Columns"
 
         line = new_line["data"]
         nline = line.strip().split(self.separator)

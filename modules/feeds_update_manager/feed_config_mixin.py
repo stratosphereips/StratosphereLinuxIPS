@@ -8,6 +8,7 @@ from typing import Dict
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from modules.feeds_update_manager.feed_status import record_feed_status
 
 
 class FeedConfigMixin:
@@ -70,6 +71,41 @@ class FeedConfigMixin:
         self.online_whitelist = conf.online_whitelist()
         self.enable_online_whitelist: bool = conf.enable_online_whitelist()
         self.enable_local_whitelist: bool = conf.enable_local_whitelist()
+
+    def _register_feed_sources(self) -> None:
+        """Record configured sources inside the feed worker before updating."""
+        sources = [
+            (self.url_feeds, "IP / domain", self.update_period),
+            (self.ja3_feeds, "JA3", self.update_period),
+            (self.ssl_feeds, "TLS certificate", self.update_period),
+            (self.tor_nodes_feeds, "Tor exits", self.update_period),
+            ({self.mac_db_link: {}}, "MAC vendors", self.mac_db_update_period),
+        ]
+        if self.enable_online_whitelist:
+            sources.append(
+                (
+                    {"tranco_whitelist": {"url": self.online_whitelist}},
+                    "Domain allowlist",
+                    self.online_whitelist_update_period,
+                )
+            )
+        if self.riskiq_email and self.riskiq_key:
+            sources.append(
+                (
+                    {"riskiq_domains": {}},
+                    "IP / domain",
+                    self.riskiq_update_period,
+                )
+            )
+        for feeds, kind, period in sources:
+            for source, settings in feeds.items():
+                record_feed_status(
+                    self.db,
+                    source,
+                    kind=kind,
+                    update_period=period,
+                    **settings,
+                )
 
     def get_feed_details(self, feeds_path) -> Dict[str, Dict[str, str]]:
         """

@@ -89,6 +89,35 @@ def test_check_if_time_to_del_rotated_files_deletes_ready_files(
     assert input_process.zeek_utils.rotated_files_to_delete == []
 
 
+@pytest.mark.parametrize("now,expected_deleted", [(50.0, []), (150.0, ["older.log"])])
+def test_rotated_cleanup_keeps_future_deadlines_and_deletes_oldest_first(
+    now: float, expected_deleted: list[str],
+) -> None:
+    """Remember pending deletions while newer rotated files arrive.
+
+    Parameters:
+        now: Time before all deadlines or between the two deadlines.
+        expected_deleted: Rotated files whose retention has expired.
+    """
+    input_process = ModuleFactory().create_input_obj("", InputType.ZEEK_LOG_FILE)
+    cleanup = input_process.zeek_utils
+    cleanup.rotated_files_to_delete = [("older.log", 100.0), ("newer.log", 200.0)]
+    with patch("time.time", return_value=now), patch("os.remove") as remove:
+        cleanup.check_if_time_to_del_rotated_files()
+        cleanup.check_if_time_to_del_rotated_files()
+    assert [call.args[0] for call in remove.call_args_list] == expected_deleted
+    assert cleanup.rotated_files_to_delete == [
+        item for item in [("older.log", 100.0), ("newer.log", 200.0)]
+        if item[0] not in expected_deleted
+    ]
+    with patch("time.time", return_value=250.0), patch("os.remove") as remove:
+        cleanup.check_if_time_to_del_rotated_files()
+    assert cleanup.rotated_files_to_delete == []
+    assert [call.args[0] for call in remove.call_args_list] == [
+        name for name in ["older.log", "newer.log"] if name not in expected_deleted
+    ]
+
+
 def test_process_rotation_message_deletes_unsupported_files_immediately():
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
@@ -105,4 +134,24 @@ def test_process_rotation_message_deletes_unsupported_files_immediately():
         )
 
     mock_remove.assert_called_once_with(old_file)
+    assert input_process.zeek_utils.rotated_files_to_delete == []
+
+
+def test_process_rotation_message_never_deletes_whitelist():
+    input_process = ModuleFactory().create_input_obj(
+        "", InputType.ZEEK_LOG_FILE
+    )
+    remover = ZeekFileRemover(input_process, input_process.zeek_utils)
+
+    with patch(
+        "slips_files.core.input.zeek.utils.zeek_file_remover.os.remove"
+    ) as mock_remove:
+        remover.process_rotation_message(
+            {
+                "old_file": "config/sebas-whitelist.conf",
+                "new_file": "config/tmp123.conf",
+            }
+        )
+
+    mock_remove.assert_not_called()
     assert input_process.zeek_utils.rotated_files_to_delete == []

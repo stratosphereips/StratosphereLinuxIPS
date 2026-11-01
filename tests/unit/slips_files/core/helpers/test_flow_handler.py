@@ -36,8 +36,11 @@ def test_handle_ftp():
 
 
 def test_handle_http():
+    """Store the HTTP record before publishing it to other processes."""
+    factory = ModuleFactory()
     flow = Mock()
-    flow_handler = ModuleFactory().create_flow_handler_obj(flow)
+    flow_handler = factory.create_flow_handler_obj(flow)
+    flow_handler.db.reset_mock()
     flow_handler.handle_http()
 
     flow_handler.db.add_out_http.assert_called_with(
@@ -46,6 +49,10 @@ def test_handle_http():
     flow_handler.db.add_altflow.assert_called_with(
         flow, flow_handler.profileid, flow_handler.twid, "benign"
     )
+    assert flow_handler.db.mock_calls == [
+        call.add_altflow(flow, flow_handler.profileid, flow_handler.twid, "benign"),
+        call.add_out_http(flow_handler.profileid, flow_handler.twid, flow),
+    ]
 
 
 # testing handle_ssl

@@ -5,7 +5,6 @@ import datetime
 import json
 import os
 import shlex
-import signal
 import subprocess
 import threading
 import time
@@ -15,8 +14,10 @@ from re import split
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from slips_files.common.slips_utils import utils
+from modules.supported_module_names import Modules
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
+from managers.process_manager.owned_processes import OwnedProcesses
 
 
 class ZeekInputUtils:
@@ -31,6 +32,7 @@ class ZeekInputUtils:
         self.zeek_files: Dict[str, str] = {}
         self.zeek_threads: List[threading.Thread] = []
         self.zeek_pids: List[int] = []
+        self.zeek_processes = OwnedProcesses()
         # is set by zeek_input_utils if slips is live updating and
         # requesting to stop the zeek proc.
         self.zeek_shutdown_requested = False
@@ -49,18 +51,19 @@ class ZeekInputUtils:
         self.next_zeek_files_refresh = 0.0
 
     def check_if_time_to_del_rotated_files(self) -> bool:
-        """
-        After a specific period (keep_rotated_files_for), slips deletes all rotated files
-        Check if it's time to do so
+        """Delete expired rotated files, retaining future deadlines in FIFO order.
+
+        Returns:
+            Whether any scheduled file was removed or already absent.
         """
         if not self.rotated_files_to_delete:
             return False
 
         now = time.time()
+        removed = False
         while self.rotated_files_to_delete:
-            file, delete_after = self.rotated_files_to_delete.pop()
+            file, delete_after = self.rotated_files_to_delete[0]
             if now < delete_after:
-                # not time to del it yet
                 break
 
             try:
@@ -71,6 +74,9 @@ class ZeekInputUtils:
                 )
             except FileNotFoundError:
                 pass
+            self.rotated_files_to_delete.pop(0)
+            removed = True
+        return removed
 
     def schedule_rotated_file_deletion(
         self, file_path: str, rotated_at: Optional[float] = None
@@ -565,6 +571,37 @@ class ZeekInputUtils:
         )
 
         cmd = builder.build(pcap_or_interface, tcpdump_filter=tcpdump_filter)
+        packet_options = self.input.conf.read_configuration(
+            Modules.BEACONING.value, "packet_timing", {}
+        )
+        if (
+            isinstance(packet_options, dict)
+            and packet_options.get("enabled") is True
+            and self.input.conf.beaconing_enabled()
+            and Modules.BEACONING.value
+            not in self.input.conf.read_configuration("modules", "disable", [])
+        ):
+            from modules.beaconing.settings import PacketTimingSettings
+
+            packet_settings = PacketTimingSettings.from_config(self.input.conf)
+            cmd.extend(
+                [
+                    os.path.join(
+                        os.getcwd(), "zeek-scripts", "packet-timing.zeek"
+                    ),
+                    "-e",
+                    packet_settings.zeek_overrides(),
+                ]
+            )
+        smb_enabled = self.input.conf.read_configuration(
+            Modules.SMB_ANALYZER.value, "enabled", True
+        )
+        for option in ("log_file_operations", "log_authentication_failures"):
+            enabled = self.input.conf.read_configuration(
+                Modules.SMB_ANALYZER.value, option, True
+            )
+            if smb_enabled is False or enabled is False:
+                cmd.extend(["-e", f"redef SMB::slips_{option}=F;"])
         return cmd
 
     def run_zeek(
@@ -720,6 +757,7 @@ class ZeekInputUtils:
         )
         # you have to get the pid before communicate()
         self.zeek_pids.append(zeek.pid)
+        self.zeek_processes.remember(zeek.pid)
         return zeek
 
     def _did_zeek_stop_bc_slips_asked_it_to(
@@ -800,18 +838,14 @@ class ZeekInputUtils:
         self.input.db.publish_stop()
 
     def shutdown_zeek_runtime(self) -> None:
+        """Flush and stop this input's Zeek processes, then join monitors."""
         self.zeek_shutdown_requested = True
+        self.zeek_processes.stop(grace_seconds=2)
         try:
             for zeek_thread in self.zeek_threads:
                 zeek_thread.join(3)
         except Exception:
             pass
-
-        for pid in self.zeek_pids:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except Exception:
-                pass
 
     def is_zeek_tabs_file(self, filepath: str) -> bool:
         """

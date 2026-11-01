@@ -25,7 +25,7 @@ from watchdog.events import RegexMatchingEventHandler
 
 
 class FileEventHandler(RegexMatchingEventHandler):
-    REGEX = [r".*\.log$", r".*\.conf$"]
+    REGEX = [r".*\.log$"]
 
     def __init__(self, dir_to_monitor, db, pcap_or_interface):
         super().__init__(regexes=self.REGEX)
@@ -40,10 +40,23 @@ class FileEventHandler(RegexMatchingEventHandler):
         if "log" in ext:
             self.db.add_zeek_file(filename + ext, self.pcap_or_interface)
 
-    def on_moved(self, event):
+    def on_moved(self, event) -> None:
         """
-        this will be triggered everytime zeek renames all log files
+        Publish rotations only for Zeek logs under the monitored directory.
+
+        Parameters:
+            event: Watchdog file move event.
         """
+        source = os.path.abspath(event.src_path)
+        destination = os.path.abspath(event.dest_path)
+        zeek_dir = os.path.abspath(self.dir_to_monitor)
+        if (
+            not source.endswith(".log")
+            or not destination.endswith(".log")
+            or os.path.commonpath((zeek_dir, source)) != zeek_dir
+            or os.path.commonpath((zeek_dir, destination)) != zeek_dir
+        ):
+            return
         # tell input.py to change open handles
         if event.dest_path != "True":
             to_send = {"old_file": event.dest_path, "new_file": event.src_path}

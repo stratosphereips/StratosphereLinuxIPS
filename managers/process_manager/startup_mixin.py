@@ -3,6 +3,12 @@
 # StartupMixin groups construction and startup of core processes and shared
 # runtime helpers used by ProcessManager.
 import threading
+import os
+import sys
+from multiprocessing import util
+from multiprocessing.synchronize import SemLock
+from multiprocessing import Process
+from multiprocessing.reduction import DupFd
 from typing import Optional
 
 from managers.update_manager import UpdateManager
@@ -21,11 +27,19 @@ from slips_files.core.profiler import Profiler
 class StartupMixin:
     """Provide helpers that construct and start child processes."""
 
+    def adopt_daemon_ipc(self) -> None:
+        """Make the surviving daemon own cleanup of its inherited semaphores."""
+        for finalizer in list(util._finalizer_registry.values()):
+            if finalizer._callback is SemLock._cleanup:
+                finalizer._pid = os.getpid()
+
     def declare_that_slips_is_done_starting_all_children(self) -> None:
         """
         Mark that all required child processes have started.
         """
         self.all_children_started = True
+        if self.main.mode == "daemonized":
+            self.main.daemon.notify_started()
 
     def start_slips_update_manager(self) -> UpdateManager:
         """
@@ -61,20 +75,20 @@ class StartupMixin:
             verbose=self.main.args.verbose or 0,
             debug=self.main.args.debug,
             input_type=self.main.input_type,
-            create_logfiles=False if self.main.args.stopdaemon else True,
+            create_logfiles=True,
             slips_args=self.main.args,
         )
         self.slips_logfile = output_process.slips_logfile
         return output_process
 
-    def start_profiler_process(self) -> Profiler:
+    def start_profiler_process(self) -> Process:
         """
         Start the profiler process.
 
         Returns:
             Started profiler process.
         """
-        profiler_process = Profiler(
+        profiler_process = Profiler.create_process(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -85,6 +99,7 @@ class StartupMixin:
             self.main.bloom_filters_man,
             is_profiler_done_semaphore=self.is_profiler_done_semaphore,
             profiler_queue=self.profiler_queue,
+            aid_queue=self.aid_queue,
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
             is_input_failed_event=self.is_input_failed_event,
@@ -109,14 +124,14 @@ class StartupMixin:
         self.profiler_process = profiler_process
         return profiler_process
 
-    def start_evidence_process(self) -> EvidenceHandler:
+    def start_evidence_process(self) -> Process:
         """
         Start the evidence handler process.
 
         Returns:
             Started evidence handler process.
         """
-        evidence_process = EvidenceHandler(
+        evidence_process = EvidenceHandler.create_process(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -125,6 +140,8 @@ class StartupMixin:
             self.main.conf,
             self.main.pid,
             self.main.bloom_filters_man,
+            evidence_worker_queue=self.evidence_worker_queue,
+            evidence_logger_q=self.evidence_logger_q,
             total_processes_to_start=self.total_processes_to_start,
         )
         evidence_process.start()
@@ -138,14 +155,14 @@ class StartupMixin:
         self.evidence_process = evidence_process
         return evidence_process
 
-    def start_input_process(self) -> Input:
+    def start_input_process(self) -> Process:
         """
         Start the input process.
 
         Returns:
             Started input process.
         """
-        input_process = Input(
+        input_process = Input.create_process(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -161,6 +178,11 @@ class StartupMixin:
             cli_packet_filter=self.main.args.pcapfilter,
             zeek_or_bro=self.main.zeek_bro,
             line_type=self.main.line_type,
+            stdin_descriptor=(
+                DupFd(sys.stdin.fileno())
+                if self.main.input_type == InputType.STDIN
+                else None
+            ),
             is_profiler_done_event=self.is_profiler_done_event,
             is_input_done_event=self.is_input_done_event,
             is_input_failed_event=self.is_input_failed_event,

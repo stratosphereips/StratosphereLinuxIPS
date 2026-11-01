@@ -9,6 +9,9 @@
 # Add SHA256 hash for files
 @load ./hash_sha256
 @load ./log_gw.zeek
+@load ./airplay-info.zeek
+@load ./mdns-identity.zeek
+@load ./http-content-metadata.zeek
 
 ########################################
 ##! Local site policy. Customize as appropriate.
@@ -117,3 +120,4 @@ redef digest_salt = "Please change this value.";
 
 # Uncomment this to source zkg's package state
 # @load packages
+@load ./smb-behavior.zeek

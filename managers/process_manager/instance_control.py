@@ -1,0 +1,494 @@
+"""Find, stop and restart Slips runs without opening their databases."""
+
+import argparse
+import os
+from pathlib import Path
+import re
+import signal
+import subprocess
+import sys
+from dataclasses import dataclass
+
+import psutil
+
+
+@dataclass(frozen=True)
+class RunningInstance:
+    """Identify a main process by PID, creation time and capture arguments."""
+
+    pid: int
+    created: float
+    arguments: tuple[str, ...]
+
+
+def add_instance_arguments(parser: argparse.ArgumentParser) -> None:
+    """Register instance commands in the full and lightweight CLI parsers.
+
+    Parameters:
+        parser: Parser receiving the management options.
+    """
+    commands = parser.add_mutually_exclusive_group()
+    commands.add_argument(
+        "--list-instances",
+        action="store_true",
+        help="List running Slips instances from this checkout without "
+        "starting a capture or connecting to Redis.",
+    )
+    commands.add_argument(
+        "--stop",
+        nargs="?",
+        const="auto",
+        metavar="PID|all",
+        help="Gracefully stop a Slips instance in any mode from this checkout. "
+        "Omit PID when only one is running, or use all to stop every instance.",
+    )
+    commands.add_argument(
+        "--restart",
+        nargs="?",
+        const="auto",
+        metavar="PID",
+        help="Stop a running daemon and relaunch it with its original "
+        "arguments. Omit PID when only one daemon is running. Use the same "
+        "Python environment that started it.",
+    )
+
+
+def script_position(command: list[str]) -> int | None:
+    """Locate the executed Python script, excluding code strings and modules.
+
+    Parameters:
+        command: Process argument vector.
+
+    Returns:
+        Slips script position, or None for a different program.
+    """
+    if not command:
+        return None
+    if Path(command[0]).name == "slips.py":
+        return 0
+    if not re.fullmatch(
+        r"(?:python|pypy)(?:\d+(?:\.\d+)*)?", Path(command[0]).name, re.I
+    ):
+        return None
+    index = 1
+    while index < len(command) and command[index].startswith("-"):
+        flag = command[index]
+        if flag == "--":
+            index += 1
+            break
+        if not (
+            re.fullmatch(r"-[bBdEiIOPqRsSuvx]+", flag)
+            or flag.startswith(("-W", "-X", "--check-hash-based-pycs"))
+        ):
+            return None
+        index += 2 if flag in {"-W", "-X", "--check-hash-based-pycs"} else 1
+    return (
+        index
+        if index < len(command) and Path(command[index]).name == "slips.py"
+        else None
+    )
+
+
+def capture_arguments(
+    command: list[str], include_views: bool = False
+) -> tuple[str, ...] | None:
+    """Separate capture launches from management and unrelated commands.
+
+    Parameters:
+        command: Process argument vector.
+        include_views: Include saved viewers for process discovery and stopping.
+
+    Returns:
+        Arguments following slips.py, or None when no capture is being run.
+    """
+    position = script_position(command)
+    if position is None:
+        return None
+    arguments = tuple(command[position + 1 :])
+    if not include_views and any(
+        arg == "--view" or arg.startswith("--view=") for arg in arguments
+    ):
+        return None
+    if any(
+        arg
+        in {
+            "--list-instances",
+            "--stop",
+            "--restart",
+            "-S",
+            "--stopdaemon",
+            "-k",
+            "--killall",
+            "-h",
+            "--help",
+            "-V",
+            "--version",
+        }
+        or arg.startswith(("--stop=", "--restart="))
+        for arg in arguments
+    ):
+        return None
+    return arguments
+
+
+def inspect_instance(
+    process: psutil.Process, entrypoint: Path
+) -> RunningInstance | None:
+    """Verify a live main process executes this checkout's actual entry point.
+
+    Parameters:
+        process: Candidate process.
+        entrypoint: Slips entry point for this checkout.
+
+    Returns:
+        Verified process identity, or None for another or inaccessible process.
+    """
+    try:
+        command = process.cmdline()
+        position = script_position(command)
+        arguments = capture_arguments(command, include_views=True)
+        if position is None or arguments is None or process.pid == os.getpid():
+            return None
+        script = Path(command[position])
+        if not script.is_absolute():
+            script = Path(process.cwd()) / script
+        if script.resolve() != entrypoint.resolve():
+            return None
+        if process.status() in {psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD}:
+            return None
+        for parent in process.parents():
+            try:
+                parent_command = parent.cmdline()
+                parent_position = script_position(parent_command)
+                if parent_position is None:
+                    continue
+                parent_script = Path(parent_command[parent_position])
+                if not parent_script.is_absolute():
+                    parent_script = Path(parent.cwd()) / parent_script
+                if parent_script.resolve() == entrypoint.resolve():
+                    return None
+            except (psutil.Error, OSError):
+                continue
+        return RunningInstance(process.pid, process.create_time(), arguments)
+    except (psutil.Error, OSError):
+        return None
+
+
+def list_instances(entrypoint: Path) -> list[RunningInstance]:
+    """Find accessible Slips main processes from one checkout.
+
+    Parameters:
+        entrypoint: Entry point to match independently of process working dirs.
+
+    Returns:
+        Verified instances in PID order, excluding this management command.
+    """
+    return sorted(
+        (
+            instance
+            for process in psutil.process_iter()
+            if (instance := inspect_instance(process, entrypoint)) is not None
+        ),
+        key=lambda instance: instance.pid,
+    )
+
+
+def argument_value(arguments: tuple[str, ...], *names: str) -> str:
+    """Read an existing launch option for the instance listing.
+
+    Parameters:
+        arguments: Arguments following slips.py.
+        names: Short and long spellings of one option.
+
+    Returns:
+        Option value, or a dash when it was omitted.
+    """
+    for index, argument in enumerate(arguments):
+        for name in names:
+            if argument == name and index + 1 < len(arguments):
+                return arguments[index + 1]
+            if argument.startswith(name + "="):
+                return argument[len(name) + 1 :]
+            if (
+                len(name) == 2
+                and argument.startswith(name)
+                and argument != name
+            ):
+                return argument[len(name) :]
+    return "—"
+
+
+def web_ports_for_instance(instance: RunningInstance) -> list[int]:
+    """Find HTTP ports actually listening for one verified Slips run.
+
+    Parameters:
+        instance: Main process identity and original launch arguments.
+
+    Returns:
+        Sorted open web ports, empty when absent or inaccessible.
+    """
+    try:
+        main = psutil.Process(instance.pid)
+        if main.create_time() != instance.created:
+            return []
+        if argument_value(instance.arguments, "--view") != "—":
+            candidates = [main]
+            output = None
+        else:
+            candidates = main.children(recursive=True)
+            output_arg = argument_value(instance.arguments, "-o", "--output")
+            output = (
+                (Path(main.cwd()) / output_arg).resolve()
+                if output_arg != "—"
+                else None
+            )
+            if output is not None:
+                # The launcher may have exited while its page stays open.
+                candidates.extend(
+                    process
+                    for process in psutil.process_iter(["cmdline"])
+                    if "modules.web_interface.server"
+                    in (process.info["cmdline"] or [])
+                )
+    except (psutil.Error, OSError):
+        return []
+
+    ports: set[int] = set()
+    inspected: set[int] = set()
+    for process in candidates:
+        if process.pid in inspected:
+            continue
+        inspected.add(process.pid)
+        try:
+            if process.pid != main.pid:
+                command = process.cmdline()
+                if (
+                    not any(
+                        command[index : index + 2]
+                        == ["-m", "modules.web_interface.server"]
+                        for index in range(len(command) - 1)
+                    )
+                    or process.create_time() < instance.created
+                ):
+                    continue
+                if output is not None:
+                    destination = argument_value(
+                        tuple(command), "--output-dir"
+                    )
+                    if (Path(process.cwd()) / destination).resolve() != output:
+                        continue
+            for connection in process.net_connections(kind="tcp"):
+                if (
+                    connection.status == psutil.CONN_LISTEN
+                    and connection.laddr
+                ):
+                    ports.add(connection.laddr.port)
+        except (psutil.Error, OSError):
+            continue
+    return sorted(ports)
+
+
+def print_instances(instances: list[RunningInstance]) -> None:
+    """Show enough launch information to select the intended capture.
+
+    Parameters:
+        instances: Verified main processes.
+    """
+    if not instances:
+        print("No accessible running Slips instances from this checkout.")
+        return
+    print("Slips instances from this checkout:")
+    print(f"{'PID':<9} {'MODE':<9} {'WEB PORT':<12} {'INPUT':<24} OUTPUT")
+    for instance in instances:
+        args = instance.arguments
+        mode = "daemon" if {"-D", "--daemon"}.intersection(args) else "normal"
+        source = argument_value(args, "-i", "--interface")
+        if source == "—":
+            source = argument_value(
+                args, "-f", "--filepath", "-g", "--growing"
+            )
+        output = argument_value(args, "-o", "--output")
+        saved_output = argument_value(args, "--view")
+        if saved_output != "—":
+            mode = "view-bg" if mode == "daemon" else "viewer"
+            source = "saved results"
+            output = saved_output
+        ports = ",".join(map(str, web_ports_for_instance(instance))) or "—"
+        print(f"{instance.pid:<9} {mode:<9} {ports:<12} {source:<24} {output}")
+
+
+def stop_instances(
+    instances: list[RunningInstance], entrypoint: Path, timeout: float = 45
+) -> int:
+    """Signal verified main processes and wait for their normal cleanup.
+
+    Parameters:
+        instances: Selected identities from discovery.
+        entrypoint: Entry point required again immediately before signaling.
+        timeout: Shared maximum wait in seconds for main processes and workers.
+
+    Returns:
+        Zero after complete shutdown; one for changed, denied or unfinished runs.
+    """
+    waiting: dict[int, psutil.Process] = {}
+    failed = False
+    for instance in instances:
+        try:
+            process = psutil.Process(instance.pid)
+            if (
+                not process.is_running()
+                or process.status() == psutil.STATUS_ZOMBIE
+            ):
+                continue
+            if inspect_instance(process, entrypoint) != instance:
+                print(
+                    f"PID {instance.pid} changed or cannot be verified; not stopped."
+                )
+                failed = True
+                continue
+            children = process.children(recursive=True)
+            process.send_signal(signal.SIGTERM)
+            waiting.update((child.pid, child) for child in children)
+            waiting[process.pid] = process
+            print(
+                f"Requested graceful shutdown of Slips PID {instance.pid}.",
+                flush=True,
+            )
+        except psutil.NoSuchProcess:
+            continue
+        except psutil.AccessDenied:
+            print(
+                f"Permission denied for PID {instance.pid}; run as its owner."
+            )
+            failed = True
+    if waiting:
+        _, alive = psutil.wait_procs(list(waiting.values()), timeout=timeout)
+        if alive:
+            pids = ", ".join(str(process.pid) for process in alive)
+            print(
+                f"Still stopping after {timeout:g}s: {pids}. Check the run's errors.log; no processes were force-killed."
+            )
+            failed = True
+        else:
+            print("Selected Slips instances and their workers have stopped.")
+    return int(failed)
+
+
+def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
+    """Stop a verified daemon completely, then repeat its launch command.
+
+    Parameters:
+        instance: Selected daemon identity and original capture arguments.
+        entrypoint: Entry point required before stopping the daemon.
+
+    Returns:
+        Launcher exit status, or one if inspection, shutdown or launch fails.
+    """
+    if not {"-D", "--daemon"}.intersection(instance.arguments):
+        print(f"PID {instance.pid} is not a Slips daemon; not restarted.")
+        return 1
+    try:
+        process = psutil.Process(instance.pid)
+        if inspect_instance(process, entrypoint) != instance:
+            print(
+                f"PID {instance.pid} changed or cannot be verified; not restarted."
+            )
+            return 1
+        command = process.cmdline()
+        position = script_position(command)
+        directory = process.cwd()
+        # macOS can expose Python's base binary instead of its virtualenv.
+        command = [sys.executable, *command[1 if position else 0 :]]
+    except (psutil.Error, OSError) as error:
+        print(
+            f"Cannot read the launch command for PID {instance.pid}: {error}"
+        )
+        return 1
+    if stop_instances([instance], entrypoint) != 0:
+        print("Shutdown did not finish; no replacement daemon was started.")
+        return 1
+    print(
+        f"Restarting Slips daemon with the arguments from PID {instance.pid}.",
+        flush=True,
+    )
+    try:
+        return subprocess.run(command, cwd=directory, check=False).returncode
+    except OSError as error:
+        print(f"Daemon stopped, but restarting failed: {error}")
+        return 1
+
+
+def handle_instance_command(arguments: list[str]) -> int | None:
+    """Handle management before capture, config, logs or Redis initialization.
+
+    Parameters:
+        arguments: Command-line arguments without the executable name.
+
+    Returns:
+        Management exit status, or None for a normal Slips invocation.
+    """
+    if any(arg in {"-S", "--stopdaemon"} for arg in arguments):
+        argparse.ArgumentParser(prog="slips.py").error(
+            "-S/--stopdaemon was removed; use --stop [PID|all] instead"
+        )
+    if not any(
+        arg in {"--list-instances", "--stop", "--restart"}
+        or arg.startswith(("--stop=", "--restart="))
+        for arg in arguments
+    ):
+        return None
+    parser = argparse.ArgumentParser(prog="slips.py", allow_abbrev=False)
+    add_instance_arguments(parser)
+    options = parser.parse_args(arguments)
+    if options.stop not in {None, "auto", "all"}:
+        if not options.stop.isdecimal() or int(options.stop) <= 0:
+            parser.error("--stop expects a positive PID or all")
+    if options.restart not in {None, "auto"}:
+        if not options.restart.isdecimal() or int(options.restart) <= 0:
+            parser.error("--restart expects a positive daemon PID")
+    entrypoint = Path(__file__).resolve().parents[2] / "slips.py"
+    instances = list_instances(entrypoint)
+    print_instances(instances)
+    if options.list_instances:
+        return 0
+    if options.restart is not None:
+        daemons = [
+            instance
+            for instance in instances
+            if {"-D", "--daemon"}.intersection(instance.arguments)
+            and (
+                options.restart == "auto"
+                or instance.pid == int(options.restart)
+            )
+        ]
+        if not daemons:
+            print(
+                "No matching running Slips daemon from this checkout to restart."
+            )
+            return 1
+        if len(daemons) > 1:
+            print("More than one daemon is running. Use --restart PID.")
+            return 1
+        return restart_instance(daemons[0], entrypoint)
+    if not instances:
+        return 0 if options.stop in {"auto", "all"} else 1
+    if options.stop == "auto" and len(instances) > 1:
+        print(
+            "More than one instance is running. Use --stop PID or --stop all."
+        )
+        return 1
+    selected = (
+        instances
+        if options.stop in {"auto", "all"}
+        else [
+            instance
+            for instance in instances
+            if instance.pid == int(options.stop)
+        ]
+    )
+    if not selected:
+        print(
+            f"PID {options.stop} is not an accessible Slips instance from this checkout."
+        )
+        return 1
+    return stop_instances(selected, entrypoint)

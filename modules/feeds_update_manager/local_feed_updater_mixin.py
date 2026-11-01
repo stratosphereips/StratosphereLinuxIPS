@@ -6,6 +6,7 @@
 import os
 
 from slips_files.common.slips_utils import utils
+from modules.feeds_update_manager.feed_status import record_feed_load
 
 
 class LocalFeedUpdaterMixin:
@@ -67,6 +68,9 @@ class LocalFeedUpdaterMixin:
                     )
                     continue
         self.db.set_organizations_of_ports(entries)
+        record_feed_load(
+            self.db, ports_info_filepath, {"port_mappings": len(entries)}
+        )
         return line_number
 
     def update_local_file(self, file_path) -> bool:
@@ -79,6 +83,7 @@ class LocalFeedUpdaterMixin:
                 self.read_ports_info(file_path)
 
             elif "services.csv" in file_path:
+                count = 0
                 with open(file_path, "r") as f:
                     for line in f:
                         if line.startswith("#"):
@@ -88,6 +93,8 @@ class LocalFeedUpdaterMixin:
                         proto = line.split(",")[2]
                         # descr = line.split(',')[3]
                         self.db.set_port_info(f"{str(port)}/{proto}", name)
+                        count += 1
+                record_feed_load(self.db, file_path, {"services": count})
 
             # Store the new hash of file in the database
             file_info = {"hash": self.new_hash}

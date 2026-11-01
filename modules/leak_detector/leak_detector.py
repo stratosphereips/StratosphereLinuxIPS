@@ -44,8 +44,8 @@ class LeakDetector(IModule):
             # ignore it
             pass
         self.yara_rules_path = "modules/leak_detector/yara_rules/rules/"
-        self.compiled_yara_rules_path = (
-            "modules/leak_detector/yara_rules/compiled/"
+        self.compiled_yara_rules_path = self.get_module_specific_output_path(
+            "compiled_yara_rules"
         )
         self.bin_found = False
         if self.is_yara_installed():

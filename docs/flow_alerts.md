@@ -37,6 +37,34 @@ The detection techniques are:
 - Tor exit nodes
 The details of each detection follows.
 
+## TCP direction when capture starts during an existing connection
+
+Zeek can first see packets after a TCP connection has already started. Its
+recorded source then does not necessarily identify the computer that opened
+the connection. A state such as `SF` alone does not prove who connected.
+
+For example, a client may already be connected to Matterhorn on TCP port 902.
+If capture first sees a reply, Zeek may record Matterhorn:902 as the source and
+the client's temporary port 59148 as the destination. History `AdDTafF` contains
+no handshake. Slips must not report that as Matterhorn connecting to an unknown
+service on port 59148.
+
+When Zeek packet history is present, checks that assign client/server roles
+require a source SYN (`S`) or a destination SYN-ACK (`h`). This applies to
+unknown ports, reconnection attempts, connections without DNS, private-network
+connection checks, connections to multiple ports, and non-HTTPS on port 443.
+Ongoing traffic is still stored, and byte-volume and connection-length checks
+still run. Slips does not guess direction from which port number is smaller.
+Inputs without a Zeek history field keep their existing behavior; an empty
+Zeek history cannot confirm an initiator.
+
+The `^` marker means Zeek already flipped its recorded endpoints. Slips keeps
+those endpoints, ports, counters, UID and raw history unchanged. Flags before
+each marker are interpreted in the roles used at that moment, then related to
+the final endpoints. For example, `H^S` supports the final source as client;
+`S^` does not. A marker alone is not a reason to reverse or discard a flow.
+See Zeek's [connection direction documentation](https://docs.zeek.org/en/master/advanced/devel/conn.html#flipping-connections).
+
 
 ## Long Connections
 Detect connections that are long, except the multicast connections.
@@ -59,6 +87,18 @@ This detection will ignore certain IP addresses for which a connection without D
 - Multicast IPs
 - Broadcast IPs only if they are private
 - Well known organizations
+- DNS service connections over UDP or TCP port 53 to configured DNS servers,
+  or to servers observed returning `NOERROR` or `NXDOMAIN` DNS replies. A resolver
+  is normally contacted directly by IP, so it does not need a preceding lookup
+  of its own address. This also applies when Zeek leaves the connection's
+  application protocol blank. The detector rechecks after its existing
+  15-second processing grace period so a reply processed later can establish
+  the resolver. Observed responders are kept separately per interface in a
+  bounded 4,096-entry cache and qualify within 24 hours of the connection's
+  capture time. Queries without replies and `SERVFAIL`/`REFUSED` responses do
+  not establish a working resolver. A decoded reply can establish the responder
+  even when Zeek could not retain its question. This exception only affects
+  `CONNECTION_WITHOUT_DNS`; DNS anomaly and threat-intelligence checks still run.
 
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips
@@ -140,7 +180,35 @@ Slips considers an IP belongs to an org if:
 
 Otherwise, Slips triggers and "unknown port" evidence.
 
-For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
+After a host is detected scanning, Slips suppresses repeated Unknown Port
+findings for its failed connection attempts. Established connections still
+receive the normal known-service checks, even while the scanner flag is
+active. For example, a host scanning TCP 445 and then establishing a TLS
+connection to an unknown TCP 9001 produces separate scan and Unknown Port
+evidence. A scan must not hide other services used by the same host.
+
+
+Unknown-port and connection-to-private-IP evidence are skipped when either
+endpoint is multicast, the IPv4 limited-broadcast address, or the monitored
+interface's subnet-directed broadcast address at capture time. A recorded
+broadcast or multicast destination MAC also excludes the flow, even when the
+subnet is unknown or has since changed.
+
+Apple services follow [Apple's documented TCP/UDP ports](https://support.apple.com/en-hk/103229).
+Fixed services include APNs on TCP 5223 and 2197, Remote Desktop and
+Classroom, AirPlay, Bonjour, printing, and device pairing on TCP 62078.
+TCP and UDP are separate entries; knowing TCP 5223 does not exempt UDP 5223.
+
+Broad application ranges (TCP 8000–8999 and 42000–42999, UDP 3478–3497 and
+16384–16472, and TCP/UDP 49152–65535) remain in the organization-specific
+file. They count as known only when the existing Apple identity checks
+match. This keeps arbitrary high ports on other hosts eligible for
+Unknown Port detection. These entries do not whitelist traffic; other
+behavioral and threat-intelligence detections still run.
+
+The feed updater imports changed port files into the shared cache at
+startup. Restart Slips after updating the files to load the new entries.
+Existing evidence is retained.
 
 The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
 
@@ -157,6 +225,12 @@ The number of MBs can be modified by changing the value of ```data_exfiltration_
 
 
 Slips also detects data upload when an IP uploads >=100MBs to any IP in 1 connections.
+
+The aggregate check reads only flows belonging to the period being closed,
+using the indexed host-and-period lookup. Earlier periods are not added again
+to a new upload total or its triggering-flow list. This prevents repeated
+findings and growing evidence records during a continuous capture. The work
+runs in `conn_analyzer`, without adding processing to the capture or profiler.
 
 ## Tor Exit Nodes
 
@@ -212,11 +286,17 @@ The `flow_alerts` module still detects successful SSH sessions, but SSH password
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
-To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
+Slips counts distinct failed DNS names per source IP and time window. Retries,
+case changes, trailing dots, and a `.lan` search-suffix variant of the same
+public name count once. Local service-discovery names, reverse lookups,
+`.local`, and reserved `.invalid` names do not contribute to this DGA signal.
 
-Then we alert when there is 10 or more NXDOMAINs.
-
-Every 10,15,20 ..etc slips generates an evidence.
+Evidence starts at 10 distinct failed names and recurs for every five new
+distinct names (15, 20, and so on). Existing evidence remains in run history;
+the corrected counting applies to new DNS traffic after restarting Slips.
+DNS resolvers that block domains by returning NXDOMAIN can still contribute
+distinct names to this signal. Review the linked DNS flows and local resolver
+policy before treating a DGA evidence record as an infection.
 
 ## Connection to multiple ports
 
@@ -231,6 +311,59 @@ Slips uses SSL certificates sha1 hashes to detect C&C servers.
 Slips supports SSL feeds and is shipped with Abuse.ch feed of malicious SSL hashes by default.
 And you can add other SSL feeds in ```ssl_feeds``` in ```slips.yaml```.
 
+### Certificate organization and capture dates
+
+`TLS_PROVIDER_IMPERSONATION` (**Suspected TLS provider impersonation**) is
+**high threat**. It checks whether the certificate's organization fields name
+a supported provider while both the server name and destination IP are
+outside that provider's known domains and networks. A provider name appearing
+only inside an unrelated hostname is not enough. A missing certificate
+subject, server name, or bundled provider-domain list skips this check.
+
+The description names the server, its claimed provider, and the client that
+connected. The server presenting the certificate is the suspected attacker;
+the client is the potential victim. The high-threat evidence belongs to the
+server's profile. The triggering connection retains its original direction.
+Provider lists can be incomplete, so the finding describes suspected
+impersonation rather than claiming it has proved who owns the domain.
+
+Domains bundled with Slips are loaded once when the detector starts, so a
+missing or older shared cache does not by itself flag those legitimate
+domains. A provider domain hosted on a CDN is accepted even if that CDN's IP
+is outside the provider's networks. For example, `mem.gfx.ms` is used by
+[Microsoft Support](https://support.microsoft.com/en-us/); the bundled
+Microsoft domains include `gfx.ms` and `assets.onestore.ms`, both listed in
+[Microsoft's service endpoints](https://learn.microsoft.com/microsoft-365/enterprise/urls-and-ip-address-ranges).
+Exact domains and their subdomains match;
+names such as `gfx.ms.attacker.example` do not.
+
+The network lookup reads decoded
+IP ranges from the shared organization cache; it does not require those
+ranges to exist in each analysis database. For example,
+`104.244.43.176` belongs to the bundled Twitter range `104.244.40.0/21` and
+must not trigger this finding just because a separate file analysis has an
+empty run database.
+
+This check is independent of certificate dates. Zeek's certificate validation
+uses the captured network time by default, not the date when the webpage is
+opened ([Zeek x509_verify documentation](https://docs.zeek.org/en/current/scripts/base/bif/plugins/Zeek_X509.functions.bif.zeek.html#id-x509_verify)).
+Imported logs may already contain a date error. If their timestamps are only
+relative seconds, Slips cannot reconstruct the original calendar date or
+decide whether the certificate was valid then. The web details show
+**Certificate dates unknown**, explain the missing date, and preserve the
+original validation text. An old capture with real calendar timestamps keeps
+its recorded result; it is not revalidated against today. Non-date errors
+such as self-signed certificates are not hidden.
+
+The organization lookup fix applies to new analysis runs using the updated
+code, or after restarting a running capture. Existing saved
+evidence and alert scores remain historical records; viewing a saved output
+does not run the detectors again or delete earlier findings. The old name,
+`INCOMPATIBLE_CN`, remains an accepted alias for stored evidence, P2P input
+and evidence-specific whitelist rules. New detections use the new name.
+Saved findings retain their original threat and profile; the web labels
+the old type **TLS provider mismatch**. Reanalyze into a new output
+folder to apply the corrected detector and scores to an old capture.
 
 ## Pastebin downloads
 
@@ -355,7 +488,17 @@ Here's how it works
 
 ## Connection to private IPs
 
-Slips detects when a private IP is connected to another private IP with threat level info.
+Slips detects when a private IP is connected to another private IP with threat level info. ICMP traffic does not produce `CONNECTION_TO_PRIVATE_IP` evidence.
+Broadcast and multicast traffic is excluded, as is UDP mDNS on source or
+destination port 5353, including unicast mDNS replies.
+Slips checks the recorded destination MAC as well as the IP addresses: an
+Ethernet broadcast (`ff:ff:ff:ff:ff:ff`) or multicast destination does not
+produce this evidence, even if the interface subnet is unknown. For IP-only
+flows, subnet-directed broadcasts are checked against the subnet active at
+the flow's capture time, including delayed flows processed after a network
+change. Without a known subnet or group destination MAC, an address ending
+in `.255` is not assumed to be broadcast; it can be a valid host address on
+other subnet sizes. These exclusions also apply to unknown-port evidence.
 
 But it skips this alert when it's a DNS or a DHCP connection on port
 53, 67 or 68 UDP to the gateway IP.
@@ -401,7 +544,9 @@ address, such as a link-local address.
 
 ## High entropy DNS TXT answers
 
-Slips check every DNS answer with TXT record for high entropy
+Slips checks DNS TXT answers for high entropy. Reverse DNS `.arpa` TXT
+answers use a higher Shannon entropy threshold of 5.8 because ordinary
+device and service metadata often contains long encoded values.
 strings.
 Encoded or encrypted strings with entropy higher than or equal 5 will then be detected using shannon entropy
 and alerted by slips.
@@ -410,11 +555,17 @@ the entropy threshold can be changed in slips.yaml by changing the value of ```e
 
 ## Devices changing IPs
 
-Slips stores the MAC of each new IP it sees in conn.log.
+For a private IPv4 source first seen in conn.log, Slips checks whether its
+unicast MAC was previously associated with a different private IPv4 address.
+If so, it reports "Device changing IPs". Link-local and special addresses are
+excluded.
 
-Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
-
-If so, it alerts "Device changing IPs".
+Public IPs and the capture interface's gateway are excluded from this check.
+For routed traffic, the Ethernet MAC belongs to the local router, not the
+remote IP. Public IPs are not stored as device MAC owners, and this detector
+ignores any public IP entries left by older versions. Gateway information
+learned by another worker is used immediately, without requiring each worker
+to infer the gateway again.
 
 
 ## GRE tunnels

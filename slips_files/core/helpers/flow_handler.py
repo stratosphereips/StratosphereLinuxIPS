@@ -55,14 +55,14 @@ class FlowHandler:
         self.db.add_out_dns(self.profileid, self.twid, self.flow)
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
-    def handle_http(self):
+    def handle_http(self) -> None:
+        """Persist HTTP before notifying detectors that may look up its UID."""
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
         self.db.add_out_http(
             self.profileid,
             self.twid,
             self.flow,
         )
-
-        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
 
     def handle_ssl(self):
         self.db.add_out_ssl(self.profileid, self.twid, self.flow)
@@ -223,3 +223,31 @@ class FlowHandler:
         to_send = json.dumps(to_send)
         self.db.publish("new_login", to_send)
         self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+
+    def handle_smb(self) -> None:
+        """Store each SMB event before publishing its connection-linked metadata."""
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+        self.db.publish(
+            "new_smb",
+            json.dumps(
+                {
+                    "profileid": self.profileid,
+                    "twid": self.twid,
+                    "flow": asdict(self.flow),
+                }
+            ),
+        )
+
+    def handle_packet_timing(self) -> None:
+        """Store and route one bounded Zeek summary to its detection worker."""
+        self.db.add_altflow(self.flow, self.profileid, self.twid, "benign")
+        self.db.publish(
+            "new_packet_timing",
+            json.dumps(
+                {
+                    "profileid": self.profileid,
+                    "twid": self.twid,
+                    "flow": asdict(self.flow),
+                }
+            ),
+        )

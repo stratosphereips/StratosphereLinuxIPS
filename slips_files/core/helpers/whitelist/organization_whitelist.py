@@ -61,33 +61,35 @@ class OrgAnalyzer(IWhitelistAnalyzer):
         the hardcoded org domains in organizations_info/org_domains
         """
         try:
-            if domain not in self.bloom_filters[org]["domains"]:
+            normalized_domain = domain.rstrip(".").lower()
+            if not normalized_domain:
+                return False
+
+            domain_candidates = {
+                ".".join(normalized_domain.split(".")[index:])
+                for index in range(len(normalized_domain.split(".")))
+            }
+            if not any(
+                candidate in self.bloom_filters[org]["domains"]
+                for candidate in domain_candidates
+            ):
                 self.bf_hits += 1
                 return False
 
-            if self.db.is_domain_in_org_domains(org, domain):
+            if self.db.is_domain_in_org_domains(org, normalized_domain):
                 self.bf_hits += 1
                 return True
 
-            # match subdomains of all org domains slips knows of
             org_domains: List[str] = self.db.get_org_info(org, "domains")
-            flow_tld = self.domain_analyzer.get_tld(domain)
-
-            for org_domain in org_domains:
-                org_domain_tld = self.domain_analyzer.get_tld(org_domain)
-
-                if flow_tld != org_domain_tld:
-                    continue
-
-                # if org has org.com, and the flow_domain is xyz.org.com
-                # whitelist it
-                if org_domain in domain:
-                    self.bf_hits += 1
-                    return True
-
-                # if org has xyz.org.com, and the flow_domain is org.com
-                # whitelist it
-                if domain in org_domain:
+            normalized_org_domains = [
+                org_domain.rstrip(".").lower() for org_domain in org_domains
+            ]
+            for org_domain in normalized_org_domains:
+                if (
+                    normalized_domain == org_domain
+                    or normalized_domain.endswith(f".{org_domain}")
+                    or org_domain.endswith(f".{normalized_domain}")
+                ):
                     self.bf_hits += 1
                     return True
 

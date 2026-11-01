@@ -57,7 +57,7 @@ def test_init_creates_notify_obj_only_when_popups_are_enabled(
     ):
         handler = EvidenceHandler(
             logger=Mock(),
-            output_dir="/tmp",
+            output_dir="output/unit_test_evidence_handler",
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),
@@ -116,7 +116,9 @@ def test_stop_evidence_workers():
     handler.print.assert_called_once()
 
 
-@patch("slips_files.core.evidence_handler.EvidenceHandlerWorker")
+@patch(
+    "slips_files.core.evidence_handler.EvidenceHandlerWorker.create_process"
+)
 def test_start_evidence_worker(mock_worker_cls):
     handler = ModuleFactory().create_evidence_handler_obj()
     worker = mock_worker_cls.return_value

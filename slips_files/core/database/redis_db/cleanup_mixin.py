@@ -25,6 +25,7 @@ class CleanupMixin:
         timewindow so the counters don't accumulate forever.
         """
         self.r.delete(f"{self.constants.P2P_MESSAGE_COUNTS}_{timewindow}")
+        self.r.delete(f"{self.constants.P2P_REPORTS_BY_PEER}_{timewindow}")
 
     def _del_all_profile_tw_keys(self, profileid: str, twid: str, pipe):
         """

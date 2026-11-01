@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from typing import Dict
+from types import SimpleNamespace
 
 import pytest
 from unittest.mock import MagicMock, Mock
@@ -23,6 +24,35 @@ from slips_files.core.structures.evidence import (
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.risk_weights import RiskWeight
+
+
+@pytest.mark.parametrize(
+    "threat_info, expected",
+    [
+        ({"source": "feed-one"}, "feed-one"),
+        ('{"source": "feed-two"}', "feed-two"),
+        ("legacy-feed", "legacy-feed"),
+    ],
+)
+def test_domain_evidence_accepts_legacy_threat_intelligence_values(
+    threat_info: object, expected: str
+) -> None:
+    """Malformed cached TI must not crash evidence generation.
+
+    Parameters:
+        threat_info: Cached domain intelligence in a legacy representation.
+        expected: Source shown on the evidence entity.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.get_domain_data = Mock(
+        return_value={"threatintelligence": threat_info}
+    )
+    attacker = SimpleNamespace(ioc_type=IoCType.DOMAIN, value="example.test")
+    evidence = SimpleNamespace(attacker=attacker, victim=None)
+
+    result = handler._get_more_info_about_evidence(evidence)
+
+    assert result.attacker.TI == expected
 
 
 @pytest.mark.parametrize(
@@ -320,11 +350,13 @@ def test_init_evidence_number(initial_value, expected_value):
         (EvidenceType.MALICIOUS_FLOW, EvidenceSignal.DAMP),
     ],
 )
+@pytest.mark.parametrize("notify", [True, False])
 def test_set_evidence(
     evidence_exists,
     expected,
     evidence_type,
     expected_signal,
+    notify,
 ):
     db = ModuleFactory().create_alert_handler_obj()
 
@@ -371,7 +403,7 @@ def test_set_evidence(
         timestamp="1233242354.3",
     )
 
-    result = db.set_evidence(evidence)
+    result = db.set_evidence(evidence, notify=notify)
 
     assert result is expected
     assert evidence.evidence_signal == expected_signal
@@ -379,11 +411,19 @@ def test_set_evidence(
     if expected:
         db.r.hset.assert_called_once()
         db.r.incr.assert_called_once_with(db.constants.NUMBER_OF_EVIDENCE)
-        db.publish.assert_called_once()
+        if notify:
+            db.publish.assert_called_once()
+        else:
+            db.publish.assert_not_called()
         stored_evidence = json.loads(db.r.hset.call_args.args[2])
-        published_evidence = json.loads(db.publish.call_args.args[1])
         assert stored_evidence["evidence_signal"] == expected_signal.name
-        assert published_evidence["evidence_signal"] == expected_signal.name
+        if notify:
+            published_evidence = json.loads(db.publish.call_args.args[1])
+            assert published_evidence == stored_evidence
+        else:
+            db.publish_evidence_added(evidence)
+            published_evidence = json.loads(db.publish.call_args.args[1])
+            assert published_evidence == stored_evidence
     else:
         db.r.hset.assert_not_called()
         db.publish.assert_not_called()

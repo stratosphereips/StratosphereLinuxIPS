@@ -126,6 +126,7 @@ def run_slips(cmd, timeout=300):
         # running; kill the whole process group instead.
         os.killpg(os.getpgid(slips.pid), signal.SIGKILL)
         slips.communicate()
+        raise
 
     return slips.returncode
 
@@ -298,6 +299,8 @@ def start_test_redis_server(
         "dump.rdb",
         "--logfile",
         f"redis-server-port-{redis_port}.log",
+        "--pidfile",
+        str((redis_dir / f"redis-server-port-{redis_port}.pid").resolve()),
     ]
 
     if require_auth:

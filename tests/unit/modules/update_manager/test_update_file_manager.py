@@ -334,13 +334,17 @@ def test_update_local_file(
     """Test update_local_file with a valid file."""
     update_manager = ModuleFactory().create_update_manager_obj()
     update_manager.new_hash = "test_hash"
+    metadata = {}
+    update_manager.db.get_ti_feed_info.side_effect = lambda _: metadata.copy()
+    update_manager.db.set_ti_feed_info.side_effect = lambda _, value: metadata.update(value)
     mocker.patch("builtins.open", mock_open(read_data=test_data))
     now = 1678887000.0
     with patch("time.time", return_value=now):
         result = update_manager.update_local_file(str(tmp_path / file_name))
-    update_manager.db.set_ti_feed_info.assert_called_once_with(
-        str(tmp_path / file_name), {"hash": "test_hash", "time": now}
-    )
+    assert metadata["hash"] == "test_hash"
+    assert metadata["time"] == metadata["checked_at"] == metadata["loaded_at"] == now
+    assert metadata["counts"]
+    assert metadata["status"] == "ready"
     assert result is True
 
 
@@ -503,9 +507,11 @@ def test_update_riskiq_feed(
             )
         }
     )
-    update_manager.db.set_ti_feed_info.assert_called_once_with(
-        "riskiq_domains", {"time": mocker.ANY}
-    )
+    calls = update_manager.db.set_ti_feed_info.call_args_list
+    assert calls[-2].args[0] == "riskiq_domains"
+    assert calls[-2].args[1]["counts"] == {"domains": 1}
+    assert calls[-1].args[1]["checked_at"] == mocker.ANY
+    assert calls[-1].args[1]["status"] == "ready"
     assert result is True
 
 
@@ -743,6 +749,9 @@ def test_parse_ti_feed_valid_data(
             '"tags": ["tag3"]}'
         }
     )
+    assert update_manager.db.set_ti_feed_info.call_args.args[1]["counts"] == {
+        "ips": 1, "domains": 1, "ip_ranges": 0,
+    }
     assert result is True
 
 

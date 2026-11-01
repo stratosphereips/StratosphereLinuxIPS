@@ -4,6 +4,7 @@ from abc import ABC
 from contextlib import contextmanager
 from threading import Lock
 from time import sleep
+from typing import Any, Mapping, Sequence
 
 from slips_files.common.sqlite_flock import SQLiteFlock
 
@@ -66,9 +67,9 @@ class ISQLite(ABC):
         FULL synchronous ensures durability and avoids 'database is
         malformed' errors.
         """
-        with self._acquire_flock():
-            # Don't use self.execute — this must not be in a transaction.
-            with self.conn_lock:
+        with self.conn_lock:
+            # Keep the same lock order as execute and retention.
+            with self._acquire_flock():
                 self.conn.execute("PRAGMA journal_mode=WAL;")
                 self.conn.execute("PRAGMA synchronous=FULL;")
 
@@ -225,23 +226,19 @@ class ISQLite(ABC):
             1,
         )
 
-    def execute(self, query: str, params=None) -> None:
-        """
-        wrapper for sqlite execute() To avoid
-         'Recursive use of cursors not allowed' error
-         and to be able to use a Lock()
+    def execute(
+        self,
+        query: str,
+        params: Sequence[Any] | Mapping[str, Any] | None = None,
+    ) -> sqlite3.Cursor | None:
+        """Execute and commit one statement, retrying SQLite failures.
 
-        since sqlite is terrible with multi-process applications
-        this function should be used instead of all calls to commit() and
-        execute()
+        Parameters:
+            query: SQL statement to execute under the shared locks.
+            params: Optional positional or named query parameters.
 
-        using transactions here is a must.
-        Since slips uses python3.10, we can't use autocommit here. we have
-        to do it manually
-        any conn other than the current one will not see the changes this
-        conn did unless they're committed.
-
-        Each call to this function results in 1 sqlite transaction
+        Returns:
+            Statement cursor, or None when execution fails after retries.
         """
         trial = 0
         max_trials = 5
@@ -256,25 +253,27 @@ class ISQLite(ABC):
                 # does not allow concurrent use of a single connection without
                 # a lock.
                 with self.conn_lock:
-                    cursor = self.conn.cursor()
-                    if self.conn.in_transaction is False:
-                        cursor.execute("BEGIN")
+                    try:
+                        cursor = self.conn.cursor()
+                        if self.conn.in_transaction is False:
+                            cursor.execute("BEGIN")
 
-                    with self._acquire_flock():
-                        if params is None:
-                            cursor.execute(query)
-                        else:
-                            cursor.execute(query, params)
+                        with self._acquire_flock():
+                            if params is None:
+                                cursor.execute(query)
+                            else:
+                                cursor.execute(query, params)
 
-                    # aka END TRANSACTION
-                    if self.conn.in_transaction:
-                        self.conn.commit()
+                            if self.conn.in_transaction:
+                                self.conn.commit()
+                    except sqlite3.Error:
+                        # Busy WAL snapshots must end before a retry can succeed.
+                        self.conn.rollback()
+                        raise
 
                 return cursor
 
             except sqlite3.Error as err:
-                # no need to manually rollback here
-                # sqlite automatically rolls back the tx if an error occurs
                 err = str(err)
 
                 if "malformed" in err or "closed database" in err:

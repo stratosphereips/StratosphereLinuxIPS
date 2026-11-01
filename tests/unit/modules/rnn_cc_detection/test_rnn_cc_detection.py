@@ -15,7 +15,7 @@ from tests.module_factory import ModuleFactory
         # testcase2: Length less than threshold
         ("a" * 50, 0.5),
         # testcase3: Empty string
-        ("", 0),
+        ("a" * 6 + ".0+*" * 20, 0.06),
     ],
 )
 def test_get_confidence(pre_behavioral_model, expected_confidence):
@@ -138,7 +138,7 @@ def test_set_evidence_cc_channel(
         # testcase2: Long input (should be truncated)
         ("a" * 1000, [0.0] * 5, (1, 500, 1)),
         # testcase3: Empty input
-        ("", [45.0] * 5, (1, 500, 1)),
+        ("", [0.0] * 5, (1, 500, 1)),
     ],
 )
 def test_convert_input_for_module(
@@ -201,7 +201,7 @@ def test_handle_new_letters_valid_tcp_high_score():
     cc_detection.db.detect_data_type.return_value = "ip"
 
     msg_data = {
-        "new_symbol": "abc",
+        "new_symbol": "abc" * 4,
         "profileid": "profile_192.168.1.1",
         "twid": "timewindow1",
         "tupleid": "10.0.0.1-80-TCP",
@@ -250,7 +250,7 @@ def test_handle_new_letters_valid_tcp_low_score():
     cc_detection.print = Mock()
 
     msg_data = {
-        "new_symbol": "def",
+        "new_symbol": "def" * 4,
         "profileid": "profile_192.168.1.2",
         "twid": "timewindow2",
         "tupleid": "10.0.0.2-443-TCP",

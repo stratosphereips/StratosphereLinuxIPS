@@ -12,16 +12,14 @@ from typing import (
     Any,
 )
 import validators
-from multiprocessing import Queue
+from queue import Queue
 from threading import Thread, Event
 
 
 from modules.flow_alerts.utils import (
-    get_ip_to_check,
+    different_localnet_context,
     is_dns_flow,
     is_interface_timeout_reached as has_interface_timeout_reached,
-    is_ip_outside_local_network,
-    is_official_dns_server,
     should_check_different_localnet,
 )
 from slips_files.common.abstracts.iflowalerts_analyzer import (
@@ -31,6 +29,7 @@ from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.ips import LOCALHOST_HOSTNAME
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import DNS as DNSFlow
 from slips_files.core.structures.evidence import Direction
 
 
@@ -39,7 +38,7 @@ class DNS(IFlowalertsAnalyzer):
         self.read_configuration()
         # this dict will contain the number of nxdomains
         # found in every profile
-        self.nxdomains = {}
+        self.nxdomains: dict[str, tuple[list[str], list[str]]] = {}
         # if nxdomains are >= this threshold, it's probably DGA
         self.nxdomains_threshold = 10
         # dict to keep track of arpa queries to check for DNS arpa scans later
@@ -49,7 +48,9 @@ class DNS(IFlowalertsAnalyzer):
         self.arpa_scan_threshold = 10
         self.is_running_non_stop: bool = self.db.is_running_non_stop()
         self.classifier = FlowClassifier()
-        self.our_ips: List[str] = utils.get_own_ips(ret="List")
+        self.our_ips: List[str] = utils.get_own_ips(
+            ret="List", include_public=False
+        )
         # In mins
         self.dns_without_conn_interface_wait_time = 30
         # to store dns queries that we should check later. the purpose of
@@ -107,7 +108,11 @@ class DNS(IFlowalertsAnalyzer):
             # dns without conn in case of an interface,
             # should only be detected from the srcip of this device,
             # not all ips, to avoid so many alerts of this type when port scanning
-            or (self.is_running_non_stop and flow.saddr not in self.our_ips)
+            or (
+                self.is_running_non_stop
+                and flow.saddr not in self.our_ips
+                and flow.saddr != self.db.get_host_ip(flow.interface)
+            )
         ):
             return False
         return True
@@ -327,7 +332,7 @@ class DNS(IFlowalertsAnalyzer):
 
         return back_to_queue
 
-    def check_dns_without_connection_timeout(self):
+    def check_dns_without_connection_timeout(self) -> None:
         """
         Waits 30 mins in zeek time for the connection of a dns to arrive
         Does so by receiving every dns msg this analyzer receives. then we
@@ -344,11 +349,10 @@ class DNS(IFlowalertsAnalyzer):
 
         This function runs in its own thread
         """
-        try:
-            while (
-                not self.flowalerts.should_stop()
-                and not self.stop_event.is_set()
-            ):
+        while (
+            not self.flowalerts.should_stop() and not self.stop_event.is_set()
+        ):
+            try:
                 # if self.pending_dns_without_conn.empty():
                 #     time.sleep(1)
                 #     continue
@@ -375,11 +379,10 @@ class DNS(IFlowalertsAnalyzer):
                     flow: Tuple[str, str, Any]
                     self.pending_dns_without_conn.put(flow)
 
-        except KeyboardInterrupt:
-            # the rest will be handled in shutdown_gracefully
-            return
-        except Exception:
-            self.print_traceback()
+            except KeyboardInterrupt:
+                return
+            except Exception:
+                self.flowalerts.print_traceback()
 
     async def check_dns_without_connection(
         self, profileid, twid, flow, waited_for_the_conn=False
@@ -436,9 +439,12 @@ class DNS(IFlowalertsAnalyzer):
         Uses shannon entropy to detect DNS TXT answers
         with encoded/encrypted strings
         """
-        # to avoid FPs when devices announce their presence in the TXT
-        # records of mDNS answers
-        if ipaddress.ip_address(flow.saddr).is_multicast:
+        # mDNS service discovery often publishes encoded TXT values, including
+        # Pigeon's peer addresses. These local announcements are not DNS
+        # tunneling signals, regardless of the source address.
+        if ipaddress.ip_address(flow.saddr).is_multicast or (
+            flow.query or ""
+        ).rstrip(".").lower().endswith(".local"):
             return
 
         if not flow.answers:
@@ -449,7 +455,10 @@ class DNS(IFlowalertsAnalyzer):
                 continue
 
             entropy = self.estimate_shannon_entropy(answer)
-            if entropy >= self.shannon_entropy_threshold:
+            threshold = self.shannon_entropy_threshold
+            if (flow.query or "").rstrip(".").lower().endswith(".arpa"):
+                threshold = max(threshold, 5.8)
+            if entropy >= threshold:
                 self.set_evidence.suspicious_dns_answer(
                     twid,
                     flow,
@@ -482,56 +491,51 @@ class DNS(IFlowalertsAnalyzer):
                 # avoid FP "DNS without connection" evidence
                 self.db.delete_dns_resolution(answer)
 
-    def detect_dga(self, profileid, twid, flow):
+    def detect_dga(self, profileid: str, twid: str, flow: DNSFlow) -> bool:
         """
-        Detect DGA based on the amount of NXDOMAINs seen in dns.log
-        alerts when 10 15 20 etc. nxdomains are found
-        Ignore queries done to *.in-addr.arpa domains and to *.local domains
+        Detect ten or more distinct failed DNS names in a source time window.
+
+        Parameters:
+            profileid: Source profile identifier.
+            twid: Time window identifier.
+            flow: DNS flow with the failed lookup.
+
+        Returns:
+            Whether this lookup crossed a distinct-name alert threshold.
         """
         if not flow.rcode_name:
-            return
+            return False
 
-        # check whitelisted queries because we
-        # don't want to count nxdomains to cymru.com or
-        # spamhaus as DGA as they're made
-        # by slips
+        query = (flow.query or "").strip().rstrip(".").lower()
+
         if (
             "NXDOMAIN" not in flow.rcode_name
-            or not flow.query
-            or flow.query.endswith(".arpa")
-            or flow.query.endswith(".local")
+            or not query
+            or "." not in query
+            or query.endswith((".arpa", ".local", ".invalid"))
+            or any(label.startswith("_") for label in query.split("."))
             or self.flowalerts.whitelist.domain_analyzer.is_whitelisted(
                 flow.query, Direction.DST, "alerts"
             )
         ):
             return False
 
+        if query.endswith(".lan") and "." in query[:-4]:
+            query = query[:-4]
         profileid_twid = f"{profileid}_{twid}"
-
-        # found NXDOMAIN by this profile
-        try:
-            # make sure all domains are unique
-            if flow.query not in self.nxdomains[profileid_twid]:
-                queries, uids = self.nxdomains[profileid_twid]
-                queries.append(flow.query)
-                uids.append(flow.uid)
-                self.nxdomains[profileid_twid] = (queries, uids)
-        except KeyError:
-            # first time seeing nxdomain in this profile and tw
-            self.nxdomains.update({profileid_twid: ([flow.query], [flow.uid])})
+        queries, uids = self.nxdomains.setdefault(profileid_twid, ([], []))
+        if query in queries:
             return False
-
-        # every 5 nxdomains, generate an alert.
-        queries, uids = self.nxdomains[profileid_twid]
+        queries.append(query)
+        uids.append(flow.uid)
         number_of_nxdomains = len(queries)
         if (
             number_of_nxdomains % 5 == 0
             and number_of_nxdomains >= self.nxdomains_threshold
         ):
-            self.set_evidence.dga(twid, flow, number_of_nxdomains, uids)
-            # clear the list of alerted queries and uids
-            self.nxdomains[profileid_twid] = ([], [])
+            self.set_evidence.dga(twid, flow, number_of_nxdomains, uids.copy())
             return True
+        return False
 
     def check_dns_arpa_scan(self, profileid, twid, flow):
         """
@@ -603,58 +607,36 @@ class DNS(IFlowalertsAnalyzer):
 
         return self.db.is_official_dns_server(ip_to_check)
 
-    def check_different_localnet_usage(
-        self,
-        twid,
-        flow,
-        what_to_check="",
-    ):
-        """
-        alerts when a connection to a private ip that
-        doesn't belong to our local network is found
-        for example:
-        If we are on 192.168.1.0/24 then detect anything
-        coming from/to 10.0.0.0/8
-        :param what_to_check: can be 'srcip' or 'dstip'
+    def check_different_localnet_usage(self, twid: str, flow: Any) -> None:
+        """Report both hosts' subnet roles for a DNS query on UDP port 53.
 
-        only checks connections to dst port 53/UDP. the rest are checked in conn.log
+        Parameters:
+            twid: Detection time window.
+            flow: DNS flow; other connections are handled by conn_analyzer.
         """
         if not is_dns_flow(flow):
             # the non dns flows are checked in conn.py
             return
 
-        if is_official_dns_server(self.db, flow, what_to_check):
-            return
-
-        if should_check_different_localnet(
+        if not should_check_different_localnet(
             flow,
             db=self.db,
             ignore_official_dns_servers=True,
         ):
             return
 
-        ip_to_check = get_ip_to_check(flow, what_to_check)
-
-        ip_obj = ipaddress.ip_address(ip_to_check)
-        if not (utils.is_private_ip(ip_obj)):
-            return
-
-        if self.is_possible_dns_misconfiguration(ip_to_check, flow):
-            # dns misconfiguration detected, dns is possibly the private ip
-            # outside of localnet
-            return
-
-        if not is_ip_outside_local_network(self.db, flow, ip_to_check):
+        local_network, outside = different_localnet_context(self.db, flow)
+        if not outside:
             return
 
         self.set_evidence.different_localnet_usage(
             twid,
             flow,
-            ip_outside_localnet=what_to_check,
+            ip_outside_localnet=outside,
+            local_network=local_network,
         )
 
     def shutdown_gracefully(self):
-        self.check_dns_without_connection_of_all_pending_flows()
         self.stop_event.set()
         self.dns_without_connection_timeout_checker_thread.join(30)
         if self.dns_without_connection_timeout_checker_thread.is_alive():
@@ -665,16 +647,9 @@ class DNS(IFlowalertsAnalyzer):
                 f"{self.flowalerts.should_stop()}"
             )
 
-        # close the queue
-        # without this, queues are left in memory and flowalerts keeps
-        # waiting for them forever
-        # to exit the process quickly without blocking on the queue's cleanup
-        self.dns_msgs.cancel_join_thread()
-        self.dns_msgs.close()
-
-        self.pending_dns_without_conn.cancel_join_thread()
-
-        self.pending_dns_without_conn.close()
+        # Thread queues have no feeder processes to close or join. Drain
+        # pending flows after the checker stops adding entries.
+        self.check_dns_without_connection_of_all_pending_flows()
 
     def pre_analyze(self):
         """Code that shouldnt be run in a loop. runs only once in
@@ -706,8 +681,7 @@ class DNS(IFlowalertsAnalyzer):
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)
-        self.check_different_localnet_usage(twid, flow, "srcip")
-        self.check_different_localnet_usage(twid, flow, "dstip")
+        self.check_different_localnet_usage(twid, flow)
         # TODO: not sure how to make sure IP_info is
         #  done adding domain age to the db or not
         self.detect_young_domains(twid, flow)

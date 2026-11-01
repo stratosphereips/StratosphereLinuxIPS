@@ -35,6 +35,30 @@ def test_zeek_json_preserves_arp_uid() -> None:
     assert flow.uid == "AWUueS9mPGij"
 
 
+def test_zeek_json_assigns_distinct_uids_to_notices_without_one() -> None:
+    """Keep separate Zeek notices retrievable when Zeek omits their UID."""
+    module_factory = ModuleFactory()
+    parser = ZeekJSON(module_factory.logger)
+    line = {
+        "type": "notice.log",
+        "interface": "eth0",
+        "data": {
+            "ts": 1774173495.641272,
+            "id.orig_h": "192.168.1.163",
+            "id.resp_h": "192.168.1.10",
+            "note": "SSH::Password_Guessing",
+            "msg": "SSH password guessing detected",
+        },
+    }
+
+    first, first_error = parser.process_line(line)
+    second, second_error = parser.process_line(line)
+
+    assert first_error == second_error == ""
+    assert first.uid and second.uid
+    assert first.uid != second.uid
+
+
 def test_zeek_json_maps_software_type_and_banner_fields():
     parser = ZeekJSON(Mock())
     flow, err = parser.process_line(

@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from multiprocessing.synchronize import SEM_VALUE_MAX
 from typing import (
     Union,
     Optional,
@@ -19,7 +20,7 @@ from contextlib import redirect_stdout, redirect_stderr
 import subprocess
 import netifaces
 import asyncio
-import multiprocessing
+from queue import Queue
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import lru_cache, partial
@@ -27,7 +28,7 @@ from functools import lru_cache, partial
 
 from modules.ip_info.jarm import JARM
 from slips_files.common.flow_classifier import FlowClassifier
-from slips_files.common.ips import BROADCAST_MAC, NULL_MAC
+from slips_files.common.mac import classify_mac
 from slips_files.common.style import green
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
 from .asn_info import ASN
@@ -54,8 +55,8 @@ class IPInfo(IAsyncModule):
 
     def init(self):
         """This will be called when initializing this module"""
-        # 30MBs max size of this queue to avoid growing forever in mem
-        self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
+        # MAC lookups stay in this process, so they need no shared semaphore.
+        self.pending_mac_queries = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         self.lookup_executor = ThreadPoolExecutor(
             max_workers=4, thread_name_prefix="ip-info"
         )
@@ -64,6 +65,7 @@ class IPInfo(IAsyncModule):
         # before retries.
         self.negative_cache_ttl = 300
         self.failed_rdns_lookups = {}
+        self.pending_ip_lookups: set[str] = set()
         self.failed_whois_lookups = {}
         self.failed_mac_vendor_lookups = {}
         self.mac_vendor_db_loaded = False
@@ -199,14 +201,56 @@ class IPInfo(IAsyncModule):
         """
         return socket.AF_INET6 if ":" in ip else socket.AF_INET
 
-    def get_rdns(self, ip: str) -> dict:
+    def _save_rdns_result(
+        self, ip: str, status: str, hostname: str = ""
+    ) -> dict | bool:
+        """Cache a reverse lookup result, including unsuccessful attempts.
+
+        Parameters:
+            ip: Address queried using the system resolver.
+            status: resolved, no_record, or error.
+            hostname: Returned name, when the lookup succeeded.
+
+        Returns:
+            The resolved name mapping, or False when no name was found.
+        """
+        now = time.time()
+        retry_delay = (
+            86400
+            if status == "no_record" and ipaddress.ip_address(ip).is_global
+            else self.negative_cache_ttl
+        )
+        data = {"reverse_dns": hostname} if hostname else {}
+        self.db.set_ip_info(
+            ip,
+            {
+                **data,
+                "reverse_dns_lookup": {
+                    "status": status,
+                    "checked_at": now,
+                    "retry_after": now + retry_delay,
+                },
+            },
+        )
+        if hostname:
+            self.failed_rdns_lookups.pop(ip, None)
+        else:
+            self._store_negative_cache(self.failed_rdns_lookups, ip)
+        return data or False
+
+    def get_rdns(self, ip: str) -> dict | bool:
         """
         get reverse DNS of an ip
         returns RDNS of the given ip or False if not found
         :param ip: str
         """
-        data = {}
         if self._is_negative_cache_hit(self.failed_rdns_lookups, ip):
+            return False
+        previous = self.db.get_ip_info(ip, "reverse_dns_lookup")
+        if (
+            isinstance(previous, dict)
+            and previous.get("retry_after", 0) > time.time()
+        ):
             return False
         try:
             # works with both ipv4 and ipv6
@@ -216,20 +260,28 @@ class IPInfo(IAsyncModule):
                 # check if the reverse_dns value is a valid IP address
                 socket.inet_pton(self.get_ip_family(reverse_dns), reverse_dns)
                 # reverse_dns is an ip. there's no reverse dns. don't store
-                self._store_negative_cache(self.failed_rdns_lookups, ip)
-                return False
+                return self._save_rdns_result(ip, "no_record")
             except socket.error:
                 # reverse_dns is a valid hostname, store it
-                data["reverse_dns"] = reverse_dns
-                self.failed_rdns_lookups.pop(ip, None)
-                self.db.set_ip_info(ip, data)
-        except (socket.gaierror, socket.herror, OSError):
-            # not an ip or multicast, can't get the reverse dns record of it
-            self._store_negative_cache(self.failed_rdns_lookups, ip)
-            return False
-        return data
+                return self._save_rdns_result(ip, "resolved", reverse_dns)
+        except (socket.gaierror, socket.herror) as error:
+            no_record = (
+                isinstance(error, socket.herror) and error.errno in (1, 4)
+            ) or (
+                isinstance(error, socket.gaierror)
+                and error.errno
+                in (
+                    socket.EAI_NONAME,
+                    getattr(socket, "EAI_NODATA", socket.EAI_NONAME),
+                )
+            )
+            return self._save_rdns_result(
+                ip, "no_record" if no_record else "error"
+            )
+        except OSError:
+            return self._save_rdns_result(ip, "error")
 
-    async def get_rdns_async(self, ip: str) -> dict:
+    async def get_rdns_async(self, ip: str) -> dict | bool:
         """
         Resolve reverse DNS without blocking the event loop.
 
@@ -289,7 +341,9 @@ class IPInfo(IAsyncModule):
             self.pending_mac_queries.put((mac_addr, profileid))
             return False
 
-    async def get_vendor_async(self, mac_addr: str, profileid: str) -> dict:
+    async def get_vendor_async(
+        self, mac_addr: str, profileid: str
+    ) -> dict | bool:
         """
         Resolve MAC vendor information without blocking the event loop.
 
@@ -302,7 +356,14 @@ class IPInfo(IAsyncModule):
             # here is irrelevant (might be the gateway's)
             return False
 
-        if BROADCAST_MAC in mac_addr.lower() or NULL_MAC in mac_addr.lower():
+        address_type = classify_mac(mac_addr)
+        if address_type == "locally_administered":
+            return {
+                "MAC": mac_addr,
+                "Vendor": "Unknown",
+                "mac_address_type": address_type,
+            }
+        if address_type != "universally_administered":
             return False
 
         # don't look for the vendor again if we already have it for this
@@ -346,10 +407,45 @@ class IPInfo(IAsyncModule):
         self.domain_validity_cache[domain] = True
         return True
 
+    @staticmethod
+    def _local_lookup_source_ips() -> list[str]:
+        """Read current local IPs before a system WHOIS command starts.
+
+        Returns:
+            Non-loopback IPv4 and IPv6 interface addresses.
+        """
+        local_ips: set[str] = set()
+        for interface in netifaces.interfaces():
+            try:
+                addresses = netifaces.ifaddresses(interface)
+            except ValueError:
+                continue
+            for family in (netifaces.AF_INET, netifaces.AF_INET6):
+                for address in addresses.get(family, []):
+                    try:
+                        ip = ipaddress.ip_address(
+                            address["addr"].split("%", 1)[0]
+                        )
+                    except (KeyError, TypeError, ValueError):
+                        continue
+                    if not ip.is_loopback:
+                        local_ips.add(str(ip))
+        return sorted(local_ips)
+
     def query_whois(self, domain: str):
         if self._is_negative_cache_hit(self.failed_whois_lookups, domain):
             return None
         try:
+            try:
+                self.db.record_slips_own_service_port(
+                    self.db.main_pid,
+                    "tcp",
+                    43,
+                    self._local_lookup_source_ips(),
+                )
+            except Exception:
+                # A failed traffic mark must not disable domain enrichment.
+                pass
             with (
                 open("/dev/null", "w") as f,
                 redirect_stdout(f),
@@ -420,14 +516,19 @@ class IPInfo(IAsyncModule):
         if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
+    async def gather_tasks_and_shutdown_gracefully(self) -> None:
+        """Stop the optional MAC database retry before draining lookups."""
+        reader = getattr(self, "reading_mac_db_task", None)
+        if isinstance(reader, asyncio.Task) and not reader.done():
+            reader.cancel()
+            await asyncio.gather(reader, return_exceptions=True)
+        await super().gather_tasks_and_shutdown_gracefully()
+
     async def shutdown_gracefully(self):
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
             self.country_db.close()
-        if hasattr(self, "pending_mac_queries"):
-            self.pending_mac_queries.close()
-            self.pending_mac_queries.join_thread()
         if hasattr(self, "lookup_executor"):
             self.lookup_executor.shutdown(wait=True, cancel_futures=True)
         if hasattr(self, "domain_validity_cache"):
@@ -457,8 +558,9 @@ class IPInfo(IAsyncModule):
         for interface in interfaces:
             try:
                 gw_ip = utils.get_gateway_for_iface(interface)
-                gw_ips.update({interface: gw_ip})
-            except KeyError:
+                ipaddress.ip_address(gw_ip)
+                gw_ips[interface] = gw_ip
+            except (KeyError, TypeError, ValueError):
                 pass
         return gw_ips
 
@@ -478,10 +580,9 @@ class IPInfo(IAsyncModule):
         # dict.
         return self.db.get_wifi_interface()
 
-    def _get_mac_using_ip_neigh(self, gw_ip) -> str | None:
+    def _get_mac_using_ip_neigh(self, gw_ip: str | None) -> str | None:
         try:
-            if not ipaddress.ip_address(gw_ip):
-                return
+            ipaddress.ip_address(gw_ip)
 
             ip_output = subprocess.run(
                 ["ip", "neigh", "show", gw_ip],
@@ -491,7 +592,13 @@ class IPInfo(IAsyncModule):
             ).stdout
             mac = ip_output.split()[-2]
             return mac
-        except (subprocess.CalledProcessError, IndexError, FileNotFoundError):
+        except (
+            subprocess.CalledProcessError,
+            IndexError,
+            FileNotFoundError,
+            TypeError,
+            ValueError,
+        ):
             return
 
     def _get_mac_using_arp_cache(self, gw_ip) -> str | None:
@@ -511,6 +618,11 @@ class IPInfo(IAsyncModule):
 
         gw_macs = {}
         for interface, gw_ip in gw_ips.items():
+            try:
+                ipaddress.ip_address(gw_ip)
+            except (TypeError, ValueError):
+                continue
+
             # we keep a cache of the macs and their IPs
             # In case of a zeek dir or a pcap,
             # check if we have the mac of this ip already saved in the db.
@@ -607,6 +719,8 @@ class IPInfo(IAsyncModule):
         :return: None.
         """
         cache[key] = time.monotonic()
+        if len(cache) > 4096:
+            cache.pop(next(iter(cache)))
 
     async def handle_new_ip_async(self, ip: str):
         """
@@ -623,16 +737,26 @@ class IPInfo(IAsyncModule):
         if ip_addr.is_multicast:
             return
 
-        geocountry = self.db.get_ip_info(ip, "geocountry")
-        if not geocountry:
-            self.get_geocountry(ip)
+        if (
+            ip in self.pending_ip_lookups
+            or len(self.pending_ip_lookups) >= 1024
+        ):
+            return
+        self.pending_ip_lookups.add(ip)
+        try:
+            geocountry = self.db.get_ip_info(ip, "geocountry")
+            if not geocountry:
+                self.get_geocountry(ip)
 
-        asn = self.db.get_asn_info(ip)
-        if self.asn.should_update_asn(asn):
-            await self.asn.get_asn_async(ip, self.run_lookup)
+            # A slow or failed remote ASN lookup must not prevent rDNS.
+            if not self.db.get_rdns_info(ip):
+                await self.get_rdns_async(ip)
 
-        if not self.db.get_rdns_info(ip):
-            await self.get_rdns_async(ip)
+            asn = self.db.get_asn_info(ip)
+            if self.asn.should_update_asn(asn):
+                await self.asn.get_asn_async(ip, self.run_lookup)
+        finally:
+            self.pending_ip_lookups.discard(ip)
 
     async def handle_new_mac_async(self, mac_addr: str, profileid: str):
         """

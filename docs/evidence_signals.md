@@ -98,7 +98,7 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `flowalerts` | `GRE_TUNNEL` | `PAMP` |
 | `flowalerts` | `HIGH_ENTROPY_DNS_ANSWER` | `DAMP` |
 | `flowalerts` | `HORIZONTAL_PORT_SCAN` | `PAMP` |
-| `flowalerts` | `INCOMPATIBLE_CN` | `PAMP` |
+| `flowalerts` | `TLS_PROVIDER_IMPERSONATION` (legacy alias: `INCOMPATIBLE_CN`) | `PAMP` |
 | `flowalerts` | `INVALID_DNS_RESOLUTION` | `PAMP` |
 | `flowalerts` | `LONG_CONNECTION` | `DAMP` |
 | `flowalerts` | `MALICIOUS_JA3` | `PAMP` |
@@ -119,6 +119,9 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `http_analyzer` | `EMPTY_CONNECTIONS` | `PAMP` |
 | `http_analyzer` | `EXECUTABLE_MIME_TYPE` | `PAMP` |
 | `http_analyzer` | `HTTP_TRAFFIC` | `DAMP` |
+| `http_analyzer` | `HTTP_IP_HOST` | `PAMP` |
+| `http_analyzer` | `HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE` | `PAMP` |
+| `http_analyzer` | `HTTP_BINARY_RESPONSE_AS_HTML` | `PAMP` |
 | `http_analyzer` | `INCOMPATIBLE_USER_AGENT` | `PAMP` |
 | `http_analyzer` | `MULTIPLE_USER_AGENT` | `DAMP` |
 | `http_analyzer` | `NON_HTTP_PORT_80_CONNECTION` | `DAMP` |
@@ -157,3 +160,9 @@ DAMP overrides in
 `NON_SSL_PORT_443_CONNECTION`, `UNKNOWN_PORT`, `YOUNG_DOMAIN`,
 `HTTP_TRAFFIC`, `MULTIPLE_USER_AGENT`, `NON_HTTP_PORT_80_CONNECTION`,
 and `SSH_SUCCESSFUL`.
+
+### SMB behavior findings
+
+All `SMB_*` types from [SMB behavior detection](smb_detection.md) default to `PAMP`.
+Their severity and confidence are independent: informational volume findings do
+not claim malicious intent; stronger correlated behaviors have higher severity.

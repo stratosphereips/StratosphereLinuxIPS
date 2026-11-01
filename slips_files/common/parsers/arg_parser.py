@@ -8,6 +8,42 @@ import argparse
 import textwrap
 
 
+def parse_web_port(value: str) -> int:
+    """Validate a web listener port supplied on the command line.
+
+    Parameters:
+        value: Requested TCP port.
+
+    Returns:
+        Integer port from 1 to 65535, or an argparse error for invalid input.
+    """
+    try:
+        port = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "web port must be an integer from 1 to 65535"
+        ) from error
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError(
+            "web port must be an integer from 1 to 65535"
+        )
+    return port
+
+
+def get_web_port_override(arguments: list[str] | None = None) -> int | None:
+    """Read the port override while allowing unrelated module arguments.
+
+    Parameters:
+        arguments: Command-line arguments, or None to read sys.argv.
+
+    Returns:
+        Requested web port, or None when the option is absent.
+    """
+    parser = argparse.ArgumentParser(add_help=False, allow_abbrev=False)
+    parser.add_argument("--web-port", type=parse_web_port)
+    return parser.parse_known_args(arguments)[0].web_port
+
+
 class ArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, **kwargs):
         self.options = []
@@ -235,20 +271,17 @@ class ArgumentParser(argparse.ArgumentParser):
             help="Run slips in daemon mode",
         )
         self.add_argument(
-            "-S",
-            "--stopdaemon",
-            required=False,
-            default=False,
-            action="store_true",
-            help="Stop slips daemon",
-        )
-        self.add_argument(
             "-k",
             "--killall",
             action="store_true",
             required=False,
             help="Kill all unused redis servers",
         )
+        from managers.process_manager.instance_control import (
+            add_instance_arguments,
+        )
+
+        add_instance_arguments(self)
         self.add_argument(
             "-m",
             "--multiinstance",
@@ -256,7 +289,9 @@ class ArgumentParser(argparse.ArgumentParser):
             required=False,
             help="Run multiple instances of slips, don't overwrite the old "
             "one. This option run redis using a random unused port "
-            "instead of the default one (6379).",
+            "instead of the default one (6379). With -f and -o, also isolate "
+            "runtime data and copy the whitelist and credentials automatically "
+            "under the output directory; reuse the same -c file.",
         )
         self.add_argument(
             "-P",
@@ -265,6 +300,15 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store",
             required=False,
             help="The redis-server port to use",
+        )
+        self.add_argument(
+            "--keep-history",
+            action="store_true",
+            required=False,
+            help="Keep detections and flows from a previous live run in the "
+            "same output directory, or start fresh if none exist. "
+            "Requires -i and -o; concurrent runs "
+            "need separate data directories and ports.",
         )
         self.add_argument(
             "-t",
@@ -288,6 +332,19 @@ class ArgumentParser(argparse.ArgumentParser):
             action="store_true",
             required=False,
             help="Enable the local web interface for this Slips run",
+        )
+        self.add_argument(
+            "--view",
+            metavar="OUTPUT_FOLDER",
+            help="Open a saved run's webpage without analyzing traffic again. "
+            "Restores databases/dump.rdb alongside the saved SQLite data.",
+        )
+        self.add_argument(
+            "--web-port",
+            type=parse_web_port,
+            metavar="PORT",
+            help="Override web_interface.port for this run (1-65535). "
+            "Enable the web interface with -w or in the configuration.",
         )
         self.add_argument(
             "-V",

@@ -213,3 +213,16 @@ the ```export_format``` parameter to your desired format.
 for now, the ```export_format``` parameter supports tsv or json formats only.
 
 the exported flows are stored in a file called ```labeled_flows.json``` or ```labeled_flows.tsv``` in the output directory.
+
+## Exporting flows with analyst review
+
+The Evidence tab has **Export reviewed flows**. It streams the retained flow
+rows in this run as `reviewed_flows.tsv` without loading the whole database into
+browser or server memory. The existing `label` column remains the original
+Slips detector label. The separate `human_review` column is `malicious` when a
+linked alert or evidence has an explicit true-positive verdict, `benign` when
+it has an explicit false-positive or expected-behavior verdict, and `conflict`
+when linked decisions disagree. It is empty when nobody has made a conclusive
+decision. An alert's workflow state (Active, In review, Resolved) is separate
+from its verdict. Only flows still retained in `flows.sqlite` can be exported;
+deleting a flow removes it from future exports.

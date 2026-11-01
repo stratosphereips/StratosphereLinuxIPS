@@ -5,6 +5,8 @@ import queue
 import threading
 import traceback
 import multiprocessing
+from pathlib import Path
+from slips_files.common.log_rotation import rotate_log
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_csv_path
@@ -38,6 +40,7 @@ class EvidenceLogger:
 
     def read_configuration(self):
         conf = ConfigParser()
+        self.history_policy = conf.detection_history_policy()
         self.GID = conf.get_GID()
         self.UID = conf.get_UID()
         self.generate_performance_plots = (
@@ -83,6 +86,12 @@ class EvidenceLogger:
         """
         try:
             # write to alerts.log
+            if isinstance(
+                getattr(self, "history_policy", None), dict
+            ) and rotate_log(Path(self.logfile.name), self.history_policy):
+                name = self.logfile.name
+                self.logfile.close()
+                self.logfile = open(name, "a")
             self.logfile.write(data)
             if not data.endswith("\n"):
                 self.logfile.write("\n")
@@ -95,6 +104,12 @@ class EvidenceLogger:
 
     def print_to_alerts_json(self, idmef_evidence: dict):
         try:
+            if isinstance(
+                getattr(self, "history_policy", None), dict
+            ) and rotate_log(Path(self.jsonfile.name), self.history_policy):
+                name = self.jsonfile.name
+                self.jsonfile.close()
+                self.jsonfile = open(name, "a")
             json.dump(idmef_evidence, self.jsonfile)
             self.jsonfile.write("\n")
             self.jsonfile.flush()  # flush Python buffer

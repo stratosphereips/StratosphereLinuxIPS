@@ -6,6 +6,7 @@
 import json
 import os
 import queue
+import sqlite3
 import sys
 from multiprocessing import Queue
 from typing import Dict, List, Optional, Tuple
@@ -17,9 +18,13 @@ from slips_files.common.slips_utils import utils
 from slips_files.common.startup_report import format_started_line
 from slips_files.core.helpers.notify import Notify
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.helpers.whitelist.blocking_whitelist import (
+    BlockingWhitelist,
+)
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import (
     Evidence,
+    EvidenceType,
     ThreatLevel,
     TimeWindow,
     dict_to_evidence,
@@ -59,7 +64,9 @@ class EvidenceHandlerWorker(IModule):
             self._get_detection_threshold()
         )
         self.blocking_modules_supported = self.is_blocking_modules_supported()
-        self.our_ips: List[str] = utils.get_own_ips(ret="List")
+        self.our_ips: List[str] = utils.get_own_ips(
+            ret="List", include_public=False
+        )
         self.formatter = EvidenceFormatter(self.db, self.args)
         self.slips_start_time: str = self.db.get_slips_start_time()
         self.first_flow_pcap_time = None
@@ -69,6 +76,7 @@ class EvidenceHandlerWorker(IModule):
 
     def read_configuration(self) -> None:
         conf = ConfigParser()
+        self.blocking_whitelist = BlockingWhitelist(self)
         self.width: float = conf.get_tw_width_in_seconds()
         self.detection_threshold = conf.evidence_detection_threshold()
         self.risk_accumulated_threat_level_threshold = (
@@ -347,7 +355,7 @@ class EvidenceHandlerWorker(IModule):
 
     def is_blocking_modules_supported(self) -> bool:
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
-        blocking_module_enabled = "-p" in sys.argv
+        blocking_module_enabled = "-p" in sys.argv or "--blocking" in sys.argv
         return (
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled
@@ -397,7 +405,9 @@ class EvidenceHandlerWorker(IModule):
         profile_already_blocked: bool = self.db.is_blocked_profile_and_tw(
             str(alert.profile), str(alert.timewindow)
         )
-        if profile_already_blocked:
+        if profile_already_blocked and not self.blocking_whitelist.is_exempt(
+            alert.profile.ip
+        ):
             return
 
         self.send_to_exporting_module(evidence_causing_the_alert)
@@ -424,7 +434,9 @@ class EvidenceHandlerWorker(IModule):
         if not self.blocking_modules_supported:
             return False
 
-        if ip_to_block in self.our_ips:
+        if ip_to_block in self.our_ips or self.blocking_whitelist.is_exempt(
+            ip_to_block
+        ):
             return False
 
         blocking_data = {
@@ -453,7 +465,12 @@ class EvidenceHandlerWorker(IModule):
     def get_accumulated_threat_level(
         self, profileid, twid, evidence: Evidence
     ) -> float:
-        if evidence.threat_level == ThreatLevel.INFO:
+        # A received report is retained as evidence, while only the
+        # corresponding observed malicious-IP finding contributes to alerts.
+        if (
+            evidence.threat_level == ThreatLevel.INFO
+            or evidence.evidence_type == EvidenceType.P2P_REPORT
+        ):
             return self.db.get_accumulated_threat_level(profileid, twid)
 
         past_evidence_ids = self.get_evidence_that_were_part_of_a_past_alert(
@@ -618,6 +635,19 @@ class EvidenceHandlerWorker(IModule):
             risk_accumulated_threat_level,
             current_risk_weight,
         )
+        # Persist the captured values, even if alert generation reset Redis.
+        try:
+            self.db.set_evidence_score(
+                evidence.id,
+                accumulated_threat_level,
+                risk_accumulated_threat_level,
+            )
+        except (sqlite3.Error, OSError) as error:
+            self.print(
+                f"Unable to persist evidence score {evidence.id}: {error}",
+                0,
+                1,
+            )
         return accumulated_threat_level, risk_accumulated_threat_level
 
     def _score_evidence(
@@ -682,7 +712,10 @@ class EvidenceHandlerWorker(IModule):
         # Informational evidence has no threat contribution and therefore
         # cannot be the event that triggers an alert. It remains processed and
         # may still be correlated with a later, score-contributing alert.
-        if evidence.threat_level == ThreatLevel.INFO:
+        if (
+            evidence.threat_level == ThreatLevel.INFO
+            or evidence.evidence_type == EvidenceType.P2P_REPORT
+        ):
             return
 
         if self.is_running_non_stop:

@@ -4,7 +4,8 @@ import shutil
 import importlib.util
 import sys
 from contextlib import contextmanager
-from types import ModuleType
+from types import ModuleType, SimpleNamespace
+from typing import TYPE_CHECKING
 from unittest.mock import (
     patch,
     Mock,
@@ -16,6 +17,14 @@ from slips_files.common.input_type import InputType
 from multiprocessing import Queue
 
 import unittest.mock as mock
+
+if TYPE_CHECKING:
+    from modules.anomaly_detection_services.anomaly_detection_services import (
+        AnomalyDetectionServices,
+    )
+    from slips_files.core.helpers.whitelist.blocking_whitelist import (
+        BlockingWhitelist,
+    )
 
 
 def read_configuration():
@@ -38,6 +47,113 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_arp_scan_detector(self, **settings: object) -> object:
+        """Create isolated ARP scan state with optional setting overrides.
+
+        Parameters:
+            settings: ARPScanSettings fields to override.
+
+        Returns:
+            Pure in-memory detector without databases or worker processes.
+        """
+        from modules.arp.scan_detector import ARPScanDetector
+        from modules.arp.scan_settings import ARPScanSettings
+
+        return ARPScanDetector(ARPScanSettings(**settings))
+
+    def create_smb_analyzer_obj(self, **settings: object) -> object:
+        """Create SMB analysis with real bounded state and mocked external services.
+
+        :param settings: SMB configuration overrides.
+        :return: Module that does not connect to Redis or create workers.
+        """
+        from modules.smb_analyzer.smb_analyzer import SMBAnalyzer
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: settings.get(key, default)
+        db = Mock()
+        db.get_input_type.return_value = InputType.PCAP
+        with patch(MODULE_DB_MANAGER, return_value=db):
+            module = SMBAnalyzer(logger=Mock(), output_dir="output/unit_smb", redis_port=6379,
+                termination_event=Mock(), slips_args=SimpleNamespace(interface=[], growing=False),
+                conf=conf, ppid=12345, bloom_filters_manager=Mock())
+        module.print = Mock()
+        return module
+
+    def create_beaconing_obj(self, output_dir: str = "output/unit_beaconing", **settings: object) -> object:
+        """Create the numeric detector without Redis or checkpoint files.
+
+        Parameters:
+            output_dir: Isolated test output directory.
+            settings: Detector settings overrides.
+
+        Returns:
+            Module with real numeric analysis and mocked external services.
+        """
+        from modules.beaconing.beaconing import Beaconing
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: settings.get(key, default)
+        db = Mock()
+        db.get_input_type.return_value = InputType.INTERFACE
+        db.get_network_state.return_value = {"gateway_mac": "aa:bb:cc:dd:ee:ff", "local_network": "192.168.1.0/24", "changed_at": 0}
+        with patch(MODULE_DB_MANAGER, return_value=db):
+            module = Beaconing(logger=Mock(), output_dir=output_dir, redis_port=6379, termination_event=Mock(), slips_args=SimpleNamespace(interface=["eth0"], growing=False), conf=conf, ppid=12345, bloom_filters_manager=Mock())
+        module.print = Mock()
+        return module
+
+    def create_service_anomaly_obj(
+        self, output_dir: str = "output/unit_service_anomaly", **settings: object
+    ) -> "AnomalyDetectionServices":
+        """Create the service detector without opening Redis or model files.
+
+        Parameters:
+            output_dir: Isolated test output directory.
+            settings: Overrides for the module's detector settings.
+
+        Returns:
+            Module with mocked external services and real detector objects.
+        """
+        from modules.anomaly_detection_services.anomaly_detection_services import (
+            AnomalyDetectionServices,
+        )
+
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: settings.get(key, default)
+        conf.permanent_dir.return_value = os.path.join(output_dir, "permanent")
+        db = Mock()
+        db.get_input_type.return_value = InputType.INTERFACE
+        db.get_network_state.return_value = {
+            "gateway_mac": "aa:bb:cc:dd:ee:ff", "local_network": "192.0.2.0/24",
+            "changed_at": 0,
+        }
+        db.get_mac_addr_from_profile.return_value = None
+        with patch(MODULE_DB_MANAGER, return_value=db):
+            module = AnomalyDetectionServices(
+                logger=Mock(), output_dir=output_dir, redis_port=6379,
+                termination_event=Mock(),
+                slips_args=SimpleNamespace(interface=["eth0"], growing=False),
+                conf=conf, ppid=12345, bloom_filters_manager=Mock(),
+            )
+        module.print = Mock()
+        module._capture_started = 0.0
+        return module
+
+    def create_module_process_obj(
+        self, module: type | str, *args: object, **kwargs: object
+    ) -> object:
+        """Create an unstarted module process for process-boundary tests.
+
+        Parameters:
+            module: Module class or import path.
+            args: Module constructor arguments.
+            kwargs: Module constructor keyword arguments.
+
+        Returns:
+            Process that initializes the module in its child.
+        """
+        from slips_files.core.module_process import ModuleProcess
+
+        return ModuleProcess(module, *args, **kwargs)
+
     def __init__(self):
         self.profiler_queue = Queue()
         self.input_queue = Queue()
@@ -47,8 +163,60 @@ class ModuleFactory:
         """default is o port 6379, this is the one we're using in conftest"""
         return self.create_db_manager_obj(6379)
 
+    def create_redis_publisher_obj(self) -> object:
+        """Return a Redis publisher with a mocked client and no connection."""
+        from slips_files.core.database.redis_db.database import RedisDB
+
+        db = object.__new__(RedisDB)
+        db.r = Mock()
+        return db
+
     def mocked_init_flock(self):
         self.lockfile_path = "/tmp/fake.lock"
+
+    def _assert_redis_has_no_run_owner(self, port: int) -> None:
+        """Refuse to write unit-test data into an existing Slips run.
+
+        Parameters:
+            port: Redis port requested by the test.
+        """
+        import redis
+        from slips_files.common.slips_utils import utils
+        from slips_files.core.database.redis_db.redis_auth import (
+            try_connect_with_and_without_password,
+        )
+
+        if not utils.is_port_in_use(port):
+            return
+        client = None
+        try:
+            client = try_connect_with_and_without_password(
+                redis.Redis,
+                host="127.0.0.1",
+                port=port,
+                db=0,
+                decode_responses=True,
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5,
+            )
+            owner = client.hget("analysis", "output_dir")
+            if owner:
+                raise RuntimeError(
+                    f"Refusing unit-test writes to Redis port {port}: "
+                    f"it belongs to Slips run {owner}. "
+                    "Use a separate Redis instance for tests."
+                )
+        except (
+            redis.exceptions.ConnectionError,
+            redis.exceptions.TimeoutError,
+        ) as error:
+            raise RuntimeError(
+                f"Cannot verify ownership of Redis port {port}; "
+                "refusing unit-test writes."
+            ) from error
+        finally:
+            if client is not None:
+                client.close()
 
     def create_db_manager_obj(
         self,
@@ -58,12 +226,25 @@ class ModuleFactory:
         start_redis_server=True,
         disabled_detections: list[str] | None = None,
     ):
-        from slips_files.core.database.database_manager import DBManager
+        """Create a database manager for tests without flushing by default.
 
+        Parameters:
+            port: Redis port used by the test database.
+            output_dir: Directory for test output.
+            flush_db: Whether to clear Redis during initialization.
+            start_redis_server: Whether the test may start Redis.
+            disabled_detections: Detection names disabled in the test.
+
+        Returns:
+            Configured test database manager.
         """
-        flush_db is False by default  because we use this function to check
-        the db after integration tests to make sure everything's going fine
-        """
+        self._assert_redis_has_no_run_owner(port)
+        from slips_files.core.database.database_manager import DBManager
+        from slips_files.common.parsers.config_parser import ConfigParser
+
+        # Redis authentication reads the real persistent path while the
+        # constructor below temporarily mocks builtins.open.
+        ConfigParser()
 
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = None
@@ -476,15 +657,12 @@ class ModuleFactory:
     def create_arp_obj(self, mock_db):
         from modules.arp.arp import ARP
 
-        with patch(
-            "modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()
-        ):
-            arp = ARP(
+        arp = ARP(
                 logger=self.logger,
                 output_dir="dummy_output_dir",
                 redis_port=6379,
                 termination_event=Mock(),
-                slips_args=Mock(),
+                slips_args=SimpleNamespace(interface=["eth0"], growing=False, blocking=False),
                 conf=Mock(),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
@@ -549,10 +727,10 @@ class ModuleFactory:
         with (
             patch(f"{daemon_module}.Daemon.read_pidfile", return_value=None),
             patch(f"{daemon_module}.Daemon.read_configuration"),
+            patch(f"{daemon_module}.Daemon.prepare_output_dir"),
             patch("builtins.open", mock_open(read_data=None)),
         ):
             slips = MagicMock()
-            slips.args.stopdaemon = True
             slips.args.is_slips_started_by_an_update = False
             slips.args.output = "output"
             daemon = Daemon(slips)
@@ -578,6 +756,9 @@ class ModuleFactory:
             patch("slips_files.common.abstracts.isqlite.ISQLite._init_flock"),
             patch(
                 "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
+            ),
+            patch(
+                "modules.p2p_trust.trust.trustdb.TrustDB._ensure_unique_peer_addresses"
             ),
         ):
             trust_db = TrustDB(
@@ -636,6 +817,10 @@ class ModuleFactory:
 
         with (
             patch(
+                "modules.blocking.blocking.platform.system",
+                return_value="Linux",
+            ),
+            patch(
                 "modules.blocking.blocking.utils.get_sudo_according_to_env",
                 return_value="",
             ),
@@ -653,7 +838,7 @@ class ModuleFactory:
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
-                conf=Mock(),
+                conf=Mock(enable_local_whitelist=Mock(return_value=False)),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
             )
@@ -882,7 +1067,8 @@ class ModuleFactory:
         return leak_detector
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_profiler_obj(self, mock_db):
+    @patch("slips_files.core.profiler.AIDManager")
+    def create_profiler_obj(self, mock_aid: Mock, mock_db: Mock) -> object:
         from slips_files.core.profiler import Profiler
 
         slips_args = Mock()
@@ -1036,6 +1222,31 @@ class ModuleFactory:
         whitelist.whitelist_path = "tests/unit/test_whitelist.conf"
         return whitelist
 
+    def create_blocking_whitelist_obj(
+        self, whitelist_path: str = "tests/unit/test_whitelist.conf"
+    ) -> "BlockingWhitelist":
+        """Create a file-backed blocking whitelist with isolated dependencies.
+
+        Parameters:
+            whitelist_path: Local rule file to read.
+
+        Returns:
+            Blocking policy without a Redis or firewall connection.
+        """
+        from slips_files.core.helpers.whitelist.blocking_whitelist import (
+            BlockingWhitelist,
+        )
+
+        manager = SimpleNamespace(
+            db=Mock(),
+            printer=Mock(),
+            conf=Mock(
+                enable_local_whitelist=Mock(return_value=True),
+                local_whitelist_path=Mock(return_value=whitelist_path),
+            ),
+        )
+        return BlockingWhitelist(manager)
+
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_flow_handler_obj(self, flow, mock_db):
         from slips_files.core.helpers.flow_handler import FlowHandler
@@ -1050,21 +1261,45 @@ class ModuleFactory:
         return flow_handler
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_horizontal_portscan_obj(self, mock_db):
+    def create_horizontal_portscan_obj(self, mock_db: Mock, **options: object) -> object:
+        """Create scan analysis with a mocked database and real limits.
+
+        Parameters:
+            mock_db: Database supplied by the patch decorator.
+            options: Horizontal scan settings overrides.
+
+        Returns:
+            Detector wrapper without database connections.
+        """
         from modules.network_discovery.horizontal_portscan import (
             HorizontalPortscan,
         )
 
-        horizontal_ps = HorizontalPortscan(mock_db)
+        from modules.network_discovery.scan_settings import ScanSettings
+
+        mock_db.is_p2p_related_flow_batch.side_effect = lambda flows: [False] * len(flows)
+        mock_db.get_port_info.return_value = ""
+        horizontal_ps = HorizontalPortscan(mock_db, ScanSettings(**options))
         return horizontal_ps
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_vertical_portscan_obj(self, mock_db):
+    def create_vertical_portscan_obj(self, mock_db: Mock, **options: object) -> object:
+        """Create bounded vertical analysis with a mocked database.
+
+        Parameters:
+            mock_db: Patched database facade.
+            options: Scan period and memory-limit overrides.
+
+        Returns:
+            Vertical detector wrapper without database connections.
+        """
         from modules.network_discovery.vertical_portscan import (
             VerticalPortscan,
         )
+        from modules.network_discovery.scan_settings import ScanSettings
 
-        vertical_ps = VerticalPortscan(mock_db)
+        mock_db.get_authenticated_p2p_connections.return_value = []
+        vertical_ps = VerticalPortscan(mock_db, ScanSettings(**options))
         return vertical_ps
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
@@ -1194,13 +1429,15 @@ class ModuleFactory:
             NetworkDiscovery,
         )
 
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: default
         network_discovery = NetworkDiscovery(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
+            slips_args=SimpleNamespace(interface=[], growing=False),
+            conf=conf,
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
@@ -1221,7 +1458,7 @@ class ModuleFactory:
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),
-            conf=Mock(),
+            conf=Mock(enable_local_whitelist=Mock(return_value=False)),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
@@ -1237,7 +1474,7 @@ class ModuleFactory:
         ):
             handler = EvidenceHandler(
                 logger=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1255,6 +1492,9 @@ class ModuleFactory:
         )
 
         def fake_read_configuration(worker):
+            worker.blocking_whitelist = Mock(
+                is_exempt=Mock(return_value=False)
+            )
             worker.width = 3600
             worker.detection_threshold = 0.25
             worker.risk_accumulated_threat_level_threshold = 15
@@ -1283,7 +1523,7 @@ class ModuleFactory:
         ):
             worker = EvidenceHandlerWorker(
                 logger=self.logger,
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1331,7 +1571,7 @@ class ModuleFactory:
             handler = EvidenceLogger(
                 logger_stop_signal=Mock(),
                 evidence_logger_q=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
             )
         return handler
 
@@ -1393,6 +1633,32 @@ class ModuleFactory:
         )
         risk_iq.db = mock_db
         return risk_iq
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_iris_obj(self, mock_db: Mock) -> object:
+        """Create an Iris adapter with mocked database resources.
+
+        Parameters:
+            mock_db: Patched database constructor.
+
+        Returns:
+            Iris adapter ready for isolated protocol tests.
+        """
+        from modules.iris.iris import Iris
+
+        iris = Iris(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        iris.db = mock_db
+        iris.print = Mock()
+        return iris
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):

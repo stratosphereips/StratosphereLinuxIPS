@@ -304,16 +304,28 @@ class AlertHandler:
                 entity.queries = ip_identification.get("queries")
 
             elif entity.ioc_type == IoCType.DOMAIN:
-                domain_info: Dict[str, str]
+                domain_info: Any
                 domain_info = self.get_domain_data(entity.value)
+                if isinstance(domain_info, str):
+                    try:
+                        domain_info = json.loads(domain_info)
+                    except (TypeError, ValueError):
+                        continue
+                if not isinstance(domain_info, dict):
+                    continue
                 if not domain_info:
                     continue
 
                 entity.CNAME = domain_info.get("CNAME", [])
                 entity.DNS_resolution = domain_info.get("IPs", [])
-                entity.TI = domain_info.get("threatintelligence", {}).get(
-                    "source"
-                )
+                threat_info = domain_info.get("threatintelligence")
+                if isinstance(threat_info, str):
+                    try:
+                        threat_info = json.loads(threat_info)
+                    except json.JSONDecodeError:
+                        entity.TI = threat_info
+                if isinstance(threat_info, dict):
+                    entity.TI = threat_info.get("source")
                 # if any of the domain's ips have an asn, set it here to
                 # check if it's whitelisted later
                 for ip in entity.DNS_resolution:
@@ -323,12 +335,26 @@ class AlertHandler:
             setattr(evidence, entity_type, entity)
         return evidence
 
-    def set_evidence(self, evidence: Evidence):
+    def publish_evidence_added(self, evidence: Evidence) -> None:
+        """Notify evidence consumers after the durable row is committed.
+
+        Parameters:
+            evidence: Evidence already stored in Redis and SQLite.
+        """
+        self.publish(
+            self.channels.EVIDENCE_ADDED,
+            json.dumps(utils.to_dict(evidence)),
+        )
+
+    def set_evidence(self, evidence: Evidence, notify: bool = True) -> bool:
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
         slips_files/core/structures/evidence.py) with all the
         evidence details,
+        :param notify: Publish immediately only when no later SQLite write
+            is required by the caller.
+        :return: Whether the evidence was newly stored.
         """
         # create the profile if it doesn't exist
         self.add_profile(str(evidence.profile), evidence.timestamp)
@@ -358,7 +384,8 @@ class AlertHandler:
 
         self.r.hset(evidence_hash, evidence.id, evidence_to_send)
         self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-        self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
+        if notify:
+            self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
         return True
 
     def set_alert(self, alert: Alert):

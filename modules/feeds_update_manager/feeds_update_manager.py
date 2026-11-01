@@ -115,6 +115,7 @@ class FeedsUpdateManager(
         we update different types of files remote TI files, remote JA3 feeds,
          RiskIQ domains and local slips files
         """
+        self._register_feed_sources()
         if self.update_period <= 0:
             # User does not want to update the malicious IP list.
             self.print(
@@ -353,29 +354,31 @@ class FeedsUpdateManager(
             ignore the return value and let it finish on its own.
         """
         ports_info_thread: Optional[threading.Thread] = None
+        update_manager = cls._build_startup_instance(
+            logger,
+            output_dir,
+            redis_port,
+            args,
+            conf,
+            pid,
+            bloom_filters_man,
+        )
+        update_manager._init_whitelist()
+        if local_files:
+            # Every run has its own Redis database. The shared organization
+            # file lock must not prevent this run from loading its rules.
+            update_manager.update_local_whitelist()
         try:
             # only one instance of slips should be able to update orgs
             # at a time
             # so this function will only be allowed to run from 1 slips
             # instance.
             with Lock(name="slips_ports_and_orgs"):
-                update_manager = cls._build_startup_instance(
-                    logger,
-                    output_dir,
-                    redis_port,
-                    args,
-                    conf,
-                    pid,
-                    bloom_filters_man,
-                )
-                update_manager._init_whitelist()
-
                 if local_files:
                     ports_info_thread = cls._update_ports_info_in_background(
                         update_manager
                     )
                     update_manager.update_org_files()
-                    update_manager.update_local_whitelist()
 
                 if ti_feeds:
                     update_manager.print("Updating TI feeds")

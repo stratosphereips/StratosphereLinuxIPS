@@ -192,3 +192,42 @@ def test_check_if_enough_dports_to_trigger_an_evidence(
     )
 
     assert result is expected
+
+
+@pytest.mark.parametrize("proto", ["tcp", "udp"])
+def test_flow_event_checks_only_its_destination_and_protocol(proto: str) -> None:
+    """A horizontal scan must not make each vertical check reread all hosts.
+
+    Parameters:
+        proto: Transport of the current connection.
+    """
+    module = ModuleFactory().create_vertical_portscan_obj()
+    from tests.unit.modules.network_discovery.test_horizontal_portscans import conn
+    profile = ProfileID(ip="192.168.1.2")
+    window = TimeWindow(number=0)
+    for i in range(10):
+        module.check(profile, window, conn(i, daddr="8.8.8.8", dport=1000+i, proto=proto, history="S" if proto == "tcp" else "D"))
+    module.db.get_dstips_with_not_established_flows.assert_not_called()
+    module.db.get_info_about_not_established_flows.assert_not_called()
+    module.db.set_evidence.assert_called_once()
+    assert module.db.set_evidence.call_args.args[0].victim.value == "8.8.8.8"
+    assert module.db.set_evidence.call_args.args[0].proto.value == proto
+
+
+
+@pytest.mark.parametrize("flow", [
+    {"saddr": "10.0.0.1", "daddr": "8.8.8.8", "proto": "icmp", "starttime": 1},
+    {"saddr": "10.0.0.2", "daddr": "8.8.8.8", "proto": "tcp", "starttime": 1},
+    {"saddr": "10.0.0.1", "proto": "tcp", "starttime": 1},
+    {},
+])
+def test_irrelevant_flow_does_not_run_vertical_database_search(flow: dict) -> None:
+    """Ignore unsupported traffic and destination-profile copies without reads.
+
+    Parameters:
+        flow: Non-source, malformed or non-TCP/UDP event.
+    """
+    module = ModuleFactory().create_vertical_portscan_obj()
+    module.check(ProfileID(ip="10.0.0.1"), TimeWindow(number=0), flow)
+    module.db.get_dstips_with_not_established_flows.assert_not_called()
+    module.db.get_info_about_not_established_flows.assert_not_called()

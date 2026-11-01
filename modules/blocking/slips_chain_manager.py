@@ -2,6 +2,9 @@ from slips_files.common.slips_utils import utils
 import os
 
 from modules.blocking.exec_iptables_cmd import list_slips_firewall_rules
+from modules.blocking.macos_pf import PF_ANCHOR
+import platform
+import subprocess
 
 
 def _chain_exists() -> bool:
@@ -20,6 +23,16 @@ def _chain_exists() -> bool:
 
 def del_slips_blocking_chain() -> bool:
     """Flushes and deletes everything in slipsBlocking chain"""
+    if platform.system() == "Darwin":
+        sudo = utils.get_sudo_according_to_env().split()
+        return (
+            subprocess.run(
+                [*sudo, "pfctl", "-a", PF_ANCHOR, "-F", "rules"],
+                capture_output=True,
+                check=False,
+            ).returncode
+            == 0
+        )
     if not _chain_exists():
         return False
 
@@ -51,5 +64,14 @@ def has_slips_firewall_rules() -> bool:
     Returns:
         True when at least one Slips-commented rule is installed.
     """
+    if platform.system() == "Darwin":
+        sudo = utils.get_sudo_according_to_env().split()
+        result = subprocess.run(
+            [*sudo, "pfctl", "-a", PF_ANCHOR, "-sr"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return result.returncode == 0 and "block" in result.stdout
     sudo = utils.get_sudo_according_to_env()
     return bool(list_slips_firewall_rules(sudo))

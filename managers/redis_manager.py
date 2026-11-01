@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import contextlib
+import argparse
 import shutil
 import redis
 import os
@@ -9,7 +10,9 @@ import socket
 import sys
 import time
 import subprocess
+import yaml
 from typing import Dict, Union
+from pathlib import Path
 
 from slips_files.common.ips import IPV4_LOCALHOST, LOCALHOST_HOSTNAME
 from slips_files.core.database.redis_db.database import RedisDB
@@ -19,6 +22,14 @@ from slips_files.core.database.redis_db.redis_auth import (
 from slips_files.core.output import Output
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
+from slips_files.common.parsers.analysis_config import (
+    isolated_analysis_config,
+    isolated_analysis_output,
+)
+from managers.process_manager.instance_control import (
+    capture_arguments,
+    list_instances,
+)
 from slips_files.common.output_paths import (
     get_this_db_path_inside_output_dir,
 )
@@ -57,6 +68,185 @@ class RedisManager:
         """
         if port in RedisDB.instances:
             del RedisDB.instances[port]
+
+    def validate_keep_history(self) -> bool:
+        """Validate live-run isolation and identify any history to preserve.
+
+        Returns:
+            True for existing SQLite history, False for a fresh run.
+        """
+        args = self.main.args
+        if (
+            not getattr(args, "interface", None)
+            or not getattr(args, "output", None)
+            or getattr(args, "multiinstance", False)
+            or getattr(args, "db", None)
+            or getattr(args, "is_slips_started_by_an_update", False)
+            or getattr(args, "port", None) not in (None, "6379", 6379)
+        ):
+            raise SystemExit(
+                "--keep-history requires -i <interface> -o <dir> "
+                "and Redis port 6379; it cannot be combined with -m or -d."
+            )
+
+        output_dir = Path(args.output)
+        flows_db = output_dir / "databases" / "flows.sqlite"
+        has_history = flows_db.is_file()
+        if has_history:
+            metadata = output_dir / "metadata" / "info.txt"
+            if not metadata.is_file():
+                raise SystemExit(
+                    f"--keep-history needs {metadata} to verify the interface."
+                )
+            previous_input = next(
+                (
+                    line.removeprefix("File: ").strip()
+                    for line in metadata.read_text().splitlines()
+                    if line.startswith("File: ")
+                ),
+                "",
+            )
+            if previous_input != args.interface:
+                raise SystemExit(
+                    "--keep-history output belongs to "
+                    f"{previous_input or 'an unknown input'}, not {args.interface}."
+                )
+
+        for process in psutil.process_iter(attrs=["pid", "cmdline"]):
+            if process.info["pid"] == os.getpid():
+                continue
+            command = process.info["cmdline"] or []
+            if any(os.path.basename(part) == "slips.py" for part in command):
+                self._assert_history_run_isolated(process)
+        return has_history
+
+    def _assert_history_run_isolated(self, process: psutil.Process) -> None:
+        """Reject resources shared with a concurrent history-preserving run.
+
+        Parameters:
+            process: Other Slips process, with cached PID and command line.
+        """
+        info = getattr(process, "info", None)
+        command = (
+            (info["cmdline"] or [])
+            if isinstance(info, dict)
+            else process.cmdline()
+        )
+        arguments = capture_arguments(command)
+        if arguments is None:
+            return
+        parser = argparse.ArgumentParser(
+            add_help=False, allow_abbrev=False, exit_on_error=False
+        )
+        parser.add_argument("-m", "--multiinstance", action="store_true")
+        parser.add_argument("-P", "--port")
+        parser.add_argument("-o", "--output")
+        parser.add_argument("-c", "--config", default="config/slips.yaml")
+        parser.add_argument("-cc", "--clearcache", action="store_true")
+        parser.add_argument("-w", "--webinterface", action="store_true")
+        parser.add_argument("--web-port", type=int)
+        try:
+            other, _ = parser.parse_known_args(arguments)
+            other_cwd = Path(process.cwd())
+            config_path = other_cwd / other.config
+            with config_path.open(encoding="utf-8") as source:
+                config = yaml.safe_load(source) or {}
+            if not isinstance(config, dict):
+                raise ValueError("Invalid Slips configuration")
+            analysis_output = isolated_analysis_output(arguments)
+            if analysis_output is not None:
+                config = isolated_analysis_config(config, analysis_output)
+            parameters = config.get("parameters") or {}
+            other_web = config.get("web_interface") or {}
+            if not isinstance(parameters, dict) or not isinstance(
+                other_web, dict
+            ):
+                raise ValueError("Invalid Slips configuration sections")
+            other_web_port = (
+                other.web_port
+                if other.web_port is not None
+                else int(other_web.get("port", 55000))
+            )
+            current_port = int(self.main.args.port or DEFAULT_REDIS_PORT)
+            other_port = int(other.port or DEFAULT_REDIS_PORT)
+        except (
+            OSError,
+            psutil.Error,
+            ValueError,
+            TypeError,
+            argparse.ArgumentError,
+            yaml.YAMLError,
+        ) as error:
+            raise SystemExit(
+                "Cannot verify isolation from another Slips run; "
+                "leaving the existing run untouched."
+            ) from error
+
+        if (
+            current_port == other_port
+            and not (
+                self.main.args.multiinstance is True
+                and not self.main.args.port
+            )
+            and not (other.multiinstance and not other.port)
+        ):
+            raise SystemExit(
+                "Another Slips run uses the history Redis port "
+                f"{current_port} (PID {process.pid}). "
+                "Use -m or -P <unused-port> for the separate analysis."
+            )
+
+        if not self.main.args.output or not other.output:
+            raise SystemExit(
+                "Concurrent history runs require separate explicit -o paths."
+            )
+        output = Path(self.main.args.output).resolve()
+        other_output = (other_cwd / other.output).resolve()
+        permanent = Path(self.main.conf.permanent_dir()).resolve()
+        other_permanent = (
+            other_cwd / (parameters.get("permanent_dir") or "permanent")
+        ).resolve()
+        if (
+            output.is_relative_to(other_output)
+            or other_output.is_relative_to(output)
+            or permanent.is_relative_to(other_output)
+            or other_permanent.is_relative_to(output)
+            or permanent == other_permanent
+        ):
+            raise SystemExit(
+                "Another Slips run shares output or persistent data. "
+                "Use separate -o and parameters.permanent_dir paths."
+            )
+
+        if (
+            (
+                self.main.args.webinterface is True
+                or self.main.conf.web_interface_enabled()
+            )
+            and (other.webinterface or other_web.get("enabled", False))
+            and self.main.conf.web_interface_port == other_web_port
+        ):
+            raise SystemExit(
+                "Another Slips run uses this web port. "
+                "Use --web-port <unused-port> for the separate analysis."
+            )
+
+    def reject_active_history_run(self) -> None:
+        """Protect history mode from a second run sharing its resources."""
+        if getattr(self.main.args, "keep_history", False) is True:
+            return
+        if getattr(self.main.conf, "isolated_analysis", False) is True:
+            for instance in list_instances(Path("slips.py")):
+                self._assert_history_run_isolated(psutil.Process(instance.pid))
+            return
+        for process in psutil.process_iter(attrs=["pid", "cmdline"]):
+            if process.info["pid"] == os.getpid():
+                continue
+            command = process.info["cmdline"] or []
+            if any(
+                os.path.basename(part) == "slips.py" for part in command
+            ) and ("--keep-history" in command):
+                self._assert_history_run_isolated(process)
 
     def get_start_port(self):
         return self.start_port
@@ -531,6 +721,10 @@ class RedisManager:
         if self.main.args.is_slips_started_by_an_update:
             if self.main.args.port:
                 return int(self.main.args.port)
+            return DEFAULT_REDIS_PORT
+
+        if getattr(self.main.args, "keep_history", False) is True:
+            self._clear_cached_redis_instance(DEFAULT_REDIS_PORT)
             return DEFAULT_REDIS_PORT
 
         if self.main.args.port:
