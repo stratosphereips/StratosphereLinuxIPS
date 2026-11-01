@@ -30,6 +30,27 @@ MATCH_WINDOW = 3600
 LOCAL_REPUTATION_HALF_LIFE = 86400
 
 
+def is_group_long_connection(detection: dict[str, Any]) -> bool:
+    """Identify an inapplicable long-connection report from explicit endpoints.
+
+    Parameters:
+        detection: Detector metadata with a canonical type and optional IPs.
+
+    Returns:
+        True for Long Connection metadata naming multicast or limited broadcast.
+    """
+    if detection.get("evidence_type") != EvidenceType.LONG_CONNECTION.name:
+        return False
+    for field in ("src_ip", "dst_ip"):
+        try:
+            address = ipaddress.ip_address(detection.get(field))
+        except (TypeError, ValueError):
+            continue
+        if address.is_multicast or str(address) == "255.255.255.255":
+            return True
+    return False
+
+
 @dataclass(frozen=True)
 class AgreementPolicy:
     """Limits for learning from a local detection corroborated by peers."""
@@ -1580,6 +1601,7 @@ class ReportValidator:
                 record
                 for record in records
                 if not record.get("peer_id")
+                and not is_group_long_connection(record.get("provenance", {}))
                 and self._verdict(connection, record["id"])
                 not in {"false_positive", "conflict"}
             ]

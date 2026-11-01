@@ -21,9 +21,75 @@ from modules.p2p_trust.trust.report_validation import (
     queue_review_event,
     validate_provenance,
     local_reputation_half_life,
+    is_group_long_connection,
 )
 from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize(
+    "kind,destination,expected",
+    [
+        ("LONG_CONNECTION", "255.255.255.255", True),
+        ("LONG_CONNECTION", "224.0.0.251", True),
+        ("LONG_CONNECTION", "ff02::1", True),
+        ("LONG_CONNECTION", "192.168.1.255", False),
+        ("LONG_CONNECTION", "192.168.1.135", False),
+        ("LONG_CONNECTION", "", False),
+        ("ARP_SCAN", "255.255.255.255", False),
+    ],
+)
+def test_group_long_connection_requires_explicit_endpoints(
+    kind: str,
+    destination: str,
+    expected: bool,
+) -> None:
+    """Exclude only duration findings with explicit non-unicast addresses.
+
+    Parameters:
+        kind: Canonical detector evidence type.
+        destination: Reported destination, including an unavailable endpoint.
+        expected: Whether the metadata demonstrates an inapplicable finding.
+    """
+    _factory = ModuleFactory()
+    detection = {
+        "evidence_type": kind,
+        "src_ip": "192.168.1.135",
+        "dst_ip": destination,
+    }
+    assert is_group_long_connection(detection) is expected
+
+
+@pytest.mark.parametrize("include_unicast", [False, True])
+def test_old_broadcast_observations_are_not_resent(
+    tmp_path: Path,
+    include_unicast: bool,
+) -> None:
+    """Keep stored broadcast findings out of outgoing reputation assessments.
+
+    Parameters:
+        tmp_path: Isolated report validation database.
+        include_unicast: Whether a usable independent observation also exists.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    old = observation(kind="LONG_CONNECTION", module=Modules.CONN_ANALYZER)
+    old["provenance"].update(src_ip=old["target"], dst_ip="255.255.255.255")
+    validator.observe_local(old)
+    if include_unicast:
+        valid = observation(identifier="valid")
+        valid["score"] = 0.2
+        validator.observe_local(valid)
+    result = validator.local_report(old["target_key"])
+    if include_unicast:
+        assert result[:2] == (0.2, 1)
+        assert [item["evidence_type"] for item in result[2]] == ["ARP_SCAN"]
+    else:
+        assert result == (None, None, [])
+    with validator.connect() as connection:
+        assert connection.execute(
+            "SELECT COUNT(*) FROM observations"
+        ).fetchone()[0] == 1 + int(include_unicast)
 
 
 def observation(

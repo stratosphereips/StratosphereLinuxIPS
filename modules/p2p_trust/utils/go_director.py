@@ -23,6 +23,7 @@ from modules.p2p_trust.trust.report_validation import (
     ReportValidator,
     observation_record,
     validate_provenance,
+    is_group_long_connection,
 )
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -664,6 +665,17 @@ class GoDirector:
         except (ValueError, TypeError) as error:
             self.print(str(error), 0, 2)
             return False
+        if provenance:
+            provenance = [
+                detection
+                for detection in provenance
+                if not is_group_long_connection(detection)
+            ]
+            if not provenance:
+                self.print(
+                    "Ignored Long Connection report for group traffic", 2, 0
+                )
+                return False
         self.trustdb.insert_new_go_report(
             reporter, key_type, key, score, confidence, report_time
         )

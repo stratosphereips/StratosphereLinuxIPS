@@ -216,6 +216,22 @@ traffic from more than one private network, so this finding alone does not
 prove an attack. The fix applies to newly analyzed flows; rerun a recording
 into a new output directory to replace previously generated duplicate results.
 
+## Long connections
+
+`conn_analyzer` checks unicast flows against `long_connection_threshold`.
+It excludes limited IPv4 broadcast (`255.255.255.255`), directed broadcast
+under the subnet recorded at capture time, multicast IPs, and broadcast or
+multicast destination MACs. An address ending in `.255` is not automatically
+a broadcast: its subnet determines that. Short flows do not need the broadcast
+subnet lookup.
+
+P2P receivers discard explicit Long Connection reports about limited broadcast
+or multicast endpoints. Other detections in a mixed report remain available.
+Saved local observations with the same explicit endpoints are excluded from
+outgoing reputation reports. Subnet-specific broadcast classification stays
+with the capturing peer, which knows the original subnet and Ethernet data.
+These checks run in module workers and add no core capture/profiling work.
+
 ## Device IP changes across networks
 
 During live interface capture, `conn_analyzer` learns the first valid private

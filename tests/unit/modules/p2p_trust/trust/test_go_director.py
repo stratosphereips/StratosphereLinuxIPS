@@ -5,8 +5,76 @@ from unittest.mock import Mock, patch
 import pytest
 from tests.module_factory import ModuleFactory
 from modules.p2p_trust.utils.go_director import GoDirector
+from modules.supported_module_names import Modules
 import tempfile
 import os
+
+
+@pytest.mark.parametrize(
+    "destination,is_group",
+    [
+        ("255.255.255.255", True),
+        ("224.0.0.251", True),
+        ("ff02::1", True),
+        ("192.168.1.255", False),
+        ("192.168.1.136", False),
+    ],
+)
+@pytest.mark.parametrize("mixed", [False, True])
+def test_peer_group_long_connections_do_not_become_evidence(
+    destination: str,
+    is_group: bool,
+    mixed: bool,
+) -> None:
+    """Reject peer duration false positives while retaining unrelated findings.
+
+    Parameters:
+        destination: Explicit destination supplied by the reporting peer.
+        is_group: Whether the endpoint is a known non-unicast address.
+        mixed: Whether the report also contains another detector's finding.
+    """
+    factory = ModuleFactory()
+    director = factory.create_go_director_obj()
+    director.set_evidence_p2p_report = Mock()
+    duration = {
+        "evidence_type": "LONG_CONNECTION",
+        "module": Modules.CONN_ANALYZER.value,
+        "rule_version": "old-detector",
+        "observed_at": 1649445643,
+        "src_ip": "192.168.1.135",
+        "dst_ip": destination,
+        "src_port": 65006,
+        "dst_port": 65006,
+        "proto": "udp",
+    }
+    provenance = [duration]
+    if mixed:
+        provenance.append(
+            dict(
+                duration, evidence_type="UNKNOWN_PORT", dst_ip="192.168.1.136"
+            )
+        )
+    result = director.process_evaluation_score_confidence(
+        "peer-248",
+        1649445643,
+        "ip",
+        "192.168.1.135",
+        {"score": 0.2, "confidence": 0.02, "provenance": provenance},
+    )
+    assert result is (not is_group or mixed)
+    if is_group and not mixed:
+        director.trustdb.insert_new_go_report.assert_not_called()
+        director.db.add_profile.assert_not_called()
+        director.set_evidence_p2p_report.assert_not_called()
+    else:
+        director.trustdb.insert_new_go_report.assert_called_once()
+        received = [
+            call.args[6][0]["evidence_type"]
+            for call in director.set_evidence_p2p_report.call_args_list
+        ]
+        assert received == ([] if is_group else ["LONG_CONNECTION"]) + (
+            ["UNKNOWN_PORT"] if mixed else []
+        )
 
 
 @pytest.mark.parametrize("debug, log_only", [(0, True), (2, False)])

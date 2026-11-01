@@ -106,25 +106,26 @@ class ConnAnalyzer(IAsyncModule):
         """wait for all the tasks created by self.create_task()"""
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
-    def check_long_connection(self, twid, flow):
-        """
-        Check if a duration of the connection is
-        above the threshold (more than 25 minutes by default).
+    def check_long_connection(self, twid: str, flow: Any) -> bool | None:
+        """Check unicast connections against the configured duration threshold.
+
+        Parameters:
+            twid: Detection time window.
+            flow: Connection with its duration and packet endpoints.
+
+        Returns:
+            True for a long unicast flow, False below the threshold, or None
+            for group traffic or an unavailable duration.
         """
         try:
             flow.dur = float(flow.dur)
         except TypeError:
             return
 
-        if (
-            ipaddress.ip_address(flow.daddr).is_multicast
-            or ipaddress.ip_address(flow.saddr).is_multicast
-        ):
-            # Do not check the duration of the flow
-            return
-
         # If duration is above threshold, we should set an evidence
         if flow.dur > self.long_connection_threshold:
+            if self.is_broadcast_or_multicast_flow(flow):
+                return None
             self.set_evidence.long_connection(twid, flow)
             return True
         return False

@@ -271,7 +271,7 @@ def test_check_unknown_port_true_case(mocker):
 def test_broadcast_and_multicast_flows_do_not_create_evidence(
     saddr: str, daddr: str
 ) -> None:
-    """Skip unknown-port and private-IP evidence for broadcast traffic.
+    """Skip unknown-port, private-IP and long-connection group evidence.
 
     Parameters:
         saddr: Flow source address.
@@ -282,12 +282,14 @@ def test_broadcast_and_multicast_flows_do_not_create_evidence(
     conn.db.get_local_network.return_value = "192.168.1.0/24"
     conn.set_evidence.unknown_port = Mock()
     conn.set_evidence.conn_to_private_ip = Mock()
+    conn.set_evidence.long_connection = Mock()
+    conn.long_connection_threshold = 1500
     flow = Conn(
         starttime="1726249372.312124",
         uid="broadcast-flow",
         saddr=saddr,
         daddr=daddr,
-        dur=1,
+        dur=2000,
         proto="udp",
         appproto="",
         sport="12345",
@@ -304,9 +306,11 @@ def test_broadcast_and_multicast_flows_do_not_create_evidence(
 
     assert conn.check_unknown_port(f"profile_{saddr}", twid, flow) is None
     conn.check_connection_to_local_ip(twid, flow)
+    conn.check_long_connection(twid, flow)
 
     conn.set_evidence.unknown_port.assert_not_called()
     conn.set_evidence.conn_to_private_ip.assert_not_called()
+    conn.set_evidence.long_connection.assert_not_called()
 
 
 @pytest.mark.parametrize("dmac,interface", [
@@ -328,15 +332,19 @@ def test_group_destination_mac_suppresses_private_and_unknown_port_evidence(
     conn.db.get_local_network.return_value = "192.168.160.0/24"
     conn.set_evidence.conn_to_private_ip = Mock()
     conn.set_evidence.unknown_port = Mock()
+    conn.set_evidence.long_connection = Mock()
+    conn.long_connection_threshold = 1500
     flow = SimpleNamespace(
         saddr="192.168.1.116", daddr="192.168.1.255", sport=137,
         dport=137, proto="udp", history="D", dmac=dmac,
-        interface=interface, starttime=1792502017.916054,
+        interface=interface, starttime=1792502017.916054, dur=2000,
     )
     conn.check_connection_to_local_ip(twid, flow)
     conn.check_unknown_port(f"profile_{flow.saddr}", twid, flow)
+    conn.check_long_connection(twid, flow)
     conn.set_evidence.conn_to_private_ip.assert_not_called()
     conn.set_evidence.unknown_port.assert_not_called()
+    conn.set_evidence.long_connection.assert_not_called()
     conn.db.get_network_state.assert_not_called()
     conn.db.get_local_network.assert_not_called()
 
@@ -1383,6 +1391,64 @@ def test_check_long_connection(
     assert (
         conn.set_evidence.long_connection.call_count == expected_evidence_call
     )
+
+
+@pytest.mark.parametrize(
+    "destination,subnet,expected",
+    [
+        ("255.255.255.255", "192.168.1.0/24", False),
+        ("192.168.1.255", "192.168.1.0/24", False),
+        ("192.168.1.255", "192.168.0.0/16", True),
+        ("192.168.1.255", "192.168.1.254/31", True),
+        ("192.168.1.135", "192.168.1.0/24", True),
+    ],
+)
+def test_long_connection_uses_real_broadcast_subnet(
+    destination: str,
+    subnet: str,
+    expected: bool,
+) -> None:
+    """Keep long unicast flows while excluding actual subnet broadcasts.
+
+    Parameters:
+        destination: Connection destination IP.
+        subnet: Subnet recorded during capture.
+        expected: Whether the flow should produce long-connection evidence.
+    """
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.db.get_network_state.return_value = None
+    conn.db.get_local_network.return_value = subnet
+    conn.long_connection_threshold = 1500
+    conn.set_evidence.long_connection = Mock()
+    flow = SimpleNamespace(
+        saddr="192.168.1.135",
+        daddr=destination,
+        dur=2000,
+        sport=65006,
+        dport=65006,
+        proto="udp",
+        interface="en0",
+        starttime=1793520000,
+        uid="long-broadcast",
+        smac="",
+        dmac="",
+    )
+    conn.check_long_connection(twid, flow)
+    assert conn.set_evidence.long_connection.call_count == int(expected)
+
+
+def test_short_connection_needs_no_broadcast_network_lookup() -> None:
+    """Avoid subnet work when a flow cannot meet the duration threshold."""
+    factory = ModuleFactory()
+    conn = factory.create_conn_analyzer_obj()
+    conn.long_connection_threshold = 1500
+    conn.set_evidence.long_connection = Mock()
+    flow = SimpleNamespace(dur=30, saddr="192.168.1.135", daddr="192.168.1.1")
+    assert conn.check_long_connection(twid, flow) is False
+    conn.db.get_network_state.assert_not_called()
+    conn.db.get_local_network.assert_not_called()
+    conn.set_evidence.long_connection.assert_not_called()
 
 
 @pytest.mark.parametrize(
