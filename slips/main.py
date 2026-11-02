@@ -156,7 +156,8 @@ class Main:
             or self.db.get_input_type() == InputType.PCAP
         )
 
-    def store_zeek_dir_copy(self):
+    def store_zeek_dir_copy(self) -> None:
+        """Preserve Zeek logs when they are stored outside the run output."""
         store_a_copy_of_zeek_files = self.conf.store_a_copy_of_zeek_files()
         was_running_zeek = self.was_running_zeek()
         if store_a_copy_of_zeek_files and was_running_zeek:
@@ -165,6 +166,8 @@ class Main:
                 return
             # this is where the copy will be stored
             dest_zeek_dir = os.path.join(self.args.output, "zeek_files")
+            if os.path.realpath(zeek_dir) == os.path.realpath(dest_zeek_dir):
+                return
             shutil.copytree(zeek_dir, dest_zeek_dir, dirs_exist_ok=True)
             print(f"[Main] Stored a copy of zeek files to {dest_zeek_dir}")
 

@@ -1145,6 +1145,8 @@ Check [rotation section](https://stratospherelinuxips.readthedocs.io/en/develop/
 But you can also enable storing a copy of zeek log files in the output
 directory after the analysis is done by setting ```store_a_copy_of_zeek_files``` to yes,
 or while zeek is still generating log files by setting ```store_zeek_files_in_the_output_dir``` to yes.
+When both settings are enabled, shutdown keeps the logs already in the output
+directory without copying that directory onto itself.
 this option stores a copy of the zeek files present in ```zeek_files/``` the moment slips stops.
 so this doesn't include deleted zeek logs.
 

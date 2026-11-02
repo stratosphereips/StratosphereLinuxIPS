@@ -367,6 +367,37 @@ def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
     )
 
 
+@pytest.mark.parametrize("source_kind", ["direct", "relative", "symlink"])
+def test_store_zeek_dir_copy_preserves_logs_already_in_output(
+    tmp_path: Path, source_kind: str
+) -> None:
+    """Skip copying an output directory onto itself, including aliases.
+
+    Parameters:
+        tmp_path: Isolated run directory containing existing Zeek logs.
+        source_kind: Direct, normalized relative, or symbolic source alias.
+    """
+    main = ModuleFactory().create_main_obj()
+    destination = tmp_path / "run" / "zeek_files"
+    destination.mkdir(parents=True)
+    (destination / "conn.log").write_text("retained Zeek records\n")
+    source = str(destination)
+    if source_kind == "relative":
+        source = os.path.join(os.path.relpath(destination), ".")
+    elif source_kind == "symlink":
+        alias = tmp_path / "zeek-alias"
+        alias.symlink_to(destination, target_is_directory=True)
+        source = str(alias)
+    main.conf = MagicMock()
+    main.db = MagicMock()
+    main.conf.store_a_copy_of_zeek_files.return_value = True
+    main.db.get_zeek_output_dir.return_value = source
+    main.args.output = str(destination.parent)
+    with patch.object(main, "was_running_zeek", return_value=True):
+        main.store_zeek_dir_copy()
+    assert (destination / "conn.log").read_text() == "retained Zeek records\n"
+
+
 # TODO should be moved to utils unit tests after the PR is merged
 # def test_get_slips_version():
 #     main = ModuleFactory().create_main_obj()
