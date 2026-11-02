@@ -103,6 +103,39 @@ def test_busy_archive_keeps_uncommitted_evidence_active(tmp_path: Path) -> None:
     db.close()
 
 
+@pytest.mark.parametrize("incomplete_table", ["evidence", "alerts"])
+def test_archive_schema_failure_rolls_back_new_tables(
+    tmp_path: Path, incomplete_table: str
+) -> None:
+    """Preserve an existing archive when schema initialization fails.
+
+    Parameters:
+        tmp_path: Isolated run and archive directory.
+        incomplete_table: Existing incompatible table that prevents indexing.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    history = DetectionHistory(db.conn, str(tmp_path))
+    history.directory.mkdir()
+    filename = "detections-2033-05-0001.sqlite"
+    with sqlite3.connect(history.directory / filename) as archive:
+        archive.execute(f"CREATE TABLE {incomplete_table}(saved TEXT)")
+        archive.execute(f"INSERT INTO {incomplete_table} VALUES ('retained')")
+    try:
+        with pytest.raises(sqlite3.OperationalError, match="no such column"):
+            history._open_archive(filename)
+        with sqlite3.connect(history.directory / filename) as archive:
+            tables = archive.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'"
+            ).fetchall()
+            assert tables == [(incomplete_table,)]
+            assert archive.execute(
+                f"SELECT saved FROM {incomplete_table}"
+            ).fetchall() == [("retained",)]
+    finally:
+        db.close()
+
+
 @pytest.mark.parametrize("phase", ["summary", "archive_evidence", "checkpoint"])
 def test_maintenance_defers_busy_phases_and_resumes(
     tmp_path: Path, phase: str

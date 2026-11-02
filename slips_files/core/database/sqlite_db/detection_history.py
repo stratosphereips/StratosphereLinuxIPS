@@ -363,6 +363,7 @@ class DetectionHistory:
         archive = sqlite3.connect(self.directory / filename, timeout=0)
         try:
             archive.execute("PRAGMA synchronous=FULL")
+            archive.execute("BEGIN IMMEDIATE")
             for table in ARCHIVE_TABLES:
                 row = self.connection.execute(
                     "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
@@ -374,14 +375,17 @@ class DetectionHistory:
                             "CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", 1
                         )
                     )
-            archive.executescript(
-                "CREATE TABLE IF NOT EXISTS archive_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);"
+            statements = (
+                "CREATE TABLE IF NOT EXISTS archive_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)",
                 "CREATE INDEX IF NOT EXISTS evidence_time_cover_idx ON evidence(evidence_time,evidence_id,"
-                "profile_ip,evidence_type,threat_level,source_module,whitelisted,accumulated_threat_level,accumulated_ratl);"
-                "CREATE INDEX IF NOT EXISTS archive_alert_time_idx ON alerts(alert_time,alert_id);"
-                "CREATE INDEX IF NOT EXISTS alert_evidence_lookup_idx ON alert_evidence(evidence_id,alert_id);"
-                "CREATE INDEX IF NOT EXISTS evidence_flows_uid_idx ON evidence_flows(uid);"
+                "profile_ip,evidence_type,threat_level,source_module,whitelisted,accumulated_threat_level,accumulated_ratl)",
+                "CREATE INDEX IF NOT EXISTS archive_alert_time_idx ON alerts(alert_time,alert_id)",
+                "CREATE INDEX IF NOT EXISTS alert_evidence_lookup_idx ON alert_evidence(evidence_id,alert_id)",
+                "CREATE INDEX IF NOT EXISTS evidence_flows_uid_idx ON evidence_flows(uid)",
             )
+            for statement in statements:
+                archive.execute(statement)
+            archive.commit()
             return archive
         except Exception:
             archive.close()

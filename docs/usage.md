@@ -440,6 +440,8 @@ drains gradually. Legacy raw flows with many evidence links use resumable
 classification checkpoints before they become eligible for cleanup. Hourly
 summaries speed compact evidence queries once their backfill catches up;
 dirty or incomplete hours use exact raw queries.
+Archive tables and indexes initialize in one atomic transaction, reducing
+durable writes on SD cards and leaving no partial schema after a failed setup.
 
 Slips, errors, alerts, HTTPS anomaly and web server logs rotate into a `rotated/` directory
 beside each active log at 64 MiB. Rotated logs use the same 30-day age limit,
