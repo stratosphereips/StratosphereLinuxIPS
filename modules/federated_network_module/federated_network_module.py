@@ -68,6 +68,8 @@ BENIGN = ml_base.BENIGN
 MALICIOUS = ml_base.MALICIOUS
 # Adam step size of every training stage (local, local head, merged head)
 DEFAULT_LEARNING_RATE = 0.01
+# Payload keys of the head (weight, bias) when merge_head shares it
+HEAD_KEYS = ("head_weight", "head_bias")
 
 
 def shared_random_projection(
@@ -126,6 +128,18 @@ def learning_rate_from_config(value) -> float:
     if not math.isfinite(lr) or lr <= 0:
         return DEFAULT_LEARNING_RATE
     return lr
+
+
+def with_shared_head(shared: dict, head: tuple) -> dict:
+    """The shared payload plus the head (weight, bias) under HEAD_KEYS.
+
+    :param shared: the model's shared tensors (weights_for_sharing)
+    :param head: (weight, bias) of the head to share
+    :return: a new dict; `shared` is not modified
+    """
+    out = dict(shared)
+    out[HEAD_KEYS[0]], out[HEAD_KEYS[1]] = head
+    return out
 
 
 def window_offset_seed(peer_id: str, run_seed: Optional[int]) -> int:
@@ -1019,6 +1033,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             conf.read_configuration(section, "learning_rate", None)
         )
         self.print(f"learning_rate: {self.learning_rate}", 0, 2)
+        # Optional head sharing: peers also send the head as it is after
+        # local training (before the head fine-tune) and the merge rule runs
+        # over the shared layers + head; the merged head fine-tune then
+        # starts from the merged head. The merged model is still discarded
+        # after its window. Unset = shared layers only (unchanged).
+        self.merge_head = self._read_module_config_bool(
+            "merge_head", default=False
+        )
+        self.print(f"merge_head: {self.merge_head}", 0, 2)
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )
@@ -3062,7 +3085,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
             self.print("_train_batch: calling send_model_to_peers", 1, 1)
-            self.send_model_to_peers()
+            self.send_model_to_peers(head=(head_before_w, head_before_b))
             self.print("_train_batch: send_model_to_peers returned", 1, 1)
 
             # After own training, try merge if we have pending peer models.
@@ -3176,7 +3199,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Averages fc1 across peers + own model, then fine-tunes the head
         starting from the head produced by local full training (before any
         head-only fine-tuning). This makes local and merged models differ
-        only in the origin of fc1.
+        only in the origin of fc1. With merge_head the rule also merges the
+        heads (own: the head after local full training) and the fine-tune
+        starts from the merged head.
 
         Args:
             head_before_w: Head weight tensor from after local full training.
@@ -3190,6 +3215,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # A peer payload is usable only with every shared key at our
             # shape (another model_class may reuse key names).
             own_shared = self.model.weights_for_sharing() if self.model else {}
+            merge_head = self.model is not None and getattr(
+                self, "merge_head", False
+            )
+            if merge_head:
+                own_head = (
+                    (head_before_w, head_before_b)
+                    if head_before_w is not None and head_before_b is not None
+                    else self.model.get_head_weights()
+                )
+                own_shared = with_shared_head(own_shared, own_head)
             shared_keys = sorted(own_shared)
             usable = {
                 pid: m
@@ -3278,6 +3313,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 self.logger._write(
                     "merging_data", f"  merge_rule={self.merge_rule}"
                 )
+                if merge_head:
+                    self.logger._write("merging_data", "  merge_head=True")
                 for peer_id, m in usable.items():
                     l2_norm = torch.norm(_flat_all(m) - own_flat).item()
                     l2_normalized = l2_norm / (numel**0.5)
@@ -3335,11 +3372,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # build the merged model on a COPY of the fresh local model: the
             # local lineage is never overwritten by the merge
             merged = copy.deepcopy(self.model)
-            merged.set_shared_weights(merged_shared)
+            merged.set_shared_weights(
+                {k: v for k, v in merged_shared.items() if k not in HEAD_KEYS}
+            )
 
             # Start merge head fine-tuning from the same head used for local
-            # head fine-tuning, so local and merged differ only in fc1 origin.
-            if head_before_w is not None and head_before_b is not None:
+            # head fine-tuning, so local and merged differ only in fc1 origin
+            # - or, with merge_head, from the merged head.
+            if merge_head:
+                merged.set_head_weights(
+                    merged_shared[HEAD_KEYS[0]], merged_shared[HEAD_KEYS[1]]
+                )
+            elif head_before_w is not None and head_before_b is not None:
                 merged.set_head_weights(head_before_w, head_before_b)
 
             # fine-tune the merged head with the shared layers frozen, on the
@@ -3414,11 +3458,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self._record_error("_align_head_on_buffer")
 
-    def send_model_to_peers(self):
+    def send_model_to_peers(self, head: Optional[tuple] = None):
         """
         Send latest local model weights to all connected peers via P2P module.
 
         Called after each local training event.
+
+        Args:
+            head: (weight, bias) of the head after local training, sent
+                  with the shared layers when merge_head is on (default:
+                  the model's current head)
         """
         try:
             self.print("send_model_to_peers: entering", 1, 1)
@@ -3426,6 +3475,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 return
 
             shared = self.model.weights_for_sharing()
+            if getattr(self, "merge_head", False):
+                shared = with_shared_head(
+                    shared,
+                    (
+                        head
+                        if head is not None
+                        else self.model.get_head_weights()
+                    ),
+                )
             n_params = sum(t.numel() for t in shared.values())
 
             self.print(

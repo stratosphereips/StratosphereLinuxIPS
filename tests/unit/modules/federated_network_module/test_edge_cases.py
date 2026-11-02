@@ -9,6 +9,7 @@ regexes the experiment runner parses them with. Only the network update
 merging, the P2P wire format, and the merge-rule contract.
 """
 
+import base64
 import json
 import pickle
 import re
@@ -530,6 +531,134 @@ def test_incompatible_peer_is_skipped_and_the_rest_still_merge(tmp_path, bad):
     assert all(torch.equal(local[key], own[key]) for key in own)
     merging = (tmp_path / "slips-a" / "merging_data.log").read_text()
     assert "peer=slips-b" in merging and "peer=slips-c" not in merging
+
+
+def _sent_shared(module):
+    """The shared tensors of the last model this module published."""
+    _channel, raw = module.db.publish.call_args.args
+    msg = json.loads(base64.b64decode(json.loads(raw)["message"]))
+    return {k: torch.tensor(v) for k, v in msg["shared"].items()}
+
+
+def _merge_ready(tmp_path, merge_head):
+    m = _peer_module(tmp_path, "slips-a", _net(tmp_path, "slips-a"))
+    m.merge_head = merge_head
+    m._align_head_on_buffer = MagicMock()
+    m._save_merged_model = MagicMock()
+    m._save_final_merged_model = MagicMock()
+    return m
+
+
+def _receive(m, peer_id, shared):
+    m.handle_p2p_model(
+        {
+            "peer_id": peer_id,
+            "model_class": "random_projection_mlp",
+            "shared": {k: v.tolist() for k, v in shared.items()},
+            "timestamp": 1.0,
+        }
+    )
+
+
+@pytest.mark.parametrize("merge_head", [False, True])
+def test_the_head_is_sent_only_with_merge_head(tmp_path, merge_head):
+    a = _peer_module(tmp_path, "slips-a", _net(tmp_path, "slips-a"))
+    a.merge_head = merge_head
+    w, b = a.model.get_head_weights()
+    head = (w + 1.0, b - 1.0)
+    a.send_model_to_peers(head=head)
+    sent = _sent_shared(a)
+    shared = a.model.weights_for_sharing()
+    extra = set(fnm.HEAD_KEYS) if merge_head else set()
+    assert set(sent) == set(shared) | extra
+    if merge_head:
+        assert torch.equal(sent["head_weight"], head[0])
+        assert torch.equal(sent["head_bias"], head[1])
+
+
+def test_with_merge_head_the_head_after_local_training_is_sent(tmp_path):
+    """_train_batch shares the head as it is after local full training, the
+    same head the merged fine-tune starts from - not the head after the
+    local head fine-tune."""
+    m = _trainable(tmp_path)
+    m.merge_head = True
+    after_local = {}
+    real_fit = m.fit_incremental_model
+
+    def spy_fit(x, y, classes=None, train_target="local"):
+        out = real_fit(x, y, classes=classes, train_target=train_target)
+        if train_target == "local":
+            after_local["head"] = m.model.get_head_weights()
+        return out
+
+    m.fit_incremental_model = spy_fit
+    m._train_batch()
+    sent = _sent_shared(m)
+    assert torch.equal(sent["head_weight"], after_local["head"][0])
+    assert torch.equal(sent["head_bias"], after_local["head"][1])
+    # the served local head is the fine-tuned one, not the one sent
+    assert not torch.equal(m.model.get_head_weights()[0], sent["head_weight"])
+
+
+@pytest.mark.parametrize("merge_head", [False, True])
+def test_merge_head_merges_the_heads_with_the_unchanged_rule(
+    tmp_path, merge_head
+):
+    """With merge_head the merge rule (here average, unchanged) also merges
+    the heads - own = the head after local training - and the merged head
+    fine-tune starts from that; without it the merged model starts from the
+    own head. Either way the local model keeps its own head and layers."""
+    m = _merge_ready(tmp_path, merge_head)
+    own = m.model.weights_for_sharing()
+    local_head = m.model.get_head_weights()
+    head_before = (local_head[0] + 0.25, local_head[1] - 0.25)
+    peer = _net(tmp_path, "slips-b")
+    peer_head = tuple(t - 0.5 for t in peer.get_head_weights())
+    payload = {k: v + 0.1 for k, v in peer.weights_for_sharing().items()}
+    if merge_head:
+        payload = fnm.with_shared_head(payload, peer_head)
+    _receive(m, "slips-b", payload)
+    m.trigger_merge(*head_before)
+    assert m._using_merged_model and m.merge_count == 1
+    merged = m.merged_model
+    for key in own:
+        assert torch.allclose(
+            merged.weights_for_sharing()[key], (own[key] + payload[key]) / 2
+        )
+    want = (
+        tuple((a + b) / 2 for a, b in zip(head_before, peer_head))
+        if merge_head
+        else head_before
+    )
+    got = merged.get_head_weights()
+    assert torch.allclose(got[0], want[0]) and torch.allclose(got[1], want[1])
+    assert torch.equal(m.model.get_head_weights()[0], local_head[0])
+    assert torch.equal(m.model.get_head_weights()[1], local_head[1])
+    local = m.model.weights_for_sharing()
+    assert all(torch.equal(local[key], own[key]) for key in own)
+    merging = (tmp_path / "slips-a" / "merging_data.log").read_text()
+    assert ("merge_head=True" in merging) == merge_head
+
+
+def test_with_merge_head_a_peer_without_a_head_is_skipped(tmp_path):
+    m = _merge_ready(tmp_path, True)
+    _receive(m, "slips-b", _net(tmp_path, "slips-b").weights_for_sharing())
+    m.trigger_merge()
+    assert m.merge_count == 0 and not m._using_merged_model
+
+
+def test_merge_head_leaves_the_merge_rules_unchanged():
+    """Head sharing only adds payload keys: every registered rule still has
+    the (own_shared, peer_models, shared_keys, trust) signature."""
+    import inspect
+
+    for rule in fnm.MERGE_REGISTRY.values():
+        assert list(inspect.signature(rule).parameters) == [
+            "own_shared",
+            "peer_models",
+            "shared_keys",
+            "trust",
+        ]
 
 
 def test_malformed_peer_payload_keeps_the_last_good_model(tmp_path):

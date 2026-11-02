@@ -249,6 +249,7 @@ federated_network_module:
   evidence_detection_threshold: 0.20
   # run_seed: 2   # optional, for repeat runs (see below)
   # learning_rate: 0.01   # optional, Adam step size (see below)
+  # merge_head: false      # optional, also share + merge the head (see below)
 ```
 
 `run_seed` (optional, unset by default) gives repeat experiments run-to-run
@@ -261,6 +262,16 @@ same model. Unset = the previous behaviour.
 training stage: local training and both head fine-tunes (local and merged), so
 local and merged stay comparable. Invalid or non-positive values fall back to
 0.01.
+
+`merge_head` (optional, default false) also shares the head: each peer sends
+its head as it is after local training (before the head fine-tune) together
+with the shared layers, the merge rule runs unchanged over shared layers +
+head, and the merged head fine-tune starts from the merged head instead of the
+own one. A peer payload without a head is skipped. Nothing else changes: the
+local model still trains only from the previous local model, and the merged
+model serves one window and is discarded. `merging_data.log` gets a
+`merge_head=True` line, and its distances and `weights/merge_*.npz` vectors
+then include the head parameters.
 
 ### Hyperparameter Summary
 
