@@ -230,5 +230,5 @@ def test_shutdown_marks_retained_page_backend_disconnected() -> None:
 
     module.shutdown_gracefully()
 
-    module.history_collector.collect_once.assert_called_once_with()
+    module.history_collector.collect_once.assert_called_once_with(force=True)
     module.history_collector.mark_backend_disconnected.assert_called_once_with()

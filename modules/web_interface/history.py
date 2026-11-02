@@ -157,6 +157,7 @@ class HistoryCollector:
         self._last_flow_check = time.monotonic()
         self._last_rollup = 0.0
         self._last_host_snapshot = 0.0
+        self._last_storage_sample = 0.0
         self._detection_schema_ready = False
         self._redis_detection_backfill_complete = False
         initialize_history(self.history_path)
@@ -512,7 +513,7 @@ class HistoryCollector:
                     "(ip, observed_at, data) VALUES (?, ?, ?)",
                     rows,
                 )
-        self._last_host_snapshot = observed_at
+            self._last_host_snapshot = observed_at
         return len(rows)
 
     @staticmethod
@@ -1024,14 +1025,28 @@ class HistoryCollector:
 
         return len(rows)
 
-    def collect_once(self) -> None:
-        """Run one bounded collector iteration."""
+    def collect_once(self, force: bool = False) -> None:
+        """
+        Run one bounded collector iteration.
+
+        Parameters:
+            force: Force immediate host snapshot and storage sampling.
+        """
         now = time.time()
         self.record_backend_heartbeat(now)
-        if now - self._last_host_snapshot >= HOST_SNAPSHOT_INTERVAL_SECONDS:
+        if (
+            force
+            or self._last_host_snapshot == 0.0
+            or now - self._last_host_snapshot >= HOST_SNAPSHOT_INTERVAL_SECONDS
+        ):
             self.snapshot_hosts()
+        if (
+            force
+            or self._last_storage_sample == 0.0
+            or now - self._last_storage_sample >= HOST_SNAPSHOT_INTERVAL_SECONDS
+        ):
             self.sample_storage()
-            self._last_host_snapshot = now
+            self._last_storage_sample = now
         self.index_new_flows()
         self.sample_metrics()
         self.tail_errors()
