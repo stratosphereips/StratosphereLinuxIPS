@@ -730,11 +730,10 @@ ip,54.151.0.246:43,dst,alerts
 
 These rules exclude detections for connections to port 43 on those servers;
 their flows remain available. They do not whitelist every destination using
-port 43, or other ports on those IPs. The current default also includes
-`ip,*:43,both,alerts`, which excludes detections whenever either endpoint uses
-port 43, regardless of its IP. To restrict the exception to particular WHOIS
-servers, remove that broader line from your copy and add verified servers in
-the destination-specific form above. Rules apply independently: a narrow rule
+port 43, or other ports on those IPs. The default file has no blanket port-43
+exception. When updating an existing personal whitelist, remove any
+`ip,*:43,both,alerts` entry if you want only the destination-specific rules
+above. Rules apply independently: a narrow rule
 does not cancel an existing broader IP, domain, organization or port rule.
 Adding a rule does not delete historical detections.
 

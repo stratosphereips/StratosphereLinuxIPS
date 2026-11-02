@@ -39,7 +39,7 @@ def test_mdns_names_follow_address_record_owners(
         extra: Additional address records used to check the memory bound.
     """
     module_factory = ModuleFactory()
-    zeek = shutil.which("zeek")
+    zeek = shutil.which("zeek") or shutil.which("bro")
     if not zeek:
         pytest.skip("Zeek is not installed")
     scapy = pytest.importorskip("scapy.all")

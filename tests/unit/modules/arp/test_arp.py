@@ -378,13 +378,14 @@ def test_busy_private_checkpoint_retries_without_blocking_worker() -> None:
 
 
 def test_recorded_arp_scan_still_detected_without_live_database() -> None:
-    """Replay the repository's actual malicious ARP log through the new worker.
+    """Replay the tracked, sanitized malicious ARP fixture through the worker.
 
     No processes or capture connections are started.
     """
     arp = ModuleFactory().create_arp_obj()
     from pathlib import Path
-    for index, line in enumerate(Path("dataset/test15-arp-scan-zeek-folder/arp.log").read_text().splitlines()):
+    fixture = Path(__file__).with_name("fixtures") / "arp_scan.jsonl"
+    for index, line in enumerate(fixture.read_text().splitlines()):
         raw = json.loads(line)
         flow = ARP(starttime=raw["ts"], uid=f"recorded-{index}", operation=raw["operation"],
             saddr=raw["orig_h"], daddr=raw["resp_h"], smac=raw["src_mac"], dmac=raw["dst_mac"],

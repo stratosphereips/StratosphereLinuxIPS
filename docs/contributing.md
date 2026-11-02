@@ -210,6 +210,13 @@ Once all modules are done processing, EvidenceHandler is killed by the Process m
 - It runs the unit tests first, then the integration tests.
 - Please get familiar with pytest first https://docs.pytest.org/en/stable/how-to/output.html
 
+Run the full suite in an isolated environment when another Slips analysis is
+active: the runner clears the shared Redis cache. Give test directories with
+repeated filenames an `__init__.py` so collection and spawned processes import
+the correct module. Keep required fixtures under `tests/` and track them in
+Git; tests must not depend on locally retained capture logs. The ARP replay
+fixture preserves packet timing and address relationships with anonymized MACs.
+
 ### What does `generate_performance_plots` do?
 
 - `Debug.generate_performance_plots` in [config/slips.yaml](config/slips.yaml) is a developer-only debugging switch for performance investigations.

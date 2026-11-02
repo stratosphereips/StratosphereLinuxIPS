@@ -20,7 +20,7 @@ def test_http_transaction_header_metadata(interim: bool) -> None:
     :param interim: Whether the first transaction includes a 100 Continue reply.
     """
     analyzer = ModuleFactory().create_http_analyzer_obj()
-    zeek = shutil.which("zeek")
+    zeek = shutil.which("zeek") or shutil.which("bro")
     if not zeek:
         pytest.skip("Zeek is not installed")
     scapy = pytest.importorskip("scapy.all")

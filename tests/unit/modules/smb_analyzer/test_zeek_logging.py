@@ -21,7 +21,7 @@ def test_zeek_limits_file_write_logging_and_authentication_commands(
     """
     factory = ModuleFactory()
     assert factory is not None
-    zeek = shutil.which("zeek")
+    zeek = shutil.which("zeek") or shutil.which("bro")
     if not zeek:
         pytest.skip("Zeek is not installed")
     # Invoke the real SMB logger with metadata records. No file content is involved.

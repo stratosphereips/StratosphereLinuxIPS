@@ -66,7 +66,7 @@ def test_native_packet_windows_exclude_retransmissions_and_keep_bounded_sizes(tm
         acks: Whether pure ACK windows should be included.
     """
     module = ModuleFactory().create_beaconing_obj(packet_timing={"enabled":True,"include_acks":acks,"min_events":8,"window_events":12,"emit_every":4,"min_connection_age_seconds":0})
-    zeek = shutil.which("zeek")
+    zeek = shutil.which("zeek") or shutil.which("bro")
     if not zeek:
         pytest.skip("Zeek is not installed")
     capture = tmp_path / "callbacks.pcap"
