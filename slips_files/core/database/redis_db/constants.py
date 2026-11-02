@@ -46,6 +46,10 @@ class Constants:
     ZEEK_FILES = "zeekfiles"
     DEFAULT_GATEWAY = "default_gateway"
     IS_CYST_ENABLED = "is_cyst_enabled"
+    NETWORK_STATES = "network_states"
+    SLIPS_OWN_CONNECTION_PREFIX = "slips:own_connection:"
+    SLIPS_OWN_SOURCE_PREFIX = "slips:own_sources:"
+    SLIPS_OWN_CONNECTION_TTL = 3600
     LOCAL_NETWORK = "local_network"
     ZEEK_PATH = "zeek_path"
     P2P_REPORTS = "p2p_reports"
@@ -117,6 +121,7 @@ class Constants:
     PEER_TRUST = "peer_trust"
     P2P_TRUST_SET = "peers_strust"
     P2P_PEER_INFO_HASH = "peer_info"
+    P2P_REPORTS_BY_PEER = "p2p_reports_by_peer"
     P2P_MESSAGE_COUNTS = "p2p_message_counts"
     P2P_MESSAGE_HISTORY = "p2p_message_history"
     P2P_CONNECTIONS = "p2p:connections"

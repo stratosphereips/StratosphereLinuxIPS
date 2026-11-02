@@ -323,12 +323,15 @@ class AlertHandler:
             setattr(evidence, entity_type, entity)
         return evidence
 
-    def set_evidence(self, evidence: Evidence):
+    def set_evidence(self, evidence: Evidence, notify: bool = True) -> bool:
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
         slips_files/core/structures/evidence.py) with all the
         evidence details,
+        :param notify: Publish immediately only when no later SQLite write
+            is required by the caller.
+        :return: Whether the evidence was newly stored.
         """
         # create the profile if it doesn't exist
         self.add_profile(str(evidence.profile), evidence.timestamp)
@@ -358,7 +361,8 @@ class AlertHandler:
 
         self.r.hset(evidence_hash, evidence.id, evidence_to_send)
         self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-        self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
+        if notify:
+            self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
         return True
 
     def set_alert(self, alert: Alert):
@@ -604,3 +608,14 @@ class AlertHandler:
         score_confidence = {"score": max_threat_lvl, "confidence": confidence}
 
         self.set_ip_info(ip, score_confidence)
+
+    def publish_evidence_added(self, evidence: Evidence) -> None:
+        """Notify evidence consumers after the durable row is committed.
+
+        Parameters:
+            evidence: Evidence already stored in Redis and SQLite.
+        """
+        self.publish(
+            self.channels.EVIDENCE_ADDED,
+            json.dumps(utils.to_dict(evidence)),
+        )

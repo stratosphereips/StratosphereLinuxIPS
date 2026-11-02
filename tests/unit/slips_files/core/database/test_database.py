@@ -145,6 +145,7 @@ def test_set_evidence_records_the_producing_module() -> None:
     db.rdb.belongs_to_run = Mock(return_value=True)
     db._get_evidence_interface = Mock(return_value="eth0")
     db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
     db.sqlite = Mock()
     db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
     db.update_threat_level = Mock()
@@ -159,8 +160,9 @@ def test_set_evidence_records_the_producing_module() -> None:
 
     assert db.set_evidence(evidence) is True
     assert evidence.source_module == "conn_analyzer"
-    db.rdb.set_evidence.assert_called_once_with(evidence)
+    db.rdb.set_evidence.assert_called_once_with(evidence, notify=False)
     db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.rdb.publish_evidence_added.assert_called_once_with(evidence)
 
 
 @pytest.mark.parametrize(

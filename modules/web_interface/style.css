@@ -349,3 +349,6 @@ pre { max-height: 380px; overflow: auto; padding: .8rem; border: 1px solid var(-
   .protocol-details { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
   .config-settings { grid-template-columns: repeat(2, minmax(240px, 1fr)); }
 }
+
+.p2p-review-editor { display: grid; gap: .75rem; margin-bottom: 1rem; padding: 1rem; }
+.p2p-review-editor textarea { min-height: 5rem; width: 100%; resize: vertical; }

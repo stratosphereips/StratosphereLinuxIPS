@@ -25,6 +25,19 @@ import redis
 import yaml
 
 from modules.supported_module_names import Modules
+from modules.p2p_trust.trust.base_model import (
+    RELIABILITY_WEIGHT,
+    local_maliciousness_to_thesis_score,
+)
+from modules.p2p_trust.trust.report_validation import (
+    ReportValidator,
+    observation_record,
+    queue_review_event,
+)
+from modules.p2p_trust.utils.network import (
+    network_id_for_state,
+    network_for_observation,
+)
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
@@ -58,6 +71,7 @@ MAX_FLOW_LIMIT = 1000
 MAX_CHART_POINTS = 1200
 CLIENT_REQUEST_TIMEOUT_SECONDS = 15
 BACKEND_HEARTBEAT_TIMEOUT_SECONDS = 15
+P2P_RECENT_ACTIVITY_SECONDS = 15 * 60
 INTERNAL_PID_NAMES = {
     "web_interface_history",
     "web_interface_detection_backfill",
@@ -4175,7 +4189,7 @@ class RunDataReader:
             peer_id: self._loads(raw, {})
             for peer_id, raw in self.redis.hgetall("peer_info").items()
         }
-        peer_trust = self.redis.hgetall("peer_trust")
+        connected.update(self._legacy_connected_p2p_peers(peer_info))
         peer_seen = dict(
             self.redis.zrange("peers_strust", 0, -1, withscores=True)
         )
@@ -4186,19 +4200,41 @@ class RunDataReader:
                 f"p2p_message_counts_{current_tw}"
             ).items()
         }
+        peer_message_counts = {
+            str(peer_id): int(value)
+            for peer_id, value in self.redis.hgetall(
+                f"p2p_reports_by_peer_{current_tw}"
+            ).items()
+        }
         activity = [
             self._loads(raw, {})
-            for raw in self.redis.lrange("p2p_message_history", 0, 199)
+            for raw in self.redis.lrange("p2p_message_history", 0, 999)
         ]
         analysis = self.redis.hgetall("analysis")
         run_start = self._event_timestamp(analysis.get("analysis_start"))
-        trust_path = Path("permanent") / "p2p_trust_runtime" / "trustdb.db"
+        recent_activity_cutoff = max(
+            time.time() - P2P_RECENT_ACTIVITY_SECONDS,
+            run_start or 0,
+        )
+        for peer_id, info in peer_info.items():
+            last_activity = self._event_timestamp(info.get("last_activity"))
+            if (
+                info.get("connected") is True
+                and last_activity
+                and last_activity >= recent_activity_cutoff
+            ):
+                connected.add(peer_id)
+        validation_path = self._report_validation_path()
+        trust_path = validation_path.with_name("trustdb.db")
         trust_range = "all"
         trust_history: List[Dict[str, Any]] = []
         latest_reliability: Dict[str, Dict[str, Any]] = {}
         reports: List[Dict[str, Any]] = []
         reports_received = 0
+        report_counts: Counter[str] = Counter()
         peer_ips: Dict[str, Dict[str, Any]] = {}
+        peer_addresses: Dict[str, Dict[str, Any]] = {}
+        peer_first_seen: Dict[str, float] = {}
         if trust_path.exists():
             try:
                 with sqlite3.connect(
@@ -4224,9 +4260,20 @@ class RunDataReader:
                         trust_params.append(trust_end)
                     trust_where = " AND ".join(trust_clauses)
                     for row in connection.execute(
-                        "SELECT peerid, reliability, update_time "
-                        f"FROM go_reliability WHERE {trust_where} "
-                        "ORDER BY update_time DESC LIMIT 2000",
+                        "WITH ordered AS ("
+                        "SELECT peerid, reliability, update_time, "
+                        "ROW_NUMBER() OVER (ORDER BY update_time, peerid) AS rn, "
+                        "COUNT(*) OVER () AS total, "
+                        "ROW_NUMBER() OVER (PARTITION BY peerid "
+                        "ORDER BY update_time) AS peer_rn, "
+                        "ROW_NUMBER() OVER (PARTITION BY peerid "
+                        "ORDER BY update_time DESC) AS peer_last_rn "
+                        f"FROM go_reliability WHERE {trust_where}) "
+                        "SELECT peerid, reliability, update_time FROM ordered "
+                        "WHERE rn = 1 OR rn = total OR peer_rn = 1 "
+                        "OR peer_last_rn = 1 "
+                        "OR rn % MAX(1, CAST((total + 1997) / 1998 AS INTEGER)) = 0 "
+                        "ORDER BY update_time",
                         trust_params,
                     ):
                         trust_history.append(
@@ -4256,6 +4303,8 @@ class RunDataReader:
                         "SELECT peerid, ipaddress, update_time FROM peer_ips "
                         "ORDER BY update_time DESC LIMIT 1000"
                     ):
+                        if not self._usable_peer_ip(row["ipaddress"]):
+                            continue
                         peer_ips.setdefault(
                             str(row["peerid"]),
                             {
@@ -4265,6 +4314,35 @@ class RunDataReader:
                                 ),
                             },
                         )
+                    if connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+                        "AND name = 'peer_addresses'"
+                    ).fetchone():
+                        for row in connection.execute(
+                            "SELECT peerid, ipaddress, update_time "
+                            "FROM peer_addresses ORDER BY update_time DESC "
+                            "LIMIT 1000"
+                        ):
+                            if not self._usable_peer_ip(row["ipaddress"]):
+                                continue
+                            peer_addresses.setdefault(
+                                str(row["peerid"]),
+                                {
+                                    "ip": str(row["ipaddress"]),
+                                    "timestamp": self._event_timestamp(
+                                        row["update_time"]
+                                    ),
+                                },
+                            )
+                    peer_first_seen = {
+                        str(row["peerid"]): self._event_timestamp(
+                            row["first_seen"]
+                        )
+                        for row in connection.execute(
+                            "SELECT peerid, MIN(update_time) AS first_seen "
+                            "FROM peer_ips GROUP BY peerid"
+                        )
+                    }
                     for row in connection.execute(
                         "SELECT reporter_peerid, reported_key, score, confidence, "
                         "update_time FROM reports ORDER BY update_time DESC LIMIT 500"
@@ -4281,37 +4359,131 @@ class RunDataReader:
                                 or timestamp >= run_start,
                             }
                         )
-                    if run_start:
-                        report_count_row = connection.execute(
-                            "SELECT COUNT(*) AS total FROM reports "
-                            "WHERE update_time >= ?",
-                            (run_start,),
-                        ).fetchone()
-                    else:
-                        report_count_row = connection.execute(
-                            "SELECT COUNT(*) AS total FROM reports"
-                        ).fetchone()
-                    if report_count_row:
-                        reports_received = int(report_count_row["total"])
+                    report_where = (
+                        "WHERE update_time >= ?" if run_start else ""
+                    )
+                    report_params = (run_start,) if run_start else ()
+                    for row in connection.execute(
+                        "SELECT reporter_peerid, COUNT(*) AS total "
+                        f"FROM reports {report_where} "
+                        "GROUP BY reporter_peerid",
+                        report_params,
+                    ):
+                        count = int(row["total"])
+                        report_counts[str(row["reporter_peerid"])] = count
+                        reports_received += count
             except sqlite3.Error:
                 pass
-        report_counts = Counter(item["peer_id"] for item in reports)
+        if counts:
+            reports_received = counts.get("received:report", 0) + counts.get(
+                "received:blame", 0
+            )
+            if not peer_message_counts and reports_received:
+                # Existing runs already have message telemetry, while their
+                # per-peer hash appears only after the writer is upgraded.
+                remaining = reports_received
+                for item in activity:
+                    if remaining <= 0:
+                        break
+                    if (
+                        not isinstance(item, dict)
+                        or item.get("direction") != "received"
+                        or item.get("message_type")
+                        not in (
+                            "report",
+                            "blame",
+                        )
+                    ):
+                        continue
+                    peer_id = str(item.get("peer") or "")
+                    if peer_id:
+                        peer_message_counts[peer_id] = (
+                            peer_message_counts.get(peer_id, 0) + 1
+                        )
+                        remaining -= 1
+            report_counts = Counter(peer_message_counts)
         peer_ids = (
             set(peer_info)
             | set(peer_ips)
+            | set(peer_addresses)
             | set(latest_reliability)
+            | set(report_counts)
             | connected
+        )
+        peer_ip_values: Dict[str, str] = {}
+        for peer_id in peer_ids:
+            info = peer_info.get(peer_id, {})
+            candidates = []
+            for source, timestamp in (
+                (
+                    info.get("ip") or info.get("ipaddress"),
+                    self._event_timestamp(info.get("timestamp")),
+                ),
+                (
+                    peer_ips.get(peer_id, {}).get("ip"),
+                    float(peer_ips.get(peer_id, {}).get("timestamp") or 0),
+                ),
+                (
+                    peer_addresses.get(peer_id, {}).get("ip"),
+                    float(
+                        peer_addresses.get(peer_id, {}).get("timestamp") or 0
+                    ),
+                ),
+            ):
+                if self._usable_peer_ip(source):
+                    candidates.append((timestamp, str(source)))
+            for connection in live_connections:
+                if str(connection.get("peer_id")) == peer_id:
+                    remote_ip = connection.get("remote_ip")
+                    if self._usable_peer_ip(remote_ip):
+                        candidates.append((time.time(), str(remote_ip)))
+            peer_ip_values[peer_id] = max(candidates)[1] if candidates else ""
+        reputations: Dict[str, tuple[float, float]] = {}
+        peer_ip_set = {ip for ip in peer_ip_values.values() if ip}
+        if peer_ip_set and trust_path.exists():
+            try:
+                with sqlite3.connect(
+                    f"file:{trust_path}?mode=ro", uri=True, timeout=5
+                ) as connection:
+                    placeholders = ",".join("?" for _ in peer_ip_set)
+                    reputations = {
+                        str(row[0]): (float(row[1]), float(row[2]))
+                        for row in connection.execute(
+                            "SELECT ipaddress, score, confidence "
+                            "FROM slips_reputation WHERE source = 'local' "
+                            "AND ipaddress IN "
+                            f"({placeholders})",
+                            tuple(peer_ip_set),
+                        )
+                    }
+            except sqlite3.Error:
+                pass
+        validator = None
+        if validation_path.exists():
+            try:
+                validator = ReportValidator(validation_path)
+            except (sqlite3.Error, OSError):
+                pass
+        current_interface = str(analysis.get("interface") or "").split(",", 1)[
+            0
+        ]
+        current_state = (
+            self._loads(
+                self.redis.hget("network_states", current_interface), {}
+            )
+            if current_interface
+            else {}
+        )
+        validation_network = (
+            network_id_for_state(current_state, self._network_run_name())
+            if isinstance(current_state, dict) and current_state
+            else ""
         )
         peers = []
         for peer_id in peer_ids:
             info = peer_info.get(peer_id, {})
             pairing = peer_ips.get(peer_id, {})
-            ip = str(
-                info.get("ip")
-                or info.get("ipaddress")
-                or pairing.get("ip")
-                or ""
-            )
+            ip = peer_ip_values[peer_id]
             reliability = latest_reliability.get(peer_id, {})
             reliability_value = reliability.get("reliability")
             if reliability_value is None:
@@ -4319,18 +4491,54 @@ class RunDataReader:
                     reliability_value = float(info["reliability"])
                 except (KeyError, TypeError, ValueError):
                     reliability_value = None
+            trust_value = None
+            if reliability_value is not None and ip:
+                score, confidence = reputations.get(ip, (0.5, 0.0))
+                if validator is not None and validation_network:
+                    try:
+                        reviewed_score, reviewed_confidence, _ = (
+                            validator.local_report(
+                                f"{validation_network}|{ip}", max_age=None
+                            )
+                        )
+                        score, confidence = (
+                            (reviewed_score, reviewed_confidence)
+                            if reviewed_score is not None
+                            else (0.5, 0.0)
+                        )
+                    except sqlite3.Error:
+                        pass
+                trust_value = (
+                    reliability_value * RELIABILITY_WEIGHT
+                    + local_maliciousness_to_thesis_score(score) * confidence
+                ) / 2
+            accuracy = []
+            if validator is not None:
+                try:
+                    accuracy = validator.peer_feedback(peer_id)
+                except sqlite3.Error:
+                    pass
             peers.append(
                 {
                     "peer_id": peer_id,
                     "ip": ip,
                     "connected": peer_id in connected,
-                    "trust": (
-                        float(peer_trust[ip]) if ip in peer_trust else None
+                    "trust": trust_value,
+                    "report_accuracy": accuracy,
+                    "confirmed_reports": sum(
+                        item["confirmed"] for item in accuracy
+                    ),
+                    "false_reports": sum(
+                        item["false_positive"] for item in accuracy
                     ),
                     "reliability": reliability_value,
+                    "first_seen": peer_first_seen.get(peer_id)
+                    or self._event_timestamp(info.get("timestamp"))
+                    or float(reliability.get("timestamp") or 0),
                     "last_seen": max(
                         float(peer_seen.get(peer_id, 0)),
                         self._event_timestamp(info.get("timestamp")),
+                        self._event_timestamp(info.get("last_activity")),
                         float(pairing.get("timestamp") or 0),
                         float(reliability.get("timestamp") or 0),
                     ),
@@ -4379,7 +4587,16 @@ class RunDataReader:
             "trust_history": trust_history,
             "trust_range": trust_range,
             "reports": current_reports[:200],
-            "activity": [item for item in activity if isinstance(item, dict)],
+            "activity": [
+                item
+                for item in activity
+                if isinstance(item, dict)
+                and (
+                    not run_start
+                    or self._event_timestamp(item.get("timestamp"))
+                    >= run_start
+                )
+            ],
             "counts": {
                 "connected": len(connected),
                 "known": len(peers),
@@ -4390,6 +4607,469 @@ class RunDataReader:
                 "requests_received": counts.get("received:request", 0),
             },
         }
+
+    def review(self, entity: str, identifier: str) -> Dict[str, Any]:
+        """Read a saved analyst verdict without creating database state.
+
+        Parameters:
+            entity: Alert or evidence selected in the interface.
+            identifier: Durable detection ID.
+
+        Returns:
+            Saved status, verdict and private note, or the unreviewed state.
+        """
+        if entity not in {"alert", "evidence"}:
+            raise ValueError("Unknown review entity")
+        if not isinstance(identifier, str) or not 1 <= len(identifier) <= 160:
+            raise ValueError("Select a valid record")
+        table, key = (
+            ("alert_reviews", "alert_id")
+            if entity == "alert"
+            else ("evidence_reviews", "evidence_id")
+        )
+        result = {
+            "id": identifier,
+            "status": "active" if entity == "alert" else "unreviewed",
+            "verdict": "",
+            "note": "",
+        }
+        with sqlite3.connect(
+            f"file:{self.sqlite_path}?mode=ro", uri=True, timeout=5
+        ) as connection:
+            connection.row_factory = sqlite3.Row
+            columns = {
+                row[1]
+                for row in connection.execute(f"PRAGMA table_info({table})")
+            }
+            if columns:
+                row = connection.execute(
+                    f"SELECT * FROM {table} WHERE {key}=?", (identifier,)
+                ).fetchone()
+                if row:
+                    result.update(dict(row))
+        return result
+
+    def save_review(
+        self, entity: str, payload: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        """Persist a review state or remove selected linked records atomically.
+
+        Parameters:
+            entity: Alert or evidence requested by the API route.
+            payload: Identifier, action, status or depth, and analyst note.
+
+        Returns:
+            Saved state or counts of deleted and protected shared records.
+        """
+        if getattr(self, "archive_mode", False):
+            raise ValueError("Detection archives are read-only")
+        if entity not in {"alert", "evidence"}:
+            raise ValueError("Unknown review entity")
+        identifier = payload.get("id")
+        action = payload.get("action")
+        note = payload.get("note", "")
+        if not isinstance(identifier, str) or not 1 <= len(identifier) <= 160:
+            raise ValueError("Select a valid record")
+        if (
+            not isinstance(note, str)
+            or len(note) > 2000
+            or any(
+                (ord(char) < 32 and char not in "\n\t") or ord(char) == 127
+                for char in note
+            )
+        ):
+            raise ValueError(
+                "Review note must be at most 2000 printable characters"
+            )
+        note = note.strip()
+        if action == "review":
+            status = payload.get("status")
+            verdict = payload.get("verdict", "") if entity == "alert" else ""
+            if entity == "alert" and verdict not in {
+                "",
+                "true_positive",
+                "false_positive",
+                "expected_behavior",
+                "inconclusive",
+            }:
+                raise ValueError("Unknown alert verdict")
+            allowed = (
+                {"active", "in_review", "resolved"}
+                if entity == "alert"
+                else {
+                    "unreviewed",
+                    "in_review",
+                    "true_positive",
+                    "false_positive",
+                    "expected_behavior",
+                    "inconclusive",
+                }
+            )
+            if status not in allowed:
+                raise ValueError("Unknown review status")
+            if entity == "alert" and status == "resolved" and not note:
+                raise ValueError("Add a note before resolving an alert")
+        elif action == "delete":
+            depth = payload.get("depth")
+            allowed = (
+                {"alert", "evidence", "flows"}
+                if entity == "alert"
+                else {"evidence", "flows"}
+            )
+            if depth not in allowed:
+                raise ValueError("Unknown deletion depth")
+            if not note:
+                raise ValueError("Add a reason before deleting")
+        else:
+            raise ValueError("Unknown review action")
+        table = "alerts" if entity == "alert" else "evidence"
+        key = f"{entity}_id"
+        connection = sqlite3.connect(str(self.sqlite_path), timeout=15)
+        connection.row_factory = sqlite3.Row
+        try:
+            history_path = getattr(self, "history_path", None)
+            history_attached = bool(
+                history_path and Path(history_path).exists()
+            )
+            if history_attached:
+                connection.execute(
+                    "ATTACH DATABASE ? AS web_history", (str(history_path),)
+                )
+            connection.execute("BEGIN IMMEDIATE")
+            if not connection.execute(
+                f"SELECT 1 FROM {table} WHERE {key} = ?", (identifier,)
+            ).fetchone():
+                raise ValueError("Record no longer exists")
+            feedback_records = self._review_feedback_records(
+                connection, entity, identifier
+            )
+            deleted_evidence_ids = []
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS alert_reviews ("
+                "alert_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL, "
+                "verdict TEXT NOT NULL DEFAULT '')"
+            )
+            if not any(
+                row[1] == "verdict"
+                for row in connection.execute(
+                    "PRAGMA table_info(alert_reviews)"
+                )
+            ):
+                connection.execute(
+                    "ALTER TABLE alert_reviews ADD COLUMN verdict TEXT NOT NULL DEFAULT ''"
+                )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS evidence_reviews ("
+                "evidence_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
+                "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
+            )
+            if action == "review":
+                if entity == "alert":
+                    connection.execute(
+                        "INSERT INTO alert_reviews "
+                        "(alert_id, status, note, updated_at, verdict) "
+                        "VALUES (?, ?, ?, ?, ?) ON CONFLICT(alert_id) DO UPDATE SET "
+                        "status = excluded.status, note = excluded.note, "
+                        "updated_at = excluded.updated_at, verdict = excluded.verdict",
+                        (identifier, status, note, time.time(), verdict),
+                    )
+                else:
+                    connection.execute(
+                        "INSERT INTO evidence_reviews "
+                        "(evidence_id, status, note, updated_at) VALUES (?, ?, ?, ?) "
+                        "ON CONFLICT(evidence_id) DO UPDATE SET "
+                        "status = excluded.status, note = excluded.note, "
+                        "updated_at = excluded.updated_at",
+                        (identifier, status, note, time.time()),
+                    )
+                result = {"id": identifier, "status": status, "note": note}
+                if entity == "alert":
+                    result["verdict"] = verdict
+            else:
+                evidence_ids = (
+                    [
+                        str(row[0])
+                        for row in connection.execute(
+                            "SELECT evidence_id FROM alert_evidence WHERE alert_id = ?",
+                            (identifier,),
+                        ).fetchall()
+                    ]
+                    if entity == "alert"
+                    else [identifier]
+                )
+                if entity == "alert":
+                    connection.execute(
+                        "DELETE FROM alert_evidence WHERE alert_id = ?",
+                        (identifier,),
+                    )
+                    connection.execute(
+                        "DELETE FROM alerts WHERE alert_id = ?", (identifier,)
+                    )
+                    connection.execute(
+                        "DELETE FROM alert_reviews WHERE alert_id = ?",
+                        (identifier,),
+                    )
+                else:
+                    connection.execute(
+                        "DELETE FROM alert_evidence WHERE evidence_id = ?",
+                        (identifier,),
+                    )
+                removed_evidence = 0
+                removed_flows = 0
+                protected = 0
+                if depth != "alert":
+                    for evidence_id in evidence_ids:
+                        if connection.execute(
+                            "SELECT 1 FROM alert_evidence WHERE evidence_id = ? LIMIT 1",
+                            (evidence_id,),
+                        ).fetchone():
+                            protected += 1
+                            continue
+                        uids = [
+                            str(row[0])
+                            for row in connection.execute(
+                                "SELECT uid FROM evidence_flows WHERE evidence_id = ?",
+                                (evidence_id,),
+                            ).fetchall()
+                        ]
+                        connection.execute(
+                            "DELETE FROM evidence_flows WHERE evidence_id = ?",
+                            (evidence_id,),
+                        )
+                        connection.execute(
+                            "DELETE FROM evidence WHERE evidence_id = ?",
+                            (evidence_id,),
+                        )
+                        connection.execute(
+                            "DELETE FROM evidence_reviews WHERE evidence_id = ?",
+                            (evidence_id,),
+                        )
+                        removed_evidence += 1
+                        deleted_evidence_ids.append(evidence_id)
+                        if depth == "flows":
+                            for uid in uids:
+                                if connection.execute(
+                                    "SELECT 1 FROM evidence_flows WHERE uid = ? LIMIT 1",
+                                    (uid,),
+                                ).fetchone():
+                                    continue
+                                for flow_table in ("flows", "altflows"):
+                                    removed_flows += connection.execute(
+                                        f"DELETE FROM {flow_table} WHERE uid = ?",
+                                        (uid,),
+                                    ).rowcount
+                                if history_attached:
+                                    connection.execute(
+                                        "DELETE FROM web_history.flow_index "
+                                        "WHERE uid = ?",
+                                        (uid,),
+                                    )
+                connection.execute(
+                    "CREATE TABLE IF NOT EXISTS review_deletions ("
+                    "entity TEXT NOT NULL, record_id TEXT NOT NULL, "
+                    "depth TEXT NOT NULL, note TEXT NOT NULL, deleted_at REAL NOT NULL, "
+                    "evidence_removed INTEGER NOT NULL, flows_removed INTEGER NOT NULL, "
+                    "shared_preserved INTEGER NOT NULL)"
+                )
+                connection.execute(
+                    "INSERT INTO review_deletions VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        entity,
+                        identifier,
+                        depth,
+                        note,
+                        time.time(),
+                        removed_evidence,
+                        removed_flows,
+                        protected,
+                    ),
+                )
+                result = {
+                    "id": identifier,
+                    "deleted": True,
+                    "depth": depth,
+                    "evidence_removed": removed_evidence,
+                    "flows_removed": removed_flows,
+                    "shared_preserved": protected,
+                }
+            feedback_verdict = (
+                (verdict if entity == "alert" else status)
+                if action == "review"
+                else ""
+            )
+            if entity == "alert" and feedback_verdict == "true_positive":
+                types = {
+                    record["evidence_type"] for record in feedback_records
+                }
+                if len(types) > 1:
+                    feedback_verdict = "inconclusive"
+            queue_review_event(
+                connection,
+                f"{entity}:{identifier}",
+                feedback_verdict,
+                feedback_records if action == "review" else [],
+                deleted_evidence_ids,
+            )
+            connection.commit()
+            if feedback_records:
+                try:
+                    validator = ReportValidator(self._report_validation_path())
+                    validator.drain_reviews(self.sqlite_path)
+                    result["p2p_feedback"] = "applied"
+                    if (
+                        feedback_verdict == "inconclusive"
+                        and entity == "alert"
+                        and verdict == "true_positive"
+                    ):
+                        result["p2p_feedback_note"] = (
+                            "Review saved. This alert contains several evidence types; review individual evidence to confirm each detector for P2P learning."
+                        )
+                except (sqlite3.Error, OSError):
+                    result["p2p_feedback"] = "pending"
+            if action == "delete" and depth == "flows":
+                connection.execute("PRAGMA incremental_vacuum(1000)")
+            return result
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            connection.close()
+
+    def _network_run_name(self) -> str:
+        """Return the same run identifier used by the host profile module.
+
+        Returns:
+            Output directory and main-process PID, if known.
+        """
+        main_pid = self.redis.hget("PIDs", "main")
+        if not isinstance(main_pid, (str, int)) or not str(main_pid).isdigit():
+            return ""
+        return f"{self.output_dir}:{main_pid}"
+
+    def _report_validation_path(self) -> Path:
+        """Locate shared P2P feedback using this run's configured permanent path.
+
+        Returns:
+            Persistent validation database, or isolated storage for test readers.
+        """
+        if not hasattr(self, "output_dir"):
+            return self.sqlite_path.parent / "report_validation.sqlite"
+        config, _ = self._run_config()
+        directory = config.get("parameters", {}).get(
+            "permanent_dir", "permanent"
+        )
+        return (
+            Path(directory) / "p2p_trust_runtime" / "report_validation.sqlite"
+        )
+
+    def _review_feedback_records(
+        self,
+        connection: sqlite3.Connection,
+        entity: str,
+        identifier: str,
+    ) -> List[Dict[str, Any]]:
+        """Snapshot reviewed evidence before deletion or later flow retention.
+
+        Parameters:
+            connection: Review write transaction.
+            entity: Alert or evidence.
+            identifier: Reviewed record ID.
+
+        Returns:
+            Local or typed peer observations suitable for validation.
+        """
+        columns = {
+            row[1] for row in connection.execute("PRAGMA table_info(evidence)")
+        }
+        if "data" not in columns:
+            return []
+        condition = (
+            "evidence_id = ?"
+            if entity == "evidence"
+            else "evidence_id IN (SELECT evidence_id FROM alert_evidence WHERE alert_id = ?)"
+        )
+        records = []
+        for row in connection.execute(
+            f"SELECT evidence_id, data FROM evidence WHERE {condition}",
+            (identifier,),
+        ):
+            raw = self._loads(row["data"], {})
+            if not isinstance(raw, dict):
+                continue
+            raw.setdefault("id", row["evidence_id"])
+            observed = observation_record(
+                raw, f"run:{getattr(self, 'output_dir', self.sqlite_path)}"
+            )
+            if observed:
+                if (
+                    not raw.get("detection_provenance")
+                    and not raw.get("peer_report")
+                    and hasattr(self, "output_dir")
+                ):
+                    network = network_for_observation(
+                        self._report_validation_path().parent.parent
+                        / "host_profiles"
+                        / "hosts.sqlite",
+                        observed["target"],
+                        observed["observed_at"],
+                    ).get("network_id")
+                    if network:
+                        observed["network_id"] = network
+                        observed["target_key"] = (
+                            f"{network}|{observed['target']}"
+                        )
+                records.append(observed)
+        return records
+
+    def _legacy_connected_p2p_peers(
+        self, peer_info: Dict[str, Dict[str, Any]]
+    ) -> set[str]:
+        """Read connected peers reported by legacy Pigeon binaries.
+
+        Parameters:
+            peer_info: Decoded peer state indexed by peer ID.
+
+        Returns:
+            Peer IDs that both legacy connectivity records mark connected.
+        """
+        raw_connected = self._loads(self.redis.get("connected_peers"), [])
+        if not isinstance(raw_connected, (list, tuple, set)):
+            return set()
+        connected = {str(peer_id) for peer_id in raw_connected}
+        now = time.time()
+        active_peers = set()
+        for peer_id in connected:
+            state = peer_info.get(peer_id, {})
+            timestamp = self._event_timestamp(
+                state.get("last_activity", state.get("timestamp"))
+            )
+            if state.get("connected") is True and (
+                timestamp == 0
+                or now - timestamp <= P2P_RECENT_ACTIVITY_SECONDS
+            ):
+                active_peers.add(peer_id)
+        return active_peers
+
+    @staticmethod
+    def _usable_peer_ip(value: Any) -> bool:
+        """Accept a peer endpoint only when it is a usable remote address.
+
+        Parameters:
+            value: Candidate address from Pigeon or a verified connection.
+
+        Returns:
+            Whether the address can identify a remote peer.
+        """
+        try:
+            address = ipaddress.ip_address(str(value))
+        except ValueError:
+            return False
+        return not (
+            address.is_loopback
+            or address.is_unspecified
+            or address.is_multicast
+        )
 
 
 class SlipsHTTPServer(ThreadingHTTPServer):
@@ -4537,6 +5217,9 @@ class RequestHandler(BaseHTTPRequestHandler):
             payload = reader.arp_poisoning()
         elif path == "/api/p2p":
             payload = reader.p2p(query)
+        elif path in {"/api/alert-review", "/api/evidence-review"}:
+            entity = "alert" if path == "/api/alert-review" else "evidence"
+            payload = reader.review(entity, reader._query_value(query, "id"))
         elif path == "/api/configuration":
             payload = reader.configuration()
         elif path == "/api/whitelists":
@@ -4655,11 +5338,60 @@ class RequestHandler(BaseHTTPRequestHandler):
                 HTTPStatus.INTERNAL_SERVER_ERROR,
             )
 
+    def _post_review(self, entity: str) -> None:
+        """Save analyst feedback from an authenticated same-origin JSON request.
+
+        Parameters:
+            entity: Alert or evidence endpoint selected by the router.
+        """
+        if self._require_password() and not self._session_ok():
+            self._send_json(
+                {"error": "Authentication required"}, HTTPStatus.UNAUTHORIZED
+            )
+            return
+        host = self.headers.get("Host", "")
+        if not host or self.headers.get("Origin") not in {
+            f"http://{host}",
+            f"https://{host}",
+        }:
+            self._send_json(
+                {"error": "Same-origin request required"}, HTTPStatus.FORBIDDEN
+            )
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            if not 0 < length <= 16384:
+                raise ValueError("Invalid review size")
+            if (
+                self.headers.get("Content-Type", "").split(";", 1)[0].strip()
+                != "application/json"
+            ):
+                raise ValueError("Review must be JSON")
+            payload = json.loads(self.rfile.read(length))
+            if not isinstance(payload, dict):
+                raise ValueError("Review must be an object")
+            self.server.reader.validate_run_identity()
+            result = self.server.reader.save_review(entity, payload)
+        except (ValueError, TypeError) as error:
+            self._send_json({"error": str(error)}, HTTPStatus.BAD_REQUEST)
+        except (sqlite3.Error, OSError):
+            self._send_json(
+                {"error": "Unable to save review; retry shortly"},
+                HTTPStatus.SERVICE_UNAVAILABLE,
+            )
+        else:
+            self._send_json(result)
+
     MAX_LOGIN_BODY_BYTES = 1024
 
     def do_POST(self) -> None:
-        """Only /login is a valid POST target - everything else is 405."""
+        """Handle login and authenticated analyst feedback."""
         parsed = urlparse(self.path)
+        if parsed.path in {"/api/alert-review", "/api/evidence-review"}:
+            self._post_review(
+                "alert" if parsed.path == "/api/alert-review" else "evidence"
+            )
+            return
         if parsed.path != "/login":
             self.send_error(HTTPStatus.METHOD_NOT_ALLOWED)
             return

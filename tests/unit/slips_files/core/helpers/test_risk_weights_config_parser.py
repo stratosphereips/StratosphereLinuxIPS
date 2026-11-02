@@ -7,12 +7,14 @@ from slips_files.core.helpers.risk_weights_config_parser import (
     _validate_risk_weights_config,
     read_risk_weights_config,
 )
+from slips_files.common.parsers.config_parser import ConfigParser
 from tests.module_factory import ModuleFactory
 
 
-def test_read_risk_weights_config() -> None:
+def test_read_risk_weights_config(monkeypatch: pytest.MonkeyPatch) -> None:
     ModuleFactory().create_evidence_handler_worker_obj()
 
+    monkeypatch.setattr(ConfigParser, "_instance", None)
     config = read_risk_weights_config()
 
     assert config.low_risk_weight > 0

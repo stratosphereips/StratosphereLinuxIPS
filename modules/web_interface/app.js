@@ -1361,7 +1361,7 @@ async function loadArpPoisoning() {
 }
 
 /** Render one compact reliability-history line for every known P2P peer. */
-function renderP2PTrustChart(history, peers) {
+function renderP2PReliabilityChart(history, peers) {
   const rows = history.filter((row) => Number.isFinite(Number(row.timestamp))
     && Number.isFinite(Number(row.reliability)));
   const peerIds = [...new Set(rows.map((row) => String(row.peer_id)))];
@@ -1416,6 +1416,10 @@ async function loadP2P() {
   setSummaryCards([
     ["Connected peers", compact(counts.connected)],
     ["Known peers", compact(counts.known)],
+    ["Average reliability", (() => {
+      const values = (payload.peers || []).map((peer) => peer.reliability).filter((value) => value !== null && value !== undefined);
+      return values.length ? (values.reduce((total, value) => total + Number(value), 0) / values.length).toFixed(3) : "—";
+    })()],
     ["Reports sent", compact(counts.reports_sent)],
     ["Reports received", compact(counts.reports_received)],
     ["Requests sent / received", `${compact(counts.requests_sent)} / ${compact(counts.requests_received)}`],
@@ -1425,13 +1429,19 @@ async function loadP2P() {
     detailRow("Local peer ID", payload.local_peer_id || "Waiting for Pigeon identity"),
     detailRow("Listen address", payload.listener || "Waiting for listener announcement"),
   );
-  renderP2PTrustChart(payload.trust_history || [], payload.peers || []);
+  renderP2PReliabilityChart(payload.trust_history || [], payload.peers || []);
   renderTable("p2p-peers-table", payload.peers || [], [
     (row) => text("code", row.peer_id),
     (row) => text("code", row.ip || "—"),
     (row) => text("span", row.connected ? "connected" : "offline", `status ${row.connected ? "ok" : "warn"}`),
     (row) => row.trust === null ? "—" : numeric(row.trust).toFixed(3),
     (row) => row.reliability === null ? "—" : numeric(row.reliability).toFixed(3),
+    (row) => {
+      const cases = row.report_accuracy || [];
+      const value = text("span", cases.length ? `${compact(row.confirmed_reports)} TP · ${compact(row.false_reports)} FP` : "—");
+      value.title = cases.map((item) => `${item.evidence_type} (${item.rule_version}): ${numeric(item.adjustment).toFixed(3)}`).join("\n");
+      return value;
+    },
     (row) => compact(row.reports_received),
     (row) => formatTime(row.last_seen),
   ]);
@@ -2060,10 +2070,66 @@ function flowCard(group) {
   return card;
 }
 
+/** Build reversible analyst feedback for P2P report validation.
+ * @param {string} entity Alert or evidence.
+ * @param {object} record Durable detection being inspected.
+ * @returns {HTMLElement} Feedback form with saved state and a private note.
+ */
+function p2pReviewEditor(entity, record) {
+  const panel = document.createElement("form");
+  panel.className = "p2p-review-editor surface";
+  panel.append(text("h3", `Review this ${entity}`), text("p", "Verdicts inform P2P report accuracy. Notes stay on this computer.", "muted"));
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", "Detection verdict");
+  const choices = [["", "Unreviewed"], ["true_positive", "True positive"], ["false_positive", "False positive"], ["expected_behavior", "Expected behavior"], ["inconclusive", "Inconclusive"], ["in_review", "In review"]];
+  choices.forEach(([value, label]) => {
+    const option = text("option", label);
+    option.value = value;
+    select.append(option);
+  });
+  const note = document.createElement("textarea");
+  note.maxLength = 2000;
+  note.setAttribute("aria-label", "Private review note");
+  const save = text("button", "Save review");
+  save.type = "submit";
+  const status = text("span", "Loading saved review…", "muted");
+  status.setAttribute("role", "status");
+  save.disabled = true;
+  panel.append(select, note, save, status);
+  const id = entity === "alert" ? record.alert_id : record.id;
+  fetch(`/api/${entity}-review?id=${encodeURIComponent(id)}`).then(async (response) => {
+    if (!response.ok) throw new Error("Saved review could not be loaded");
+    const saved = await response.json();
+    select.value = entity === "alert" ? (saved.verdict || (saved.status === "in_review" ? "in_review" : "")) : (saved.status === "unreviewed" ? "" : saved.status);
+    note.value = saved.note || "";
+    status.textContent = "";
+    save.disabled = false;
+  }).catch((error) => { status.textContent = error.message; });
+  panel.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    save.disabled = true;
+    const verdict = select.value;
+    const payload = { id, action: "review", note: note.value };
+    if (entity === "alert") {
+      payload.status = !verdict ? "active" : verdict === "in_review" ? "in_review" : "resolved";
+      payload.verdict = verdict === "in_review" ? "" : verdict;
+    } else payload.status = verdict || "unreviewed";
+    try {
+      const response = await fetch(`/api/${entity}-review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Review could not be saved");
+      status.textContent = result.p2p_feedback_note || (result.p2p_feedback === "pending" ? "Saved; P2P feedback will retry automatically." : "Review saved.");
+    } catch (error) { status.textContent = error.message; }
+    finally { save.disabled = false; }
+  });
+  return panel;
+}
+
 async function openEvidence(record) {
   const generation = openDrawer("EVIDENCE", record.evidence_type || record.id);
   const body = byId("drawer-body");
   const alertCount = record.alert_ids?.length || 0;
+  body.append(p2pReviewEditor("evidence", record));
   if (record.whitelisted) {
     const notice = document.createElement("section");
     notice.className = "whitelist-notice";
@@ -2190,6 +2256,7 @@ async function openAlert(record) {
     }
     body.replaceChildren();
   }
+  body.append(p2pReviewEditor("alert", record));
   body.append(
     investigationStats([
       ["Created", formatTime(record.alert_time)],
