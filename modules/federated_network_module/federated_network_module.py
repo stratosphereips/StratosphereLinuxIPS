@@ -10,25 +10,31 @@ Training Flow:
    - Buffer flows and alerts during the window
    - Label flows using all evidence from buffered alerts; rest benign
    - Train fc1 + head for local_training_epochs
-   - Save the head produced by local training as "head_before"
-   - Freeze fc1, fine-tune head for merge_finetune_epochs (local_head_train.log)
+   - Save the model produced by local training (fc1 + "head_before"): it is
+     what peers are sent and what the merge averages
+   - Fine-tune fc1 + head for merge_finetune_epochs from a fresh Adam state
+     (local_head_train.log); head only with finetune_fc_layers: false
    - Save as latest_local model
-   - Send to peers via P2P
+   - Send the model after local training (not the fine-tuned one) via P2P
 
 2. Model Merging (event-based, after own local training):
    - Collect all peer models + own latest local
    - Aggregate fc1 weights (AVERAGE)
    - Restore "head_before" (head from local full training)
-   - Fine-tune head for merge_finetune_epochs (merged_train.log) with fc1 frozen
+   - Fine-tune for merge_finetune_epochs (merged_train.log) exactly like the
+     local model: fc1 + head from a fresh Adam state (head only, fc1 frozen,
+     with finetune_fc_layers: false)
    - Save as merged_N model (merged models NOT used in future merges)
 
-This makes local and merged models directly comparable: both heads start from
-identical weights and receive the same head-only fine-tuning; only fc1 differs.
+This makes local and merged models directly comparable: both start from the
+model after local training (own vs averaged fc1) and receive the same
+fine-tune; only the starting weights differ.
 
 Options: merge_head also shares and merges the head (the merged fine-tune then
-starts from the merged head); finetune_shared makes both fine-tunes train fc1 +
-head, each from a fresh Adam state, while peers still get the model after local
-training; minibatch_size splits every training pass into class-stratified
+starts from the merged head); finetune_fc_layers (default on) makes both
+fine-tunes train fc1 + head, each from a fresh Adam state, while peers still get
+the model after local training - off = head-only fine-tunes with fc1 frozen, the
+behaviour before this option; minibatch_size splits every training pass into class-stratified
 mini-batches (one Adam step each). merging_data.log records per merge how much
 of the merge the fine-tunes undo ("finetune | ... | undone=").
 
@@ -1114,15 +1120,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "merge_head", default=False
         )
         self.print(f"merge_head: {self.merge_head}", 0, 2)
-        # Optional: the fine-tune after the merge point also trains the
-        # shared layers, on the local and on the merged model alike, each
-        # from a fresh throwaway Adam state (same learning rate). What is
-        # sent and merged is still the model after local training. Unset =
-        # head-only fine-tune with the shared layers frozen (unchanged).
-        self.finetune_shared = self._read_module_config_bool(
-            "finetune_shared", default=False
+        # The fine-tune after the merge point also trains the shared (fc)
+        # layers, on the local and on the merged model alike, each from a
+        # fresh throwaway Adam state (same learning rate). What is sent and
+        # merged is still the model after local training. Default on; false
+        # = head-only fine-tune with the shared layers frozen (the behaviour
+        # before this option).
+        self.finetune_fc_layers = self._read_module_config_bool(
+            "finetune_fc_layers", default=True
         )
-        self.print(f"finetune_shared: {self.finetune_shared}", 0, 2)
+        self.print(f"finetune_fc_layers: {self.finetune_fc_layers}", 0, 2)
         # Optional mini-batch size for every training pass (local training
         # and both fine-tunes): each epoch takes one Adam step per
         # class-stratified mini-batch. Unset/0 = one full-batch step per
@@ -1461,7 +1468,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         Note: epochs come from config. Set _finetune_stage=True for a head-only
         fine-tune pass (fewer epochs: merge_finetune_epochs; freezes the shared
-        layers unless finetune_shared, trains the head). The random projection
+        layers unless finetune_fc_layers, trains the head). The random projection
         is always frozen. With minibatch_size each epoch takes one Adam step
         per class-stratified mini-batch, else one full-batch step.
 
@@ -1478,7 +1485,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # _finetune_stage selects the fine-tune pass (fewer epochs). By default
         # the fine-tune freezes the shared layers and trains only the head
         # (below), so it leaves the averaged representation as merged;
-        # finetune_shared trains the shared layers too.
+        # finetune_fc_layers trains the shared layers too.
         finetune = getattr(self, "_finetune_stage", False)
         epochs = (
             self.merge_finetune_epochs
@@ -1500,11 +1507,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.model = self.create_empty_model().to(self.device)
 
         # fine-tune stages freeze the shared layers and train only the head
-        # (with finetune_shared they train both); full training trains both.
+        # (with finetune_fc_layers they train both); full training trains both.
         # The random projection is always frozen.
         if finetune:
             self.model.set_shared_frozen(
-                not getattr(self, "finetune_shared", False)
+                not getattr(self, "finetune_fc_layers", True)
             )
             self.model.set_head_frozen(False)
         else:
@@ -3189,17 +3196,18 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             head_before_w, head_before_b = self.model.get_head_weights()
             shared_before = self.model.weights_for_sharing()
 
-            # Phase 2: local fine-tune (shorter). Head only on its reset Adam
-            # moments; with finetune_shared the shared layers train too, from
-            # a fresh throwaway Adam state like the merged fine-tune's, and
-            # the local training state carries on to the next window.
+            # Phase 2: local fine-tune (shorter). With finetune_fc_layers the
+            # shared layers train too, from a fresh throwaway Adam state like
+            # the merged fine-tune's, and the local training state carries on
+            # to the next window; without it the head alone trains, on its
+            # reset Adam moments.
             self.logger.log_train_header(
                 "local_head_train",
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
-            finetune_shared = getattr(self, "finetune_shared", False)
+            finetune_fc_layers = getattr(self, "finetune_fc_layers", True)
             train_adam = self._adam_state
-            if finetune_shared:
+            if finetune_fc_layers:
                 self._adam_state = {}
             else:
                 self._reset_head_adam_state()
@@ -3212,7 +3220,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
             finally:
                 self._finetune_stage = False
-                if finetune_shared:
+                if finetune_fc_layers:
                     self._adam_state = train_adam
 
             self._save_local_model()
@@ -3344,7 +3352,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         head-only fine-tuning). This makes local and merged models differ
         only in the origin of fc1. With merge_head the rule also merges the
         heads (own: the head after local full training) and the fine-tune
-        starts from the merged head. With finetune_shared the merged
+        starts from the merged head. With finetune_fc_layers the merged
         fine-tune also trains fc1, as the local one does.
 
         Args:
@@ -3537,7 +3545,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 merged.set_head_weights(head_before_w, head_before_b)
 
             # fine-tune the merged head (shared layers frozen unless
-            # finetune_shared), on the merged copy and with a FRESH, throwaway
+            # finetune_fc_layers), on the merged copy and with a FRESH, throwaway
             # optimizer state: Adam moments are keyed by parameter name, so
             # sharing them would leak the merged training into the next local
             # training
@@ -3614,7 +3622,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"  finetune | gap_before={before:.6f} | gap_after={after:.6f}"
                 f" | undone={undone:.4f} | local_moved={local_moved:.6f}"
                 f" | merged_moved={merged_moved:.6f}"
-                f" | shared_trained={bool(getattr(self, 'finetune_shared', False))}"
+                f" | fc_trained={bool(getattr(self, 'finetune_fc_layers', True))}"
                 f" | n_params={own_start.numel()}",
             )
         except Exception:
@@ -3622,7 +3630,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
-        Fine-tune the merged HEAD (fc1 frozen; with finetune_shared fc1 and
+        Fine-tune the merged HEAD (fc1 frozen; with finetune_fc_layers fc1 and
         head) on the provided batch for merge_finetune_epochs. With shared
         init the averaged fc1 is already a good feature extractor, so by
         default polishing only the head suffices.
@@ -3642,7 +3650,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             epochs = self.merge_finetune_epochs
 
             # Fine-tune for the shorter fine-tune epoch count: the head only,
-            # or with finetune_shared fc1 + head (fit_incremental_model).
+            # or with finetune_fc_layers fc1 + head (fit_incremental_model).
             self.print(
                 f"Fine-tuning merged head for {epochs} epochs on {len(y)} samples",
                 1,

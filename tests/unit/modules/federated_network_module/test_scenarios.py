@@ -851,13 +851,27 @@ def test_merge_rule_runs_through_the_live_merge_path(net, rule, far, expected):
     assert b.lines("local_test.log") == []
 
 
-def test_peers_exchange_local_models_and_merge_the_latest_one(net):
+@pytest.mark.parametrize("fc_layers", [False, True])
+def test_peers_exchange_local_models_and_merge_the_latest_one(net, fc_layers):
     """Two peers, three windows, models routed both ways after each close:
-    every publish carries the sender's fresh local model (never its merged
-    one), a newer model from a peer replaces the older one, and each merge
-    averages the receiver's own fresh local model with that latest model."""
+    every publish carries the sender's fresh local model as its local
+    training left it (never its merged one, nor - with finetune_fc_layers -
+    the fine-tuned one), a newer model from a peer replaces the older one,
+    and each merge averages the receiver's own fresh local model with that
+    latest model."""
     a = net.peer("slips-a", k=0)
     b = net.peer("slips-b", k=0)
+    after_local = {}
+    for p in (a, b):
+        p.m.finetune_fc_layers = fc_layers
+        real_fit = p.m.fit_incremental_model
+
+        def spy(x, y, classes=None, train_target="local", p=p, fit=real_fit):
+            fit(x, y, classes=classes, train_target=train_target)
+            if train_target == "local":
+                after_local[p.name] = _flat(p.m.model.weights_for_sharing())
+
+        p.m.fit_incremental_model = spy
     sent = {}
     for w in (1, 2, 3):
         for p in (a, b):
@@ -867,9 +881,11 @@ def test_peers_exchange_local_models_and_merge_the_latest_one(net):
             )
         for src, dst in ((a, b), (b, a)):
             msg = net.route(src, dst)
-            local = _flat(src.m.model.weights_for_sharing())
+            local = after_local[src.name]
+            served = _flat(src.m.model.weights_for_sharing())
             assert msg["peer_id"] == src.name
             assert np.array_equal(_wire_flat(msg), local.numpy())
+            assert torch.equal(served, local) != fc_layers
             if w > 1:  # merged since window 2, and merged != local
                 merged = _flat(src.m.merged_model.weights_for_sharing())
                 assert not torch.equal(merged, local)
@@ -902,6 +918,7 @@ def test_head_only_finetune_leaves_federated_layers_untouched(net, stage):
     init, is already a good feature extractor - only the head is polished).
     """
     p = net.peer(k=0)
+    p.m.finetune_fc_layers = False
     p.m.handle_p2p_model(net.payload("slips-a"))
     calls = []
     real_fit = p.m.fit_incremental_model

@@ -18,7 +18,7 @@ input(18) -> RandomProjection(256, frozen, He init) -> /√256 -> fc1(256->16)+R
 - **Optimizer**: Adam with $\eta=0.005$, L2 weight decay $\lambda=10^{-4}$
 - **Class-weighted loss**: $w_c = \frac{N_{\text{total}}}{2 \cdot \max(N_c, 1)}$ per batch, computed fresh each call
 - **Minimum batch size**: 30 flows — training deferred, buffer accumulates across consecutive alerts/windows until threshold met
-- **Epochs**: 15 local (fc1 + head), 5 merge fine-tune (head-only)
+- **Epochs**: 15 local (fc1 + head), 5 fine-tune (fc1 + head on both the local and the merged model; head-only with `finetune_fc_layers: false`)
 
 ### Training Buffers
 
@@ -250,7 +250,7 @@ federated_network_module:
   # run_seed: 2   # optional, for repeat runs (see below)
   # learning_rate: 0.01   # optional, Adam step size (see below)
   # merge_head: false      # optional, also share + merge the head (see below)
-  # finetune_shared: false # optional, fine-tune fc1 + head on both models (see below)
+  # finetune_fc_layers: true  # fine-tune fc1 + head on both models (false = head only, see below)
   # minibatch_size: 0       # optional, mini-batch size of every training pass (see below)
 ```
 
@@ -275,8 +275,8 @@ model serves one window and is discarded. `merging_data.log` gets a
 `merge_head=True` line, and its distances and `weights/merge_*.npz` vectors
 then include the head parameters.
 
-`finetune_shared` (optional, default false) makes the fine-tune after the merge
-point train fc1 + head instead of the head alone, on the local and on the merged
+`finetune_fc_layers` (default true) makes the fine-tune after the merge point
+train the fc (shared) layers + head instead of the head alone, on the local and on the merged
 model alike, each from a fresh throwaway Adam state with the same learning rate
 (the local model's training state carries on to the next window). Peers are
 still sent the model after local training, before the fine-tune, and that is
@@ -286,13 +286,14 @@ local model trains `local_training_epochs + merge_finetune_epochs` epochs per
 window. Each merge adds a line to `merging_data.log`:
 
 ```
-  finetune | gap_before=… | gap_after=… | undone=0.42 | local_moved=… | merged_moved=… | shared_trained=True | n_params=…
+  finetune | gap_before=… | gap_after=… | undone=0.42 | local_moved=… | merged_moved=… | fc_trained=True | n_params=…
 ```
 
 over all trainable weights: `gap_before` = merged vs own model where the
 fine-tunes start, `gap_after` = the two after them, `undone` = 1 − after/before
 (1 = both end on the same model, 0 = as far apart as the merge put them). The
-line is written with the option off too (head-only fine-tunes).
+line is also written with the option off (`finetune_fc_layers: false`: head-only
+fine-tunes with fc1 frozen, the behaviour before this option).
 
 `minibatch_size` (optional, default 0 = full batch) splits every training pass
 (local training and both fine-tunes) into ceil(n / minibatch_size) near-equal,
@@ -312,7 +313,7 @@ with 100 a 118-flow batch takes 2 steps per epoch, a 1,230-flow batch 13.
 \textbf{Parameter} & \textbf{Value} & \textbf{Description} \\
 \midrule
 $E_{\text{local}}$  & 15  & Local training epochs (fc1 + head) \\
-$E_{\text{merge}}$  & 5   & Merge fine-tuning epochs (head-only) \\
+$E_{\text{merge}}$  & 5   & Fine-tuning epochs after the merge point (fc1 + head, both models) \\
 $\eta$              & 0.01 & Learning rate (Adam, \texttt{learning\_rate}) \\
 $\lambda$           & $10^{-4}$ & L2 weight decay \\
 $B_{\text{min}}$    & 30  & Minimum training batch size \\
@@ -330,7 +331,7 @@ $s_{\text{thresh}}$ & 0.20 & Slips evidence detection threshold \\
 
 ### Epochs
 - **Local training**: 15 epochs per batch (alert or twclose trigger)
-- **Merge fine-tuning**: 5 epochs head-only after model aggregation
+- **Fine-tuning**: 5 epochs of fc1 + head after the merge point, on the local and the merged model (head-only with `finetune_fc_layers: false`)
 
 ### Learning Rate
 - Adam optimizer with $\eta = 0.01$ (config `learning_rate`), weight decay $\lambda = 10^{-4}$

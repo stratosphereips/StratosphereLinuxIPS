@@ -962,12 +962,14 @@ def _spy_train(m):
     return seen
 
 
-@pytest.mark.parametrize("finetune_shared", [False, True])
-def test_peers_get_the_model_after_local_training(tmp_path, finetune_shared):
+@pytest.mark.parametrize("finetune_fc_layers", [False, True])
+def test_peers_get_the_model_after_local_training(
+    tmp_path, finetune_fc_layers
+):
     """What is sent and merged is fc1 after local training, before the
-    fine-tune - also when finetune_shared moves fc1 in the fine-tune."""
+    fine-tune - also when finetune_fc_layers moves fc1 in the fine-tune."""
     m = _trainable(tmp_path)
-    m.finetune_shared = finetune_shared
+    m.finetune_fc_layers = finetune_fc_layers
     m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
     seen = _spy_train(m)
     m._train_batch()
@@ -981,16 +983,16 @@ def test_peers_get_the_model_after_local_training(tmp_path, finetune_shared):
         not torch.equal(m.model.weights_for_sharing()[k], after_local[k])
         for k in after_local
     )
-    assert local_moved == finetune_shared
+    assert local_moved == finetune_fc_layers
 
 
-def test_finetune_shared_trains_fc1_in_both_finetunes_from_fresh_adam(
+def test_finetune_fc_layers_trains_fc1_in_both_finetunes_from_fresh_adam(
     tmp_path,
 ):
     """Both fine-tunes start from an empty Adam state and move fc1; the
     local training state (2 epochs = 2 steps) carries on unchanged."""
     m = _trainable(tmp_path)
-    m.finetune_shared = True
+    m.finetune_fc_layers = True
     peer = _net(tmp_path, "slips-b").weights_for_sharing()
     m.peer_models["slips-b"] = peer
     seen = _spy_train(m)
@@ -1005,6 +1007,7 @@ def test_finetune_shared_trains_fc1_in_both_finetunes_from_fresh_adam(
 
 def test_head_only_finetune_leaves_the_averaged_fc1_as_merged(tmp_path):
     m = _trainable(tmp_path)
+    m.finetune_fc_layers = False
     peer = _net(tmp_path, "slips-b").weights_for_sharing()
     m.peer_models["slips-b"] = peer
     seen = _spy_train(m)
@@ -1017,19 +1020,19 @@ def test_head_only_finetune_leaves_the_averaged_fc1_as_merged(tmp_path):
 
 FINETUNE_RE = re.compile(
     r"finetune \| gap_before=([\d.]+) \| gap_after=([\d.]+) \| undone=(-?[\d.]+|nan)"
-    r" \| local_moved=([\d.]+) \| merged_moved=([\d.]+) \| shared_trained=(\w+)"
+    r" \| local_moved=([\d.]+) \| merged_moved=([\d.]+) \| fc_trained=(\w+)"
 )
 
 
-@pytest.mark.parametrize("finetune_shared", [False, True])
+@pytest.mark.parametrize("finetune_fc_layers", [False, True])
 def test_each_merge_logs_how_much_the_finetunes_undo(
-    tmp_path, finetune_shared
+    tmp_path, finetune_fc_layers
 ):
     """gap_before is the merged-vs-own distance where the fine-tunes start
     (= merged_vs_own without merge_head: the heads start equal), gap_after
     the distance after them, undone = 1 - after / before."""
     m = _trainable(tmp_path)
-    m.finetune_shared = finetune_shared
+    m.finetune_fc_layers = finetune_fc_layers
     m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
     m._train_batch()
     log = (tmp_path / "slips-a" / "merging_data.log").read_text()
@@ -1038,7 +1041,7 @@ def test_each_merge_logs_how_much_the_finetunes_undo(
     before, after, undone, local_moved, merged_moved = map(
         float, hit.groups()[:5]
     )
-    assert hit.group(6) == str(finetune_shared)
+    assert hit.group(6) == str(finetune_fc_layers)
     merged_vs_own = float(
         re.search(r"merged_vs_own \| L2_dist=([\d.]+)", log).group(1)
     )
