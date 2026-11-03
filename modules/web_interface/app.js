@@ -1723,7 +1723,7 @@ function startLiveTitlePolling() {
     } catch (_) {
       // The next tick retries without overlapping an unfinished request.
     } finally {
-      state.titleTimer = window.setTimeout(tick, document.hidden ? 30000 : 5000);
+      state.titleTimer = window.setTimeout(tick, document.hidden ? 60000 : 30000);
     }
   };
   tick();

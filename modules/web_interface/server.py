@@ -16,6 +16,7 @@ import socket
 import sys
 import sqlite3
 import tempfile
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
@@ -307,6 +308,8 @@ class RunDataReader:
             socket_timeout=2,
         )
         self._processes: Dict[int, psutil.Process] = {}
+        self._overview_counts_cache: Dict[Any, Any] = {}
+        self._overview_counts_lock = threading.Lock()
         initialize_history(self.history_path)
         self.score_mode, self.alert_threshold = self._detector_score_settings()
 
@@ -1976,6 +1979,12 @@ class RunDataReader:
         else:
             scope = cached[1]
         reader = copy.copy(self)
+        reader._overview_counts_cache = self.__dict__.setdefault(
+            "_overview_counts_cache", {}
+        )
+        reader._overview_counts_lock = self.__dict__.setdefault(
+            "_overview_counts_lock", threading.Lock()
+        )
         reader._active_network_scope = scope
         reader._connection_only = self._query_value(
             query, "network"
@@ -2936,10 +2945,20 @@ class RunDataReader:
             "connection",
         }:
             live_query["network"] = [self._query_value(query or {}, "network")]
+        wall_clock = (
+            str(self.redis.hget("analysis", "input_type") or "").lower()
+            in {"interface", "stdin", "cyst"}
+            and not getattr(self, "saved_view", False)
+            and not getattr(self, "archive_mode", False)
+        )
         with self._connect_sqlite() as connection:
-            latest_alert = connection.execute(
-                "SELECT MAX(CAST(alert_time AS REAL)) FROM alerts"
-            ).fetchone()[0]
+            latest_alert = (
+                None
+                if wall_clock
+                else connection.execute(
+                    "SELECT MAX(CAST(alert_time AS REAL)) FROM alerts"
+                ).fetchone()[0]
+            )
             alert_start, alert_end, _ = self._time_bounds(
                 live_query, latest_alert
             )
@@ -2955,10 +2974,14 @@ class RunDataReader:
                 ).fetchone()[0]
             )
         with self._connect_history() as history:
-            latest_host = history.execute(
-                "SELECT MAX(event_time) FROM flow_index"
-            ).fetchone()[0]
-            if not latest_host:
+            latest_host = (
+                None
+                if wall_clock
+                else history.execute(
+                    "SELECT MAX(event_time) FROM flow_index"
+                ).fetchone()[0]
+            )
+            if not wall_clock and not latest_host:
                 latest_host = history.execute(
                     "SELECT MAX(observed_at) FROM host_snapshots"
                 ).fetchone()[0]
@@ -2974,9 +2997,12 @@ class RunDataReader:
             if scoped:
                 self._attach_run_database(history)
             seen = self._host_last_seen_expression(history, scoped)
+            candidates = self._live_host_candidates(history, scoped)
             host_rows = history.execute(
-                f"SELECT hs.ip FROM host_snapshots hs WHERE {seen} BETWEEN ? AND ?",
-                (host_start, host_end),
+                "SELECT hs.ip FROM host_snapshots hs "
+                f"WHERE hs.ip IN ({candidates}) "
+                f"AND {seen} BETWEEN :live_start AND :live_end",
+                {"live_start": host_start, "live_end": host_end},
             ).fetchall()
             if device_view:
                 device_keys = self._device_key_map()
@@ -2989,6 +3015,56 @@ class RunDataReader:
             else:
                 hosts = len(host_rows)
         return {"alerts": alerts, "hosts": hosts}
+
+    def _live_host_candidates(
+        self,
+        connection: sqlite3.Connection,
+        scoped: bool,
+    ) -> str:
+        """Restrict last-seen lookups to addresses active in the live window.
+
+        Parameters:
+            connection: History connection with scoped detections when needed.
+            scoped: Whether metadata refreshes must not count as activity.
+
+        Returns:
+            SQL using timestamp indexes and named live_start/live_end parameters.
+        """
+        bounds = "BETWEEN :live_start AND :live_end"
+        sources = [
+            f"SELECT src_ip FROM flow_index WHERE event_time {bounds}",
+            f"SELECT dst_ip FROM flow_index WHERE event_time {bounds}",
+        ]
+        if not scoped:
+            sources.append(
+                f"SELECT ip FROM host_snapshots WHERE observed_at {bounds}"
+            )
+        else:
+            sources.append(
+                "SELECT ip FROM host_snapshots "
+                f"WHERE host_observed_at(ip) {bounds}"
+            )
+            for table, ip_column, time_column in (
+                ("evidence", "profile_ip", "evidence_time"),
+                ("alerts", "ip_alerted", "alert_time"),
+            ):
+                columns = {
+                    str(row[1])
+                    for row in connection.execute(
+                        f"PRAGMA run_db.table_info({table})"
+                    )
+                }
+                if {ip_column, time_column} <= columns:
+                    timestamp = (
+                        time_column
+                        if table == "evidence"
+                        else f"CAST({time_column} AS REAL)"
+                    )
+                    sources.append(
+                        f"SELECT {ip_column} FROM scoped_{table} "
+                        f"WHERE {timestamp} {bounds}"
+                    )
+        return " UNION ".join(sources)
 
     def response_metadata(self) -> Dict[str, Any]:
         """Return bounded source freshness and indexing checkpoints."""
@@ -9103,6 +9179,45 @@ class RunDataReader:
             result.update({"status": status, "labels": labels})
         return result
 
+    def _overview_evidence_total(
+        self, connection: sqlite3.Connection, start: Optional[float]
+    ) -> int:
+        """Reuse bounded network counts while keeping unfiltered totals constant-time.
+
+        Parameters:
+            connection: Read-only detection connection with this request's scope.
+            start: Optional connection cutoff.
+
+        Returns:
+            Retained evidence count, at most thirty seconds old for network scopes.
+        """
+        if not self._table_exists(connection, "evidence"):
+            return 0
+        scope = getattr(self, "_active_network_scope", None)
+        if scope is None and start is None:
+            return detection_total(connection, "evidence")
+        stat = self.sqlite_path.stat()
+        key = (str(self.sqlite_path), stat.st_dev, stat.st_ino, scope, start)
+        cache = self.__dict__.setdefault("_overview_counts_cache", {})
+        lock = self.__dict__.setdefault(
+            "_overview_counts_lock", threading.Lock()
+        )
+        with lock:
+            cached = cache.get(key)
+            if cached and time.monotonic() - cached[0] < 30:
+                return cached[1]
+            count = int(
+                connection.execute(
+                    "SELECT COUNT(*) FROM evidence"
+                    + (" WHERE evidence_time>=?" if start is not None else ""),
+                    (start,) if start is not None else (),
+                ).fetchone()[0]
+            )
+            cache[key] = (time.monotonic(), count)
+            while len(cache) > 8:
+                del cache[next(iter(cache))]
+            return count
+
     @network_filtered
     def overview(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -9113,9 +9228,6 @@ class RunDataReader:
             " AND CAST(alert_time AS REAL) >= ?"
             if scoped_start is not None
             else ""
-        )
-        evidence_scope = (
-            " WHERE evidence_time >= ?" if scoped_start is not None else ""
         )
         scope_params = (scoped_start,) if scoped_start is not None else ()
         analysis = self.redis.hgetall("analysis")
@@ -9134,16 +9246,8 @@ class RunDataReader:
                         scope_params,
                     ).fetchone()["count"]
                 )
-                durable_evidence = (
-                    int(
-                        connection.execute(
-                            "SELECT COUNT(*) AS count FROM evidence"
-                            + evidence_scope,
-                            scope_params,
-                        ).fetchone()["count"]
-                    )
-                    if self._table_exists(connection, "evidence")
-                    else 0
+                durable_evidence = self._overview_evidence_total(
+                    connection, scoped_start
                 )
         except sqlite3.Error:
             alert_count = 0

@@ -33,7 +33,7 @@ five-second backend heartbeat, including while another tab is open. It does
 not wait for Overview to load.
 
 The browser tab title shows alert and host counts from the rolling one-hour
-**Live** range. It checks every five seconds while visible and every thirty
+**Live** range. It checks every thirty seconds while visible and every sixty
 seconds in the background, and refreshes immediately when the tab becomes
 visible again. Browsers may delay background timers. It does not depend on the
 selected tab, search, or date filter. The Alerts and Evidence navigation
@@ -698,6 +698,17 @@ Overview puts the run state, alerts grouped by host, system warnings, five key c
 Uptime is elapsed wall-clock time since this Slips run started and freezes at the recorded analysis end time for completed runs. The header shows the run name, computer name, monitored interface, network name, version, state, and uptime. Its visible address line lists every current IPv4 and IPv6 address on the monitored interfaces, including IPv6 link-local, local, global, and temporary addresses. Long lists wrap without truncation. Addresses refresh with the lightweight network heartbeat on every tab, so changing networks or IPv6 addresses does not require visiting Overview. **Run details** opens Metadata for the full run facts, including branch and commit. Parsed runtime messages remain in **Logs**.
 
 The first Overview response is deliberately lightweight even when `-p` retains a large Redis history. It reads the constant-time evidence counter and does not scan historical profile/time-window keys. Exact evidence attribution for each module is deferred behind **Load evidence counts** in Metadata; opening **Evidence** likewise loads the retained evidence records only when that tab is requested. Performance-history charts use their separate bounded endpoint.
+
+With **Current network only**, Overview reuses its exact network evidence count
+for up to thirty seconds instead of rereading every stored evidence JSON on
+each refresh. The cache holds at most eight network/connection selections,
+separates different databases and recorded network visits, and shares work
+between browser tabs. The Evidence table still queries its selected filters
+directly. Live title counts first select addresses active in the last hour
+through timestamp indexes, then check their last observation; metadata-only
+refreshes cannot revive historical hosts. Backend status and active-tab data
+continue to refresh every five seconds. All this work stays in the web server;
+capture and detection processing require no additional lookups or writes.
 
 Overview finds the four leading alert hosts by reading alert totals first and checking linked severity from highest to lowest until the visible rows are known. The grouped Alerts view calculates host totals once and looks up linked severity in indexed batches. Hosts uses the source and destination flow indexes for last-seen sorting and score indexes for past peak values. Existing run databases receive the score indexes when Slips next initializes their SQLite schema.
 The ARP view reads its latest evidence in timestamp order from the evidence type index, so opening that tab does not sort every matching record.

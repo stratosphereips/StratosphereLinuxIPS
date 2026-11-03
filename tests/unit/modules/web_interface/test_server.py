@@ -22,6 +22,7 @@ import psutil
 from pytest_mock import MockerFixture
 
 from modules.web_interface.history import connect_history, initialize_history
+from modules.web_interface.network_scope import NetworkScope
 from modules.supported_module_names import Modules
 from modules.web_interface.server import (
     RequestHandler,
@@ -2642,8 +2643,132 @@ def test_live_title_counts_match_alert_and_host_ranges(
     assert reader.live_counts() == {"alerts": 1, "hosts": 2}
 
 
-def test_live_title_poll_continues_when_tab_is_hidden() -> None:
-    """The title's timer must fetch counts while the browser tab is hidden."""
+def test_live_counts_bound_work_to_recent_host_activity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep live counts cheap when many inactive hosts have retained flow history.
+
+    Parameters:
+        tmp_path: Isolated retained history.
+        monkeypatch: Freezes capture time and instruments SQLite work.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO host_snapshots VALUES (?,?, '{}')",
+            [(f"10.99.{i // 250}.{i % 250 + 1}", now) for i in range(1000)],
+        )
+        connection.executemany(
+            "INSERT INTO flow_index(uid,flow_rowid,event_time,src_ip,dst_ip,bytes,packets) "
+            "VALUES (?,1,?,?, '8.8.8.8',1,1)",
+            [(f"old-{i}-{j}", now - 5000 - j, f"10.99.{i // 250}.{i % 250 + 1}")
+             for i in range(1000) for j in range(20)],
+        )
+    connect = RunDataReader._connect_history
+    work = [0]
+
+    def progress() -> int:
+        """Cancel a regression that executes over 100,000 SQLite instructions.
+
+        Returns:
+            Nonzero when the live request exceeds its work budget.
+        """
+        work[0] += 1
+        return int(work[0] > 100)
+
+    def measured_connection(scoped_reader: RunDataReader) -> sqlite3.Connection:
+        """Instrument the history connection without changing network views.
+
+        Parameters:
+            scoped_reader: Request reader carrying its network filter.
+
+        Returns:
+            Read-only scoped connection with a query-work budget.
+        """
+        connection = connect(scoped_reader)
+        connection.set_progress_handler(progress, 1000)
+        return connection
+
+    monkeypatch.setattr(RunDataReader, "_connect_history", measured_connection)
+    assert reader.live_counts({"network": ["current"]}) == {"alerts": 1, "hosts": 5}
+    assert work[0] <= 100
+
+
+def test_overview_network_counts_reuse_work_and_expire(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Share network counts across requests without retaining stale counts indefinitely.
+
+    Parameters:
+        tmp_path: Isolated detections with recorded network visits.
+        monkeypatch: Controls cache expiry independently from event time.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    clock = [100.0]
+    monkeypatch.setattr("modules.web_interface.server.time.monotonic", lambda: clock[0])
+    query = {"network": ["current"]}
+    scoped = reader._for_network_scope(query)
+    statements: list[str] = []
+    with scoped._connect_sqlite() as connection:
+        connection.set_trace_callback(statements.append)
+        assert scoped._overview_evidence_total(connection, 0) == 1
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time,data) VALUES ('added',1999999950,'{}')"
+        )
+    fresh_request = reader._for_network_scope(query)
+    with fresh_request._connect_sqlite() as connection:
+        connection.set_trace_callback(statements.append)
+        assert fresh_request._overview_evidence_total(connection, 0) == 1
+        clock[0] += 31
+        assert fresh_request._overview_evidence_total(connection, 0) == 2
+    assert sum(sql.startswith("SELECT COUNT(*) FROM evidence") for sql in statements) == 2
+
+    other = reader._for_network_scope(query)
+    other._active_network_scope = NetworkScope("gateway:other", scoped._active_network_scope.visits, None)
+    with other._connect_sqlite() as connection:
+        assert other._overview_evidence_total(connection, 0) == 0
+    with scoped._connect_sqlite() as connection:
+        for cutoff in range(12):
+            assert scoped._overview_evidence_total(connection, cutoff) == 2
+    assert len(reader._overview_counts_cache) <= 8
+
+
+def test_overview_unfiltered_evidence_uses_maintained_total(tmp_path: Path) -> None:
+    """Read the persisted counter without scanning or caching unfiltered records.
+
+    Parameters:
+        tmp_path: Isolated database with maintained totals.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.sqlite_path = tmp_path / "flows.sqlite"
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript(
+            "CREATE TABLE evidence(evidence_id TEXT);"
+            "CREATE TABLE history_totals(entity TEXT PRIMARY KEY,count INTEGER);"
+            "INSERT INTO history_totals VALUES ('evidence',1000000);"
+        )
+        statements: list[str] = []
+        connection.set_trace_callback(statements.append)
+        assert reader._overview_evidence_total(connection, None) == 1000000
+        connection.execute("UPDATE history_totals SET count=count+1")
+        assert reader._overview_evidence_total(connection, None) == 1000001
+    assert not any("COUNT(*)" in sql for sql in statements)
+
+
+@pytest.mark.parametrize("hidden, interval", [(False, 30000), (True, 60000)])
+def test_live_title_poll_continues_when_tab_is_hidden(hidden: bool, interval: int) -> None:
+    """Keep title counts fresh without repeating expensive work every five seconds.
+
+    Parameters:
+        hidden: Whether the browser tab is in the background.
+        interval: Expected count polling interval in milliseconds.
+    """
     _module_factory = ModuleFactory()
     if not shutil.which("node"):
         pytest.skip("Node.js is required for the browser title timer test")
@@ -2658,11 +2783,11 @@ let requests = 0;
 let tick;
 let finish;
 const context = {
-  document: { hidden: true }, state: { titleTimer: null },
+  document: { hidden: HIDDEN }, state: { titleTimer: null },
   window: {
     clearTimeout() {},
     setTimeout(callback, interval) {
-      assert.equal(interval, 30000);
+      assert.equal(interval, INTERVAL);
       tick = callback;
       return 1;
     },
@@ -2687,7 +2812,7 @@ const context = {
 })().catch(error => { console.error(error); process.exitCode = 1; });
 """
     result = subprocess.run(
-        ["node", "-e", script],
+        ["node", "-e", script.replace("HIDDEN", json.dumps(hidden)).replace("INTERVAL", str(interval))],
         capture_output=True,
         check=False,
         text=True,
