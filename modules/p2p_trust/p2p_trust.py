@@ -1438,6 +1438,17 @@ class Trust(IModule):
             )
             return
 
+        if not self._pigeon_supports_flag("-local-dial-version"):
+            if not self._build_pigeon_binary(
+                "for local-network peer dialing"
+            ) or not self._pigeon_supports_flag("-local-dial-version"):
+                self.print(
+                    "P2P needs the updated Pigeon dial policy; update the p2p4slips submodule, rebuild, and restart Slips.",
+                    0,
+                    1,
+                )
+                return
+
         if isinstance(
             getattr(self, "catchup", None), Catchup
         ) and not self._pigeon_supports_flag("-catchup-version"):

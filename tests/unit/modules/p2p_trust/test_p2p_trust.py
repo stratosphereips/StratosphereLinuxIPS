@@ -515,6 +515,45 @@ def test_pigeon_command_bootstraps_to_authenticated_peers_on_current_subnet():
     ]
 
 
+@pytest.mark.parametrize(
+    "supported, rebuilt, updated, starts",
+    [(True, False, False, True), (False, True, True, True),
+     (False, False, False, False), (False, True, False, False)],
+)
+def test_start_pigeon_requires_local_dial_policy(
+    supported: bool, rebuilt: bool, updated: bool, starts: bool
+) -> None:
+    """Require address gating even when an older binary needs rebuilding.
+
+    Parameters:
+        supported: Whether the installed binary already has address gating.
+        rebuilt: Whether compilation succeeds.
+        updated: Whether the compiled binary has the required policy.
+        starts: Expected decision to launch the P2P process.
+    """
+    _factory = ModuleFactory()
+    trust = create_trust()
+    trust.port = 6668
+    trust.host = "192.168.1.100"
+    trust.create_p2p_logfile = False
+    trust.p2p_trust_runtime_dir = "permanent/p2p_trust_runtime"
+    trust._rebuild_pigeon_binary_after_slips_update = Mock(return_value=True)
+    trust._pigeon_supports_flag.side_effect = [supported, updated]
+    trust._build_pigeon_binary = Mock(return_value=rebuilt)
+    trust._get_pigeon_command = Mock(return_value=["p2p4slips/p2p4slips"])
+    with patch("modules.p2p_trust.p2p_trust.shutil.which", return_value=True), \
+         patch("modules.p2p_trust.p2p_trust.subprocess.Popen") as launch:
+        launch.return_value.poll.return_value = None
+        trust._start_pigeon()
+    assert launch.called is starts
+    if supported:
+        trust._build_pigeon_binary.assert_not_called()
+    else:
+        trust._build_pigeon_binary.assert_called_once_with("for local-network peer dialing")
+    if not starts:
+        assert trust.pigeon is None
+
+
 def test_local_subnets_include_interfaces_other_than_capture_interface():
     """Include directly connected LANs on secondary interfaces for P2P."""
     module_factory = ModuleFactory()
@@ -584,7 +623,7 @@ def test_start_pigeon_omits_unsupported_version_flag() -> None:
     trust.create_p2p_logfile = False
     trust.p2p_trust_runtime_dir = "permanent/p2p_trust_runtime"
     trust.pigeon_key_file = "pigeon.keys"
-    trust._pigeon_supports_flag.return_value = False
+    trust._pigeon_supports_flag.side_effect = lambda flag: flag == "-local-dial-version"
     trust._rebuild_pigeon_binary_after_slips_update = Mock(return_value=True)
 
     with (

@@ -77,6 +77,19 @@ Local Pigeon uses the dedicated TCP port configured by
 ```local_p2p.listen_port``` (default ```6668```). It no longer scans the
 ephemeral port range for an available listener.
 
+Pigeon filters discovered addresses to the directly connected subnets of
+interfaces that are currently up. A peer can advertise Wi-Fi, Ethernet,
+loopback and Docker addresses together; only locally reachable network
+addresses become dial candidates or saved discovery endpoints. The transport
+also checks every outgoing dial, including addresses learned later through
+libp2p identification, so an advertised foreign Docker bridge such as
+`172.17.0.1` cannot be contacted from an unrelated Wi-Fi subnet. Network
+membership is checked at dial time and follows interface changes. Loopback
+dials require an explicitly configured loopback listen address for local
+development. These checks run in Pigeon, outside Slips' capture/flow path.
+Slips rebuilds an older Pigeon binary when this policy is missing. If rebuilding
+fails, it leaves P2P stopped and reports the failure; capture continues normally.
+
 Pigeon (the Go peer daemon) stores every exact TCP 5-tuple of an
 authenticated libp2p connection directly in redis, in the
 ```p2p:connections``` set, adding it on connect and removing it on
