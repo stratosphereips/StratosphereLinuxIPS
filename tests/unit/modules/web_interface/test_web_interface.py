@@ -77,8 +77,7 @@ def test_pre_main_starts_server_for_current_run() -> None:
         ),
         patch("builtins.open", mock_open()),
         patch(
-            "modules.web_interface.web_interface.redis_auth_kwargs",
-            return_value={"password": "test"},
+            "modules.web_interface.web_interface.try_connect_with_and_without_password",
         ),
         patch(
             "modules.web_interface.web_interface.subprocess.Popen",

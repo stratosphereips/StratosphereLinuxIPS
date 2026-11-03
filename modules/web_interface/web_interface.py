@@ -17,7 +17,9 @@ import redis
 from modules.web_interface.history import HistoryCollector
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.slips_utils import utils
-from slips_files.core.database.redis_db.redis_auth import redis_auth_kwargs
+from slips_files.core.database.redis_db.redis_auth import (
+    try_connect_with_and_without_password,
+)
 
 
 class WebInterface(IModule):
@@ -349,13 +351,13 @@ class WebInterface(IModule):
         history_path = Path(
             self.get_module_specific_output_path("history.sqlite")
         )
-        redis_client = redis.Redis(
+        redis_client = try_connect_with_and_without_password(
+            redis.Redis,
             host="127.0.0.1",
             port=self.redis_port,
             db=0,
             decode_responses=True,
             socket_timeout=2,
-            **redis_auth_kwargs(),
         )
         self.history_collector = HistoryCollector(
             self.parent_output_dir,

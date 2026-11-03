@@ -339,6 +339,17 @@ the page with `-w` or `web_interface.enabled: true`. Use another unused port
 and output directory for the next simultaneous analysis. This example uses
 the isolated PCAP configuration described in [Usage](usage.md#running-several-slips-instances).
 
+### Redis compatibility
+
+The history collector and HTTP reader use the same Redis authentication check.
+They try the persistent Slips password first, then retry without a password only
+when an older Redis server explicitly reports that no password is configured.
+This prevents repeated `History collector error: AUTH ... without any password
+configured` messages while allowing history collection to continue. Incorrect
+passwords on protected servers still raise an authentication error. Restart
+Slips after upgrading to load this fix; refreshing the page alone does not
+replace the collector.
+
 ### Login
 
 The web interface requires a password before it shows any run data. By
