@@ -512,7 +512,9 @@ def test_restart_preserves_launch_arguments_and_directory(tmp_path: Path, direct
     ), patch.object(control.subprocess, "run", order.launch):
         assert control.restart_instance(instance, entrypoint) == 0
     assert [call[0] for call in order.mock_calls] == ["stop", "launch"]
-    order.stop.assert_called_once_with([instance], entrypoint)
+    order.stop.assert_called_once_with(
+        [instance], entrypoint, timeout=control.RESTART_STOP_TIMEOUT_SECONDS
+    )
     expected = [sys.executable, *([] if direct_script else ["-u"]), *original]
     order.launch.assert_called_once_with(expected, cwd=str(tmp_path), check=False)
 
@@ -550,11 +552,13 @@ def test_restart_handles_failures(tmp_path: Path, case: str) -> None:
         launch.assert_not_called()
 
 
-def test_native_restart_preserves_arguments_and_waits_for_worker(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cleanup_delay", [0, 46])
+def test_native_restart_preserves_arguments_and_waits_for_worker(tmp_path: Path, cleanup_delay: int) -> None:
     """Restart an isolated daemon after its worker exits and state is saved.
 
     Parameters:
         tmp_path: Private fixture scripts, launch data and shutdown checkpoint.
+        cleanup_delay: Seconds spent saving after workers exit, including beyond the former deadline.
     """
     _factory = ModuleFactory()
     entrypoint = tmp_path / "slips.py"
@@ -573,6 +577,7 @@ import os
 from pathlib import Path
 import signal
 import sys
+import time
 from types import SimpleNamespace
 from unittest.mock import patch
 sys.path.insert(0, __PROJECT_DIRECTORY__)
@@ -604,6 +609,8 @@ def stop(number: int, frame: object) -> None:
     """Stop the worker before recording a completed shutdown."""
     os.kill(worker, signal.SIGTERM)
     os.waitpid(worker, 0)
+    if not Path("saved.json").exists():
+        time.sleep(__CLEANUP_DELAY__)
     Path("saved.json").write_text(json.dumps({"pid": os.getpid()}))
     raise SystemExit(0)
 signal.signal(signal.SIGTERM, stop)
@@ -615,7 +622,7 @@ Path("ready.tmp").write_text(json.dumps({
 Path("ready.tmp").replace("ready.json")
 while True:
     signal.pause()
-'''.replace("__PROJECT_DIRECTORY__", repr(str(Path.cwd()))))
+'''.replace("__PROJECT_DIRECTORY__", repr(str(Path.cwd()))).replace("__CLEANUP_DELAY__", str(cleanup_delay)))
     arguments = ["--daemon", "-i", "eth0", "-c", "config with spaces.yaml",
                  "-o", "output/capture with spaces", "--web-port", "55012", "--keep-history"]
     previous = None
@@ -630,8 +637,10 @@ while True:
         instance = control.inspect_instance(psutil.Process(previous["pid"]), entrypoint)
         assert instance is not None
         restarted = subprocess.run([sys.executable, "./slips.py", "--restart", str(instance.pid)],
-                                   cwd=tmp_path, capture_output=True, text=True, timeout=20)
+                                   cwd=tmp_path, capture_output=True, text=True, timeout=cleanup_delay + 20)
         assert restarted.returncode == 0, restarted.stdout + restarted.stderr
+        if cleanup_delay:
+            assert "Shutdown in progress" in restarted.stdout
         deadline = time.monotonic() + 10
         while time.monotonic() < deadline:
             current = json.loads(marker.read_text())

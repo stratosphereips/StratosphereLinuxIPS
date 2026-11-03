@@ -41,6 +41,18 @@ class ShutdownMixin:
 
     INTERRUPT_SHUTDOWN_GRACE_SECONDS = 30
 
+    def _close_shutdown_queues(self) -> None:
+        """Release main-owned IPC after consumers stop without waiting on unread data."""
+        for queue in (
+            self.profiler_queue,
+            self.aid_queue,
+            self.evidence_worker_queue,
+            self.evidence_logger_q,
+            self.main.logger._startup_queue,
+        ):
+            queue.cancel_join_thread()
+            queue.close()
+
     def cleanup_failed_startup(self) -> None:
         """Stop and reap this run's workers after an incomplete startup."""
         self.children = multiprocessing.active_children()
@@ -920,9 +932,5 @@ class ShutdownMixin:
             # These queues are owned by the main process. Close them after
             # children have stopped so their pipe handles do not survive
             # until interpreter shutdown.
-            self.profiler_queue.close()
-            self.aid_queue.close()
-            self.evidence_worker_queue.close()
-            self.evidence_logger_q.close()
-            self.main.logger._startup_queue.close()
+            self._close_shutdown_queues()
         return None

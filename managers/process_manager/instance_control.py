@@ -7,9 +7,12 @@ import re
 import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 
 import psutil
+
+RESTART_STOP_TIMEOUT_SECONDS = 300
 
 
 @dataclass(frozen=True)
@@ -362,7 +365,29 @@ def stop_instances(
             )
             failed = True
     if waiting:
-        _, alive = psutil.wait_procs(list(waiting.values()), timeout=timeout)
+        alive = list(waiting.values())
+        deadline = time.monotonic() + timeout
+        remaining = timeout
+        next_report = 10.0
+        while True:
+            interval = min(5.0, remaining)
+            _, alive = psutil.wait_procs(alive, timeout=interval)
+            if not alive:
+                break
+            remaining = min(
+                remaining - interval, max(0.0, deadline - time.monotonic())
+            )
+            if remaining <= 0:
+                break
+            elapsed = timeout - remaining
+            if elapsed >= next_report:
+                pids = ", ".join(str(process.pid) for process in alive)
+                print(
+                    f"Shutdown in progress ({elapsed:.0f}s); waiting for PID(s) {pids}. "
+                    "Waiting for workers and final state saving to finish.",
+                    flush=True,
+                )
+                next_report = elapsed + 10
         if alive:
             pids = ", ".join(str(process.pid) for process in alive)
             print(
@@ -404,7 +429,12 @@ def restart_instance(instance: RunningInstance, entrypoint: Path) -> int:
             f"Cannot read the launch command for PID {instance.pid}: {error}"
         )
         return 1
-    if stop_instances([instance], entrypoint) != 0:
+    if (
+        stop_instances(
+            [instance], entrypoint, timeout=RESTART_STOP_TIMEOUT_SECONDS
+        )
+        != 0
+    ):
         print("Shutdown did not finish; no replacement daemon was started.")
         return 1
     print(

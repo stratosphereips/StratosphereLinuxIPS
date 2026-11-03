@@ -3,6 +3,8 @@
 import json
 import signal
 import multiprocessing
+import subprocess
+import sys
 import time
 from unittest.mock import Mock, call, patch
 
@@ -13,6 +15,35 @@ from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("unread", [False, True])
+def test_shutdown_queue_cleanup_cannot_hold_interpreter_open(unread: bool) -> None:
+    """Exit after workers stop even when IPC feeder pipes still contain unread data.
+
+    Parameters:
+        unread: Whether dead consumers left more data than a pipe can hold.
+    """
+    _manager = ModuleFactory().create_process_manager_obj()
+    script = '''
+from multiprocessing import get_context
+from types import SimpleNamespace
+from managers.process_manager.shutdown_mixin import ShutdownMixin
+manager = ShutdownMixin()
+queues = [get_context("spawn").Queue() for _ in range(5)]
+manager.profiler_queue, manager.aid_queue, manager.evidence_worker_queue, manager.evidence_logger_q, startup = queues
+manager.main = SimpleNamespace(logger=SimpleNamespace(_startup_queue=startup))
+if UNREAD:
+    for queue in queues:
+        queue.put(b"x" * (1024 * 1024))
+manager._close_shutdown_queues()
+assert all(queue._closed and queue._joincancelled for queue in queues)
+print("closed")
+'''.replace("UNREAD", repr(unread))
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True,
+                            text=True, timeout=20, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "closed"
 
 
 def abandon_event_lock(event: object, ready: object) -> None:

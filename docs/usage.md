@@ -185,7 +185,10 @@ arguments. If no matching daemon exists, it reports the problem and returns
 a nonzero exit status.
 
 Restart first performs the same shutdown as `--stop` and waits for the daemon
-and its observed workers to exit. If shutdown fails or times out, no replacement
+and its observed workers to exit. Restart allows up to five minutes for worker
+shutdown and final history/database saving, with progress every ten seconds.
+This avoids abandoning a healthy restart when final cleanup exceeds the normal
+45-second stop wait. If shutdown fails or times out, no replacement
 is started. After a successful stop, it launches a new daemon with the original
 Slips arguments, Python interpreter options, and working directory. Arguments
 containing spaces remain separate arguments. Use the same Python environment
@@ -220,6 +223,9 @@ The stop notification and module waits share one shutdown deadline (at most
 30 seconds after an interrupt). If a damaged shared lock prevents notification,
 main reports it and terminates remaining workers rather than waiting forever.
 A second Ctrl-C also cleans up workers before main exits.
+After consumers have stopped, main closes its IPC queues without waiting for
+unread feeder buffers. Queue data left after the workers exit cannot hold the
+Python interpreter open or prevent a replacement daemon from starting.
 
 Before asking modules to stop, Slips records their process identities and their
 descendants, including the Zeek instances it started. This matters because a
