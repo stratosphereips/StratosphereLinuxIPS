@@ -9,6 +9,8 @@ Training Flow:
 1. Local Training (on wall-clock window close every 5 minutes):
    - Buffer flows and alerts during the window
    - Label flows using all evidence from buffered alerts; rest benign
+   - Fit the scaler on the whole window (after this close's tests, before
+     undersampling; scaler_stats.jsonl)
    - Train fc1 + head for local_training_epochs
    - Save the model produced by local training (fc1 + "head_before"): it is
      what peers are sent and what the merge averages
@@ -773,6 +775,7 @@ class ModuleLogger:
                 "trained_labels": "trained_labels.jsonl",
                 "alert_uids": "alert_uids.jsonl",
                 "sofar_test": "sofar_test.jsonl",
+                "scaler_stats": "scaler_stats.jsonl",
             }
             for name in [
                 "local_train",
@@ -793,6 +796,7 @@ class ModuleLogger:
                 "trained_labels",
                 "alert_uids",
                 "sofar_test",
+                "scaler_stats",
                 "live_consistency",
                 "module_errors",
             ]:
@@ -2867,6 +2871,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
            (deferred training), updating the live model that serves later
            windows; its models are also scored on all flows so far (sofar);
         5. flips: alerts created since the last close vs already-trained flows.
+
+        The scaler is fit only in step 4, on the whole finalized window
+        right before it is trained on (_update_scaler), so every flow is
+        scored with a scaler that has not seen it.
         """
         try:
             self.training_count_window += 1
@@ -2993,6 +3001,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
+                # the scaler learns the whole window about to be trained on,
+                # here: after step 3 scored every open window with the
+                # previous scaler, before undersampling and training
+                self._update_scaler(self.training_buffer_x, window_n)
                 if self._undersample:
                     self._undersample_buffer()
                 self._commit_training_labels(window_n)
@@ -3066,6 +3078,37 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 state["m"].zero_()
                 state["v"].zero_()
                 state["step"] = 0
+
+    def _update_scaler(self, x_rows, window_n: int) -> None:
+        """Fit the scaler (partial_fit) on the whole window about to be
+        trained on, before undersampling, and log its state.
+
+        Called once per training from the close routine, after that close
+        scored every open window with the previous scaler and before any
+        training, so no flow is ever scored with a scaler that has seen it.
+        Each flow reaches the scaler once: the buffer is cleared by the
+        training that follows. scaler_stats.jsonl gets one line per fit
+        (mean, var, scale per feature), to compare the peers' scalers.
+
+        :param x_rows: the raw feature rows of the training buffer
+        :param window_n: the closing window
+        """
+        self.update_preprocessor(pd.DataFrame(np.asarray(x_rows)))
+        sc = self.scaler
+        self.logger._write(
+            "scaler_stats",
+            json.dumps(
+                {
+                    "window": int(window_n),
+                    "rows": len(x_rows),
+                    "n_seen": int(np.max(sc.n_samples_seen_)),
+                    "features": self._get_feature_order(),
+                    "mean": [float(v) for v in sc.mean_],
+                    "var": [float(v) for v in sc.var_],
+                    "scale": [float(v) for v in sc.scale_],
+                }
+            ),
+        )
 
     def _undersample_majority(self, X: np.ndarray, y: np.ndarray):
         """Randomly undersample the majority label to a 50/50 class balance.
@@ -3170,7 +3213,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
 
-            self.update_preprocessor(pd.DataFrame(X))
+            # scaled with the scaler _update_scaler just fit on the whole
+            # window (the close routine); training never refits it
             X_scaled = self.scaler.transform(X)
 
             # Save scaled batch for both local and merge head fine-tuning

@@ -20,6 +20,18 @@ input(18) -> RandomProjection(256, frozen, He init) -> /√256 -> fc1(256->16)+R
 - **Minimum batch size**: 30 flows — training deferred, buffer accumulates across consecutive alerts/windows until threshold met
 - **Epochs**: 15 local (fc1 + head), 5 fine-tune (fc1 + head on both the local and the merged model; head-only with `finetune_fc_layers: false`)
 
+### Feature scaler
+
+One `StandardScaler` per peer, empty at start (no warm start in the experiment
+image), updated with `partial_fit` in exactly one place: at a window close,
+after that close has scored every open window (prequential test) and right
+before training, on the **whole** finalized window — before undersampling
+drops flows (`_update_scaler`). Training and both fine-tunes reuse that scaled
+batch and never refit; every prediction is transform-only. So no flow is ever
+scored with a scaler that has seen it. Each fit appends a line to
+`scaler_stats.jsonl` (window, rows, samples seen, per-feature mean / var /
+scale) for comparing the peers' scalers.
+
 ### Training Buffers
 
 1. **Training Buffer**: Populated incrementally across deferred alerts/twcloses. Only cleared after successful training (≥30 flows). Tracks buffered flow IDs to prevent duplicates.

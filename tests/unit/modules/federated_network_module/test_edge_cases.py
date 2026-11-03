@@ -134,7 +134,13 @@ class Pipe:
         m._conn_active = m._blank_test_statistics()
         m._conn_local = m._blank_test_statistics()
         m._sofar_chunks = []
-        m.scaler = MagicMock(transform=lambda x: x)
+        m.scaler = MagicMock(
+            transform=lambda x: x,
+            n_samples_seen_=0,
+            mean_=np.zeros(18),
+            var_=np.ones(18),
+            scale_=np.ones(18),
+        )
         m.predict_batch = lambda x: np.array([BEN] * len(x))
         m._train_batch = self._train
         self.m = m
@@ -592,7 +598,7 @@ def test_with_merge_head_the_head_after_local_training_is_sent(tmp_path):
         return out
 
     m.fit_incremental_model = spy_fit
-    m._train_batch()
+    _fit_and_train(m)
     sent = _sent_shared(m)
     assert torch.equal(sent["head_weight"], after_local["head"][0])
     assert torch.equal(sent["head_bias"], after_local["head"][1])
@@ -772,6 +778,13 @@ def _trainable(tmp_path, balancing=""):
     return m
 
 
+def _fit_and_train(m):
+    """What the close routine does once the window is finalized: fit the
+    scaler on the whole buffer (_update_scaler), then train."""
+    m._update_scaler(m.training_buffer_x, m.training_count_window)
+    m._train_batch()
+
+
 def test_learning_rate_scales_the_adam_step(tmp_path):
     """From a fresh Adam state the first step (incl. decoupled weight decay)
     is linear in the learning rate: doubling it doubles every weight change."""
@@ -848,7 +861,7 @@ def test_undersample_preset_trains_and_logs_the_balanced_batch(tmp_path):
     buffer -> both training stages see and log 2/2, on an unweighted loss;
     the buffer is consumed and the fresh model is published."""
     m = _trainable(tmp_path, "undersample")
-    m._train_batch()
+    _fit_and_train(m)
     out = tmp_path / "slips-a"
     for name in ("local_train.log", "local_head_train.log"):
         lines = [ln.strip() for ln in (out / name).read_text().splitlines()]
@@ -883,7 +896,7 @@ def test_merged_head_finetunes_on_the_same_batch_as_the_local_head(tmp_path):
         return real_fit(x, y, classes=classes, train_target=train_target)
 
     m.fit_incremental_model = spy_fit
-    m._train_batch()
+    _fit_and_train(m)
     assert set(seen) == {"local", "local_head", "merged"}
     assert m._using_merged_model and m.merge_count == 1
     x_head, n_head, mean_head = seen["local_head"]
@@ -972,7 +985,7 @@ def test_peers_get_the_model_after_local_training(
     m.finetune_fc_layers = finetune_fc_layers
     m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
     seen = _spy_train(m)
-    m._train_batch()
+    _fit_and_train(m)
     after_local = seen["local"][1]
     sent = _sent_shared(m)
     assert all(torch.equal(sent[k], after_local[k]) for k in after_local)
@@ -996,7 +1009,7 @@ def test_finetune_fc_layers_trains_fc1_in_both_finetunes_from_fresh_adam(
     peer = _net(tmp_path, "slips-b").weights_for_sharing()
     m.peer_models["slips-b"] = peer
     seen = _spy_train(m)
-    m._train_batch()
+    _fit_and_train(m)
     assert seen["local_head"][0] == {} and seen["merged"][0] == {}
     after_local = seen["local"][1]
     averaged = {k: (after_local[k] + peer[k]) / 2 for k in after_local}
@@ -1011,7 +1024,7 @@ def test_head_only_finetune_leaves_the_averaged_fc1_as_merged(tmp_path):
     peer = _net(tmp_path, "slips-b").weights_for_sharing()
     m.peer_models["slips-b"] = peer
     seen = _spy_train(m)
-    m._train_batch()
+    _fit_and_train(m)
     after_local = seen["local"][1]
     merged = m.merged_model.weights_for_sharing()
     for k in after_local:
@@ -1034,7 +1047,7 @@ def test_each_merge_logs_how_much_the_finetunes_undo(
     m = _trainable(tmp_path)
     m.finetune_fc_layers = finetune_fc_layers
     m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
-    m._train_batch()
+    _fit_and_train(m)
     log = (tmp_path / "slips-a" / "merging_data.log").read_text()
     hit = FINETUNE_RE.search(log)
     assert hit
@@ -1048,3 +1061,72 @@ def test_each_merge_logs_how_much_the_finetunes_undo(
     assert before == pytest.approx(merged_vs_own, rel=1e-4)
     assert undone == pytest.approx(1 - after / before, abs=1e-3)
     assert local_moved > 0 and merged_moved > 0
+
+
+def test_the_scaler_learns_the_whole_window_not_the_undersampled_batch(
+    tmp_path,
+):
+    """8 mal / 2 ben: the scaler sees all 10 flows, training only 2/2;
+    scaler_stats.jsonl logs the fit."""
+    m = _trainable(tmp_path, "undersample")
+    _fit_and_train(m)
+    assert m.scaler.n_samples_seen_ == 10
+    out = tmp_path / "slips-a"
+    train = (out / "local_train.log").read_text()
+    assert "batch 4 (Mal:2 Ben:2)" in train
+    (row,) = [
+        json.loads(ln)
+        for ln in (out / "scaler_stats.jsonl").read_text().splitlines()
+    ]
+    assert (row["window"], row["rows"], row["n_seen"]) == (3, 10, 10)
+    assert row["features"] == m._get_feature_order()
+    assert np.allclose(row["mean"], m.scaler.mean_)
+    assert np.allclose(row["scale"], m.scaler.scale_)
+
+
+def test_training_never_refits_the_scaler(tmp_path):
+    m = _trainable(tmp_path)
+    m._update_scaler(m.training_buffer_x, m.training_count_window)
+    mean = m.scaler.mean_.copy()
+    m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
+    m._train_batch()
+    assert m.scaler.n_samples_seen_ == 10
+    assert np.array_equal(m.scaler.mean_, mean)
+
+
+def test_the_scaler_is_fit_after_the_tests_on_the_whole_window_then_trained(
+    monkeypatch, tmp_path
+):
+    """At each close: every open window is scored first (with the previous
+    scaler), then the scaler fits the whole finalized window - before
+    undersampling drops flows - and only then does training run."""
+    p = Pipe(monkeypatch, tmp_path, k=1, fitted=True)
+    p.m.seed = SEED
+    p.m._undersample = True
+    events = []
+    real_test_cell, real_update = p.m._test_cell, p.m.update_preprocessor
+
+    def spy_test_cell(cell):
+        events.append(("test", p.m.training_count_window))
+        real_test_cell(cell)
+
+    def spy_update(x):
+        events.append(("fit", len(x)))
+        real_update(x)
+
+    def spy_train():
+        events.append(("train", len(p.m.training_buffer_y)))
+        p._train()
+
+    p.m._test_cell = spy_test_cell
+    p.m.update_preprocessor = spy_update
+    p.m._train_batch = spy_train
+    p.close("a", "b", "c", alerts=[("A1", ["a"])])
+    p.close("d")
+    p.close()
+    fits = [i for i, e in enumerate(events) if e[0] == "fit"]
+    assert [events[i] for i in fits] == [("fit", 3), ("fit", 1)]
+    for i in fits:
+        assert events[i - 1][0] == "test" and events[i + 1][0] == "train"
+    # the 3-flow window (1 mal / 2 ben) is fit whole, trained 1/1
+    assert events[fits[0] + 1] == ("train", 2)
