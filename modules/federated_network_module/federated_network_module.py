@@ -25,6 +25,13 @@ Training Flow:
 This makes local and merged models directly comparable: both heads start from
 identical weights and receive the same head-only fine-tuning; only fc1 differs.
 
+Options: merge_head also shares and merges the head (the merged fine-tune then
+starts from the merged head); finetune_shared makes both fine-tunes train fc1 +
+head, each from a fresh Adam state, while peers still get the model after local
+training; minibatch_size splits every training pass into class-stratified
+mini-batches (one Adam step each). merging_data.log records per merge how much
+of the merge the fine-tunes undo ("finetune | ... | undone=").
+
 Key Features:
 - Fixed 18-feature input
 - Single training buffer per wall-clock window
@@ -142,6 +149,23 @@ def with_shared_head(shared: dict, head: tuple) -> dict:
     return out
 
 
+def trainable_vector(shared: dict, head: tuple) -> torch.Tensor:
+    """All trainable weights of a model as one flat vector: the shared
+    layers (key order fixed, any head keys dropped) followed by the head.
+
+    :param shared: the model's shared tensors (weights_for_sharing)
+    :param head: (weight, bias) of the model's head
+    :return: a 1-D tensor
+    """
+    parts = [
+        shared[k].detach().reshape(-1)
+        for k in sorted(shared)
+        if k not in HEAD_KEYS
+    ]
+    parts += [t.detach().reshape(-1) for t in head]
+    return torch.cat(parts)
+
+
 def window_offset_seed(peer_id: str, run_seed: Optional[int]) -> int:
     """Seed of a peer's window offset: the peer id alone (default, the same
     every run) or the peer id plus the run seed, so repeats get different
@@ -169,6 +193,54 @@ def undersample_rng(
     if run_seed is None:
         return np.random.default_rng(int(seed) + int(window))
     return np.random.default_rng((int(run_seed), int(window)))
+
+
+def minibatch_rng(
+    seed: int, run_seed: Optional[int], window: int, finetune: bool
+) -> np.random.Generator:
+    """RNG for the mini-batch split of one training pass, reproducible per
+    window. Both fine-tunes (local and merged) get the same stream, so they
+    see the same mini-batches in the same order.
+
+    :param seed: the module's config seed
+    :param run_seed: the per-run seed, or None
+    :param window: the training window index
+    :param finetune: True for the fine-tune passes, False for local training
+    :return: a numpy Generator
+    """
+    run = 0 if run_seed is None else int(run_seed) + 1
+    return np.random.default_rng(
+        (int(seed), run, int(window), int(finetune), 0x6D62)
+    )
+
+
+def minibatch_indices(y, batch_size: int, rng: np.random.Generator) -> list:
+    """Split a training batch into class-stratified mini-batches.
+
+    batch_size <= 0, or a batch no larger than it, keeps the full batch (one
+    Adam step per epoch). Otherwise the batch is cut into
+    ceil(n / batch_size) near-equal parts of at most batch_size rows; each
+    class is shuffled and spread evenly over the parts, so every part keeps
+    the batch's class ratio (50/50 after undersampling).
+
+    :param y: labels of the batch
+    :param batch_size: the configured mini-batch size
+    :param rng: the pass's Generator (minibatch_rng)
+    :return: list of index arrays, one per mini-batch
+    """
+    y = np.asarray(y)
+    n = len(y)
+    if batch_size <= 0 or n <= batch_size:
+        return [np.arange(n)]
+    order, rank = [], []
+    for cls in np.unique(y):
+        idx = rng.permutation(np.where(y == cls)[0])
+        order.append(idx)
+        rank.append((np.arange(len(idx)) + 0.5) / len(idx))
+    order = np.concatenate(order)[
+        np.argsort(np.concatenate(rank), kind="stable")
+    ]
+    return np.array_split(order, -(-n // batch_size))
 
 
 def build_with_init_seed(init_seed: int, build):
@@ -1042,6 +1114,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "merge_head", default=False
         )
         self.print(f"merge_head: {self.merge_head}", 0, 2)
+        # Optional: the fine-tune after the merge point also trains the
+        # shared layers, on the local and on the merged model alike, each
+        # from a fresh throwaway Adam state (same learning rate). What is
+        # sent and merged is still the model after local training. Unset =
+        # head-only fine-tune with the shared layers frozen (unchanged).
+        self.finetune_shared = self._read_module_config_bool(
+            "finetune_shared", default=False
+        )
+        self.print(f"finetune_shared: {self.finetune_shared}", 0, 2)
+        # Optional mini-batch size for every training pass (local training
+        # and both fine-tunes): each epoch takes one Adam step per
+        # class-stratified mini-batch. Unset/0 = one full-batch step per
+        # epoch (unchanged).
+        self.minibatch_size = self._read_module_config_int(
+            "minibatch_size", default=0
+        )
+        self.print(f"minibatch_size: {self.minibatch_size}", 0, 2)
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )
@@ -1372,7 +1461,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         Note: epochs come from config. Set _finetune_stage=True for a head-only
         fine-tune pass (fewer epochs: merge_finetune_epochs; freezes the shared
-        layers, trains the head). The random projection is always frozen.
+        layers unless finetune_shared, trains the head). The random projection
+        is always frozen. With minibatch_size each epoch takes one Adam step
+        per class-stratified mini-batch, else one full-batch step.
 
         Args:
             x_train: Normalized features
@@ -1384,10 +1475,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         self.print("fit_incremental_model: entering", 1, 1)
 
-        # _finetune_stage selects the fine-tune pass (fewer epochs). With shared
-        # init the averaged fc1 is already a good feature extractor, so the
-        # fine-tune freezes the shared layers and trains only the head (below) -
-        # retraining fc1 here over-trained the weak peer's noisy data.
+        # _finetune_stage selects the fine-tune pass (fewer epochs). By default
+        # the fine-tune freezes the shared layers and trains only the head
+        # (below), so it leaves the averaged representation as merged;
+        # finetune_shared trains the shared layers too.
         finetune = getattr(self, "_finetune_stage", False)
         epochs = (
             self.merge_finetune_epochs
@@ -1408,10 +1499,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("fit_incremental_model: creating model...", 1, 1)
             self.model = self.create_empty_model().to(self.device)
 
-        # fine-tune stages freeze the shared layers and train only the head;
-        # full training trains both. The random projection is always frozen.
+        # fine-tune stages freeze the shared layers and train only the head
+        # (with finetune_shared they train both); full training trains both.
+        # The random projection is always frozen.
         if finetune:
-            self.model.set_shared_frozen(True)
+            self.model.set_shared_frozen(
+                not getattr(self, "finetune_shared", False)
+            )
             self.model.set_head_frozen(False)
         else:
             self.model.set_shared_frozen(False)
@@ -1472,39 +1566,69 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             1,
         )
 
+        # one Adam step per mini-batch; without minibatch_size the whole
+        # batch is one step per epoch
+        batch_size = getattr(self, "minibatch_size", 0)
+        rng = (
+            minibatch_rng(
+                self.seed,
+                getattr(self, "run_seed", None),
+                self.training_count_window,
+                finetune,
+            )
+            if batch_size > 0
+            else None
+        )
+        y_labels = y_tensor.cpu().numpy()
+
         for epoch in range(epochs):
-            outputs = self.model(X_tensor)
-            loss = criterion(outputs, y_tensor)
-            loss.backward()
+            parts = (
+                [None]
+                if rng is None
+                else minibatch_indices(y_labels, batch_size, rng)
+            )
+            epoch_loss = 0.0
+            for part in parts:
+                if part is None:
+                    xb, yb = X_tensor, y_tensor
+                else:
+                    sel = torch.as_tensor(part, device=self.device)
+                    xb, yb = X_tensor[sel], y_tensor[sel]
+                outputs = self.model(xb)
+                loss = criterion(outputs, yb)
+                loss.backward()
+                epoch_loss += loss.item() * len(yb) / len(y_tensor)
 
-            with torch.no_grad():
-                for name, param in self.model.named_parameters():
-                    # frozen params keep the zeroed grad of an earlier fit
-                    # (not None): skip them, or weight decay and stale Adam
-                    # momentum would still move them in head-only stages
-                    if param.grad is None or not param.requires_grad:
-                        continue
-                    state = self._adam_state[name]
-                    state["step"] += 1
-                    g = param.grad.clone()
+                with torch.no_grad():
+                    for name, param in self.model.named_parameters():
+                        # frozen params keep the zeroed grad of an earlier fit
+                        # (not None): skip them, or weight decay and stale Adam
+                        # momentum would still move them in head-only stages
+                        if param.grad is None or not param.requires_grad:
+                            continue
+                        state = self._adam_state[name]
+                        state["step"] += 1
+                        g = param.grad.clone()
 
-                    # Weight decay (decoupled, as in PyTorch's Adam)
-                    param.mul_(1.0 - lr * wd)
+                        # Weight decay (decoupled, as in PyTorch's Adam)
+                        param.mul_(1.0 - lr * wd)
 
-                    m = state["m"]
-                    v = state["v"]
-                    m.mul_(beta1).add_(g, alpha=1.0 - beta1)
-                    v.mul_(beta2).addcmul_(g, g, value=1.0 - beta2)
+                        m = state["m"]
+                        v = state["v"]
+                        m.mul_(beta1).add_(g, alpha=1.0 - beta1)
+                        v.mul_(beta2).addcmul_(g, g, value=1.0 - beta2)
 
-                    m_hat = m / (1.0 - beta1 ** state["step"])
-                    v_hat = v / (1.0 - beta2 ** state["step"])
+                        m_hat = m / (1.0 - beta1 ** state["step"])
+                        v_hat = v / (1.0 - beta2 ** state["step"])
 
-                    param.addcdiv_(m_hat, v_hat.sqrt().add_(eps), value=-lr)
+                        param.addcdiv_(
+                            m_hat, v_hat.sqrt().add_(eps), value=-lr
+                        )
 
-                    param.grad.zero_()
+                        param.grad.zero_()
 
             self.print(
-                f"fit_incremental_model: epoch {epoch+1}/{epochs} done loss={loss.item():.6f}",
+                f"fit_incremental_model: epoch {epoch+1}/{epochs} done loss={epoch_loss:.6f}",
                 1,
                 1,
             )
@@ -1515,7 +1639,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 epoch_correct = (epoch_preds == y_tensor).sum().item()
                 epoch_acc = epoch_correct / len(y_tensor)
                 self.logger.log_train_epoch(
-                    log_target, epoch + 1, epochs, loss.item(), epoch_acc
+                    log_target, epoch + 1, epochs, epoch_loss, epoch_acc
                 )
 
         self.print(
@@ -3060,22 +3184,36 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"{self._training_trigger}_{counter} samples={len(y)}",
             )
 
-            # Capture the head produced by local training; merge will start from here too
+            # Capture the model produced by local training: it is what we
+            # send and merge, and where both fine-tunes start
             head_before_w, head_before_b = self.model.get_head_weights()
+            shared_before = self.model.weights_for_sharing()
 
-            # Phase 2: local head fine-tune (shorter; fc1 frozen, head only)
+            # Phase 2: local fine-tune (shorter). Head only on its reset Adam
+            # moments; with finetune_shared the shared layers train too, from
+            # a fresh throwaway Adam state like the merged fine-tune's, and
+            # the local training state carries on to the next window.
             self.logger.log_train_header(
                 "local_head_train",
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
-            self._reset_head_adam_state()
+            finetune_shared = getattr(self, "finetune_shared", False)
+            train_adam = self._adam_state
+            if finetune_shared:
+                self._adam_state = {}
+            else:
+                self._reset_head_adam_state()
             self._finetune_stage = True
-            self.fit_incremental_model(
-                self._last_train_X,
-                self._last_train_Y,
-                train_target="local_head",
-            )
-            self._finetune_stage = False
+            try:
+                self.fit_incremental_model(
+                    self._last_train_X,
+                    self._last_train_Y,
+                    train_target="local_head",
+                )
+            finally:
+                self._finetune_stage = False
+                if finetune_shared:
+                    self._adam_state = train_adam
 
             self._save_local_model()
 
@@ -3085,7 +3223,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("[DEBUG] _train_batch done, about to send model", 1, 1)
 
             self.print("_train_batch: calling send_model_to_peers", 1, 1)
-            self.send_model_to_peers(head=(head_before_w, head_before_b))
+            self.send_model_to_peers(
+                head=(head_before_w, head_before_b), shared=shared_before
+            )
             self.print("_train_batch: send_model_to_peers returned", 1, 1)
 
             # After own training, try merge if we have pending peer models.
@@ -3097,7 +3237,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     "_train_batch: pending peer models, triggering merge", 1, 1
                 )
                 merges_before = self.merge_count
-                self.trigger_merge(head_before_w, head_before_b)
+                self.trigger_merge(
+                    head_before_w, head_before_b, shared_before=shared_before
+                )
                 merged = self.merge_count > merges_before
 
             self.training_buffer_x.clear()
@@ -3192,6 +3334,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self,
         head_before_w: Optional[torch.Tensor] = None,
         head_before_b: Optional[torch.Tensor] = None,
+        shared_before: Optional[dict] = None,
     ):
         """
         Merge all peer models + own latest, retrain head, save merged model.
@@ -3201,11 +3344,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         head-only fine-tuning). This makes local and merged models differ
         only in the origin of fc1. With merge_head the rule also merges the
         heads (own: the head after local full training) and the fine-tune
-        starts from the merged head.
+        starts from the merged head. With finetune_shared the merged
+        fine-tune also trains fc1, as the local one does.
 
         Args:
             head_before_w: Head weight tensor from after local full training.
             head_before_b: Head bias tensor from after local full training.
+            shared_before: Own shared tensors from after local full training
+                (default: the model's current shared layers).
         """
         try:
             self.print("trigger_merge: entering", 1, 1)
@@ -3214,7 +3360,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # parameters (key order fixed) — works for ANY model class.
             # A peer payload is usable only with every shared key at our
             # shape (another model_class may reuse key names).
-            own_shared = self.model.weights_for_sharing() if self.model else {}
+            own_shared = (
+                shared_before
+                if shared_before is not None
+                else self.model.weights_for_sharing() if self.model else {}
+            )
             merge_head = self.model is not None and getattr(
                 self, "merge_head", False
             )
@@ -3386,11 +3536,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             elif head_before_w is not None and head_before_b is not None:
                 merged.set_head_weights(head_before_w, head_before_b)
 
-            # fine-tune the merged head with the shared layers frozen, on the
-            # merged copy and with a FRESH, throwaway optimizer state: Adam
-            # moments are keyed by parameter name, so sharing them would leak
-            # the merged training into the next local training
+            # fine-tune the merged head (shared layers frozen unless
+            # finetune_shared), on the merged copy and with a FRESH, throwaway
+            # optimizer state: Adam moments are keyed by parameter name, so
+            # sharing them would leak the merged training into the next local
+            # training
             self.print("trigger_merge: calling _align_head_on_buffer", 1, 1)
+            merged_start = trainable_vector(
+                merged.weights_for_sharing(), merged.get_head_weights()
+            )
             local_model = self.model
             local_adam = getattr(self, "_adam_state", {})
             self.model, self._adam_state = merged, {}
@@ -3400,6 +3554,14 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
             finally:
                 self.model, self._adam_state = local_model, local_adam
+            own_head = (
+                (head_before_w, head_before_b)
+                if head_before_w is not None and head_before_b is not None
+                else self.model.get_head_weights()
+            )
+            self._log_finetune_undo(
+                trainable_vector(own_shared, own_head), merged_start, merged
+            )
 
             self.merged_model = merged
             self._using_merged_model = True
@@ -3417,11 +3579,53 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self._record_error("trigger_merge")
 
+    def _log_finetune_undo(
+        self,
+        own_start: torch.Tensor,
+        merged_start: torch.Tensor,
+        merged: nn.Module,
+    ):
+        """Log how much of the merge the fine-tunes undo (merging_data.log).
+
+        Over all trainable weights: gap_before = merged model vs own model
+        where their fine-tunes start, gap_after = the two models after them.
+        undone = 1 - gap_after / gap_before: 1 = both fine-tunes end on the
+        same model, 0 = still as far apart as the merge put them (negative =
+        further apart). local_moved / merged_moved = how far each moved.
+
+        :param own_start: own trainable weights after local training
+        :param merged_start: the merged model's weights before its fine-tune
+        :param merged: the merged model after its fine-tune
+        """
+        try:
+            local_end = trainable_vector(
+                self.model.weights_for_sharing(), self.model.get_head_weights()
+            )
+            merged_end = trainable_vector(
+                merged.weights_for_sharing(), merged.get_head_weights()
+            )
+            before = torch.norm(merged_start - own_start).item()
+            after = torch.norm(merged_end - local_end).item()
+            undone = 1.0 - after / before if before > 0 else float("nan")
+            local_moved = torch.norm(local_end - own_start).item()
+            merged_moved = torch.norm(merged_end - merged_start).item()
+            self.logger._write(
+                "merging_data",
+                f"  finetune | gap_before={before:.6f} | gap_after={after:.6f}"
+                f" | undone={undone:.4f} | local_moved={local_moved:.6f}"
+                f" | merged_moved={merged_moved:.6f}"
+                f" | shared_trained={bool(getattr(self, 'finetune_shared', False))}"
+                f" | n_params={own_start.numel()}",
+            )
+        except Exception:
+            self._record_error("trigger_merge")
+
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
-        Fine-tune the merged HEAD (fc1 frozen) on the provided batch for
-        merge_finetune_epochs. With shared init the averaged fc1 is already a
-        good feature extractor, so polishing only the head suffices.
+        Fine-tune the merged HEAD (fc1 frozen; with finetune_shared fc1 and
+        head) on the provided batch for merge_finetune_epochs. With shared
+        init the averaged fc1 is already a good feature extractor, so by
+        default polishing only the head suffices.
 
         X is the ALREADY-SCALED batch the local fine-tune used (_last_train_X):
         it is neither fed to the scaler (fit on raw training features only) nor
@@ -3437,8 +3641,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # Get epochs from instance variable (set in init)
             epochs = self.merge_finetune_epochs
 
-            # Fine-tune the whole merged model (fc1+head) for the shorter
-            # fine-tune epoch count so it can adapt the averaged fc1.
+            # Fine-tune for the shorter fine-tune epoch count: the head only,
+            # or with finetune_shared fc1 + head (fit_incremental_model).
             self.print(
                 f"Fine-tuning merged head for {epochs} epochs on {len(y)} samples",
                 1,
@@ -3458,7 +3662,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         except Exception:
             self._record_error("_align_head_on_buffer")
 
-    def send_model_to_peers(self, head: Optional[tuple] = None):
+    def send_model_to_peers(
+        self, head: Optional[tuple] = None, shared: Optional[dict] = None
+    ):
         """
         Send latest local model weights to all connected peers via P2P module.
 
@@ -3468,13 +3674,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             head: (weight, bias) of the head after local training, sent
                   with the shared layers when merge_head is on (default:
                   the model's current head)
+            shared: the shared tensors after local training, before the
+                  fine-tune (default: the model's current shared layers)
         """
         try:
             self.print("send_model_to_peers: entering", 1, 1)
             if self.model is None:
                 return
 
-            shared = self.model.weights_for_sharing()
+            if shared is None:
+                shared = self.model.weights_for_sharing()
             if getattr(self, "merge_head", False):
                 shared = with_shared_head(
                     shared,

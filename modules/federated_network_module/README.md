@@ -250,6 +250,8 @@ federated_network_module:
   # run_seed: 2   # optional, for repeat runs (see below)
   # learning_rate: 0.01   # optional, Adam step size (see below)
   # merge_head: false      # optional, also share + merge the head (see below)
+  # finetune_shared: false # optional, fine-tune fc1 + head on both models (see below)
+  # minibatch_size: 0       # optional, mini-batch size of every training pass (see below)
 ```
 
 `run_seed` (optional, unset by default) gives repeat experiments run-to-run
@@ -272,6 +274,32 @@ local model still trains only from the previous local model, and the merged
 model serves one window and is discarded. `merging_data.log` gets a
 `merge_head=True` line, and its distances and `weights/merge_*.npz` vectors
 then include the head parameters.
+
+`finetune_shared` (optional, default false) makes the fine-tune after the merge
+point train fc1 + head instead of the head alone, on the local and on the merged
+model alike, each from a fresh throwaway Adam state with the same learning rate
+(the local model's training state carries on to the next window). Peers are
+still sent the model after local training, before the fine-tune, and that is
+what the merge averages, so both fine-tunes start from the merge point and only
+their starting weights differ. Because the local fine-tune now changes fc1, the
+local model trains `local_training_epochs + merge_finetune_epochs` epochs per
+window. Each merge adds a line to `merging_data.log`:
+
+```
+  finetune | gap_before=… | gap_after=… | undone=0.42 | local_moved=… | merged_moved=… | shared_trained=True | n_params=…
+```
+
+over all trainable weights: `gap_before` = merged vs own model where the
+fine-tunes start, `gap_after` = the two after them, `undone` = 1 − after/before
+(1 = both end on the same model, 0 = as far apart as the merge put them). The
+line is written with the option off too (head-only fine-tunes).
+
+`minibatch_size` (optional, default 0 = full batch) splits every training pass
+(local training and both fine-tunes) into ceil(n / minibatch_size) near-equal,
+class-stratified mini-batches of at most that size, one Adam step each, shuffled
+per window and pass (both fine-tunes draw the same split). An epoch is then
+several steps instead of one, so the step count per window grows with the batch:
+with 100 a 118-flow batch takes 2 steps per epoch, a 1,230-flow batch 13.
 
 ### Hyperparameter Summary
 

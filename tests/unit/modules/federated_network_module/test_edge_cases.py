@@ -892,3 +892,156 @@ def test_merged_head_finetunes_on_the_same_batch_as_the_local_head(tmp_path):
     assert np.allclose(x_merged, x_head)
     assert n_merged == n_head
     assert np.allclose(mean_merged, mean_head)
+
+
+@pytest.mark.parametrize("n, size", [(10, 0), (10, 10), (10, 25)])
+def test_without_a_smaller_minibatch_size_the_batch_stays_whole(n, size):
+    y = np.array([MAL, BEN] * (n // 2))
+    parts = fnm.minibatch_indices(y, size, np.random.default_rng(0))
+    assert len(parts) == 1 and np.array_equal(parts[0], np.arange(n))
+
+
+@pytest.mark.parametrize(
+    "n_mal, n_ben, size", [(59, 59, 100), (615, 615, 100), (8, 2, 3)]
+)
+def test_minibatches_cover_the_batch_once_and_keep_its_class_ratio(
+    n_mal, n_ben, size
+):
+    y = np.array([MAL] * n_mal + [BEN] * n_ben)
+    parts = fnm.minibatch_indices(y, size, np.random.default_rng(0))
+    n = len(y)
+    assert len(parts) == -(-n // size)
+    assert all(len(p) <= size for p in parts)
+    assert np.array_equal(np.sort(np.concatenate(parts)), np.arange(n))
+    for p in parts:
+        want = n_mal * len(p) / n
+        assert abs(int(np.sum(y[p] == MAL)) - want) <= 1
+
+
+def test_both_finetunes_draw_the_same_minibatches():
+    y = np.array([MAL] * 40 + [BEN] * 40)
+
+    def split(finetune):
+        rng = fnm.minibatch_rng(SEED, 2, 7, finetune)
+        return [p.tolist() for p in fnm.minibatch_indices(y, 30, rng)]
+
+    assert split(True) == split(True)
+    assert split(True) != split(False)
+
+
+@pytest.mark.parametrize("size, steps", [(0, 1), (3, 4), (100, 1)])
+def test_minibatch_size_takes_one_adam_step_per_minibatch(
+    tmp_path, size, steps
+):
+    """10 flows, one epoch: one step on the full batch, ceil(10 / 3) = 4
+    steps with minibatch_size 3."""
+    m = _trainable(tmp_path)
+    m.local_training_epochs = 1
+    m.minibatch_size = size
+    m.fit_incremental_model(np.stack(m.training_buffer_x), m.training_buffer_y)
+    assert m._adam_state["fc1.weight"]["step"] == steps
+    assert m._adam_state["head.weight"]["step"] == steps
+
+
+def _spy_train(m):
+    """Record the fc1 after each training pass of _train_batch and the Adam
+    state each pass starts from."""
+    seen = {}
+    real_fit = m.fit_incremental_model
+
+    def spy_fit(x, y, classes=None, train_target="local"):
+        start = {k: v["step"] for k, v in m._adam_state.items()}
+        out = real_fit(x, y, classes=classes, train_target=train_target)
+        seen[train_target] = (
+            start,
+            {k: v.clone() for k, v in m.model.weights_for_sharing().items()},
+        )
+        return out
+
+    m.fit_incremental_model = spy_fit
+    return seen
+
+
+@pytest.mark.parametrize("finetune_shared", [False, True])
+def test_peers_get_the_model_after_local_training(tmp_path, finetune_shared):
+    """What is sent and merged is fc1 after local training, before the
+    fine-tune - also when finetune_shared moves fc1 in the fine-tune."""
+    m = _trainable(tmp_path)
+    m.finetune_shared = finetune_shared
+    m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
+    seen = _spy_train(m)
+    m._train_batch()
+    after_local = seen["local"][1]
+    sent = _sent_shared(m)
+    assert all(torch.equal(sent[k], after_local[k]) for k in after_local)
+    npz = np.load(tmp_path / "slips-a" / "weights" / "merge_0001.npz")
+    own = torch.cat([after_local[k].reshape(-1) for k in sorted(after_local)])
+    assert np.allclose(npz["own"], own.numpy())
+    local_moved = any(
+        not torch.equal(m.model.weights_for_sharing()[k], after_local[k])
+        for k in after_local
+    )
+    assert local_moved == finetune_shared
+
+
+def test_finetune_shared_trains_fc1_in_both_finetunes_from_fresh_adam(
+    tmp_path,
+):
+    """Both fine-tunes start from an empty Adam state and move fc1; the
+    local training state (2 epochs = 2 steps) carries on unchanged."""
+    m = _trainable(tmp_path)
+    m.finetune_shared = True
+    peer = _net(tmp_path, "slips-b").weights_for_sharing()
+    m.peer_models["slips-b"] = peer
+    seen = _spy_train(m)
+    m._train_batch()
+    assert seen["local_head"][0] == {} and seen["merged"][0] == {}
+    after_local = seen["local"][1]
+    averaged = {k: (after_local[k] + peer[k]) / 2 for k in after_local}
+    merged = m.merged_model.weights_for_sharing()
+    assert any(not torch.allclose(merged[k], averaged[k]) for k in averaged)
+    assert m._adam_state["fc1.weight"]["step"] == m.local_training_epochs
+
+
+def test_head_only_finetune_leaves_the_averaged_fc1_as_merged(tmp_path):
+    m = _trainable(tmp_path)
+    peer = _net(tmp_path, "slips-b").weights_for_sharing()
+    m.peer_models["slips-b"] = peer
+    seen = _spy_train(m)
+    m._train_batch()
+    after_local = seen["local"][1]
+    merged = m.merged_model.weights_for_sharing()
+    for k in after_local:
+        assert torch.allclose(merged[k], (after_local[k] + peer[k]) / 2)
+
+
+FINETUNE_RE = re.compile(
+    r"finetune \| gap_before=([\d.]+) \| gap_after=([\d.]+) \| undone=(-?[\d.]+|nan)"
+    r" \| local_moved=([\d.]+) \| merged_moved=([\d.]+) \| shared_trained=(\w+)"
+)
+
+
+@pytest.mark.parametrize("finetune_shared", [False, True])
+def test_each_merge_logs_how_much_the_finetunes_undo(
+    tmp_path, finetune_shared
+):
+    """gap_before is the merged-vs-own distance where the fine-tunes start
+    (= merged_vs_own without merge_head: the heads start equal), gap_after
+    the distance after them, undone = 1 - after / before."""
+    m = _trainable(tmp_path)
+    m.finetune_shared = finetune_shared
+    m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
+    m._train_batch()
+    log = (tmp_path / "slips-a" / "merging_data.log").read_text()
+    hit = FINETUNE_RE.search(log)
+    assert hit
+    before, after, undone, local_moved, merged_moved = map(
+        float, hit.groups()[:5]
+    )
+    assert hit.group(6) == str(finetune_shared)
+    merged_vs_own = float(
+        re.search(r"merged_vs_own \| L2_dist=([\d.]+)", log).group(1)
+    )
+    assert before == pytest.approx(merged_vs_own, rel=1e-4)
+    assert undone == pytest.approx(1 - after / before, abs=1e-3)
+    assert local_moved > 0 and merged_moved > 0
