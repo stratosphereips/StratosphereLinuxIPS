@@ -9,8 +9,9 @@ Training Flow:
 1. Local Training (on wall-clock window close every 5 minutes):
    - Buffer flows and alerts during the window
    - Label flows using all evidence from buffered alerts; rest benign
-   - Fit the scaler on the whole window (after this close's tests, before
-     undersampling; scaler_stats.jsonl)
+   - Training starts by fitting the scaler on the whole window (after this
+     close's tests, before undersampling; scaler_stats.jsonl) and scaling
+     the batch with it
    - Train fc1 + head for local_training_epochs
    - Save the model produced by local training (fc1 + "head_before"): it is
      what peers are sent and what the merge averages
@@ -2872,9 +2873,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
            windows; its models are also scored on all flows so far (sofar);
         5. flips: alerts created since the last close vs already-trained flows.
 
-        The scaler is fit only in step 4, on the whole finalized window
-        right before it is trained on (_update_scaler), so every flow is
-        scored with a scaler that has not seen it.
+        The scaler is fit only by the training in step 4, on the whole
+        finalized window, so every flow is scored with a scaler that has
+        not seen it.
         """
         try:
             self.training_count_window += 1
@@ -3001,15 +3002,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             self._training_trigger = "window"
             if len(self.training_buffer_x) >= self.min_training_samples:
-                # the scaler learns the whole window about to be trained on,
-                # here: after step 3 scored every open window with the
-                # previous scaler, before undersampling and training
-                self._update_scaler(self.training_buffer_x, window_n)
+                # the whole window, before undersampling drops flows: the
+                # training fits the scaler on it (after step 3 scored every
+                # open window with the previous scaler)
+                window_rows = list(self.training_buffer_x)
                 if self._undersample:
                     self._undersample_buffer()
                 self._commit_training_labels(window_n)
                 self._write_label_flips("finalize")
-                self._train_batch()
+                self._train_batch(scaler_rows=window_rows)
 
             self._end_window()
 
@@ -3080,15 +3081,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 state["step"] = 0
 
     def _update_scaler(self, x_rows, window_n: int) -> None:
-        """Fit the scaler (partial_fit) on the whole window about to be
-        trained on, before undersampling, and log its state.
+        """Fit the scaler (partial_fit) on the whole window being trained
+        on, before undersampling, and log its state.
 
-        Called once per training from the close routine, after that close
-        scored every open window with the previous scaler and before any
-        training, so no flow is ever scored with a scaler that has seen it.
-        Each flow reaches the scaler once: the buffer is cleared by the
-        training that follows. scaler_stats.jsonl gets one line per fit
-        (mean, var, scale per feature), to compare the peers' scalers.
+        Called once per training, at the start of _train_batch, which the
+        close routine runs after scoring every open window with the
+        previous scaler, so no flow is ever scored with a scaler that has
+        seen it. Each flow reaches the scaler once: the training clears the
+        buffer. scaler_stats.jsonl gets one line per fit (mean, var, scale
+        per feature), to compare the peers' scalers.
 
         :param x_rows: the raw feature rows of the training buffer
         :param window_n: the closing window
@@ -3172,9 +3173,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.training_buffer_ids[i] for i in keep
         ]
 
-    def _train_batch(self):
+    def _train_batch(self, scaler_rows: Optional[list] = None):
         """Train on accumulated training buffer: local fc1+head, local head,
-        merge head; then score this close's models on all flows so far."""
+        merge head; then score this close's models on all flows so far.
+
+        Starts by fitting the scaler on the whole window and transforming
+        the training batch with it; nothing after that refits it.
+
+        :param scaler_rows: raw feature rows of the whole window, before
+            undersampling (default: the training buffer)
+        """
         try:
             self.print("_train_batch: entering", 1, 1)
             if len(self.training_buffer_x) == 0:
@@ -3213,8 +3221,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
 
-            # scaled with the scaler _update_scaler just fit on the whole
-            # window (the close routine); training never refits it
+            # fit the scaler on the whole window, then scale the training
+            # batch with it; the fine-tunes reuse this batch, never refit
+            self._update_scaler(
+                self.training_buffer_x if scaler_rows is None else scaler_rows,
+                counter,
+            )
             X_scaled = self.scaler.transform(X)
 
             # Save scaled batch for both local and merge head fine-tuning
