@@ -12,6 +12,10 @@ from contextlib import contextmanager, closing
 from pathlib import Path
 from typing import Any, Callable, Iterator
 
+from modules.p2p_trust.trust.report_validation import (
+    is_unsupported_long_connection,
+)
+
 
 def message_summary(message: dict[str, Any]) -> dict[str, Any]:
     """Return bounded request/reply metadata from message without signature envelopes."""
@@ -174,6 +178,12 @@ class CatchupStore:
     ) -> bool:
         """Validate and save a newer record, signed seal and delivery peer; return acceptance."""
         now = time.time()
+        if not isinstance(record, dict):
+            return False
+        if record.get(
+            "state"
+        ) != "withdrawn" and is_unsupported_long_connection(record):
+            return False
         try:
             encoded = json.dumps(
                 record, separators=(",", ":"), allow_nan=False
@@ -272,7 +282,12 @@ class CatchupStore:
         self, evidence: dict[str, Any], network: str, author: str
     ) -> None:
         """Summarize first-hand evidence from network and author without importing peer reports."""
-        if evidence.get("peer_report") or not network or not author:
+        if (
+            evidence.get("peer_report")
+            or not network
+            or not author
+            or is_unsupported_long_connection(evidence)
+        ):
             return
         kind = str(evidence.get("evidence_type", ""))
         threat = {
@@ -715,7 +730,11 @@ class Catchup:
         for row in rows:
             self.bootstrap_cursor = (row["observed_at"], row["record_id"])
             record = json.loads(row["data"])
-            if record.get("peer_id") or record.get("network_id") != network:
+            if (
+                record.get("peer_id")
+                or record.get("network_id") != network
+                or is_unsupported_long_connection(record.get("provenance", {}))
+            ):
                 continue
             evidence = {
                 "id": record["id"],

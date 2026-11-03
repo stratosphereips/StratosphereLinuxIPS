@@ -218,18 +218,20 @@ into a new output directory to replace previously generated duplicate results.
 
 ## Long connections
 
-`conn_analyzer` checks unicast flows against `long_connection_threshold`.
+`conn_analyzer` checks non-ICMP unicast flows against `long_connection_threshold`.
+ICMP and ICMPv6 records are excluded regardless of their aggregated duration.
 It excludes limited IPv4 broadcast (`255.255.255.255`), directed broadcast
 under the subnet recorded at capture time, multicast IPs, and broadcast or
 multicast destination MACs. An address ending in `.255` is not automatically
 a broadcast: its subnet determines that. Short flows do not need the broadcast
 subnet lookup.
 
-P2P receivers discard explicit Long Connection reports about limited broadcast
-or multicast endpoints. Other detections in a mixed report remain available.
+P2P receivers discard explicit Long Connection reports identifying ICMP,
+ICMPv6, limited broadcast or multicast endpoints. Other detections in a mixed report remain available.
 Saved local observations with the same explicit endpoints are excluded from
 outgoing reputation reports. Subnet-specific broadcast classification stays
 with the capturing peer, which knows the original subnet and Ethernet data.
+Catch-up storage and bootstrap also exclude explicit ICMP duration findings.
 These checks run in module workers and add no core capture/profiling work.
 
 ## Device IP changes across networks

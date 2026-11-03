@@ -67,9 +67,11 @@ See Zeek's [connection direction documentation](https://docs.zeek.org/en/master/
 
 
 ## Long Connections
-Detect connections that are long, except the multicast connections.
+Detect long unicast connections, excluding ICMP, ICMPv6, broadcast and multicast traffic.
+Zeek may aggregate many ICMP packets into a long-duration record; that duration
+does not represent a persistent connection.
 
-By defualt, A connection in considered long if it exceeds 1500 seconds (25 Minutes).
+By default, a connection is considered long if it exceeds 1500 seconds (25 minutes).
 
 This threshold can be changed ```slips.yaml``` by changing the value of  ```long_connection_threshold```
 

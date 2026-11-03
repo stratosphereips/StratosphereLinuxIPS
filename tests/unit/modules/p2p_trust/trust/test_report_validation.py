@@ -21,7 +21,7 @@ from modules.p2p_trust.trust.report_validation import (
     queue_review_event,
     validate_provenance,
     local_reputation_half_life,
-    is_group_long_connection,
+    is_unsupported_long_connection,
 )
 from modules.supported_module_names import Modules
 from tests.module_factory import ModuleFactory
@@ -57,24 +57,47 @@ def test_group_long_connection_requires_explicit_endpoints(
         "src_ip": "192.168.1.135",
         "dst_ip": destination,
     }
-    assert is_group_long_connection(detection) is expected
+    assert is_unsupported_long_connection(detection) is expected
+
+
+@pytest.mark.parametrize("proto", ["icmp", "ICMP", "icmp6", "ICMPv6", 1, 58, "1", "58", "tcp", "udp", None])
+@pytest.mark.parametrize("kind", ["LONG_CONNECTION", "ARP_SCAN"])
+def test_unsupported_duration_requires_the_long_connection_type(
+    proto: str | int | None, kind: str
+) -> None:
+    """Filter explicit ICMP duration metadata without suppressing other detectors.
+
+    Parameters:
+        proto: Reported transport, including unknown metadata.
+        kind: Duration detection or an independent finding.
+    """
+    _factory = ModuleFactory()
+    detection = {"evidence_type": kind, "proto": proto}
+    assert is_unsupported_long_connection(detection) is (
+        kind == "LONG_CONNECTION" and proto not in {"tcp", "udp", None}
+    )
 
 
 @pytest.mark.parametrize("include_unicast", [False, True])
-def test_old_broadcast_observations_are_not_resent(
+@pytest.mark.parametrize("destination,proto", [("255.255.255.255", None), ("192.168.1.135", "icmp"), ("fe80::44f:cfe7:e270:b19d", "icmp6")])
+def test_unsupported_local_observations_are_not_resent(
     tmp_path: Path,
     include_unicast: bool,
+    destination: str,
+    proto: str | None,
 ) -> None:
-    """Keep stored broadcast findings out of outgoing reputation assessments.
+    """Keep stored inapplicable durations out of reports and catch-up bootstrap.
 
     Parameters:
         tmp_path: Isolated report validation database.
         include_unicast: Whether a usable independent observation also exists.
+        destination: Previously reported broadcast or unicast endpoint.
+        proto: Explicit ICMP transport, or unavailable metadata.
     """
     _factory = ModuleFactory()
     validator = ReportValidator(tmp_path / "validation.sqlite")
     old = observation(kind="LONG_CONNECTION", module=Modules.CONN_ANALYZER)
-    old["provenance"].update(src_ip=old["target"], dst_ip="255.255.255.255")
+    old["provenance"].update(src_ip=old["target"], dst_ip=destination, proto=proto)
     validator.observe_local(old)
     if include_unicast:
         valid = observation(identifier="valid")
@@ -90,6 +113,12 @@ def test_old_broadcast_observations_are_not_resent(
         assert connection.execute(
             "SELECT COUNT(*) FROM observations"
         ).fetchone()[0] == 1 + int(include_unicast)
+    from modules.p2p_trust.catchup import Catchup, CatchupSettings, CatchupStore
+
+    store = CatchupStore(tmp_path / "catchup.sqlite", CatchupSettings())
+    controller = Catchup(store, lambda: "gateway:home", lambda: "me", Mock())
+    controller.bootstrap(validator)
+    assert CatchupStore.view(store.path, "gateway:home")["total"] == int(include_unicast)
 
 
 def observation(

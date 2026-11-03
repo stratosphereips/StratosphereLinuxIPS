@@ -340,6 +340,7 @@ def test_long_connection():
     args, _ = set_ev.db.set_evidence.call_args
     evidence = args[0]
     assert evidence.evidence_type == EvidenceType.LONG_CONNECTION
+    assert evidence.proto == "tcp"
     assert evidence.attacker.value == flow.saddr
     assert evidence.victim.value == "10.0.0.1"
     assert evidence.threat_level == ThreatLevel.LOW

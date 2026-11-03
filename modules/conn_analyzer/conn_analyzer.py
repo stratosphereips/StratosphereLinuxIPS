@@ -30,6 +30,7 @@ from slips_files.common.input_type import InputType
 from slips_files.common.flow_direction import tcp_initiator_is_known
 from slips_files.common.mac import classify_mac
 from slips_files.core.helpers.whitelist.whitelist import Whitelist
+from slips_files.core.structures.evidence import is_icmp_protocol
 
 NOT_ESTAB = "Not Established"
 ESTAB = "Established"
@@ -107,7 +108,7 @@ class ConnAnalyzer(IAsyncModule):
         await asyncio.gather(*self.tasks, return_exceptions=True)
 
     def check_long_connection(self, twid: str, flow: Any) -> bool | None:
-        """Check unicast connections against the configured duration threshold.
+        """Check non-ICMP unicast connections against the duration threshold.
 
         Parameters:
             twid: Detection time window.
@@ -115,8 +116,10 @@ class ConnAnalyzer(IAsyncModule):
 
         Returns:
             True for a long unicast flow, False below the threshold, or None
-            for group traffic or an unavailable duration.
+            for ICMP, group traffic or an unavailable duration.
         """
+        if is_icmp_protocol(getattr(flow, "proto", None)):
+            return None
         try:
             flow.dur = float(flow.dur)
         except TypeError:

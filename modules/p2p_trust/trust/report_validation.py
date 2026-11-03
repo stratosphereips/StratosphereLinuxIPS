@@ -30,17 +30,19 @@ MATCH_WINDOW = 3600
 LOCAL_REPUTATION_HALF_LIFE = 86400
 
 
-def is_group_long_connection(detection: dict[str, Any]) -> bool:
-    """Identify an inapplicable long-connection report from explicit endpoints.
+def is_unsupported_long_connection(detection: dict[str, Any]) -> bool:
+    """Identify an inapplicable duration report from its protocol or endpoints.
 
     Parameters:
-        detection: Detector metadata with a canonical type and optional IPs.
+        detection: Detector metadata with a canonical type, protocol and IPs.
 
     Returns:
-        True for Long Connection metadata naming multicast or limited broadcast.
+        True for Long Connection metadata identifying ICMP or group traffic.
     """
     if detection.get("evidence_type") != EvidenceType.LONG_CONNECTION.name:
         return False
+    if is_icmp_protocol(detection.get("proto")):
+        return True
     for field in ("src_ip", "dst_ip"):
         try:
             address = ipaddress.ip_address(detection.get(field))
@@ -1601,7 +1603,9 @@ class ReportValidator:
                 record
                 for record in records
                 if not record.get("peer_id")
-                and not is_group_long_connection(record.get("provenance", {}))
+                and not is_unsupported_long_connection(
+                    record.get("provenance", {})
+                )
                 and self._verdict(connection, record["id"])
                 not in {"false_positive", "conflict"}
             ]

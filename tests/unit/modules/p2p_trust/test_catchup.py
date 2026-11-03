@@ -89,6 +89,28 @@ def test_reject_invalid_incidents(tmp_path: Path, changes: dict) -> None:
     assert CatchupStore.view(store.path, "gateway:aa")["total"] == 0
 
 
+@pytest.mark.parametrize("proto", ["icmp", "icmp6", "ICMPv6", 1, 58])
+def test_icmp_duration_is_not_imported_or_observed(
+    tmp_path: Path, proto: str | int
+) -> None:
+    """Keep ICMP durations out of both peer and first-hand catch-up summaries.
+
+    Parameters:
+        tmp_path: Isolated catch-up history.
+        proto: Explicit ICMP transport in the evidence or signed record.
+    """
+    _factory = ModuleFactory()
+    store = CatchupStore(tmp_path / "catchup.sqlite", CatchupSettings())
+    assert not store.save(incident(evidence_type="LONG_CONNECTION", proto=proto), "signed", "peer")
+    store.observe({
+        "evidence_type": "LONG_CONNECTION", "proto": proto,
+        "threat_level": "low", "confidence": 0.02, "timestamp": time.time(),
+        "attacker": {"value": "192.0.2.50"}, "id": "icmp-duration",
+    }, "gateway:aa", "me")
+    assert CatchupStore.view(store.path, "gateway:aa")["total"] == 0
+    assert store.save(incident(evidence_type="ICMP_SWEEP", proto=proto), "signed", "peer")
+
+
 def test_revisions_withdrawal_and_replay(tmp_path: Path) -> None:
     """Keep the latest signed revision across restarts; tmp_path isolates the journal."""
     _factory = ModuleFactory()

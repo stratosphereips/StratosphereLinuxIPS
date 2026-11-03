@@ -21,10 +21,12 @@ import os
     ],
 )
 @pytest.mark.parametrize("mixed", [False, True])
-def test_peer_group_long_connections_do_not_become_evidence(
+@pytest.mark.parametrize("proto", ["udp", "tcp", "icmp", "icmp6"])
+def test_peer_unsupported_long_connections_do_not_become_evidence(
     destination: str,
     is_group: bool,
     mixed: bool,
+    proto: str,
 ) -> None:
     """Reject peer duration false positives while retaining unrelated findings.
 
@@ -32,10 +34,12 @@ def test_peer_group_long_connections_do_not_become_evidence(
         destination: Explicit destination supplied by the reporting peer.
         is_group: Whether the endpoint is a known non-unicast address.
         mixed: Whether the report also contains another detector's finding.
+        proto: Reported transport.
     """
     factory = ModuleFactory()
     director = factory.create_go_director_obj()
     director.set_evidence_p2p_report = Mock()
+    is_group = is_group or proto.lower() in {"icmp", "icmp6", "icmpv6"}
     duration = {
         "evidence_type": "LONG_CONNECTION",
         "module": Modules.CONN_ANALYZER.value,
@@ -45,13 +49,13 @@ def test_peer_group_long_connections_do_not_become_evidence(
         "dst_ip": destination,
         "src_port": 65006,
         "dst_port": 65006,
-        "proto": "udp",
+        "proto": proto,
     }
     provenance = [duration]
     if mixed:
         provenance.append(
             dict(
-                duration, evidence_type="UNKNOWN_PORT", dst_ip="192.168.1.136"
+                duration, evidence_type="UNKNOWN_PORT", dst_ip="192.168.1.136", proto="tcp"
             )
         )
     result = director.process_evaluation_score_confidence(

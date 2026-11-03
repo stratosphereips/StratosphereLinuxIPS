@@ -1451,6 +1451,29 @@ def test_short_connection_needs_no_broadcast_network_lookup() -> None:
     conn.set_evidence.long_connection.assert_not_called()
 
 
+@pytest.mark.parametrize("proto", ["icmp", "ICMP", "icmp6", "ICMPv6", 1, 58, "1", "58"])
+@pytest.mark.parametrize("duration", [1865.942, 86400, "1865.942"])
+def test_long_icmp_flows_are_not_long_connections(
+    proto: str | int, duration: float | str
+) -> None:
+    """Ignore ICMP aggregation without looking up network state.
+
+    Parameters:
+        proto: ICMP or ICMPv6 protocol name or number.
+        duration: Aggregated duration, including the reported neighbour discovery.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.set_evidence.long_connection = Mock()
+    flow = SimpleNamespace(
+        proto=proto, dur=duration, saddr="fe80::cb3:f31f:f5d6:209a",
+        daddr="fe80::44f:cfe7:e270:b19d", sport=135, dport=136,
+    )
+    assert conn.check_long_connection(twid, flow) is None
+    conn.set_evidence.long_connection.assert_not_called()
+    conn.db.get_network_state.assert_not_called()
+    conn.db.get_local_network.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "daddr, portproto, org_info, mac_vendor, "
     "ip_identification, is_ip_in_org, expected_result",
