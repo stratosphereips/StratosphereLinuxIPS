@@ -11,6 +11,7 @@ from slips_files.common.abstracts.imodule import IModule
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import SSH
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -23,7 +24,6 @@ from slips_files.core.structures.evidence import (
     TimeWindow,
     Victim,
 )
-
 
 AUTOMATION_BANNER_TOKENS = (
     "libssh",
@@ -107,11 +107,7 @@ class BruteforceDetector(IModule):
         return f"{profileid}_{twid}"
 
     @staticmethod
-    def _is_successful_ssh(flow) -> bool:
-        return str(flow.auth_success).lower() in ("true", "t")
-
-    @staticmethod
-    def _is_failed_ssh(flow) -> bool:
+    def _is_failed_ssh(flow: SSH) -> bool:
         return str(flow.auth_success).lower() in ("false", "f")
 
     @staticmethod
@@ -127,27 +123,23 @@ class BruteforceDetector(IModule):
             parts.append(version)
         return " ".join(parts).strip()
 
-    def _parse_attempt_increment(self, flow) -> int:
+    def _parse_attempt_increment(self, flow: SSH) -> int:
+        """Count authentication attempts only in explicitly failed sessions.
+
+        Parameters:
+            flow: SSH record whose authentication result may be unknown.
+
+        Returns:
+            Zero without failure evidence; at least one for a failed session.
+        """
+        if not self._is_failed_ssh(flow):
+            return 0
+
         try:
             auth_attempts = int(flow.auth_attempts or 0)
         except (TypeError, ValueError):
             auth_attempts = 0
-
-        if self._is_successful_ssh(flow):
-            return 0
-
-        if auth_attempts <= 0:
-            # Some SSH bruteforce tools trigger repeated SSH sessions where
-            # Zeek does not record auth attempts or auth_success. Count each
-            # non-successful session as one suspected password attempt.
-            return 1
-
-        if self._is_failed_ssh(flow):
-            return auth_attempts
-
-        # If Zeek observed auth attempts but did not mark the session as
-        # successful, treat them as failed attempts.
-        return auth_attempts
+        return max(1, auth_attempts)
 
     def _get_reporting_bucket(self, attempts: int) -> int:
         if attempts < self.ssh_attempt_threshold:
@@ -248,8 +240,8 @@ class BruteforceDetector(IModule):
         target = campaign.daddr or "an SSH server"
         destination = f"{target} on {port_label}" if port_label else target
         description = (
-            f"SSH brute force detector from {campaign.saddr} to {destination}. "
-            f"Attempts observed: {campaign.attempts}."
+            f"SSH password guessing from {campaign.saddr} to {destination}. "
+            f"Authentication attempts in failed sessions: {campaign.attempts}."
         )
         if banner:
             description += (

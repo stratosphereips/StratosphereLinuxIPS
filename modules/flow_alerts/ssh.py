@@ -9,6 +9,7 @@ from slips_files.common.abstracts.iflowalerts_analyzer import (
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
+from slips_files.core.flows.zeek import SSH as SSHFlow
 
 
 class SSH(IFlowalertsAnalyzer):
@@ -69,10 +70,18 @@ class SSH(IFlowalertsAnalyzer):
         )
         return True
 
-    async def check_successful_ssh(self, twid, flow):
+    async def check_successful_ssh(self, twid: str, flow: SSHFlow) -> None:
         """
-        Function to check if an SSH connection logged in successfully
+        Check an SSH login using its observed result or the volume heuristic.
+
+        Parameters:
+            twid: Time window containing the SSH session.
+            flow: SSH record with successful, failed or unknown authentication.
         """
+        auth_result = str(flow.auth_success).lower()
+        if auth_result in ("false", "f"):
+            return
+
         # this is the ssh flow read from conn.log not ssh.log
         conn_log_flow = utils.get_original_conn_flow(flow, self.db)
 
@@ -82,8 +91,7 @@ class SSH(IFlowalertsAnalyzer):
             if not conn_log_flow:
                 return
 
-        # it's true in zeek json files, T in zeke tab files
-        if flow.auth_success in ["true", "T"]:
+        if auth_result in ("true", "t"):
             self.set_evidence_ssh_successful_by_zeek(twid, conn_log_flow, flow)
         else:
             self.detect_successful_ssh_by_slips(twid, conn_log_flow, flow)

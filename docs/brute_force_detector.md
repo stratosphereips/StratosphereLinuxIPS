@@ -1,6 +1,6 @@
 # Brute force detector Module
 
-The `brute_force_detector` module detects SSH brute forcing by combining repeated SSH sessions, Zeek SSH metadata, client software banners, and Zeek notice confirmations.
+The `brute_force_detector` module detects repeated failed SSH authentication using Zeek SSH metadata and password-guessing notices. Client software banners add context after failure evidence has been observed.
 
 This module is loaded automatically by Slips like the rest of the modules in `modules/`, unless it is explicitly disabled in `config/slips.yaml`.
 
@@ -25,7 +25,7 @@ The module tracks repeated SSH activity from the same source IP to the same dest
 
 It uses the following inputs:
 
-- `ssh.log` to count repeated SSH sessions and authentication attempts
+- `ssh.log` to count authentication attempts in explicitly failed SSH sessions
 - `software.log` to extract the `SSH::CLIENT` banner and identify likely automation libraries such as `libssh`, `libssh2`, `paramiko`, `hydra`, `medusa`, or `ncrack`
 - `notice.log` to consume Zeek `SSH::Password_Guessing` confirmations
 
@@ -35,11 +35,13 @@ It uses the following inputs:
 
 For each SSH flow, the module first checks the Zeek SSH authentication outcome:
 
-- If `auth_success` is `true` or `T`, the flow is ignored for `brute_force_detector`.
-- If `auth_attempts` is greater than `0`, that value is added to the bruteforce campaign counter.
-- If `auth_attempts` is `0` or missing, but the SSH session is not marked successful, the module counts the session as one suspected password attempt.
+- If `auth_success` is `true` or `T`, the flow is ignored. JSON boolean `true` is also supported.
+- If `auth_success` is absent, empty or otherwise unknown, the flow is ignored even when `auth_attempts` is positive. Repeated unknown sessions do not establish password guessing.
+- Only `auth_success=false` or `F`, including JSON boolean `false`, contributes to the counter. Positive `auth_attempts` values are added; an explicitly failed session without a usable count contributes one failed session.
 
-The last rule is important for datasets where Zeek records repeated SSH handshakes without recording explicit authentication attempts, such as the `malicious-ssh-bruteforce.pcap` sample.
+[Zeek defines an unset authentication result as unknown](https://docs.zeek.org/en/v8.1.0/scripts/base/protocols/ssh/main.zeek.html#type-SSH::Info). Its observed attempts are not necessarily failures. Encrypted SSH sessions, including successful public-key administration, can have an unknown result and zero observed attempts. Neither session frequency nor an OpenSSH or automation-library banner turns those records into failed logins.
+
+Unknown sessions remain available as SSH flows. Captures without failure outcomes require a separate Zeek `SSH::Password_Guessing` notice to produce this finding. Successful sessions do not erase earlier observed failures from a genuine guessing campaign.
 
 ### Threshold and Reporting
 
@@ -59,7 +61,7 @@ After the threshold is reached, the module does not alert on every new attempt. 
 
 The evidence threat level is `medium`.
 
-Confidence grows with the number of attempted passwords:
+Confidence grows with authentication attempts in failed sessions:
 
 - first brute force detector evidence starts at the configured threshold
 - full confidence is reached at `30` attempts
@@ -81,7 +83,7 @@ The module emits `PASSWORD_GUESSING` evidence with:
 Example description:
 
 ```text
-SSH brute force detector from 147.32.80.40 to 147.32.80.37 on SSH 902/tcp. Attempts observed: 24. Client banner: libssh libssh2_1.11.0 from software.log. Confidence: 0.89. by Slips
+SSH password guessing from 147.32.80.40 to 147.32.80.37 on SSH 902/tcp. Authentication attempts in failed sessions: 24. Client banner: libssh libssh2_1.11.0 from software.log. Confidence: 0.89. by Slips
 ```
 
 ## Zeek Confirmation
@@ -92,7 +94,7 @@ If Zeek raises `SSH::Password_Guessing` in `notice.log`, the module:
 - stores the notice as confirmation for later `brute_force_detector` evidence
 - uses the confirmed connection count from the Zeek notice to increase confidence
 
-If Zeek does not generate `notice.log` for SSH password guessing, the module still detects `brute_force_detector` events from `ssh.log` and `software.log`.
+Without a Zeek notice, the module still detects repeated explicitly failed logins in `ssh.log`. `software.log` alone cannot create a campaign.
 
 ## Configuration
 
@@ -104,6 +106,8 @@ brute_force_detector:
 ```
 
 This value is read from `config/slips.yaml`.
+
+Restart Slips to load changed detector code. Existing saved evidence is not recalculated automatically; an old finding based on unknown sessions can be reviewed as a false positive without whitelisting the hosts or disabling SSH attack detection.
 
 ## Relationship With Flow Alerts
 

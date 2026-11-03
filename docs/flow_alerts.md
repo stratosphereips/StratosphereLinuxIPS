@@ -124,10 +124,12 @@ of the docs for info on how slips detects DoH.
 
 ## Successful SSH connections
 
-Slips detects successful SSH connections using 2 ways
+Slips detects successful SSH connections in two ways:
 
-1. Using Zeek. Zeek logs successful SSH connection to ssh.log by default
-2. If all bytes sent in a SSH connection is more than 4290 bytes
+1. An explicit successful result in Zeek's `ssh.log`, including JSON booleans and TSV `T` values.
+2. When Zeek's result is unknown, the existing volume heuristic checks whether the connection exceeds the configured successful-SSH byte threshold (4290 bytes by default).
+
+An explicit failed result always prevents a successful-login finding, regardless of connection size. Unknown authentication results do not count as failed logins in the [brute-force detector](brute_force_detector.md).
 
 ## DNS resolutions without a connection
 

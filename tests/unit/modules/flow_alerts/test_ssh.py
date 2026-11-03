@@ -31,12 +31,15 @@ daddr = "192.168.1.2"
         # Test case 2: auth_success is 'T'
         # - should call detect_successful_ssh_by_zeek
         ("T", True, False),
+        (True, True, False),
+        ("TRUE", True, False),
         # Test case 3: auth_success is 'false'
-        # - should call detect_successful_ssh_by_slips
-        ("false", False, True),
+        # - an explicit failure must not be inferred successful from bytes
+        ("false", False, False),
         # Test case 4: auth_success is 'F'
-        # - should call detect_successful_ssh_by_slips
-        ("F", False, True),
+        # - an explicit failure must not be inferred successful from bytes
+        ("F", False, False),
+        (False, False, False),
         # Test case 5: auth_success is any other value
         # - should call detect_successful_ssh_by_slips
         ("some_other_value", False, True),
@@ -77,6 +80,8 @@ async def test_check_successful_ssh(
     ) as mock_get_original_conn_flow:
         mock_get_original_conn_flow.side_effect = [None, {"flow": {}}]
         await ssh.check_successful_ssh(twid, flow)
+        if str(auth_success).lower() in ("false", "f"):
+            mock_get_original_conn_flow.assert_not_called()
 
     assert (
         mock_set_evidence_ssh_successful_by_zeek.called
