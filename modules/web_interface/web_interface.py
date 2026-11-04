@@ -360,7 +360,7 @@ class WebInterface(IModule):
             self.backfill_thread.join(timeout=2)
         if self.history_collector:
             try:
-                self.history_collector.collect_once()
+                self.history_collector.collect_once(force=True)
             except Exception as error:
                 self.print(f"Final history collection error: {error}", 0, 1)
             try:

@@ -2,6 +2,8 @@ import json
 import sqlite3
 from unittest.mock import Mock, patch
 
+import pytest
+
 from modules.web_interface.history import (
     HistoryCollector,
     connect_history,
@@ -283,6 +285,133 @@ def test_collect_once_snapshots_hosts_before_detection_backfill(
 
     assert calls == ["hosts"]
     collector.backfill_detections.assert_not_called()
+
+
+def test_snapshot_hosts_empty_profiles_does_not_advance_last_host_snapshot(
+    tmp_path,
+) -> None:
+    """Empty boot snapshot must not lock out subsequent host collection."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    redis_client = Mock()
+    redis_client.zrange.return_value = []
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
+
+    assert collector.snapshot_hosts() == 0
+    assert collector._last_host_snapshot == 0.0
+
+
+def test_collect_once_retries_snapshot_immediately_until_hosts_exist(
+    tmp_path,
+) -> None:
+    """Collect hosts immediately on next iteration once profiles appear."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    redis_client = Mock()
+    redis_client.zrange.return_value = []
+    collector = HistoryCollector(
+        str(output_dir), history_path, redis_client, 999999
+    )
+    collector.sample_storage = Mock()
+    collector.index_new_flows = Mock()
+    collector.sample_metrics = Mock()
+    collector.tail_errors = Mock()
+    collector.rollup_metrics = Mock()
+
+    # Iteration 1 at t=0: no profiles yet
+    with patch("modules.web_interface.history.time.time", return_value=0.0):
+        collector.collect_once()
+    assert collector._last_host_snapshot == 0.0
+
+    # Iteration 2 at t=2: profile appears
+    redis_client.zrange.return_value = ["profile_192.168.1.10"]
+    identity_pipeline = Mock()
+    identity_pipeline.execute.return_value = [
+        {"MAC": "aa:bb:cc:dd:ee:ff", "host_name": "target"},
+        "{}",
+        ["timewindow1"],
+    ]
+    score_pipeline = Mock()
+    score_pipeline.execute.return_value = [1.0]
+    redis_client.pipeline.side_effect = [identity_pipeline, score_pipeline]
+    redis_client.hget.return_value = "0.32"
+
+    with patch("modules.web_interface.history.time.time", return_value=2.0):
+        collector.collect_once()
+
+    assert collector._last_host_snapshot == 2.0
+    with connect_history(history_path, read_only=True) as connection:
+        count = connection.execute(
+            "SELECT COUNT(*) AS count FROM host_snapshots WHERE ip = '192.168.1.10'"
+        ).fetchone()["count"]
+    assert count == 1
+
+
+@pytest.mark.parametrize(
+    "force, expected_calls",
+    [
+        (False, 0),
+        (True, 1),
+    ],
+)
+def test_collect_once_force_flushes_snapshot(
+    tmp_path, force: bool, expected_calls: int
+) -> None:
+    """Forced collection flushes host snapshot even before 60s expires."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    collector.snapshot_hosts = Mock()
+    collector.sample_storage = Mock()
+    collector.index_new_flows = Mock()
+    collector.sample_metrics = Mock()
+    collector.tail_errors = Mock()
+    collector.rollup_metrics = Mock()
+    collector._last_host_snapshot = 100.0
+
+    # Collect at t=110 (< 60s elapsed from 100.0)
+    with patch("modules.web_interface.history.time.time", return_value=110.0):
+        collector.collect_once(force=force)
+    assert collector.snapshot_hosts.call_count == expected_calls
+
+
+def test_collect_once_decouples_sample_storage_from_empty_host_snapshots(
+    tmp_path,
+) -> None:
+    """sample_storage must throttle to 60s even when 0 hosts exist in Redis."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    collector.snapshot_hosts = Mock(return_value=0)
+    collector.sample_storage = Mock()
+    collector.index_new_flows = Mock()
+    collector.sample_metrics = Mock()
+    collector.tail_errors = Mock()
+    collector.rollup_metrics = Mock()
+
+    # Tick 1 at t=10: initial sample
+    with patch("modules.web_interface.history.time.time", return_value=10.0):
+        collector.collect_once()
+    assert collector.snapshot_hosts.call_count == 1
+    assert collector.sample_storage.call_count == 1
+
+    # Tick 2 at t=11 (1s later, still 0 hosts): snapshot_hosts retries, but sample_storage is throttled
+    with patch("modules.web_interface.history.time.time", return_value=11.0):
+        collector.collect_once()
+    assert collector.snapshot_hosts.call_count == 2
+    assert collector.sample_storage.call_count == 1
+
+    # Tick 3 at t=70 (60s later): sample_storage runs again
+    with patch("modules.web_interface.history.time.time", return_value=70.0):
+        collector.collect_once()
+    assert collector.snapshot_hosts.call_count == 3
+    assert collector.sample_storage.call_count == 2
 
 
 def test_initialize_history_migrates_legacy_metric_schema(tmp_path) -> None:
