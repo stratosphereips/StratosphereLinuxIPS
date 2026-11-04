@@ -40,7 +40,7 @@ const state = {
   },
   evidenceWorkspace: {
     group: null, record: null, records: [], next: null, total: 0, typeFilter: "",
-    generation: 0, listLoadedAt: 0, listSignature: "", threatCounts: null,
+    generation: 0, listLoadedAt: 0, listSignature: "",
     recordSearch: "", recordOrigin: "", recordThreat: "", recordSort: "time", recordOrder: "desc", recordsLoaded: false,
   },
   hostNames: new Map(),
@@ -1154,7 +1154,7 @@ function applyRunIdentity(identity) {
     Object.keys(state.pages).forEach((name) => resetPage(name));
     Object.assign(state.evidenceWorkspace, {
       group: null, record: null, records: [], next: null, total: 0,
-      typeFilter: "", listLoadedAt: 0, listSignature: "", threatCounts: null,
+      typeFilter: "", listLoadedAt: 0, listSignature: "",
       generation: state.evidenceWorkspace.generation + 1,
     });
     renderEvidenceEmptyState();
@@ -3251,34 +3251,6 @@ function highlightEvidenceSelection() {
   });
 }
 
-/** Render compact severity filters using counts from an unfiltered page. */
-function renderEvidenceThreatChips() {
-  const selected = byId("evidence-threat").value;
-  const counts = state.evidenceWorkspace.threatCounts || new Map();
-  const container = byId("evidence-threat-chips");
-  container.replaceChildren();
-  [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"],
-    ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]
-    .forEach(([level, label]) => {
-      const count = counts.get(level);
-      const unit = byId("evidence-view").value === "individual" ? "record" : "group";
-      const button = text("button", level.endsWith("_or_more") || count === undefined
-        ? label : `${label} ${compact(count)} ${unit}${count === 1 ? "" : "s"}`, "evidence-chip");
-      button.type = "button";
-      button.dataset.level = level;
-      button.classList.toggle("active", level === selected);
-      button.setAttribute("aria-pressed", String(level === selected));
-      button.addEventListener("click", () => {
-        if (selected === level) return;
-        byId("evidence-threat").value = level;
-        clearEvidenceSelection();
-        renderEvidenceThreatChips();
-        byId("evidence-threat").dispatchEvent(new Event("change"));
-      });
-      container.append(button);
-    });
-}
-
 /** Render grouping controls for the four Evidence table modes. */
 function renderEvidenceGroupControls() {
   updateEvidencePaneLayout();
@@ -3296,7 +3268,6 @@ function renderEvidenceGroupControls() {
       button.addEventListener("click", () => {
         if (mode === value) return;
         byId("evidence-view").value = value;
-        state.evidenceWorkspace.threatCounts = null;
         clearEvidenceSelection();
         renderEvidenceGroupControls();
         byId("evidence-view").dispatchEvent(new Event("change"));
@@ -3785,15 +3756,6 @@ async function loadEvidence() {
   state.filteredBadgeCounts.evidence = payload.matching_total ?? payload.total;
   byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence);
   const mode = byId("evidence-view").value;
-  if (!byId("evidence-threat").value && !state.evidenceWorkspace.typeFilter) {
-    const counts = new Map([["", payload.total]]);
-    payload.items.forEach((item) => {
-      const level = String(item.threat_level || "info").toLowerCase();
-      counts.set(level, (counts.get(level) || 0) + 1);
-    });
-    state.evidenceWorkspace.threatCounts = counts;
-  }
-  renderEvidenceThreatChips();
   renderEvidenceTable(payload);
   const loadedRecords = mode === "individual"
     ? payload.items.length
@@ -9067,7 +9029,7 @@ document.addEventListener("change", (event) => {
 });
 document.addEventListener("click", (event) => {
   if (event.target.closest?.("[data-alert-group], [data-config-filter], [data-p2p-filter], "
-      + "#alerts-severity-filters, #evidence-threat-chips, #evidence-group-controls, "
+      + "#alerts-severity-filters, #evidence-group-controls, "
       + "#hosts-threat-chips, #hosts-scope-chips, #alerts-host-order, #alerts-item-order, "
       + "th[data-sort], [data-host-activity], #configuration-navigation, #p2p-peers-table")) {
     scheduleViewPreferencesSave();
@@ -9343,6 +9305,7 @@ byId("evidence-active-type").addEventListener("click", () => {
   loadEvidence().catch(() => {});
 });
 byId("evidence-search").addEventListener("input", clearEvidenceSelection);
+byId("evidence-threat").addEventListener("change", clearEvidenceSelection);
 byId("evidence-link").addEventListener("change", clearEvidenceSelection);
 bindFilters("hosts", ["hosts-search", "hosts-scope", "hosts-threat", "hosts-review"], loadHosts);
 byId("configuration-search").addEventListener("input", renderConfiguration);

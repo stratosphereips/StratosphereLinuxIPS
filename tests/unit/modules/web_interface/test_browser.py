@@ -160,7 +160,7 @@ def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
             assert toolbar.locator("details").count() == 0
             assert page.locator("#evidence-link").is_visible()
             assert page.locator("#evidence-range").is_visible()
-            metrics = toolbar.evaluate("""node => ['#evidence-search','#evidence-review',
+            metrics = toolbar.evaluate("""node => ['#evidence-search','#evidence-review','#evidence-threat',
                 '#evidence-group-controls','.evidence-toolbar-check','.excluded-visibility-toggle',
                 '#evidence-link','#evidence-range'].map(selector => {
                     const el=node.querySelector(selector), style=getComputedStyle(el);
@@ -4650,10 +4650,10 @@ def test_p2p_catchup_continue_posts_and_has_readable_sections(
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_seven_day_network_history_and_group_counts_in_browser(
+def test_seven_day_network_history_and_severity_dropdown_in_browser(
     tmp_path: Path, theme: str,
 ) -> None:
-    """Keep older Home evidence visible and distinguish device groups from records.
+    """Keep older Home evidence and inclusive severity filters across group modes.
 
     Parameters:
         tmp_path: Isolated repeated-visit databases.
@@ -4704,7 +4704,11 @@ def test_seven_day_network_history_and_group_counts_in_browser(
             assert queries[-1]["network"] == ["current"]
             assert queries[-1]["range"] == ["7d"]
             assert "4 records" in page.locator("#evidence-count").inner_text()
-            assert page.locator('#evidence-threat-chips button[data-level=""]').inner_text() == "All 1 group"
+            severity = page.get_by_role("combobox", name="Evidence severity", exact=True)
+            assert severity.is_visible()
+            assert severity.input_value() == ""
+            assert severity.locator("option").all_text_contents() == ["All", "Critical+", "High+", "Medium+", "Low+", "Info+"]
+            assert page.locator("#evidence-summary").inner_text() == "1 of 1 groups"
             assert page.locator("#evidence-badge").inner_text() == "4"
             assert page.locator("#evidence-count").is_visible()
             page.evaluate("""async () => {
@@ -4716,13 +4720,13 @@ def test_seven_day_network_history_and_group_counts_in_browser(
             page.evaluate("""async () => {
               byId('evidence-range').value='7d';byId('evidence-view').value='individual';await loadEvidence();
             }""")
-            assert page.locator('#evidence-threat-chips button[data-level=""]').inner_text() == "All 4 records"
+            assert severity.locator("option:checked").inner_text() == "All"
+            assert page.locator("#evidence-summary").inner_text() == "4 of 4 records"
             assert page.locator("#evidence-table tbody tr").count() == 4
             for level in ("low_or_more", "critical_or_more", "high_or_more",
                           "medium_or_more", "info_or_more", ""):
-                chip = page.locator(f'#evidence-threat-chips button[data-level="{level}"]')
                 with page.expect_response(lambda response: urlparse(response.url).path == "/api/evidence"):
-                    chip.click()
+                    severity.select_option(level)
                 page.wait_for_function("!state.requests.has('evidence')")
                 for mode, label, group in (
                     ("grouped", "Host + type", "host_type"),
@@ -4734,13 +4738,13 @@ def test_seven_day_network_history_and_group_counts_in_browser(
                         page.locator("#evidence-group-controls").get_by_role("button", name=label, exact=True).click()
                     page.wait_for_function("!state.requests.has('evidence')")
                     assert page.locator("#evidence-threat").input_value() == level
-                    assert chip.get_attribute("aria-pressed") == "true"
+                    assert severity.input_value() == level
                     assert page.locator("#evidence-view").input_value() == mode
                     assert queries[-1].get("threat") == ([level] if level else None)
                     assert queries[-1].get("group") == ([group] if group else None)
                     assert queries[-1]["range"] == ["7d"]
                     assert queries[-1]["network"] == ["current"]
-                    assert "All 0" not in page.locator('#evidence-threat-chips button[data-level=""]').inner_text()
+                    assert severity.locator('option[value=""]').inner_text() == "All"
             assert not errors, errors
         finally:
             browser.close()

@@ -946,14 +946,9 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-toolbar > input[type="search"] { width: 200px; min-width: 160px; }
 .evidence-active-type { padding: .37rem .5rem; border: 1px solid var(--accent); border-radius: 4px; background: #123329; color: var(--accent); font-size: .7rem; cursor: pointer; }
 .evidence-active-type[hidden] { display: none; }
-.evidence-threat-chips, .evidence-group-controls { display: inline-flex; gap: .12rem; align-items: center; flex: none; }
-.evidence-chip, .evidence-group-button { padding: .4rem .48rem; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); font-size: .7rem; cursor: pointer; }
-.evidence-chip.active, .evidence-group-button.active { border-color: #415263; background: #dce6ec; color: #14202b; font-weight: 700; }
-.evidence-chip[data-level="critical"]:not(.active) { color: #f18b94; }
-.evidence-chip[data-level="high"]:not(.active) { color: #f1a171; }
-.evidence-chip[data-level="medium"]:not(.active) { color: #e9c36f; }
-.evidence-chip[data-level="low"]:not(.active) { color: #b7c8d5; }
-.evidence-chip[data-level="info"]:not(.active) { color: #79b5f6; }
+.evidence-group-controls { display: inline-flex; gap: .12rem; align-items: center; flex: none; }
+.evidence-group-button { padding: .4rem .48rem; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--muted); font-size: .7rem; cursor: pointer; }
+.evidence-group-button.active { border-color: #415263; background: #dce6ec; color: #14202b; font-weight: 700; }
 .evidence-group-controls { padding: .08rem; border: 1px solid var(--line); border-radius: 5px; }
 .evidence-toolbar-check { display: inline-flex; align-items: center; gap: .25rem; padding: .38rem .55rem; border: 1px solid var(--line); border-radius: 5px; color: var(--muted); font-size: .7rem; cursor: pointer; }
 .evidence-toolbar-check input { width: 13px; min-width: 13px; height: 13px; margin: 0; }
@@ -1398,12 +1393,10 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 [data-theme="light"] .alerts-host-controls, [data-theme="light"] .alerts-host-row, [data-theme="light"] .alerts-alert-row, [data-theme="light"] .evidence-record-list .evidence-record-row { border-color: var(--line); }
 [data-theme="light"] .alerts-host-controls > input, [data-theme="light"] .alerts-group-options, [data-theme="light"] .alerts-filter { background: #f7fafc; }
 [data-theme="light"] .alerts-group-options button.active { border-color: #a5d6ce; background: #dff3ef; }
-[data-theme="light"] .alerts-filter.active, [data-theme="light"] .hosts-filter-chip.active, [data-theme="light"] .evidence-chip.active, [data-theme="light"] .evidence-group-button.active { background: #daeef0; color: #164a57; }
-[data-theme="light"] .alerts-filter[data-level="critical"], [data-theme="light"] .alerts-filter[data-level="critical"].active, [data-theme="light"] .evidence-chip[data-level="critical"]:not(.active) { color: #a8243a; }
-[data-theme="light"] .alerts-filter[data-level="high"], [data-theme="light"] .alerts-filter[data-level="high"].active, [data-theme="light"] .evidence-chip[data-level="high"]:not(.active) { color: #a34c0c; }
-[data-theme="light"] .alerts-filter[data-level="medium"], [data-theme="light"] .alerts-filter[data-level="medium"].active, [data-theme="light"] .evidence-chip[data-level="medium"]:not(.active) { color: #8b6206; }
-[data-theme="light"] .evidence-chip[data-level="low"]:not(.active) { color: #516879; }
-[data-theme="light"] .evidence-chip[data-level="info"]:not(.active) { color: var(--blue); }
+[data-theme="light"] .alerts-filter.active, [data-theme="light"] .hosts-filter-chip.active, [data-theme="light"] .evidence-group-button.active { background: #daeef0; color: #164a57; }
+[data-theme="light"] .alerts-filter[data-level="critical"], [data-theme="light"] .alerts-filter[data-level="critical"].active { color: #a8243a; }
+[data-theme="light"] .alerts-filter[data-level="high"], [data-theme="light"] .alerts-filter[data-level="high"].active { color: #a34c0c; }
+[data-theme="light"] .alerts-filter[data-level="medium"], [data-theme="light"] .alerts-filter[data-level="medium"].active { color: #8b6206; }
 [data-theme="light"] .alerts-filter[data-level="critical"].active, [data-theme="light"] .alerts-filter[data-level="high"].active, [data-theme="light"] .alerts-filter[data-level="medium"].active { background: #fceef0; }
 [data-theme="light"] .alerts-range-note { color: var(--warn); }
 [data-theme="light"] .alerts-host-list, [data-theme="light"] .alerts-list, [data-theme="light"] .alerts-detail, [data-theme="light"] .host-left-column, [data-theme="light"] .host-center-column, [data-theme="light"] .host-right-column { scrollbar-color: #a9c0ce #f3f7fa; }

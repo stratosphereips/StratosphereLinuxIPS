@@ -1191,8 +1191,11 @@ interface; an unprotected web interface accepts these changes only locally.
 The optional fifth column in a local IP whitelist line is the canonical
 evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN`.
 
-Evidence threat chips offer **All**, **Critical+**, **High+**, **Medium+**,
-**Low+**, and **Info+**. Each `+` includes that level and all more severe levels.
+The Evidence **Severity** dropdown defaults to **All**, followed by
+**Critical+**, **High+**, **Medium+**,
+**Low+**, and **Info+**. **All** has no record or group count in its label;
+counts remain beside the Evidence heading and in the table footer. Each `+`
+includes that level and all more severe levels.
 Previously saved exact-level selections use the corresponding `+` filter.
 Changing between **Device + type**, **Type**, **Device**, and **None** preserves
 the selected threat filter; changing the threat filter preserves the grouping.
