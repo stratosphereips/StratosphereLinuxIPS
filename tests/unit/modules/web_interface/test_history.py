@@ -1,7 +1,10 @@
 import json
 import sqlite3
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import MagicMock, Mock, patch
+from types import SimpleNamespace
+
+import psutil
 
 import pytest
 
@@ -11,6 +14,7 @@ from modules.web_interface.history import (
     initialize_history,
     network_connection_scope,
     NETWORK_SCOPES_KEY,
+    RUNTIME_RESOURCES_KEY,
 )
 from tests.module_factory import ModuleFactory
 from slips_files.common.sqlite_flock import SQLiteFlock
@@ -1059,3 +1063,120 @@ def test_score_recovery_preserves_canonical_data_and_existing_scores(tmp_path: P
     assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl,data FROM evidence WHERE evidence_id='missing'").fetchone() == (1.28,.4096,'{"canonical":true}')
     assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='zero'").fetchone() == (0,0)
     database.close()
+
+
+@pytest.mark.parametrize("cores", [1, 8])
+def test_resources_count_only_run_trees_and_normalize_cpu(tmp_path: Path, cores: int) -> None:
+    """Include detached Redis and Zeek once, normalizing against host capacity.
+
+    Parameters:
+        tmp_path: Isolated web history directory.
+        cores: Machine logical CPU count.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.info.return_value = {"process_id": 400}
+    client.get.return_value = 100
+    processes = {}
+    for pid, cpu, rss in [(100, 16, 100), (200, 16, 200), (300, 32, 300),
+                          (400, 8, 50), (500, 8, 25)]:
+        process = MagicMock()
+        process.pid = pid
+        process.is_running.return_value = True
+        process.status.return_value = psutil.STATUS_RUNNING
+        process.cpu_percent.return_value = cpu
+        process.memory_info.return_value = SimpleNamespace(rss=rss * 1024**2)
+        process.children.return_value = []
+        processes[pid] = process
+    processes[100].children.return_value = [processes[200], processes[300], processes[400]]
+    processes[400].children.return_value = [processes[500]]
+    path = tmp_path / "history.sqlite"
+    with patch("modules.web_interface.history.psutil.Process", side_effect=processes.__getitem__) as lookup:
+        collector = HistoryCollector(str(tmp_path), path, client, 100)
+        with (
+            patch("modules.web_interface.history.psutil.cpu_count", return_value=cores),
+            patch("modules.web_interface.history.psutil.virtual_memory", return_value=SimpleNamespace(total=4096 * 1024**2)),
+        ):
+            collector.sample_metrics()
+            collector.sample_metrics()
+        assert [call.args[0] for call in lookup.call_args_list] == [100, 400]
+    client.info.assert_called_once_with("server")
+    with connect_history(path, read_only=True) as connection:
+        sample = connection.execute("SELECT * FROM runtime_metrics_1s ORDER BY ts DESC LIMIT 1").fetchone()
+        resources = json.loads(connection.execute("SELECT value FROM metadata WHERE key=?", (RUNTIME_RESOURCES_KEY,)).fetchone()[0])
+    assert sample["cpu_percent"] == 80 / cores
+    assert sample["memory_mb"] == 675
+    assert resources["cpu_percent"] == sample["cpu_percent"]
+    assert resources["memory_percent"] == pytest.approx(675 / 4096 * 100)
+    assert resources["memory_bytes"] == 675 * 1024**2
+    assert resources["process_count"] == 5
+    assert resources["root_pid"] == 100
+    assert resources["complete"] is True
+    for process in processes.values():
+        assert process.cpu_percent.call_count == 2
+        process.memory_full_info.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["root_exited", "root_denied", "redis_unavailable", "access_denied", "zombie"])
+def test_run_process_selection_handles_exits_and_partial_access(tmp_path: Path, failure: str) -> None:
+    """Keep run boundaries when trees exit or process inspection is restricted.
+
+    Parameters:
+        tmp_path: Isolated web history directory.
+        failure: Process discovery failure to simulate.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.info.return_value = {"process_id": 400}
+    root = Mock(pid=100)
+    root.is_running.return_value = failure != "root_exited"
+    root.status.return_value = psutil.STATUS_RUNNING
+    root.children.return_value = []
+    database = Mock(pid=400)
+    database.is_running.return_value = True
+    database.status.return_value = psutil.STATUS_ZOMBIE if failure == "zombie" else psutil.STATUS_RUNNING
+    database.children.return_value = []
+    if failure == "redis_unavailable":
+        client.info.return_value = {}
+    if failure == "root_denied":
+        root.is_running.side_effect = psutil.AccessDenied(100)
+    if failure == "access_denied":
+        root.children.side_effect = psutil.AccessDenied(100)
+    with patch("modules.web_interface.history.psutil.Process", side_effect={100: root, 400: database}.__getitem__) as lookup:
+        collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", client, 100)
+        selected = collector._live_processes()
+        if failure in {"root_exited", "root_denied"}:
+            assert selected == []
+            client.info.assert_not_called()
+            lookup.assert_called_once_with(100)
+        elif failure in {"redis_unavailable", "zombie"}:
+            assert [process.pid for process in selected] == [100]
+        else:
+            assert [process.pid for process in selected] == [100, 400]
+    assert collector._process_scope_complete is False
+
+
+def test_metric_sampling_replaces_reused_process_identity(tmp_path: Path) -> None:
+    """Discard CPU state belonging to an earlier process with the same PID.
+
+    Parameters:
+        tmp_path: Isolated resource history directory.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.get.return_value = 0
+    collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", client, 999999)
+    old, current = MagicMock(pid=100), MagicMock(pid=100)
+    old.cpu_percent.return_value = 80
+    current.cpu_percent.return_value = 5
+    old.memory_info.return_value = SimpleNamespace(rss=100 * 1024**2)
+    current.memory_info.return_value = SimpleNamespace(rss=10 * 1024**2)
+    collector._live_processes = Mock(side_effect=[[old], [current]])
+    with patch("modules.web_interface.history.psutil.cpu_count", return_value=1):
+        collector.sample_metrics()
+        collector.sample_metrics()
+    with connect_history(collector.history_path, read_only=True) as connection:
+        sample = connection.execute("SELECT cpu_percent,memory_mb FROM runtime_metrics_1s ORDER BY ts DESC LIMIT 1").fetchone()
+    assert sample["cpu_percent"] == 5
+    assert sample["memory_mb"] == 10
+    assert collector._processes[100] is current

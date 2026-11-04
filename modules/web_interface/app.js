@@ -1665,7 +1665,7 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     ? height * renderedWidth / renderedHeight
     : numeric(svg.viewBox?.baseVal?.width) || 600;
   svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
-  const overviewChart = Boolean(svg.closest(".overview-performance"));
+  const overviewChart = Boolean(svg.closest(".overview-performance, .overview-throughput"));
   const left = overviewChart ? 145 : 42;
   const right = 10;
   const top = overviewChart ? 28 : 12;
@@ -1977,23 +1977,51 @@ function renderOverview() {
     ["Evidence while blocked", compact(firewallImpact.evidence)],
   ], "overview-firewall-impact");
   const system = data.system;
+  const resources = system.run_resources;
+  const runValue = (key) => resources ? numeric(resources[key]) : null;
+  const runPercent = (key) => resources
+    ? `${resources.complete === false ? "≥ " : ""}${numeric(resources[key]).toFixed(1)}%` : "—";
+  const cpuHelp = "CPU usage for the whole machine, averaged across all logical CPU cores.";
+  const memoryHelp = "Physical RAM usage for the whole machine. Swap is excluded.";
+  const partialHelp = resources?.complete === false
+    ? " Some processes could not be read; ≥ shows the measured lower bound." : "";
+  const runCpuHelp = "CPU used by this run's Slips, Redis, Zeek and child processes, as a percentage of total machine CPU capacity across all logical cores." + partialHelp;
+  const runMemoryHelp = "Resident physical RAM (RSS) used by this run's Slips, Redis, Zeek and child processes, as a percentage of total physical RAM. Swap is excluded." + partialHelp;
   const metrics = [
-    ["CPU", numeric(system.cpu_percent), `${numeric(system.cpu_percent).toFixed(1)}%`],
-    ["Memory", numeric(system.memory_percent), `${numeric(system.memory_percent).toFixed(1)}%`],
+    ["Host CPU", numeric(system.cpu_percent), `${numeric(system.cpu_percent).toFixed(1)}%`, cpuHelp],
+    ["Slips CPU", runValue("cpu_percent"), runPercent("cpu_percent"), runCpuHelp],
+    ["Host memory", numeric(system.memory_percent), `${numeric(system.memory_percent).toFixed(1)}%`, memoryHelp],
+    ["Slips memory", runValue("memory_percent"), resources
+      ? `${runPercent("memory_percent")} · ${formatBytes(resources.memory_bytes)}` : "—", runMemoryHelp],
     ["Output disk", numeric(system.output_disk_percent),
-      `${numeric(system.output_disk_percent).toFixed(1)}% · ${formatBytes(system.output_disk_free)} free`],
+      `${numeric(system.output_disk_percent).toFixed(1)}% · ${formatBytes(system.output_disk_free)} free`, ""],
   ];
   const load = byId("system-load");
   load.replaceChildren();
-  metrics.forEach(([label, percent, value]) => {
+  metrics.forEach(([label, percent, value, description]) => {
     const row = document.createElement("div");
     row.className = `metric ${percent >= 90 ? "danger" : percent >= 75 ? "warning" : ""}`;
+    row.dataset.metric = label.toLowerCase().replaceAll(" ", "-");
     const heading = document.createElement("div");
     heading.className = "metric-heading";
-    heading.append(text("span", label), text("strong", value));
+    const name = text("span", label);
+    if (description) {
+      const info = text("button", "ⓘ", "resource-info");
+      info.type = "button";
+      info.setAttribute("aria-label", `About ${label.toLowerCase()}`);
+      info.dataset.tooltip = description;
+      name.append(" ", info);
+    }
+    heading.append(name, text("strong", value));
     const track = text("span", "", "metric-track");
+    track.setAttribute("role", "meter");
+    track.setAttribute("aria-label", label);
+    track.setAttribute("aria-valuemin", "0");
+    track.setAttribute("aria-valuemax", "100");
+    if (percent !== null) track.setAttribute("aria-valuenow", String(Math.min(percent, 100)));
+    track.setAttribute("aria-valuetext", percent === null ? "Current run sample unavailable" : value);
     const fill = text("span", "", "metric-fill");
-    fill.style.width = `${Math.min(Math.max(percent, 0), 100)}%`;
+    fill.style.width = `${Math.min(Math.max(percent || 0, 0), 100)}%`;
     track.append(fill);
     row.append(heading, track);
     load.append(row);
@@ -2464,6 +2492,8 @@ async function loadMetrics() {
   const payload = await api("metrics", `/api/metrics?range=${range}&max_points=1200`);
   if (!payload) return;
   state.metrics = payload.items;
+  byId("throughput-range").textContent = byId("metrics-range").selectedOptions[0].textContent;
+  byId("throughput-range").title = "Time range follows Slips performance";
   renderLineChart(
     "cpu-chart", state.metrics,
     [{ key: "cpu" }, { key: "cpu_max", className: "secondary-line" }],

@@ -82,6 +82,7 @@ from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
     NETWORK_SCOPES_KEY,
+    RUNTIME_RESOURCES_KEY,
     connect_history,
     initialize_history,
     network_connection_scope,
@@ -9268,6 +9269,37 @@ class RunDataReader:
                 del cache[next(iter(cache))]
             return count
 
+    def _current_run_resources(
+        self, metadata: Dict[str, str], now: float, connected: bool
+    ) -> Optional[Dict[str, Any]]:
+        """Read a fresh worker sample belonging to the running analysis.
+
+        Parameters:
+            metadata: Bounded history metadata already loaded by Overview.
+            now: Current Unix time.
+            connected: Whether the analysis collector is still connected.
+
+        Returns:
+            Current-run measurements, or None for stale or unavailable samples.
+        """
+        if not connected or getattr(self, "saved_view", False):
+            return None
+        try:
+            sample = json.loads(metadata.get(RUNTIME_RESOURCES_KEY, "{}"))
+            if not isinstance(sample, dict):
+                return None
+            pid = int(self.redis.hget("PIDs", "main"))
+            age = now - float(sample["sampled_at"])
+            if pid != int(sample["root_pid"]) or not 0 <= age <= 15:
+                return None
+            for key in ("cpu_percent", "memory_percent", "memory_bytes"):
+                value = float(sample[key])
+                if not math.isfinite(value) or value < 0:
+                    return None
+        except (redis.RedisError, TypeError, ValueError, KeyError):
+            return None
+        return sample
+
     @network_filtered
     def overview(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -9455,6 +9487,9 @@ class RunDataReader:
                 ),
             },
             "system": {
+                "run_resources": self._current_run_resources(
+                    metadata, now, backend_status["connected"]
+                ),
                 "cpu_percent": psutil.cpu_percent(interval=None),
                 "memory_percent": psutil.virtual_memory().percent,
                 "load_average": list(os.getloadavg()),

@@ -631,6 +631,30 @@ output/test7-malicious.pcap_2026-08-22_18:10:46/web_interface/server.log
 
 All paths belong to this specific run. Nothing is written to a repository-level performance_metrics directory.
 
+### Resource measurements
+
+**Host load** separates whole-machine CPU and physical RAM usage from this run's
+**Slips CPU** and **Slips memory** shares. The ⓘ buttons explain each measure on
+hover or keyboard focus. Both CPU percentages use total machine capacity:
+100% means all logical cores are busy; one busy core on an eight-core machine
+is 12.5% of that capacity. Memory percentages use total physical RAM; swap is
+excluded. The **Memory** chart shows resident memory in MiB/GiB.
+
+The web collector measures the main Slips process and its descendants,
+including Zeek and module workers, plus the process identified by this run's
+Redis connection and its descendants. Redis background-save children are
+included, and duplicate PIDs count once. Other Slips instances and unrelated
+Redis servers are excluded. Resident memory is the sum of process RSS values;
+shared mappings can contribute to more than one process's RSS.
+
+The resource bars reuse the collector's latest sample instead of inspecting
+process trees during browser requests. Redis identity is checked at most once
+every 30 seconds. Missing, stale (over 15 seconds), disconnected, saved-view,
+or previous-run samples show **—**. Restricted process access produces **≥**
+values for the measured lower bound. Historical charts keep their recorded
+samples, including data collected by earlier Slips versions. Flow throughput
+has its own panel and uses the selected performance-history time range.
+
 ## Long-running behavior
 
 For live interfaces, Slips checks SQLite flow retention once per minute in small batches outside the profiler's flow path. Imported captures are left intact. Under size pressure, evidence-linked flows remain protected for at least the configured ordinary-flow age after their newest linked evidence; the size target is allowed to be exceeded when durable evidence alone is larger than the target. Web host traffic and flow charts cover retained raw flows; the Alerts and Evidence tabs can still show older detection records after their linked raw flow expires. The evidence drawer first reads SQLite and then recovers missing linked flows from bounded current or saved Zeek JSON logs when available. The compact web flow index follows raw-flow deletion and reconciles missed deletions after a restart. Overview shows the size of flows.sqlite, free space on the output disk, recent growth, and disk usage. On older databases, deleted rows may not reduce the file's physical size until Slips is stopped and SQLite `VACUUM` is run; allow temporary free disk space for that operation.
@@ -713,7 +737,7 @@ The header shows **Searching…** or **Loading…** with a small activity indica
 
 ### Overview
 
-Overview puts the run state, alerts grouped by host, system warnings, five key counts, current network, host load, and three Slips performance charts (CPU, resident memory, and flows per second) on one desktop screen. The alert card uses the Alerts tab's selected time range, review state, severity, and search; it reports matching alert and host counts and shows the first four host groups. Its Alerts count card follows the same selection. Each chart shows numeric Y-axis values with its unit, and hovering shows the sampled time and value. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact. The sortable Modules table is in Metadata; the **Modules** action in a high-CPU warning opens it there.
+Overview puts the run state, alerts grouped by host, system warnings, five key counts, current network, host load, Slips CPU and Memory charts, and a separate Flow throughput chart (flows per second) on one desktop screen. The alert card uses the Alerts tab's selected time range, review state, severity, and search; it reports matching alert and host counts and shows the first four host groups. Its Alerts count card follows the same selection. Each chart shows numeric Y-axis values with its unit, and hovering shows the sampled time and value. When no alerts exist, the status card shows the highest current host score. The four alert-host rows open their host workspace. Network **Rename** opens an inline name editor. **More run details** reveals firewall impact. The sortable Modules table is in Metadata; the **Modules** action in a high-CPU warning opens it there.
 
 Uptime is elapsed wall-clock time since this Slips run started and freezes at the recorded analysis end time for completed runs. The header shows the run name, computer name, monitored interface, network name, version, state, and uptime. Its visible address line lists every current IPv4 and IPv6 address on the monitored interfaces, including IPv6 link-local, local, global, and temporary addresses. Long lists wrap without truncation. Addresses refresh with the lightweight network heartbeat on every tab, so changing networks or IPv6 addresses does not require visiting Overview. **Run details** opens Metadata for the full run facts, including branch and commit. Parsed runtime messages remain in **Logs**.
 

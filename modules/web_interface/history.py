@@ -42,6 +42,8 @@ HOST_SNAPSHOT_INTERVAL_SECONDS = 60
 BACKEND_HEARTBEAT_KEY = "backend_heartbeat_at"
 BACKEND_DISCONNECTED_KEY = "backend_disconnected_at"
 NETWORK_SCOPES_KEY = "current_network_scopes"
+RUNTIME_RESOURCES_KEY = "runtime_resources"
+REDIS_PROCESS_CHECK_SECONDS = 30
 
 
 def network_connection_scope(
@@ -269,6 +271,13 @@ class HistoryCollector:
             / "hosts.sqlite"
         )
         self._processes: Dict[int, psutil.Process] = {}
+        try:
+            self._root_process = psutil.Process(root_pid)
+        except psutil.Error:
+            self._root_process = None
+        self._redis_process: Optional[psutil.Process] = None
+        self._last_redis_process_check = -float("inf")
+        self._process_scope_complete = False
         self._last_flow_count: Optional[int] = None
         self._last_flow_check = time.monotonic()
         self._last_rollup = 0.0
@@ -502,27 +511,65 @@ class HistoryCollector:
             return len(missing)
 
     def _live_processes(self) -> List[psutil.Process]:
-        """
-        Resolve the current Slips process tree.
+        """Resolve this run's Slips and Redis process trees, including Zeek.
 
         Returns:
-            Unique live processes rooted at the main Slips PID.
+            Unique live processes; inaccessible trees mark the sample partial.
         """
+        self._process_scope_complete = True
+        root = self._root_process
         try:
-            root = psutil.Process(self.root_pid)
-            candidates = [root, *root.children(recursive=True)]
+            running = root is not None and root.is_running()
         except psutil.Error:
-            candidates = []
+            running = False
+        if not running:
+            self._process_scope_complete = False
+            return []
+        now = time.monotonic()
+        if now - self._last_redis_process_check >= REDIS_PROCESS_CHECK_SECONDS:
+            self._last_redis_process_check = now
+            try:
+                server = self.redis.info("server")
+                pid = int(server["process_id"])
+                self._redis_process = psutil.Process(pid) if pid > 0 else None
+            except (
+                redis.RedisError,
+                psutil.Error,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
+                self._redis_process = None
+        roots = [root]
+        if self._redis_process is not None:
+            roots.append(self._redis_process)
+        else:
+            self._process_scope_complete = False
         unique: Dict[int, psutil.Process] = {}
-        for process in candidates:
+        for owner in roots:
             try:
                 if (
-                    process.is_running()
-                    and process.status() != psutil.STATUS_ZOMBIE
+                    not owner.is_running()
+                    or owner.status() == psutil.STATUS_ZOMBIE
                 ):
-                    unique[process.pid] = process
+                    self._process_scope_complete = False
+                    continue
+                unique[owner.pid] = owner
+                descendants = owner.children(recursive=True)
             except psutil.Error:
+                self._process_scope_complete = False
                 continue
+            for process in descendants:
+                try:
+                    if (
+                        process.is_running()
+                        and process.status() != psutil.STATUS_ZOMBIE
+                    ):
+                        unique[process.pid] = process
+                except psutil.AccessDenied:
+                    self._process_scope_complete = False
+                except psutil.Error:
+                    continue
         return list(unique.values())
 
     def sample_metrics(self) -> None:
@@ -532,10 +579,16 @@ class HistoryCollector:
         live_pids = set()
         for process in self._live_processes():
             live_pids.add(process.pid)
-            cached = self._processes.setdefault(process.pid, process)
+            cached = self._processes.get(process.pid)
+            if cached is None or cached != process:
+                cached = process
+                self._processes[process.pid] = process
             try:
-                cpu_total += cached.cpu_percent(interval=None)
-                memory_bytes += cached.memory_info().rss
+                with cached.oneshot():
+                    cpu_total += cached.cpu_percent(interval=None)
+                    memory_bytes += cached.memory_info().rss
+            except psutil.AccessDenied:
+                self._process_scope_complete = False
             except psutil.Error:
                 continue
         self._processes = {
@@ -543,7 +596,9 @@ class HistoryCollector:
             for pid, process in self._processes.items()
             if pid in live_pids
         }
-        cpu_percent = cpu_total / max(psutil.cpu_count() or 1, 1)
+        cpu_count = max(psutil.cpu_count() or 1, 1)
+        cpu_percent = cpu_total / cpu_count
+        total_memory = max(psutil.virtual_memory().total, 1)
         try:
             current_count = int(
                 self.redis.get("processed_flows_by_profiler_so_far") or 0
@@ -560,6 +615,23 @@ class HistoryCollector:
         self._last_flow_count = current_count
         self._last_flow_check = now_monotonic
         with connect_history(self.history_path) as connection:
+            self._metadata_set(
+                connection,
+                RUNTIME_RESOURCES_KEY,
+                json.dumps(
+                    {
+                        "sampled_at": time.time(),
+                        "root_pid": self.root_pid,
+                        "cpu_percent": cpu_percent,
+                        "memory_percent": memory_bytes / total_memory * 100,
+                        "memory_bytes": memory_bytes,
+                        "total_memory_bytes": total_memory,
+                        "cpu_count": cpu_count,
+                        "process_count": len(live_pids),
+                        "complete": self._process_scope_complete,
+                    }
+                ),
+            )
             connection.execute(
                 "INSERT OR REPLACE INTO runtime_metrics_1s "
                 "(ts, cpu_percent, memory_mb, flows_per_second, flow_delta) "

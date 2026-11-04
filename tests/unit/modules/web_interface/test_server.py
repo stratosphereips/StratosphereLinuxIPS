@@ -21,7 +21,7 @@ import yaml
 import psutil
 from pytest_mock import MockerFixture
 
-from modules.web_interface.history import connect_history, initialize_history
+from modules.web_interface.history import connect_history, initialize_history, RUNTIME_RESOURCES_KEY
 from modules.web_interface.network_scope import NetworkScope
 from modules.supported_module_names import Modules
 from modules.web_interface.server import (
@@ -8922,3 +8922,38 @@ def test_p2p_graph_api_uses_lightweight_reader() -> None:
     assert result["activity"] == []
     handler.server.reader.p2p_graph.assert_called_once_with({})
     handler.server.reader.p2p.assert_not_called()
+
+
+@pytest.mark.parametrize("case", ["current", "partial", "stale", "future", "different_run", "disconnected", "saved_view", "missing", "invalid", "not_object", "nan"])
+def test_overview_resource_sample_is_fresh_and_scoped(case: str) -> None:
+    """Serve worker measurements without attributing stale usage to this run.
+
+    Parameters:
+        case: Sample validity or run state to exercise.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = "100"
+    reader.saved_view = case == "saved_view"
+    sample = {"sampled_at": 995, "root_pid": 100, "cpu_percent": 12.5,
+              "memory_percent": 5, "memory_bytes": 1024, "complete": case != "partial"}
+    if case == "stale":
+        sample["sampled_at"] = 980
+    elif case == "future":
+        sample["sampled_at"] = 1010
+    elif case == "different_run":
+        sample["root_pid"] = 200
+    elif case == "nan":
+        sample["cpu_percent"] = float("nan")
+    metadata = {RUNTIME_RESOURCES_KEY: json.dumps(sample)}
+    if case == "missing":
+        metadata = {}
+    elif case == "invalid":
+        metadata[RUNTIME_RESOURCES_KEY] = "broken"
+    elif case == "not_object":
+        metadata[RUNTIME_RESOURCES_KEY] = "[]"
+    with patch("modules.web_interface.server.psutil.Process") as process:
+        result = reader._current_run_resources(metadata, 1000, case != "disconnected")
+    process.assert_not_called()
+    assert result == (sample if case in {"current", "partial"} else None)

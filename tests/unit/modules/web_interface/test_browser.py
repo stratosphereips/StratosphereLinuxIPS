@@ -21,6 +21,95 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("theme,width", [("light", 1100), ("dark", 1800)])
+@pytest.mark.parametrize("measurement", ["complete", "partial", "unavailable"])
+def test_overview_resources_and_separate_throughput(theme: str, width: int, measurement: str) -> None:
+    """Distinguish host load, run resource shares and flow throughput.
+
+    Parameters:
+        theme: Browser theme.
+        width: Browser viewport width.
+        measurement: Whether the worker sample is complete, partial or absent.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    queries: list[dict[str, list[str]]] = []
+
+    def respond(route: Any) -> None:
+        """Serve the real dashboard with isolated resource history.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/metrics":
+            queries.append(parse_qs(parsed.query))
+            route.fulfill(json={"items": [{"ts": 1793800000, "cpu": 12.5, "memory": 768, "fps": 20},
+                                         {"ts": 1793800060, "cpu": 15, "memory": 800, "fps": 30}]})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated resource fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderOverview === 'function'")
+            page.evaluate("""async ({theme,measurement}) => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+                setTheme(theme);state.overviewAlertGroups={items:[],total:0,matching_total:0,full_total:0};
+                state.overview={run:{state:'running',input_type:'interface',interface:'en0',output_dir:'output/resources',uptime_seconds:60},
+                    backend_status:{connected:true},computer_name:'Test host',network_states:[],modules:[],
+                    counts:{alerts:0,evidence:3,hosts:2,processed_flows:100},
+                    system:{cpu_percent:40,memory_percent:60,output_disk_percent:20,output_disk_free:10000000000,
+                        load_average:[1,2,3],flows_db_size:1024,run_resources:measurement==='unavailable'?null:{
+                            cpu_percent:12.5,memory_percent:25,memory_bytes:805306368,complete:measurement==='complete'}}};
+                renderOverview();await loadMetrics();clearError();
+            }""", {"theme":theme,"measurement":measurement})
+            assert page.locator("#system-load .metric").count() == 5
+            assert page.locator('[data-metric="host-cpu"] strong').inner_text() == "40.0%"
+            assert page.locator('[data-metric="host-memory"] strong').inner_text() == "60.0%"
+            own_cpu = page.locator('[data-metric="slips-cpu"]')
+            own_memory = page.locator('[data-metric="slips-memory"]')
+            prefix = "≥ " if measurement == "partial" else ""
+            assert own_cpu.locator("strong").inner_text() == ("—" if measurement == "unavailable" else f"{prefix}12.5%")
+            if measurement == "unavailable":
+                assert own_cpu.get_by_role("meter").get_attribute("aria-valuenow") is None
+                assert own_memory.locator("strong").inner_text() == "—"
+            else:
+                assert own_cpu.get_by_role("meter").get_attribute("aria-valuenow") == "12.5"
+                assert own_memory.locator("strong").inner_text() == f"{prefix}25.0% · 768.0 MiB"
+            help_button = page.locator('[data-metric="host-cpu"] .resource-info')
+            assert "all logical CPU cores" in help_button.get_attribute("data-tooltip")
+            help_button.focus()
+            assert help_button.evaluate("node => getComputedStyle(node,'::after').display") == "block"
+            assert "Swap is excluded" in own_memory.locator(".resource-info").get_attribute("data-tooltip")
+            assert page.locator(".overview-performance #fps-chart").count() == 0
+            assert page.locator(".overview-throughput #fps-chart").is_visible()
+            assert page.locator("#memory-chart").locator("..").locator("figcaption").inner_text() == "Memory ⓘ"
+            assert page.locator(".overview-performance .resource-info").count() == 2
+            assert page.locator("#cpu-chart .chart-line").count() == 1
+            assert "MiB" in page.locator("#memory-chart").text_content()
+            with page.expect_response(lambda response: urlparse(response.url).path == "/api/metrics"):
+                page.locator("#metrics-range").select_option("1h")
+            page.wait_for_function("!state.requests.has('metrics')")
+            assert queries[-1]["range"] == ["1h"]
+            assert page.locator("#throughput-range").inner_text() == "1 hour"
+            help_button.blur()
+            artifacts = Path("output/resource-overview-check")
+            artifacts.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(artifacts / f"{theme}-{width}-{measurement}.png"))
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("tab", ["evidence", "alerts", "hosts"])
 @pytest.mark.parametrize("theme,width", [("light", 900), ("dark", 1800)])
 def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, width: int) -> None:
