@@ -180,18 +180,19 @@ def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
                 assert host.locator("code").evaluate("node => getComputedStyle(node).fontSize") == host.locator(".host-name").evaluate("node => getComputedStyle(node).fontSize"), host.evaluate("node => [node.outerHTML,getComputedStyle(node).fontSize,getComputedStyle(node.parentElement).fontSize,node.closest('#evidence')?.id]")
                 assert host.locator(".host-name").evaluate("node => getComputedStyle(node,'::before').content") == '"["'
                 assert host.locator(".host-name").evaluate("node => getComputedStyle(node).textTransform") == "none"
-            toggle = toolbar.get_by_role("button", name="Hide excluded records", exact=True)
+            toggle = toolbar.get_by_role("button", name="Show Whitelisted Evidence", exact=True)
             toggle.click()
             page.wait_for_function("!state.requests.has('evidence')")
             assert not page.evaluate("state.hideExcluded")
-            assert all(value == "false" for value in page.locator(".excluded-visibility-toggle").evaluate_all("nodes => nodes.map(node => node.getAttribute('aria-pressed'))"))
+            assert all(value == "false" for value in page.locator(".excluded-visibility-toggle").evaluate_all("nodes => nodes.map(node => node.dataset.hidden)"))
+            assert all(label == "Hide Whitelisted Evidence" for label in page.locator(".excluded-visibility-toggle").all_text_contents())
             assert "hide_excluded" not in queries[-1]
             page.locator("#evidence-range").select_option("24h")
             page.wait_for_function("!state.requests.has('evidence')")
             assert queries[-1]["range"] == ["24h"]
             page.evaluate("""() => {saveViewPreferences(); state.hideExcluded=true;
                 syncExcludedVisibility(); restoreViewPreferences(state.viewPreferencesKey);}""")
-            assert toggle.get_attribute("aria-pressed") == "false"
+            assert toolbar.get_by_role("button", name="Hide Whitelisted Evidence", exact=True).get_attribute("data-hidden") == "false"
             page.locator("#evidence-records-table tbody tr[data-clickable]").first.click()
             page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
             banner = page.locator(".evidence-detail-banner")

@@ -1183,7 +1183,7 @@ partial whitelist in place of a missing configured file. Keep an additional
 copy of any personal whitelist outside the repository before replacing a
 checkout. Existing evidence and alerts are historical records.
 With an `alerts` or `both` rule, new matching evidence is excluded from scoring
-and alerts and is hidden by the default **Excluded hidden** setting. A `blocking`
+and alerts and is hidden by default; click **Show Whitelisted Evidence** to include it. A `blocking`
 rule keeps evidence eligible for scoring and alerts. Saving
 changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web
@@ -1303,8 +1303,9 @@ after numeric scores in both ascending and descending order, including across
 pages. A host/type group with any excluded evidence follows the same rule
 because its score cell displays **Excluded**.
 
-The exclusion toggle defaults to **Excluded hidden**. Click it to switch to
-**Excluded shown**, or click again to hide excluded records.
+Whitelisted evidence is hidden by default. Click **Show Whitelisted Evidence**
+to include it. The button then reads **Hide Whitelisted Evidence**, which hides
+those records again. This shared preference is remembered across page reloads.
 The choice is shared by Alerts, Evidence, the Host workspace, and ARP detections.
 New evidence-type rules take effect as soon as they reach Redis, even while a
 worker's local IP filter refresh is pending. Existing detections and alerts
@@ -1327,7 +1328,7 @@ excluded evidence is hidden as well. Flows linked to scored evidence and flows
 with no evidence remain visible. Alerts are already formed only from scored
 evidence, so their list is unchanged. Opening an Evidence group keeps the same
 filter. The toggle changes displayed lists;
-stored records and run totals remain available with **Excluded shown**.
+stored records and run totals remain available when whitelisted evidence is shown.
 Flows discarded by the profiler's flow whitelist were never stored
 and cannot appear in either view.
 
@@ -1447,7 +1448,7 @@ Opening a host or device from the inventory copies its selected time range,
 including custom start and end times, into the detail workspace. The Alerts
 and Evidence summary cards, peak score, highest evidence threat, score plot,
 and activity tables use that range and the current-network selection.
-**Excluded hidden** also excludes whitelisted evidence from the peak, threat,
+Hiding whitelisted evidence also excludes it from the peak, threat,
 and evidence count. Select **Full run** to inspect earlier findings. The
 header separates the current active time-window score from the peak in the
 selected range. In Device view, the host header shows every associated IPv4

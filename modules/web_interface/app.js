@@ -136,9 +136,11 @@ const VIEW_CONTROL_DEFAULTS = Object.fromEntries(VIEW_CONTROL_IDS.map((id) => {
 /** Keep exclusion buttons synchronized with the saved visibility preference. */
 function syncExcludedVisibility() {
   document.querySelectorAll(".excluded-visibility-toggle").forEach((button) => {
-    button.textContent = state.hideExcluded ? "Excluded hidden" : "Excluded shown";
-    button.setAttribute("aria-pressed", String(state.hideExcluded));
-    button.title = state.hideExcluded ? "Show records excluded from scoring" : "Hide records excluded from scoring";
+    const label = state.hideExcluded ? "Show Whitelisted Evidence" : "Hide Whitelisted Evidence";
+    button.textContent = label;
+    button.setAttribute("aria-label", label);
+    button.dataset.hidden = String(state.hideExcluded);
+    button.title = state.hideExcluded ? "Show whitelisted evidence excluded from scoring" : "Hide whitelisted evidence excluded from scoring";
   });
 }
 

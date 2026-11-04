@@ -965,7 +965,7 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-toolbar .evidence-group-controls { height: var(--control-height); padding: 0; }
 .evidence-toolbar .evidence-group-button { height: calc(var(--control-height) - 2px); }
 .excluded-visibility-toggle { min-height: 32px; padding: .35rem .55rem; font-size: .75rem; white-space: nowrap; }
-.excluded-visibility-toggle[aria-pressed="true"] { border-color: var(--accent); background: #43c7b512; }
+.excluded-visibility-toggle[data-hidden="true"] { border-color: var(--accent); background: #43c7b512; }
 .evidence-toolbar .result-count { margin-left: auto; white-space: nowrap; }
 .evidence-export { flex: none; padding: .35rem .5rem; border: 1px solid var(--line); border-radius: 5px; color: var(--blue); font-size: .68rem; text-decoration: none; }
 .evidence-export:hover { border-color: var(--accent); }
