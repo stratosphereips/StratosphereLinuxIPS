@@ -41,6 +41,9 @@ training - off = head-only fine-tunes with fc1 frozen, the behaviour before
 this option; merge_finetune_adam (default copy) starts each fine-tune from its
 own copy of the local training Adam state, 'fresh' from an empty one (the
 behaviour before this option); finetune_head: false skips both fine-tunes;
+merge_scaler also sends the scaler's per-feature mean and variance and gives
+the merged model the own + peers' scalers pooled with the merge rule's
+weights (its fine-tune and scoring use it, the local model keeps its own);
 minibatch_size splits every training pass into class-stratified
 mini-batches (one Adam step each). merging_data.log records per merge how much
 of the merge the fine-tunes undo ("finetune | ... | undone=").
@@ -782,6 +785,205 @@ MERGE_REGISTRY = {
 }
 
 
+# ----------------------------------------------------------------------
+# Merge weights: each rule's weight per candidate ("own" + each peer id) over
+# ONE flat vector (all shared tensors concatenated), summing to 1 - the
+# weights MERGE_REGISTRY blends with; the per-layer rules (mean_with_closest,
+# proximity) as if the model were one layer. Same signature for every rule:
+#   weights_<name>(own_flat, peer_flats, trust) -> {candidate: weight}
+# ----------------------------------------------------------------------
+def weights_average(
+    own_flat: torch.Tensor, peer_flats: dict, trust: dict = None
+) -> dict:
+    """average: every candidate 1 / (1 + peers)."""
+    n = 1 + len(peer_flats)
+    return {cid: 1.0 / n for cid in ["own", *peer_flats]}
+
+
+def weights_mean_with_closest(
+    own_flat: torch.Tensor, peer_flats: dict, trust: dict = None
+) -> dict:
+    """mean_with_closest: own 1/2, the peer closest to own (L2) 1/2, the
+    other peers 0; no peers -> own 1."""
+    if not peer_flats:
+        return {"own": 1.0}
+    closest = min(
+        peer_flats,
+        key=lambda pid: torch.norm(peer_flats[pid] - own_flat).item(),
+    )
+    weights = {"own": 0.5, **{pid: 0.0 for pid in peer_flats}}
+    weights[closest] = 0.5
+    return weights
+
+
+def weights_proximity(
+    own_flat: torch.Tensor, peer_flats: dict, trust: dict = None
+) -> dict:
+    """proximity: Gaussian kernel exp(-d^2 / (2 sigma^2)) of each
+    candidate's L2 distance d to own, sigma = the median pairwise candidate
+    distance, normalized; sigma ~0 -> uniform."""
+    vecs = {"own": own_flat, **peer_flats}
+    ids = list(vecs)
+    pair_d = [
+        torch.norm(vecs[a] - vecs[b]).item()
+        for i, a in enumerate(ids)
+        for b in ids[i + 1 :]
+    ]
+    sigma = float(np.median(pair_d)) if pair_d else 0.0
+    if sigma <= 1e-12:
+        return {cid: 1.0 / len(ids) for cid in ids}
+    kernel = {
+        cid: float(
+            np.exp(
+                -(torch.norm(vecs[cid] - own_flat).item() ** 2)
+                / (2.0 * sigma * sigma)
+            )
+        )
+        for cid in ids
+    }
+    total = sum(kernel.values())
+    return {cid: w / total for cid, w in kernel.items()}
+
+
+def weights_trust_weighted(
+    own_flat: torch.Tensor, peer_flats: dict, trust: dict = None
+) -> dict:
+    """trust_weighted: own 1, each peer its clamped local trust (1 without
+    a verdict), normalized."""
+    trust = trust or {}
+    weights = {"own": 1.0}
+    for pid in peer_flats:
+        t = trust.get(pid) or {}
+        weights[pid] = max(0.0, min(1.0, float(t.get("trust", 1.0))))
+    total = sum(weights.values())
+    return {cid: w / total for cid, w in weights.items()}
+
+
+def weights_distance_weighted(
+    own_flat: torch.Tensor, peer_flats: dict, trust: dict = None
+) -> dict:
+    """distance_weighted: own 1/2, the peers the other 1/2 in proportion to
+    their L2 distance to own; identical candidates -> uniform, no peers ->
+    own 1."""
+    if not peer_flats:
+        return {"own": 1.0}
+    dist = {
+        pid: torch.norm(v - own_flat).item() for pid, v in peer_flats.items()
+    }
+    total = sum(dist.values())
+    if total <= 1e-12:
+        return weights_average(own_flat, peer_flats)
+    return {"own": 0.5, **{pid: 0.5 * d / total for pid, d in dist.items()}}
+
+
+MERGE_WEIGHTS = {
+    "average": weights_average,
+    "trust_weighted": weights_trust_weighted,
+    "mean_with_closest": weights_mean_with_closest,
+    "proximity": weights_proximity,
+    "distance_weighted": weights_distance_weighted,
+}
+
+
+# ----------------------------------------------------------------------
+# Scaler sharing (merge_scaler): each peer sends its scaler's per-feature
+# mean and variance with its model; a merge pools them into the merged
+# model's scaler with the merge rule's weights (MERGE_WEIGHTS).
+# ----------------------------------------------------------------------
+def scaler_payload(scaler: StandardScaler) -> Optional[dict]:
+    """A fitted scaler's statistics as plain JSON numbers, for the P2P model
+    message.
+
+    :param scaler: the peer's StandardScaler
+    :return: {"mean": [per feature], "var": [per feature]}, or None when the
+        scaler is not fitted or holds a non-finite value (nothing to send)
+    """
+    if getattr(scaler, "mean_", None) is None:
+        return None
+    if getattr(scaler, "var_", None) is None:
+        return None
+    mean = np.asarray(scaler.mean_, dtype=np.float64)
+    var = np.asarray(scaler.var_, dtype=np.float64)
+    if not (np.isfinite(mean).all() and np.isfinite(var).all()):
+        return None
+    return {"mean": mean.tolist(), "var": var.tolist()}
+
+
+def scaler_from_payload(payload, n_features: int) -> Optional[dict]:
+    """Validate scaler statistics received from a peer.
+
+    :param payload: the message's "scaler" entry (untrusted)
+    :param n_features: the model's input size
+    :return: {"mean", "var": float64 arrays of n_features}, or None when
+        absent or malformed (not a dict, a wrong length, a non-finite entry
+        or a negative variance)
+    """
+    if not isinstance(payload, dict):
+        return None
+    try:
+        mean = np.asarray(payload["mean"], dtype=np.float64)
+        var = np.asarray(payload["var"], dtype=np.float64)
+    except (KeyError, TypeError, ValueError):
+        return None
+    if mean.shape != (n_features,) or var.shape != mean.shape:
+        return None
+    if not (np.isfinite(mean).all() and np.isfinite(var).all()):
+        return None
+    if (var < 0).any():
+        return None
+    return {"mean": mean, "var": var}
+
+
+def pool_scaler_stats(stats: dict, weights: dict) -> tuple:
+    """Pool the candidates' scaler statistics with the merge rule's weights
+    w_i (summing to 1) into the statistics of their weighted mixture - the
+    variances pooled, never the standard deviations averaged:
+
+        mean = sum w_i mean_i
+        var  = sum w_i (var_i + mean_i^2) - mean^2
+
+    computed in the equal form sum w_i (var_i + (mean_i - mean)^2), which
+    avoids the cancellation of mean^2 for features with a large mean.
+
+    :param stats: {candidate: {"mean", "var"}} (own + peers)
+    :param weights: {candidate: w_i} over the same candidates
+    :return: (mean, var) as float64 arrays
+    """
+    ids = list(weights)
+    w = np.array([weights[c] for c in ids], dtype=np.float64)
+    means = np.stack([stats[c]["mean"] for c in ids])
+    variances = np.stack([stats[c]["var"] for c in ids])
+    mean = (w[:, None] * means).sum(axis=0)
+    var = (w[:, None] * (variances + (means - mean) ** 2)).sum(axis=0)
+    return mean, var
+
+
+def scaler_from_stats(template: StandardScaler, mean, var) -> StandardScaler:
+    """A transform-only StandardScaler with the given statistics: a copy of
+    the fitted template (its settings and sample count) with mean_, var_ and
+    scale_ replaced; scale_ = sqrt(var), 1 for a feature StandardScaler's
+    own rule treats as constant (variance within the float64 error bound
+    for the template's sample count).
+
+    :param template: the fitted own scaler
+    :param mean: the pooled per-feature mean
+    :param var: the pooled per-feature variance
+    :return: the new scaler; template is not modified
+    """
+    scaler = copy.deepcopy(template)
+    scaler.mean_ = np.asarray(mean, dtype=np.float64).copy()
+    scaler.var_ = np.asarray(var, dtype=np.float64).copy()
+    n = float(np.max(template.n_samples_seen_))
+    eps = np.finfo(np.float64).eps
+    constant = scaler.var_ <= (
+        n * eps * scaler.var_ + (n * scaler.mean_ * eps) ** 2
+    )
+    scale = np.sqrt(scaler.var_)
+    scale[constant] = 1.0
+    scaler.scale_ = scale
+    return scaler
+
+
 class ModuleLogger:
     """Centralized logging for training, testing, and label comparison."""
 
@@ -795,6 +997,7 @@ class ModuleLogger:
                 "alert_uids": "alert_uids.jsonl",
                 "sofar_test": "sofar_test.jsonl",
                 "scaler_stats": "scaler_stats.jsonl",
+                "merged_scaler": "merged_scaler.jsonl",
             }
             for name in [
                 "local_train",
@@ -816,6 +1019,7 @@ class ModuleLogger:
                 "alert_uids",
                 "sofar_test",
                 "scaler_stats",
+                "merged_scaler",
                 "live_consistency",
                 "module_errors",
             ]:
@@ -1017,6 +1221,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.peer_models: Dict[str, dict] = (
             {}
         )  # peer_id -> {fc1, head, timestamp}
+        # peer_id -> validated scaler statistics of its stored model, or None
+        self.peer_scalers: Dict[str, Optional[dict]] = {}
 
         # Use hostname as our peer identity (deterministic, available in Docker)
         try:
@@ -1068,6 +1274,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         # serves exactly the next window and is discarded at the next close's
         # training (no legacy: nothing of it flows back into the local model).
         self.merged_model = None
+        # the merged model's pooled scaler (merge_scaler), discarded with it
+        self.merged_scaler: Optional[StandardScaler] = None
         # True while merged_model serves (selects the test/log streams)
         self._using_merged_model: bool = False
 
@@ -1143,6 +1351,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "merge_head", default=False
         )
         self.print(f"merge_head: {self.merge_head}", 0, 2)
+        # Optional scaler sharing: peers also send their scaler's
+        # per-feature mean and variance with the model, and a merge pools
+        # own + peers' with the merge rule's weights (MERGE_WEIGHTS) into the
+        # merged model's scaler, which its fine-tune and its scoring use; the
+        # local model keeps its own scaler. Unset = off (one scaler per peer,
+        # unchanged).
+        self.merge_scaler = self._read_module_config_bool(
+            "merge_scaler", default=False
+        )
+        self.print(f"merge_scaler: {self.merge_scaler}", 0, 2)
         # The fine-tune after the merge point also trains the shared (fc)
         # layers, on the local and on the merged model alike, each from its
         # own throwaway Adam state (merge_finetune_adam; same learning
@@ -2294,29 +2512,68 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     new_hits += 1
         return new_hits
 
-    def _scale(self, x_raw) -> np.ndarray:
+    def _scaler_of(self, model) -> StandardScaler:
+        """The scaler a model's inputs are scaled with: the merged model's
+        pooled scaler (merge_scaler) for the merged model, else the peer's
+        own scaler.
+
+        :param model: the model about to predict
+        :return: its scaler
+        """
+        merged_scaler = getattr(self, "merged_scaler", None)
+        if (
+            merged_scaler is not None
+            and model is not None
+            and model is getattr(self, "merged_model", None)
+        ):
+            return merged_scaler
+        return self.scaler
+
+    def _serving_scaler(self) -> StandardScaler:
+        """The scaler of the model predict_batch serves with: the merged
+        model's (_scaler_of) while one serves, else the own scaler."""
+        return self._scaler_of(getattr(self, "merged_model", None))
+
+    def _scale(
+        self, x_raw, scaler: Optional[StandardScaler] = None
+    ) -> np.ndarray:
         """The ONE place features are scaled for a prediction (transform
-        only: the scaler is fit exclusively in _train_batch)."""
+        only: the own scaler is fit exclusively in _train_batch, a merged
+        one is pooled in trigger_merge).
+
+        :param x_raw: raw feature rows
+        :param scaler: the predicting model's scaler (_scaler_of); default
+            the own scaler
+        :return: the scaled rows (float32)
+        """
+        scaler = self.scaler if scaler is None else scaler
         return np.asarray(
-            self.scaler.transform(np.asarray(x_raw, dtype=np.float32)),
+            scaler.transform(np.asarray(x_raw, dtype=np.float32)),
             dtype=np.float32,
         )
 
-    def _scaled_features(self, items: list) -> tuple:
-        """THE feature path of every prediction - end-of-window scoring, the
-        live channels and single-flow classification: extract each flow's
-        features, then _scale them. items: [(key, flow)]. Returns
-        (kept_items, x_scaled); flows whose features cannot be extracted are
-        dropped (not predicted)."""
+    def _flow_features(self, items: list) -> tuple:
+        """THE feature extraction of every prediction - end-of-window
+        scoring, the live channels and single-flow classification. items:
+        [(key, flow)]. Returns (kept_items, raw feature rows); flows whose
+        features cannot be extracted are dropped (not predicted)."""
         feats, kept = [], []
         for key, flow in items:
             x = self._extract_flow_features(flow)
             if x is not None:
                 feats.append(x)
                 kept.append((key, flow))
+        return kept, feats
+
+    def _scaled_features(self, items: list) -> tuple:
+        """Features of [(key, flow)] scaled for the SERVING model (its
+        scaler, _scaler_of), for predict_batch: the live channels and
+        single-flow classification. Returns (kept_items, x_scaled), ([],
+        None) when no flow has features."""
+        kept, feats = self._flow_features(items)
         if not kept:
             return [], None
-        return kept, self._scale(feats)
+        return kept, self._scale(feats, self._serving_scaler())
 
     def _predict_batch_with(self, model, x_scaled: np.ndarray) -> np.ndarray:
         """Labels of a scaled batch from an arbitrary (frozen) model."""
@@ -2355,17 +2612,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             return
         cell["tested"].update(fid for fid, _ in todo)
         try:
-            kept, x_scaled = self._scaled_features(todo)
+            kept, feats = self._flow_features(todo)
             if not kept:
                 return
+            serving = self._serving_scaler()
+            x_scaled = self._scale(feats, serving)
             main = self.predict_batch(x_scaled)
-            # while merged serves, the local model is scored too (shadow)
+            # while merged serves, the local model is scored too (shadow),
+            # on inputs scaled with its own scaler
             local_model = getattr(self, "model", None)
-            local = (
-                self._predict_batch_with(local_model, x_scaled)
-                if self._using_merged_model and local_model is not None
-                else None
-            )
+            local = None
+            if self._using_merged_model and local_model is not None:
+                x_local = (
+                    x_scaled if serving is self.scaler else self._scale(feats)
+                )
+                local = self._predict_batch_with(local_model, x_local)
         except Exception:
             self._record_error("_test_cell")
             return
@@ -2467,7 +2728,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _sofar_predict(self, model, x_raw: np.ndarray) -> np.ndarray:
         """Malicious mask of a model over raw features: scaled with the
-        current shared scaler and decided as the test streams decide
+        model's scaler (_scaler_of) and decided as the test streams decide
         (argmax of the softmax), in _SOFAR_BATCH-row slices. The model's
         train/eval mode is restored afterwards.
 
@@ -2476,12 +2737,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         :return: bool array, True where the model predicts malicious
         """
         out = np.zeros(len(x_raw), dtype=bool)
+        scaler = self._scaler_of(model)
         was_training = model.training
         model.eval()
         try:
             with torch.no_grad():
                 for i in range(0, len(x_raw), self._SOFAR_BATCH):
-                    x = self._scale(x_raw[i : i + self._SOFAR_BATCH])
+                    x = self._scale(x_raw[i : i + self._SOFAR_BATCH], scaler)
                     logits = model(torch.FloatTensor(x).to(self.device))
                     idx = torch.argmax(torch.softmax(logits, dim=1), dim=1)
                     out[i : i + len(x)] = (idx == 1).cpu().numpy()
@@ -3101,6 +3363,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.peer_models[peer_id]["timestamp"] = model_data.get(
                 "timestamp", time.time()
             )
+            # the scaler statistics sent with this model (merge_scaler),
+            # validated; None when absent or malformed, so a stored scaler
+            # always belongs to the stored model
+            scaler = scaler_from_payload(
+                model_data.get("scaler"), SimpleFederatedNet.FIXED_INPUT_DIM
+            )
+            if scaler is None and model_data.get("scaler") is not None:
+                self.print(
+                    f"WARNING: peer {peer_id} sent malformed scaler "
+                    "statistics; ignored",
+                    0,
+                    1,
+                )
+            if getattr(self, "peer_scalers", None) is None:
+                self.peer_scalers = {}
+            self.peer_scalers[peer_id] = scaler
 
             self.print(
                 f"Received model from peer {peer_id}, stashed ({len(self.peer_models)} total)",
@@ -3231,6 +3509,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             # the merged model served the window that just ended (already
             # scored before this training); discard it - no legacy
             self.merged_model = None
+            self.merged_scaler = None
             self._using_merged_model = False
             # every live prediction from here on is by a new model generation
             self._model_gen = getattr(self, "_model_gen", 0) + 1
@@ -3270,8 +3549,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             X_scaled = self.scaler.transform(X)
 
-            # Save scaled batch for both local and merge head fine-tuning
+            # Save scaled batch for both local and merge head fine-tuning,
+            # and the raw one for a merged scaler (merge_scaler)
             self._last_train_X = X_scaled.copy()
+            self._last_train_X_raw = X.copy()
             self._last_train_Y = y.copy()
 
             self.print(
@@ -3486,6 +3767,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
                 own_shared = with_shared_head(own_shared, own_head)
             shared_keys = sorted(own_shared)
+            # with merge_scaler a peer is usable only with its scaler
+            # statistics, so the model and the scaler pool the same peers
+            merge_scaler = self.model is not None and getattr(
+                self, "merge_scaler", False
+            )
+            peer_scalers = getattr(self, "peer_scalers", None) or {}
             usable = {
                 pid: m
                 for pid, m in self.peer_models.items()
@@ -3494,6 +3781,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     and m[k].shape == own_shared[k].shape
                     for k in shared_keys
                 )
+                and (not merge_scaler or peer_scalers.get(pid) is not None)
             }
             skipped = [pid for pid in self.peer_models if pid not in usable]
             if skipped:
@@ -3629,6 +3917,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
             if self.model is None:
                 return
+            # merge_scaler: the merged model's own scaler, own + the merged
+            # peers' pooled with the rule's weights (None = the own scaler)
+            merged_scaler = (
+                self._pool_scalers(own_shared, usable, shared_keys, trust_map)
+                if merge_scaler
+                else None
+            )
             # build the merged model on a COPY of the fresh local model: the
             # local lineage is never overwritten by the merge
             merged = copy.deepcopy(self.model)
@@ -3663,11 +3958,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 if getattr(self, "merge_finetune_adam", "copy") == "copy"
                 else {}
             )
+            # the batch the fine-tune trains on, scaled with the merged
+            # model's scaler (the pooled one with merge_scaler)
+            train_x = self._last_train_X
+            raw_x = getattr(self, "_last_train_X_raw", None)
+            if merged_scaler is not None and raw_x is not None:
+                train_x = merged_scaler.transform(raw_x)
             self.model, self._adam_state = merged, merged_adam
             try:
-                self._align_head_on_buffer(
-                    self._last_train_X, self._last_train_Y
-                )
+                self._align_head_on_buffer(train_x, self._last_train_Y)
             finally:
                 self.model, self._adam_state = local_model, local_adam
             own_head = (
@@ -3680,6 +3979,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
 
             self.merged_model = merged
+            self.merged_scaler = merged_scaler
             self._using_merged_model = True
 
             self.merge_count += 1
@@ -3694,6 +3994,83 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         except Exception:
             self._record_error("trigger_merge")
+
+    def _pool_scalers(
+        self,
+        own_shared: dict,
+        usable: dict,
+        shared_keys: list,
+        trust_map: dict,
+    ) -> Optional[StandardScaler]:
+        """The merged model's scaler (merge_scaler): the own and the merged
+        peers' scaler statistics pooled (pool_scaler_stats) with the merge
+        rule's weight for each model (MERGE_WEIGHTS over the flat shared
+        vectors the merge used). Logs a `scaler` line to merging_data.log and
+        a merged_scaler.jsonl row.
+
+        :param own_shared: own shared tensors that were merged
+        :param usable: {peer_id: shared tensors} of the merged peers, each
+            with stored scaler statistics
+        :param shared_keys: the merged keys
+        :param trust_map: the trust map the merge rule got
+        :return: the pooled scaler, or None (the merged model then uses the
+            own scaler) when the own scaler is not fitted or the pooled
+            statistics are not finite
+        """
+        own = scaler_from_payload(
+            scaler_payload(self.scaler), SimpleFederatedNet.FIXED_INPUT_DIM
+        )
+        if own is None:
+            self.print(
+                "merge_scaler: own scaler not fitted, the merged model uses it",
+                0,
+                1,
+            )
+            return None
+
+        def _flat(ws: dict) -> torch.Tensor:
+            return torch.cat([ws[k].detach().reshape(-1) for k in shared_keys])
+
+        weights = MERGE_WEIGHTS[self.merge_rule](
+            _flat(own_shared),
+            {pid: _flat(m) for pid, m in usable.items()},
+            trust_map,
+        )
+        peer_scalers = getattr(self, "peer_scalers", None) or {}
+        stats = {"own": own, **{pid: peer_scalers[pid] for pid in usable}}
+        mean, var = pool_scaler_stats(stats, weights)
+        if not (np.isfinite(mean).all() and np.isfinite(var).all()):
+            self.logger._write(
+                "merging_data",
+                "  scaler | skipped: pooled statistics not finite",
+            )
+            return None
+        pooled = scaler_from_stats(self.scaler, mean, var)
+        own_scale = np.asarray(self.scaler.scale_, dtype=np.float64)
+        shift = np.abs(mean - own["mean"]) / own_scale
+        ratio = pooled.scale_ / own_scale
+        self.logger._write(
+            "merging_data",
+            "  scaler | weights "
+            + " ".join(f"{k}:{w:.4f}" for k, w in weights.items())
+            + f" | mean_shift_sd={shift.max():.4f}"
+            + f" | scale_ratio={ratio.min():.4f}-{ratio.max():.4f}",
+        )
+        self.logger._write(
+            "merged_scaler",
+            json.dumps(
+                {
+                    "merge": self.merge_count + 1,
+                    "window": int(getattr(self, "training_count_window", 0)),
+                    "weights": {k: float(w) for k, w in weights.items()},
+                    "features": self._get_feature_order(),
+                    "mean": [float(v) for v in pooled.mean_],
+                    "var": [float(v) for v in pooled.var_],
+                    "scale": [float(v) for v in pooled.scale_],
+                }
+            ),
+        )
+        return pooled
 
     def _log_finetune_undo(
         self,
@@ -3827,6 +4204,12 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 "timestamp": time.time(),
                 "peer_id": getattr(self, "my_peer_id", "unknown"),
             }
+            # merge_scaler: the scaler this model trained with (fit at the
+            # start of this training, unchanged until the next one)
+            if getattr(self, "merge_scaler", False):
+                scaler = scaler_payload(self.scaler)
+                if scaler is not None:
+                    model_data["scaler"] = scaler
 
             # Publish to P2P module via p2p_pygo (Python -> Go) channel
             # The Go binary requires {"message": "<base64>", "recipient": "<peer_id|*>"}
@@ -4085,7 +4468,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             os.makedirs(os.path.dirname(prep_path), exist_ok=True)
             with open(prep_path, "wb") as fh:
-                pickle.dump(self.scaler, fh)
+                pickle.dump(self._scaler_of(merged), fh)
             self.print(
                 f"final merged model -> {store_path} (merge {self.merge_count})",
                 0,

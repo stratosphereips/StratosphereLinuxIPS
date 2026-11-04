@@ -202,9 +202,9 @@ def test_every_prediction_scales_through_one_path_and_never_fits(tmp_path):
     calls = []
     real_scale = Module._scale.__get__(m)
 
-    def spy(x):
+    def spy(x, scaler=None):
         calls.append(len(x))
-        return real_scale(x)
+        return real_scale(x, scaler)
 
     m._scale = spy
     m.scaler = MagicMock(

@@ -1,5 +1,6 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import base64
 import json
 from unittest.mock import Mock, patch
 import pytest
@@ -1034,3 +1035,37 @@ def test_connection_update_rejects_incomplete_data(
 
     with pytest.raises(ValueError):
         go_director.process_connection_update(connection)
+
+
+def test_a_federated_model_message_with_scaler_stats_is_only_recorded():
+    """The federated module's model messages (with merge_scaler also its
+    scaler mean / var) reach this module on p2p_gopy as an unknown message
+    type: recorded JSON-serializable in the bounded P2P history, and never
+    processed as a report, request or blame."""
+    go_director = ModuleFactory().create_go_director_obj()
+    payload = {
+        "message_type": "model",
+        "model_class": "random_projection_mlp",
+        "shared": {"fc1_bias": [0.1] * 16},
+        "scaler": {"mean": [0.5] * 18, "var": [2.0] * 18},
+        "n_params": 16,
+        "timestamp": 1.0,
+        "peer_id": "slips-a",
+    }
+    report = {
+        "reporter": "QmPeerA",
+        "report_time": 1649445643,
+        "message": base64.b64encode(json.dumps(payload).encode()).decode(),
+    }
+    with patch.object(
+        go_director, "process_message_report"
+    ) as on_report, patch.object(
+        go_director, "process_message_request"
+    ) as on_request:
+        go_director.process_go_data(report)
+    on_report.assert_not_called()
+    on_request.assert_not_called()
+    direction, record = go_director.db.record_p2p_message.call_args.args
+    assert direction == "received" and record["message_type"] == "model"
+    assert record["message"]["scaler"] == payload["scaler"]
+    json.dumps(record)

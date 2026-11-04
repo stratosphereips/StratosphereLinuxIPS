@@ -1192,3 +1192,334 @@ def test_training_gets_the_whole_window_for_the_scaler_after_the_tests(
     # the 3-flow window (1 mal / 2 ben): scaler gets all 3, training 1/1
     assert [events[i] for i in trains] == [("train", 2, 3), ("train", 1, 1)]
     assert all(events[i - 1] == ("test",) for i in trains)
+
+
+# --------------------------------------------------------------------------
+# scaler sharing (merge_scaler)
+# --------------------------------------------------------------------------
+def _fitted_scaler(rng, n, loc, scale, constant=7.0):
+    """A StandardScaler fit in two partial_fit calls (as the module fits
+    window by window) on 18 features; feature 0 is constant."""
+    x = rng.normal(loc, scale, size=(n, 18))
+    x[:, 0] = constant
+    sc = StandardScaler()
+    sc.partial_fit(x[: n // 2])
+    sc.partial_fit(x[n // 2 :])
+    return sc, x
+
+
+@pytest.mark.parametrize("rule", sorted(fnm.MERGE_REGISTRY))
+@pytest.mark.parametrize("n_peers", [1, 3])
+def test_merge_weights_are_the_weights_the_rule_blends_with(rule, n_peers):
+    """For a one-tensor model, sum w_i * x_i with MERGE_WEIGHTS is exactly
+    what the rule in MERGE_REGISTRY returns; the weights sum to 1."""
+    g = torch.Generator().manual_seed(n_peers)
+    own = {"w": torch.randn(12, generator=g)}
+    peers = {
+        f"p{i}": {"w": torch.randn(12, generator=g) * (i + 1)}
+        for i in range(n_peers)
+    }
+    trust = {"p0": {"trust": 0.4}}
+    weights = fnm.MERGE_WEIGHTS[rule](
+        own["w"], {pid: m["w"] for pid, m in peers.items()}, trust
+    )
+    assert set(weights) == {"own", *peers}
+    assert sum(weights.values()) == pytest.approx(1.0)
+    blend = weights["own"] * own["w"] + sum(
+        weights[pid] * m["w"] for pid, m in peers.items()
+    )
+    merged = fnm.MERGE_REGISTRY[rule](own, peers, ["w"], trust)["w"]
+    assert torch.allclose(blend, merged, atol=1e-6)
+
+
+def test_every_merge_rule_has_its_weights():
+    assert set(fnm.MERGE_WEIGHTS) == set(fnm.MERGE_REGISTRY)
+
+
+def test_scaler_payload_round_trips_through_json():
+    sc, _ = _fitted_scaler(np.random.default_rng(0), 40, 2.0, 3.0)
+    payload = fnm.scaler_payload(sc)
+    assert set(payload) == {"mean", "var"}
+    got = fnm.scaler_from_payload(json.loads(json.dumps(payload)), 18)
+    assert np.array_equal(got["mean"], sc.mean_)
+    assert np.array_equal(got["var"], sc.var_)
+
+
+def test_an_unfitted_scaler_sends_no_payload():
+    assert fnm.scaler_payload(StandardScaler()) is None
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        None,
+        "garbage",
+        {"mean": [0.0] * 18},
+        {"mean": [0.0] * 17, "var": [1.0] * 17},
+        {"mean": [0.0] * 18, "var": [1.0] * 17},
+        {"mean": [0.0] * 17 + [float("nan")], "var": [1.0] * 18},
+        {"mean": [0.0] * 18, "var": [1.0] * 17 + [float("inf")]},
+        {"mean": [0.0] * 18, "var": [1.0] * 17 + [-1e-3]},
+        {"mean": [[0.0], [1.0, 2.0]], "var": [1.0] * 18},
+        {"mean": ["a"] * 18, "var": [1.0] * 18},
+    ],
+)
+def test_a_malformed_peer_scaler_is_rejected(payload):
+    assert fnm.scaler_from_payload(payload, 18) is None
+
+
+@pytest.mark.parametrize("w_own", [0.5, 0.6225, 0.9])
+def test_pooled_scaler_is_the_weighted_mixture_of_the_scalers(w_own):
+    """mean = sum w_i mean_i, var = sum w_i (var_i + mean_i^2) - mean^2 (the
+    formula, not an average of standard deviations); with w_i = n_i / N it
+    equals the scaler fit on all the data together, a constant feature
+    included (scale 1, as StandardScaler sets it)."""
+    rng = np.random.default_rng(1)
+    own, x_own = _fitted_scaler(rng, 60, 0.0, 1.0)
+    peer, x_peer = _fitted_scaler(rng, 40, 5.0, 3.0)
+    stats = {
+        "own": fnm.scaler_from_payload(fnm.scaler_payload(own), 18),
+        "peer": fnm.scaler_from_payload(fnm.scaler_payload(peer), 18),
+    }
+    weights = {"own": w_own, "peer": 1.0 - w_own}
+    mean, var = fnm.pool_scaler_stats(stats, weights)
+    want_mean = w_own * own.mean_ + (1 - w_own) * peer.mean_
+    want_var = (
+        w_own * (own.var_ + own.mean_**2)
+        + (1 - w_own) * (peer.var_ + peer.mean_**2)
+        - want_mean**2
+    )
+    assert np.allclose(mean, want_mean)
+    assert np.allclose(var, want_var)
+    # not the average of the standard deviations
+    avg_sd = w_own * np.sqrt(own.var_) + (1 - w_own) * np.sqrt(peer.var_)
+    assert not np.allclose(np.sqrt(var[1:]), avg_sd[1:])
+    # sample-count weights reproduce the fit on the pooled data
+    n_w = {"own": 60 / 100, "peer": 40 / 100}
+    pooled = fnm.scaler_from_stats(own, *fnm.pool_scaler_stats(stats, n_w))
+    direct = StandardScaler().fit(np.vstack([x_own, x_peer]))
+    assert np.allclose(pooled.mean_, direct.mean_)
+    assert np.allclose(pooled.var_, direct.var_)
+    assert np.allclose(pooled.scale_, direct.scale_)
+    assert pooled.scale_[0] == 1.0
+    probe = rng.normal(2.0, 4.0, size=(5, 18))
+    assert np.allclose(pooled.transform(probe), direct.transform(probe))
+    # the own scaler is not touched
+    assert np.allclose(own.mean_, x_own.mean(axis=0))
+
+
+def test_scaler_travels_with_the_model_over_p2p(monkeypatch, tmp_path):
+    """With merge_scaler the sender's scaler statistics ride in the same P2P
+    model message (a few hundred bytes of ~100 KB); the receiver stores them
+    validated next to the peer's model. Without the option the message is
+    exactly the one before (no "scaler" key)."""
+    a = _peer_module(tmp_path, "slips-a", _net(tmp_path, "slips-a"))
+    a.scaler, _ = _fitted_scaler(np.random.default_rng(2), 40, 1.0, 2.0)
+    a.send_model_to_peers()
+    plain = json.loads(a.db.publish.call_args.args[1])["message"]
+    assert "scaler" not in json.loads(base64.b64decode(plain))
+    a.merge_scaler = True
+    a.send_model_to_peers()
+    channel, raw = a.db.publish.call_args.args
+    go = json.loads(raw)
+    assert channel == "p2p_pygo" and "\n" not in go["message"]
+    assert len(go["message"]) - len(plain) < 0.02 * len(plain)
+    wire = {
+        "message_type": "go_data",
+        "message_contents": {
+            "message": go["message"],
+            "reporter": "QmPeerA",
+            "report_time": 0,
+        },
+    }
+    b = _peer_module(tmp_path, "slips-b", _net(tmp_path, "slips-b"))
+    b.mode = "train"
+    b.channels = {"p2p_gopy": object()}
+    b._p2p_connected = True
+    inbox = [{"data": json.dumps(wire)}]
+    b.get_msg = lambda channel: inbox.pop() if inbox else None
+    b.window_size_seconds = WIN
+    b.training_window_start = fnm.time.time() + 10 * WIN  # no close now
+    monkeypatch.setattr(fnm.time, "sleep", lambda s: None)
+    assert b.main() is False
+    got = b.peer_scalers["slips-a"]
+    assert np.array_equal(got["mean"], a.scaler.mean_)
+    assert np.array_equal(got["var"], a.scaler.var_)
+    assert set(b.peer_models["slips-a"]) == set(
+        a.model.weights_for_sharing()
+    ) | {"timestamp"}
+
+
+def test_a_new_model_without_a_scaler_clears_the_stored_one(tmp_path):
+    m = _peer_module(tmp_path, "slips-a")
+    sc, _ = _fitted_scaler(np.random.default_rng(3), 20, 0.0, 1.0)
+    shared = {"fc1_weight": [[1.0, 2.0]], "fc1_bias": [0.5]}
+    m.handle_p2p_model(
+        {
+            "peer_id": "slips-b",
+            "shared": shared,
+            "scaler": fnm.scaler_payload(sc),
+        }
+    )
+    assert m.peer_scalers["slips-b"] is not None
+    m.handle_p2p_model({"peer_id": "slips-b", "shared": shared})
+    assert m.peer_scalers["slips-b"] is None
+
+
+def _scaler_merge(tmp_path, rule):
+    """A real _train_batch with merge_scaler on and one peer whose model and
+    scaler arrived over P2P; records each training pass's input."""
+    m = _trainable(tmp_path)
+    m.merge_scaler = True
+    m.merge_rule = rule
+    peer_scaler, _ = _fitted_scaler(np.random.default_rng(4), 40, 3.0, 2.0)
+    peer = _net(tmp_path, "slips-b").weights_for_sharing()
+    peer = {k: v + 0.05 for k, v in peer.items()}
+    m.handle_p2p_model(
+        {
+            "peer_id": "slips-b",
+            "model_class": "random_projection_mlp",
+            "shared": {k: v.tolist() for k, v in peer.items()},
+            "scaler": fnm.scaler_payload(peer_scaler),
+            "timestamp": 1.0,
+        }
+    )
+    seen = {}
+    real_fit = m.fit_incremental_model
+
+    def spy_fit(x, y, classes=None, train_target="local"):
+        seen[train_target] = np.array(x, copy=True)
+        return real_fit(x, y, classes=classes, train_target=train_target)
+
+    m.fit_incremental_model = spy_fit
+    raw = np.stack(m.training_buffer_x)
+    seen["after_local"] = {}
+    real_send = m.send_model_to_peers
+
+    def spy_send(head=None, shared=None):
+        seen["after_local"] = {k: v.clone() for k, v in shared.items()}
+        return real_send(head=head, shared=shared)
+
+    m.send_model_to_peers = spy_send
+    m._train_batch()
+    return m, peer, peer_scaler, raw, seen
+
+
+@pytest.mark.parametrize("rule", ["average", "proximity"])
+def test_merge_scaler_pools_the_scalers_with_the_rule_weights(tmp_path, rule):
+    """The merged model gets own + peer scalers pooled with the merge rule's
+    weights for the two models (average 1/2, proximity 62/38), and its
+    fine-tune trains on the batch scaled with it; the local model keeps the
+    own scaler, its fine-tune on the own scaling."""
+    m, peer, peer_scaler, raw, seen = _scaler_merge(tmp_path, rule)
+    assert m._using_merged_model and m.merged_scaler is not None
+    own_flat = torch.cat(
+        [seen["after_local"][k].reshape(-1) for k in sorted(peer)]
+    )
+    peer_flat = torch.cat([peer[k].reshape(-1) for k in sorted(peer)])
+    weights = fnm.MERGE_WEIGHTS[rule](own_flat, {"slips-b": peer_flat}, {})
+    want_own = {"average": 0.5, "proximity": 1 / (1 + np.exp(-0.5))}[rule]
+    assert weights["own"] == pytest.approx(want_own)
+    w = weights["own"]
+    mean = w * m.scaler.mean_ + (1 - w) * peer_scaler.mean_
+    var = (
+        w * (m.scaler.var_ + m.scaler.mean_**2)
+        + (1 - w) * (peer_scaler.var_ + peer_scaler.mean_**2)
+        - mean**2
+    )
+    assert np.allclose(m.merged_scaler.mean_, mean)
+    assert np.allclose(m.merged_scaler.var_, var)
+    assert m.scaler.n_samples_seen_ == 10  # own scaler: own data only
+    assert np.allclose(seen["local_head"], m.scaler.transform(raw))
+    assert np.allclose(seen["merged"], m.merged_scaler.transform(raw))
+    assert not np.allclose(seen["merged"], seen["local_head"])
+    out = tmp_path / "slips-a"
+    log = (out / "merging_data.log").read_text()
+    line = re.search(r"  scaler \| weights own:([\d.]+) slips-b:([\d.]+)", log)
+    assert float(line.group(1)) == pytest.approx(w, abs=1e-4)
+    assert "peer=" not in line.group(0)
+    (row,) = [
+        json.loads(ln)
+        for ln in (out / "merged_scaler.jsonl").read_text().splitlines()
+    ]
+    assert row["merge"] == 1 and row["window"] == 3
+    assert np.allclose(row["mean"], m.merged_scaler.mean_)
+    assert row["weights"]["own"] == pytest.approx(w)
+
+
+def test_with_merge_scaler_a_peer_without_a_scaler_is_skipped(tmp_path):
+    m = _merge_ready(tmp_path, False)
+    m.merge_scaler = True
+    m.scaler, _ = _fitted_scaler(np.random.default_rng(5), 20, 0.0, 1.0)
+    _receive(m, "slips-b", _net(tmp_path, "slips-b").weights_for_sharing())
+    m.trigger_merge()
+    assert m.merge_count == 0 and not m._using_merged_model
+
+
+def test_without_merge_scaler_the_merged_model_uses_the_own_scaler(tmp_path):
+    m = _trainable(tmp_path)
+    m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
+    m._train_batch()
+    assert m._using_merged_model and m.merged_scaler is None
+    assert m._scaler_of(m.merged_model) is m.scaler
+    assert (tmp_path / "slips-a" / "merged_scaler.jsonl").read_text() == ""
+
+
+def test_each_model_is_scored_with_its_own_scaler(tmp_path):
+    """While the merged model serves, the test cell scores it on features
+    scaled with the pooled scaler and the local shadow with the own one;
+    the so-far evaluation and the live path do the same; the next training
+    discards the pooled scaler with the merged model."""
+    m, *_ = _scaler_merge(tmp_path, "average")
+    assert m._scaler_of(m.merged_model) is m.merged_scaler
+    assert m._scaler_of(m.model) is m.scaler
+    m.is_preprocessor_fitted = True
+    used = []
+    real_scale = m._scale
+
+    def spy_scale(x_raw, scaler=None):
+        used.append(scaler if scaler is not None else m.scaler)
+        return real_scale(x_raw, scaler)
+
+    m._scale = spy_scale
+    m._extract_flow_features = lambda flow: [1.0] * 18
+    m._get_simulated_gt = lambda flow: BEN
+    blank = fnm.FederatedNetworkModule._blank_test_statistics
+    cell = {
+        "scorable": True,
+        "flows": {"u1": {"type_": "conn"}, "u2": {"type_": "arp"}},
+        "tested": set(),
+        "test": {
+            k: blank()
+            for k in ("main", "conn_main", "shadow_local", "conn_shadow")
+        },
+        "preds": {},
+    }
+    m._test_cell(cell)
+    assert used == [m.merged_scaler, m.scaler]
+    assert cell["merged_served"]
+    used.clear()
+    m._scaled_features([("u1", {"type_": "conn"})])
+    assert used == [m.merged_scaler]
+    used.clear()
+    x = np.ones((3, 18), dtype=np.float32)
+    m._sofar_predict(m.merged_model, x)
+    m._sofar_predict(m.model, x)
+    assert used == [m.merged_scaler, m.scaler]
+    m.training_buffer_x = list(np.ones((4, 18), dtype=np.float32))
+    m.training_buffer_y = [MAL, BEN, MAL, BEN]
+    m.training_buffer_ids = [f"v{i}" for i in range(4)]
+    m.peer_models.clear()
+    m._train_batch()
+    assert m.merged_model is None and m.merged_scaler is None
+
+
+def test_the_final_merged_scaler_artifact_is_the_pooled_one(tmp_path):
+    m, *_ = _scaler_merge(tmp_path, "average")
+    m.model_path = str(tmp_path / "store" / "model.bin")
+    m.preprocess_path = str(tmp_path / "store" / "scaler.bin")
+    m._save_final_merged_model()
+    with open(m.preprocess_path, "rb") as fh:
+        stored = pickle.load(fh)
+    assert np.allclose(stored.mean_, m.merged_scaler.mean_)
+    assert not np.allclose(stored.mean_, m.scaler.mean_)

@@ -31,7 +31,9 @@ scaled with it. Local training and both fine-tunes reuse that scaled batch and
 never refit; every prediction is transform-only. So no flow is ever
 scored with a scaler that has seen it. Each fit appends a line to
 `scaler_stats.jsonl` (window, rows, samples seen, per-feature mean / var /
-scale) for comparing the peers' scalers.
+scale) for comparing the peers' scalers. With `merge_scaler` the merged model
+gets its own scaler, pooled from the own and the peers' scalers at each merge
+(see the option below); the local model always keeps the own one.
 
 ### Training Buffers
 
@@ -198,8 +200,9 @@ under `--- New local model (window_N) ---` headers):
 > features as `float32`, GT, conn flag; flows read before the first fit
 > included; no model snapshots). Right after the local training and the merge
 > of a training close, each model of that close is scored on all of them with
-> the current shared scaler and the same feature extraction as the test
-> streams. One JSON object per (close, model, scope):
+> that model's scaler (the own one; the pooled one for the merged model with
+> `merge_scaler`) and the same feature extraction as the test streams. One
+> JSON object per (close, model, scope):
 >
 > ```
 > {"window": 3, "model": "local", "scope": "all", "flows": 19, "gt_mal": 5, "gt_ben": 14, "tp": 5, "fp": 2, "tn": 12, "fn": 0}
@@ -240,7 +243,8 @@ Federation internals:
 
 | File | Content |
 |------|---------|
-| `merging_data.log` | per merge: `peer=<name> | L2_dist | L2_norm | n_params`, plus `merged_vs_own | L2_dist | L2_norm | differs` |
+| `merging_data.log` | per merge: `peer=<name> | L2_dist | L2_norm | n_params`, plus `merged_vs_own | L2_dist | L2_norm | differs` (and a `scaler | weights …` line with `merge_scaler`) |
+| `merged_scaler.jsonl` | with `merge_scaler`, one row per merge: the merged model's pooled scaler (`merge`, `window`, `weights` per candidate, `features`, `mean`, `var`, `scale`); empty otherwise |
 | `training_network.log` | timeline events (`TRAIN_START/DONE`, `MODEL_SENT`, `MERGE_START`, `ALERT`) |
 | `weights/merge_XXXX.npz` | per merge: flat fc1 vectors (`float32`) — `own` (pre-merge), `merged`, `peer_<name>` per received model (+ biases); consumed by the UI for weight norms, cosine correlations and 3D-PCA trajectories |
 
@@ -263,6 +267,7 @@ federated_network_module:
   # run_seed: 2   # optional, for repeat runs (see below)
   # learning_rate: 0.01   # optional, Adam step size (see below)
   # merge_head: false      # optional, also share + merge the head (see below)
+  # merge_scaler: false    # optional, also share the scaler; the merged model gets the pooled one (see below)
   # finetune_head: true    # false = no fine-tune at all (see below)
   # finetune_fc_layers: true  # fine-tune fc1 + head on both models (false = head only, see below)
   # merge_finetune_adam: copy  # Adam state the fine-tunes start from (fresh = empty, see below)
@@ -298,6 +303,35 @@ local model still trains only from the previous local model, and the merged
 model serves one window and is discarded. `merging_data.log` gets a
 `merge_head=True` line, and its distances and `weights/merge_*.npz` vectors
 then include the head parameters.
+
+`merge_scaler` (optional, default false) also shares the scaler: each peer
+sends, with its model, the scaler that model trained with as its per-feature
+mean `μ_i` and variance `σ_i²` (`"scaler": {"mean", "var"}` in the P2P model
+message, about 1 KB next to the model's ~120 KB). Each merge pools the own and
+the merged peers' statistics with the merge rule's weight `w_i` for each model
+(summing to 1), pooling the variances and never averaging standard deviations:
+
+```
+μ  = Σ w_i μ_i
+σ² = Σ w_i (σ_i² + μ_i²) − μ²      (computed as Σ w_i (σ_i² + (μ_i − μ)²))
+```
+
+`w_i` is what the rule gives each candidate (`MERGE_WEIGHTS` in the module,
+one function per rule): average 1/(1+peers), trust_weighted the normalized
+trust, distance_weighted own 1/2 + the distance split, and the per-layer rules
+(proximity, mean_with_closest) computed over all shared tensors as one vector.
+With one peer that equals their per-layer weights (proximity: 62/38). The
+merged model gets this pooled scaler: its fine-tune trains on the batch scaled
+with it, and its predictions (test streams, live scoring, `sofar_test.jsonl`,
+the final merged scaler at `preprocess_store_path`) use it. The local model
+keeps the own scaler, and the pooled one is discarded with the merged model. A
+received scaler is validated (18 finite means, 18 finite non-negative
+variances); a peer whose model came without a valid scaler is skipped from
+the merge, so the model and the scaler always pool the same peers. Every merge
+adds a line to `merging_data.log`, `  scaler | weights own:<w> <peer>:<w> … |
+mean_shift_sd=… | scale_ratio=<min>-<max>` (largest shift of the pooled mean in
+own standard deviations; pooled / own scale per feature), and a
+`merged_scaler.jsonl` row (merge, window, weights, pooled mean / var / scale).
 
 `finetune_fc_layers` (default true) makes the fine-tune after the merge point
 train the fc (shared) layers + head instead of the head alone, on the local and on the merged
