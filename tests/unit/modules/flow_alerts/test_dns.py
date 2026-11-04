@@ -3,17 +3,18 @@
 """Unit test for modules/flow_alerts/dns.py"""
 
 from dataclasses import asdict
+import inspect
+import json
+from unittest.mock import (
+    Mock,
+    patch,
+)
+
+from numpy import arange
+import pytest
 
 from slips_files.core.flows.zeek import DNS
-from tests.unit.common_test_utils import get_mock_coro
 from tests.module_factory import ModuleFactory
-from numpy import arange
-from unittest.mock import (
-    patch,
-    Mock,
-)
-import pytest
-import json
 
 # dummy params used for testing
 profileid = "profile_192.168.1.1"
@@ -553,7 +554,7 @@ def test_check_high_entropy_dns_answers_no_call(
 async def test_analyze_new_flow_msg(test_case, expected_calls):
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.connections_checked_in_dns_conn_timer_thread = []
-    dns.check_dns_without_connection = get_mock_coro(True)
+    dns.check_dns_without_connection = Mock(return_value=True)
     dns.check_high_entropy_dns_answers = Mock()
     dns.check_invalid_dns_answers = Mock()
     dns.detect_dga = Mock()
@@ -810,65 +811,83 @@ def get_dns_obj():
     return dns
 
 
-async def test_check_dns_without_connection_shouldnt_detect():
+@pytest.mark.parametrize(
+    (
+        "should_detect, timeout_reached, answer_contacted, waited, "
+        "expected_result, expected_evidence, expected_queued"
+    ),
+    [
+        (False, True, False, False, False, False, False),
+        (True, False, False, False, False, False, False),
+        (True, True, True, False, False, False, False),
+        (True, True, False, False, False, False, True),
+        (True, True, False, True, True, True, False),
+    ],
+)
+def test_check_dns_without_connection(
+    should_detect: bool,
+    timeout_reached: bool,
+    answer_contacted: bool,
+    waited: bool,
+    expected_result: bool,
+    expected_evidence: bool,
+    expected_queued: bool,
+) -> None:
+    """Test decision logic of check_dns_without_connection."""
     dns = get_dns_obj()
-    # Test when should_detect_dns_without_conn returns False
-    dns.should_detect_dns_without_conn.return_value = False
-    result = await dns.check_dns_without_connection(
-        "profileid", "twid", "flow"
+    dns.should_detect_dns_without_conn.return_value = should_detect
+    dns.is_interface_timeout_reached.return_value = timeout_reached
+    dns.is_any_flow_answer_contacted.return_value = answer_contacted
+
+    result = dns.check_dns_without_connection(
+        "profileid", "twid", "flow", waited_for_the_conn=waited
     )
-    assert result is False
+    assert result is expected_result
+    if expected_evidence:
+        dns.set_evidence.dns_without_conn.assert_called_once_with("twid", "flow")
+    else:
+        dns.set_evidence.dns_without_conn.assert_not_called()
+    if expected_queued:
+        dns.pending_dns_without_conn.put.assert_called_once_with(
+            ("profileid", "twid", "flow")
+        )
 
 
-async def test_check_dns_without_connection_interface_timeout_not_reached():
-    dns = get_dns_obj()
-    # Test when is_interface_timeout_reached returns False
-    dns.should_detect_dns_without_conn.return_value = True
-    dns.is_interface_timeout_reached.return_value = False
-    result = await dns.check_dns_without_connection(
-        "profileid", "twid", "flow"
+def test_check_dns_without_connection_is_synchronous() -> None:
+    """Verify check_dns_without_connection is not a coroutine function."""
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    assert not inspect.iscoroutinefunction(dns.check_dns_without_connection)
+
+
+def test_check_dns_without_connection_of_all_pending_flows_synchronous() -> None:
+    """
+    Pending flows evaluated synchronously on shutdown and emit evidence.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    flow = DNS(
+        starttime="1726570879.5997488",
+        uid="5678",
+        saddr="192.168.1.100",
+        daddr="1.1.1.1",
+        query="example.com",
+        qclass_name="",
+        dport="53",
+        sport="54321",
+        proto="udp",
+        qtype_name="A",
+        rcode_name="NOERROR",
+        answers=["203.0.113.99"],
+        TTLs="",
     )
-    assert result is False
+    dns.pending_dns_without_conn.put(("p1", "tw1", flow))
+    dns.should_detect_dns_without_conn = Mock(return_value=True)
+    dns.has_flow_answer_contacted = Mock(return_value=True)
+    dns.set_evidence.dns_without_conn = Mock()
 
+    dns.check_dns_without_connection_of_all_pending_flows()
 
-async def test_check_dns_without_connection_flow_answer_contacted_true():
-    dns = get_dns_obj()
-    # Test when is_any_flow_answer_contacted returns True
-    dns.should_detect_dns_without_conn.return_value = True
-    dns.is_interface_timeout_reached.return_value = True
-    dns.is_any_flow_answer_contacted.return_value = True
-    result = await dns.check_dns_without_connection(
-        "profileid", "twid", "flow"
-    )
-    assert result is False
-
-
-async def test_check_dns_without_connection_waited_for_the_conn_false():
-    dns = get_dns_obj()
-    # Test when waited_for_the_conn is False
-    dns.should_detect_dns_without_conn.return_value = True
-    dns.is_interface_timeout_reached.return_value = True
-    dns.is_any_flow_answer_contacted.return_value = False
-    result = await dns.check_dns_without_connection(
-        "profileid", "twid", "flow", waited_for_the_conn=False
-    )
-    assert result is False
-    dns.pending_dns_without_conn.put.assert_called_once_with(
-        ("profileid", "twid", "flow")
-    )
-
-
-async def test_check_dns_without_connection_waited_for_the_conn_true():
-    dns = get_dns_obj()
-    # Test when waited_for_the_conn is True
-    dns.should_detect_dns_without_conn.return_value = True
-    dns.is_interface_timeout_reached.return_value = True
-    dns.is_any_flow_answer_contacted.return_value = False
-    result = await dns.check_dns_without_connection(
-        "profileid", "twid", "flow", waited_for_the_conn=True
-    )
-    assert result is True
-    dns.set_evidence.dns_without_conn.assert_called_once_with("twid", "flow")
+    dns.set_evidence.dns_without_conn.assert_called_once_with("tw1", flow)
+    assert dns.pending_dns_without_conn.qsize() == 0
 
 
 def test_check_dns_without_connection_timeout_empty_queue():
@@ -951,7 +970,22 @@ def test_check_dns_without_connection_timeout_should_stop():
     dns.get_dns_flow_from_queue.assert_not_called()
 
 
-def test_check_pending_flows_timeout():
+@pytest.mark.parametrize(
+    "time_diff, expected_waited, should_call_check, expected_back_to_queue_len",
+    [
+        (35, True, True, 0),
+        (10, False, True, 0),
+        (20, False, True, 0),
+        (5, None, False, 1),
+    ],
+)
+def test_check_pending_flows_timeout(
+    time_diff: float,
+    expected_waited: bool | None,
+    should_call_check: bool,
+    expected_back_to_queue_len: int,
+) -> None:
+    """Test timeout checking branches for pending DNS flows."""
     reference_flow = DNS(
         starttime="1726568479.5997488",
         uid="1234",
@@ -968,7 +1002,6 @@ def test_check_pending_flows_timeout():
         TTLs="",
     )
 
-    # This will be 10 mins after the reference_flow
     dns_flow_to_check = DNS(
         starttime="1726570879.5997488",
         uid="5678",
@@ -991,14 +1024,21 @@ def test_check_pending_flows_timeout():
     )
 
     with patch(
-        "slips_files.common.slips_utils.utils.get_time_diff", return_value=10
+        "slips_files.common.slips_utils.utils.get_time_diff", return_value=time_diff
     ) as mock_time_diff:
         back_to_queue = dns.check_pending_flows_timeout(reference_flow)
         mock_time_diff.assert_called_once_with(
             dns_flow_to_check.starttime, reference_flow.starttime, "minutes"
         )
 
-    dns.check_dns_without_connection.assert_called_once_with(
-        "profile5678", "twid_123", dns_flow_to_check, waited_for_the_conn=False
-    )
-    assert back_to_queue == []
+    if should_call_check:
+        dns.check_dns_without_connection.assert_called_once_with(
+            "profile5678",
+            "twid_123",
+            dns_flow_to_check,
+            waited_for_the_conn=expected_waited,
+
+        )
+    else:
+        dns.check_dns_without_connection.assert_not_called()
+    assert len(back_to_queue) == expected_back_to_queue_len

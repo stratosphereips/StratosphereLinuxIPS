@@ -255,10 +255,10 @@ class DNS(IFlowalertsAnalyzer):
             # this is not a DNS without resolution
             return True
 
-    def check_dns_without_connection_of_all_pending_flows(self):
-        """should be called before shutting down, to check all the pending
-        flows in the pending_dns_without_conn queue before stopping slips,
-        doesnt matter if the 30 mins passed or not"""
+    def check_dns_without_connection_of_all_pending_flows(self) -> None:
+        """
+        Check all remaining flows in pending_dns_without_conn before stopping.
+        """
         while self.pending_dns_without_conn.qsize() > 0:
             try:
                 # flowalerts is closing here. there's no chance that
@@ -381,14 +381,24 @@ class DNS(IFlowalertsAnalyzer):
         except Exception:
             self.print_traceback()
 
-    async def check_dns_without_connection(
-        self, profileid, twid, flow, waited_for_the_conn=False
+    def check_dns_without_connection(
+        self,
+        profileid: str,
+        twid: str,
+        flow: Any,
+        waited_for_the_conn: bool = False,
     ) -> bool:
         """
-        Makes sure all cached DNS answers are there in contacted_ips
-        :kwarg waited_for_the_conn: if True, it means we already waited 30
-        mins in zeek time for the conn of this dns to arrive, and it didnt.
-        if False, we wait 30 mins zeek time for it to arrive
+        Check that cached DNS answers exist in contacted IPs.
+
+        Parameters:
+            profileid: Profile ID of the host.
+            twid: Timewindow ID.
+            flow: DNS flow object to inspect.
+            waited_for_the_conn: Whether the timeout has already elapsed.
+
+        Returns:
+            True if evidence was set, False otherwise.
         """
         if not self.should_detect_dns_without_conn(flow):
             return False
@@ -699,9 +709,7 @@ class DNS(IFlowalertsAnalyzer):
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
 
-        self.flowalerts.create_task(
-            self.check_dns_without_connection, profileid, twid, flow
-        )
+        self.check_dns_without_connection(profileid, twid, flow)
 
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
