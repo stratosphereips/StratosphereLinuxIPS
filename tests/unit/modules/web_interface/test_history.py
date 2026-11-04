@@ -1180,3 +1180,73 @@ def test_metric_sampling_replaces_reused_process_identity(tmp_path: Path) -> Non
     assert sample["cpu_percent"] == 5
     assert sample["memory_mb"] == 10
     assert collector._processes[100] is current
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_restore_host_inventory_is_incremental_and_preserves_identity(tmp_path: Path, complete: bool) -> None:
+    """Restore missing hosts from bounded findings without copying false identities.
+
+    Parameters:
+        tmp_path: Isolated findings and web databases.
+        complete: Complete startup recovery or one bounded background batch.
+    """
+    _factory = ModuleFactory()
+    history_path = tmp_path / "history.sqlite"
+    source_path = tmp_path / "flows.sqlite"
+    initialize_history(history_path)
+    with connect_history(history_path) as connection:
+        connection.execute("INSERT INTO host_snapshots VALUES ('192.0.2.1',1,?)", (json.dumps({"ip":"192.0.2.1","hostname":"Known host","mac":"00:11:22:33:44:55"}),))
+    with sqlite3.connect(source_path) as connection:
+        connection.executescript("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL);CREATE TABLE alerts(alert_id TEXT PRIMARY KEY,ip_alerted TEXT,alert_time TEXT);")
+        connection.executemany("INSERT INTO evidence VALUES (?,?,?)", [("known","192.0.2.1",100),("invalid","not-an-ip",101),("new","10.0.0.2",102)])
+        connection.execute("INSERT INTO alerts VALUES ('alert','2001:db8::1','103')")
+    with patch("modules.web_interface.history.FLOW_INDEX_BATCH_SIZE", 2):
+        processed = HistoryCollector.restore_host_inventory(history_path, source_path, complete=complete)
+    assert processed == (4 if complete else 3)
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == (0 if complete else 1)
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = {row["ip"]:row for row in connection.execute("SELECT * FROM host_snapshots")}
+    assert set(rows) == {"192.0.2.1","10.0.0.2","2001:db8::1"}
+    assert rows["192.0.2.1"]["observed_at"] == 100
+    assert json.loads(rows["192.0.2.1"]["data"])["hostname"] == "Known host"
+    assert rows["10.0.0.2"]["observed_at"] == 102
+    with sqlite3.connect(source_path) as connection:
+        connection.execute("INSERT INTO evidence VALUES ('later','10.0.0.3',104)")
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == 1
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == 0
+
+
+@pytest.mark.parametrize("change", ["empty_inventory", "reused_rowid", "replaced_database"])
+def test_restore_host_inventory_rebuilds_after_resets(tmp_path: Path, change: str) -> None:
+    """Recover data after a cache reset or a different source reuses row IDs.
+
+    Parameters:
+        tmp_path: Isolated source and derived host inventory.
+        change: Cache or source replacement to simulate.
+    """
+    _factory = ModuleFactory()
+    history_path = tmp_path / "history.sqlite"
+    source_path = tmp_path / "flows.sqlite"
+    initialize_history(history_path)
+    with sqlite3.connect(source_path) as connection:
+        connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+        connection.execute("INSERT INTO evidence VALUES ('one','10.0.0.1',100)")
+    assert HistoryCollector.restore_host_inventory(history_path, source_path, complete=True) == 1
+    if change == "empty_inventory":
+        with connect_history(history_path) as connection:
+            connection.execute("DELETE FROM host_snapshots")
+    else:
+        if change == "replaced_database":
+            old_path = tmp_path / "old.sqlite"
+            source_path.rename(old_path)
+        with sqlite3.connect(source_path) as connection:
+            if change == "replaced_database":
+                connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+            else:
+                connection.execute("DELETE FROM evidence")
+            connection.execute("INSERT INTO evidence VALUES ('two','10.0.0.2',200)")
+    assert HistoryCollector.restore_host_inventory(history_path, source_path, complete=True) == 1
+    with connect_history(history_path, read_only=True) as connection:
+        ips = {row[0] for row in connection.execute("SELECT ip FROM host_snapshots")}
+    assert ("10.0.0.1" if change == "empty_inventory" else "10.0.0.2") in ips

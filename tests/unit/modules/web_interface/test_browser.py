@@ -16,9 +16,82 @@ from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 from tests.unit.modules.web_interface.test_server import _network_scope_reader, _group_records_reader
-from modules.web_interface.history import connect_history
+from modules.web_interface.history import connect_history, HistoryCollector
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_hosts_tab_shows_recovered_finding_only_hosts(tmp_path: Path, theme: str) -> None:
+    """Render retained host findings after identity and raw-flow caches are lost.
+
+    Parameters:
+        tmp_path: Isolated recovered host inventory and real API data.
+        theme: Browser theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    reader = _network_scope_reader(tmp_path)
+    reader.saved_view = True
+    with connect_history(reader.history_path) as connection:
+        connection.execute("DELETE FROM host_snapshots")
+        connection.execute("DELETE FROM flow_index")
+    HistoryCollector.restore_host_inventory(reader.history_path,reader.sqlite_path,complete=True)
+    assets = Path("modules/web_interface")
+    queries: list[dict[str,list[str]]] = []
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve real host queries against the repaired inventory.
+
+        Parameters:
+            route: Browser request to fulfill from isolated data.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/","/app.js","/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/hosts":
+            query = parse_qs(parsed.query)
+            queries.append(query)
+            with patch("modules.web_interface.server.time.time", return_value=2_000_000_000):
+                route.fulfill(json=reader.hosts(query))
+        elif parsed.path == "/api/host-names":
+            route.fulfill(json={"names":{}})
+        else:
+            route.fulfill(status=503,json={"error":"Isolated host recovery fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome",headless=True)
+        try:
+            page = browser.new_page(viewport={"width":1800,"height":1000})
+            page.on("pageerror",lambda error: errors.append(str(error)))
+            page.route("**/*",respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof loadHosts === 'function'")
+            page.evaluate("""async theme => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+                setTheme(theme);state.activeTab='hosts';state.networkOnly=false;
+                document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='hosts'));
+                byId('hosts-range').value='7d';await loadHosts();clearError();
+            }""",theme)
+            table = page.locator("#hosts-table")
+            assert table.locator("tbody tr[data-clickable]").count() == 2
+            assert "192.168.1.22" in table.inner_text()
+            assert page.locator("#hosts-badge").inner_text() == "2"
+            assert "2 of 2" in page.locator("#hosts-list-status").inner_text()
+            page.get_by_role("button",name="Hosts filters",exact=True).click()
+            page.locator("#hosts-threat-chips").get_by_role("button",name="Low+",exact=False).click()
+            page.wait_for_function("!state.requests.has('hosts')")
+            assert queries[-1]["threat"] == ["low_or_more"]
+            assert table.locator("tbody tr[data-clickable]").count() == 2
+            page.keyboard.press("Escape")
+            page.evaluate("async () => {state.deviceView=false;await loadHosts();}")
+            assert table.locator("tbody tr[data-clickable]").count() == 2
+            assert "device" not in queries[-1]
+            page.screenshot(path=f"output/issue-2167-hosts-{theme}.png")
+            assert not errors, errors
+        finally:
+            browser.close()
 
 
 @pytest.mark.parametrize("theme,width", [("light", 1100), ("dark", 1800)])

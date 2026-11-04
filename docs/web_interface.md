@@ -1422,6 +1422,20 @@ table, so the next selection starts a new investigation.
 
 ### Hosts
 
+Host activity includes retained evidence and alerts as well as traffic. Recent
+findings keep their host visible after raw flows expire or Redis profiles are
+cleared. Host and Device views use the same activity timestamps and capture
+clock; refreshing an identity cache does not move an old finding into a new
+network connection.
+
+When opening a run or `--view` output, Slips repairs missing inventory entries
+from that output's saved findings. Recovery preserves existing names and MACs,
+uses original finding times, and reads batches of at most 5,000 records. The
+web worker continues incrementally during its normal identity refreshes, with
+fixed per-table checkpoints. Recovery updates only the derived web inventory;
+it does not rerun analysis or modify the saved findings. Browser filter requests
+use the repaired index rather than rebuilding it on every refresh.
+
 The Hosts tab opens as a compact inventory sized to the available browser height. It shows every host in the first server page, then loads more pages automatically as you scroll until every host matching the selected time range and filters is visible. **Load more** is also available in the footer. The footer shows how many of the matching hosts have loaded. Sorting stays on the server. Search stays visible; the filter popup contains threat and scope chips, review, time range, and **Only with alerts**; these filter the inventory, and the alerts-only filter is applied before server paging. **Columns** reveals hostname, TI feeds, and current score when needed. The table combines MAC with vendor and threat with the past peak score, including a marker for the alert threshold. **Export CSV** exports the loaded rows.
 All inventory headings, including the optional TI feeds column, sort the matching hosts before paging. TI feed sorting reads cached feed names only when that column is selected.
 The first refreshed page is displayed immediately; revalidating additional

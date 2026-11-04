@@ -81,6 +81,7 @@ from modules.web_interface.network_scope import (
 from modules.web_interface.history import (
     BACKEND_DISCONNECTED_KEY,
     BACKEND_HEARTBEAT_KEY,
+    HistoryCollector,
     NETWORK_SCOPES_KEY,
     RUNTIME_RESOURCES_KEY,
     connect_history,
@@ -312,6 +313,9 @@ class RunDataReader:
         self._overview_counts_cache: Dict[Any, Any] = {}
         self._overview_counts_lock = threading.Lock()
         initialize_history(self.history_path)
+        HistoryCollector.restore_host_inventory(
+            self.history_path, self.sqlite_path, complete=True
+        )
         self.score_mode, self.alert_threshold = self._detector_score_settings()
 
     def _metadata_snapshot(self, suffix: str) -> Optional[Path]:
@@ -2976,11 +2980,7 @@ class RunDataReader:
             )
         with self._connect_history() as history:
             latest_host = (
-                None
-                if wall_clock
-                else history.execute(
-                    "SELECT MAX(event_time) FROM flow_index"
-                ).fetchone()[0]
+                None if wall_clock else self._host_latest_event(history)
             )
             if not wall_clock and not latest_host:
                 latest_host = history.execute(
@@ -3045,26 +3045,26 @@ class RunDataReader:
                 "SELECT ip FROM host_snapshots "
                 f"WHERE host_observed_at(ip) {bounds}"
             )
-            for table, ip_column, time_column in (
-                ("evidence", "profile_ip", "evidence_time"),
-                ("alerts", "ip_alerted", "alert_time"),
-            ):
-                columns = {
-                    str(row[1])
-                    for row in connection.execute(
-                        f"PRAGMA run_db.table_info({table})"
-                    )
-                }
-                if {ip_column, time_column} <= columns:
-                    timestamp = (
-                        time_column
-                        if table == "evidence"
-                        else f"CAST({time_column} AS REAL)"
-                    )
-                    sources.append(
-                        f"SELECT {ip_column} FROM scoped_{table} "
-                        f"WHERE {timestamp} {bounds}"
-                    )
+        for table, ip_column, time_column in (
+            ("evidence", "profile_ip", "evidence_time"),
+            ("alerts", "ip_alerted", "alert_time"),
+        ):
+            columns = {
+                str(row[1])
+                for row in connection.execute(
+                    f"PRAGMA run_db.table_info({table})"
+                )
+            }
+            if {ip_column, time_column} <= columns:
+                timestamp = (
+                    time_column
+                    if table == "evidence"
+                    else f"CAST({time_column} AS REAL)"
+                )
+                sources.append(
+                    f"SELECT {ip_column} FROM scoped_{table} "
+                    f"WHERE {timestamp} {bounds}"
+                )
         return " UNION ".join(sources)
 
     def response_metadata(self) -> Dict[str, Any]:
@@ -5915,6 +5915,59 @@ class RunDataReader:
             item["device_id"] = key
             item["device_ips"] = sorted(members.get(key, [ip]))
 
+    def _host_latest_event(self, connection: sqlite3.Connection) -> float:
+        """Resolve the Hosts clock from live time or retained activity.
+
+        Parameters:
+            connection: History connection for the active network scope.
+
+        Returns:
+            Current live time, or the newest saved activity/snapshot timestamp.
+        """
+        input_type = str(
+            self.redis.hget("analysis", "input_type") or ""
+        ).lower()
+        if input_type in {"interface", "stdin", "cyst"} and not (
+            getattr(self, "saved_view", False)
+            or getattr(self, "archive_mode", False)
+        ):
+            return time.time()
+        self._attach_run_database(connection)
+        latest = float(
+            connection.execute(
+                "SELECT MAX(event_time) FROM flow_index"
+            ).fetchone()[0]
+            or 0
+        )
+        for table, timestamp in (
+            ("evidence", "evidence_time"),
+            ("alerts", "alert_time"),
+        ):
+            columns = {
+                str(row[1])
+                for row in connection.execute(
+                    f"PRAGMA run_db.table_info({table})"
+                )
+            }
+            if timestamp in columns:
+                expression = (
+                    timestamp
+                    if table == "evidence"
+                    else f"CAST({timestamp} AS REAL)"
+                )
+                value = connection.execute(
+                    f"SELECT MAX({expression}) FROM scoped_{table}"
+                ).fetchone()[0]
+                latest = max(latest, float(value or 0))
+        if not latest:
+            latest = float(
+                connection.execute(
+                    "SELECT MAX(observed_at) FROM host_snapshots"
+                ).fetchone()[0]
+                or 0
+            )
+        return latest
+
     def _host_last_seen_expression(
         self, connection: sqlite3.Connection, current_network: bool
     ) -> str:
@@ -5934,26 +5987,23 @@ class RunDataReader:
             "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
             f"WHERE fi.dst_ip=hs.ip), {missing}))"
         )
-        if not current_network:
-            return f"COALESCE(NULLIF({flow_seen}, {missing}), hs.observed_at)"
-        capture = self._current_header_network()
-        sightings = HostProfileStore.observation_times(
-            getattr(
-                self,
-                "host_profiles_path",
-                Path("permanent/host_profiles/hosts.sqlite"),
-            ),
-            [
-                capture.get("network_id", ""),
-            ],
-        )
-        connection.create_function(
-            "host_observed_at", 1, lambda ip: sightings.get(ip)
-        )
-        expressions = [
-            flow_seen,
-            f"COALESCE(host_observed_at(hs.ip), {missing})",
-        ]
+        expressions = [flow_seen]
+        if current_network:
+            capture = self._current_header_network()
+            sightings = HostProfileStore.observation_times(
+                getattr(
+                    self,
+                    "host_profiles_path",
+                    Path("permanent/host_profiles/hosts.sqlite"),
+                ),
+                [capture.get("network_id", "")],
+            )
+            connection.create_function(
+                "host_observed_at", 1, lambda ip: sightings.get(ip)
+            )
+            expressions.append(f"COALESCE(host_observed_at(hs.ip), {missing})")
+        elif getattr(self, "sqlite_path", None) is not None:
+            self._attach_run_database(connection)
         for table, ip_column, time_column in (
             ("evidence", "profile_ip", "evidence_time"),
             ("alerts", "ip_alerted", "alert_time"),
@@ -5974,7 +6024,12 @@ class RunDataReader:
                     f"COALESCE((SELECT MAX({observed_time}) FROM scoped_{table} "
                     f"WHERE {ip_column}=hs.ip), {missing})"
                 )
-        return f"NULLIF(MAX({', '.join(expressions)}), {missing})"
+        seen = (
+            f"NULLIF(MAX({', '.join(expressions)}), {missing})"
+            if len(expressions) > 1
+            else f"NULLIF({flow_seen}, {missing})"
+        )
+        return seen if current_network else f"COALESCE({seen}, hs.observed_at)"
 
     def _host_activity_times(self, ips: Sequence[str]) -> Dict[str, float]:
         """Read actual observations for a bounded set of host or device addresses.
@@ -6396,15 +6451,7 @@ class RunDataReader:
         with self._connect_history() as connection:
             connection.execute("BEGIN")
             self._attach_run_database(connection)
-            latest_row = connection.execute(
-                "SELECT MAX(event_time) AS latest FROM flow_index"
-            ).fetchone()
-            latest = float(latest_row["latest"] or 0)
-            if not latest:
-                latest_row = connection.execute(
-                    "SELECT MAX(observed_at) AS latest FROM host_snapshots"
-                ).fetchone()
-                latest = float(latest_row["latest"] or 0)
+            latest = self._host_latest_event(connection)
             full_total = int(
                 connection.execute(
                     "SELECT COUNT(*) AS count FROM host_snapshots"
@@ -6910,21 +6957,11 @@ class RunDataReader:
                     (network_start,),
                 ).fetchall()
             else:
-                snapshots = connection.execute(
-                    "SELECT ip, observed_at, data FROM host_snapshots"
-                ).fetchall()
-            latest = max(
-                (float(row["observed_at"]) for row in snapshots), default=0
-            )
-            if network_start is None:
                 seen = self._host_last_seen_expression(connection, False)
-                latest = float(
-                    connection.execute(
-                        f"SELECT MAX(MAX(hs.observed_at, {seen})) "
-                        "FROM host_snapshots hs"
-                    ).fetchone()[0]
-                    or latest
-                )
+                snapshots = connection.execute(
+                    f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs"
+                ).fetchall()
+            latest = self._host_latest_event(connection)
         ips = [str(row["ip"]) for row in snapshots]
         search = self._query_value(query, "search").lower()
         scope = self._query_value(query, "scope")
@@ -7112,7 +7149,11 @@ class RunDataReader:
             members = group["members"]
             if start is not None and group["last_seen"] < start:
                 continue
-            if end is not None and group["last_seen"] > end:
+            if (
+                (range_name != "all" or network_start is not None)
+                and end is not None
+                and group["last_seen"] > end
+            ):
                 continue
             if alerts_only and not group["alerts"]:
                 continue

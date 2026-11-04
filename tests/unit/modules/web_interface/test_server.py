@@ -21,7 +21,7 @@ import yaml
 import psutil
 from pytest_mock import MockerFixture
 
-from modules.web_interface.history import connect_history, initialize_history, RUNTIME_RESOURCES_KEY
+from modules.web_interface.history import connect_history, initialize_history, RUNTIME_RESOURCES_KEY, HistoryCollector
 from modules.web_interface.network_scope import NetworkScope
 from modules.supported_module_names import Modules
 from modules.web_interface.server import (
@@ -5833,6 +5833,9 @@ def test_device_search_keeps_unfiltered_offline_range_clock(tmp_path: Path) -> N
         connection.execute("UPDATE host_snapshots SET observed_at=1")
         connection.execute("UPDATE flow_index SET event_time=20000 WHERE src_ip='192.168.13.1'")
         connection.execute("UPDATE flow_index SET event_time=100 WHERE src_ip!='192.168.13.1'")
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("UPDATE evidence SET evidence_time=CASE WHEN profile_ip='192.168.12.1' THEN 100 ELSE 20000 END")
+        connection.execute("UPDATE alerts SET alert_time=20000")
 
     page = reader.hosts({"range": ["live"], "device": ["1"], "search": ["fe80::20"]})
 
@@ -8957,3 +8960,123 @@ def test_overview_resource_sample_is_fresh_and_scoped(case: str) -> None:
         result = reader._current_run_resources(metadata, 1000, case != "disconnected")
     process.assert_not_called()
     assert result == (sample if case in {"current", "partial"} else None)
+
+
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("finding", ["evidence", "alert"])
+def test_hosts_keep_recent_findings_after_old_flows_expire(tmp_path: Path, device: bool, finding: str) -> None:
+    """Recent findings keep hosts visible when their identity snapshot is old.
+
+    Parameters:
+        tmp_path: Isolated cached identities and detections.
+        device: Whether to group addresses into devices.
+        finding: Durable activity source newer than retained flows.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    now = 2_000_000_000.0
+    ip = "192.168.1.22"
+    with connect_history(reader.history_path) as connection:
+        connection.execute("DELETE FROM flow_index")
+        connection.execute("UPDATE host_snapshots SET observed_at=?", (now-10*86400,))
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("DELETE FROM evidence")
+        connection.execute("DELETE FROM alerts")
+        if finding == "evidence":
+            connection.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,threat_level) VALUES ('recent',?,?,'medium')", (now-3600,ip))
+        else:
+            connection.execute("INSERT INTO alerts(alert_id,alert_time,ip_alerted) VALUES ('recent',?,?)", (now-3600,ip))
+    query = {"range":["7d"], **({"device":["1"]} if device else {})}
+    with patch("modules.web_interface.server.time.time", return_value=now):
+        result = reader.hosts(query)
+    assert [item["ip"] for item in result["items"]] == [ip]
+    assert result["items"][0]["last_seen"] == now-3600
+
+
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("network", [False, True])
+def test_recovered_hosts_are_visible_without_redis_or_flows(tmp_path: Path, device: bool, network: bool) -> None:
+    """Show evidence-only hosts after rebuilding a lost inventory.
+
+    Parameters:
+        tmp_path: Isolated existing evidence and empty web inventory.
+        device: Group addresses into devices.
+        network: Restrict activity to the reported network.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    with connect_history(reader.history_path) as connection:
+        connection.execute("DELETE FROM host_snapshots")
+        connection.execute("DELETE FROM flow_index")
+    HistoryCollector.restore_host_inventory(reader.history_path, reader.sqlite_path, complete=True)
+    query = {"range":["7d"], **({"device":["1"]} if device else {}), **({"network":["current"]} if network else {})}
+    with patch("modules.web_interface.server.time.time", return_value=2_000_000_000):
+        result = reader.hosts(query)
+    assert "192.168.1.22" in {item["ip"] for item in result["items"]}
+    row = next(item for item in result["items"] if item["ip"] == "192.168.1.22")
+    assert row["evidence_count"] == 1
+    assert row["alert_count"] == 1
+
+
+@pytest.mark.parametrize("device", [False, True])
+def test_offline_hosts_clock_includes_findings_newer_than_flows(tmp_path: Path, device: bool) -> None:
+    """Use a saved finding's clock after newer raw flow records were removed.
+
+    Parameters:
+        tmp_path: Isolated historical capture data.
+        device: Whether device grouping is enabled.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)
+    reader.saved_view = True
+    with connect_history(reader.history_path) as connection:
+        connection.execute("UPDATE host_snapshots SET observed_at=1")
+        connection.execute("UPDATE flow_index SET event_time=100")
+    query = {"range":["live"], **({"device":["1"]} if device else {})}
+    result = reader.hosts(query)
+    assert "192.168.1.22" in {row["ip"] for row in result["items"]}
+    assert reader.live_counts()["hosts"] >= 1
+
+
+@pytest.mark.parametrize("saved_view", [False, True])
+def test_reader_startup_restores_hosts_from_existing_findings(tmp_path: Path, saved_view: bool) -> None:
+    """Repair the inventory before serving either a live or saved analysis.
+
+    Parameters:
+        tmp_path: Isolated output folder with findings but no web history.
+        saved_view: Start the normal web server or a saved-output viewer.
+    """
+    _factory = ModuleFactory()
+    source = tmp_path / "databases" / "flows.sqlite"
+    source.parent.mkdir()
+    with sqlite3.connect(source) as connection:
+        connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+        connection.execute("INSERT INTO evidence VALUES ('saved','10.0.0.1',100)")
+    client = Mock()
+    client.hget.return_value = None
+    with (
+        patch("modules.web_interface.server.try_connect_with_and_without_password", return_value=client),
+        patch.object(RunDataReader,"_detector_score_settings",return_value=("ratl",5)),
+    ):
+        reader = RunDataReader(1234,str(tmp_path),str(tmp_path / "hosts.sqlite"),saved_view=saved_view)
+    with connect_history(reader.history_path,read_only=True) as connection:
+        assert connection.execute("SELECT ip,observed_at FROM host_snapshots").fetchone()[:] == ("10.0.0.1",100)
+
+
+@pytest.mark.parametrize("input_type", ["interface","stdin","cyst"])
+def test_live_host_clock_avoids_finding_history_queries(input_type: str) -> None:
+    """Avoid scanning saved findings when the live wall clock is sufficient.
+
+    Parameters:
+        input_type: Live input mode whose host range follows wall time.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = input_type
+    reader._attach_run_database = Mock()
+    connection = Mock()
+    with patch("modules.web_interface.server.time.time", return_value=2_000_000_000):
+        assert reader._host_latest_event(connection) == 2_000_000_000
+    connection.execute.assert_not_called()
+    reader._attach_run_database.assert_not_called()

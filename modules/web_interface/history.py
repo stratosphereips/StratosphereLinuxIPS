@@ -1092,8 +1092,133 @@ class HistoryCollector:
                     "(ip, observed_at, data) VALUES (?, ?, ?)",
                     rows,
                 )
+        self.restore_host_inventory(self.history_path, self.flows_path)
         self._last_host_snapshot = observed_at
         return len(rows)
+
+    @classmethod
+    def restore_host_inventory(
+        cls, history_path: Path, sqlite_path: Path, complete: bool = False
+    ) -> int:
+        """Recover host identities from retained findings using bounded checkpoints.
+
+        Parameters:
+            history_path: Run-specific web history database.
+            sqlite_path: Read-only run database containing evidence and alerts.
+            complete: Process all records present at startup instead of one batch.
+
+        Returns:
+            Number of source records examined, including already known hosts.
+        """
+        if not sqlite_path.exists():
+            return 0
+        stat = sqlite_path.stat()
+        source_id = f"{stat.st_dev}:{stat.st_ino}"
+        processed = 0
+        with (
+            sqlite3.connect(
+                f"file:{sqlite_path}?mode=ro", uri=True, timeout=5
+            ) as source,
+            connect_history(history_path) as history,
+        ):
+            source.row_factory = sqlite3.Row
+            empty = not history.execute(
+                "SELECT 1 FROM host_snapshots LIMIT 1"
+            ).fetchone()
+            for table, id_column, ip_column, time_column in (
+                ("evidence", "evidence_id", "profile_ip", "evidence_time"),
+                ("alerts", "alert_id", "ip_alerted", "alert_time"),
+            ):
+                columns = {
+                    str(row[1])
+                    for row in source.execute(f"PRAGMA table_info({table})")
+                }
+                if not {id_column, ip_column, time_column} <= columns:
+                    continue
+                key = f"host_inventory_checkpoint:{table}"
+                checkpoint = cls._json_value(
+                    cls._metadata_get(history, key, "{}"), {}
+                )
+                checkpoint = checkpoint if isinstance(checkpoint, dict) else {}
+                last = int(checkpoint.get("rowid", 0))
+                upper = int(
+                    source.execute(
+                        f"SELECT MAX(rowid) FROM {table}"
+                    ).fetchone()[0]
+                    or 0
+                )
+                if (
+                    (empty and complete)
+                    or checkpoint.get("source") != source_id
+                    or upper < last
+                ):
+                    last = 0
+                if last:
+                    row = source.execute(
+                        f"SELECT {id_column} FROM {table} WHERE rowid=?",
+                        (last,),
+                    ).fetchone()
+                    if row and str(row[0]) != checkpoint.get("id"):
+                        last = 0
+                while last < upper:
+                    rows = source.execute(
+                        f"SELECT rowid AS source_rowid,{id_column} AS record_id,"
+                        f"{ip_column} AS ip,{time_column} AS observed_at FROM {table} "
+                        "WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT ?",
+                        (last, upper, FLOW_INDEX_BATCH_SIZE),
+                    ).fetchall()
+                    if not rows:
+                        break
+                    recovered: Dict[str, tuple[float, str]] = {}
+                    for row in rows:
+                        try:
+                            address = ipaddress.ip_address(str(row["ip"]))
+                        except ValueError:
+                            continue
+                        stamp = cls._event_timestamp(row["observed_at"])
+                        if not math.isfinite(stamp):
+                            continue
+                        ip = str(address)
+                        if ip in recovered and recovered[ip][0] >= stamp:
+                            continue
+                        recovered[ip] = (
+                            stamp,
+                            json.dumps(
+                                {
+                                    "ip": ip,
+                                    "scope": (
+                                        "local"
+                                        if address.is_private
+                                        else "public"
+                                    ),
+                                }
+                            ),
+                        )
+                    history.executemany(
+                        "INSERT INTO host_snapshots(ip,observed_at,data) VALUES (?,?,?) "
+                        "ON CONFLICT(ip) DO UPDATE SET observed_at=MAX(host_snapshots.observed_at,excluded.observed_at)",
+                        [
+                            (ip, stamp, data)
+                            for ip, (stamp, data) in recovered.items()
+                        ],
+                    )
+                    last = int(rows[-1]["source_rowid"])
+                    cls._metadata_set(
+                        history,
+                        key,
+                        json.dumps(
+                            {
+                                "source": source_id,
+                                "rowid": last,
+                                "id": str(rows[-1]["record_id"]),
+                            }
+                        ),
+                    )
+                    history.commit()
+                    processed += len(rows)
+                    if not complete:
+                        break
+        return processed
 
     @staticmethod
     def _json_value(value: Any, default: Any) -> Any:
