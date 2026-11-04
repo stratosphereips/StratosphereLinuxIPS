@@ -596,7 +596,9 @@ function deviceIdentity(row, field = "ip") {
   element.className = "device-identity";
   element.append(hostIdentity(row[field]));
   if (state.deviceView && Array.isArray(row.device_ips) && row.device_ips.length > 1) {
-    element.append(text("small", `${row.device_ips.length} addresses · ${row.device_ips.join(" · ")}`, "device-addresses"));
+    const addresses = text("small", `${row.device_ips.length} addresses · ${row.device_ips.join(" · ")}`, "device-addresses");
+    addresses.title = "Addresses grouped by their recorded MAC identity. Each record keeps its original IP address.";
+    element.append(addresses);
   }
   return element;
 }

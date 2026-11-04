@@ -5914,12 +5914,84 @@ def test_device_view_combines_local_addresses_before_paging(
     assert set(grouped["device_ips"]) == {"10.0.0.1", "fe80::1"}
     assert alert_groups["total"] == 1
     assert alert_groups["items"][0]["alert_count"] == 2
+    assert alert_groups["items"][0]["ip_alerted"] == "fe80::1"
     assert evidence_groups["total"] == 1
     assert evidence_groups["items"][0]["evidence_count"] == 2
+    assert evidence_groups["items"][0]["profile_ip"] == "fe80::1"
     assert device_alerts["total"] == 2
     assert device_evidence["total"] == 2
     assert first_page["next_cursor"]
     assert first_page["items"][0]["device_id"] != second_page["items"][0]["device_id"]
+
+
+@pytest.mark.parametrize("group", ["host", "host_type"])
+@pytest.mark.parametrize("compact", [False, True])
+@pytest.mark.parametrize("search, threat, expected", [
+    ("", "", "10.0.1.15"),
+    ("IPv6", "", "fe80::1"),
+    ("", "medium", "fe80::1"),
+])
+def test_device_evidence_heading_follows_latest_matching_record(
+    tmp_path: Path, group: str, compact: bool, search: str, threat: str,
+    expected: str,
+) -> None:
+    """Use the latest filtered address, preserving group IDs and cursor sorting.
+
+    Parameters:
+        tmp_path: Isolated device snapshots and evidence.
+        group: Device grouping, optionally separated by evidence type.
+        compact: Skip expensive flow counts as in browser group requests.
+        search: Optional description filter.
+        threat: Optional exact threat filter.
+        expected: Address of the latest matching SCAN record.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    reader.history_path = tmp_path / "history.sqlite"
+    initialize_history(reader.history_path)
+    mac = "12:92:7a:46:2f:7f"
+    members = ["10.0.1.15", "192.168.1.158", "fe80::1"]
+    with connect_history(reader.history_path) as connection:
+        connection.executemany("INSERT INTO host_snapshots VALUES (?, ?, ?)", [
+            (ip, 400, json.dumps({"ip": ip, "mac": mac, "scope": "local"}))
+            for ip in members
+        ])
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("DELETE FROM evidence")
+        connection.execute("DELETE FROM alert_evidence")
+        connection.executescript(
+            "CREATE INDEX evidence_time_idx ON evidence(evidence_time);"
+            "INSERT INTO evidence VALUES "
+            "('old',100,'10.0.1.15','tw','high','SCAN','scan old',1,'{}',99,0,'conn_analyzer'),"
+            "('new',200,'192.168.1.158','tw','low','SCAN','scan new',1,'{}',1,0,'conn_analyzer'),"
+            "('v6',300,'fe80::1','tw','medium','SCAN','scan IPv6',1,'{}',2,0,'conn_analyzer'),"
+            "('tie',300,'10.0.1.15','tw','info','SCAN','other same time',1,'{}',3,0,'conn_analyzer'),"
+            "('excluded',400,'192.168.1.158','tw','medium','SCAN','scan excluded',1,'{}',4,1,'conn_analyzer'),"
+            "('other-type',300,'10.0.1.15','tw','critical','OTHER','other type',1,'{}',5,0,'conn_analyzer'),"
+            "('other-host',250,'192.168.2.1','tw','medium','SCAN','scan other host',1,'{}',6,0,'conn_analyzer');"
+        )
+    query = {"range": ["all"], "device": ["1"], "group": [group],
+             "compact": ["1" if compact else "0"], "hide_excluded": ["1"],
+             "search": [search], "threat": [threat], "sort": ["host"],
+             "order": ["asc"], "limit": ["1"]}
+    rows = []
+    while True:
+        page = reader.evidence(query)
+        rows.extend(page["items"])
+        if not page["next_cursor"]:
+            break
+        query["cursor"] = [page["next_cursor"]]
+    assert len(rows) == len({row["id"] for row in rows})
+    assert [row["profile_ip"] for row in rows] == sorted(row["profile_ip"] for row in rows)
+    row = next(item for item in rows if item.get("device_id") == f"mac:{mac}"
+               and item["evidence_type"] in {"", "SCAN"})
+    assert row["profile_ip"] == expected
+    assert row["timestamp"] == 300
+    assert row["id"] == f"mac:{mac}" + ("\x1fSCAN" if group == "host_type" else "")
+    assert expected in row["device_ips"]
+    if not search and not threat:
+        assert row["alert_score"] == 99
+        assert set(row["device_ips"]) == set(members)
 
 
 @pytest.mark.parametrize(

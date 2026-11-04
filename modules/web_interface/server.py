@@ -3555,11 +3555,31 @@ class RunDataReader:
                 f"FROM {group_source} WHERE {' AND '.join(clauses)} "
                 f"GROUP BY {group_fields[1]}"
             )
+            grouped_params = params
+            if device_view and group_mode != "type":
+                type_clause = (
+                    " AND evidence_type = members.evidence_type"
+                    if group_mode != "host"
+                    else ""
+                )
+                grouped_sql = (
+                    "SELECT members.*, (SELECT profile_ip FROM evidence WHERE "
+                    f"{' AND '.join(clauses)} "
+                    "AND evidence_time = members.timestamp "
+                    "AND device_key(profile_ip) = device_key(members.profile_ip)"
+                    f"{type_clause} ORDER BY profile_ip LIMIT 1) AS latest_profile_ip "
+                    f"FROM ({grouped_sql}) members"
+                )
+                grouped_params = [*params, *params]
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
                 {
                     "time": "timestamp",
-                    "host": "LOWER(profile_ip)",
+                    "host": (
+                        "LOWER(latest_profile_ip)"
+                        if device_view and group_mode != "type"
+                        else "LOWER(profile_ip)"
+                    ),
                     "threat": "threat_rank",
                     "type": "LOWER(evidence_type)",
                     "module": "LOWER(module)",
@@ -3604,7 +3624,7 @@ class RunDataReader:
                 f"FROM ({grouped_sql}) grouped {outer_where} "
                 f"ORDER BY {sort_expression} {direction}, "
                 f"group_id {direction} LIMIT ?",
-                (*params, *outer_params, limit + 1),
+                (*grouped_params, *outer_params, limit + 1),
             ).fetchall()
             alert_counts: Dict[str, int] = {}
             if (
@@ -3701,6 +3721,8 @@ class RunDataReader:
             item.pop("sort_value", None)
             item.pop("total_groups", None)
             item["id"] = str(item.pop("group_id"))
+            if "latest_profile_ip" in item:
+                item["profile_ip"] = item.pop("latest_profile_ip")
             if device_view and group_mode != "type":
                 item["device_id"] = item["id"].split("\x1f", 1)[0]
                 item["device_ips"] = sorted(
@@ -4679,11 +4701,26 @@ class RunDataReader:
                 "GROUP_CONCAT(DISTINCT COALESCE(label, '')) AS labels "
                 f"FROM alerts WHERE {' AND '.join(clauses)} GROUP BY {host_group}"
             )
+            grouped_params = params
+            if device_view:
+                grouped_sql = (
+                    "SELECT members.*, (SELECT ip_alerted FROM alerts WHERE "
+                    f"{' AND '.join(clauses)} "
+                    "AND alert_time = members.alert_time "
+                    "AND device_key(ip_alerted) = device_key(members.ip_alerted) "
+                    "ORDER BY ip_alerted LIMIT 1) AS latest_profile_ip "
+                    f"FROM ({grouped_sql}) members"
+                )
+                grouped_params = [*params, *params]
             sort_key, sort_expression, direction = self._sort_spec(
                 query,
                 {
                     "time": "alert_time",
-                    "host": "LOWER(ip_alerted)",
+                    "host": (
+                        "LOWER(latest_profile_ip)"
+                        if device_view
+                        else "LOWER(ip_alerted)"
+                    ),
                     "threat": "threat_rank",
                     "label": "LOWER(labels)",
                     "alerts": "alert_count",
@@ -4696,7 +4733,7 @@ class RunDataReader:
                 "SELECT COUNT(*) AS count, "
                 "COALESCE(SUM(alert_count), 0) AS matching_total "
                 f"FROM ({grouped_sql})",
-                params,
+                grouped_params,
             ).fetchone()
             total = int(totals["count"])
             matching_total = int(totals["matching_total"])
@@ -4715,7 +4752,7 @@ class RunDataReader:
                 f"FROM ({grouped_sql}) grouped {outer_where} "
                 f"ORDER BY {sort_expression} {direction}, "
                 f"group_id {direction} LIMIT ?",
-                (*params, *outer_params, limit + 1),
+                (*grouped_params, *outer_params, limit + 1),
             ).fetchall()
         has_more = len(rows) > limit
         rows = rows[:limit]
@@ -4724,6 +4761,8 @@ class RunDataReader:
             item = dict(row)
             item.pop("sort_value", None)
             item["id"] = str(item.pop("group_id"))
+            if "latest_profile_ip" in item:
+                item["ip_alerted"] = item.pop("latest_profile_ip")
             if device_view:
                 item["device_id"] = item["id"]
                 item["device_ips"] = str(item.get("device_ips") or "").split(

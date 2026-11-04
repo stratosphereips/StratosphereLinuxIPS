@@ -84,6 +84,11 @@ grouped Evidence, and the selected device's alert, evidence, and traffic
 pages. Each device row lists its addresses. Public profiles and ambiguous MACs
 shared by more than 16 profiles remain separate. Slips still scores each IP
 profile independently; the device list shows the highest member score.
+Evidence and alert groups use the IP of their latest matching record as the
+heading, rather than the alphabetically first address. The address list shows
+the other profiles included in the group; individual records retain their
+original source and destination IPs. Filters and host sorting use the same
+representative address.
 
 The browser also remembers pane filters, search terms, review filters, time
 ranges, grouping, table sort and direction, optional host columns, and resized
