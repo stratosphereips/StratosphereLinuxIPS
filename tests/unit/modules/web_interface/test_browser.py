@@ -22,6 +22,76 @@ from slips_files.common.slips_utils import utils
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+def test_runtime_logs_show_both_sources_and_honest_daemon_times(theme: str) -> None:
+    """Show source, severity and time provenance in the table and event drawer.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    records = [
+        {"event_time":1793797504,"module":"main","message":"Network settings changed on en0",
+         "line":"[main] Network settings changed on en0","source":"slips.log","time_source":"observed"},
+        {"event_time":0,"module":"main","message":"Historical network change",
+         "line":"[main] Historical network change","source":"slips.log","time_source":"unknown"},
+        {"event_time":1793797505,"module":"worker","message":"Traceback: failure",
+         "line":"Traceback: failure\nValueError: bad data","source":"errors.log","time_source":"logged"},
+    ]
+
+    def respond(route: Any) -> None:
+        """Serve local UI assets without access to a live run.
+
+        Parameters:
+            route: Browser request intercepted before network access.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error":"Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width":1500,"height":1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderLogs === 'function'")
+            page.evaluate("""({theme,records}) => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                setTheme(theme); state.activeTab='logs';
+                document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active',panel.id==='logs'));
+                renderLogs({items:records,total:records.length,scope:'history'}); clearError();
+            }""", {"theme":theme,"records":records})
+            assert "SOURCE" in page.locator("#logs-table thead").inner_text()
+            rows = page.locator("#logs-table tbody tr")
+            assert rows.count() == 3
+            normal = rows.filter(has_text="Network settings changed")
+            assert normal.locator(".log-level").text_content() == "info"
+            assert "slips.log" in normal.inner_text()
+            assert normal.locator("time").inner_text().startswith("≈")
+            assert "source has no timestamp" in normal.locator("time").get_attribute("title")
+            historical = rows.filter(has_text="Historical network change")
+            assert "Time not recorded" in historical.inner_text()
+            assert historical.locator("time").count() == 0
+            normal.click()
+            assert "slips.log" in page.locator(".log-console-titlebar").inner_text()
+            assert page.locator(".log-console.info").count() == 1
+            assert page.locator(".log-console-raw pre").inner_text() == records[0]["line"]
+            page.evaluate("record => openLog(record)", records[2])
+            assert "errors.log" in page.locator(".log-console-titlebar").inner_text()
+            assert "ValueError: bad data" in page.locator(".log-console-raw pre").inner_text()
+            assert page.locator(".log-console.critical").count() == 1
+            assert errors == []
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 @pytest.mark.parametrize("width", [1100, 2200])
 def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
     """Keep evidence controls visible and summaries compact without losing facts.

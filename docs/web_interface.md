@@ -600,7 +600,14 @@ the durable evidence table is empty; afterward, the append-only alerts file is
 processed incrementally from its saved byte offset once per minute. The web
 workers never rescan all retained profile/time-window keys on a timer.
 
-The canonical error source is output/<run>/errors.log. For older runs, output/<run>/error.log is used only when errors.log does not exist. New lines are tailed from a saved byte offset. On upgrade, the collector scans the current log once to attach traceback continuation lines to previously imported events.
+The Logs tab combines useful messages from `output/<run>/slips.log` with
+`output/<run>/errors.log`. Older runs use `error.log` only when `errors.log`
+is absent. Each source has its own byte-offset and rotation checkpoints;
+collection reads at most 5,000 lines per source per iteration in the web worker.
+The collector omits analyzed-IP statistics, module startup listings, and printed
+evidence/alert blocks from `slips.log`. Operational messages and warnings,
+including errors while saving evidence, remain visible. Existing error history
+and multiline tracebacks are preserved on upgrade.
 
 The web server's own log is:
 
@@ -836,20 +843,31 @@ Metadata keeps the run version, branch, and commit beside the monitored device's
 
 ### Logs
 
-The Logs tab opens with **Log history → This run**. It shows only errors between
+The Logs tab opens with **Log history → This run**. It shows only timestamped or newly observed messages between
 this Slips process's start and its recorded end, if it has finished. Restarting
-with the same output directory does not make old errors look current. The
+with the same output directory does not make old messages look current. The
 Overview and module error counts use the same boundary. Error times are wall-clock
 times, including when Slips is analyzing an old capture.
 
-Select **All retained runs** to browse older imported errors in that output
+Select **All retained runs** to browse older imported messages in that output
 directory. This is separate from the detection archive selector: detection
-archives contain findings, not runtime errors. Imported errors remain in the
+archives contain findings, not runtime logs. Imported messages remain in the
 web history database until its retention cleanup removes them; selecting
 history does not reread rotated text logs. If the run start cannot be found,
 the current view stays empty and explains how to open retained history.
 
-Events are parsed incrementally from `errors.log`. Select any row to open a console-style investigation panel with
+The **Source** column identifies the original log file, including in the event
+drawer. Ordinary `slips.log` messages are informational by default; warnings
+and failures receive the corresponding displayed severity. Informational
+messages do not increase the Overview's module-error count.
+
+Timestamped entries retain their original date. Historical daemon output without
+a timestamp displays **Time not recorded** under **All retained runs** and is
+excluded from **This run**. Newly appended undated messages use the collector's
+observation time, marked **≈** with an explanatory date tooltip. Their actual
+emission time is unavailable.
+
+Select any row to open a console-style investigation panel with
 the complete timestamp, module, presentation severity, and raw multiline source
 block. Traceback rows also show the final exception when one is available.
 Colors highlight severity, paths, and IP addresses

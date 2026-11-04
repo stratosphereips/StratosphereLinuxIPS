@@ -380,6 +380,117 @@ def test_tail_errors_backfill_preserves_repeated_event_order(tmp_path) -> None:
     assert rows == [first, f"{header}\nValueError: second"]
 
 
+@pytest.mark.parametrize("prefix", ["2026/11/04 14:05:04.123456 ", ""])
+@pytest.mark.parametrize("message", [
+    "Total analyzed IPs: 100. IPs sending traffic: 10",
+    "[ 4/32]   [PID 1234] Starts the HTTP analyzer",
+    "[112/32]  [PID 33883] Parses flows in parallel with other profiler workers",
+    "Starting module http_analyzer [PID 1234]",
+    "2026/11/04 14:05:04 IP 192.0.2.1 detected as malicious given the following evidence:",
+    "- Detected an unknown port. Threat level: high.",
+    "Weighted Threat Level: 0.5",
+    "[EvidenceHandler] Exporting evidence id type=UNKNOWN_PORT via export_evidence.",
+])
+def test_slips_log_filters_noise_without_losing_operational_messages(
+    tmp_path: Path, prefix: str, message: str,
+) -> None:
+    """Drop startup/statistics/detection blocks while retaining useful messages.
+
+    Parameters:
+        tmp_path: Isolated run and history database.
+        prefix: Foreground timestamp or timestamp-free daemon format.
+        message: Routine output excluded from the Logs tab.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "slips.log"
+    path.write_text(f"{prefix}[main] Network settings changed on en0\n"
+                    f"{prefix}[worker] {message}\n  ignored continuation\n")
+    collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999)
+    assert collector.tail_slips() == 1
+    with path.open("a") as handle:
+        handle.write("  later ignored continuation\n[worker] Warning: evidence database unavailable\n")
+    assert collector.tail_slips() == 1
+    assert collector.tail_slips() == 0
+    with connect_history(collector.history_path) as connection:
+        rows = connection.execute("SELECT message,line,source FROM error_events ORDER BY id").fetchall()
+    assert [row["message"] for row in rows] == ["Network settings changed on en0", "Warning: evidence database unavailable"]
+    assert all(row["source"] == "slips.log" for row in rows)
+    assert all("ignored continuation" not in row["line"] for row in rows)
+
+
+@pytest.mark.parametrize("rotation", ["rename", "truncate"])
+def test_slips_and_error_log_checkpoints_survive_restart_and_rotation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rotation: str,
+) -> None:
+    """Keep multiline events and timestamps separate across sources and restarts.
+
+    Parameters:
+        tmp_path: Isolated logs and checkpoints.
+        monkeypatch: Bound collector batches and freeze observation time.
+        rotation: Replace the inode or truncate the existing file.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.history.FLOW_INDEX_BATCH_SIZE", 2)
+    monkeypatch.setattr("modules.web_interface.history.time.time", lambda: 2_000_000_000.0)
+    path = tmp_path / "slips.log"
+    path.write_text("[main] Historical network change\n[main] Historical second event\n[main] Historical third event\n")
+    error = tmp_path / "errors.log"
+    error.write_text("2026/11/04 14:05:04.123456 [main] Traceback (most recent call last):\n  File error.py\n")
+    collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999)
+    assert collector.tail_errors() == 1
+    assert collector.tail_slips() == 2
+    collector = HistoryCollector(str(tmp_path), collector.history_path, Mock(), 999999)
+    assert collector.tail_slips() == 1
+    with path.open("a") as handle:
+        handle.write("[main] Current network change\n  live detail\n")
+    assert collector.tail_slips() == 1
+    with error.open("a") as handle:
+        handle.write("ValueError: error detail\n")
+    assert collector.tail_errors() == 0
+    if rotation == "rename":
+        path.rename(tmp_path / "slips.log.1")
+    path.write_text("[main] Rotated event\n")
+    assert collector.tail_slips() == 1
+    assert collector.tail_slips() == 0
+    with connect_history(collector.history_path) as connection:
+        rows = [dict(row) for row in connection.execute("SELECT * FROM error_events ORDER BY id")]
+    errors = [row for row in rows if row["source"] == "errors.log"]
+    assert len(errors) == 1
+    assert errors[0]["line"].endswith("ValueError: error detail")
+    slips = [row for row in rows if row["source"] == "slips.log"]
+    assert [row["time_source"] for row in slips] == ["unknown"] * 3 + ["observed"] * 2
+    assert [row["event_time"] for row in slips] == [2_000_000_000.0] * 5
+    assert slips[3]["line"].endswith("  live detail")
+    assert "error detail" not in slips[3]["line"]
+    collector.redis.hget.return_value = "interface"
+    assert collector.prune_operational_history(2_000_000_000.0) == 1
+    with connect_history(collector.history_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM error_events WHERE source='slips.log'").fetchone()[0] == 5
+
+
+@pytest.mark.parametrize("legacy_source", ["errors.log", "error.log"])
+def test_runtime_log_schema_upgrade_preserves_old_errors(tmp_path: Path, legacy_source: str) -> None:
+    """Attach source metadata to old rows without recreating or deleting history.
+
+    Parameters:
+        tmp_path: Legacy history database directory.
+        legacy_source: Canonical or compatibility error filename.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "history.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.executescript("CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT);"
+            "CREATE TABLE error_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event_time REAL,module TEXT,message TEXT,line TEXT);"
+            "INSERT INTO error_events VALUES(5,100,'main','error','raw');")
+        connection.execute("INSERT INTO metadata VALUES ('error_log_name',?)", (legacy_source,))
+    initialize_history(path)
+    initialize_history(path)
+    with connect_history(path) as connection:
+        row = dict(connection.execute("SELECT * FROM error_events").fetchone())
+    assert row == {"id":5,"event_time":100,"module":"main","message":"error","line":"raw",
+                   "source":legacy_source,"time_source":"logged"}
+
+
 def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
     _module_factory = ModuleFactory()
     output_dir = tmp_path / "run"
@@ -787,6 +898,7 @@ def test_collect_once_snapshots_hosts_before_detection_backfill(
     collector.index_new_flows = Mock()
     collector.sample_metrics = Mock()
     collector.tail_errors = Mock()
+    collector.tail_slips = Mock()
     collector.backfill_detections = Mock()
     collector.rollup_metrics = Mock()
 
@@ -794,6 +906,8 @@ def test_collect_once_snapshots_hosts_before_detection_backfill(
         collector.collect_once()
 
     assert calls == ["hosts"]
+    collector.tail_errors.assert_called_once_with()
+    collector.tail_slips.assert_called_once_with()
     collector.backfill_detections.assert_not_called()
 
 

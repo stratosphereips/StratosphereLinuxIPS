@@ -1825,7 +1825,7 @@ function renderRunContext(data) {
   byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts ?? data.counts.alerts);
   byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence ?? data.counts.evidence);
   byId("hosts-badge").textContent = compact(state.filteredBadgeCounts.hosts ?? data.counts.hosts);
-  byId("logs-badge").textContent = compact(data.counts.module_errors);
+  byId("logs-badge").textContent = compact(data.counts.logs ?? data.counts.module_errors);
   byId("firewall-badge").textContent = (data.modules || []).some((module) => module.name === "blocking")
     ? compact(data.firewall?.current) : "off";
 }
@@ -2173,9 +2173,24 @@ function logSeverity(record) {
   const content = `${record.message || ""} ${record.line || ""}`.toLowerCase();
   if (/\b(critical|fatal|panic|traceback|exception)\b/.test(content)) return "critical";
   if (/\b(warning|warn)\b/.test(content)) return "warning";
+  if (/\b(error|failed|failure)\b/.test(content)) return "error";
   if (/\b(debug)\b/.test(content)) return "debug";
   if (/\b(info|notice)\b/.test(content)) return "info";
-  return "error";
+  return record.source === "slips.log" ? "info" : "error";
+}
+
+/** Show recorded or observed log times without inventing dates for old text.
+ * @param {Object} record Runtime event and timestamp provenance.
+ * @returns {HTMLElement} Timestamp or an explicit unavailable label.
+ */
+function logTime(record) {
+  if (record.time_source === "unknown") return text("span", "Time not recorded", "muted");
+  const element = timeValue(record.event_time);
+  if (record.time_source === "observed") {
+    element.textContent = `≈ ${element.textContent}`;
+    element.title += " · Observed by the log collector; source has no timestamp.";
+  }
+  return element;
 }
 
 /** Append safe, lightly highlighted log text to a console line. */
@@ -2204,7 +2219,7 @@ function openLog(record) {
   openDrawer("RUNTIME LOG", record.module || "Slips");
   const body = byId("drawer-body");
   body.append(investigationStats([
-    ["Time", timeValue(record.event_time)],
+    ["Time", logTime(record)],
     ["Module", record.module || "unknown"],
     ["Level", text("span", severity, `log-level ${severity}`)],
   ]));
@@ -2216,13 +2231,13 @@ function openLog(record) {
   lights.className = "log-console-lights";
   lights.setAttribute("aria-hidden", "true");
   lights.append(text("i", ""), text("i", ""), text("i", ""));
-  titlebar.append(lights, text("code", `${record.module || "Slips"} · errors.log`));
+  titlebar.append(lights, text("code", `${record.module || "Slips"} · ${record.source || "errors.log"}`));
   const output = document.createElement("div");
   output.className = "log-console-output";
   const line = document.createElement("div");
   line.className = "log-console-line";
   line.append(
-    text("span", timeValue(record.event_time), "log-console-time"),
+    text("span", logTime(record), "log-console-time"),
     text("span", `[${record.module || "unknown"}]`, "log-console-module"),
     text("strong", severity, `log-console-level ${severity}`),
   );
@@ -2255,11 +2270,12 @@ function renderLogs(payload) {
   byId("logs-scope-note").textContent = payload.scope === "history"
     ? "All retained runs in this output directory"
     : payload.run_started_at ? `This run started ${new Date(payload.run_started_at * 1000).toLocaleString()}`
-      : "Run start unavailable; select All retained runs to browse saved errors.";
+      : "Run start unavailable; select All retained runs to browse saved logs.";
   byId("logs-scope-note").title = payload.scope === "history" ? "" : timeTitle(payload.run_started_at);
   renderTable("logs-table", errors, [
-    (row) => timeValue(row.event_time),
+    (row) => logTime(row),
     (row) => text("span", logSeverity(row), `log-level ${logSeverity(row)}`),
+    (row) => text("code", row.source || "errors.log", "log-module"),
     (row) => text("code", row.module, "log-module"),
     (row) => {
       const message = text("span", "", `log-message ${logSeverity(row)}`);

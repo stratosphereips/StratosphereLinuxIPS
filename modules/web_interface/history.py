@@ -14,13 +14,25 @@ from typing import Any, Dict, List, Optional
 
 import psutil
 import redis
+from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.sqlite_flock import SQLiteFlock
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 
 ERROR_LINE = re.compile(
-    r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+"
+    r"^(?P<date>\d{4}[/-]\d{2}[/-]\d{2})\s+"
+    r"(?P<clock>\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)\s+"
     r"\[(?P<module>[^]]+)]\s+(?P<message>.*)$"
+)
+MODULE_LINE = re.compile(r"^\[(?P<module>[^]]+)]\s+(?P<message>.*)$")
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+SLIPS_LOG_NOISE = re.compile(
+    r"^(?:Total\s+)?analyzed IPs\b|\[\s*\d+/\d+]\s*\[PID\s+\d+]"
+    r"|^Starting (?:the\s+)?(?:modules?|process(?:es)?)\b"
+    r"|detected as malicious.*following evidence"
+    r"|^\s*- Detected\b|^\s*Weighted Threat Level:"
+    r"|^\[EvidenceHandler] Export(?:ing evidence| streaming)\b",
+    re.IGNORECASE,
 )
 MAX_ERROR_EVENT_CHARS = 256 * 1024
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
@@ -201,6 +213,22 @@ def initialize_history(path: Path) -> None:
             )
             connection.execute(
                 "UPDATE flow_index SET source_packets = packets"
+            )
+        log_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(error_events)")
+        }
+        if "source" not in log_columns:
+            connection.execute(
+                "ALTER TABLE error_events ADD COLUMN source TEXT NOT NULL DEFAULT 'errors.log'"
+            )
+            connection.execute(
+                "UPDATE error_events SET source='error.log' WHERE EXISTS "
+                "(SELECT 1 FROM metadata WHERE key='error_log_name' AND value='error.log')"
+            )
+        if "time_source" not in log_columns:
+            connection.execute(
+                "ALTER TABLE error_events ADD COLUMN time_source TEXT NOT NULL DEFAULT 'logged'"
             )
         connection.execute(
             "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
@@ -549,11 +577,11 @@ class HistoryCollector:
     def _error_timestamp(date: str, clock: str) -> float:
         """Convert a Slips log timestamp to Unix time."""
         try:
-            return datetime.strptime(
-                f"{date} {clock}", "%Y/%m/%d %H:%M:%S.%f"
+            return datetime.fromisoformat(
+                f"{date.replace('/', '-')} {clock}"
             ).timestamp()
         except ValueError:
-            return time.time()
+            return 0.0
 
     @staticmethod
     def _store_error_event(
@@ -563,6 +591,8 @@ class HistoryCollector:
         module: str,
         message: str,
         raw_text: str,
+        source: str = "errors.log",
+        time_source: str = "logged",
     ) -> int:
         """Insert a log event or extend its raw multiline source.
 
@@ -573,6 +603,8 @@ class HistoryCollector:
             module: Module in the event header.
             message: Summary from the event header.
             raw_text: Header and retained continuation lines.
+            source: Original log filename.
+            time_source: Logged, observed, or unavailable timestamp.
 
         Returns:
             Stored event ID.
@@ -585,8 +617,8 @@ class HistoryCollector:
             return event_id
         cursor = connection.execute(
             "INSERT INTO error_events "
-            "(event_time, module, message, line) VALUES (?, ?, ?, ?)",
-            (event_time, module, message, raw_text),
+            "(event_time, module, message, line, source, time_source) VALUES (?, ?, ?, ?, ?, ?)",
+            (event_time, module, message, raw_text, source, time_source),
         )
         return int(cursor.lastrowid)
 
@@ -605,7 +637,8 @@ class HistoryCollector:
         """
         matching_ids: dict[str, deque[Optional[int]]] = defaultdict(deque)
         for row in connection.execute(
-            "SELECT id, line FROM error_events ORDER BY id"
+            "SELECT id, line FROM error_events WHERE source=? ORDER BY id",
+            (error_path.name,),
         ):
             raw_text = str(row["line"])
             header = raw_text.split("\n", 1)[0]
@@ -665,13 +698,36 @@ class HistoryCollector:
         canonical = self.output_dir / "errors.log"
         legacy = self.output_dir / "error.log"
         error_path = canonical if canonical.exists() else legacy
+        return self._tail_log(error_path)
+
+    def tail_slips(self) -> int:
+        """Archive useful slips.log messages without detection or startup noise.
+
+        Returns:
+            Number of newly archived events.
+        """
+        return self._tail_log(self.output_dir / "slips.log")
+
+    def _tail_log(self, error_path: Path) -> int:
+        """Read one bounded log batch with independent rotation checkpoints.
+
+        Parameters:
+            error_path: Runtime or error log in this run's output directory.
+
+        Returns:
+            Number of newly archived events.
+        """
         if not error_path.exists():
             return 0
+        runtime = error_path.name == "slips.log"
         offset_key = f"error_offset:{error_path.name}"
         last_event_key = f"error_last_event_id:{error_path.name}"
         with connect_history(self.history_path) as connection:
             backfill_key = f"error_multiline_backfilled:{error_path.name}"
-            if self._metadata_get(connection, backfill_key, "0") != "1":
+            if (
+                not runtime
+                and self._metadata_get(connection, backfill_key, "0") != "1"
+            ):
                 self._backfill_error_continuations(connection, error_path)
                 self._metadata_set(connection, backfill_key, 1)
             offset = int(self._metadata_get(connection, offset_key, "0"))
@@ -685,27 +741,38 @@ class HistoryCollector:
                     != inode
                 ):
                     offset = 0
+                    self._metadata_set(
+                        connection, f"log_initial_size:{error_path.name}", 0
+                    )
                 self._metadata_set(connection, inode_key, inode)
+                initial_size_key = f"log_initial_size:{error_path.name}"
+                initial_size = int(
+                    self._metadata_get(
+                        connection, initial_size_key, str(stat.st_size)
+                    )
+                )
+                self._metadata_set(connection, initial_size_key, initial_size)
             except OSError:
                 return 0
             active_id: Optional[int] = None
             active_event: Optional[tuple[float, str, str]] = None
             active_lines: list[str] = []
             active_size = 0
+            active_time_source = "logged"
             dirty = False
             if offset:
-                previous_id = int(
-                    self._metadata_get(connection, last_event_key, "0")
-                )
-                if previous_id == 0:
+                checkpoint = self._metadata_get(connection, last_event_key, "")
+                previous_id = int(checkpoint or 0)
+                if not checkpoint:
                     latest = connection.execute(
-                        "SELECT id FROM error_events ORDER BY id DESC LIMIT 1"
+                        "SELECT id FROM error_events WHERE source=? ORDER BY id DESC LIMIT 1",
+                        (error_path.name,),
                     ).fetchone()
                     previous_id = int(latest["id"]) if latest else 0
                 previous = connection.execute(
-                    "SELECT id, event_time, module, message, line "
-                    "FROM error_events WHERE id = ?",
-                    (previous_id,),
+                    "SELECT id, event_time, module, message, line, time_source "
+                    "FROM error_events WHERE id = ? AND source = ?",
+                    (previous_id, error_path.name),
                 ).fetchone()
                 if previous is not None:
                     active_id = int(previous["id"])
@@ -716,6 +783,7 @@ class HistoryCollector:
                     )
                     active_lines = str(previous["line"]).split("\n")
                     active_size = len(str(previous["line"]))
+                    active_time_source = str(previous["time_source"])
             event_count = 0
             new_offset = offset
             try:
@@ -732,31 +800,78 @@ class HistoryCollector:
                             new_offset = line_start
                             break
                         new_offset = handle.tell()
-                        match = ERROR_LINE.match(line.rstrip())
-                        if match:
+                        header = (
+                            ANSI_ESCAPE.sub("", line.rstrip())
+                            if runtime
+                            else line.rstrip()
+                        )
+                        match = ERROR_LINE.match(header)
+                        daemon_match = (
+                            MODULE_LINE.match(header)
+                            if runtime and not match
+                            else None
+                        )
+                        if (
+                            runtime
+                            and not match
+                            and not daemon_match
+                            and re.match(
+                                r"^(?:Warning|Error|Traceback)\b", header
+                            )
+                        ):
+                            daemon_match = MODULE_LINE.match(
+                                f"[{Modules.MAIN.value}] {header}"
+                            )
+                        if match or daemon_match:
                             if active_event is not None and dirty:
                                 active_id = self._store_error_event(
                                     connection,
                                     active_id,
                                     *active_event,
                                     "\n".join(active_lines),
+                                    error_path.name,
+                                    active_time_source,
                                 )
-                            header = line.rstrip()
-                            active_event = (
-                                self._error_timestamp(
+                            parsed = match or daemon_match
+                            if runtime and SLIPS_LOG_NOISE.search(
+                                parsed.group("message")
+                            ):
+                                active_id = None
+                                active_event = None
+                                active_lines = []
+                                dirty = False
+                                continue
+                            if match:
+                                event_time = self._error_timestamp(
                                     match.group("date"), match.group("clock")
-                                ),
-                                match.group("module"),
-                                match.group("message"),
+                                )
+                                active_time_source = (
+                                    "logged" if event_time else "unknown"
+                                )
+                                event_time = event_time or time.time()
+                            else:
+                                event_time = time.time()
+                                active_time_source = (
+                                    "unknown"
+                                    if line_start < initial_size
+                                    else "observed"
+                                )
+                            active_event = (
+                                event_time,
+                                parsed.group("module"),
+                                parsed.group("message"),
                             )
                             active_id = None
-                            active_lines = [header]
+                            active_lines = [line.rstrip()]
                             active_size = len(header)
                             dirty = True
                             event_count += 1
                         elif (
                             active_event is not None
                             and active_size < MAX_ERROR_EVENT_CHARS
+                            and not (
+                                runtime and SLIPS_LOG_NOISE.search(header)
+                            )
                         ):
                             continuation = line.rstrip("\r\n")
                             active_lines.append(continuation)
@@ -770,11 +885,15 @@ class HistoryCollector:
                     active_id,
                     *active_event,
                     "\n".join(active_lines),
+                    error_path.name,
+                    active_time_source,
                 )
-            if active_id is not None:
-                self._metadata_set(connection, last_event_key, active_id)
+            self._metadata_set(connection, last_event_key, active_id or 0)
             self._metadata_set(connection, offset_key, new_offset)
-            self._metadata_set(connection, "error_log_name", error_path.name)
+            if not runtime:
+                self._metadata_set(
+                    connection, "error_log_name", error_path.name
+                )
             return event_count
 
     def snapshot_hosts(self) -> int:
@@ -1557,6 +1676,7 @@ class HistoryCollector:
             self._last_flow_reconcile = now
         self.sample_metrics()
         self.tail_errors()
+        self.tail_slips()
         if now - self._last_rollup >= 60:
             self.rollup_metrics()
             self.prune_operational_history(now)

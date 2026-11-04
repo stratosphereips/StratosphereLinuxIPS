@@ -8769,12 +8769,17 @@ class RunDataReader:
             return " WHERE 0", (), 0.0, 0.0
         if math.isfinite(end) and end >= start:
             return (
-                " WHERE event_time >= ? AND event_time <= ?",
+                " WHERE event_time >= ? AND event_time <= ? AND time_source<>'unknown'",
                 (start, end),
                 start,
                 end,
             )
-        return " WHERE event_time >= ?", (start,), start, 0.0
+        return (
+            " WHERE event_time >= ? AND time_source<>'unknown'",
+            (start,),
+            start,
+            0.0,
+        )
 
     def logs(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -8792,12 +8797,13 @@ class RunDataReader:
         where, parameters, start, end = self._log_scope(scope)
         with self._connect_history() as history:
 
-            def log_level(message: str, line: str) -> str:
+            def log_level(message: str, line: str, source: str) -> str:
                 """Classify a stored log using the visible level labels.
 
                 Parameters:
                     message: Parsed summary.
                     line: Raw source line.
+                    source: Original log filename.
 
                 Returns:
                     Severity label used by the browser.
@@ -8809,19 +8815,21 @@ class RunDataReader:
                         r"\b(critical|fatal|panic|traceback|exception)\b",
                     ),
                     ("warning", r"\b(warning|warn)\b"),
+                    ("error", r"\b(error|failed|failure)\b"),
                     ("debug", r"\bdebug\b"),
                     ("info", r"\b(info|notice)\b"),
                 ):
                     if re.search(pattern, content):
                         return level
-                return "error"
+                return "info" if source == "slips.log" else "error"
 
-            history.create_function("log_level", 2, log_level)
+            history.create_function("log_level", 3, log_level)
             _, sort_expression, direction = self._sort_spec(
                 query,
                 {
                     "event_time": "event_time",
-                    "level": "log_level(message, line)",
+                    "level": "log_level(message, line, source)",
+                    "source": "LOWER(source)",
                     "module": "LOWER(module)",
                     "message": "LOWER(message)",
                 },
@@ -8836,13 +8844,16 @@ class RunDataReader:
             items = [
                 dict(row)
                 for row in history.execute(
-                    "SELECT event_time, module, message, line "
+                    "SELECT event_time, module, message, line, source, time_source "
                     f"FROM error_events{where} ORDER BY {sort_expression} {direction}, id {direction} "
                     "LIMIT 100",
                     parameters,
                 ).fetchall()
             ]
         for item in items:
+            item["level"] = log_level(
+                item["message"], item["line"], item["source"]
+            )
             if not str(item["message"]).startswith("Traceback"):
                 continue
             for line in reversed(str(item["line"]).splitlines()):
@@ -9307,17 +9318,22 @@ class RunDataReader:
                 analysis=analysis
             )
             error_rows = history.execute(
-                f"SELECT module, COUNT(*) AS count FROM error_events INDEXED BY error_time_idx{log_where} GROUP BY module",
+                "SELECT module, COUNT(*) AS count, "
+                "SUM(CASE WHEN source='slips.log' THEN 0 ELSE 1 END) AS errors "
+                f"FROM error_events INDEXED BY error_time_idx{log_where} GROUP BY module",
                 log_parameters,
             ).fetchall()
             error_counts = {
-                str(row["module"]): int(row["count"]) for row in error_rows
+                str(row["module"]): int(row["errors"])
+                for row in error_rows
+                if row["errors"]
             }
+            log_count = sum(int(row["count"]) for row in error_rows)
             recent_errors = [
                 dict(row)
                 for row in history.execute(
                     "SELECT event_time, module, message, line "
-                    f"FROM error_events{log_where} ORDER BY event_time DESC, id DESC "
+                    f"FROM error_events{log_where} AND source<>'slips.log' ORDER BY event_time DESC, id DESC "
                     "LIMIT 20",
                     log_parameters,
                 ).fetchall()
@@ -9455,6 +9471,7 @@ class RunDataReader:
                 "hosts": host_count,
                 "processed_flows": processed_flows,
                 "module_errors": sum(error_counts.values()),
+                "logs": log_count,
             },
             "firewall": {
                 "current": firewall["current"],

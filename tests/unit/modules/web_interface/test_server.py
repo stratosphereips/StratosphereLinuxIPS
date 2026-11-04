@@ -2966,13 +2966,15 @@ assert.equal(JSON.stringify(flow), original, 'The source result must remain inta
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize("runtime_messages", [0, 3])
 def test_overview_uses_counter_without_scanning_retained_evidence(
-    tmp_path: Path,
+    tmp_path: Path, runtime_messages: int,
 ) -> None:
     """Keep the first Overview response independent of retained Redis size.
 
     Parameters:
         tmp_path: Isolated output directory for durable web data.
+        runtime_messages: Informational runtime entries excluded from errors.
     """
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
@@ -3022,6 +3024,11 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
             "INSERT INTO error_events(event_time,module,message,line) VALUES (?,?,?,?)",
             [(90, "OldModule", "old", "old"), (110, "Profiler", "current", "current")],
         )
+        history.executemany(
+            "INSERT INTO error_events(event_time,module,message,line,source) "
+            "VALUES (?,'main','network change','raw','slips.log')",
+            [(120 + index,) for index in range(runtime_messages)],
+        )
     with sqlite3.connect(reader.sqlite_path) as connection:
         connection.execute("CREATE TABLE alerts (alert_id TEXT)")
         connection.execute("CREATE TABLE evidence (evidence_id TEXT)")
@@ -3035,6 +3042,7 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
     assert result["evidence_details_loaded"] is False
     reader._redis_evidence.assert_not_called()
     assert result["counts"]["module_errors"] == 1
+    assert result["counts"]["logs"] == 1 + runtime_messages
     assert [item["module"] for item in result["recent_errors"]] == ["Profiler"]
     reader._module_rows.assert_called_once_with(None, {"Profiler": 1}, False)
 
@@ -3692,6 +3700,48 @@ def test_logs_show_the_final_exception_in_traceback_summary(
         "RecursionError: maximum recursion depth exceeded" in item["message"]
     )
     assert '  File "detector.py", line 461' in item["line"]
+
+
+@pytest.mark.parametrize("sort", ["event_time", "level", "source"])
+def test_runtime_logs_keep_source_severity_and_undated_history(
+    tmp_path: Path, sort: str,
+) -> None:
+    """Combine sources without turning normal messages into errors or old dates.
+
+    Parameters:
+        tmp_path: Isolated runtime history.
+        sort: Server-side sort applied before bounding the result page.
+    """
+    _factory = ModuleFactory()
+    reader = object.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"analysis_start":"100"}
+    initialize_history(reader.history_path)
+    with connect_history(reader.history_path) as connection:
+        connection.executemany(
+            "INSERT INTO error_events(event_time,module,message,line,source,time_source) "
+            "VALUES (?,'main',?,?,?,?)", [
+                (150, "Historical network change", "old", "slips.log", "unknown"),
+                (110, "Network settings changed", "network", "slips.log", "logged"),
+                (120, "Warning: queue capacity reached", "warning", "slips.log", "observed"),
+                (130, "Database unavailable", "error", "errors.log", "logged"),
+                (140, "Failed to update feed", "failure", "slips.log", "logged"),
+            ],
+        )
+    query = {"sort":[sort],"order":["asc"]}
+    current = reader.logs(query)
+    history = reader.logs({**query,"scope":["history"]})
+    assert current["total"] == 4
+    assert history["total"] == 5
+    assert all(row["time_source"] != "unknown" for row in current["items"])
+    rows = {row["message"]:row for row in history["items"]}
+    assert rows["Network settings changed"]["level"] == "info"
+    assert rows["Warning: queue capacity reached"]["level"] == "warning"
+    assert rows["Database unavailable"]["level"] == "error"
+    assert rows["Failed to update feed"]["level"] == "error"
+    assert rows["Historical network change"]["time_source"] == "unknown"
+    assert [row[sort] for row in history["items"]] == sorted(row[sort] for row in history["items"])
 
 
 def test_log_rows_open_the_colored_raw_console() -> None:
