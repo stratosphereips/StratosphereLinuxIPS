@@ -1178,7 +1178,7 @@ class HistoryCollector:
                         stamp = cls._event_timestamp(row["observed_at"])
                         if not math.isfinite(stamp):
                             continue
-                        ip = str(address)
+                        ip = str(row["ip"])
                         if ip in recovered and recovered[ip][0] >= stamp:
                             continue
                         recovered[ip] = (

@@ -1250,3 +1250,25 @@ def test_restore_host_inventory_rebuilds_after_resets(tmp_path: Path, change: st
     with connect_history(history_path, read_only=True) as connection:
         ips = {row[0] for row in connection.execute("SELECT ip FROM host_snapshots")}
     assert ("10.0.0.1" if change == "empty_inventory" else "10.0.0.2") in ips
+
+
+@pytest.mark.parametrize("ip", ["2001:db8::1", "2001:0DB8:0:0:0:0:0:1"])
+def test_restored_host_keeps_exact_finding_profile_ip(tmp_path: Path, ip: str) -> None:
+    """Keep SQLite joins valid for alternative textual forms of IPv6 addresses.
+
+    Parameters:
+        tmp_path: Isolated findings and inventory.
+        ip: Exact profile address stored in a finding.
+    """
+    _factory = ModuleFactory()
+    history = tmp_path / "history.sqlite"
+    source = tmp_path / "flows.sqlite"
+    initialize_history(history)
+    with sqlite3.connect(source) as connection:
+        connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+        connection.execute("INSERT INTO evidence VALUES ('saved',?,100)", (ip,))
+    assert HistoryCollector.restore_host_inventory(history, source, complete=True) == 1
+    with connect_history(history, read_only=True) as connection:
+        row = connection.execute("SELECT ip,data FROM host_snapshots").fetchone()
+    assert row["ip"] == ip
+    assert json.loads(row["data"])["ip"] == ip
