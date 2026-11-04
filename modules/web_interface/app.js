@@ -142,6 +142,125 @@ function syncExcludedVisibility() {
     button.dataset.hidden = String(state.hideExcluded);
     button.title = state.hideExcluded ? "Show whitelisted evidence excluded from scoring" : "Hide whitelisted evidence excluded from scoring";
   });
+  syncFilterPopups();
+}
+
+/** Position an open filter popup inside the browser viewport.
+ * @param {HTMLElement} popup Native popover containing one tab's controls.
+ */
+function positionFilterPopup(popup) {
+  if (!popup.matches(":popover-open")) return;
+  const anchor = byId(`${popup.dataset.filterTab}-filter-button`).getBoundingClientRect();
+  const bounds = popup.getBoundingClientRect();
+  popup.style.left = `${Math.max(12, Math.min(anchor.left, innerWidth - bounds.width - 12))}px`;
+  const below = anchor.bottom + 8;
+  popup.style.top = `${Math.max(12, Math.min(below, innerHeight - bounds.height - 12))}px`;
+}
+
+/** Keep hidden filter criteria visible through a count and compact range summary. */
+function syncFilterPopups() {
+  document.querySelectorAll(".filter-popup").forEach((popup) => {
+    const tab = popup.dataset.filterTab;
+    const criteria = popup.dataset.filterControls.split(" ");
+    let count = criteria.filter((id) => {
+      const control = byId(id);
+      const value = control.type === "checkbox" ? control.checked : control.value;
+      return value !== VIEW_CONTROL_DEFAULTS[id];
+    }).length;
+    if (tab === "alerts" && state.alertsWorkspace.severity) count += 1;
+    if (popup.querySelector(".excluded-visibility-toggle") && !state.hideExcluded) count += 1;
+    const range = byId(`${tab}-range`);
+    if (!["live", "all"].includes(range.value)) count += 1;
+    const selected = tab === "alerts" ? state.alertsWorkspace.severity
+      : byId(`${tab}-threat`).value;
+    const labels = [range.selectedOptions[0]?.textContent || "Live"];
+    if (selected) labels.push(selected[0].toUpperCase() + selected.slice(1).replace("_or_more", "+"));
+    const button = byId(`${tab}-filter-button`);
+    button.dataset.active = String(count > 0);
+    const badge = button.querySelector(".filter-count");
+    badge.textContent = String(count);
+    badge.hidden = count === 0;
+    button.title = `Filters · ${count} active · ${labels.join(" · ")}`;
+    button.setAttribute("aria-description", button.title);
+    byId(`${tab}-filter-summary`).textContent = labels.join(" · ");
+    positionFilterPopup(popup);
+  });
+}
+
+/** Move existing tab controls into accessible, immediately applied filter popups. */
+function initFilterPopups() {
+  const definitions = [
+    ["evidence", "Evidence", ".evidence-toolbar", "evidence-review evidence-threat evidence-scored-only evidence-link", [
+      ["#evidence-review"], ["#evidence-threat"], ["#evidence-group-controls", "Group by"],
+      ["#evidence-scored-only"], [".excluded-visibility-toggle"], ["#evidence-link"],
+      ["#evidence-range"], ["#evidence-from", "From"], ["#evidence-to", "To"],
+    ]],
+    ["alerts", "Alerts", ".alerts-host-controls", "alerts-review", [
+      [".alerts-group-options", "Group by"], ["#alerts-review"],
+      ["#alerts-severity-filters", "Severity"], [".alerts-time-controls"],
+      ["#alerts-from", "From"], ["#alerts-to", "To"], ["#alerts-range-note"],
+    ]],
+    ["hosts", "Hosts", ".hosts-toolbar", "hosts-threat hosts-scope hosts-alerts-only hosts-review", [
+      ["#hosts-threat-chips", "Severity"], ["#hosts-scope-chips", "Scope"],
+      ["#hosts-alerts-only"], ["#hosts-review", "Review"], ["#hosts-range", "Range"],
+      ["#hosts-from", "From"], ["#hosts-to", "To"],
+    ]],
+  ];
+  definitions.forEach(([tab, title, selector, criteria, fields]) => {
+    const toolbar = document.querySelector(selector);
+    const button = document.createElement("button");
+    button.id = `${tab}-filter-button`;
+    button.className = "filter-popup-trigger secondary";
+    button.type = "button";
+    button.setAttribute("aria-label", `${title} filters`);
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("popovertarget", `${tab}-filter-popup`);
+    button.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg><span class="filter-count" aria-hidden="true" hidden></span>';
+    const summary = text("span", "", "filter-context muted");
+    summary.id = `${tab}-filter-summary`;
+    const popup = document.createElement("div");
+    popup.id = `${tab}-filter-popup`;
+    popup.className = "filter-popup";
+    popup.setAttribute("popover", "auto");
+    popup.setAttribute("role", "dialog");
+    popup.setAttribute("aria-label", `${title} filters`);
+    popup.dataset.filterTab = tab;
+    popup.dataset.filterControls = criteria;
+    const heading = document.createElement("div");
+    heading.className = "filter-popup-heading";
+    const close = text("button", "×", "text-button");
+    close.type = "button";
+    close.setAttribute("aria-label", `Close ${title.toLowerCase()} filters`);
+    close.setAttribute("popovertarget", popup.id);
+    close.setAttribute("popovertargetaction", "hide");
+    heading.append(text("h3", `${title} filters`), close);
+    const body = document.createElement("div");
+    body.className = "filter-popup-fields";
+    fields.forEach(([fieldSelector, caption]) => {
+      let node = toolbar.querySelector(fieldSelector);
+      if (node.matches("input, select") && node.closest("label")) node = node.closest("label");
+      if (caption) {
+        const field = document.createElement(node.matches("input, select") ? "label" : "div");
+        field.className = "filter-popup-field";
+        field.append(text("span", caption, "filter-popup-label"), node);
+        body.append(field);
+      } else body.append(node);
+    });
+    if (tab === "alerts") toolbar.querySelector(".alerts-custom-time").remove();
+    popup.append(heading, body);
+    byId(`${tab}-search`).after(button, summary, popup);
+    popup.addEventListener("toggle", (event) => {
+      button.setAttribute("aria-expanded", String(event.newState === "open"));
+      if (event.newState !== "open") return;
+      positionFilterPopup(popup);
+      body.querySelector('select:not([hidden]):not(:disabled), input:not([hidden]):not(:disabled), button:not([hidden]):not(:disabled)')?.focus();
+    });
+    popup.addEventListener("change", syncFilterPopups);
+    popup.addEventListener("click", () => queueMicrotask(syncFilterPopups));
+  });
+  byId("evidence-range-badge").hidden = true;
+  window.addEventListener("resize", syncFilterPopups);
+  syncFilterPopups();
 }
 
 /** Save browser-only filters, sorts, visible columns, and pane widths. */
@@ -3132,6 +3251,7 @@ async function loadAlerts() {
   byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts);
   byId("alerts-count").textContent = compact(payload.total);
   renderAlertSeverityFilters();
+  syncFilterPopups();
   renderAlertHostList();
   pager("alerts", "alerts-pager", loadAlerts);
   if (workspace.host && workspace.grouping === "host") {
@@ -3750,6 +3870,7 @@ async function copyEvidenceId(identifier) {
 /** Refresh the Evidence table while retaining a valid open investigation. */
 async function loadEvidence() {
   renderEvidenceGroupControls();
+  syncFilterPopups();
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
@@ -5854,6 +5975,7 @@ async function loadP2P() {
 }
 
 async function loadHosts() {
+  syncFilterPopups();
   const page = state.pages.hosts;
   const revision = page.revision;
   const generation = (page.refreshGeneration || 0) + 1;
@@ -8936,6 +9058,7 @@ function scheduleBackendStatusPoll() {
 }
 
 function switchTab(name) {
+  document.querySelectorAll(".filter-popup:popover-open").forEach((popup) => popup.hidePopover());
   if (name === "alerts" && state.activeTab !== "alerts") resetAlertPaneWidths();
   closeEvidenceDetail(false, true);
   state.activeTab = name;
@@ -9103,6 +9226,13 @@ byId("drawer-backdrop").addEventListener("click", closeDrawer);
 /** Return to the nearest visible investigation with Escape. */
 document.addEventListener("keydown", (event) => {
   if (event.key !== "Escape") return;
+  const popup = document.querySelector(".filter-popup:popover-open");
+  if (popup) {
+    event.preventDefault();
+    popup.hidePopover();
+    byId(`${popup.dataset.filterTab}-filter-button`).focus();
+    return;
+  }
   const drawer = byId("drawer");
   if (drawer.classList.contains("open")
       && drawer.classList.contains("alert-over-evidence")) {
@@ -9366,6 +9496,7 @@ window.addEventListener("beforeunload", () => {
   state.requests.forEach((controller) => controller.abort());
 });
 
+initFilterPopups();
 initDrawerResize();
 initAlertPaneResize();
 initEvidencePaneResize();

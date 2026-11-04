@@ -171,7 +171,7 @@ Active and In review alerts by default; its Review filter can show either
 state, Resolved, or all alerts. Resolved alerts and their evidence remain in
 the current run database after a Slips restart. Reopen a resolved alert by
 setting it Active. The Overview and live alert counts exclude resolved alerts.
-The Alerts view has visible **Group by host** and **All alerts** choices. The
+The Alerts filter popup has **Group by host** and **All alerts** choices. The
 second choice shows a pageable list of individual alerts. Search, severity, time, visibility, review, and
 sorting filters apply in both views. Selecting an individual alert opens its
 existing evidence and review details beside the list.
@@ -192,9 +192,16 @@ The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
-Evidence filters sit directly in the toolbar, wrapping onto another row when
-needed. Alert-link and time-range selectors are always visible; custom dates
-appear beside the range selector. Controls share the same font and height.
+The **Alerts**, **Evidence**, and **Hosts** tabs keep search and result counts
+visible, with a funnel icon opening the other filtering options in a popup.
+Filters apply immediately; no Apply step is needed. The icon shows the number
+of active criteria, and a compact summary keeps the range and severity visible.
+Grouping, review, severity, whitelist visibility, score, scope, alert-link and
+time controls remain available in their respective tabs. Custom dates appear
+when **Custom** is selected. Controls share the same font and height.
+Close the popup with its close button, Escape, or a click outside it. Changing
+tabs closes it too. Closing it preserves selections; existing saved browser
+preferences still apply. Table sorting and column controls stay beside the tables.
 The group summary shows its type once, one host identity, the description and
 a compact row for threat, score and network. Record headers keep additional
 description details without repeating their opening sentence. Identifiers stay
@@ -772,9 +779,9 @@ drawer and then the original evidence record.
 
 Both alert lists have sort controls and a reverse-order button. Host sorting covers latest alert, address, severity, score, alert and evidence counts, and label. The selected host's alerts can be sorted by time, severity, score, label, evidence count, and ID. These choices apply before cursor paging.
 
-Search, severity chips, time range, and excluded-record visibility stay visible
-in the host pane. Time choices include 5 minutes, 15 minutes, Live (the last
-hour), longer intervals, Full run, and a custom interval. On the first visit,
+Search stays visible in the host pane; its funnel icon opens grouping, review,
+severity, time range, and whitelisted-evidence visibility in a filter popup.
+Time choices include 5 minutes, 15 minutes, Live (the last hour), longer intervals, Full run, and a custom interval. On the first visit,
 if Live has no alert hosts but the run has saved alerts, the tab switches to
 24 hours, 7 days, or Full run based on the newest alert time and says so.
 Older servers without that timestamp switch to Full run. An empty
@@ -828,7 +835,7 @@ hardware addresses follow below. Both IPs open the host
 workspace. They remain visible when only the ARP protocol record was retained;
 they are not repeated in the additional-fields table.
 
-The top controls switch between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
+The Evidence filter popup switches between host-and-type, type, host, and individual records. Search, threat, score, alert-link, time-range, and excluded-record filters use the server's bounded queries. The compact group response avoids concatenating evidence IDs and counting linked flows that are not shown in the group table; it retains the persisted exclusion and alert-link counts needed there. The right panel never loads every record in a large group at once.
 
 Evidence and Hosts also offer **All** and inclusive **High+**,
 **Medium+**, **Low+**, **Info+**, and **Critical+** filters. Host thresholds
@@ -1390,7 +1397,7 @@ table, so the next selection starts a new investigation.
 
 ### Hosts
 
-The Hosts tab opens as a compact inventory sized to the available browser height. It shows every host in the first server page, then loads more pages automatically as you scroll until every host matching the selected time range and filters is visible. **Load more** is also available in the footer. The footer shows how many of the matching hosts have loaded. Sorting stays on the server. Threat and scope chips, search, and **Only with alerts** filter the inventory; the alerts-only filter is applied before server paging. **Columns** reveals hostname, TI feeds, and current score when needed. The table combines MAC with vendor and threat with the past peak score, including a marker for the alert threshold. **Export CSV** exports the loaded rows.
+The Hosts tab opens as a compact inventory sized to the available browser height. It shows every host in the first server page, then loads more pages automatically as you scroll until every host matching the selected time range and filters is visible. **Load more** is also available in the footer. The footer shows how many of the matching hosts have loaded. Sorting stays on the server. Search stays visible; the filter popup contains threat and scope chips, review, time range, and **Only with alerts**; these filter the inventory, and the alerts-only filter is applied before server paging. **Columns** reveals hostname, TI feeds, and current score when needed. The table combines MAC with vendor and threat with the past peak score, including a marker for the alert threshold. **Export CSV** exports the loaded rows.
 All inventory headings, including the optional TI feeds column, sort the matching hosts before paging. TI feed sorting reads cached feed names only when that column is selected.
 The first refreshed page is displayed immediately; revalidating additional
 previously loaded pages does not delay it. Finding counts, peak scores, and

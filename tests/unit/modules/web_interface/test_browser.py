@@ -21,6 +21,118 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("tab", ["evidence", "alerts", "hosts"])
+@pytest.mark.parametrize("theme,width", [("light", 900), ("dark", 1800)])
+def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, width: int) -> None:
+    """Apply popup filters while preserving selections and keyboard dismissal.
+
+    Parameters:
+        tab: Workspace whose existing filters move into a popup.
+        theme: Browser color theme.
+        width: Browser viewport width.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    queries: list[dict[str, list[str]]] = []
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve real assets and isolated empty result pages.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == f"/api/{tab}":
+            queries.append(parse_qs(parsed.query))
+            route.fulfill(json={"items": [], "total": 0, "full_total": 0, "open_total": 0,
+                                "page_size": 0, "next_cursor": None})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated popup fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 850})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof initFilterPopups === 'function'")
+            assert not errors, errors
+            page.evaluate("""async ({tab,theme}) => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+                setTheme(theme);await switchTab(tab);clearTimeout(state.timer);
+            }""", {"tab": tab, "theme": theme})
+            trigger = page.get_by_role("button", name=f"{tab.title()} filters", exact=True)
+            popup = page.locator(f"#{tab}-filter-popup")
+            assert page.locator(f"#{tab}-search").is_visible()
+            assert popup.is_hidden()
+            assert page.locator(f"#{tab}-range").is_hidden()
+            trigger.click()
+            page.wait_for_function("tab => byId(`${tab}-filter-button`).getAttribute('aria-expanded') === 'true'", arg=tab)
+            assert popup.is_visible()
+            bounds = popup.bounding_box()
+            assert 0 <= bounds["x"] and bounds["x"] + bounds["width"] <= width
+            assert 0 <= bounds["y"] and bounds["y"] + bounds["height"] <= 850
+            with page.expect_response(lambda response: urlparse(response.url).path == f"/api/{tab}"):
+                page.locator(f"#{tab}-range").select_option("7d")
+            page.wait_for_function("tab => !state.requests.has(tab)", arg=tab)
+            with page.expect_response(lambda response: urlparse(response.url).path == f"/api/{tab}"):
+                if tab == "evidence":
+                    page.locator("#evidence-threat").select_option("high_or_more")
+                else:
+                    group = "#alerts-severity-filters" if tab == "alerts" else "#hosts-threat-chips"
+                    page.locator(group).get_by_role("button", name="High+", exact=False).click()
+            page.wait_for_function("tab => !state.requests.has(tab)", arg=tab)
+            with page.expect_response(lambda response: urlparse(response.url).path == f"/api/{tab}"):
+                if tab == "alerts":
+                    popup.get_by_role("button", name="All alerts", exact=True).click()
+                elif tab == "hosts":
+                    page.locator("#hosts-scope-chips").get_by_role("button", name="Local", exact=False).click()
+                else:
+                    page.locator("#evidence-group-controls").get_by_role("button", name="None", exact=True).click()
+            page.wait_for_function("tab => !state.requests.has(tab)", arg=tab)
+            assert queries[-1]["range"] == ["7d"]
+            assert queries[-1]["threat"] == ["high_or_more"]
+            assert popup.is_visible()
+            assert "7 days" in page.locator(f"#{tab}-filter-summary").inner_text()
+            assert "High+" in page.locator(f"#{tab}-filter-summary").inner_text()
+            assert int(trigger.locator(".filter-count").inner_text()) >= 2
+            popup.locator("select:not(:disabled)").first.focus()
+            page.keyboard.press("Escape")
+            assert popup.is_hidden()
+            assert trigger.evaluate("node => node === document.activeElement")
+            trigger.click()
+            popup.get_by_role("button", name=f"Close {tab} filters", exact=True).click()
+            assert popup.is_hidden()
+            trigger.click()
+            assert page.locator(f"#{tab}-range").input_value() == "7d"
+            with page.expect_response(lambda response: urlparse(response.url).path == f"/api/{tab}"):
+                page.locator(f"#{tab}-range").select_option("custom")
+            assert page.locator(f"#{tab}-from").is_visible()
+            assert page.locator(f"#{tab}-to").is_visible()
+            for field in popup.locator("select, input:not([hidden])").all():
+                if field.is_visible():
+                    box = field.bounding_box()
+                    assert box["width"] <= bounds["width"]
+            page.locator(f"#{tab}-search").click()
+            assert popup.is_hidden()
+            trigger.click()
+            page.evaluate("() => switchTab('overview')")
+            assert popup.is_hidden()
+            assert not errors, errors
+            artifacts = Path("output/filter-popup-check")
+            artifacts.mkdir(parents=True, exist_ok=True)
+            page.evaluate("tab => switchTab(tab)", tab)
+            trigger.click()
+            page.screenshot(path=str(artifacts / f"{tab}-{theme}-{width}.png"))
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_runtime_logs_show_both_sources_and_honest_daemon_times(theme: str) -> None:
     """Show source, severity and time provenance in the table and event drawer.
@@ -158,6 +270,8 @@ def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
             page.wait_for_function("state.evidenceWorkspace.recordsLoaded")
             toolbar = page.locator(".evidence-toolbar")
             assert toolbar.locator("details").count() == 0
+            assert page.locator("#evidence-link").is_hidden()
+            page.get_by_role("button", name="Evidence filters", exact=True).click()
             assert page.locator("#evidence-link").is_visible()
             assert page.locator("#evidence-range").is_visible()
             metrics = toolbar.evaluate("""node => ['#evidence-search','#evidence-review','#evidence-threat',
@@ -169,8 +283,6 @@ def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
             assert len({metric[0] for metric in metrics}) == 1
             assert len({metric[1] for metric in metrics}) == 1
             assert len({metric[2] for metric in metrics}) == 1
-            if width == 2200:
-                assert page.locator("#evidence-link").bounding_box()["y"] == page.locator("#evidence-range").bounding_box()["y"]
             summary = page.locator(".evidence-group-summary")
             assert summary.inner_text().count(source) == 1
             assert summary.locator(".type-chip").count() == 1
@@ -193,6 +305,7 @@ def test_compact_evidence_filters_and_headers(theme: str, width: int) -> None:
             page.evaluate("""() => {saveViewPreferences(); state.hideExcluded=true;
                 syncExcludedVisibility(); restoreViewPreferences(state.viewPreferencesKey);}""")
             assert toolbar.get_by_role("button", name="Hide Whitelisted Evidence", exact=True).get_attribute("data-hidden") == "false"
+            page.keyboard.press("Escape")
             page.locator("#evidence-records-table tbody tr[data-clickable]").first.click()
             page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
             banner = page.locator(".evidence-detail-banner")
@@ -864,8 +977,10 @@ def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, them
         assert page.locator("#evidence-detail").is_visible()
         assert table.is_visible()
         page.evaluate("renderEvidenceGroupControls()")
+        page.get_by_role("button", name="Evidence filters", exact=True).click()
         page.locator("#evidence-group-controls").get_by_role("button", name="None", exact=True).click()
         page.wait_for_function("!state.requests.has('evidence') && state.pages.evidence.items.length > 1")
+        page.keyboard.press("Escape")
         workspace = page.locator("#evidence-workspace")
         evidence_list = page.locator(".evidence-left")
         assert page.locator("#evidence-right").is_hidden()
@@ -902,8 +1017,10 @@ def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, them
         page.locator("#evidence-table tbody tr[data-clickable]").first.click()
         page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
         assert evidence_list.bounding_box()["width"] == width
+        page.get_by_role("button", name="Evidence filters", exact=True).click()
         page.locator("#evidence-group-controls").get_by_role("button", name="Type", exact=True).click()
         page.wait_for_function("!state.requests.has('evidence') && state.pages.evidence.items.length > 0")
+        page.keyboard.press("Escape")
         assert page.locator("#evidence-right").is_visible()
         assert divider.is_visible()
         page.locator("#evidence-table tbody tr[data-clickable]").first.click()
@@ -4705,6 +4822,7 @@ def test_seven_day_network_history_and_severity_dropdown_in_browser(
             assert queries[-1]["range"] == ["7d"]
             assert "4 records" in page.locator("#evidence-count").inner_text()
             severity = page.get_by_role("combobox", name="Evidence severity", exact=True)
+            page.get_by_role("button", name="Evidence filters", exact=True).click()
             assert severity.is_visible()
             assert severity.input_value() == ""
             assert severity.locator("option").all_text_contents() == ["All", "Critical+", "High+", "Medium+", "Low+", "Info+"]
