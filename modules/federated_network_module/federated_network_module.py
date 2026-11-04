@@ -15,7 +15,8 @@ Training Flow:
    - Train fc1 + head for local_training_epochs
    - Save the model produced by local training (fc1 + "head_before"): it is
      what peers are sent and what the merge averages
-   - Fine-tune fc1 + head for merge_finetune_epochs from a fresh Adam state
+   - Fine-tune fc1 + head for merge_finetune_epochs from a copy of the local
+     training Adam state (merge_finetune_adam; 'fresh' = an empty one)
      (local_head_train.log); head only with finetune_fc_layers: false
    - Save as latest_local model
    - Send the model after local training (not the fine-tuned one) via P2P
@@ -25,8 +26,8 @@ Training Flow:
    - Aggregate fc1 weights (AVERAGE)
    - Restore "head_before" (head from local full training)
    - Fine-tune for merge_finetune_epochs (merged_train.log) exactly like the
-     local model: fc1 + head from a fresh Adam state (head only, fc1 frozen,
-     with finetune_fc_layers: false)
+     local model: fc1 + head from its own copy of the local training Adam
+     state (head only, fc1 frozen, with finetune_fc_layers: false)
    - Save as merged_N model (merged models NOT used in future merges)
 
 This makes local and merged models directly comparable: both start from the
@@ -35,9 +36,12 @@ fine-tune; only the starting weights differ.
 
 Options: merge_head also shares and merges the head (the merged fine-tune then
 starts from the merged head); finetune_fc_layers (default on) makes both
-fine-tunes train fc1 + head, each from a fresh Adam state, while peers still get
-the model after local training - off = head-only fine-tunes with fc1 frozen, the
-behaviour before this option; minibatch_size splits every training pass into class-stratified
+fine-tunes train fc1 + head while peers still get the model after local
+training - off = head-only fine-tunes with fc1 frozen, the behaviour before
+this option; merge_finetune_adam (default copy) starts each fine-tune from its
+own copy of the local training Adam state, 'fresh' from an empty one (the
+behaviour before this option); finetune_head: false skips both fine-tunes;
+minibatch_size splits every training pass into class-stratified
 mini-batches (one Adam step each). merging_data.log records per merge how much
 of the merge the fine-tunes undo ("finetune | ... | undone=").
 
@@ -144,6 +148,20 @@ def learning_rate_from_config(value) -> float:
     if not math.isfinite(lr) or lr <= 0:
         return DEFAULT_LEARNING_RATE
     return lr
+
+
+# merge_finetune_adam: the Adam state both fine-tunes start from
+FINETUNE_ADAM_MODES = ("copy", "fresh")
+
+
+def finetune_adam_from_config(value) -> str:
+    """Parse the fine-tunes' Adam start state.
+
+    :param value: the raw `merge_finetune_adam` config value
+    :return: 'copy' or 'fresh'; 'copy' (the default) when unset or unknown
+    """
+    mode = str(value or "").strip().lower()
+    return mode if mode in FINETUNE_ADAM_MODES else "copy"
 
 
 def with_shared_head(shared: dict, head: tuple) -> dict:
@@ -1126,15 +1144,38 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         )
         self.print(f"merge_head: {self.merge_head}", 0, 2)
         # The fine-tune after the merge point also trains the shared (fc)
-        # layers, on the local and on the merged model alike, each from a
-        # fresh throwaway Adam state (same learning rate). What is sent and
-        # merged is still the model after local training. Default on; false
-        # = head-only fine-tune with the shared layers frozen (the behaviour
-        # before this option).
+        # layers, on the local and on the merged model alike, each from its
+        # own throwaway Adam state (merge_finetune_adam; same learning
+        # rate). What is sent and merged is still the model after local
+        # training. Default on; false = head-only fine-tune with the shared
+        # layers frozen (the behaviour before this option).
         self.finetune_fc_layers = self._read_module_config_bool(
             "finetune_fc_layers", default=True
         )
         self.print(f"finetune_fc_layers: {self.finetune_fc_layers}", 0, 2)
+        # Adam state the two fine-tunes start from. 'copy' (default) = each
+        # fine-tune (local and merged) gets its own copy of the state local
+        # training left, never shared, so its steps scale with the gradient;
+        # the local training state carries on to the next window untouched.
+        # 'fresh' = an empty state (reset head moments for a head-only local
+        # fine-tune), whose first steps move every weight by about the
+        # learning rate whatever the gradient: the behaviour before this
+        # option.
+        raw_adam = conf.read_configuration(
+            section, "merge_finetune_adam", "copy"
+        )
+        self.merge_finetune_adam = finetune_adam_from_config(raw_adam)
+        if str(raw_adam or "").strip().lower() not in (
+            "",
+            *FINETUNE_ADAM_MODES,
+        ):
+            self.print(
+                f"unknown merge_finetune_adam '{raw_adam}' "
+                "(known: copy, fresh); using copy",
+                0,
+                1,
+            )
+        self.print(f"merge_finetune_adam: {self.merge_finetune_adam}", 0, 2)
         # Optional mini-batch size for every training pass (local training
         # and both fine-tunes): each epoch takes one Adam step per
         # class-stratified mini-batch. Unset/0 = one full-batch step per
@@ -3253,17 +3294,22 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             shared_before = self.model.weights_for_sharing()
 
             # Phase 2: local fine-tune (shorter). With finetune_fc_layers the
-            # shared layers train too, from a fresh throwaway Adam state like
-            # the merged fine-tune's, and the local training state carries on
-            # to the next window; without it the head alone trains, on its
-            # reset Adam moments.
+            # shared layers train too; without it the head alone. It starts
+            # from a copy of the state local training left (merge_finetune_adam
+            # 'copy'; the merged fine-tune gets its own copy) or, with 'fresh',
+            # from an empty state (head only: reset head moments). With 'copy'
+            # or fc layers the local training state carries on to the next
+            # window untouched.
             self.logger.log_train_header(
                 "local_head_train",
                 f"{self._training_trigger}_{counter} | {mal_count} mal, {ben_count} ben",
             )
             finetune_fc_layers = getattr(self, "finetune_fc_layers", True)
+            copy_adam = getattr(self, "merge_finetune_adam", "copy") == "copy"
             train_adam = self._adam_state
-            if finetune_fc_layers:
+            if copy_adam:
+                self._adam_state = copy.deepcopy(train_adam)
+            elif finetune_fc_layers:
                 self._adam_state = {}
             else:
                 self._reset_head_adam_state()
@@ -3276,7 +3322,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 )
             finally:
                 self._finetune_stage = False
-                if finetune_fc_layers:
+                if copy_adam or finetune_fc_layers:
                     self._adam_state = train_adam
 
             self._save_local_model()
@@ -3601,17 +3647,23 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 merged.set_head_weights(head_before_w, head_before_b)
 
             # fine-tune the merged head (shared layers frozen unless
-            # finetune_fc_layers), on the merged copy and with a FRESH, throwaway
-            # optimizer state: Adam moments are keyed by parameter name, so
-            # sharing them would leak the merged training into the next local
-            # training
+            # finetune_fc_layers), on the merged copy and with its own
+            # throwaway optimizer state (merge_finetune_adam: a copy of the
+            # local training state, or empty): Adam moments are keyed by
+            # parameter name, so sharing the local one would leak the merged
+            # training into the next local training
             self.print("trigger_merge: calling _align_head_on_buffer", 1, 1)
             merged_start = trainable_vector(
                 merged.weights_for_sharing(), merged.get_head_weights()
             )
             local_model = self.model
             local_adam = getattr(self, "_adam_state", {})
-            self.model, self._adam_state = merged, {}
+            merged_adam = (
+                copy.deepcopy(local_adam)
+                if getattr(self, "merge_finetune_adam", "copy") == "copy"
+                else {}
+            )
+            self.model, self._adam_state = merged, merged_adam
             try:
                 self._align_head_on_buffer(
                     self._last_train_X, self._last_train_Y

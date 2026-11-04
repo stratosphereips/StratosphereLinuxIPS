@@ -995,10 +995,12 @@ def test_peers_get_the_model_after_local_training(
 def test_finetune_fc_layers_trains_fc1_in_both_finetunes_from_fresh_adam(
     tmp_path,
 ):
-    """Both fine-tunes start from an empty Adam state and move fc1; the
-    local training state (2 epochs = 2 steps) carries on unchanged."""
+    """merge_finetune_adam 'fresh': both fine-tunes start from an empty Adam
+    state and move fc1; the local training state (2 epochs = 2 steps)
+    carries on unchanged."""
     m = _trainable(tmp_path)
     m.finetune_fc_layers = True
+    m.merge_finetune_adam = "fresh"
     peer = _net(tmp_path, "slips-b").weights_for_sharing()
     m.peer_models["slips-b"] = peer
     seen = _spy_train(m)
@@ -1009,6 +1011,68 @@ def test_finetune_fc_layers_trains_fc1_in_both_finetunes_from_fresh_adam(
     merged = m.merged_model.weights_for_sharing()
     assert any(not torch.allclose(merged[k], averaged[k]) for k in averaged)
     assert m._adam_state["fc1.weight"]["step"] == m.local_training_epochs
+
+
+def _adam_copy(state):
+    return {
+        name: {k: v.clone() if torch.is_tensor(v) else v for k, v in s.items()}
+        for name, s in state.items()
+    }
+
+
+def _adam_equal(a, b):
+    return set(a) == set(b) and all(
+        set(a[n]) == set(b[n])
+        and all(
+            (
+                torch.equal(a[n][k], b[n][k])
+                if torch.is_tensor(a[n][k])
+                else a[n][k] == b[n][k]
+            )
+            for k in a[n]
+        )
+        for n in a
+    )
+
+
+@pytest.mark.parametrize("finetune_fc_layers", [False, True])
+def test_finetunes_start_from_own_copies_of_the_local_training_adam_state(
+    tmp_path, finetune_fc_layers
+):
+    """merge_finetune_adam 'copy': each fine-tune starts from its own copy
+    of the state local training left (never the training state itself, nor
+    the other's), trains on it, and the local training state carries on to
+    the next window exactly as local training left it."""
+    m = _trainable(tmp_path)
+    m.finetune_fc_layers = finetune_fc_layers
+    m.merge_finetune_adam = "copy"
+    m.peer_models["slips-b"] = _net(tmp_path, "slips-b").weights_for_sharing()
+    seen = {}
+    real_fit = m.fit_incremental_model
+
+    def spy(x, y, classes=None, train_target="local"):
+        seen[train_target] = {
+            "obj": m._adam_state,
+            "start": _adam_copy(m._adam_state),
+        }
+        out = real_fit(x, y, classes=classes, train_target=train_target)
+        seen[train_target]["end"] = _adam_copy(m._adam_state)
+        return out
+
+    m.fit_incremental_model = spy
+    m._train_batch()
+    trained = seen["local"]["end"]
+    assert trained["head.weight"]["step"] == m.local_training_epochs
+    objs = [seen[s]["obj"] for s in ("local", "local_head", "merged")]
+    assert len({id(o) for o in objs}) == 3
+    for stage in ("local_head", "merged"):
+        assert _adam_equal(seen[stage]["start"], trained)
+        assert (
+            seen[stage]["end"]["head.weight"]["step"]
+            == m.local_training_epochs + m.merge_finetune_epochs
+        )
+    assert m._adam_state is seen["local"]["obj"]
+    assert _adam_equal(_adam_copy(m._adam_state), trained)
 
 
 def test_head_only_finetune_leaves_the_averaged_fc1_as_merged(tmp_path):

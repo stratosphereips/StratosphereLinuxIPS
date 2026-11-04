@@ -263,9 +263,20 @@ federated_network_module:
   # run_seed: 2   # optional, for repeat runs (see below)
   # learning_rate: 0.01   # optional, Adam step size (see below)
   # merge_head: false      # optional, also share + merge the head (see below)
+  # finetune_head: true    # false = no fine-tune at all (see below)
   # finetune_fc_layers: true  # fine-tune fc1 + head on both models (false = head only, see below)
+  # merge_finetune_adam: copy  # Adam state the fine-tunes start from (fresh = empty, see below)
   # minibatch_size: 0       # optional, mini-batch size of every training pass (see below)
 ```
+
+`finetune_head` (default true) switches both fine-tunes (local and merged) on
+or off. With false, `merge_finetune_epochs` collapses to 0: the local model
+trains `local_training_epochs` only, and the merged model is the merge rule's
+output as it is (with `merge_head`, also the merged head; without it, the own
+head after local training), scored for one window and discarded like any merged
+model. To give the local model the same training per window as with the
+fine-tune on, raise `local_training_epochs` by `merge_finetune_epochs` (e.g.
+20 instead of 15 + 5); peers are then sent the model after those 20 epochs.
 
 `run_seed` (optional, unset by default) gives repeat experiments run-to-run
 variation while keeping the model start fixed: it re-seeds each peer's window
@@ -290,8 +301,9 @@ then include the head parameters.
 
 `finetune_fc_layers` (default true) makes the fine-tune after the merge point
 train the fc (shared) layers + head instead of the head alone, on the local and on the merged
-model alike, each from a fresh throwaway Adam state with the same learning rate
-(the local model's training state carries on to the next window). Peers are
+model alike, each from its own throwaway Adam state (`merge_finetune_adam`) with
+the same learning rate (the local model's training state carries on to the next
+window). Peers are
 still sent the model after local training, before the fine-tune, and that is
 what the merge averages, so both fine-tunes start from the merge point and only
 their starting weights differ. Because the local fine-tune now changes fc1, the
@@ -307,6 +319,16 @@ fine-tunes start, `gap_after` = the two after them, `undone` = 1 − after/befor
 (1 = both end on the same model, 0 = as far apart as the merge put them). The
 line is also written with the option off (`finetune_fc_layers: false`: head-only
 fine-tunes with fc1 frozen, the behaviour before this option).
+
+`merge_finetune_adam` (default `copy`) sets the Adam state both fine-tunes
+start from. `copy`: right after local training, each fine-tune (local and
+merged) gets its own copy of the training state; the two never share one, the
+copies are discarded afterwards, and the local training state carries on to the
+next window as local training left it. With warm moments a step is
+proportional to the gradient, so a near-tie in the labels gets a small step.
+`fresh`: an empty state (head-only: the head moments reset), the behaviour
+before this option; Adam's first step from an empty state moves every weight by
+about the learning rate whatever the gradient size.
 
 `minibatch_size` (optional, default 0 = full batch) splits every training pass
 (local training and both fine-tunes) into ceil(n / minibatch_size) near-equal,

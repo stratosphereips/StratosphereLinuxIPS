@@ -204,6 +204,21 @@ def test_learning_rate_from_config(value, expected):
     assert fnm.learning_rate_from_config(value) == expected
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (None, "copy"),
+        ("", "copy"),
+        ("x", "copy"),
+        ("copy", "copy"),
+        (" Fresh ", "fresh"),
+        ("fresh", "fresh"),
+    ],
+)
+def test_finetune_adam_from_config(value, expected):
+    assert fnm.finetune_adam_from_config(value) == expected
+
+
 def test_window_offset_seed_without_run_seed_is_the_peer_id_hash():
     import hashlib
 
