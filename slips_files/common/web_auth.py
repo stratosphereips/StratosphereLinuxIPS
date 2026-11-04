@@ -14,8 +14,6 @@ session cookie is the right amount of protection.
 from collections.abc import Mapping
 import hmac
 import json
-import os
-import pwd
 import time
 from hashlib import sha256
 from html import escape
@@ -134,16 +132,13 @@ def record_successful_login(client_ip: str) -> None:
 
 
 def _password_hint() -> str:
-    """
-    text shown on the login page pointing the analyst at the file
-    holding the shared redis/web password, and who on the host owns it.
+    """Identify the shared Redis/web password file in the login hint.
+
+    Returns:
+        Instructions for finding the Redis password.
     """
     path = get_redis_auth_conf_path()
-    try:
-        owner = pwd.getpwuid(os.stat(path).st_uid).pw_name
-    except (OSError, KeyError):
-        owner = "the user who started Slips"
-    return f"check {path} for {owner}'s password."
+    return f"Check {path} for the Redis password."
 
 
 def login_page_html(error: Optional[str], post_path: str = "/login") -> str:

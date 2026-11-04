@@ -367,8 +367,9 @@ replace the collector.
 The web interface requires a password before it shows any run data. By
 default this is the same password slips generates for Redis (see
 [installation.md](installation.md), section "Redis authentication") -
-retrieve it with `cat permanent/redis_auth.conf`. Submitting it on the
-login page issues a signed session cookie valid for one year. The browser
+retrieve it with `cat permanent/redis_auth.conf`. The login page identifies
+this as the **Redis password** and shows the password file path. Submitting
+it issues a signed session cookie valid for one year. The browser
 retains it when Slips or the browser closes. Sessions remain valid across
 Slips runs using the same persistent web password record, and changing that
 password invalidates existing sessions.
