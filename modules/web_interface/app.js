@@ -7382,7 +7382,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   } else recordCard.append(detailRow("Alerts", "None"));
   const whitelistSection = whitelistEditor("evidence-detail", isPeerReport(record)
     ? { ...record, evidence_type: "P2P_REPORT" } : record);
-  side.append(recordCard, reviewEditor("evidence", record), whitelistSection);
+  side.append(recordCard, whitelistSection);
   const json = document.createElement("section");
   json.className = "surface evidence-detail-json";
   json.append(rawBlock(record, "evidence"));
@@ -7395,7 +7395,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   recordActions.append(showJson);
   side.append(json);
   columns.append(flowSection, side);
-  content.append(toolbar, banner, columns);
+  content.append(toolbar, banner, columns, reviewEditor("evidence", record));
 
   if (record.whitelisted) {
     const notice = document.createElement("section");

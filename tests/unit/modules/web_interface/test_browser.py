@@ -978,6 +978,7 @@ def test_review_keeps_investigation_open(workspace: str, decision: str) -> None:
                 "#alerts-detail" if workspace == "alert" else "#evidence-detail")
             pane = page.locator(selector)
             editor = pane.locator(".review-editor")
+            assert editor.evaluate("node => node.parentElement.lastElementChild === node")
             editor.locator("select").first.select_option(decision)
             editor.locator("textarea").fill("  Checked manually  ")
             editor.get_by_role("button", name="Save review", exact=True).click()
@@ -986,6 +987,7 @@ def test_review_keeps_investigation_open(workspace: str, decision: str) -> None:
                 !document.querySelector(selector + ' .review-editor button').disabled""", arg=selector)
             assert saved[-1]["status"] == decision
             assert pane.is_visible()
+            assert editor.evaluate("node => node.parentElement.lastElementChild === node")
             assert f"Current: {decision.replace('_', ' ')}" in editor.inner_text()
             assert editor.locator("textarea").input_value() == "Checked manually"
             if workspace not in {"alert", "drawer"}:
@@ -1981,6 +1983,10 @@ def test_host_evidence_opens_beside_table_in_chrome(theme: str, width: int) -> N
         assert inspector.bounding_box()["x"] > page.locator(".host-center-column").bounding_box()["x"]
         assert inspector.bounding_box()["x"] + inspector.bounding_box()["width"] <= width
         assert inspector.locator(".flow-card").count() == 1
+        assert inspector.locator(".review-editor").evaluate("""node =>
+            node.parentElement.id === 'evidence-detail-content'
+            && node.parentElement.lastElementChild === node
+            && node.getBoundingClientRect().top >= node.parentElement.querySelector('.evidence-detail-columns').getBoundingClientRect().bottom""")
         assert "1 of 1 linked flows loaded" in inspector.inner_text()
         inspector.get_by_role("button", name="next ↓").click()
         page.wait_for_function("() => state.evidenceDetail.record?.id === 'host-evidence-1' && !state.requests.has('evidenceFlows')")
