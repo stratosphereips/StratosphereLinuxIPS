@@ -146,7 +146,7 @@ runs:
               # Validate this PR against a fresh venv built only from the PRs
               # install/requirements.txt, rather than the image-baked packages.
               apt-get update
-              apt-get install -y --no-install-recommends python3.12-venv
+              apt-get install -y --no-install-recommends python3.12-venv python3.12-dev build-essential
               python3.12 -m venv /tmp/slips-venv
               . /tmp/slips-venv/bin/activate
               python3 -m pip install --upgrade pip
