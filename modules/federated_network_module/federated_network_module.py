@@ -44,8 +44,9 @@ behaviour before this option); finetune_head: false skips both fine-tunes;
 merge_scaler also sends the scaler's per-feature mean and variance and gives
 the merged model the own + peers' scalers pooled with the merge rule's
 weights (its fine-tune and scoring use it, the local model keeps its own);
-minibatch_size splits every training pass into class-stratified
-mini-batches (one Adam step each). merging_data.log records per merge how much
+global_scaler makes every model scale with the pretrained scaler in
+artifacts/global_scaler.json, never fit; minibatch_size splits every
+training pass into class-stratified mini-batches (one Adam step each). merging_data.log records per merge how much
 of the merge the fine-tunes undo ("finetune | ... | undone=").
 
 Key Features:
@@ -56,7 +57,8 @@ Key Features:
 - Graceful shutdown: saves latest_local and latest merged model
 
 Artifact Paths:
-- Base (shared): artifacts/random_projection.bin, artifacts/scaler.bin
+- Base (shared): artifacts/random_projection.bin, artifacts/global_scaler.json
+  (global_scaler)
 - Local: artifacts/latest_local_fc1.bin, latest_local_head.bin, latest_local_scaler.bin
 - Merged: artifacts/merged_N_fc1.bin, merged_N_head.bin (N = merge count)
 """
@@ -984,6 +986,47 @@ def scaler_from_stats(template: StandardScaler, mean, var) -> StandardScaler:
     return scaler
 
 
+def load_global_scaler(path: str, features: list) -> StandardScaler:
+    """The pretrained global scaler (global_scaler): a transform-only
+    StandardScaler from its saved statistics.
+
+    :param path: the JSON artifact (features, n_samples_seen, mean, var,
+        scale)
+    :param features: the module's feature order; the artifact must match it
+    :return: the scaler
+    :raises ValueError: when the artifact does not match the features or
+        holds an invalid value
+    """
+    with open(path) as fh:
+        saved = json.load(fh)
+    if saved.get("features") != list(features):
+        raise ValueError(
+            f"global scaler {path}: features {saved.get('features')} "
+            f"!= {list(features)}"
+        )
+    stats = scaler_from_payload(saved, len(features))
+    try:
+        scale = np.asarray(saved["scale"], dtype=np.float64)
+        n_seen = int(saved["n_samples_seen"])
+    except (KeyError, TypeError, ValueError):
+        stats = None
+    if (
+        stats is None
+        or scale.shape != stats["mean"].shape
+        or not np.isfinite(scale).all()
+        or (scale <= 0).any()
+        or n_seen < 1
+    ):
+        raise ValueError(f"global scaler {path}: invalid statistics")
+    scaler = StandardScaler()
+    scaler.n_features_in_ = len(features)
+    scaler.n_samples_seen_ = n_seen
+    scaler.mean_ = stats["mean"]
+    scaler.var_ = stats["var"]
+    scaler.scale_ = scale
+    return scaler
+
+
 class ModuleLogger:
     """Centralized logging for training, testing, and label comparison."""
 
@@ -1177,6 +1220,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.local_scaler_path = os.path.join(
             artifacts_dir, "latest_local_scaler.bin"
         )
+        self.global_scaler_path = os.path.join(
+            artifacts_dir, "global_scaler.json"
+        )
         self.merged_dir = os.path.join(artifacts_dir, "merged")
         os.makedirs(self.merged_dir, exist_ok=True)
 
@@ -1361,6 +1407,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "merge_scaler", default=False
         )
         self.print(f"merge_scaler: {self.merge_scaler}", 0, 2)
+        # Optional global scaler: every model (local and merged) scales with
+        # the pretrained scaler shipped as artifacts/global_scaler.json and
+        # never fits it. Unset = off (each peer fits its own scaler).
+        self.global_scaler = self._read_module_config_bool(
+            "global_scaler", default=False
+        )
+        self.print(f"global_scaler: {self.global_scaler}", 0, 2)
         # The fine-tune after the merge point also trains the shared (fc)
         # layers, on the local and on the merged model alike, each from its
         # own throwaway Adam state (merge_finetune_adam; same learning
@@ -1532,13 +1585,34 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self._warm_started = False
         if not train_from_scratch:
             self._load_local_model()
+        if self.global_scaler:
+            self._apply_global_scaler()
+
+    def _apply_global_scaler(self) -> None:
+        """global_scaler: make the pretrained global scaler the peer's
+        scaler (fitted, never fit again; update_preprocessor is a no-op)."""
+        self.scaler = load_global_scaler(
+            self.global_scaler_path, self._get_feature_order()
+        )
+        self.preprocessor = self.scaler
+        self.is_preprocessor_fitted = True
+        self.print(
+            f"global_scaler: using {self.global_scaler_path} "
+            f"({int(self.scaler.n_samples_seen_)} samples)",
+            0,
+            2,
+        )
 
     def read_model(self):
         """Base-class artifact loading (pre_main), skipped when init()
         already warm-started from latest_local_*: the base would replace the
-        reloaded scaler with an empty one."""
+        reloaded scaler with an empty one. With global_scaler the base
+        loading runs for the model and the global scaler is put back."""
         if not getattr(self, "_warm_started", False):
-            return super().read_model()
+            super().read_model()
+            if getattr(self, "global_scaler", False):
+                self._apply_global_scaler()
+            return
         self.clf = self.model
         self.preprocessor = self.scaler
 
@@ -1664,7 +1738,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
         Always calls partial_fit for ongoing incremental updates.
         Keeps scaler statistics accumulating with each training batch.
+        With global_scaler the pretrained scaler is never fit (no-op).
         """
+        if getattr(self, "global_scaler", False):
+            self.is_preprocessor_fitted = True
+            return
         numeric_data = x_train.select_dtypes(include=[np.number]).fillna(0)
         self.scaler.partial_fit(numeric_data)
         self.is_preprocessor_fitted = True

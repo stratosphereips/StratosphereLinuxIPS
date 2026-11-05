@@ -33,7 +33,9 @@ scored with a scaler that has seen it. Each fit appends a line to
 `scaler_stats.jsonl` (window, rows, samples seen, per-feature mean / var /
 scale) for comparing the peers' scalers. With `merge_scaler` the merged model
 gets its own scaler, pooled from the own and the peers' scalers at each merge
-(see the option below); the local model always keeps the own one.
+(see the option below); the local model always keeps the own one. With
+`global_scaler` every model uses one fixed pretrained scaler instead and
+nothing is fit.
 
 ### Training Buffers
 
@@ -120,6 +122,7 @@ All paths are hardcoded in `init()`. They are NOT configurable via `slips.yaml`.
 
 ### Base Artifacts (Shared Across All Peers)
 - `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to the default model only)
+- `artifacts/global_scaler.json` - the pretrained global scaler's statistics, used only with `global_scaler`
 
 ### Local Model (Own Training Only)
 - `artifacts/latest_local_state.bin` - full model `state_dict` (class-driven: any registry model)
@@ -268,6 +271,7 @@ federated_network_module:
   # learning_rate: 0.01   # optional, Adam step size (see below)
   # merge_head: false      # optional, also share + merge the head (see below)
   # merge_scaler: false    # optional, also share the scaler; the merged model gets the pooled one (see below)
+  # global_scaler: false   # optional, every model uses the pretrained artifacts/global_scaler.json, never fit (see below)
   # finetune_head: true    # false = no fine-tune at all (see below)
   # finetune_fc_layers: true  # fine-tune fc1 + head on both models (false = head only, see below)
   # merge_finetune_adam: copy  # Adam state the fine-tunes start from (fresh = empty, see below)
@@ -332,6 +336,19 @@ adds a line to `merging_data.log`, `  scaler | weights own:<w> <peer>:<w> … |
 mean_shift_sd=… | scale_ratio=<min>-<max>` (largest shift of the pooled mean in
 own standard deviations; pooled / own scale per feature), and a
 `merged_scaler.jsonl` row (merge, window, weights, pooled mean / var / scale).
+
+`global_scaler` (optional, default false) gives every model, local and
+merged, one fixed pretrained scaler: `artifacts/global_scaler.json`, the
+statistics (per-feature mean, variance, scale, samples seen, feature names)
+of the scaler of the pretrained base models of a22196607, fit on all 19,635
+labeled conn flows of Stratosphere captures 008, 010 and 011 with the same
+18-feature extraction as now. It is loaded at start (and again after the base
+class's artifact loading, which would replace it with an empty scaler) and
+never fit: `update_preprocessor` does nothing, so `scaler_stats.jsonl` logs
+the same statistics at every training. A file whose feature names differ from
+the module's, or with an invalid value, stops the module at start. With
+`merge_scaler` on as well every peer sends the same statistics, so the pooled
+scaler is the global one.
 
 `finetune_fc_layers` (default true) makes the fine-tune after the merge point
 train the fc (shared) layers + head instead of the head alone, on the local and on the merged

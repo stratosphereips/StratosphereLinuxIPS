@@ -11,6 +11,7 @@ merging, the P2P wire format, and the merge-rule contract.
 
 import base64
 import json
+import os
 import pickle
 import re
 import sqlite3
@@ -1523,3 +1524,125 @@ def test_the_final_merged_scaler_artifact_is_the_pooled_one(tmp_path):
         stored = pickle.load(fh)
     assert np.allclose(stored.mean_, m.merged_scaler.mean_)
     assert not np.allclose(stored.mean_, m.scaler.mean_)
+
+
+# --------------------------------------------------------------------------
+# global scaler (global_scaler)
+# --------------------------------------------------------------------------
+GLOBAL_SCALER = os.path.join(
+    os.path.dirname(fnm.__file__), "artifacts", "global_scaler.json"
+)
+
+
+def test_the_shipped_global_scaler_loads_for_the_module_features(tmp_path):
+    m = _trainable(tmp_path)
+    sc = fnm.load_global_scaler(GLOBAL_SCALER, m._get_feature_order())
+    assert sc.n_features_in_ == 18 and sc.n_samples_seen_ == 19635
+    x = np.random.default_rng(0).normal(size=(4, 18)).astype(np.float32)
+    assert np.allclose(sc.transform(x), (x - sc.mean_) / sc.scale_)
+    # scale = sqrt(var), 1 where StandardScaler's rule saw a constant feature
+    # (dir_num: variance 3e-33 at mean 1)
+    eps = np.finfo(np.float64).eps
+    n, var = sc.n_samples_seen_, sc.var_
+    constant = var <= n * eps * var + (n * sc.mean_ * eps) ** 2
+    assert np.allclose(sc.scale_, np.where(constant, 1.0, np.sqrt(var)))
+    assert sc.scale_[m._get_feature_order().index("dir_num")] == 1.0
+
+
+@pytest.mark.parametrize(
+    "broken", ["features", "length", "zero_scale", "nan_mean", "no_scale"]
+)
+def test_a_broken_global_scaler_artifact_stops_the_module(tmp_path, broken):
+    with open(GLOBAL_SCALER) as fh:
+        saved = json.load(fh)
+    features = list(saved["features"])
+    if broken == "features":
+        saved["features"] = features[::-1]
+    elif broken == "length":
+        saved["mean"] = saved["mean"][:17]
+    elif broken == "zero_scale":
+        saved["scale"][3] = 0.0
+    elif broken == "nan_mean":
+        saved["mean"][0] = float("nan")
+    else:
+        del saved["scale"]
+    path = tmp_path / "global_scaler.json"
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError):
+        fnm.load_global_scaler(str(path), features)
+
+
+@pytest.mark.parametrize("merge_scaler", [False, True])
+def test_with_global_scaler_no_model_ever_fits_a_scaler(
+    tmp_path, merge_scaler
+):
+    """Every training pass - local, local fine-tune, merged fine-tune -
+    sees the batch scaled with the global scaler, which training never fits
+    (scaler_stats.jsonl logs it unchanged). With merge_scaler too, every
+    peer sends the same statistics, so the pooled scaler is the global one."""
+    m = _trainable(tmp_path)
+    m.global_scaler = True
+    m.merge_scaler = merge_scaler
+    m.global_scaler_path = GLOBAL_SCALER
+    m._apply_global_scaler()
+    gs = fnm.load_global_scaler(GLOBAL_SCALER, m._get_feature_order())
+    m.handle_p2p_model(
+        {
+            "peer_id": "slips-b",
+            "model_class": "random_projection_mlp",
+            "shared": {
+                k: v.tolist()
+                for k, v in _net(tmp_path, "slips-b")
+                .weights_for_sharing()
+                .items()
+            },
+            "scaler": fnm.scaler_payload(gs),
+            "timestamp": 1.0,
+        }
+    )
+    seen = {}
+    real_fit = m.fit_incremental_model
+
+    def spy_fit(x, y, classes=None, train_target="local"):
+        seen[train_target] = np.array(x, copy=True)
+        return real_fit(x, y, classes=classes, train_target=train_target)
+
+    m.fit_incremental_model = spy_fit
+    raw = np.stack(m.training_buffer_x)
+    m._train_batch()
+    assert m._using_merged_model
+    assert m.scaler.n_samples_seen_ == 19635
+    assert np.array_equal(m.scaler.mean_, gs.mean_)
+    for stage in ("local", "local_head", "merged"):
+        assert np.allclose(seen[stage], gs.transform(raw)), stage
+    merged_scaler = m._scaler_of(m.merged_model)
+    assert (merged_scaler is m.scaler) != merge_scaler
+    assert np.allclose(merged_scaler.mean_, gs.mean_)
+    assert np.allclose(merged_scaler.var_, gs.var_)
+    (row,) = [
+        json.loads(ln)
+        for ln in (tmp_path / "slips-a" / "scaler_stats.jsonl")
+        .read_text()
+        .splitlines()
+    ]
+    assert row["n_seen"] == 19635 and np.allclose(row["mean"], gs.mean_)
+
+
+def test_the_base_read_model_does_not_replace_the_global_scaler(
+    tmp_path, monkeypatch
+):
+    """The base class's artifact loading (pre_main) sets an empty scaler;
+    with global_scaler the global one is put back."""
+
+    def base_read_model(self):
+        self.scaler = StandardScaler()
+        self.preprocessor = self.scaler
+
+    monkeypatch.setattr(ml_base.MLBaseDetection, "read_model", base_read_model)
+    m = _trainable(tmp_path)
+    m.global_scaler = True
+    m.global_scaler_path = GLOBAL_SCALER
+    m._warm_started = False
+    m.read_model()
+    assert m.scaler.n_samples_seen_ == 19635
+    assert m.preprocessor is m.scaler and m.is_preprocessor_fitted
