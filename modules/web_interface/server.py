@@ -2891,12 +2891,16 @@ class RunDataReader:
             "network_scope_version": 2,
             "device_view_supported": True,
             "current_network_start": self._current_network_start(),
-            "current_network": self._current_header_network(),
+            "current_network": self._current_header_network(refresh=True),
             **self.validate_run_identity(),
         }
 
-    def _current_header_network(self) -> Dict[str, Any]:
+    def _current_header_network(self, refresh: bool = False) -> Dict[str, Any]:
         """Return the named live network for the shared page header.
+
+        Parameters:
+            refresh: Use OS fallback readings for the header heartbeat only;
+                detection scopes continue using capture-owned settings.
 
         Returns:
             Current monitored interface, connection, name and all its IPs.
@@ -2912,10 +2916,38 @@ class RunDataReader:
         interface = interfaces.split(",", 1)[0]
         if not interface:
             return {}
-        state = self._loads(self.redis.hget("network_states", interface), {})
+        raw_state = self.redis.hget("network_states", interface)
+        state = self._loads(raw_state, {})
         if not isinstance(state, dict):
             return {}
         addresses = self._interface_addresses(interfaces)
+        if refresh:
+            key = (
+                interfaces,
+                raw_state,
+                tuple(addresses.get("ipv4", [])),
+                tuple(addresses.get("ipv6", [])),
+            )
+            lock = self.__dict__.setdefault(
+                "_header_network_lock", threading.Lock()
+            )
+            with lock:
+                cached = getattr(self, "_header_network_snapshot", None)
+                if (
+                    cached
+                    and cached[0] == key
+                    and time.monotonic() - cached[1] < 5
+                ):
+                    state = cached[2]
+                else:
+                    state = self._current_network_states(
+                        analysis, [state], addresses
+                    )[0]
+                    self._header_network_snapshot = (
+                        key,
+                        time.monotonic(),
+                        state,
+                    )
         if not state.get("connected"):
             return {
                 "interface": interface,
@@ -2933,6 +2965,11 @@ class RunDataReader:
             "network_id": network.get("network_id") or "",
             "host_ip": network.get("host_ip") or "",
             "host_addresses": addresses,
+            **{
+                key: network[key]
+                for key in ("changed_at", "observed_at")
+                if key in network
+            },
         }
 
     @network_filtered

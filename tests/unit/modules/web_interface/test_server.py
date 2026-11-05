@@ -7820,11 +7820,102 @@ def test_identity_returns_current_named_network_in_any_tab(interfaces: str, conn
         "ipv4": ["192.0.2.4"] + (["198.51.100.4"] if "," in interfaces else []),
         "ipv6": ["fe80::4", "fd00::4", "2001:db8::4", "2001:db8::5"],
     }
-    with patch("modules.web_interface.server.psutil.net_if_addrs", return_value=current_addresses):
-        assert reader._current_header_network() == expected
+    with (
+        patch("modules.web_interface.server.psutil.net_if_addrs", return_value=current_addresses),
+        patch("modules.web_interface.server.collect_network_state", return_value={
+            "interface":"en0","connected":connected,"host_ip":"192.0.2.4",
+        }),
+    ):
+        assert reader._current_header_network(refresh=True) == expected
         current_addresses["en0"][4].address = "2001:db8::6"
-        assert reader._current_header_network()["host_addresses"]["ipv6"][-1] == "2001:db8::6"
+        assert reader._current_header_network(refresh=True)["host_addresses"]["ipv6"][-1] == "2001:db8::6"
     reader.redis.hset.assert_not_called()
+
+
+@pytest.mark.parametrize("connected", [True, False])
+def test_header_refreshes_stale_saved_network_before_overview(connected: bool) -> None:
+    """Use the current network name when capture metadata still belongs to Wi-Fi left behind.
+
+    Parameters:
+        connected: Whether the operating system has connected to a new network.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"input_type":"interface","interface":"en0"}
+    reader.redis.hget.return_value = json.dumps({"interface":"en0","connected":True,
+        "host_ip":"192.168.1.247","gateway_mac":"aa:bb:cc:dd:ee:01","changed_at":100,
+        "addresses":[{"ip":"192.168.1.247"}]})
+    current = {"interface":"en0","connected":connected,"host_ip":"10.0.0.20" if connected else "",
+        "gateway_mac":"aa:bb:cc:dd:ee:02" if connected else ""}
+    reader._interface_addresses = Mock(return_value={"ipv4":["10.0.0.20"] if connected else [],"ipv6":[]})
+    reader._named_network_states = Mock(side_effect=lambda states: [
+        {**state,"name":"Office" if state.get("gateway_mac")==current["gateway_mac"] else "Home"}
+        for state in states])
+    with patch("modules.web_interface.server.collect_network_state", return_value=current) as collect:
+        result = reader._current_header_network(refresh=True)
+        assert reader._current_header_network(refresh=True) == result
+    assert result["connected"] is connected
+    assert result.get("name", "") == ("Office" if connected else "")
+    collect.assert_called_once_with("en0", 1)
+    reader.redis.hset.assert_not_called()
+
+
+def test_header_network_snapshot_cache_expires_and_invalidates() -> None:
+    """Bound OS refresh work while reacting immediately to address or saved-state changes."""
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hgetall.return_value = {"input_type":"interface","interface":"en0"}
+    reader.redis.hget.return_value = json.dumps({"interface":"en0","connected":True,"host_ip":"192.0.2.1"})
+    reader._interface_addresses = Mock(return_value={"ipv4":["192.0.2.2"],"ipv6":[]})
+    reader._named_network_states = Mock(side_effect=lambda states:states)
+    current = {"interface":"en0","connected":True,"host_ip":"192.0.2.2"}
+    with (
+        patch("modules.web_interface.server.time.monotonic",return_value=100) as clock,
+        patch("modules.web_interface.server.collect_network_state",return_value=current) as collect,
+    ):
+        reader._current_header_network(refresh=True)
+        reader._current_header_network(refresh=True)
+        assert collect.call_count == 1
+        clock.return_value = 106
+        reader._current_header_network(refresh=True)
+        assert collect.call_count == 2
+        reader._interface_addresses.return_value = {"ipv4":["192.0.2.3"],"ipv6":[]}
+        reader._current_header_network(refresh=True)
+        assert collect.call_count == 3
+        reader.redis.hget.return_value = json.dumps({"interface":"en0","connected":False})
+        reader._current_header_network(refresh=True)
+        assert collect.call_count == 4
+
+
+def test_header_name_changes_between_routers_with_the_same_host_ip(tmp_path: Path) -> None:
+    """Refresh saved names on router changes and renames without waiting for cache expiry.
+
+    Parameters:
+        tmp_path: Isolated permanent network-name database.
+    """
+    _factory = ModuleFactory()
+    from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.output_dir = tmp_path / "run"
+    reader.host_profiles_path = tmp_path / "hosts.sqlite"
+    reader.redis.hgetall.return_value = {"input_type":"interface","interface":"en0"}
+    state = {"interface":"en0","connected":True,"host_ip":"192.168.1.100",
+        "addresses":[{"ip":"192.168.1.100"}],"gateway_mac":"aa:bb:cc:dd:ee:01"}
+    reader.redis.hget.side_effect = lambda key,field: json.dumps(state) if key=="network_states" else "123"
+    reader._interface_addresses = Mock(return_value={"ipv4":["192.168.1.100"],"ipv6":[]})
+    for suffix, name in [("01","Home"),("02","Guest")]:
+        HostProfileStore.set_network_name(reader.host_profiles_path,f"gateway:aa:bb:cc:dd:ee:{suffix}",name)
+    with patch("modules.web_interface.server.collect_network_state") as collect:
+        assert reader._current_header_network(refresh=True)["name"] == "Home"
+        state["gateway_mac"] = "aa:bb:cc:dd:ee:02"
+        assert reader._current_header_network(refresh=True)["name"] == "Guest"
+        HostProfileStore.set_network_name(reader.host_profiles_path,"gateway:aa:bb:cc:dd:ee:02","Guest renamed")
+        assert reader._current_header_network(refresh=True)["name"] == "Guest renamed"
+        collect.assert_not_called()
 
 
 def test_p2p_catchup_activity_is_bounded_to_current_network_and_run(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

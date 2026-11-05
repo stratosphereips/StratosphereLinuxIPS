@@ -3135,6 +3135,23 @@ def test_header_shows_all_ips_and_refreshes_outside_overview_in_chrome(theme: st
         assert addresses.locator("code").all_text_contents() == new_addresses["ipv4"] + new_addresses["ipv6"]
         assert page.evaluate("state.activeTab") == "logs"
         assert page.evaluate("state.overview.host_addresses.ipv4") == ipv4
+        heartbeat["changed_at"] = 200
+        page.evaluate("pollBackendStatus()")
+        page.evaluate("""() => {
+            state.overview.network_states=[{interface:'en0',connected:true,name:'Newer overview',changed_at:300}];
+            renderHeaderNetwork(state.overview);
+        }""")
+        assert "Newer overview" in page.locator("#run-meta").inner_text()
+        page.evaluate("pollBackendStatus()")
+        assert "Newer overview" in page.locator("#run-meta").inner_text()
+        heartbeat["changed_at"] = 400
+        page.evaluate("pollBackendStatus()")
+        assert "Office" in page.locator("#run-meta").inner_text()
+        page.evaluate("state.overview=null")
+        heartbeat.update(name="Guest",network_id="guest")
+        page.evaluate("pollBackendStatus()")
+        assert "Guest" in page.locator("#run-meta").inner_text()
+        assert "Office" not in page.locator("#run-meta").inner_text()
         heartbeat.update(connected=False,host_addresses={"ipv4":[],"ipv6":[]})
         page.evaluate("pollBackendStatus()")
         assert addresses.is_hidden()

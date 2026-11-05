@@ -1831,7 +1831,11 @@ function renderHeaderNetwork(data) {
     || (data.network_states || []).find((network) => network.connected);
   const liveNetwork = String(run.interface || "").split(/[,\s]+/).includes(state.headerNetwork?.interface)
     ? state.headerNetwork : null;
-  const network = liveNetwork || overviewNetwork;
+  const overviewTime = Number(overviewNetwork?.observed_at || overviewNetwork?.changed_at) || 0;
+  const liveTime = Number(liveNetwork?.observed_at || liveNetwork?.changed_at) || 0;
+  const network = overviewNetwork?.interface === liveNetwork?.interface
+    && overviewTime && liveTime && overviewTime > liveTime
+    ? overviewNetwork : liveNetwork || overviewNetwork;
   const detailsLink = text("button", "run details", "overview-link");
   detailsLink.type = "button";
   detailsLink.addEventListener("click", () => switchTab("metadata"));
@@ -1843,7 +1847,7 @@ function renderHeaderNetwork(data) {
     ].filter(Boolean).join(" · ")),
     text("span", " · "), detailsLink,
   );
-  renderHeaderAddresses(data, liveNetwork);
+  renderHeaderAddresses(data, network);
 }
 
 /** Show every current monitored address and refresh this-device labels.
@@ -8916,7 +8920,10 @@ async function pollBackendStatus() {
       updateNetworkFilterAvailability(identity);
       updateDeviceViewAvailability(identity);
       state.headerNetwork = identity.current_network || null;
-      if (state.overview) renderHeaderNetwork(state.overview);
+      renderHeaderNetwork(state.overview || {run: {
+        interface: identity.current_network?.interface || identity.interface,
+        input_type: identity.input_type,
+      }});
     }
     if (Date.now() - state.archivesCheckedAt > 60000) loadArchiveCatalog().catch(() => {});
   } catch (_) {

@@ -30,7 +30,14 @@ uses bounded batches of addresses already visible in the current view.
 
 The shared header refreshes its network name and current IP from the
 five-second backend heartbeat, including while another tab is open. It does
-not wait for Overview to load.
+not wait for Overview to load, and can update even when Overview has not
+loaded successfully. If saved capture settings still contain the previous
+network's IPs, the web reads the current interface settings before looking
+up the network name. These fallback readings share a single five-second
+cache; changed IPs or saved settings invalidate it immediately. An older
+heartbeat cannot overwrite a newer dated Overview network snapshot. This
+work runs in the web process and does not scan detection databases or modify
+capture settings.
 
 The browser title identifies the run, for example **Slips · sebas-en0**.
 It does not poll detection totals. Grouped network evidence queries resolve network
