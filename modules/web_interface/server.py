@@ -35,6 +35,7 @@ import yaml
 from slips_files.common.mac import classify_mac
 from slips_files.common.log_rotation import RotatingTextLog
 from slips_files.common.sqlite_flock import SQLiteFlock
+from slips_files.common.slips_utils import utils
 
 from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
@@ -5603,6 +5604,70 @@ class RunDataReader:
         network_id = self._current_header_network().get("network_id", "")
         return [network_id] if network_id else []
 
+    def _organization_range_names(
+        self, ips: List[str]
+    ) -> Dict[str, Dict[str, str]]:
+        """Identify unnamed public addresses using locally cached organization ranges.
+
+        Parameters:
+            ips: Displayed addresses without DNS or ASN organization labels.
+
+        Returns:
+            Organization labels with their range-based provenance.
+        """
+        addresses = {}
+        for ip in ips[:MAX_PAGE_SIZE]:
+            try:
+                address = ipaddress.ip_address(ip)
+            except ValueError:
+                continue
+            if address.is_global:
+                addresses[ip] = address
+        buckets = {utils.get_first_octet(ip) for ip in addresses}
+        keys = [
+            (org, bucket)
+            for org in utils.supported_orgs
+            for bucket in sorted(buckets)
+        ]
+        if not keys:
+            return {}
+        try:
+            pipeline = self.cache.pipeline(transaction=False)
+            for org, bucket in keys:
+                pipeline.hget(f"{org}_IPs", bucket)
+            values = pipeline.execute()
+        except (AttributeError, redis.RedisError):
+            return {}
+        if not isinstance(values, (list, tuple)):
+            return {}
+        ranges = {}
+        for (org, bucket), value in zip(keys, values):
+            networks = self._loads(value, [])
+            if not isinstance(networks, list):
+                continue
+            for network in networks[:2048]:
+                try:
+                    parsed = ipaddress.ip_network(network)
+                except (TypeError, ValueError):
+                    continue
+                ranges.setdefault(bucket, []).append((org, parsed))
+        names = {}
+        for ip, address in addresses.items():
+            matches = [
+                (network.prefixlen, org)
+                for org, network in ranges.get(utils.get_first_octet(ip), [])
+                if address.version == network.version and address in network
+            ]
+            if matches:
+                best = max(prefix for prefix, _ in matches)
+                owners = {org for prefix, org in matches if prefix == best}
+                if len(owners) == 1:
+                    names[ip] = {
+                        "name": owners.pop().title(),
+                        "source": "Organization IP range",
+                    }
+        return names
+
     @network_filtered
     def host_names(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Resolve a bounded set of displayed IPs to stored host names.
@@ -5758,6 +5823,11 @@ class RunDataReader:
                     name = f"{str(vendor).strip()} device"
                     source = "MAC vendor"
             names[ip] = {"name": name, "source": source}
+        names.update(
+            self._organization_range_names(
+                [ip for ip in ips if not names[ip]["name"]]
+            )
+        )
         return {"names": {value: names[ip] for value, ip in requested.items()}}
 
     def _current_profile_threats(self) -> Dict[str, str]:

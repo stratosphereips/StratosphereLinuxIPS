@@ -8,7 +8,6 @@ const state = {
   overviewEvidenceLoading: false,
   overviewAlertGroups: null,
   overviewAlertQuery: "",
-  filteredBadgeCounts: { alerts: null, evidence: null, hosts: null },
   metadata: null,
   metrics: [],
   configuration: null,
@@ -1281,9 +1280,6 @@ function applyRunIdentity(identity) {
     state.overviewEvidenceLoading = false;
     state.overviewAlertGroups = null;
     state.overviewAlertQuery = "";
-    state.filteredBadgeCounts.alerts = null;
-    state.filteredBadgeCounts.evidence = null;
-    state.filteredBadgeCounts.hosts = null;
     state.metadata = null;
     state.p2pGraph = { payload: null, groups: [], selected: null, message: null, signature: "", detailSignature: "", zoom: 1 };
     byId("p2p-report-graph").replaceChildren();
@@ -1916,12 +1912,6 @@ function renderRunContext(data) {
     || addresses.ipv4?.[0] || addresses.ipv6?.[0] || "Name unavailable";
   renderHeaderNetwork(data);
   renderConnectionState(backendConnected, data.run_identity?.saved_view === true);
-  byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts ?? data.counts.alerts);
-  byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence ?? data.counts.evidence);
-  byId("hosts-badge").textContent = compact(state.filteredBadgeCounts.hosts ?? data.counts.hosts);
-  byId("logs-badge").textContent = compact(data.counts.logs ?? data.counts.module_errors);
-  byId("firewall-badge").textContent = (data.modules || []).some((module) => module.name === "blocking")
-    ? compact(data.firewall?.current) : "off";
 }
 
 /** Render the operational overview without supporting metadata or logs. */
@@ -2399,7 +2389,6 @@ function renderLogs(payload) {
   const errors = sortLocalRows("logs-table", (payload.items || []).map((row) => ({
     ...row, level: logSeverity(row),
   })));
-  byId("logs-badge").textContent = compact(payload.total);
   byId("logs-count").textContent = `${errors.length} shown · ${compact(payload.total)} total`;
   byId("logs-scope-note").textContent = payload.scope === "history"
     ? "All retained runs in this output directory"
@@ -2668,10 +2657,6 @@ function applyPage(name, payload) {
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  if (name === "hosts") {
-    state.filteredBadgeCounts.hosts = payload.total;
-    byId("hosts-badge").textContent = compact(payload.total);
-  }
   byId(`${name}-count`).textContent = `${payload.page_size} shown · ${compact(payload.total)} match`;
   applySortIndicators(name);
 }
@@ -2892,13 +2877,14 @@ function renderAlertHostList() {
       row.classList.toggle("selected", record.alert_id === state.alertsWorkspace.alert?.alert_id);
       const top = document.createElement("div");
       top.className = "alerts-alert-row-top";
-      top.append(text("span", timeValue(record.alert_time, formatTime)),
-        text("span", numeric(record.alert_score).toFixed(2), `threat-${record.threat_level}`));
+      const score = text("span", numeric(record.alert_score).toFixed(2), `alerts-row-score threat-${record.threat_level}`);
+      score.title = `Score: ${numeric(record.alert_score).toFixed(2)}`;
+      top.append(deviceIdentity(record, "ip_alerted"), score);
       const summary = alertComposition(record);
       row.title = summary;
-      row.append(top, deviceIdentity(record, "ip_alerted"),
+      row.append(top,
         text("span", summary, "alerts-alert-row-title"),
-        text("span", `${compact(record.evidence_count)} evidence · ${(record.review_status || "active").replaceAll("_", " ")}`, "alerts-alert-row-meta"));
+        text("span", [timeValue(record.alert_time, formatTime), ` · ${compact(record.evidence_count)} evidence · ${(record.review_status || "active").replaceAll("_", " ")}`], "alerts-alert-row-meta"));
       row.addEventListener("click", () => selectAlertDetailPane(record).catch(() => {}));
       container.append(row);
     });
@@ -2911,11 +2897,13 @@ function renderAlertHostList() {
     row.className = "alerts-host-row";
     row.classList.toggle("selected", (host.device_id || host.ip_alerted)
       === (state.alertsWorkspace.host?.device_id || selected));
+    const score = text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2),
+      `alerts-host-score alerts-row-score threat-${host.threat_level || "info"}`);
+    score.title = `Score: ${host.alert_score == null ? "unavailable" : numeric(host.alert_score).toFixed(2)}`;
     row.append(
       deviceIdentity(host, "ip_alerted"),
-      text("span", host.alert_score == null ? "—" : numeric(host.alert_score).toFixed(2),
-        `alerts-host-score threat-${host.threat_level || "info"}`),
-      text("span", [`${compact(host.alert_count)} · `, timeValue(host.alert_time, formatAge)], "alerts-host-meta"),
+      score,
+      text("span", [`${compact(host.alert_count)} ${host.alert_count === 1 ? "alert" : "alerts"} · `, timeValue(host.alert_time, formatAge)], "alerts-host-meta"),
     );
     row.title = `${host.alert_count} alerts · ${host.evidence_count} evidence links`;
     row.addEventListener("click", () => selectAlertHostPane(host));
@@ -3261,8 +3249,6 @@ async function loadAlerts() {
   workspace.fullTotal = byId("alerts-review").value === "open"
     ? payload.open_total || 0 : payload.full_total || 0;
   applyPage("alerts", payload);
-  state.filteredBadgeCounts.alerts = payload.matching_total ?? payload.total;
-  byId("alerts-badge").textContent = compact(state.filteredBadgeCounts.alerts);
   byId("alerts-count").textContent = compact(payload.total);
   renderAlertSeverityFilters();
   syncFilterPopups();
@@ -3888,8 +3874,6 @@ async function loadEvidence() {
   const payload = await api("evidence", listPath("evidence"));
   if (!payload) return;
   applyPage("evidence", payload);
-  state.filteredBadgeCounts.evidence = payload.matching_total ?? payload.total;
-  byId("evidence-badge").textContent = compact(state.filteredBadgeCounts.evidence);
   const mode = byId("evidence-view").value;
   renderEvidenceTable(payload);
   const loadedRecords = mode === "individual"
@@ -4829,7 +4813,6 @@ async function loadWhitelists() {
     });
     select.value = selected;
   });
-  byId("whitelists-badge").textContent = compact(payload.total);
   byId("whitelists-status").textContent = `${payload.total} local rules were parsed for this run. Evidence marked “Whitelisted” was excluded by Slips before score accumulation.`;
   setSummaryCards([
     ["Parsed local rules", compact(payload.total)],
@@ -4886,7 +4869,6 @@ function enforcementEventText(value) {
  * @param {object} payload Current firewall API response.
  */
 function renderFirewall(payload) {
-  byId("firewall-badge").textContent = compact(payload.total);
   byId("firewall-disabled").hidden = payload.enabled;
   byId("firewall-stats").hidden = !payload.enabled;
   if (!payload.enabled) return;
@@ -4985,7 +4967,6 @@ async function loadArpPoisoning() {
   state.arpPoisoning = payload;
   const counts = payload.counts || {};
   const module = payload.module || {};
-  byId("arp-poisoning-badge").textContent = compact(counts.active);
   byId("arp-poisoning-disabled").hidden = module.enabled;
   byId("arp-poisoning-stats").hidden = !module.enabled;
   if (!module.enabled) {
@@ -5982,7 +5963,6 @@ async function loadP2P() {
   state.p2p = payload;
   renderP2PCatchup(payload.catch_up);
   const counts = payload.counts || {};
-  byId("p2p-badge").textContent = compact(counts.connected);
   byId("p2p-disabled").hidden = payload.enabled;
   byId("p2p-stats").hidden = !payload.enabled;
   if (!payload.enabled) {
@@ -8049,20 +8029,6 @@ function resetHostActivityFilters() {
   byId("host-activity-filter-notice").hidden = true;
 }
 
-/** Show both matching and available records when a host activity is filtered.
- * @param {string} kind Alerts or evidence activity.
- * @param {number} total Matching records in the selected range.
- */
-function renderHostActivityCount(kind, total) {
-  const search = byId(`host-${kind === "alerts" ? "alert" : "evidence"}-search`).value.trim();
-  const filtered = Boolean(search || state.hostActivityThreats[kind]);
-  const savedTotal = Number(state.host?.[kind === "alerts" ? "alert_count" : "evidence_count"]);
-  const available = Number.isFinite(savedTotal) ? Math.max(total, savedTotal) : total;
-  const count = byId(`host-${kind}-tab-count`);
-  count.textContent = filtered ? `${compact(total)} / ${compact(available)}` : compact(total);
-  count.title = filtered ? `${total} matching ${kind} of ${available} in this range` : "";
-}
-
 /** Show the selected host's alerts, evidence, or flows and load that page. */
 function showHostActivity(name) {
   if (name !== "evidence" && state.evidenceDetail.inHostPane) closeEvidenceDetail(false, true);
@@ -8250,10 +8216,6 @@ async function loadHostAlerts() {
   page.items = alerts;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  if (showingEarlier) {
-    byId("host-alerts-tab-count").textContent = `${compact(payload.total)} earlier`;
-    byId("host-alerts-tab-count").title = "";
-  } else renderHostActivityCount("alerts", payload.total);
   byId("host-alerts-title").textContent = showingEarlier
     ? "Earlier alerts for this host" : "Alerts for this host";
   byId("host-alert-count").textContent = showingEarlier
@@ -8331,7 +8293,6 @@ async function loadHostEvidence() {
   page.items = payload.items;
   page.total = payload.total;
   page.next = payload.next_cursor;
-  renderHostActivityCount("evidence", payload.total);
   renderHostActivityFilterNotice("evidence", payload.total);
   byId("host-evidence-title").textContent = "Related evidence · " + payload.total;
   byId("host-evidence-count").textContent =
@@ -8382,7 +8343,6 @@ async function loadHostFlows() {
   page.items = scopedItems;
   page.total = discarded ? scopedItems.length : payload.total;
   page.next = payload.next_cursor;
-  byId("host-flows-tab-count").textContent = compact(page.total);
   byId("host-flow-count").textContent =
     `${scopedItems.length} shown · ` +
     (deviceView ? `device view · ${hostIps.size} addresses` : "exact profile IP only") +
@@ -8754,8 +8714,7 @@ async function openHost(ip, summary = null) {
   byId("host-alerts").replaceChildren(text("p", "Loading alerts…", "muted"));
   byId("host-evidence-table").querySelector("tbody").replaceChildren();
   byId("host-flows-table").querySelector("tbody").replaceChildren();
-  ["host-alert-count", "host-evidence-count", "host-flow-count",
-    "host-alerts-tab-count", "host-evidence-tab-count", "host-flows-tab-count"].forEach((id) => {
+  ["host-alert-count", "host-evidence-count", "host-flow-count"].forEach((id) => {
     byId(id).textContent = "";
     byId(id).title = "";
   });
@@ -9038,10 +8997,6 @@ function updateNetworkFilterAvailability(identity) {
 function refreshNetworkScopedViews(reload = true) {
   ["alerts", "evidence", "hosts", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
   document.activeElement?.blur();
-  state.filteredBadgeCounts = { alerts: null, evidence: null, hosts: null };
-  ["alerts-badge", "evidence-badge", "hosts-badge"].forEach((id) => {
-    byId(id).textContent = "—";
-  });
   closeAlertHostPane();
   closeEvidenceDetail(false, true);
   state.evidenceWorkspace.group = null;

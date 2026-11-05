@@ -738,17 +738,19 @@ body.alerts-active main { max-width: none; padding: 0; }
 .alerts-host-row:hover, .alerts-alert-row:hover { background: #172734; }
 .alerts-host-row.selected, .alerts-alert-row.selected { background: #142632; }
 .alerts-host-row.selected { border-left-color: var(--accent); }
-.alerts-host-row .host-label { display: grid; grid-column: 1; grid-row: 1 / span 2; gap: .25rem; overflow: hidden; }
-.alerts-host-row .host-label code { color: var(--blue); font-size: 1rem; font-weight: 650; }
-.alerts-host-row .host-label .host-name { min-width: 0; overflow: hidden; color: var(--muted); font: 500 .78rem/1.4 system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
-.alerts-host-row .alerts-host-score { grid-column: 2; grid-row: 1; font: 800 .8rem ui-monospace, SFMono-Regular, Menlo, monospace; }
-.alerts-host-row .alerts-host-meta { grid-column: 2; grid-row: 2; color: var(--muted); font-size: .71rem; text-align: right; }
+.alerts-host-row > .device-identity { grid-column: 1; grid-row: 1 / span 2; align-self: center; }
+.alerts-host-row .host-label { display: flex; flex-direction: column; align-items: flex-start; gap: .18rem; overflow: hidden; }
+.alerts-host-row .host-label code { color: var(--blue); font: 650 1.05rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.alerts-host-row .host-label .host-name { min-width: 0; max-width: 100%; overflow: hidden; color: var(--muted); font: 500 .76rem/1.4 Inter, ui-sans-serif, system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
+.alerts-row-score { flex: none; font: 700 1rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
+.alerts-host-row .alerts-host-score { grid-column: 2; grid-row: 1; text-align: right; }
+.alerts-host-row .alerts-host-meta { grid-column: 2; grid-row: 2; color: var(--muted); font-size: .73rem; line-height: 1.4; text-align: right; }
 .alerts-host-pager { display: flex; align-items: center; gap: .35rem; padding: .45rem .6rem; border-top: 1px solid var(--line); }
 .alerts-host-pager button { padding: .3rem .45rem; font-size: .7rem; }
 .alerts-host-pager span { font-size: .7rem; }
 .alerts-selected-host { padding: .8rem 1rem; border-bottom: 1px solid var(--line); }
 .alerts-selected-title { margin: 0 2rem .4rem 0; font-size: .82rem; }
-.alerts-selected-host strong { display: block; overflow-wrap: anywhere; font: 800 .88rem ui-monospace, SFMono-Regular, Menlo, monospace; }
+.alerts-selected-host strong { display: block; overflow-wrap: anywhere; color: var(--blue); font: 650 1.05rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .alerts-selected-host .alerts-selected-name { display: block; margin-top: .25rem; color: var(--muted); font-size: .75rem; }
 .alerts-selected-host .alerts-selected-meta { display: flex; flex-wrap: wrap; gap: .55rem; margin-top: .5rem; font-size: .72rem; }
 .alerts-alert-row { gap: .25rem; border-left: 3px solid transparent; }
@@ -1553,8 +1555,11 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .resource-info:hover::after, .resource-info:focus-visible::after { display: block; }
 
 .alerts-alert-row .host-label { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
-.alerts-alert-row .host-label code { color: var(--blue); font-size: 1rem; font-weight: 650; }
-.alerts-alert-row .host-label .host-name { color: var(--muted); font: 500 .78rem/1.4 var(--font, system-ui, sans-serif); }
+.alerts-host-list .alerts-alert-row-top { align-items: flex-start; }
+.alerts-alert-row .host-label code { color: var(--blue); font: 650 1.05rem/1.35 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.alerts-alert-row .host-label .host-name { color: var(--muted); font: 500 .76rem/1.4 Inter, ui-sans-serif, system-ui, sans-serif; }
+.alerts-host-row .host-name::before, .alerts-host-row .host-name::after,
+.alerts-alert-row .host-name::before, .alerts-alert-row .host-name::after { content: none; }
 .alerts-host-row .host-label.own-host .host-name, .alerts-alert-row .host-label.own-host .host-name { color: var(--accent); }
 .p2p-graph-peer rect, .p2p-graph-peer.graph-local rect { stroke: var(--peer-color); }
 .p2p-graph-peer .p2p-graph-peer-name { fill: var(--peer-color); }

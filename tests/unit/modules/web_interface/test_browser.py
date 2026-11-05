@@ -87,7 +87,7 @@ def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
             assert summary.inner_text() == "More"
             assert page.title() == "Slips · metadata"
             assert "/api/live-counts" not in requested
-            assert all(hidden for hidden in page.locator(".tabs .badge").evaluate_all("nodes => nodes.map(node => getComputedStyle(node).display === 'none')"))
+            assert page.locator(".tabs .badge").count() == 0
             assert not any(character.isdigit() for character in page.locator(".tabs").inner_text().replace("P2P", ""))
             assert "192.0.2.10" in page.locator("#metadata-device").inner_text()
             page.evaluate("""async () => {
@@ -169,7 +169,7 @@ def test_hosts_tab_shows_recovered_finding_only_hosts(tmp_path: Path, theme: str
             table = page.locator("#hosts-table")
             assert table.locator("tbody tr[data-clickable]").count() == 2
             assert "192.168.1.22" in table.inner_text()
-            assert page.locator("#hosts-badge").inner_text() == "2"
+            assert page.locator("#hosts-badge").count() == 0
             assert "2 of 2" in page.locator("#hosts-list-status").inner_text()
             page.get_by_role("button",name="Hosts filters",exact=True).click()
             page.locator("#hosts-threat-chips").get_by_role("button",name="Low+",exact=False).click()
@@ -2028,8 +2028,8 @@ def test_host_evidence_opens_beside_table_in_chrome(theme: str, width: int) -> N
 
 @pytest.mark.parametrize("activity", ["alerts", "evidence", "flows"])
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_host_tab_counts_survive_polling_in_chrome(activity: str, theme: str) -> None:
-    """Retain all last-known counts while a periodic refresh is pending.
+def test_host_tab_names_stay_plain_during_polling_in_chrome(activity: str, theme: str) -> None:
+    """Keep names free of totals during refreshes and host changes.
 
     Parameters:
         activity: Host tab refreshed by the five-second timer.
@@ -2083,39 +2083,29 @@ def test_host_tab_counts_survive_polling_in_chrome(activity: str, theme: str) ->
             renderHostCards(host);
             ['alerts', 'evidence', 'flows'].forEach(kind => {
                 byId(`host-${kind}-panel`).hidden = kind !== activity;
-                byId(`host-${kind}-tab-count`).textContent = {alerts:'7', evidence:'9', flows:'41'}[kind];
             });
             loadHostSummary = async () => {}; loadHostScoreHistory = async () => {};
-            window.blankCounts = [];
-            new MutationObserver(() => {
-                ['alerts', 'evidence', 'flows'].forEach(kind => {
-                    if (byId(`host-${kind}-tab-count`).textContent === '') blankCounts.push(kind);
-                });
-            }).observe(document.querySelector('.host-activity-tabs'), {subtree:true, childList:true});
             schedulePoll();
         }""", {"host": host, "activity": activity, "theme": theme})
-        labels = [page.locator(f"#host-{kind}-tab-count") for kind in ["alerts", "evidence", "flows"]]
+        labels = [page.locator(f'[data-host-activity="{kind}"]') for kind in ["alerts", "evidence", "flows"]]
         before = [label.bounding_box() for label in labels]
         page.clock.run_for(5000)
         page.wait_for_function("() => state.requests.has({alerts:'hostAlerts', evidence:'hostEvidence', flows:'hostFlows'}[state.hostActivity])")
-        assert [label.text_content() for label in labels] == ["7", "9", "41"]
+        assert [label.text_content() for label in labels] == ["Alerts", "Evidence", "Flows"]
         assert [label.bounding_box() for label in labels] == before
-        assert page.evaluate("blankCounts") == []
         total = 0 if theme == "light" else 42
         assert len(pending) == 1
         pending.pop().fulfill(json={"items": [], "total": total, "page_size": 0})
         page.wait_for_function("() => !state.requests.has({alerts:'hostAlerts', evidence:'hostEvidence', flows:'hostFlows'}[state.hostActivity])")
-        expected = {"alerts": "7", "evidence": "9", "flows": "41"}
-        expected[activity] = str(total)
-        assert [label.text_content() for label in labels] == list(expected.values())
-        assert page.evaluate("blankCounts") == []
+        assert [label.text_content() for label in labels] == ["Alerts", "Evidence", "Flows"]
         page.evaluate("() => {clearTimeout(state.timer); window.openingHost = openHost('192.0.2.11');}")
         page.wait_for_function("() => state.host.ip === '192.0.2.11'")
-        assert [label.text_content() for label in labels] == ["", "", ""]
+        assert [label.text_content() for label in labels] == ["Alerts", "Evidence", "Flows"]
         assert len(pending) == 1
         pending.pop().fulfill(json={"items": [], "total": 3, "page_size": 0})
         page.evaluate("() => window.openingHost")
-        assert page.locator(f"#host-{activity}-tab-count").text_content() == "3"
+        assert [label.text_content() for label in labels] == ["Alerts", "Evidence", "Flows"]
+        assert page.locator(".host-activity-tabs span").count() == 0
         assert errors == []
         browser.close()
 
@@ -2490,7 +2480,7 @@ def test_host_device_flows_match_cards_and_charts(tmp_path: Path, theme: str, sc
         }""", {"host": host, "theme": theme, "scope": scope})
         expected = "2" if scope.startswith("device") else "0"
         assert page.locator("#host-summary .summary-card").nth(2).locator("strong").inner_text() == expected
-        assert page.locator("#host-flows-tab-count").inner_text() == expected
+        assert page.locator("#host-flows-tab-count").count() == 0
         assert page.evaluate("state.pages.hostFlows.items.length") == int(expected)
         if scope.startswith("device"):
             assert page.evaluate("state.pages.hostFlows.items.map(row => row.uid).sort()") == ["current-v4", "current-v6"]
@@ -3340,7 +3330,7 @@ def test_host_findings_range_and_saved_filters_in_chrome(
         assert not notice.is_visible()
         page.locator("#host-activity-threat").select_option("high_or_more")
         page.wait_for_function("state.pages['host-evidence'].total === 0")
-        assert page.locator("#host-evidence-tab-count").text_content() == "0 / 1"
+        assert page.locator("#host-evidence-tab-count").count() == 0
         assert "0 matching evidence · 1 in this range" in notice.inner_text()
         assert "High+" in notice.inner_text()
         notice.get_by_role("button", name="Clear activity filters", exact=True).click()
@@ -3472,7 +3462,7 @@ def test_current_network_host_refresh_and_history_in_chrome() -> None:
         assert "192.168.12.1" not in page.locator("#hosts-table").inner_text()
         assert "10.0.0.101" in page.locator("#hosts-table").inner_text()
         assert page.locator("#hosts-table tbody tr").count() == 101
-        assert page.locator("#hosts-badge").inner_text() == "101"
+        assert page.locator("#hosts-badge").count() == 0
         page.evaluate("""() => {
             const table=document.querySelector('.hosts-list-table');
             table.style.height='250px'; table.style.flex='none'; table.scrollTop=300;
@@ -3993,17 +3983,17 @@ def test_pcap_host_evidence_does_not_inherit_other_host_filters(
         assert page.evaluate("state.host.evidence_count") == 93
         assert page.evaluate("state.pages['host-evidence'].total") == 93
         assert page.locator("#host-evidence-table tbody tr").count() == 93
-        assert page.locator("#host-evidence-tab-count").text_content() == "93"
+        assert page.locator("#host-evidence-tab-count").count() == 0
         assert page.locator("#host-activity-threat").input_value() == ""
         assert page.locator("#host-evidence-search").input_value() == ""
         assert all(not query.get("threat") and not query.get("search") for query in requests if query.get("profile") == [first])
         page.locator("#host-activity-threat").select_option("medium")
         page.wait_for_function("state.pages['host-evidence'].total === 0")
-        assert page.locator("#host-evidence-tab-count").text_content() == "0 / 93"
+        assert page.locator("#host-evidence-tab-count").count() == 0
         assert "0 matching evidence · 93 in this range" in page.locator("#host-activity-filter-notice").inner_text()
         page.evaluate("async () => { await refreshHostWorkspace(); await showHostActivity('flows'); await showHostActivity('evidence'); }")
         assert page.locator("#host-activity-threat").input_value() == "medium"
-        assert page.locator("#host-evidence-tab-count").text_content() == "0 / 93"
+        assert page.locator("#host-evidence-tab-count").count() == 0
         page.evaluate("async ip => await openHost(ip)", first)
         assert page.locator("#host-activity-threat").input_value() == ""
         assert page.evaluate("state.pages['host-evidence'].total") == 93
@@ -5090,7 +5080,7 @@ def test_seven_day_network_history_and_severity_dropdown_in_browser(
             assert severity.input_value() == ""
             assert severity.locator("option").all_text_contents() == ["All", "Critical+", "High+", "Medium+", "Low+", "Info+"]
             assert page.locator("#evidence-summary").inner_text() == "1 of 1 groups"
-            assert page.locator("#evidence-badge").inner_text() == "4"
+            assert page.locator("#evidence-badge").count() == 0
             assert page.locator("#evidence-count").is_visible()
             page.evaluate("""async () => {
               byId('evidence-range').value='connection';await loadEvidence();
@@ -5222,11 +5212,13 @@ def test_timestamp_hover_exposes_original_date_across_views(
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_alert_identity_hierarchy_and_review_at_bottom(theme: str) -> None:
+@pytest.mark.parametrize("width", [980, 1600])
+def test_alert_identity_hierarchy_and_review_at_bottom(theme: str, width: int) -> None:
     """Keep readable alert identities and reviews after all related evidence.
 
     Parameters:
         theme: Browser color theme.
+        width: Narrow or wide alert workspace.
     """
     _factory = ModuleFactory()
     playwright = pytest.importorskip("playwright.sync_api")
@@ -5248,7 +5240,7 @@ def test_alert_identity_hierarchy_and_review_at_bottom(theme: str) -> None:
     with playwright.sync_playwright() as engine:
         browser = engine.chromium.launch(channel="chrome", headless=True)
         try:
-            page = browser.new_page(viewport={"width": 1600, "height": 1100})
+            page = browser.new_page(viewport={"width": width, "height": 1100})
             page.on("pageerror", lambda error: errors.append(str(error)))
             page.route("**/*", respond)
             page.goto("http://slips.test/")
@@ -5276,9 +5268,19 @@ def test_alert_identity_hierarchy_and_review_at_bottom(theme: str) -> None:
                     name:parseFloat(getComputedStyle(node.querySelector('.host-name')).fontSize),
                     color:getComputedStyle(node.querySelector('code')).color,
                     nameColor:getComputedStyle(node.querySelector('.host-name')).color})""")
-                assert sizes["ip"] > sizes["name"]
+                assert sizes["ip"] >= sizes["name"] * 1.25
                 assert sizes["color"] != sizes["nameColor"]
                 assert "Cherry" in identity.inner_text()
+                assert page.locator("#alerts-host-list .alerts-row-score").inner_text() == "6.15"
+                if grouping == "host":
+                    assert "1 alert" in page.locator(".alerts-host-meta").inner_text()
+            page.evaluate("""() => {
+                state.alertsWorkspace.grouping='host';
+                state.pages.alerts.items=[{...alertFixture,ip_alerted:'2001:db8:1234:5678:9012:3456:7890:abcd',alert_count:7}];
+                renderAlertHostList();
+            }""")
+            assert "7 alerts" in page.locator(".alerts-host-meta").inner_text()
+            assert page.locator("#alerts-host-list").evaluate("node => node.scrollWidth <= node.clientWidth")
             assert page.locator("#alerts-detail").evaluate("node => node.lastElementChild.classList.contains('review-editor')")
             assert page.locator("#alerts-detail .investigation-list").inner_text()
             page.evaluate("() => openAlert(alertFixture)")

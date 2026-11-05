@@ -9078,3 +9078,45 @@ def test_public_host_label_uses_asn_without_inventing_rdns(tmp_path: Path, hostn
     reader.cache = Mock()
     reader.cache.hget.side_effect = lambda key, ip: hostname if key == "IPsInfo:reverse_dns" else json.dumps({"org":organization,"number":"AS15169"})
     assert reader.host_names({"ip":["142.250.82.212"]})["names"]["142.250.82.212"] == expected
+
+
+@pytest.mark.parametrize("ip,ranges,owner", [
+    ("142.250.82.212", {"google": ["142.250.0.0/15"]}, "Google"),
+    ("2607:f8b0::1", {"google": ["2607:f8b0::/32"]}, "Google"),
+    ("142.250.82.212", {"google": ["invalid", "2001:db8::/32"]}, ""),
+    ("192.168.1.247", {"google": ["192.168.0.0/16"]}, ""),
+    ("142.250.82.212", {}, ""),
+    ("142.250.82.212", {"google": ["142.250.0.0/15"], "microsoft": ["142.250.82.0/24"]}, "Microsoft"),
+    ("142.250.82.212", {"google": ["142.250.0.0/15"], "microsoft": ["142.250.0.0/15"]}, ""),
+])
+def test_host_label_uses_cached_organization_ranges(
+    tmp_path: Path, ip: str, ranges: dict[str, list[str]], owner: str,
+) -> None:
+    """Resolve ownership without DNS, ASN enrichment or external requests.
+
+    Parameters:
+        tmp_path: Isolated host history.
+        ip: Requested address.
+        ranges: Cached organization networks.
+        owner: Unambiguous expected owner, or empty when unknown.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.host_profiles_path = tmp_path / "missing.sqlite"
+    initialize_history(reader.history_path)
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [None] * 4
+    reader.cache = Mock()
+    reader.cache.hget.return_value = None
+    pipeline = reader.cache.pipeline.return_value
+    pipeline.execute.side_effect = lambda: [
+        json.dumps(ranges.get(call.args[0].removesuffix("_IPs"), []))
+        for call in pipeline.hget.call_args_list
+    ]
+    expected = {"name": owner, "source": "Organization IP range" if owner else ""}
+    assert reader.host_names({"ip": [ip]})["names"][ip] == expected
+    if ip.startswith("192.168."):
+        pipeline.execute.assert_not_called()
+    else:
+        pipeline.execute.assert_called_once()

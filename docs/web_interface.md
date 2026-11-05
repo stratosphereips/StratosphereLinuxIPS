@@ -36,7 +36,8 @@ The browser title identifies the run, for example **Slips · sebas-en0**.
 It does not poll detection totals. Grouped network evidence queries resolve network
 membership once per request in a temporary ID table, then reuse it for counts and
 groups. This work stays in the web process and never writes to the capture database.
-Navigation tabs show names without totals; counts stay beside the data and its
+Navigation tabs, including host activity tabs, contain only their names; total
+badges and their update handlers are removed. Counts stay beside the data and its
 active filters. The browser no longer polls `/api/live-counts` just to update
 a title. Overview keeps its run totals.
 
@@ -1691,8 +1692,8 @@ and catch-up explanations remain available in expandable help. P2P Graph include
 not increase current host scores. See [network catch-up](p2p_catchup.md) for
 configuration, protection requirements, retention and coverage limits.
 
-Navigation tabs use names without totals. Counts remain inside each view beside the data and its active filters. Alert reviews appear after the related evidence and complete alert data.
+Navigation tabs use names without totals. Counts remain inside each view beside the data and its active filters. Alert lists emphasize the IP in blue, place the smaller device name beneath it, and color the score by threat level. Grouped rows align the score and alert count/time together on the right; individual rows put identity before supporting details. Full timestamps remain available on hover. Alert reviews appear after the related evidence and complete alert data.
 
-P2P Graph gives each visible IP its own color. Clicking a peer highlights its routes without hiding other boxes; the Peer dropdown applies filtering. Public IPs without DNS names can use their cached ASN organization as a display label, identified as **ASN organization** on hover; this does not create a reverse DNS record.
+P2P Graph gives each visible IP its own color. Clicking a peer highlights its routes without hiding other boxes; the Peer dropdown applies filtering. Public IPs without DNS names can use their cached ASN organization as a display label, identified as **ASN organization** on hover. If that cache entry is absent, the web checks locally cached organization IP ranges and labels a match **Organization IP range**. It uses the most specific matching range and leaves equal-specificity ownership conflicts unnamed. These labels do not create reverse DNS records or change whitelist rules; matching a configured organization whitelist does not require DNS or ASN enrichment. The lookups run in the web process and make no external requests.
 
 Hidden controls stay hidden even when toolbar layout rules set their display mode. Detection archives hide export and disable editing. The loading indicator keeps an invisible reserved slot so polling does not move the header.
