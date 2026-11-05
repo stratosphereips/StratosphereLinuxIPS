@@ -2012,7 +2012,7 @@ def test_check_connection_to_local_ip(
 @pytest.mark.parametrize(
     "saddr, daddr, sport, dport, official_dns_ip",
     [
-        ("192.168.1.20", "192.168.1.53", "40000", "53", ""),
+        ("192.168.1.20", "192.168.1.53", "40000", "53", "192.168.1.53"),
         ("fd00::53", "fd00::10", "547", "546", ""),
         ("fd00::10", "fd00::53", "546", "547", ""),
     ],
@@ -2026,6 +2026,7 @@ def test_check_connection_to_local_ip_ignores_official_dns_server(
     conn.db.is_official_dns_server.side_effect = (
         lambda ip: ip == official_dns_ip
     )
+    conn.db.get_network_state.return_value = None
     flow = Conn(
         starttime="1726249372.312124",
         uid="123",
@@ -2088,6 +2089,36 @@ def test_check_connection_to_local_ip_ignores_dns_and_dhcpv6_service_ports(
     conn.check_connection_to_local_ip(twid, flow)
 
     conn.set_evidence.conn_to_private_ip.assert_not_called()
+
+
+@pytest.mark.parametrize("proto,port,server,expected", [
+    ("udp", 53, "192.168.1.1", 0), ("tcp", 53, "192.168.1.1", 0),
+    ("tcp", 443, "192.168.1.1", 1), ("udp", 5354, "192.168.1.1", 1),
+    ("udp", 53, "192.168.1.99", 1), ("tcp", 53, "192.168.1.99", 1),
+])
+def test_private_ip_dns_exception_matches_configured_endpoint(
+    proto: str, port: int, server: str, expected: int,
+) -> None:
+    """Keep system resolver service traffic out of private-IP evidence.
+
+    Parameters:
+        proto: DNS or unrelated connection transport.
+        port: Destination service port.
+        server: Configured resolver or another private host.
+        expected: Number of private-IP findings.
+    """
+    conn = ModuleFactory().create_conn_analyzer_obj()
+    conn.set_evidence.conn_to_private_ip = Mock()
+    conn.db.get_gateway_ip.return_value = "192.168.1.1"
+    conn.db.get_network_state.return_value = {
+        "local_network":"192.168.1.0/24", "dns_servers":["192.168.1.1"],
+    }
+    conn.db.is_official_dns_server.return_value = True
+    flow = Conn(starttime="1726249372.312124",uid="dns-endpoint",saddr="192.168.1.247",
+        daddr=server,dur=1,proto=proto,appproto="",sport="62254",dport=str(port),
+        spkts=1,dpkts=1,sbytes=30,dbytes=60,smac="",dmac="",state="Established",history="ShADadFf")
+    conn.check_connection_to_local_ip(twid,flow)
+    assert conn.set_evidence.conn_to_private_ip.call_count == expected
 
 
 @pytest.mark.parametrize(

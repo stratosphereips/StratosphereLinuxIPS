@@ -504,13 +504,35 @@ change. Without a known subnet or group destination MAC, an address ending
 in `.255` is not assumed to be broadcast; it can be a valid host address on
 other subnet sizes. These exclusions also apply to unknown-port evidence.
 
-But it skips this alert when it's a DNS or a DHCP connection on port
-53, 67 or 68 UDP to the gateway IP.
+DNS service traffic to the operating system's configured resolver is excluded
+on **UDP and TCP port 53**, including flows without a DNS application label.
+The reply direction matches the resolver's source IP and source port. IPv4
+and equivalent IPv6 address spellings are supported. Other ports on that host
+remain subject to private-IP detection.
 
-Slips also skips this alert for DNS traffic on port 53 and for DHCPv6 traffic
-on ports 546 and 547. When Slips sees a private DNS flow in the analyzed
-traffic, it records that destination address as a DNS server and prints it to
-the display and to slips.log.
+This automatic exception uses the monitored interface's resolver settings
+at the flow's capture time. Network changes update the exception; an old
+resolver or one configured on another interface cannot override the active
+settings. The exception does not add a permanent IP-wide whitelist rule.
+For captures without operating-system network settings, Slips can use DNS
+servers discovered from the analyzed traffic. Connections explicitly
+identified as DNS on port 53 are also excluded; merely using UDP/53 is
+insufficient. Other DNS detectors still analyze the DNS transactions.
+
+For a manually configured resolver on another port, the existing whitelist
+supports a narrow exception for this evidence type. For example, to exclude
+private-IP evidence for DNS at `192.168.1.53:5354`, retain the flows and use:
+
+```text
+ip,192.168.1.53:5354,both,alerts,CONNECTION_TO_PRIVATE_IP
+```
+
+This explicit rule matches the server-side IP and port in either direction
+and applies to TCP and UDP; it persists until removed. Prefer the automatic
+network-scoped exception for the current system resolver.
+
+DHCP traffic on UDP ports 67 or 68 to the gateway and DHCPv6 traffic on UDP
+ports 546 and 547 are also excluded.
 
 ## Connection to private IPs outside the current local network
 

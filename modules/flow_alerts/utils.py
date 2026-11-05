@@ -357,9 +357,18 @@ def is_official_dns_server(
     flow: Any,
     what_to_check: str,
 ) -> bool:
+    """Match a resolver's DNS endpoint in the flow's network context.
+
+    Parameters:
+        db: Database holding interface resolver settings and PCAP discoveries.
+        flow: Connection with transport, endpoints and optional capture time.
+        what_to_check: Resolver endpoint, either srcip or dstip.
+
+    Returns:
+        Whether the endpoint is a known resolver on TCP or UDP port 53.
     """
-    returns True when the checked IP is a detected DNS server using port 53.
-    """
+    if str(getattr(flow, "proto", "")).lower() not in {"tcp", "udp"}:
+        return False
     if what_to_check == "dstip":
         dns_server_ip = getattr(flow, "daddr", "")
         dns_server_port = getattr(flow, "dport", "")
@@ -372,10 +381,23 @@ def is_official_dns_server(
     if str(dns_server_port) != "53" or not dns_server_ip:
         return False
 
-    active = network_state_for_flow(db, flow)
-    if active and dns_server_ip in active.get("dns_servers", []):
-        return True
-    return db.is_official_dns_server(dns_server_ip)
+    try:
+        server = ipaddress.ip_address(dns_server_ip)
+    except ValueError:
+        return False
+    state = db.get_network_state(getattr(flow, "interface", ""))
+    if isinstance(state, dict):
+        active = network_state_for_flow(db, flow, state)
+        if not active:
+            return False
+        for candidate in active.get("dns_servers", []):
+            try:
+                if server == ipaddress.ip_address(candidate):
+                    return True
+            except ValueError:
+                continue
+        return False
+    return db.is_official_dns_server(str(server))
 
 
 def should_ignore_dns_or_dhcpv6_flow(
@@ -390,8 +412,8 @@ def should_ignore_dns_or_dhcpv6_flow(
     flow: Flow-like object being analyzed.
 
     Return:
-    bool: True when the flow is a DNS query to port 53, a DNS reply from a
-    detected DNS server, or DHCPv6 service traffic.
+    bool: True for configured or protocol-identified DNS service traffic on
+    port 53, or DHCPv6 service traffic.
     """
     proto = getattr(flow, "proto", "").lower()
     if proto not in {"udp", "tcp"}:
@@ -402,14 +424,21 @@ def should_ignore_dns_or_dhcpv6_flow(
     dport = str(getattr(flow, "dport", ""))
     sport = str(getattr(flow, "sport", ""))
 
+    dns_protocol = "dns" in str(getattr(flow, "appproto", "")).lower().split(
+        ","
+    )
     if (
         dport == "53"
         and daddr
-        and (proto == "udp" or is_official_dns_server(db, flow, "dstip"))
+        and (dns_protocol or is_official_dns_server(db, flow, "dstip"))
     ):
         return True
 
-    if sport == "53" and saddr and is_official_dns_server(db, flow, "srcip"):
+    if (
+        sport == "53"
+        and saddr
+        and (dns_protocol or is_official_dns_server(db, flow, "srcip"))
+    ):
         return True
 
     if proto == "udp" and (sport in DHCPV6_PORTS or dport in DHCPV6_PORTS):
