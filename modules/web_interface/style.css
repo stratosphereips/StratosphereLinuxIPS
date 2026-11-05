@@ -737,9 +737,9 @@ body.alerts-active main { max-width: none; padding: 0; }
 .alerts-host-row:hover, .alerts-alert-row:hover { background: #172734; }
 .alerts-host-row.selected, .alerts-alert-row.selected { background: #142632; }
 .alerts-host-row.selected { border-left-color: var(--accent); }
-.alerts-host-row .host-label { display: grid; grid-column: 1; grid-row: 1 / span 2; gap: .2rem; overflow: hidden; }
-.alerts-host-row .host-label code { font-size: .8rem; font-weight: 750; }
-.alerts-host-row .host-label .host-name { min-width: 0; overflow: hidden; color: var(--muted); font-size: .73rem; text-overflow: ellipsis; white-space: nowrap; }
+.alerts-host-row .host-label { display: grid; grid-column: 1; grid-row: 1 / span 2; gap: .25rem; overflow: hidden; }
+.alerts-host-row .host-label code { color: var(--blue); font-size: 1rem; font-weight: 650; }
+.alerts-host-row .host-label .host-name { min-width: 0; overflow: hidden; color: var(--muted); font: 500 .78rem/1.4 system-ui, sans-serif; text-overflow: ellipsis; white-space: nowrap; }
 .alerts-host-row .alerts-host-score { grid-column: 2; grid-row: 1; font: 800 .8rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .alerts-host-row .alerts-host-meta { grid-column: 2; grid-row: 2; color: var(--muted); font-size: .71rem; text-align: right; }
 .alerts-host-pager { display: flex; align-items: center; gap: .35rem; padding: .45rem .6rem; border-top: 1px solid var(--line); }
@@ -1550,3 +1550,19 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .resource-info { position: relative; display: inline-flex; align-items: center; justify-content: center; min-width: 18px; width: 18px; height: 18px; padding: 0; border: 0; background: transparent; color: var(--muted); font: inherit; cursor: help; vertical-align: middle; }
 .resource-info::after { display: none; position: absolute; left: 0; bottom: calc(100% + 6px); z-index: 100; width: min(280px, 65vw); padding: .6rem .7rem; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--text); box-shadow: 0 4px 16px #0003; white-space: normal; text-align: left; font: 400 .78rem/1.45 ui-sans-serif, system-ui, sans-serif; content: attr(data-tooltip); pointer-events: none; }
 .resource-info:hover::after, .resource-info:focus-visible::after { display: block; }
+
+.alerts-alert-row .host-label { display: flex; flex-direction: column; align-items: flex-start; gap: .2rem; }
+.alerts-alert-row .host-label code { color: var(--blue); font-size: 1rem; font-weight: 650; }
+.alerts-alert-row .host-label .host-name { color: var(--muted); font: 500 .78rem/1.4 var(--font, system-ui, sans-serif); }
+.alerts-host-row .host-label.own-host .host-name, .alerts-alert-row .host-label.own-host .host-name { color: var(--accent); }
+.p2p-graph-peer rect, .p2p-graph-peer.graph-local rect { stroke: var(--peer-color); }
+.p2p-graph-peer .p2p-graph-peer-name { fill: var(--peer-color); }
+.p2p-graph-peer[aria-pressed="true"] rect { stroke-width: 3.5; }
+.p2p-graph-report rect { stroke: var(--target-color); }
+.p2p-graph-target { fill: var(--target-color); }
+.p2p-graph-route path:first-child { stroke: var(--sender-color); }
+.p2p-graph-route path:nth-child(2) { stroke: var(--receiver-color); }
+.p2p-graph-route.related path { opacity: 1; stroke-width: 3; }
+.p2p-graph-route.selected .p2p-graph-report rect { stroke: var(--target-color); stroke-width: 3; }
+
+.tabs .badge[hidden], .host-activity-tabs [hidden], #p2p-graph-scroll[hidden] { display: none; }

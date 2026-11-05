@@ -120,7 +120,7 @@ def test_pre_main_and_subscribe(tmp_path: Path) -> None:
     """
     module = ModuleFactory().create_beaconing_obj(output_dir=str(tmp_path))
     module.subscribe_to_channels()
-    module.db.subscribe.assert_called_once_with("new_flow")
+    assert [call.args[0] for call in module.db.subscribe.call_args_list] == ["new_flow", "new_packet_timing"]
     with patch("modules.beaconing.beaconing.utils.drop_root_privs_permanently"):
         module.pre_main()
     assert isinstance(module.model, PatternModel)

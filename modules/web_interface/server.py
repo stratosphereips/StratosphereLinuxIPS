@@ -5729,6 +5729,22 @@ class RunDataReader:
                 if reverse_dns:
                     name = str(reverse_dns)
                     source = "rDNS"
+            if (
+                not name
+                and not identity_changed
+                and ipaddress.ip_address(ip).is_global
+            ):
+                try:
+                    asn = self._loads(self.cache.hget("IPsInfo:asn", ip), {})
+                except (AttributeError, redis.RedisError):
+                    asn = {}
+                if isinstance(asn, dict) and asn.get("org") not in {
+                    None,
+                    "",
+                    "Unknown",
+                }:
+                    name = str(asn["org"])
+                    source = "ASN organization"
             if not name:
                 vendor = (
                     live_identity[index * 4 + 2]

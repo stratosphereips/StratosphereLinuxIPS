@@ -66,13 +66,13 @@ def test_agreement_requires_local_and_distinct_peers(
             second["confidence"] = 0.6
         if condition == "low_reporter_confidence":
             first["confidence"] = 0.6
-        if condition != "no_local":
-            validator.observe_local(local)
         if condition == "local_fp":
             validator.apply_review(review(local, "false_positive"))
         validator.observe_report(first)
         if condition != "one_peer":
             validator.observe_report(second)
+        if condition != "no_local":
+            validator.observe_local(local)
         if condition == "peer_fp":
             validator.apply_review(review(second, "false_positive"))
         learned = validator.peer_agreement("peer-A")
@@ -92,9 +92,9 @@ def test_agreement_survives_restart_versions_networks_and_repetition(tmp_path: P
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
         validator = ReportValidator(path)
         local, first, second = observation(), report(), report("second", peer="peer-B")
-        validator.observe_local(local)
         validator.observe_report(first)
         validator.observe_report(second)
+        validator.observe_local(local)
         with validator.connect() as connection:
             earned = connection.execute("SELECT earned_at FROM credits WHERE peer_id='peer-A'").fetchone()[0]
         for _ in range(20):
@@ -130,9 +130,9 @@ def test_agreement_review_retracts_and_restores_original_reward(tmp_path: Path) 
     validator = ReportValidator(tmp_path / "validation.sqlite")
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
         local = observation()
-        validator.observe_local(local)
         validator.observe_report(report())
         validator.observe_report(report("second", peer="peer-B"))
+        validator.observe_local(local)
         validator.apply_review(review(local, "false_positive"))
         assert validator.peer_agreement("peer-A")["adjustment"] == 0
         validator.apply_review(review(local, "unreviewed", revision=2))
@@ -152,9 +152,9 @@ def test_agreement_changes_actual_report_weight_and_is_capped(tmp_path: Path) ->
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
         for index in range(10):
             target = f"192.168.1.{100 + index}"
-            validator.observe_local(observation(f"local-{index}", target=target))
             validator.observe_report(report(f"first-{index}", target=target))
             validator.observe_report(report(f"second-{index}", peer="peer-B", target=target))
+            validator.observe_local(observation(f"local-{index}", target=target))
             if index == 0:
                 trustdb = Mock()
                 trustdb.get_ip_of_peer.return_value = (1793000000, "192.0.2.1")
@@ -178,9 +178,9 @@ def test_original_agreement_proof_survives_latest_report_replacement(tmp_path: P
     _factory = ModuleFactory()
     validator = ReportValidator(tmp_path / "validation.sqlite")
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
-        validator.observe_local(observation())
         validator.observe_report(report())
         validator.observe_report(report("second", peer="peer-B"))
+        validator.observe_local(observation())
         revision = validator.feedback_revision()
         validator.observe_report(report())
         assert validator.feedback_revision() == revision
@@ -204,9 +204,9 @@ def test_old_duplicate_positive_cases_cannot_multiply_reward(tmp_path: Path) -> 
     _factory = ModuleFactory()
     validator = ReportValidator(tmp_path / "validation.sqlite")
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
-        validator.observe_local(observation())
         validator.observe_report(report())
         validator.observe_report(report("second", peer="peer-B"))
+        validator.observe_local(observation())
         with validator.connect() as connection:
             connection.execute("DELETE FROM positive_targets")
             connection.execute("INSERT INTO credits SELECT peer_id, 'gateway:office|192.168.1.185', evidence_type, rule_version, verdict, reason, report_data, earned_at+1, changed_at FROM credits WHERE peer_id='peer-A'")
@@ -228,12 +228,12 @@ def test_all_witnesses_fit_one_time_window(
     _factory = ModuleFactory()
     validator = ReportValidator(tmp_path / "validation.sqlite", {"min_peers": 3})
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
-        validator.observe_local(observation())
         validator.observe_report(report())
         for index, offset in enumerate(offsets):
             witness = report(f"witness-{index}", peer=f"peer-{index}")
             witness["provenance"][0]["observed_at"] += offset
             validator.observe_report(witness)
+        validator.observe_local(observation())
         assert validator.peer_agreement("peer-A")["targets"] == expected
 
 
@@ -247,9 +247,9 @@ def test_equivalent_ipv6_targets_share_one_lifetime_reward(tmp_path: Path) -> No
     validator = ReportValidator(tmp_path / "validation.sqlite")
     with patch("modules.p2p_trust.trust.report_validation.time.time", return_value=1793000000):
         for target in ("2001:db8::1", "2001:0db8:0000:0000:0000:0000:0000:0001"):
-            validator.observe_local(observation(f"local-{target}", target=target))
             validator.observe_report(report(f"first-{target}", target=target))
             validator.observe_report(report(f"second-{target}", peer="peer-B", target=target))
+            validator.observe_local(observation(f"local-{target}", target=target))
         assert validator.peer_agreement("peer-A") == {"adjustment": 0.025, "targets": 1}
 
 
@@ -269,3 +269,104 @@ def test_agreement_policy(settings: object, expected: AgreementPolicy) -> None:
     """
     _factory = ModuleFactory()
     assert AgreementPolicy.from_config(settings) == expected
+
+
+@pytest.mark.parametrize("backdate", [False, True])
+@pytest.mark.parametrize("restart", [False, True])
+def test_mirrored_reports_cannot_earn_agreement(tmp_path: Path, backdate: bool, restart: bool) -> None:
+    """Reject copied reports, including forged times and replacement observations.
+
+    Parameters:
+        tmp_path: Persistent receiver-owned ledger.
+        backdate: Forge the remote observation time before our own detection.
+        restart: Reopen the validator before receiving copied reports.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "validation.sqlite"
+    validator = ReportValidator(path)
+    local = observation()
+    validator.observe_local(local)
+    if restart:
+        validator = ReportValidator(path)
+    for index in range(5):
+        for peer in ("peer-A", "peer-B"):
+            copied = report(f"copy-{peer}-{index}", peer=peer)
+            copied["received_order"] = -1
+            if backdate:
+                copied["provenance"][0]["observed_at"] = local["observed_at"] - 10
+            validator.observe_report(copied)
+        validator.observe_local(observation(f"next-{index}"))
+    assert validator.peer_agreement("peer-A") == {"adjustment": 0, "targets": 0}
+    assert validator.peer_agreement("peer-B") == {"adjustment": 0, "targets": 0}
+
+
+def test_late_mirror_cannot_corroborate_first_reporter(tmp_path: Path) -> None:
+    """Require independent early reports from all peers used as witnesses.
+
+    Parameters:
+        tmp_path: Isolated receiver-owned ledger.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    validator.observe_report(report())
+    validator.observe_local(observation())
+    validator.observe_report(report("mirror", peer="peer-B"))
+    assert validator.peer_agreement("peer-A")["targets"] == 0
+    assert validator.peer_agreement("peer-B")["targets"] == 0
+
+
+@pytest.mark.parametrize("change", ["score", "confidence", "detector"])
+def test_reusing_an_early_id_does_not_backdate_changed_report(tmp_path: Path, change: str) -> None:
+    """Use new receipt order when a peer changes an earlier report's content.
+
+    Parameters:
+        tmp_path: Receiver-owned ledger.
+        change: Field changed after the first local observation.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    early = report()
+    if change == "detector":
+        early["provenance"][0]["dst_port"] = 80
+    else:
+        early[change] = 0
+    validator.observe_report(early)
+    local = observation()
+    local["provenance"]["dst_port"] = 445
+    validator.observe_local(local)
+    revised = report()
+    revised["provenance"][0]["dst_port"] = 445
+    validator.observe_report(revised)
+    validator.observe_report(report("other-peer", peer="peer-B"))
+    assert validator.peer_agreement("peer-A")["targets"] == 0
+    with validator.connect() as connection:
+        arrival = connection.execute("SELECT json_extract(data, '$.received_order') FROM reports WHERE peer_id='peer-A'").fetchone()[0]
+        local_order = connection.execute("SELECT first_order FROM local_targets").fetchone()[0]
+    assert arrival > local_order
+
+
+def test_pre_upgrade_agreement_has_no_automatic_reward(tmp_path: Path) -> None:
+    """Preserve lifetime deduplication while excluding unverifiable old ordering.
+
+    Parameters:
+        tmp_path: Persistent pre-upgrade ledger fixture.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "validation.sqlite"
+    validator = ReportValidator(path)
+    validator.observe_report(report())
+    validator.observe_report(report("second", peer="peer-B"))
+    validator.observe_local(observation())
+    assert validator.peer_agreement("peer-A")["targets"] == 1
+    with validator.connect() as connection:
+        connection.execute("DROP TABLE arrival_clock")
+        connection.execute("DROP TABLE local_targets")
+        connection.execute("UPDATE credits SET report_data=json_remove(report_data, '$.received_order')")
+    validator = ReportValidator(path)
+    assert validator.peer_agreement("peer-A")["targets"] == 0
+    with validator.connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM positive_targets WHERE peer_id='peer-A'").fetchone()[0] == 1
+        assert connection.execute("SELECT first_order FROM local_targets").fetchone()[0] == 0
+    validator.observe_report(report("replayed-after-upgrade"))
+    validator.observe_local(observation("after-upgrade"))
+    assert validator.peer_agreement("peer-A")["targets"] == 0

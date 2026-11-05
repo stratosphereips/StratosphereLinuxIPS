@@ -401,8 +401,8 @@ def test_flow_retention_policy_bounds_settings(
         == expected
     )
 @pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("false", False), (None, False)])
-def test_service_anomaly_is_enabled_only_explicitly(value: object, expected: bool) -> None:
-    """Keep the new detector opt-in, including older custom configurations.
+def test_service_anomaly_feature_flag_is_boolean(value: object, expected: bool) -> None:
+    """Respect explicit boolean settings for the service anomaly detector.
 
     Parameters:
         value: Configured feature value or missing-section default.
@@ -428,3 +428,22 @@ def test_beaconing_feature_flag_is_boolean(value: object, expected: bool) -> Non
         assert parser.beaconing_enabled() is expected
         assert read.call_args.args == ("beaconing", "enabled", True)
     assert factory is not None
+
+
+@pytest.mark.parametrize("enabled", [None, True, False])
+def test_packet_and_service_anomaly_defaults(enabled: bool | None) -> None:
+    """Enable both detectors by default while respecting an explicit opt-out.
+
+    Parameters:
+        enabled: Explicit configuration, or None for a missing section.
+    """
+    _factory = ModuleFactory()
+    from modules.beaconing.settings import PacketTimingSettings
+
+    parser = object.__new__(ConfigParser)
+    parser.config = {} if enabled is None else {
+        "beaconing": {"packet_timing": {"enabled": enabled}},
+        Modules.ANOMALY_DETECTION_SERVICES.value: {"enabled": enabled},
+    }
+    assert parser.service_anomaly_enabled() is (enabled is not False)
+    assert PacketTimingSettings.from_config(parser).enabled is (enabled is not False)

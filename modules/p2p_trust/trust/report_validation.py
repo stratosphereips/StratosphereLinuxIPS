@@ -527,10 +527,26 @@ class ReportValidator:
                 "rejections": "peer_id TEXT NOT NULL, target_key TEXT NOT NULL, evidence_type TEXT NOT NULL, rule_version TEXT NOT NULL, verdict TEXT NOT NULL, reason TEXT NOT NULL, report_data TEXT NOT NULL, earned_at REAL NOT NULL, changed_at REAL NOT NULL, PRIMARY KEY(peer_id, target_key, evidence_type, rule_version)",
                 "review_imports": "run_path TEXT PRIMARY KEY, updated_at REAL NOT NULL, source TEXT NOT NULL",
                 "feedback_state": "id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL",
+                "arrival_clock": "id INTEGER PRIMARY KEY CHECK(id=1), sequence INTEGER NOT NULL",
+                "local_targets": "target_ip TEXT PRIMARY KEY, first_order INTEGER NOT NULL",
             }
             for table, schema in schemas.items():
                 connection.execute(
                     f"CREATE TABLE IF NOT EXISTS {table} ({schema})"
+                )
+            initialized = connection.execute(
+                "INSERT OR IGNORE INTO arrival_clock VALUES (1, 0)"
+            ).rowcount
+            if initialized:
+                connection.executemany(
+                    "INSERT OR IGNORE INTO local_targets VALUES (?, 0)",
+                    [
+                        (self._target_ip(row[0]),)
+                        for row in connection.execute(
+                            "SELECT DISTINCT target_key FROM observations "
+                            "WHERE json_extract(data, '$.peer_id')='' LIMIT 100000"
+                        ).fetchall()
+                    ],
                 )
             connection.execute(
                 "INSERT OR IGNORE INTO feedback_state VALUES (1, 0)"
@@ -585,6 +601,17 @@ class ReportValidator:
             record: Canonical local observation or received report snapshot.
             compact: Keep only the latest unreviewed live observation; reviews retain all their records.
         """
+        if not record.get("peer_id"):
+            order = ReportValidator._arrival_order(connection)
+            target_ip = ReportValidator._target_ip(record["target_key"])
+            if not connection.execute(
+                "SELECT 1 FROM local_targets WHERE target_ip=?", (target_ip,)
+            ).fetchone():
+                connection.execute(
+                    "INSERT OR IGNORE INTO local_targets SELECT ?, ? "
+                    "WHERE (SELECT COUNT(*) FROM local_targets)<100000",
+                    (target_ip, order),
+                )
         connection.execute(
             "INSERT INTO observations VALUES (?, ?, ?, ?) ON CONFLICT(record_id) "
             "DO UPDATE SET data=excluded.data",
@@ -611,6 +638,23 @@ class ReportValidator:
                 ),
             )
 
+    @staticmethod
+    def _arrival_order(connection: sqlite3.Connection) -> int:
+        """Allocate a receiver-owned sequence within the write transaction.
+
+        Parameters:
+            connection: Current write transaction.
+
+        Returns:
+            Increasing local arrival order, independent of peer timestamps.
+        """
+        connection.execute(
+            "UPDATE arrival_clock SET sequence=sequence+1 WHERE id=1"
+        )
+        return connection.execute(
+            "SELECT sequence FROM arrival_clock WHERE id=1"
+        ).fetchone()[0]
+
     def observe_local(self, record: dict[str, Any]) -> None:
         """Register traffic-derived evidence and reconsider earlier peer reports.
 
@@ -631,6 +675,7 @@ class ReportValidator:
             reconcile: Apply validation after the current block evaluation.
         """
         with self.connect() as connection:
+            order = self._arrival_order(connection)
             provenance_items = record["provenance"] or [
                 {
                     "evidence_type": "legacy",
@@ -648,6 +693,7 @@ class ReportValidator:
                     **record,
                     "detector": provenance,
                     "observed_at": observed,
+                    "received_order": order,
                 }
                 previous = connection.execute(
                     "SELECT data FROM reports WHERE peer_id=? AND target_key=? AND evidence_type=? AND rule_version=?",
@@ -658,6 +704,21 @@ class ReportValidator:
                         provenance["rule_version"],
                     ),
                 ).fetchone()
+                if previous:
+                    earlier = json.loads(previous[0])
+                    if earlier.get("id") == report["id"] and all(
+                        earlier.get(key) == report.get(key)
+                        for key in (
+                            "detector",
+                            "observed_at",
+                            "score",
+                            "confidence",
+                            "message_type",
+                        )
+                    ):
+                        report["received_order"] = earlier.get(
+                            "received_order", order
+                        )
                 if record.get("message_type") == "blame":
                     report["blame_at"] = observed
                 elif (
@@ -821,6 +882,13 @@ class ReportValidator:
             or report.get("confidence", 0) < policy.min_confidence
         ):
             return []
+        local_target = connection.execute(
+            "SELECT first_order FROM local_targets WHERE target_ip=?",
+            (self._target_ip(report["target_key"]),),
+        ).fetchone()
+        received = report.get("received_order", 0)
+        if not local_target or not 0 < received < local_target[0]:
+            return []
         start = report["observed_at"] - policy.window_seconds
         end = report["observed_at"] + policy.window_seconds
         local_records = [
@@ -866,6 +934,9 @@ class ReportValidator:
                 )
                 if (
                     not peer
+                    or not 0
+                    < witness.get("received_order", 0)
+                    < local_target[0]
                     or peer == report["peer_id"]
                     or witness.get("score", 0) <= 0
                     or witness.get("confidence", 0) < policy.min_confidence
@@ -1106,7 +1177,7 @@ class ReportValidator:
         return (
             (
                 "corroborated",
-                "Local detection and matching peer reports",
+                "Peer reported first; local detection and distinct peers agree",
                 agreement,
             )
             if agreement
@@ -1335,6 +1406,17 @@ class ReportValidator:
                 report = json.loads(row["report_data"])
                 if row["verdict"] != "corroborated" and not report.get(
                     "agreement_earned"
+                ):
+                    continue
+                local_target = connection.execute(
+                    "SELECT first_order FROM local_targets WHERE target_ip=?",
+                    (self._target_ip(row["target_key"]),),
+                ).fetchone()
+                if (
+                    not local_target
+                    or not 0
+                    < report.get("received_order", 0)
+                    < local_target[0]
                 ):
                     continue
                 owner = self._positive_owner(

@@ -1369,3 +1369,5 @@ command = './slips.py -f dataset/test3-mixed.binetflow -o /data/test'
 args = command.split()
 process = subprocess.run(args, stdout=subprocess.PIPE)
 ```
+
+Large data upload evidence records both source and destination, so organization whitelist rules apply to either endpoint even without DNS or reverse DNS. Private-IP connection findings exclude UDP DNS queries and TCP DNS queries or replies involving the resolver configured at the flow's observation time. DHCPv6 exceptions apply only to UDP.

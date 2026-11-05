@@ -1038,9 +1038,8 @@ beaconing:
   enabled: true
 
   packet_timing:
-    # Collect packet timing inside individual TCP connections. Opt in because
-    # Zeek must handle packet events; disabled leaves the capture path unchanged.
-    enabled: false
+    # Collect bounded packet timing summaries inside individual TCP connections.
+    enabled: true
     # Also examine pure ACKs and TCP keepalive probes. These produce info only.
     # Leave off to reduce ordinary transport-maintenance records.
     include_acks: false
@@ -1167,7 +1166,7 @@ beaconing:
 anomaly_detection_services:
   # Turn on learning and warnings for new local services, unfamiliar clients,
   # unusual connection hours and lengths. A service is one computer's TCP/UDP port.
-  enabled: false
+  enabled: true
   # auto: learn normal connections, then report unusual ones.
   # train: only learn; use this to teach Slips about legitimate changes.
   # detect: check connections using saved learning; do not accept new habits.

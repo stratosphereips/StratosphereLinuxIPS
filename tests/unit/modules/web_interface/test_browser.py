@@ -22,6 +22,94 @@ from slips_files.common.slips_utils import utils
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
+def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
+    """Keep the metadata disclosure and keyboard focus across automatic refreshes.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    metadata = {"Slips version":"1.1.24","Branch":"test-branch","Commit":"abc123",
+                "File":"en0","Command":"slips.py -i en0","Zeek version":"8"}
+    polls = []
+
+    def respond(route: Any) -> None:
+        """Serve real metadata refreshes using isolated run data.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        parsed = urlparse(route.request.url)
+        if parsed.path in {"/","/app.js","/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
+        elif parsed.path == "/api/metadata":
+            route.fulfill(json={"items":metadata})
+        elif parsed.path == "/api/overview":
+            polls.append(parsed.query)
+            route.fulfill(json={"run":{"state":"running","input_type":"interface","interface":"en0","output_dir":"output/metadata","uptime_seconds":len(polls)},
+                                "computer_name":"Test host","host_addresses":{"ipv4":["192.0.2.10"],"ipv6":[]},
+                                "counts":{"alerts":0,"evidence":0,"hosts":1,"processed_flows":1},
+                                "system":{},"modules":[],"network_states":[]})
+        else:
+            route.fulfill(status=503,json={"error":"Isolated metadata fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome",headless=True)
+        try:
+            page = browser.new_page(viewport={"width":1500,"height":1000})
+            page.on("pageerror",lambda error: errors.append(str(error)))
+            page.route("**/*",respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof loadMetadata === 'function'")
+            page.evaluate("""async theme => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+                setTheme(theme);state.activeTab='metadata';state.networkOnly=false;
+                document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='metadata'));
+                await loadMetadata();clearError();
+            }""",theme)
+            details = page.locator("#run-metadata .metadata-more")
+            summary = details.locator("summary")
+            assert not details.evaluate("node => node.open")
+            summary.click()
+            summary.focus()
+            page.evaluate("window.metadataDisclosure = byId('run-metadata').querySelector('.metadata-more')")
+            for _ in range(3):
+                page.evaluate("() => loadMetadata()")
+                assert details.evaluate("node => node.open")
+                assert details.evaluate("node => node === window.metadataDisclosure")
+                assert summary.evaluate("node => node === document.activeElement")
+                assert "slips.py -i en0" in details.inner_text()
+            assert summary.inner_text() == "More"
+            assert all(hidden for hidden in page.locator(".tabs .badge").evaluate_all("nodes => nodes.map(node => getComputedStyle(node).display === 'none')"))
+            assert not any(character.isdigit() for character in page.locator(".tabs").inner_text().replace("P2P", ""))
+            assert "192.0.2.10" in page.locator("#metadata-device").inner_text()
+            page.evaluate("""async () => {
+                state.metadata.items.Command='slips.py -i eth0';
+                state.metadata.items.Branch='updated-branch';await loadMetadata();
+            }""")
+            assert "slips.py -i eth0" in details.inner_text()
+            assert "updated-branch" in page.locator("#run-metadata").inner_text()
+            assert details.evaluate("node => node.open")
+            summary.press("Enter")
+            assert not details.evaluate("node => node.open")
+            page.evaluate("() => loadMetadata()")
+            assert not details.evaluate("node => node.open")
+            summary.press("Enter")
+            page.evaluate("renderMetadata({'Slips version':'1.1.24'},state.overview)")
+            assert details.is_hidden()
+            page.evaluate("() => loadMetadata()")
+            assert details.evaluate("node => node.open")
+            assert details.is_visible()
+            assert len(polls) >= 6
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
 def test_hosts_tab_shows_recovered_finding_only_hosts(tmp_path: Path, theme: str) -> None:
     """Render retained host findings after identity and raw-flow caches are lost.
 
@@ -4343,6 +4431,15 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
             assert page.locator("#p2p-graph").is_visible()
             assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 5
             assert "rpi-one" in page.locator("#p2p-report-graph").text_content()
+            page.locator("#p2p-report-graph .p2p-graph-peer[data-peer='peer-A']").first.click()
+            assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 5
+            assert page.locator("#p2p-report-graph .p2p-graph-route.related").count() == 2
+            assert page.locator("#p2p-graph-peer").input_value() == ""
+            assert "All routes remain visible" in page.locator("#p2p-graph-selection").inner_text()
+            colors = page.locator("#p2p-report-graph .p2p-graph-peer").evaluate_all("nodes => nodes.map(node => [node.dataset.peer, node.style.getPropertyValue('--peer-color')])")
+            by_peer = {peer: color for peer, color in colors}
+            assert all(by_peer[peer] == color for peer, color in colors)
+            assert len(set(by_peer.values())) == len(by_peer)
             assert page.evaluate("state.p2pGraph.groups.every(g=>g.sender.id==='@local'||g.receiver.id==='@local')")
             assert page.locator("#p2p-graph-detail").get_by_text("Select a report card", exact=False).count() == 1
             selected_key = page.evaluate("state.p2pGraph.groups.find(g=>g.sender.id==='peer-A'&&g.target==='192.0.2.99').key")
@@ -4428,7 +4525,7 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
                     byId('p2p-report-graph').querySelectorAll('.p2p-graph-route path').length];
             }""", payload)
             assert counts == [12, 48, 1000, 0, 96]
-            page.evaluate("""() => {state.networkOnly=true; state.currentNetworkStart=Date.now()/1000+5; renderP2PGraph();}""")
+            page.evaluate("""() => {state.networkOnly=true; state.currentNetworkStart=Date.now()/1000+5; byId('p2p-graph-range').value='connection'; renderP2PGraph();}""")
             assert page.locator("#p2p-graph-empty").is_visible()
             assert not errors, errors
         finally:
@@ -5115,6 +5212,73 @@ def test_timestamp_hover_exposes_original_date_across_views(
                 assert "GMT+02:00" in result["daylight"][0]
                 assert "GMT+01:00" in result["daylight"][1]
             page.locator("#evidence-table tbody time").hover(force=True)
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_alert_identity_hierarchy_and_review_at_bottom(theme: str) -> None:
+    """Keep readable alert identities and reviews after all related evidence.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve static assets and isolate the alert rendering fixture.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated alert fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1600, "height": 1100})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof renderAlertDetailPane === 'function'")
+            page.evaluate("""theme => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);clearTimeout(state.titleTimer);
+                setTheme(theme);state.activeTab='alerts';state.deviceView=false;
+                state.hostNames.set('192.168.1.247',{name:'Cherry',checkedAt:Date.now()});
+                document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='alerts'));
+                const evidence={id:'evidence-one',evidence_type:'UNKNOWN_PORT',profile_ip:'192.168.1.247',
+                    description:'Unknown destination port',threat_level:'high',confidence:1,timestamp:1793000000};
+                window.alertFixture={alert_id:'alert-one',ip_alerted:'192.168.1.247',alert_score:6.15,
+                    threat_level:'high',alert_time:1793000000,evidence_count:1,evidence:[evidence]};
+                state.alertsWorkspace.grouping='host';state.pages.alerts.items=[{...alertFixture,alert_count:1}];
+                renderAlertHostList();renderAlertDetailPane(alertFixture);
+            }""", theme)
+            for grouping in ("host", "individual"):
+                page.evaluate("""grouping => {
+                    state.alertsWorkspace.grouping=grouping;
+                    state.pages.alerts.items=[{...alertFixture,alert_count:1}];renderAlertHostList();
+                }""", grouping)
+                identity = page.locator("#alerts-host-list .host-label")
+                sizes = identity.evaluate("""node => ({
+                    ip:parseFloat(getComputedStyle(node.querySelector('code')).fontSize),
+                    name:parseFloat(getComputedStyle(node.querySelector('.host-name')).fontSize),
+                    color:getComputedStyle(node.querySelector('code')).color,
+                    nameColor:getComputedStyle(node.querySelector('.host-name')).color})""")
+                assert sizes["ip"] > sizes["name"]
+                assert sizes["color"] != sizes["nameColor"]
+                assert "Cherry" in identity.inner_text()
+            assert page.locator("#alerts-detail").evaluate("node => node.lastElementChild.classList.contains('review-editor')")
+            assert page.locator("#alerts-detail .investigation-list").inner_text()
+            page.evaluate("() => openAlert(alertFixture)")
+            assert page.locator("#drawer-body").evaluate("node => node.lastElementChild.classList.contains('review-editor')")
             assert not errors, errors
         finally:
             browser.close()

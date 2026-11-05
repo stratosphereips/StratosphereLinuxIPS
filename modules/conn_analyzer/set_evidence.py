@@ -511,6 +511,9 @@ class SetEvidenceHelper:
             attacker=Attacker(
                 direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
+            victim=Victim(
+                direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
+            ),
             threat_level=ThreatLevel.INFO,
             confidence=0.6,
             description=description,
@@ -528,6 +531,9 @@ class SetEvidenceHelper:
             evidence_type=EvidenceType.DATA_UPLOAD,
             attacker=Attacker(
                 direction=Direction.DST, ioc_type=IoCType.IP, value=daddr
+            ),
+            victim=Victim(
+                direction=Direction.SRC, ioc_type=IoCType.IP, value=saddr
             ),
             threat_level=ThreatLevel.HIGH,
             confidence=0.6,

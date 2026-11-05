@@ -103,7 +103,7 @@ def test_packet_evidence_uses_original_flow_and_worker_scoring() -> None:
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     assert worker.get_threat_level(evidence) == pytest.approx(0.425)
     assert "300.000s" in evidence.description
-    disabled = ModuleFactory().create_beaconing_obj()
+    disabled = ModuleFactory().create_beaconing_obj(packet_timing={"enabled": False})
     disabled.handle_packet_timing({"profileid":"profile_10.0.0.1","twid":"timewindow1","flow":summary()})
     disabled.db.set_evidence.assert_not_called()
 

@@ -393,7 +393,8 @@ def should_ignore_dns_or_dhcpv6_flow(
     bool: True when the flow is a DNS query to port 53, a DNS reply from a
     detected DNS server, or DHCPv6 service traffic.
     """
-    if getattr(flow, "proto", "").lower() != "udp":
+    proto = getattr(flow, "proto", "").lower()
+    if proto not in {"udp", "tcp"}:
         return False
 
     daddr = getattr(flow, "daddr", "")
@@ -401,13 +402,17 @@ def should_ignore_dns_or_dhcpv6_flow(
     dport = str(getattr(flow, "dport", ""))
     sport = str(getattr(flow, "sport", ""))
 
-    if dport == "53" and daddr:
+    if (
+        dport == "53"
+        and daddr
+        and (proto == "udp" or is_official_dns_server(db, flow, "dstip"))
+    ):
         return True
 
-    if sport == "53" and saddr and db.is_official_dns_server(saddr):
+    if sport == "53" and saddr and is_official_dns_server(db, flow, "srcip"):
         return True
 
-    if sport in DHCPV6_PORTS or dport in DHCPV6_PORTS:
+    if proto == "udp" and (sport in DHCPV6_PORTS or dport in DHCPV6_PORTS):
         return True
 
     return False

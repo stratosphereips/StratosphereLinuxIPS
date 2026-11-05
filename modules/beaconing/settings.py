@@ -107,7 +107,7 @@ class Settings:
 class PacketTimingSettings:
     """Optional sparse-packet collection and conservative heartbeat thresholds."""
 
-    enabled: bool = False
+    enabled: bool = True
     include_acks: bool = False
     min_events: int = 12
     window_events: int = 64

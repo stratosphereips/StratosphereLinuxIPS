@@ -292,3 +292,33 @@ def test_is_interface_timeout_reached(
             )
             is expected_result
         )
+
+
+@pytest.mark.parametrize("proto,port,source,expected", [
+    ("tcp", 53, False, True), ("tcp", 53, True, True),
+    ("udp", 53, False, True), ("udp", 53, True, True),
+    ("tcp", 443, False, False), ("tcp", 547, False, False),
+    ("udp", 547, False, True),
+])
+def test_private_ip_exemptions_use_flow_time_resolver(proto: str, port: int, source: bool, expected: bool) -> None:
+    """Exempt both DNS transports using the resolver active when traffic occurred.
+
+    Parameters:
+        proto: Observed transport.
+        port: Resolver-side service port.
+        source: Whether this is the server's reverse flow.
+        expected: Whether private-IP evidence should be skipped.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.is_official_dns_server.return_value = False
+    db.get_network_state.return_value = {
+        "changed_at":200,"dns_servers":["10.0.0.53"],
+        "history":[{"changed_at":100,"dns_servers":["192.168.1.1"]}],
+    }
+    flow = SimpleNamespace(proto=proto,starttime=150,interface="en0",
+        saddr="192.168.1.1" if source else "192.168.1.247",
+        daddr="192.168.1.247" if source else "192.168.1.1",
+        sport=port if source else 62254,dport=62254 if source else port)
+    assert helper.should_ignore_dns_or_dhcpv6_flow(db,flow) is expected

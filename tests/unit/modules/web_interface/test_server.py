@@ -9080,3 +9080,29 @@ def test_live_host_clock_avoids_finding_history_queries(input_type: str) -> None
         assert reader._host_latest_event(connection) == 2_000_000_000
     connection.execute.assert_not_called()
     reader._attach_run_database.assert_not_called()
+
+
+@pytest.mark.parametrize("hostname,organization,expected", [
+    (None,"Google LLC",{"name":"Google LLC","source":"ASN organization"}),
+    ("google.example","Google LLC",{"name":"google.example","source":"rDNS"}),
+    (None,"Unknown",{"name":"","source":""}),
+])
+def test_public_host_label_uses_asn_without_inventing_rdns(tmp_path: Path, hostname: str | None, organization: str, expected: dict[str,str]) -> None:
+    """Use cached ownership only as a fallback for missing public hostnames.
+
+    Parameters:
+        tmp_path: Isolated web history.
+        hostname: Cached reverse DNS, if one was actually resolved.
+        organization: Cached ASN owner.
+        expected: Display label and honest provenance.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.history_path = tmp_path / "history.sqlite"
+    reader.host_profiles_path = tmp_path / "missing-profiles.sqlite"
+    initialize_history(reader.history_path)
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [None]*4
+    reader.cache = Mock()
+    reader.cache.hget.side_effect = lambda key, ip: hostname if key == "IPsInfo:reverse_dns" else json.dumps({"org":organization,"number":"AS15169"})
+    assert reader.host_names({"ip":["142.250.82.212"]})["names"]["142.250.82.212"] == expected

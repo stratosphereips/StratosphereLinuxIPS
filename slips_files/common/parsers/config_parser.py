@@ -704,11 +704,11 @@ class ConfigParser(object):
         """Check the service anomaly feature flag.
 
         Returns:
-            Whether the module is explicitly enabled.
+            Whether the module is enabled unless explicitly disabled.
         """
         return (
             self.read_configuration(
-                Modules.ANOMALY_DETECTION_SERVICES.value, "enabled", False
+                Modules.ANOMALY_DETECTION_SERVICES.value, "enabled", True
             )
             is True
         )

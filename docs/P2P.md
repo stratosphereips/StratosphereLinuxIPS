@@ -400,6 +400,17 @@ fit inside the configured window. Default confidence is at least 0.8 for the
 local detection and each report. Informational observations, peer-derived
 local evidence and untyped legacy reports do not supply this confirmation.
 
+Only reports **received before this Slips first detected the target locally**
+can earn agreement credit or supply a peer witness. Receipt order is allocated
+by this Slips in SQLite; a peer's claimed detection time cannot backdate its
+arrival. Repeated local observations, restarts and reconnects preserve the
+first-local boundary. Copied reports arriving afterwards earn no agreement
+credit. Older credits without verifiable receipt order no longer contribute;
+their lifetime reward reservations remain, so they cannot be earned again.
+A singleton sequence and at most 100,000 first-local target records bound this
+extra storage. Once full, new targets cannot earn automatic agreement credit.
+Analyst verdicts and independently verified detections remain separate.
+
 Each qualifying **peer ID and target IP** earns +0.025 once, across runs,
 networks, evidence types and detector versions. A separate persistent
 `positive_targets` ledger reserves that lifetime reward. Repeated reports,

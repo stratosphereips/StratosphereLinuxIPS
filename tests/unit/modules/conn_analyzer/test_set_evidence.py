@@ -592,8 +592,12 @@ def test_data_exfiltration(attacker_ip, threat_level, profile_ip):
     assert evidence_1.attacker.value == "192.168.0.1"
     assert evidence_1.threat_level == ThreatLevel.INFO
     assert evidence_1.profile.ip == "192.168.0.1"
+    assert evidence_1.victim.value == flow.daddr
+    assert evidence_1.victim.direction == Direction.DST
     call_args_2, _ = set_ev.db.set_evidence.call_args_list[1]
     evidence_2 = call_args_2[0]
     assert evidence_2.attacker.value == "10.0.0.1"
     assert evidence_2.threat_level == ThreatLevel.HIGH
     assert evidence_2.profile.ip == "10.0.0.1"
+    assert evidence_2.victim.value == flow.saddr
+    assert evidence_2.victim.direction == Direction.SRC

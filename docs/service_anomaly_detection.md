@@ -41,7 +41,7 @@ anomaly_detection_services:
   min_training_days: 3
 ```
 
-The default is `enabled: false`. Restart Slips after changing the configuration.
+The default is `enabled: true`; set it to `false` to disable this detector. Restart Slips after changing the configuration.
 Client, hour and connection-length checks learn separately for each service:
 connections to one port do not train another port. The new-service check learns
 the set of answering ports for the computer as a whole. This module is separate from the
@@ -66,7 +66,7 @@ service-detector setting uses the default listed below.
 
 | Setting | Default | What it does and why |
 | --- | --- | --- |
-| `enabled` | `false` | Turns this detector on. Set it to `true` when you want Slips to start learning connections and checking them for changes. |
+| `enabled` | `true` | Turns this detector on. Set it to `true` when you want Slips to start learning connections and checking them for changes. |
 | `mode` | `auto` | Chooses whether Slips learns, checks connections, or does both. The three choices are explained below so you can decide when to accept changes as normal. |
 | `timezone` | `UTC` | The local timezone used to learn usual connection hours and distinguish weekdays from weekends. For example, `Europe/Prague` makes 09:00 mean 09:00 in Prague, including summer/winter clock changes. |
 

@@ -2276,21 +2276,33 @@ function renderNetworkStates(networkStates) {
  */
 function renderMetadata(metadata, overview = null) {
   const runMetadata = byId("run-metadata");
-  runMetadata.replaceChildren();
+  let primary = runMetadata.querySelector(".metadata-primary");
+  if (!primary) {
+    primary = document.createElement("div");
+    primary.className = "metadata-primary";
+    runMetadata.append(primary);
+  }
   const version = metadata["Slips version"] || overview?.run_metadata?.["Slips version"] || "";
-  runMetadata.append(
+  primary.replaceChildren(
     metadataRow("Version", version ? (/^slips\b/i.test(version) ? version : `Slips ${version}`) : "Unavailable"),
     metadataRow("Branch", metadata.Branch || overview?.run_metadata?.Branch || "Unavailable"),
     metadataRow("Commit", metadata.Commit || overview?.run_metadata?.Commit || "Unavailable"),
   );
   const extras = ["File", "Command", "Slips start date", "Zeek version"]
     .filter((label) => metadata[label] !== undefined);
-  if (extras.length) {
-    const details = document.createElement("details");
+  let details = runMetadata.querySelector(".metadata-more");
+  if (!details && extras.length) {
+    details = document.createElement("details");
     details.className = "metadata-more";
-    details.append(text("summary", "More run facts"));
-    extras.forEach((label) => details.append(metadataRow(label, metadata[label] || "Unavailable")));
+    const fields = document.createElement("div");
+    fields.className = "metadata-more-fields";
+    details.append(text("summary", "More"), fields);
     runMetadata.append(details);
+  }
+  if (details) {
+    details.hidden = !extras.length;
+    details.querySelector(".metadata-more-fields").replaceChildren(
+      ...extras.map((label) => metadataRow(label, metadata[label] || "Unavailable")));
   }
   const device = byId("metadata-device");
   device.replaceChildren();
@@ -3139,13 +3151,12 @@ function renderAlertDetailPane(record) {
     whitelist.setAttribute("aria-expanded", String(!editor.hidden));
   });
   container.append(editor, investigationHeading("Related evidence", "Select evidence to inspect its triggering flows"));
-  container.append(reviewEditor("alert", record));
   const evidence = document.createElement("div");
   evidence.className = "investigation-list";
   (record.evidence || []).forEach((item) => evidence.append(evidenceCard(item, record.evidence, true)));
   if (!record.evidence?.length) evidence.append(text("p", "No related evidence is available.", "muted"));
   container.append(evidence, investigationHeading("Identifiers"),
-    text("p", record.alert_id, "mono"), rawBlock(record, "alert"));
+    text("p", record.alert_id, "mono"), rawBlock(record, "alert"), reviewEditor("alert", record));
 }
 
 /** Open one alert in the right pane and load its linked evidence. */
@@ -5560,6 +5571,25 @@ function drawP2PGraph(groups) {
   definitions.append(marker); svg.append(definitions);
   [[146, "Reporting peer"], [600, "Report about host"], [1054, "Recipient"]].forEach(([x, label]) =>
     svg.append(p2pGraphSvg("text", { x, y: 32, class: "p2p-graph-column", "text-anchor": "middle" }, label)));
+  const colors = new Map();
+  const hues = state.p2pGraph.colorHues ||= new Map();
+  const usedHues = new Set(hues.values());
+  const palette = [2100, 300, 1600, 2750, 3450, 1900, 650, 3100, 2400, 1000, 100, 1350];
+  const identities = new Set(groups.flatMap((group) => [group.target,
+    group.sender.ip || group.sender.id, group.receiver.ip || group.receiver.id]));
+  [...identities].sort().forEach((identity) => {
+    if (!hues.has(identity)) {
+      let hash = 2166136261;
+      for (const character of identity) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+      const choices = palette.slice(hash % palette.length).concat(palette.slice(0, hash % palette.length));
+      let hue = choices.find((value) => !usedHues.has(value)) ?? hash % 3600;
+      while (usedHues.has(hue)) hue = (hue + 137) % 3600;
+      if (hues.size >= 3000) hues.delete(hues.keys().next().value);
+      usedHues.add(hue);
+      hues.set(identity, hue);
+    }
+    colors.set(identity, `hsl(${hues.get(identity) / 10} 62% ${document.documentElement.dataset.theme === "light" ? 32 : 72}%)`);
+  });
   const positions = {};
   ["sender", "receiver"].forEach((role) => {
     const nodes = new Map();
@@ -5579,12 +5609,14 @@ function drawP2PGraph(groups) {
   const short = (value, limit) => value.length > limit ? `${value.slice(0, limit - 1)}…` : value;
   groups.forEach((group, index) => {
     const y = 110 + index * 106;
-    const route = p2pGraphSvg("g", { class: "p2p-graph-route", "data-route": group.key });
+    const route = p2pGraphSvg("g", { class: "p2p-graph-route", "data-route": group.key,
+      style: `--target-color:${colors.get(group.target)};--sender-color:${colors.get(group.sender.ip || group.sender.id)};--receiver-color:${colors.get(group.receiver.ip || group.receiver.id)}` });
     const fromY = positions.sender.get(group.sender.id).y, toY = positions.receiver.get(group.receiver.id).y;
     route.append(p2pGraphSvg("path", { d: `M276,${fromY} C350,${fromY} 370,${y} 438,${y}`, "marker-end": "url(#p2p-graph-arrow)" }),
       p2pGraphSvg("path", { d: `M790,${y} C850,${y} 850,${toY} 924,${toY}`, "marker-end": "url(#p2p-graph-arrow)" }));
     p2pGraphAction(route, `Inspect ${group.records.length} reports about ${group.target} from ${group.sender.label} to ${group.receiver.label}`, () => selectP2PGraphRoute(group.key));
     route.classList.toggle("selected", group.key === state.p2pGraph.selected);
+    route.classList.toggle("related", [group.sender.id, group.receiver.id].includes(state.p2pGraph.highlightPeer));
     route.setAttribute("aria-pressed", String(group.key === state.p2pGraph.selected));
     const card = p2pGraphSvg("g", { class: "p2p-graph-report" });
     const names = [...group.types].map(alertTypeName).join(" + ") || "Evidence type unavailable";
@@ -5597,17 +5629,35 @@ function drawP2PGraph(groups) {
   });
   ["sender", "receiver"].forEach((role) => positions[role].forEach((peer) => {
     const x = role === "sender" ? 16 : 924;
-    const node = p2pGraphSvg("g", { class: `p2p-graph-peer${peer.id === "@local" ? " graph-local" : ""}` });
+    const node = p2pGraphSvg("g", { class: `p2p-graph-peer${peer.id === "@local" ? " graph-local" : ""}`,
+      "data-peer": peer.id, style: `--peer-color:${colors.get(peer.ip || peer.id)}` });
     node.append(p2pGraphSvg("rect", { x, y: peer.y - 34, width: 260, height: 68, rx: 10 }),
       p2pGraphSvg("title", {}, `${peer.label}\n${peer.detail}\n${peer.id === "@local" ? state.p2pGraph.payload.local_peer_id || "This instance" : peer.id}`),
       p2pGraphSvg("text", { x: x + 14, y: peer.y - 6, class: "p2p-graph-peer-name" }, short(peer.label, 28)),
       p2pGraphSvg("text", { x: x + 14, y: peer.y + 17, class: "p2p-graph-meta" }, short(peer.detail, 33)));
-    p2pGraphAction(node, `Filter reports involving ${peer.label}`, () => {
-      byId("p2p-graph-peer").value = peer.id === "@local" ? "" : peer.id;
-      renderP2PGraph();
+    p2pGraphAction(node, `Highlight reports involving ${peer.label}`, () => {
+      const selected = node.getAttribute("aria-pressed") !== "true";
+      state.p2pGraph.highlightPeer = selected ? peer.id : null;
+      svg.querySelectorAll(".p2p-graph-peer").forEach((item) => {
+        item.setAttribute("aria-pressed", String(selected && item.dataset.peer === peer.id));
+      });
+      svg.querySelectorAll("[data-route]").forEach((item) => {
+        const group = groups.find((entry) => entry.key === item.dataset.route);
+        item.classList.toggle("related", selected && (group.sender.id === peer.id || group.receiver.id === peer.id));
+      });
+      byId("p2p-graph-selection").textContent = selected
+        ? `Highlighted ${peer.label}. All routes remain visible; use Peer above to filter.`
+        : "Select a report to inspect it; select a peer to highlight its routes.";
     });
+    node.setAttribute("aria-pressed", String(state.p2pGraph.highlightPeer === peer.id));
     svg.append(node);
   }));
+  const highlighted = positions.sender.get(state.p2pGraph.highlightPeer)
+    || positions.receiver.get(state.p2pGraph.highlightPeer);
+  if (!highlighted) state.p2pGraph.highlightPeer = null;
+  byId("p2p-graph-selection").textContent = highlighted
+    ? `Highlighted ${highlighted.label}. All routes remain visible; use Peer above to filter.`
+    : "Select a report to inspect it; select a peer to highlight its routes.";
   svg.style.width = `${state.p2pGraph.zoom * 100}%`;
   scroll.scrollLeft = savedScroll[0]; scroll.scrollTop = savedScroll[1];
 }
@@ -5728,7 +5778,7 @@ function renderP2PGraph() {
   byId("p2p-graph-status").textContent = `${visible.length} of ${all.length} matching routes · ${reports} recorded reports · latest ${graph.payload.message_limit || 1000} messages and up to ${graph.payload.report_limit || 200} stored reports from this run`;
   byId("p2p-graph-empty").hidden = visible.length > 0;
   byId("p2p-graph-scroll").hidden = !visible.length;
-  const signature = JSON.stringify([visible.map((group) => [group.key, group.records, group.sender, group.receiver]), state.computerName]);
+  const signature = JSON.stringify([visible.map((group) => [group.key, group.records, group.sender, group.receiver]), state.computerName, document.documentElement.dataset.theme]);
   if (signature !== graph.signature) { drawP2PGraph(visible); graph.signature = signature; }
   renderP2PGraphDetail();
 }
@@ -7548,10 +7598,10 @@ async function openAlert(record) {
   evidenceList.className = "investigation-list";
   record.evidence?.forEach((item) => evidenceList.append(evidenceCard(item, record.evidence)));
   body.append(
-    reviewEditor("alert", record),
     evidenceList,
     investigationHeading("Complete alert data", "Original durable alert object and evidence links"),
     rawBlock(record, "alert"),
+    reviewEditor("alert", record),
   );
 }
 

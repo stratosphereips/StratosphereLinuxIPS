@@ -314,9 +314,9 @@ def test_same_detector_agreement_does_not_certify_true_positives(
     factory = ModuleFactory()
     validator = ReportValidator(tmp_path / "validation.sqlite")
     local = observation()
-    validator.observe_local(local)
     for index in range(peers):
         validator.observe_report(report(f"peer-record-{index}", peer=f"peer-{index}"))
+    validator.observe_local(local)
     assert factory is not None
     with validator.connect() as connection:
         assert (

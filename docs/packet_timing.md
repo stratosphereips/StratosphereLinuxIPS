@@ -1,6 +1,6 @@
 # Packet periodicity inside one TCP connection
 
-The optional packet timing collector detects recurring packets inside a single
+The packet timing collector detects recurring packets inside a single
 long-lived TCP connection. Connection-level beacon detection measures separate
 connections and cannot recover these timings from `conn.log` alone.
 
@@ -25,7 +25,7 @@ output were preserved. This file problem is separate from periodicity detection.
 
 ## Enable and run
 
-Add this to the configuration selected by `-c`:
+Packet timing is enabled by default. To control it in the configuration selected by `-c`:
 
 ```yaml
 beaconing:
@@ -46,7 +46,8 @@ speed experiments, but a conservative configuration retains the default 12
 events and requires strong timing and size agreement.
 
 The collector is loaded only when both beaconing and its packet timing option
-are enabled. It is **off by default** because packet-level Zeek events cost CPU.
+are enabled. It is **on by default**, with bounded connection and event windows. Set
+`beaconing.packet_timing.enabled: false` to disable packet-level collection.
 Enabling a different evidence type or opening a web page does not enable packet
 collection. Benchmark packet collection on the intended capture rate before
 using it for continuous high-volume traffic.

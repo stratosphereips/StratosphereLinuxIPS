@@ -871,7 +871,7 @@ The range controls initially use **Live** so opening a tab while Overview is sti
 
 ### Metadata
 
-Metadata keeps the run version, branch, and commit beside the monitored device's interface and IPv4/IPv6 addresses. Other captured run fields are available under **More run facts**. The Modules table now lives below these cards and refreshes while this tab is open. It can be sorted and filtered by module name. CPU appears as a percentage and bar, while memory shows MiB with host-memory percentage on hover. **Load evidence counts** adds the Evidence column on demand; it avoids scanning retained evidence during the initial page load. The table scrolls inside the tab without moving the shared header.
+Metadata keeps the run version, branch, and commit beside the monitored device's interface and IPv4/IPv6 addresses. Other captured run fields are available under **More**. The disclosure stays open or closed during automatic refreshes until you toggle it. The Modules table now lives below these cards and refreshes while this tab is open. It can be sorted and filtered by module name. CPU appears as a percentage and bar, while memory shows MiB with host-memory percentage on hover. **Load evidence counts** adds the Evidence column on demand; it avoids scanning retained evidence during the initial page load. The table scrolls inside the tab without moving the shared header.
 
 ### Logs
 
@@ -1042,7 +1042,8 @@ peer can correctly stay near 0.34. Higher uptime does not validate reports;
 the separate **Report accuracy** column shows agreed targets and detector-specific
 TP/FP adjustments. A learned agreement increase is shown below trust, for example
 **+0.025 from agreement**, and included in newly saved plot points. It requires
-matching first-hand local evidence and at least two distinct reporting peer IDs.
+matching first-hand local evidence and at least two distinct peer IDs whose
+reports arrived before our first local detection of that target.
 Each peer ID and target IP can earn it only once, even across restarts, networks
 or detector versions. It is capped at +0.20 and halves over 30 days; analyst FP
 reviews withdraw the contribution. See [peer agreement settings](P2P.md#learning-from-local-detections-and-peer-agreement).
@@ -1694,3 +1695,7 @@ styles in both themes. Empty request history stays collapsed. Trust calculation
 and catch-up explanations remain available in expandable help. P2P Graph includes accepted catch-up deliveries. Historical imports do
 not increase current host scores. See [network catch-up](p2p_catchup.md) for
 configuration, protection requirements, retention and coverage limits.
+
+Navigation tabs use names without totals. Counts remain inside each view beside the data and its active filters. Alert reviews appear after the related evidence and complete alert data.
+
+P2P Graph gives each visible IP its own color. Clicking a peer highlights its routes without hiding other boxes; the Peer dropdown applies filtering. Public IPs without DNS names can use their cached ASN organization as a display label, identified as **ASN organization** on hover; this does not create a reverse DNS record.
