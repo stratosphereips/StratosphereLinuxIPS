@@ -73,7 +73,7 @@ jobs:
           submodules: true
 
       - name: Login to DockerHub
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           username: stratosphereips
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
