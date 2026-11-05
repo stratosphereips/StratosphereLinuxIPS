@@ -409,7 +409,16 @@ credit. Older credits without verifiable receipt order no longer contribute;
 their lifetime reward reservations remain, so they cannot be earned again.
 A singleton sequence and at most 100,000 first-local target records bound this
 extra storage. Once full, new targets cannot earn automatic agreement credit.
-Analyst verdicts and independently verified detections remain separate.
+The same ordering requirement applies to positive trust learned from independent
+signature/integrity verification or reviews of matching local evidence. A late
+copy can be accurate without earning the sender a reward. Existing automatic
+credits lacking valid early receipt order no longer increase trust, while their
+lifetime target reservations remain. An explicit TP review of the received
+peer report itself can still grant reviewed accuracy credit; reviewing our own
+local detection does not grant this exception. Removing that explicit verdict
+also removes its exception. FP penalties apply regardless of arrival order.
+Slips records local evidence before broadcasting it, so copying its outgoing
+report cannot beat that target's persisted local boundary.
 
 Each qualifying **peer ID and target IP** earns +0.025 once, across runs,
 networks, evidence types and detector versions. A separate persistent

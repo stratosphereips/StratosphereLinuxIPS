@@ -370,3 +370,84 @@ def test_pre_upgrade_agreement_has_no_automatic_reward(tmp_path: Path) -> None:
     validator.observe_report(report("replayed-after-upgrade"))
     validator.observe_local(observation("after-upgrade"))
     assert validator.peer_agreement("peer-A")["targets"] == 0
+
+
+@pytest.mark.parametrize("confirmation", ["signature", "local_review"])
+@pytest.mark.parametrize("peer_first", [False, True])
+def test_automatic_verified_rewards_require_peer_first(
+    tmp_path: Path, confirmation: str, peer_first: bool,
+) -> None:
+    """Prevent mirrors earning trust through other local confirmation paths.
+
+    Parameters:
+        tmp_path: Receiver-owned persistent validation ledger.
+        confirmation: Independent signature or analyst review of local evidence.
+        peer_first: Whether the remote report arrived before local evidence.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    local, remote = observation(), report()
+    if confirmation == "signature":
+        local["provenance"].update(method="SIGNATURE", family="independent")
+    if peer_first:
+        validator.observe_report(remote)
+    validator.observe_local(local)
+    if not peer_first:
+        validator.observe_report(remote)
+    if confirmation == "local_review":
+        validator.apply_review(review(local, "true_positive"))
+    validator = ReportValidator(validator.path)
+    result = validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")
+    assert result["confirmed"] == int(peer_first)
+    assert result["adjustment"] == pytest.approx(0.05 if peer_first else 0)
+
+
+@pytest.mark.parametrize("ordering", ["late", "missing"])
+def test_old_verified_rewards_cannot_bypass_receiver_order(
+    tmp_path: Path, ordering: str,
+) -> None:
+    """Exclude old automatic rewards while preserving lifetime reservations.
+
+    Parameters:
+        tmp_path: Persistent pre-fix credit ledger.
+        ordering: An existing late report or a credit lacking receiver order.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    local = observation()
+    local["provenance"].update(method="SIGNATURE", family="independent")
+    validator.observe_report(report())
+    validator.observe_local(local)
+    assert validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")["confirmed"] == 1
+    with validator.connect() as connection:
+        if ordering == "late":
+            connection.execute("UPDATE credits SET report_data=json_set(report_data,'$.received_order',999)")
+        else:
+            connection.execute("UPDATE credits SET report_data=json_remove(report_data,'$.received_order')")
+    validator = ReportValidator(validator.path)
+    assert validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")["adjustment"] == 0
+    validator.observe_report(report("copied-again"))
+    validator.observe_local(observation("local-again"))
+    assert validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")["confirmed"] == 0
+    with validator.connect() as connection:
+        assert connection.execute("SELECT COUNT(*) FROM positive_targets").fetchone()[0] == 1
+
+
+def test_explicit_peer_review_remains_separate_from_automatic_credit(tmp_path: Path) -> None:
+    """Require a verdict on the received report itself to override late arrival.
+
+    Parameters:
+        tmp_path: Persistent local review ledger.
+    """
+    _factory = ModuleFactory()
+    validator = ReportValidator(tmp_path / "validation.sqlite")
+    local, remote = observation(), report()
+    validator.observe_local(local)
+    validator.observe_report(remote)
+    validator.apply_review(review(local, "true_positive"))
+    assert validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")["confirmed"] == 0
+    validator.apply_review(review(remote, "true_positive", source="evidence:peer"))
+    assert validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")["confirmed"] == 1
+    assert validator.peer_agreement("peer-A")["targets"] == 0
+    validator.apply_review(review(remote, "unreviewed", revision=2, source="evidence:peer"))
+    assert validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")["confirmed"] == 0

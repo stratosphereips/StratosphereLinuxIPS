@@ -465,20 +465,24 @@ def test_credit_once_per_host_across_versions_and_types(
         ("HONEYPOT", "unknown", 0),
     ],
 )
+@pytest.mark.parametrize("peer_first", [False, True])
 def test_independent_local_verification_is_conservative(
-    tmp_path: Path, method: str, family: str, expected: int
+    tmp_path: Path, method: str, family: str, expected: int, peer_first: bool
 ) -> None:
     factory = ModuleFactory()
     validator = ReportValidator(tmp_path / "validation.sqlite")
     local = observation(method=method)
     local["provenance"]["family"] = family
+    if peer_first:
+        validator.observe_report(report())
     validator.observe_local(local)
-    validator.observe_report(report())
+    if not peer_first:
+        validator.observe_report(report())
     assert (
         validator.report_adjustment("peer-A", "ARP_SCAN", "rule-v1")[
             "confirmed"
         ]
-        == expected
+        == (expected if peer_first else 0)
     )
     assert factory is not None
 

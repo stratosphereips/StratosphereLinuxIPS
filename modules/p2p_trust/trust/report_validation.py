@@ -861,6 +861,50 @@ class ReportValidator:
             for key in ("proto", "dst_port")
         )
 
+    def _reported_first(
+        self, connection: sqlite3.Connection, report: dict[str, Any]
+    ) -> bool:
+        """Check receiver-owned ordering against the first local target record.
+
+        Parameters:
+            connection: Current validation transaction.
+            report: Stored report containing its receiver-assigned arrival order.
+
+        Returns:
+            Whether receipt verifiably preceded the first local observation.
+        """
+        local_target = connection.execute(
+            "SELECT first_order FROM local_targets WHERE target_ip=?",
+            (self._target_ip(report["target_key"]),),
+        ).fetchone()
+        return bool(
+            local_target
+            and 0 < report.get("received_order", 0) < local_target[0]
+        )
+
+    def _positive_reward_allowed(
+        self, connection: sqlite3.Connection, report: dict[str, Any]
+    ) -> bool:
+        """Require early receipt or an explicit review of this received report.
+
+        Parameters:
+            connection: Current validation transaction.
+            report: Typed authenticated report being rewarded.
+
+        Returns:
+            Whether automatic or directly reviewed positive credit is allowed.
+        """
+        return self._reported_first(connection, report) or (
+            self._verdict(connection, report["id"]) == "true_positive"
+            and len(
+                {
+                    item["evidence_type"]
+                    for item in report.get("provenance", [])
+                }
+            )
+            == 1
+        )
+
     def _agreement_sources(
         self, connection: sqlite3.Connection, report: dict[str, Any]
     ) -> list[str]:
@@ -1062,6 +1106,8 @@ class ReportValidator:
         Returns:
             Whether this network and detector own the target's lifetime reward.
         """
+        if not self._positive_reward_allowed(connection, report):
+            return False
         target_ip = self._target_ip(report["target_key"])
         detector = report["detector"]
         owner = self._positive_owner(connection, report["peer_id"], target_ip)
@@ -1335,7 +1381,7 @@ class ReportValidator:
         """
         with self.connect() as connection:
             rows = connection.execute(
-                "SELECT target_key, verdict, earned_at, 1 AS reward_allowed FROM credits WHERE peer_id=? AND evidence_type=? AND rule_version=? UNION ALL SELECT target_key, verdict, earned_at, 0 AS reward_allowed FROM rejections WHERE peer_id=? AND evidence_type=? AND rule_version=?",
+                "SELECT target_key, verdict, earned_at, report_data, 1 AS reward_allowed FROM credits WHERE peer_id=? AND evidence_type=? AND rule_version=? UNION ALL SELECT target_key, verdict, earned_at, report_data, 0 AS reward_allowed FROM rejections WHERE peer_id=? AND evidence_type=? AND rule_version=?",
                 (
                     peer_id,
                     evidence_type,
@@ -1352,6 +1398,15 @@ class ReportValidator:
                 for row in rows
                 if row["reward_allowed"]
             }
+            eligible = {
+                row["target_key"]
+                for row in rows
+                if row["reward_allowed"]
+                and row["verdict"] == "true_positive"
+                and self._positive_reward_allowed(
+                    connection, json.loads(row["report_data"])
+                )
+            }
         adjustment = 0.0
         positive = 0
         negative_cases: dict[str, float] = {}
@@ -1362,6 +1417,8 @@ class ReportValidator:
                     row["earned_at"],
                 )
             elif row["verdict"] == "true_positive" and row["reward_allowed"]:
+                if row["target_key"] not in eligible:
+                    continue
                 owner = owners.get(row["target_key"])
                 if owner is None or tuple(owner)[:3] != (
                     row["target_key"],
@@ -1408,16 +1465,7 @@ class ReportValidator:
                     "agreement_earned"
                 ):
                     continue
-                local_target = connection.execute(
-                    "SELECT first_order FROM local_targets WHERE target_ip=?",
-                    (self._target_ip(row["target_key"]),),
-                ).fetchone()
-                if (
-                    not local_target
-                    or not 0
-                    < report.get("received_order", 0)
-                    < local_target[0]
-                ):
+                if not self._reported_first(connection, report):
                     continue
                 owner = self._positive_owner(
                     connection, peer_id, self._target_ip(row["target_key"])

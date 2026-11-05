@@ -1046,6 +1046,10 @@ reports arrived before our first local detection of that target.
 Each peer ID and target IP can earn it only once, even across restarts, networks
 or detector versions. It is capped at +0.20 and halves over 30 days; analyst FP
 reviews withdraw the contribution. See [peer agreement settings](P2P.md#learning-from-local-detections-and-peer-agreement).
+Automatic TP accuracy rewards also require receipt before our first local
+detection, including rewards supported by signatures or reviews of local
+evidence. Only an explicit TP review of the received peer report itself can
+override late arrival; it does not grant an agreement bonus.
 Old local detections lose influence after the first hour, using
 `local_p2p.local_reputation_half_life_hours` (24 hours by default). Their confidence
 halves each interval, so an old test cannot keep its full penalty indefinitely.
