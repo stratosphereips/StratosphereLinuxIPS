@@ -370,6 +370,21 @@ def stop_instances(
         remaining = timeout
         next_report = 10.0
         while True:
+            executing = []
+            for process in alive:
+                try:
+                    if process.is_running() and process.status() not in {
+                        psutil.STATUS_ZOMBIE,
+                        psutil.STATUS_DEAD,
+                    }:
+                        executing.append(process)
+                except psutil.NoSuchProcess:
+                    continue
+                except psutil.AccessDenied:
+                    executing.append(process)
+            alive = executing
+            if not alive or remaining <= 0:
+                break
             interval = min(5.0, remaining)
             _, alive = psutil.wait_procs(alive, timeout=interval)
             if not alive:
@@ -377,8 +392,6 @@ def stop_instances(
             remaining = min(
                 remaining - interval, max(0.0, deadline - time.monotonic())
             )
-            if remaining <= 0:
-                break
             elapsed = timeout - remaining
             if elapsed >= next_report:
                 pids = ", ".join(str(process.pid) for process in alive)

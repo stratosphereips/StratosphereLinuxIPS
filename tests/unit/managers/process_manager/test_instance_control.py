@@ -324,6 +324,30 @@ def test_stop_revalidates_and_waits(tmp_path: Path, case: str, expected: int) ->
     child.send_signal.assert_not_called()
 
 
+@pytest.mark.parametrize("status", [psutil.STATUS_ZOMBIE, psutil.STATUS_DEAD])
+def test_stop_does_not_wait_for_exited_unreaped_workers(tmp_path: Path, status: str) -> None:
+    """Complete shutdown when a container parent has not reaped exited workers.
+
+    Parameters:
+        tmp_path: Isolated entry point.
+        status: Terminal process state reported after signaling.
+    """
+    _factory = ModuleFactory()
+    entrypoint = tmp_path / "slips.py"
+    process = candidate(41001, entrypoint, "-i", "eth0")
+    child = Mock(pid=41002)
+    child.is_running.return_value = True
+    child.status.return_value = status
+    process.children.return_value = [child]
+    instance = control.inspect_instance(process, entrypoint)
+    process.send_signal.side_effect = lambda _: setattr(process.status, "return_value", status)
+    with patch.object(control.psutil, "Process", return_value=process), patch.object(control.psutil, "wait_procs") as wait:
+        assert control.stop_instances([instance], entrypoint, timeout=0.1) == 0
+    wait.assert_not_called()
+    process.send_signal.assert_called_once_with(signal.SIGTERM)
+    child.kill.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "arguments, count, selected, expected",
     [

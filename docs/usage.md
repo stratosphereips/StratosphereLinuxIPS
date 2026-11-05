@@ -188,7 +188,8 @@ Restart first performs the same shutdown as `--stop` and waits for the daemon
 and its observed workers to exit. Restart allows up to five minutes for worker
 shutdown and final history/database saving, with progress every ten seconds.
 This avoids abandoning a healthy restart when final cleanup exceeds the normal
-45-second stop wait. If shutdown fails or times out, no replacement
+45-second stop wait. Exited zombie processes do not extend the wait, including
+when a container parent has not reaped them. If shutdown fails or times out, no replacement
 is started. After a successful stop, it launches a new daemon with the original
 Slips arguments, Python interpreter options, and working directory. Arguments
 containing spaces remain separate arguments. Use the same Python environment
