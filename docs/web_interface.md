@@ -35,7 +35,11 @@ loaded successfully. If saved capture settings still contain the previous
 network's IPs, the web reads the current interface settings before looking
 up the network name. These fallback readings share a single five-second
 cache; changed IPs or saved settings invalidate it immediately. An older
-heartbeat cannot overwrite a newer dated Overview network snapshot. This
+heartbeat cannot overwrite a newer network transition from Overview. Snapshot
+sampling times are not compared with network transition times. Heartbeat requests
+time out after ten seconds and retry, so a request interrupted during a network
+change cannot freeze the header. Browser reconnection, returning to a visible tab,
+and restoring a page from the back/forward cache request an immediate update. This
 work runs in the web process and does not scan detection databases or modify
 capture settings.
 

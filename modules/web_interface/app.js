@@ -1340,12 +1340,13 @@ function renderRequestActivity() {
   document.querySelector("main").setAttribute("aria-busy", String(busy));
 }
 
-async function api(key, path, trackFailures = true, allowNotFound = false) {
+async function api(key, path, trackFailures = true, allowNotFound = false, timeoutMs = 0) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
   controller.activityLabel = ["backendStatus", "archiveCatalog"].includes(key)
     ? "" : new URL(path, window.location.origin).searchParams.get("search") ? "Searching…" : "Loading…";
   state.requests.set(key, controller);
+  const timeout = timeoutMs ? window.setTimeout(() => controller.abort(), timeoutMs) : null;
   renderRequestActivity();
   try {
     if (state.archiveSource && /^\/api\/(?:alerts|evidence|hosts|flows)(?:[/?]|$)/.test(path)) {
@@ -1382,6 +1383,7 @@ async function api(key, path, trackFailures = true, allowNotFound = false) {
       : `Web data unavailable: ${error.message}`);
     throw error;
   } finally {
+    if (timeout !== null) window.clearTimeout(timeout);
     if (state.requests.get(key) === controller) state.requests.delete(key);
     renderRequestActivity();
   }
@@ -1840,8 +1842,8 @@ function renderHeaderNetwork(data) {
     || (data.network_states || []).find((network) => network.connected);
   const liveNetwork = String(run.interface || "").split(/[,\s]+/).includes(state.headerNetwork?.interface)
     ? state.headerNetwork : null;
-  const overviewTime = Number(overviewNetwork?.observed_at || overviewNetwork?.changed_at) || 0;
-  const liveTime = Number(liveNetwork?.observed_at || liveNetwork?.changed_at) || 0;
+  const overviewTime = Number(overviewNetwork?.changed_at) || 0;
+  const liveTime = Number(liveNetwork?.changed_at) || 0;
   const network = overviewNetwork?.interface === liveNetwork?.interface
     && overviewTime && liveTime && overviewTime > liveTime
     ? overviewNetwork : liveNetwork || overviewNetwork;
@@ -8930,7 +8932,7 @@ function schedulePoll() {
 async function pollBackendStatus() {
   if (document.hidden) return;
   try {
-    const identity = await api("backendStatus", "/api/identity", false);
+    const identity = await api("backendStatus", "/api/identity", false, false, 10000);
     if (identity) {
       updateReviewAvailability(identity.review_actions === true);
       updateNetworkFilterAvailability(identity);
@@ -9573,6 +9575,10 @@ document.addEventListener("visibilitychange", () => {
     refreshActive();
     pollBackendStatus();
   }
+});
+window.addEventListener("online", () => pollBackendStatus());
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) pollBackendStatus();
 });
 window.addEventListener("beforeunload", () => {
   saveViewPreferences();

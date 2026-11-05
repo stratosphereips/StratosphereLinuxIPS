@@ -3161,6 +3161,96 @@ def test_header_shows_all_ips_and_refreshes_outside_overview_in_chrome(theme: st
         assert errors == []
         browser.close()
 
+@pytest.mark.parametrize("theme", ["light", "dark"])
+def test_header_recovers_from_interrupted_network_change_in_chrome(theme: str) -> None:
+    """Refresh the Evidence header after a stalled heartbeat and stale overview.
+
+    Parameters:
+        theme: Browser color theme.
+    """
+    _module_factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    heartbeat = {"interface":"en0", "connected":True, "name":"Stratoguest",
+                 "network_id":"guest", "host_ip":"192.168.1.247", "changed_at":100,
+                 "host_addresses":{"ipv4":["192.168.1.247"], "ipv6":[]}}
+    requests = []
+    interrupted = []
+    hold = False
+
+    def respond(route: Any) -> None:
+        """Serve real assets and hold a heartbeat across the simulated change.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/identity":
+            requests.append(path)
+            if hold:
+                interrupted.append(route)
+                return
+            route.fulfill(json={"input_type":"interface", "review_actions":True, "network_filter_supported":True,
+                "device_view_supported":True, "current_network_start":heartbeat["changed_at"],
+                "current_network":heartbeat})
+        elif path == "/api/host-names":
+            route.fulfill(json={"names":{}})
+        else:
+            route.fulfill(status=503, json={"error":"Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        page = browser.new_page()
+        page.route("**/*", respond)
+        page.goto("http://slips.test/")
+        page.wait_for_function("state.headerNetwork?.name === 'Stratoguest'")
+        page.clock.install()
+        page.evaluate("""theme => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); setTheme(theme);
+            state.activeTab='evidence'; byId('evidence-range').value='connection';
+            document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='evidence'));
+            state.overview={run:{interface:'en0',input_type:'interface'},
+                host_addresses:{ipv4:['192.168.1.247'],ipv6:[]},
+                network_states:[{interface:'en0',connected:true,name:'Stratoguest',
+                    host_ip:'192.168.1.247',changed_at:100,observed_at:900}]};
+            renderHeaderNetwork(state.overview);
+        }""", theme)
+        hold = True
+        page.evaluate("void pollBackendStatus()")
+        page.wait_for_function("state.requests.has('backendStatus')")
+        heartbeat.update(name="Home-Wifi6", network_id="home", host_ip="192.168.1.100",
+                         changed_at=200, host_addresses={"ipv4":["192.168.1.100"],"ipv6":["fd00::100"]})
+        hold = False
+        page.clock.fast_forward(10001)
+        page.wait_for_function("!state.requests.has('backendStatus')", timeout=2000)
+        page.clock.fast_forward(5001)
+        page.wait_for_function("state.headerNetwork?.name === 'Home-Wifi6'")
+        assert "Home-Wifi6" in page.locator("#run-meta").inner_text()
+        assert page.locator("#run-addresses code").all_text_contents() == ["192.168.1.100", "fd00::100"]
+        assert page.evaluate("state.activeTab") == "evidence"
+        assert page.locator("#evidence-range").input_value() == "connection"
+        page.evaluate("renderHeaderNetwork(state.overview)")
+        assert "Home-Wifi6" in page.locator("#run-meta").inner_text()
+        heartbeat.update(name="Office", network_id="office", host_ip="10.0.0.20", changed_at=300,
+                         host_addresses={"ipv4":["10.0.0.20"],"ipv6":[]})
+        page.evaluate("window.dispatchEvent(new Event('online'))")
+        page.wait_for_function("state.headerNetwork?.name === 'Office'", timeout=2000)
+        assert "Office" in page.locator("#run-meta").inner_text()
+        heartbeat.update(name="Guest", network_id="guest", changed_at=350)
+        page.evaluate("window.dispatchEvent(new PageTransitionEvent('pageshow', {persisted:true}))")
+        page.wait_for_function("state.headerNetwork?.name === 'Guest'", timeout=2000)
+        assert "Guest" in page.locator("#run-meta").inner_text()
+        heartbeat.update(connected=False, host_addresses={"ipv4":[],"ipv6":[]}, changed_at=400)
+        page.clock.fast_forward(5001)
+        page.wait_for_function("state.headerNetwork?.connected === false")
+        assert "Guest" not in page.locator("#run-meta").inner_text()
+        assert page.locator("#run-addresses").is_hidden()
+        assert len(requests) >= 4
+        assert interrupted
+        browser.close()
+
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_compact_mac_markers_across_views_in_chrome(theme: str) -> None:
