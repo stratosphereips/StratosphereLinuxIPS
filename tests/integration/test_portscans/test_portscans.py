@@ -11,6 +11,7 @@ from tests.common_test_utils import (
     allocate_started_redis_port,
     assert_no_errors,
     get_slips_test_command,
+    create_config_without_ti_update,
     get_total_analyzed_ips_from_output,
     skip_if_missing_runtime_dependencies,
 )
@@ -27,7 +28,12 @@ alerts_file = "alerts.log"
         )
     ],
 )
-def test_horizontal(path, output_dir, integration_port_factory):
+def test_horizontal(
+    path,
+    output_dir,
+    integration_port_factory,
+    tmp_path,
+):
     """
     checks that slips is detecting horizontal ps no issue,
     """
@@ -45,8 +51,10 @@ def test_horizontal(path, output_dir, integration_port_factory):
         )
 
         output_file = os.path.join(output_dir, "slips_output.txt")
+        config_file = create_config_without_ti_update(tmp_path)
         command = get_slips_test_command(
-            f"-e 1 -t -f {path} -o {output_dir} -P {redis_port}"
+            f"-e 1 -t -f {path} -o {output_dir} "
+            f"-c {config_file} -P {redis_port}"
         )
         command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done
@@ -68,7 +76,12 @@ def test_horizontal(path, output_dir, integration_port_factory):
     "path, output_dir",
     [("dataset/port-scans/vertical/conn.log", "testing_vertical_ps/")],
 )
-def test_vertical(path, output_dir, integration_port_factory):
+def test_vertical(
+    path,
+    output_dir,
+    integration_port_factory,
+    tmp_path,
+):
     """
     checks that slips is detecting horizontal ps no issue,
     """
@@ -86,8 +99,10 @@ def test_vertical(path, output_dir, integration_port_factory):
         )
 
         output_file = os.path.join(output_dir, "slips_output.txt")
+        config_file = create_config_without_ti_update(tmp_path)
         command = get_slips_test_command(
-            f"-e 1 -t -f {path} -o {output_dir} -P {redis_port}"
+            f"-e 1 -t -f {path} -o {output_dir} "
+            f"-c {config_file} -P {redis_port}"
         )
         command = f"{command} > {output_file} 2>&1"
         # this function returns when slips is done

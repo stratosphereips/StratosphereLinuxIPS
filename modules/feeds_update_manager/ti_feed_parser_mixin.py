@@ -8,6 +8,8 @@ import os
 import time
 from typing import IO, Optional, Tuple
 
+import ijson
+
 from slips_files.common.ips import IPV4_ANY
 from slips_files.common.slips_utils import utils
 
@@ -56,7 +58,7 @@ class TIFeedParserMixin:
                     3,
                     0,
                 )
-                for line in feed.read().splitlines():
+                for line in feed:
                     try:
                         line: dict = json.loads(line)
                     except json.decoder.JSONDecodeError:
@@ -78,7 +80,7 @@ class TIFeedParserMixin:
 
         if "hole.cert.pl" in link_to_download:
             malicious_domains_dict = {}
-            with open(ti_file_path) as feed:
+            with open(ti_file_path, "rb") as feed:
                 self.print(
                     f"Reading next lines in the file {ti_file_path}"
                     f" for IoC",
@@ -86,31 +88,31 @@ class TIFeedParserMixin:
                     0,
                 )
                 try:
-                    file = json.loads(feed.read())
-                except json.decoder.JSONDecodeError:
+                    for ioc in ijson.items(feed, "item"):
+                        date = utils.convert_ts_to_tz_aware(ioc["InsertDate"])
+                        now = utils.convert_ts_to_tz_aware(time.time())
+                        diff = utils.get_time_diff(
+                            date, now, return_type="days"
+                        )
+
+                        if diff > self.max_days_to_keep_ti_files:
+                            continue
+
+                        domain = ioc["DomainAddress"]
+                        if not utils.is_valid_domain(domain):
+                            continue
+
+                        malicious_domains_dict[domain] = json.dumps(
+                            {
+                                "description": "",
+                                "source": filename,
+                                "threat_level": threat_level,
+                                "tags": tags,
+                            }
+                        )
+                except ijson.JSONError:
                     # not a json file??
                     return False
-
-                for ioc in file:
-                    date = utils.convert_ts_to_tz_aware(ioc["InsertDate"])
-                    now = utils.convert_ts_to_tz_aware(time.time())
-                    diff = utils.get_time_diff(date, now, return_type="days")
-
-                    if diff > self.max_days_to_keep_ti_files:
-                        continue
-
-                    domain = ioc["DomainAddress"]
-                    if not utils.is_valid_domain(domain):
-                        continue
-
-                    malicious_domains_dict[domain] = json.dumps(
-                        {
-                            "description": "",
-                            "source": filename,
-                            "threat_level": threat_level,
-                            "tags": tags,
-                        }
-                    )
             self.db.add_domains_to_ioc(malicious_domains_dict)
             return True
 
@@ -247,19 +249,6 @@ class TIFeedParserMixin:
 
         self.print(f"\tRead Data {data}: {description}", 3, 0)
         return data, description
-
-    def add_to_ip_ctr(self, ip, blacklist):
-        """
-        keep track of how many times an ip was there in all blacklists
-        :param blacklist: t make sure we don't count the ip twice in the
-         same blacklist
-        """
-        blacklist = os.path.basename(blacklist)
-        if ip in self.ips_ctr and blacklist not in self.ips_ctr["blacklists"]:
-            self.ips_ctr[ip]["times_found"] += 1
-            self.ips_ctr[ip]["blacklists"].append(blacklist)
-        else:
-            self.ips_ctr[ip] = {"times_found": 1, "blacklists": [blacklist]}
 
     def _is_valid_ti_file(self, ti_file_path: str) -> bool:
         # Check if the file has any content
@@ -408,7 +397,6 @@ class TIFeedParserMixin:
             return
 
         try:
-            self.add_to_ip_ctr(ip, feed_link)
             # we already have info about this ip?
             old_ip_info = json.loads(malicious_ips_dict[str(ip)])
             # if the IP appeared twice in the same blacklist,
@@ -516,11 +504,9 @@ class TIFeedParserMixin:
 
         data_type = utils.detect_ioc_type(ioc)
         if data_type is None:
-            self.print(
+            self.log(
                 f"The data {ioc} is not valid. It "
-                f"was found in {ti_file_path}.",
-                0,
-                1,
+                f"was found in {ti_file_path}."
             )
             return False
         return True
@@ -600,32 +586,3 @@ class TIFeedParserMixin:
         self.db.add_ip_range_to_ioc(malicious_ip_ranges)
         feed.close()
         return True
-
-    def print_duplicate_ip_summary(self):
-        if not self.first_time_reading_files:
-            # when we parse ti files for the first time, we have the info to
-            # print the summary
-            # when the ti files are already updated, from a previous run,
-            # we don't
-            return
-
-        ips_in_1_bl = 0
-        ips_in_2_bl = 0
-        ips_in_3_bl = 0
-        for ip, ip_info in self.ips_ctr.items():
-            blacklists_ip_appeard_in = ip_info["times_found"]
-            if blacklists_ip_appeard_in == 1:
-                ips_in_1_bl += 1
-            elif blacklists_ip_appeard_in == 2:
-                ips_in_2_bl += 1
-            elif blacklists_ip_appeard_in == 3:
-                ips_in_3_bl += 1
-        self.print(
-            f"Number of repeated IPs in 1 blacklist: {ips_in_1_bl}", 2, 0
-        )
-        self.print(
-            f"Number of repeated IPs in 2 blacklists: {ips_in_2_bl}", 2, 0
-        )
-        self.print(
-            f"Number of repeated IPs in 3 blacklists: {ips_in_3_bl}", 2, 0
-        )
