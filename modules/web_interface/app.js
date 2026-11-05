@@ -5417,7 +5417,12 @@ function renderP2PPeers() {
  * @returns {object} Stable identity, address and readable label.
  */
 function p2pGraphPeer(id, payload) {
-  if (id === "@local") return { id, ip: "", label: `This Slips · ${state.computerName || "local"}`, detail: shortPeerId(payload.local_peer_id || "Local instance") };
+  if (id === "@local") {
+    const ip = peerAddress(state.headerNetwork?.host_ip)
+      || [...state.ownAddresses].find((address) => !["127.0.0.1", "::1"].includes(address) && peerAddress(address)) || "";
+    return { id, ip, label: `This Slips · ${state.computerName || "local"}`,
+      detail: [ip, shortPeerId(payload.local_peer_id || "Local instance")].filter(Boolean).join(" · ") };
+  }
   if (id === "*") return { id, ip: "", label: "All peers", detail: "Broadcast · recipients not recorded" };
   const peer = (payload.peers || []).find((item) => item.peer_id === id);
   const ip = peerAddress(peer?.ip) || peerAddress(id);
@@ -5498,15 +5503,88 @@ function p2pGraphAction(node, label, action) {
  */
 function selectP2PGraphRoute(key) {
   state.p2pGraph.selected = key;
+  state.p2pGraph.highlightPeer = null;
   const first = state.p2pGraph.groups.find((group) => group.key === key)?.records[0];
   state.p2pGraph.message = first ? p2pMessageKey(first) : null;
   state.p2pGraph.detailLimit = 20;
-  byId("p2p-report-graph").querySelectorAll("[data-route]").forEach((node) => {
-    const selected = node.dataset.route === key;
-    node.classList.toggle("selected", selected);
-    if (node.getAttribute("role") === "button") node.setAttribute("aria-pressed", String(selected));
-  });
+  renderP2PGraphSelection();
   renderP2PGraphDetail();
+}
+
+/** Normalize an IP's color across graph roles and IPv6 spellings.
+ * @param {string} identity IP address or a peer without a known IP.
+ * @returns {string} Canonical address, or the unchanged peer identity.
+ */
+function p2pGraphColorKey(identity) {
+  if (typeof identity === "string" && /^[\da-f:.]+$/i.test(identity)) {
+    try { return new URL(`http://${identity.includes(":") ? `[${identity}]` : identity}`).hostname.replace(/^\[|\]$/g, ""); }
+    catch (_) { /* Keep unknown identities distinct. */ }
+  }
+  return identity;
+}
+
+/** Assign distinct visible colors while retaining a bounded identity cache.
+ * @param {object[]} groups Visible routes, bounded by the graph's route limit.
+ * @returns {Map<string,string>} Canonical identity colors for this theme.
+ */
+function p2pGraphColors(groups) {
+  const hues = state.p2pGraph.colorHues ||= new Map();
+  const identities = new Set(groups.flatMap((group) => [group.target,
+    group.sender.ip || group.sender.id, group.receiver.ip || group.receiver.id]).map(p2pGraphColorKey));
+  const assigned = new Map(), used = new Set();
+  [...identities].sort().forEach((identity) => {
+    if (hues.has(identity) && !used.has(hues.get(identity))) {
+      assigned.set(identity, hues.get(identity)); used.add(hues.get(identity));
+    }
+  });
+  const palette = [2100, 300, 1600, 2750, 3450, 1900, 650, 3100, 2400, 1000, 100, 1350];
+  [...identities].sort().forEach((identity) => {
+    if (assigned.has(identity)) return;
+    let hash = 2166136261;
+    for (const character of identity) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
+    const choices = palette.slice(hash % palette.length).concat(palette.slice(0, hash % palette.length));
+    let hue = choices.find((value) => !used.has(value));
+    if (hue === undefined) {
+      const occupied = [...used].sort((a, b) => a - b);
+      let gap = -1;
+      occupied.forEach((start, index) => {
+        const distance = (occupied[index + 1] ?? occupied[0] + 3600) - start;
+        if (distance > gap) { gap = distance; hue = (start + Math.floor(distance / 2)) % 3600; }
+      });
+    }
+    assigned.set(identity, hue); used.add(hue);
+  });
+  assigned.forEach((hue, identity) => { hues.delete(identity); hues.set(identity, hue); });
+  for (const identity of hues.keys()) {
+    if (hues.size <= 3000) break;
+    if (!identities.has(identity)) hues.delete(identity);
+  }
+  return new Map([...assigned].map(([identity, hue]) =>
+    [identity, `hsl(${hue / 10} 62% ${document.documentElement.dataset.theme === "light" ? 32 : 72}%)`]));
+}
+
+/** Apply selection styling without filtering or rebuilding graph boxes. */
+function renderP2PGraphSelection() {
+  const graph = state.p2pGraph;
+  const svg = byId("p2p-report-graph");
+  svg.querySelectorAll(".p2p-graph-peer").forEach((node) => {
+    node.setAttribute("aria-pressed", String(node.dataset.peer === graph.highlightPeer));
+  });
+  svg.querySelectorAll("[data-route]").forEach((node) => {
+    const group = graph.groups.find((item) => item.key === node.dataset.route);
+    const selected = group?.key === graph.selected;
+    node.classList.toggle("selected", selected);
+    node.classList.toggle("related", Boolean(group && [group.sender.id, group.receiver.id].includes(graph.highlightPeer)));
+    node.setAttribute("aria-pressed", String(selected));
+  });
+  const highlighted = graph.groups.flatMap((group) => [group.sender, group.receiver]).find((peer) => peer.id === graph.highlightPeer);
+  if (!highlighted) graph.highlightPeer = null;
+  const selected = graph.groups.find((group) => group.key === graph.selected);
+  byId("p2p-graph-selection").textContent = highlighted
+    ? `Highlighted ${highlighted.label}. All routes remain visible; use Peer above to filter.`
+    : selected ? `Selected report about ${selected.target}. All routes remain visible.`
+    : "Select a report to inspect it; select a peer to highlight its routes.";
+  byId("p2p-graph-clear").disabled = !highlighted && !selected;
 }
 
 /** Draw a stable, bounded three-column graph without a physics simulation.
@@ -5525,25 +5603,8 @@ function drawP2PGraph(groups) {
   definitions.append(marker); svg.append(definitions);
   [[146, "Reporting peer"], [600, "Report about host"], [1054, "Recipient"]].forEach(([x, label]) =>
     svg.append(p2pGraphSvg("text", { x, y: 32, class: "p2p-graph-column", "text-anchor": "middle" }, label)));
-  const colors = new Map();
-  const hues = state.p2pGraph.colorHues ||= new Map();
-  const usedHues = new Set(hues.values());
-  const palette = [2100, 300, 1600, 2750, 3450, 1900, 650, 3100, 2400, 1000, 100, 1350];
-  const identities = new Set(groups.flatMap((group) => [group.target,
-    group.sender.ip || group.sender.id, group.receiver.ip || group.receiver.id]));
-  [...identities].sort().forEach((identity) => {
-    if (!hues.has(identity)) {
-      let hash = 2166136261;
-      for (const character of identity) hash = Math.imul(hash ^ character.charCodeAt(0), 16777619) >>> 0;
-      const choices = palette.slice(hash % palette.length).concat(palette.slice(0, hash % palette.length));
-      let hue = choices.find((value) => !usedHues.has(value)) ?? hash % 3600;
-      while (usedHues.has(hue)) hue = (hue + 137) % 3600;
-      if (hues.size >= 3000) hues.delete(hues.keys().next().value);
-      usedHues.add(hue);
-      hues.set(identity, hue);
-    }
-    colors.set(identity, `hsl(${hues.get(identity) / 10} 62% ${document.documentElement.dataset.theme === "light" ? 32 : 72}%)`);
-  });
+  const colors = p2pGraphColors(groups);
+  const color = (identity) => colors.get(p2pGraphColorKey(identity));
   const positions = {};
   ["sender", "receiver"].forEach((role) => {
     const nodes = new Map();
@@ -5564,7 +5625,7 @@ function drawP2PGraph(groups) {
   groups.forEach((group, index) => {
     const y = 110 + index * 106;
     const route = p2pGraphSvg("g", { class: "p2p-graph-route", "data-route": group.key,
-      style: `--target-color:${colors.get(group.target)};--sender-color:${colors.get(group.sender.ip || group.sender.id)};--receiver-color:${colors.get(group.receiver.ip || group.receiver.id)}` });
+      style: `--target-color:${color(group.target)};--sender-color:${color(group.sender.ip || group.sender.id)};--receiver-color:${color(group.receiver.ip || group.receiver.id)}` });
     const fromY = positions.sender.get(group.sender.id).y, toY = positions.receiver.get(group.receiver.id).y;
     route.append(p2pGraphSvg("path", { d: `M276,${fromY} C350,${fromY} 370,${y} 438,${y}`, "marker-end": "url(#p2p-graph-arrow)" }),
       p2pGraphSvg("path", { d: `M790,${y} C850,${y} 850,${toY} 924,${toY}`, "marker-end": "url(#p2p-graph-arrow)" }));
@@ -5584,34 +5645,19 @@ function drawP2PGraph(groups) {
   ["sender", "receiver"].forEach((role) => positions[role].forEach((peer) => {
     const x = role === "sender" ? 16 : 924;
     const node = p2pGraphSvg("g", { class: `p2p-graph-peer${peer.id === "@local" ? " graph-local" : ""}`,
-      "data-peer": peer.id, style: `--peer-color:${colors.get(peer.ip || peer.id)}` });
+      "data-peer": peer.id, style: `--peer-color:${color(peer.ip || peer.id)}` });
     node.append(p2pGraphSvg("rect", { x, y: peer.y - 34, width: 260, height: 68, rx: 10 }),
       p2pGraphSvg("title", {}, `${peer.label}\n${peer.detail}\n${peer.id === "@local" ? state.p2pGraph.payload.local_peer_id || "This instance" : peer.id}`),
       p2pGraphSvg("text", { x: x + 14, y: peer.y - 6, class: "p2p-graph-peer-name" }, short(peer.label, 28)),
       p2pGraphSvg("text", { x: x + 14, y: peer.y + 17, class: "p2p-graph-meta" }, short(peer.detail, 33)));
     p2pGraphAction(node, `Highlight reports involving ${peer.label}`, () => {
-      const selected = node.getAttribute("aria-pressed") !== "true";
-      state.p2pGraph.highlightPeer = selected ? peer.id : null;
-      svg.querySelectorAll(".p2p-graph-peer").forEach((item) => {
-        item.setAttribute("aria-pressed", String(selected && item.dataset.peer === peer.id));
-      });
-      svg.querySelectorAll("[data-route]").forEach((item) => {
-        const group = groups.find((entry) => entry.key === item.dataset.route);
-        item.classList.toggle("related", selected && (group.sender.id === peer.id || group.receiver.id === peer.id));
-      });
-      byId("p2p-graph-selection").textContent = selected
-        ? `Highlighted ${peer.label}. All routes remain visible; use Peer above to filter.`
-        : "Select a report to inspect it; select a peer to highlight its routes.";
+      state.p2pGraph.highlightPeer = state.p2pGraph.highlightPeer === peer.id ? null : peer.id;
+      state.p2pGraph.selected = null; state.p2pGraph.message = null;
+      renderP2PGraphSelection(); renderP2PGraphDetail();
     });
     node.setAttribute("aria-pressed", String(state.p2pGraph.highlightPeer === peer.id));
     svg.append(node);
   }));
-  const highlighted = positions.sender.get(state.p2pGraph.highlightPeer)
-    || positions.receiver.get(state.p2pGraph.highlightPeer);
-  if (!highlighted) state.p2pGraph.highlightPeer = null;
-  byId("p2p-graph-selection").textContent = highlighted
-    ? `Highlighted ${highlighted.label}. All routes remain visible; use Peer above to filter.`
-    : "Select a report to inspect it; select a peer to highlight its routes.";
   svg.style.width = `${state.p2pGraph.zoom * 100}%`;
   scroll.scrollLeft = savedScroll[0]; scroll.scrollTop = savedScroll[1];
 }
@@ -5733,6 +5779,7 @@ function renderP2PGraph() {
   byId("p2p-graph-scroll").hidden = !visible.length;
   const signature = JSON.stringify([visible.map((group) => [group.key, group.records, group.sender, group.receiver]), state.computerName, document.documentElement.dataset.theme]);
   if (signature !== graph.signature) { drawP2PGraph(visible); graph.signature = signature; }
+  renderP2PGraphSelection();
   renderP2PGraphDetail();
 }
 
@@ -5770,6 +5817,10 @@ async function loadP2PGraph() {
 
 /** Bind local graph filters, zoom controls and keyboard-friendly selection. */
 function bindP2PGraph() {
+  byId("p2p-graph-clear").addEventListener("click", () => {
+    state.p2pGraph.selected = null; state.p2pGraph.highlightPeer = null; state.p2pGraph.message = null;
+    renderP2PGraphSelection(); renderP2PGraphDetail();
+  });
   ["direction", "peer", "type", "range", "limit"].forEach((name) => byId(`p2p-graph-${name}`).addEventListener("change", renderP2PGraph));
   let timer;
   byId("p2p-graph-search").addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(renderP2PGraph, 200); });

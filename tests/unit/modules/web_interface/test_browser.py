@@ -4423,6 +4423,7 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
             page.evaluate("""theme => {
                 clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
                 state.networkOnly=false; state.computerName='Cherry'; setTheme(theme);
+                state.headerNetwork={host_ip:'192.0.2.99'}; state.ownAddresses.add('192.0.2.99');
                 state.hostNames.set('192.0.2.2',{name:'rpi-one',checkedAt:Date.now()});
             }""", theme)
             page.get_by_role("button", name="P2P Graph", exact=True).click()
@@ -4431,21 +4432,50 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
             assert page.locator("#p2p-graph").is_visible()
             assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 5
             assert "rpi-one" in page.locator("#p2p-report-graph").text_content()
+            original_boxes = page.locator("#p2p-report-graph [role='button']").count()
+            clear_selection = page.get_by_role("button", name="Clear selection", exact=True)
+            assert clear_selection.is_disabled()
             page.locator("#p2p-report-graph .p2p-graph-peer[data-peer='peer-A']").first.click()
             assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 5
             assert page.locator("#p2p-report-graph .p2p-graph-route.related").count() == 2
             assert page.locator("#p2p-graph-peer").input_value() == ""
             assert "All routes remain visible" in page.locator("#p2p-graph-selection").inner_text()
+            assert clear_selection.is_enabled()
+            page.evaluate("loadP2PGraph()")
+            assert page.locator("#p2p-report-graph .p2p-graph-route.related").count() == 2
+            assert page.locator("#p2p-report-graph [role='button']").count() == original_boxes
+            clear_selection.click()
+            assert clear_selection.is_disabled()
+            assert page.locator("#p2p-report-graph .p2p-graph-route.related").count() == 0
+            assert page.locator("#p2p-report-graph [role='button']").count() == original_boxes
+            peer_box = page.locator("#p2p-report-graph .p2p-graph-peer[data-peer='peer-A']").first
+            peer_box.click()
+            peer_box.click()
+            assert clear_selection.is_disabled()
+            assert page.locator("#p2p-report-graph [role='button']").count() == original_boxes
             colors = page.locator("#p2p-report-graph .p2p-graph-peer").evaluate_all("nodes => nodes.map(node => [node.dataset.peer, node.style.getPropertyValue('--peer-color')])")
             by_peer = {peer: color for peer, color in colors}
             assert all(by_peer[peer] == color for peer, color in colors)
             assert len(set(by_peer.values())) == len(by_peer)
+            assert page.evaluate("""() => {
+                const route=state.p2pGraph.groups.find(g=>g.target==='192.0.2.99');
+                return [...byId('p2p-report-graph').querySelectorAll('[data-route]')]
+                    .find(node=>node.dataset.route===route.key).style.getPropertyValue('--target-color');
+            }""") == by_peer["@local"]
             assert page.evaluate("state.p2pGraph.groups.every(g=>g.sender.id==='@local'||g.receiver.id==='@local')")
             assert page.locator("#p2p-graph-detail").get_by_text("Select a report card", exact=False).count() == 1
             selected_key = page.evaluate("state.p2pGraph.groups.find(g=>g.sender.id==='peer-A'&&g.target==='192.0.2.99').key")
             page.locator("#p2p-report-graph [data-route]").evaluate_all("(nodes,key)=>nodes.find(n=>n.dataset.route===key).focus()", selected_key)
             page.keyboard.press("Enter")
             detail = page.locator("#p2p-graph-detail")
+            assert page.locator("#p2p-report-graph [role='button']").count() == original_boxes
+            assert "Selected report about 192.0.2.99" in page.locator("#p2p-graph-selection").inner_text()
+            clear_selection.click()
+            assert page.locator("#p2p-report-graph .p2p-graph-route.selected").count() == 0
+            assert page.locator("#p2p-report-graph [role='button']").count() == original_boxes
+            assert page.locator("#p2p-graph-peer").input_value() == ""
+            page.locator("#p2p-report-graph [data-route]").evaluate_all("(nodes,key)=>nodes.find(n=>n.dataset.route===key).focus()", selected_key)
+            page.keyboard.press("Enter")
             assert detail.locator("h3").first.inner_text() == "Reports about 192.0.2.99"
             assert detail.locator(".p2p-graph-delivery").inner_text() == "192.0.2.2 → This Slips · Cherry"
             assert detail.locator(".p2p-graph-report-list tbody tr").count() == 2
@@ -4483,6 +4513,8 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
             page.locator("#p2p-graph-type").select_option("UNKNOWN_PORT")
             assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 3
             page.locator("#p2p-graph-type").select_option("")
+            filtered_colors = page.locator("#p2p-report-graph .p2p-graph-peer").evaluate_all("nodes => nodes.map(node => [node.dataset.peer, node.style.getPropertyValue('--peer-color')])")
+            assert all(by_peer[peer] == color for peer, color in filtered_colors)
             page.locator("#p2p-graph-peer").select_option("peer-B")
             assert page.locator("#p2p-report-graph .p2p-graph-route").count() == 2
             page.locator("#p2p-graph-peer").select_option("")
@@ -4525,6 +4557,27 @@ def test_p2p_report_graph_direction_selection_filters_and_refresh(theme: str, wi
                     byId('p2p-report-graph').querySelectorAll('.p2p-graph-route path').length];
             }""", payload)
             assert counts == [12, 48, 1000, 0, 96]
+            color_checks = page.evaluate("""() => {
+                const graph=state.p2pGraph;
+                graph.colorHues=new Map(Array.from({length:3005},(_,i)=>['stale-'+i,i%3600]));
+                const peer={id:'peer-A',ip:'192.0.2.2'}, local={id:'@local',ip:'192.0.2.99'};
+                const groups=Array.from({length:48},(_,i)=>({sender:peer,receiver:local,target:'2001:db8::'+i.toString(16)}));
+                groups.push({sender:peer,receiver:local,target:'2001:0DB8:0000:0000:0000:0000:0000:0001'});
+                const colors=p2pGraphColors(groups), original=[...colors];
+                const repeated=p2pGraphColors([...groups].reverse());
+                const beforeTheme=document.documentElement.dataset.theme;
+                document.documentElement.dataset.theme=beforeTheme==='light'?'dark':'light';
+                const otherTheme=p2pGraphColors(groups);
+                document.documentElement.dataset.theme=beforeTheme;
+                return {size:colors.size,unique:new Set(colors.values()).size,cacheSize:graph.colorHues.size,
+                    canonical:p2pGraphColorKey(groups.at(-1).target),
+                    stable:original.every(([ip,color])=>repeated.get(ip)===color),
+                    themeHues:original.every(([ip,color])=>otherTheme.get(ip).split(' 62%')[0]===color.split(' 62%')[0]),
+                    allRetained:original.every(([ip])=>graph.colorHues.has(ip))};
+            }""")
+            assert color_checks == {"size": 50, "unique": 50, "cacheSize": 3000,
+                                    "canonical": "2001:db8::1", "stable": True,
+                                    "themeHues": True, "allRetained": True}
             page.evaluate("""() => {state.networkOnly=true; state.currentNetworkStart=Date.now()/1000+5; byId('p2p-graph-range').value='connection'; renderP2PGraph();}""")
             assert page.locator("#p2p-graph-empty").is_visible()
             assert not errors, errors
