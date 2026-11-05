@@ -22,6 +22,11 @@ input(18) -> RandomProjection(256, frozen, He init) -> /√256 -> fc1(256->16)+R
 
 ### Feature scaler
 
+By default (`global_scaler: true`) every model, local and merged, scales with
+one fixed pretrained scaler, `artifacts/global_scaler.json`, fit offline on the
+published security-datasets-for-testing, and nothing is fit during a run (see
+`global_scaler` below). With `global_scaler: false` each peer fits its own:
+
 One `StandardScaler` per peer, empty at start (no warm start in the experiment
 image), updated with `partial_fit` in exactly one place: at the start of the training
 at a window close (`_train_batch`), which runs after that close has scored
@@ -33,9 +38,7 @@ scored with a scaler that has seen it. Each fit appends a line to
 `scaler_stats.jsonl` (window, rows, samples seen, per-feature mean / var /
 scale) for comparing the peers' scalers. With `merge_scaler` the merged model
 gets its own scaler, pooled from the own and the peers' scalers at each merge
-(see the option below); the local model always keeps the own one. With
-`global_scaler` every model uses one fixed pretrained scaler instead and
-nothing is fit.
+(see the option below); the local model always keeps the own one.
 
 ### Training Buffers
 
@@ -122,7 +125,7 @@ All paths are hardcoded in `init()`. They are NOT configurable via `slips.yaml`.
 
 ### Base Artifacts (Shared Across All Peers)
 - `artifacts/random_projection.bin` - Frozen random projection matrix (created once, distributed to the default model only)
-- `artifacts/global_scaler.json` - the pretrained global scaler's statistics, used only with `global_scaler`
+- `artifacts/global_scaler.json` - the pretrained global scaler's statistics, used by every model by default (`global_scaler`)
 
 ### Local Model (Own Training Only)
 - `artifacts/latest_local_state.bin` - full model `state_dict` (class-driven: any registry model)
@@ -271,7 +274,7 @@ federated_network_module:
   # learning_rate: 0.01   # optional, Adam step size (see below)
   # merge_head: false      # optional, also share + merge the head (see below)
   # merge_scaler: false    # optional, also share the scaler; the merged model gets the pooled one (see below)
-  # global_scaler: false   # optional, every model uses the pretrained artifacts/global_scaler.json, never fit (see below)
+  global_scaler: true      # every model uses the pretrained artifacts/global_scaler.json, never fit; false = own scaler per peer (see below)
   # finetune_head: true    # false = no fine-tune at all (see below)
   # finetune_fc_layers: true  # fine-tune fc1 + head on both models (false = head only, see below)
   # merge_finetune_adam: copy  # Adam state the fine-tunes start from (fresh = empty, see below)
@@ -337,8 +340,9 @@ mean_shift_sd=… | scale_ratio=<min>-<max>` (largest shift of the pooled mean i
 own standard deviations; pooled / own scale per feature), and a
 `merged_scaler.jsonl` row (merge, window, weights, pooled mean / var / scale).
 
-`global_scaler` (optional, default false) gives every model, local and
-merged, one fixed pretrained scaler: `artifacts/global_scaler.json`, the
+`global_scaler` (default true; false = each peer fits its own scaler) gives
+every model, local and merged, one fixed pretrained scaler:
+`artifacts/global_scaler.json`, the
 statistics (per-feature mean, variance, scale, samples seen, feature names,
 source) of a StandardScaler fit on every conn flow of the published
 [security-datasets-for-testing](https://github.com/stratosphereips/security-datasets-for-testing)
@@ -351,7 +355,27 @@ never fit: `update_preprocessor` does nothing, so `scaler_stats.jsonl` logs
 the same statistics at every training. A file whose feature names differ from
 the module's, or with an invalid value, stops the module at start. With
 `merge_scaler` on as well every peer sends the same statistics, so the pooled
-scaler is the global one.
+scaler is the global one. The file is reproducible: `fit_global_scaler.sh
+OUT.json ROOT...` in
+[SCL-Federation-Experiment-Runner](https://github.com/stratosphereips/SCL-Federation-Experiment-Runner)
+(`thesis_experiments/`, branch `jsvobo/thesis-experiments`) runs the fit inside
+the module's image, `partial_fit` one conn log at a time, and writes the
+artifact with its `source` line plus a per-file flow count.
+
+Why it is the default: a peer's own scaler is fit only on what that peer has
+seen so far (first its benign baseline), so the same flow is scaled
+differently on different peers and over time; a fixed scaler from published
+data keeps every model on one input scale and is fit on no lab traffic. In the
+small-topology comparison (one run each, fc1 + head fine-tune, last 5 windows,
+MCC over all flows of both peers, local → merged): own scaler 0.283 → 0.210,
+the first pretrained scaler (19,635 flows of the dataset's captures
+008/010/011, about 92% TCP; SLIPS 67ed1e0a6) 0.458 → 0.471, this one 0.703 →
+0.706. Most of the gain is ARP on the weaker peer, which its local model
+catches in 14 of 15 attack windows instead of 9 (own scaler) or about 12
+(first scaler); with the first scaler the lab's protocol feature sat 10.7
+standard deviations from its mean and the stronger peer flipped between
+all-malicious and all-benign windows. The cost: the stronger peer misses a few
+more conn flows than with its own scaler (conn MCC 0.90 instead of 0.98).
 
 `finetune_fc_layers` (default true) makes the fine-tune after the merge point
 train the fc (shared) layers + head instead of the head alone, on the local and on the merged

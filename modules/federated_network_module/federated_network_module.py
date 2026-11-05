@@ -44,8 +44,8 @@ behaviour before this option); finetune_head: false skips both fine-tunes;
 merge_scaler also sends the scaler's per-feature mean and variance and gives
 the merged model the own + peers' scalers pooled with the merge rule's
 weights (its fine-tune and scoring use it, the local model keeps its own);
-global_scaler makes every model scale with the pretrained scaler in
-artifacts/global_scaler.json, never fit; minibatch_size splits every
+global_scaler (default on) makes every model scale with the pretrained
+scaler in artifacts/global_scaler.json, never fit; minibatch_size splits every
 training pass into class-stratified mini-batches (one Adam step each). merging_data.log records per merge how much
 of the merge the fine-tunes undo ("finetune | ... | undone=").
 
@@ -1407,11 +1407,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "merge_scaler", default=False
         )
         self.print(f"merge_scaler: {self.merge_scaler}", 0, 2)
-        # Optional global scaler: every model (local and merged) scales with
-        # the pretrained scaler shipped as artifacts/global_scaler.json and
-        # never fits it. Unset = off (each peer fits its own scaler).
+        # Global scaler (default on): every model (local and merged) scales
+        # with the pretrained scaler shipped as artifacts/global_scaler.json
+        # and never fits it. false = each peer fits its own scaler.
         self.global_scaler = self._read_module_config_bool(
-            "global_scaler", default=False
+            "global_scaler", default=True
         )
         self.print(f"global_scaler: {self.global_scaler}", 0, 2)
         # The fine-tune after the merge point also trains the shared (fc)
