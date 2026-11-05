@@ -14,6 +14,8 @@ import shutil
 import os
 import json
 import signal
+import threading
+import time
 
 
 @pytest.mark.parametrize(
@@ -648,3 +650,97 @@ def test__make_gen(data, expected_chunks):
     gen = input_process._make_gen(reader)
     for expected_chunk in expected_chunks:
         assert next(gen) == expected_chunk
+
+
+def test_get_earliest_line_with_no_cached_lines():
+    input = ModuleFactory().create_input_obj("", InputType.ZEEK_LOG_FILE)
+    input.zeek_utils.file_time = {}
+    input.zeek_utils.cache_lines = {}
+    input.zeek_utils.refresh_zeek_files = Mock()
+
+    assert input.zeek_utils.get_earliest_line() == (False, False)
+    input.zeek_utils.refresh_zeek_files.assert_called_once()
+
+
+def test_refresh_zeek_files_is_rate_limited():
+    input = ModuleFactory().create_input_obj("", InputType.ZEEK_LOG_FILE)
+    zeek_utils = input.zeek_utils
+    zeek_utils.input.db.get_all_zeek_files = Mock(
+        return_value={"conn.log": "eth0"}
+    )
+    zeek_utils.next_zeek_files_refresh = 0.0
+
+    zeek_utils.refresh_zeek_files()
+    zeek_utils.refresh_zeek_files()
+    assert zeek_utils.input.db.get_all_zeek_files.call_count == 1
+
+    zeek_utils.refresh_zeek_files(force=True)
+    assert zeek_utils.input.db.get_all_zeek_files.call_count == 2
+    assert zeek_utils.zeek_files == {"conn.log": "eth0"}
+
+
+def test_wait_for_new_lines_backs_off_up_to_max():
+    input = ModuleFactory().create_input_obj("", InputType.ZEEK_LOG_FILE)
+    zeek_utils = input.zeek_utils
+    zeek_utils.idle_wait = zeek_utils.min_idle_wait
+
+    with patch("time.sleep") as sleep:
+        for _ in range(6):
+            zeek_utils.wait_for_new_lines()
+
+    waits = [call.args[0] for call in sleep.call_args_list]
+    assert waits[0] == zeek_utils.min_idle_wait
+    assert waits == sorted(waits)
+    assert max(waits) == zeek_utils.max_idle_wait
+    assert zeek_utils.idle_wait == zeek_utils.max_idle_wait
+
+
+def test_read_zeek_files_reads_growing_log_and_new_files(tmp_path):
+    """
+    Lines appended to a log while the reader is idle, and logs created
+    after startup, should all be forwarded to the profiler in order.
+    """
+    input = ModuleFactory().create_input_obj("", InputType.ZEEK_LOG_FILE)
+    zeek_utils = input.zeek_utils
+    zeek_utils.dos_protector.is_running_non_stop = False
+    zeek_utils.zeek_files_refresh_interval = 0.05
+    zeek_utils.max_idle_wait = 0.02
+    input.bro_timeout = float("inf")
+    input.is_zeek_tabs = False
+
+    conn_log = tmp_path / "conn.log"
+    dns_log = tmp_path / "dns.log"
+    conn_log.write_text('{"ts": 1, "uid": "c1"}\n')
+    zeek_files = {str(conn_log): "eth0"}
+    input.db.get_all_zeek_files = Mock(side_effect=lambda: dict(zeek_files))
+
+    sent = []
+    input.give_profiler = lambda line: sent.append(line["data"]["uid"])
+    stop = threading.Event()
+    input.should_stop = stop.is_set
+
+    reader = threading.Thread(target=zeek_utils.read_zeek_files)
+    reader.start()
+
+    def wait_until(expected):
+        deadline = time.time() + 5
+        while sent != expected and time.time() < deadline:
+            time.sleep(0.01)
+        return sent == expected
+
+    try:
+        assert wait_until(["c1"])
+        # let the reader go idle and back off before adding more data
+        time.sleep(0.2)
+        with open(conn_log, "a") as f:
+            f.write('{"ts": 2, "uid": "c2"}\n')
+        assert wait_until(["c1", "c2"])
+
+        dns_log.write_text('{"ts": 3, "uid": "d1"}\n')
+        zeek_files[str(dns_log)] = "eth0"
+        assert wait_until(["c1", "c2", "d1"])
+    finally:
+        stop.set()
+        reader.join(5)
+
+    assert not reader.is_alive()
