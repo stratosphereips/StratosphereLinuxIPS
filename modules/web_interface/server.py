@@ -3384,6 +3384,9 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
+            scope = getattr(self, "_active_network_scope", None)
+            if scope:
+                scope.materialize_evidence(connection)
             self._register_device_key(connection, device_view)
             score_expression = self._detector_score_expression(
                 connection, "evidence"

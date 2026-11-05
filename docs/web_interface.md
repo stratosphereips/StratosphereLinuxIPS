@@ -32,14 +32,13 @@ The shared header refreshes its network name and current IP from the
 five-second backend heartbeat, including while another tab is open. It does
 not wait for Overview to load.
 
-The browser tab title shows alert and host counts from the rolling one-hour
-**Live** range. It checks every thirty seconds while visible and every sixty
-seconds in the background, and refreshes immediately when the tab becomes
-visible again. Browsers may delay background timers. It does not depend on the
-selected tab, search, or date filter. The Alerts and Evidence navigation
-badges show the records matching those tabs' selected range and filters after
-each tab loads; the Hosts badge likewise shows the matching host count.
-Overview keeps its run totals.
+The browser title identifies the run, for example **Slips · sebas-en0**.
+It does not poll detection totals. Grouped network evidence queries resolve network
+membership once per request in a temporary ID table, then reuse it for counts and
+groups. This work stays in the web process and never writes to the capture database.
+Navigation tabs show names without totals; counts stay beside the data and its
+active filters. The browser no longer polls `/api/live-counts` just to update
+a title. Overview keeps its run totals.
 
 The shared header shows **Loading** or **Searching** while a foreground data
 request is pending. Its reserved space keeps the page width stable as the
@@ -733,7 +732,7 @@ Only the active tab refreshes every five seconds and only when its range include
 
 ## Tabs
 
-The header shows **Searching…** or **Loading…** with a small activity indicator while foreground requests are running. It clears when they finish, fail or are cancelled. Its reserved space keeps the page width and header height stable during refreshes. Press Enter in a search field to run the search immediately; typing still searches after a short pause. Background heartbeat and title-count checks do not activate the indicator.
+The header shows **Searching…** or **Loading…** with a small activity indicator while foreground requests are running. It clears when they finish, fail or are cancelled. Its reserved space keeps the page width and header height stable during refreshes. Press Enter in a search field to run the search immediately; typing still searches after a short pause. Background heartbeat checks do not activate the indicator.
 
 ### Overview
 
@@ -748,9 +747,8 @@ for up to thirty seconds instead of rereading every stored evidence JSON on
 each refresh. The cache holds at most eight network/connection selections,
 separates different databases and recorded network visits, and shares work
 between browser tabs. The Evidence table still queries its selected filters
-directly. Live title counts first select addresses active in the last hour
-through timestamp indexes, then check their last observation; metadata-only
-refreshes cannot revive historical hosts. Backend status and active-tab data
+directly. Browser titles use the run name and do not request background counts.
+Backend status and active-tab data
 continue to refresh every five seconds. All this work stays in the web server;
 capture and detection processing require no additional lookups or writes.
 
@@ -1005,7 +1003,7 @@ only when opened. Capture, profiling and the P2P protocol are unchanged.
 
 The P2P tab combines current Redis connectivity with the persistent local P2P trust database. Its compact header shows the local Pigeon identity and listen address, with copy controls. Summary cards show connected and known peers, report and request counts, and average reliability. The peers table retains each peer's ID, IP, connection state, trust, reliability, report count, and last seen time. The adjacent **Peer reliability history** chart plots the same metric as the table's **Reliability** column, with three decimal places on its numeric axis and hover values. It keeps Live, 1-hour, 24-hour, 7-day, and full-history ranges. Full history starts at the peer's first recorded detection and samples the whole reliability timeline, keeping each peer's first and latest measured reliability; no reliability value is invented before the first measurement or for a missing measurement. Selecting a peer filters the message table; selecting it again or clearing the filter restores all peers.
 Every peers-table heading is sortable, including connectivity, trust, reliability, report count, and last seen time.
-History charts use indexed seeks capped at about 2,000 actual samples per metric, including each peer’s first and latest samples. Refreshing connectivity does not rescan the full history or redraw unchanged plots. Browser title counts refresh every five seconds while visible and every thirty seconds while hidden, with at most one polling request in flight.
+History charts use indexed seeks capped at about 2,000 actual samples per metric, including each peer’s first and latest samples. Refreshing connectivity does not rescan the full history or redraw unchanged plots. The browser title uses the run name without polling peer or host totals.
 
 Peer IDs appear shortened in tables, message details, and chart labels; hover
 shows the full ID and the copy controls retain it. The IP column prefers an
@@ -1480,11 +1478,8 @@ Selecting a host opens a three-column workspace. The left column holds identity 
 
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
-Alerts, Evidence, and Flows tab counts retain their last known values during
-periodic refreshes and update when their activity query completes, including
-zero results. Counts clear when opening another host so its labels cannot
-inherit the previous host's totals. Keeping the labels stable adds no API
-requests or polling work.
+Alerts, Evidence, and Flows tabs use stable names without total badges.
+The active view shows its own filtered count next to its records.
 
 In Device view, the flow table uses the same server-verified address set as the
 traffic cards and plots. A device selected through an old IPv4 address can have

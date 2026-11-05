@@ -61,7 +61,6 @@ const state = {
   runUptimeRunning: false,
   timer: null,
   statusTimer: null,
-  titleTimer: null,
   requests: new Map(),
   drawerHistory: [],
   drawerGeneration: 0,
@@ -1339,7 +1338,7 @@ function renderRequestActivity() {
 async function api(key, path, trackFailures = true, allowNotFound = false) {
   state.requests.get(key)?.abort();
   const controller = new AbortController();
-  controller.activityLabel = ["backendStatus", "liveTitleCounts", "archiveCatalog"].includes(key)
+  controller.activityLabel = ["backendStatus", "archiveCatalog"].includes(key)
     ? "" : new URL(path, window.location.origin).searchParams.get("search") ? "Searching…" : "Loading…";
   state.requests.set(key, controller);
   renderRequestActivity();
@@ -1819,37 +1818,10 @@ function setSummaryCards(items, target = "summary-cards") {
   });
 }
 
-/**
- * Show alert and host totals from the rolling live window in the tab title.
- *
- * @param {Object} counts Live alert and host totals.
- */
-function updatePageTitle(counts) {
-  document.title = `Slips ${compact(counts.alerts)} alerts · ${compact(counts.hosts)} ${state.deviceView && state.deviceViewSupported ? "devices" : "hosts"}`;
-}
-
-/** Refresh live title totals independently of the selected tab and filters. */
-async function loadLiveTitleCounts() {
-  const params = new URLSearchParams();
-  if (state.networkOnly && state.networkFilterSupported) params.set("network", "current");
-  if (state.deviceView && state.deviceViewSupported) params.set("device", "1");
-  const payload = await api("liveTitleCounts", `/api/live-counts${params.size ? `?${params}` : ""}`, false, true);
-  if (payload && !payload.not_found) updatePageTitle(payload);
-}
-
-/** Keep the browser title current even when the dashboard tab is hidden. */
-function startLiveTitlePolling() {
-  window.clearTimeout(state.titleTimer);
-  const tick = async () => {
-    try {
-      await loadLiveTitleCounts();
-    } catch (_) {
-      // The next tick retries without overlapping an unfinished request.
-    } finally {
-      state.titleTimer = window.setTimeout(tick, document.hidden ? 60000 : 30000);
-    }
-  };
-  tick();
+/** Use the run name as the browser title without querying detection totals. */
+function updatePageTitle() {
+  const name = byId("run-name").textContent.trim();
+  document.title = name && name !== "Current run" ? `Slips · ${name}` : "Slips";
 }
 
 /** Update the network name in the shared header from the latest heartbeat.
@@ -1937,6 +1909,7 @@ function renderRunContext(data) {
   renderHeaderUptime();
   const outputName = String(run.output_dir || "").split("/").filter(Boolean).at(-1);
   byId("run-name").textContent = outputName || "Current run";
+  updatePageTitle();
   const addresses = data.host_addresses || {};
   state.computerName = data.computer_name || "";
   byId("run-device").textContent = state.computerName
@@ -5692,7 +5665,6 @@ async function openP2PGraphHost(target, activity) {
   state.hostActivityPreferred = true;
   await inspectHost(target);
   if (includeEarlier) {
-    loadLiveTitleCounts().catch(() => {});
     toast("Showing full-run history across network connections to include the original detection.");
   }
 }
@@ -9081,7 +9053,6 @@ function refreshNetworkScopedViews(reload = true) {
   state.overviewAlertGroups = null;
   state.overviewEvidence = null;
   if (!reload) return;
-  loadLiveTitleCounts().catch(() => {});
   if (state.activeTab !== "hosts") loadHosts().catch(() => {});
   if (state.activeTab === "overview") loadOverview().catch(() => {});
   else {
@@ -9566,13 +9537,11 @@ document.addEventListener("visibilitychange", () => {
   } else {
     refreshActive();
     pollBackendStatus();
-    loadLiveTitleCounts().catch(() => {});
   }
 });
 window.addEventListener("beforeunload", () => {
   saveViewPreferences();
   window.clearTimeout(state.statusTimer);
-  window.clearTimeout(state.titleTimer);
   state.requests.forEach((controller) => controller.abort());
 });
 
@@ -9585,7 +9554,7 @@ window.addEventListener("resize", updateHostViewportHeight);
 window.addEventListener("resize", updateMetadataViewportHeight);
 window.setInterval(renderHeaderUptime, 1000);
 loadWhitelists().catch(() => {});
-startLiveTitlePolling();
+updatePageTitle();
 updateReviewAvailability(false);
 pollBackendStatus().catch(() => {}).finally(() => {
   loadOverview().catch(() => {}).finally(() => {

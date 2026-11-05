@@ -35,6 +35,7 @@ def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
     metadata = {"Slips version":"1.1.24","Branch":"test-branch","Commit":"abc123",
                 "File":"en0","Command":"slips.py -i en0","Zeek version":"8"}
     polls = []
+    requested: list[str] = []
 
     def respond(route: Any) -> None:
         """Serve real metadata refreshes using isolated run data.
@@ -43,6 +44,7 @@ def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
             route: Intercepted browser request.
         """
         parsed = urlparse(route.request.url)
+        requested.append(parsed.path)
         if parsed.path in {"/","/app.js","/style.css"}:
             route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
         elif parsed.path == "/api/metadata":
@@ -83,6 +85,8 @@ def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
                 assert summary.evaluate("node => node === document.activeElement")
                 assert "slips.py -i en0" in details.inner_text()
             assert summary.inner_text() == "More"
+            assert page.title() == "Slips · metadata"
+            assert "/api/live-counts" not in requested
             assert all(hidden for hidden in page.locator(".tabs .badge").evaluate_all("nodes => nodes.map(node => getComputedStyle(node).display === 'none')"))
             assert not any(character.isdigit() for character in page.locator(".tabs").inner_text().replace("P2P", ""))
             assert "192.0.2.10" in page.locator("#metadata-device").inner_text()

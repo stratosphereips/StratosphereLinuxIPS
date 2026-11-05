@@ -160,6 +160,28 @@ def test_membership_prefers_recorded_network(
     assert scope.matches(timestamp, identity) is expected
 
 
+@pytest.mark.parametrize("network", ["current", "connection"])
+def test_group_queries_resolve_membership_once(
+    tmp_path: Path, network: str,
+) -> None:
+    """Keep repeated aggregates off JSON payloads after resolving membership.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        network: Selected network or current connection.
+    """
+    _factory = ModuleFactory()
+    reader = repeated_visits(tmp_path)._for_network_scope({"network": [network]})
+    with reader._connect_sqlite() as connection:
+        expected = {row[0] for row in connection.execute("SELECT evidence_id FROM evidence")}
+        reader._active_network_scope.materialize_evidence(connection)
+        connection.create_function("json_valid", 1, lambda _: pytest.fail("Membership reparsed"))
+        for _ in range(3):
+            actual = {row[0] for row in connection.execute("SELECT evidence_id FROM evidence")}
+            assert actual == expected
+            assert connection.execute("SELECT COUNT(*) FROM evidence").fetchone()[0] == len(expected)
+
+
 def test_visit_ledger_is_bounded_and_survives_restart(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:

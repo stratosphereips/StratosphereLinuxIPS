@@ -226,7 +226,8 @@ class NetworkScope:
             period = self._recorded_period("e.evidence_time", identity)
             connection.execute(
                 f"CREATE TEMP VIEW {prefix}evidence AS SELECT e.* FROM {database}.evidence e "
-                f"WHERE ({recorded})={identity} OR ((({recorded})='' OR ({recorded}) LIKE 'run:%') AND {period})"
+                f"WHERE CASE ({recorded}) WHEN {identity} THEN 1 WHEN '' THEN {period} "
+                f"ELSE CASE WHEN ({recorded}) LIKE 'run:%' THEN {period} ELSE 0 END END"
             )
         if "alerts" in tables:
             period = self._recorded_period(
@@ -250,6 +251,24 @@ class NetworkScope:
                 connection.execute(
                     "CREATE TEMP VIEW history_state AS SELECT * FROM main.history_state WHERE key<>'summary_complete'"
                 )
+
+    def materialize_evidence(self, connection: sqlite3.Connection) -> None:
+        """Resolve network membership once for a grouped request's queries.
+
+        Parameters:
+            connection: Read-only run connection with network views installed.
+        """
+        connection.execute(
+            "CREATE TEMP TABLE scope_evidence_ids (evidence_id TEXT PRIMARY KEY) WITHOUT ROWID"
+        )
+        connection.execute(
+            "INSERT INTO scope_evidence_ids SELECT evidence_id FROM evidence"
+        )
+        connection.execute("DROP VIEW temp.evidence")
+        connection.execute(
+            "CREATE TEMP VIEW evidence AS SELECT e.* FROM main.evidence e "
+            "JOIN scope_evidence_ids s ON s.evidence_id=e.evidence_id"
+        )
 
     def install_flows(self, connection: sqlite3.Connection) -> None:
         """Scope traffic by recorded visits or evidence-linked network identity.

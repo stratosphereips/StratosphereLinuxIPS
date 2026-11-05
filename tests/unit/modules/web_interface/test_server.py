@@ -2583,8 +2583,9 @@ def test_overview_prioritizes_operational_data() -> None:
     assert 'id="load-module-evidence" disabled' in index_source
     assert '`/api/overview/evidence-counts${scope}`' in app_source
     assert "async function loadOverviewEvidenceCounts" in app_source
-    assert "document.title = `Slips ${compact" in app_source
-    assert 'api("liveTitleCounts", `/api/live-counts${params.size' in app_source
+    assert '? `Slips · ${name}` : "Slips"' in app_source
+    assert "/api/live-counts" not in app_source
+    assert "titleTimer" not in app_source
     assert 'path == "/api/live-counts"' in server_source
     assert "updatePageTitle({ alerts: data.counts.alerts" not in app_source
     assert "updatePageTitle({ [name]: payload.full_total" not in app_source
@@ -2761,64 +2762,35 @@ def test_overview_unfiltered_evidence_uses_maintained_total(tmp_path: Path) -> N
     assert not any("COUNT(*)" in sql for sql in statements)
 
 
-@pytest.mark.parametrize("hidden, interval", [(False, 30000), (True, 60000)])
-def test_live_title_poll_continues_when_tab_is_hidden(hidden: bool, interval: int) -> None:
-    """Keep title counts fresh without repeating expensive work every five seconds.
+@pytest.mark.parametrize("name,expected", [("Current run", "Slips"), ("sebas-en0", "Slips · sebas-en0")])
+def test_browser_title_uses_run_name_without_requests(name: str, expected: str) -> None:
+    """Keep run identity visible without polling detection counts.
 
     Parameters:
-        hidden: Whether the browser tab is in the background.
-        interval: Expected count polling interval in milliseconds.
+        name: Displayed run name.
+        expected: Browser title.
     """
     _module_factory = ModuleFactory()
     if not shutil.which("node"):
-        pytest.skip("Node.js is required for the browser title timer test")
+        pytest.skip("Node.js is required for the browser title test")
     script = r"""
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
 const source = fs.readFileSync('modules/web_interface/app.js', 'utf8');
-const definition = source.match(/function startLiveTitlePolling\(\) \{[\s\S]*?\n\}/);
-assert.ok(definition);
-let requests = 0;
-let tick;
-let finish;
-const context = {
-  document: { hidden: HIDDEN }, state: { titleTimer: null },
-  window: {
-    clearTimeout() {},
-    setTimeout(callback, interval) {
-      assert.equal(interval, INTERVAL);
-      tick = callback;
-      return 1;
-    },
-  },
-  loadLiveTitleCounts() {
-    requests += 1;
-    return new Promise(resolve => { finish = resolve; });
-  },
-};
-(async () => {
-  vm.createContext(context);
-  vm.runInContext(definition[0], context);
-  context.startLiveTitlePolling();
-  assert.equal(requests, 1);
-  assert.equal(tick, undefined, 'a pending request must not schedule another');
-  finish();
-  await new Promise(resolve => setImmediate(resolve));
-  assert.equal(typeof tick, 'function');
-  tick();
-  assert.equal(requests, 2, 'hidden title counts still refresh at a slower rate');
-  finish();
-})().catch(error => { console.error(error); process.exitCode = 1; });
+const definition = source.match(/function updatePageTitle\(\) \{[\s\S]*?\n\}/);
+const context = { document: {}, byId: () => ({textContent: NAME}) };
+vm.createContext(context);
+vm.runInContext(definition[0], context);
+context.updatePageTitle();
+assert.equal(context.document.title, EXPECTED);
+assert.ok(!source.includes('/api/live-counts'));
 """
     result = subprocess.run(
-        ["node", "-e", script.replace("HIDDEN", json.dumps(hidden)).replace("INTERVAL", str(interval))],
-        capture_output=True,
-        check=False,
-        text=True,
-        timeout=10,
+        ["node", "-e", script.replace("NAME", json.dumps(name)).replace("EXPECTED", json.dumps(expected))],
+        capture_output=True, text=True, check=False,
     )
-    assert result.returncode == 0, result.stderr
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("mode", ["grouped", "type", "host"])
