@@ -1,76 +1,96 @@
-# Federated Network Module - Implementation Plan
+# Federated Network Module - Design Notes
 
 ## Overview
-Federated learning module for Slips with model sharing across peers. Uses frozen random projection + learnable fc1 + head layers.
+Federated learning module for Slips with model sharing across peers. The
+default model (`random_projection_mlp`) is a frozen random projection + a
+trainable fc1 + a head; `simple_mlp` and `random_projection_two_layer` are the
+other registry models. All trainable layers start from the same weights on
+every peer (`shared_init_seed`). README.md is the full reference.
 
 ## Core Workflow
 
-### 1. Local Training (Wall-Clock Window Close)
+### 1. Window close (every `time_window_width` s, fixed wall-clock grid)
 ```
-Buffer flows and alerts for 5 minutes (with per-peer offset)
+Read every conn flow + ARP record SLIPS stored in flows.sqlite since the last
+close into this window's ring cell (by read time)
     ↓
-Close window: label flows from all buffered alerts' evidence
+Label all open cells: malicious iff an alert's evidence cites the flow's uid
+(alerts within the lookback); the rest benign. No IPs, no ground truth
     ↓
-Train fc1 + head for local_training_epochs
+Score every open cell's unscored flows with the model serving this window
+(prequential: before this close trains anything)
     ↓
-Save head produced by local training as "head_before"
-    ↓
-Freeze fc1, fine-tune head for merge_finetune_epochs (local_head_train.log)
-    ↓
-Save as latest_local model
-    ↓
-Send to peers via P2P
+Finalize the cell label_finalize_delay_windows (K, default 1) closes old into
+the training buffer; train when it holds >= min_training_samples flows
 ```
 
-### 2. Model Merging (Event-Based)
+### 2. Training (at a close that trains)
 ```
-Receive peer models
+Scale the batch: global scaler (default, never fit) or the own scaler
+(fit on the whole buffer first, global_scaler: false)
     ↓
-Aggregate fc1 weights (AVERAGE)
+Local training: fc1 + head for local_training_epochs
     ↓
-Restore "head_before" (head from local full training)
+Send the model after local training to the peers (fc1; + head with
+merge_head; + scaler statistics with merge_scaler)
     ↓
-Freeze fc1, fine-tune head for merge_finetune_epochs (merged_train.log)
+Local fine-tune: merge_finetune_epochs, fc1 + head (head only with
+finetune_fc_layers: false), from its own copy of the training Adam state
+(merge_finetune_adam) - the local model carries on from here
     ↓
-Save as merged_N model
+Merge (if any peer model is stored): merge_rule over own + the latest model of
+every peer; merged head with merge_head, else the own head after local
+training; then the same fine-tune as the local model (merged_train.log)
 ```
+`finetune_head: false` skips both fine-tunes (0 epochs).
 
 ### 3. Key Design Decisions
-- **Comparable local and merged models**: both heads are fine-tuned for the same number of epochs from the same starting head; only fc1 differs (local-only vs averaged).
-- **Wall-clock training windows**: windows close every 5 minutes, independent of Slips global time windows, with a per-peer random offset.
-- **Buffered alerts**: alerts are not processed immediately; all evidence from a window is used together to label flows at window close.
-- **Merged models NOT reused**: Each merge uses only latest local models from peers, not previous merges.
-- **Off-sync windows**: Random time offset per peer to avoid synchronized training pulses.
+- **Comparable local and merged models**: both start from the model after
+  local training (own vs merged weights) and get the same fine-tune on the same
+  batch; only the starting weights differ.
+- **Merged models are never adopted**: the merged model serves until the next
+  training close and is then discarded; it never feeds the local model or a
+  later merge. Each merge uses the peers' latest local models.
+- **Labels only from SLIPS alerts**: flow-exact (uid) matching of alert
+  evidence; ground truth is for evaluation only.
+- **No evidence emission**: `set_evidence_malicious_flow` is a no-op, so the
+  module never feeds the alerts it learns from.
+- **Wall-clock windows** independent of the Slips time windows; each peer's
+  first window is shortened by a random offset (`uniform(0, 300)` s, seeded by
+  hostname and run_seed) so peers train out of phase.
 
 ## Artifact Structure
 ```
 artifacts/
-├── random_projection.bin      # Shared base (frozen, distributed to all peers)
-├── scaler.bin                  # Local scaler state
-├── latest_local_state.bin      # Current local model state_dict (any registry model)
-├── latest_local_head.bin       # Current local head weights
+├── random_projection.bin      # shared frozen projection (seeded, all peers)
+├── global_scaler.json         # pretrained global scaler (global_scaler)
+├── latest_local_state.bin     # local model state_dict (any registry model)
+├── latest_local_scaler.bin    # local scaler
 └── merged/
-    ├── merged_1_state.bin      # First merge result (state_dict)
-    ├── merged_1_head.bin
-    ├── merged_2_state.bin      # Second merge result (state_dict)
+    ├── merged_1_state.bin     # merge results (state_dict)
     └── ...
 ```
+The final merged model and scaler go to `model_store_path` /
+`preprocess_store_path`.
 
 ## P2P Integration
-- **Sending**: After each local training, publish model weights to `p2p_pygo` channel
-- **Receiving**: Subscribe to `p2p_gopy`, store latest per peer in memory
-- **Merge trigger**: After own local training if any peer models are pending
+- **Sending**: after each local training, a base64 JSON message
+  (`message_type: model`, recipient `*`) on the `p2p_pygo` channel
+- **Receiving**: `p2p_gopy`; the latest model per peer is stored (keyed by the
+  sender's hostname) and kept until replaced
+- **Merge trigger**: right after own local training, if any peer model is
+  stored - never on receipt
 
 ## Base Class Integration
-- Use `store_testing_results()` for TP/FP/TN/FN metrics
-- Use `write_to_log()` for training/testing logs
-- Override `store_model()` for graceful shutdown (save local + merged)
-- Use `partial_fit()` for incremental scaler training
-- Throw exception in `transform_features()` if preprocessor not fitted
+- Override `store_model()` for graceful shutdown (flush the last windows'
+  scores, save local + merged)
+- `update_preprocessor()` = `partial_fit` of the own scaler; a no-op with
+  global_scaler
+- `transform_features()` raises if the preprocessor is not fitted
+- Test mode (`run_test_on_flow`) uses `store_testing_results()`
 
-## Minimal Implementation Notes
+## Implementation Notes
 - No unnecessary abstractions - keep logic inline where possible
-- Reuse base class methods for logging, metrics, model loading/saving
-- Dynamic input dimension detected from first flow
-- All numerical features kept (no feature engineering)
-- Try/catch around training batch to handle errors gracefully
+- Fixed 18-feature input (`_get_feature_order`), no feature engineering
+  beyond the derived features
+- Try/catch around training and merging; errors go to module_errors.log

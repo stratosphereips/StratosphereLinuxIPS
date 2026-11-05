@@ -3,64 +3,58 @@
 """
 Federated Network Module - Federated Learning with Model Sharing
 
-Architecture: input(N features, fixed 18) -> RandomProjection(256,frozen,shared) -> Linear(256->16)+ReLU [fc1] -> Linear(16->2) [head]
+Architecture (default model_class random_projection_mlp): input(18 features)
+-> RandomProjection(18->256, frozen, shared by seed) -> /16 -> Linear(256->16)
++ReLU [fc1] -> Linear(16->2) [head]. fc1 and the head start from the same
+weights on every peer (shared_init_seed), as FedAvg needs.
 
-Training Flow:
-1. Local Training (on wall-clock window close every 5 minutes):
-   - Buffer flows and alerts during the window
-   - Label flows using all evidence from buffered alerts; rest benign
-   - Training starts by fitting the scaler on the whole window (after this
-     close's tests, before undersampling; scaler_stats.jsonl) and scaling
-     the batch with it
-   - Train fc1 + head for local_training_epochs
-   - Save the model produced by local training (fc1 + "head_before"): it is
-     what peers are sent and what the merge averages
-   - Fine-tune fc1 + head for merge_finetune_epochs from a copy of the local
-     training Adam state (merge_finetune_adam; 'fresh' = an empty one)
-     (local_head_train.log); head only with finetune_fc_layers: false
-   - Save as latest_local model
-   - Send the model after local training (not the fine-tuned one) via P2P
+Window close (every time_window_width seconds of wall-clock time, on a fixed
+grid; each peer's first window is shortened by a random offset):
+1. Read every conn flow and ARP record SLIPS stored in flows.sqlite since the
+   last close into this window's ring cell (by read time, not flow start).
+2. Label the open cells: a flow is malicious iff its Zeek uid is cited by the
+   evidence of an alert raised within the lookback, else benign (no IPs).
+3. Score every open cell's not-yet-scored flows with the model serving this
+   window (the merged model of the previous training close, else the local
+   model), before this close trains anything.
+4. Finalize the cell label_finalize_delay_windows closes old into the
+   training buffer; with at least min_training_samples flows, train:
+   - scale the batch: the global scaler by default (never fit); with
+     global_scaler: false the own scaler is first fit on the whole buffer
+     (before undersampling; scaler_stats.jsonl)
+   - local training: fc1 + head for local_training_epochs
+   - peers are sent the model after local training (fc1; with merge_head
+     also the head), never the fine-tuned one
+   - local fine-tune: merge_finetune_epochs, fc1 + head (head only with
+     finetune_fc_layers: false), from its own copy of the training Adam
+     state (merge_finetune_adam); the local model carries on from here
+   - merge, if any peer model is stored: merge_rule over own + the latest
+     model of every peer; the merged model gets the merged head with
+     merge_head, else the own head after local training, then the same
+     fine-tune as the local model (merged_train.log)
+   The merged model serves until the next training close and is then
+   discarded: it never feeds the local model or a later merge.
 
-2. Model Merging (event-based, after own local training):
-   - Collect all peer models + own latest local
-   - Aggregate fc1 weights (AVERAGE)
-   - Restore "head_before" (head from local full training)
-   - Fine-tune for merge_finetune_epochs (merged_train.log) exactly like the
-     local model: fc1 + head from its own copy of the local training Adam
-     state (head only, fc1 frozen, with finetune_fc_layers: false)
-   - Save as merged_N model (merged models NOT used in future merges)
-
-This makes local and merged models directly comparable: both start from the
-model after local training (own vs averaged fc1) and receive the same
-fine-tune; only the starting weights differ.
-
-Options: merge_head also shares and merges the head (the merged fine-tune then
-starts from the merged head); finetune_fc_layers (default on) makes both
-fine-tunes train fc1 + head while peers still get the model after local
-training - off = head-only fine-tunes with fc1 frozen, the behaviour before
-this option; merge_finetune_adam (default copy) starts each fine-tune from its
-own copy of the local training Adam state, 'fresh' from an empty one (the
-behaviour before this option); finetune_head: false skips both fine-tunes;
-merge_scaler also sends the scaler's per-feature mean and variance and gives
-the merged model the own + peers' scalers pooled with the merge rule's
-weights (its fine-tune and scoring use it, the local model keeps its own);
-global_scaler (default on) makes every model scale with the pretrained
-scaler in artifacts/global_scaler.json, never fit; minibatch_size splits every
-training pass into class-stratified mini-batches (one Adam step each). merging_data.log records per merge how much
-of the merge the fine-tunes undo ("finetune | ... | undone=").
-
-Key Features:
-- Fixed 18-feature input
-- Single training buffer per wall-clock window
-- Model separation: latest_local (own data only) vs merged (aggregated)
-- Off-sync windows: random time offset per peer to avoid synchronized pulses
-- Graceful shutdown: saves latest_local and latest merged model
+Options: merge_head also shares and merges the head; finetune_fc_layers
+(default on) makes both fine-tunes train fc1 + head - off = head-only
+fine-tunes with fc1 frozen; merge_finetune_adam (default copy) starts each
+fine-tune from its own copy of the local training Adam state, 'fresh' from an
+empty one; finetune_head: false skips both fine-tunes; merge_scaler also
+sends the scaler's per-feature mean and variance and gives the merged model
+the own + peers' scalers pooled with the merge rule's weights (its fine-tune
+and scoring use it, the local model keeps its own); global_scaler (default
+on) makes every model scale with the pretrained scaler in
+artifacts/global_scaler.json, never fit; minibatch_size splits every training
+pass into class-stratified mini-batches (one Adam step each).
+merging_data.log records per merge how much of the merge the fine-tunes undo
+("finetune | ... | undone="). The module emits no SLIPS evidence
+(set_evidence_malicious_flow is a no-op).
 
 Artifact Paths:
 - Base (shared): artifacts/random_projection.bin, artifacts/global_scaler.json
-  (global_scaler)
-- Local: artifacts/latest_local_fc1.bin, latest_local_head.bin, latest_local_scaler.bin
-- Merged: artifacts/merged_N_fc1.bin, merged_N_head.bin (N = merge count)
+- Local: artifacts/latest_local_state.bin, artifacts/latest_local_scaler.bin
+- Merged: artifacts/merged/merged_N_state.bin (N = merge count); the final
+  merged model and scaler go to model_store_path / preprocess_store_path
 """
 
 import collections
@@ -512,8 +506,9 @@ class RandomProjectionTwoLayerNet(SimpleFederatedNet):
     Federated: fc1 + lin2 (the two trainable linears, shared under keys
     fc1_*/fc2_*). BOTH projections are frozen and reconstructed from the shared
     config seed on every peer (RP1 from `seed`, RP2 from a fixed derived seed),
-    so all peers agree on them; only fc1/lin2/head are trainable and per-peer
-    seeded. Head is fine-tuned around merges exactly like the base model.
+    so all peers agree on them; only fc1/lin2/head are trainable, and they
+    start from the same weights on every peer (shared_init_seed). The head
+    is fine-tuned around merges exactly like the base model.
     Sending/sharing/merging are unchanged (generic over the shared keys); only
     the forward pass gained the second projection. No class weighting.
     """
@@ -626,13 +621,17 @@ MODEL_REGISTRY = {
 # ----------------------------------------------------------------------
 # Merge rules (how the merged model is computed from peer models)
 # ----------------------------------------------------------------------
-# Pure functions: merge_<name>(own_shared, peer_models, shared_keys) -> dict.
+# Pure functions: merge_<name>(own_shared, peer_models, shared_keys, trust)
+# -> dict.
 #   own_shared:   {key: tensor}            own model's federated weights
 #   peer_models:  {peer_id: {key: tensor}} received federated weights
-#   shared_keys:  sorted list of shared tensor keys to merge
+#   shared_keys:  sorted list of shared tensor keys to merge (with merge_head
+#                 the head's keys too)
+#   trust:        {peer_id: {"trust": float}} (only trust_weighted uses it)
 # Returns: {key: tensor} — the merged federated weights.
 # yaml `federated_network_module.merge_rule` selects the rule (default average).
-# Add a rule below and a registry line — nothing else to touch.
+# Add a rule below, a MERGE_REGISTRY line and its MERGE_WEIGHTS function
+# (used by merge_scaler).
 def merge_average(
     own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
 ) -> dict:
@@ -648,8 +647,9 @@ def merge_mean_with_closest(
     own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
 ) -> dict:
     """Mean-with-closest, block by block, referenced to OWN. For EACH shared
-    layer independently: pick the single PEER layer closest (L2) to own, then
-    average own with that one peer (50/50). No peers -> own unchanged; one peer
+    tensor independently (a layer's weight and bias separately): pick the
+    single PEER tensor closest (L2) to own, then average own with that one
+    peer (50/50). No peers -> own unchanged; one peer
     -> plain average. NB: this is NOT Byzantine-robust aggregation (no Krum /
     trimmed mean); it follows the paper's self-referenced closest-peer blend and
     is named for what it actually does."""
@@ -671,13 +671,15 @@ def merge_proximity(
     own_shared: dict, peer_models: dict, shared_keys: list, trust: dict = None
 ) -> dict:
     """Proximity-weighted blend, block by block, referenced to OWN. For EACH
-    shared layer, weight every candidate (own + peers) by a Gaussian kernel of
-    its L2 distance to own, exp(-d^2 / (2*sigma^2)); own keeps the top weight
-    (d=0 -> 1) and peers decay with distance, so all models contribute and none
-    is discarded. Bandwidth sigma is set per layer by the median heuristic (the
-    median of all pairwise candidate distances for that layer), so it adapts to
-    each layer's scale; if that median is ~0 (candidates identical) the weights
-    collapse to a plain average."""
+    shared tensor (a layer's weight and bias separately), weight every
+    candidate (own + peers) by a Gaussian kernel of its L2 distance to own,
+    exp(-d^2 / (2*sigma^2)); own keeps the top weight (d=0 -> 1) and peers
+    decay with distance, so all models contribute and none is discarded.
+    Bandwidth sigma is set per tensor by the median heuristic (the median of
+    all pairwise candidate distances for that tensor), so it adapts to each
+    tensor's scale; if that median is ~0 (candidates identical) the weights
+    collapse to a plain average. One peer: own 1/(1+e^-1/2) ~ 0.62, peer
+    ~0.38."""
     candidates = {"own": own_shared}
     candidates.update(peer_models)
     cand_ids = list(candidates)
@@ -790,8 +792,8 @@ MERGE_REGISTRY = {
 # ----------------------------------------------------------------------
 # Merge weights: each rule's weight per candidate ("own" + each peer id) over
 # ONE flat vector (all shared tensors concatenated), summing to 1 - the
-# weights MERGE_REGISTRY blends with; the per-layer rules (mean_with_closest,
-# proximity) as if the model were one layer. Same signature for every rule:
+# weights MERGE_REGISTRY blends with; the per-tensor rules (mean_with_closest,
+# proximity) as if the model were one tensor. Same signature for every rule:
 #   weights_<name>(own_flat, peer_flats, trust) -> {candidate: weight}
 # ----------------------------------------------------------------------
 def weights_average(
@@ -1165,13 +1167,15 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
     Federated network ML detector with model sharing and merging.
 
     Training triggers:
-    1. Window close: flows enter a small ring; alerts (evidence-UID + IP
-       touches) are matched against ALL ring cells — so *late* alerts still
-       label their window's flows. When a cell is older than
-       `label_finalize_delay_windows` (default 2) it is finalized and trained
-       exactly once (matched→MALICIOUS, rest→BENIGN). 0 = legacy immediate
-       labeling.
-    2. Merge event: Aggregate peer models -> Retrain head ONCE on alignment buffer
+    1. Window close: flows enter a small ring; alerts (evidence-cited flow
+       uids only, no IPs) are matched against ALL ring cells — so *late*
+       alerts still label their window's flows. When a cell is
+       `label_finalize_delay_windows` (default 1) closes old it is finalized
+       and trained exactly once (matched→MALICIOUS, rest→BENIGN). 0 =
+       immediate labeling.
+    2. Merge: right after the own local training of a close, the merge rule
+       combines own + the latest model of every peer; the merged model is
+       fine-tuned like the local one and serves until the next training.
     """
 
     name = "federated_network_module"
@@ -1824,10 +1828,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """
         self.print("fit_incremental_model: entering", 1, 1)
 
-        # _finetune_stage selects the fine-tune pass (fewer epochs). By default
-        # the fine-tune freezes the shared layers and trains only the head
-        # (below), so it leaves the averaged representation as merged;
-        # finetune_fc_layers trains the shared layers too.
+        # _finetune_stage selects the fine-tune pass (fewer epochs). With
+        # finetune_fc_layers (default on) the fine-tune trains the shared
+        # layers and the head; off, it freezes the shared layers and trains
+        # only the head, leaving the merged representation as merged.
         finetune = getattr(self, "_finetune_stage", False)
         epochs = (
             self.merge_finetune_epochs
@@ -1848,9 +1852,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self.print("fit_incremental_model: creating model...", 1, 1)
             self.model = self.create_empty_model().to(self.device)
 
-        # fine-tune stages freeze the shared layers and train only the head
-        # (with finetune_fc_layers they train both); full training trains both.
-        # The random projection is always frozen.
+        # fine-tune stages train the shared layers + head with
+        # finetune_fc_layers (default), else only the head; full training
+        # trains both. The random projection is always frozen.
         if finetune:
             self.model.set_shared_frozen(
                 not getattr(self, "finetune_fc_layers", True)
@@ -1959,7 +1963,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                         state["step"] += 1
                         g = param.grad.clone()
 
-                        # Weight decay (decoupled, as in PyTorch's Adam)
+                        # Weight decay, decoupled (as in PyTorch's AdamW, not
+                        # an L2 term in the loss)
                         param.mul_(1.0 - lr * wd)
 
                         m = state["m"]
@@ -3240,8 +3245,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         Close the current wall-clock training window (order, not timing).
 
         1. read every conn flow and ARP record SLIPS stored since the last
-           close from its sqlite; each goes to the open cell whose window
-           contains its ts (flow start) and, once, to the so-far store;
+           close from its sqlite; each goes to THIS window's new cell (by
+           read time, never back-dated by its start ts) and, once, to the
+           so-far store;
         2. label every open cell: a flow is malicious when the evidence of
            an alert (within the lookback) cites its uid;
         3. PREQUENTIAL TEST: score every open cell's not-yet-tested flows with
@@ -3254,9 +3260,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
            windows; its models are also scored on all flows so far (sofar);
         5. flips: alerts created since the last close vs already-trained flows.
 
-        The scaler is fit only by the training in step 4, on the whole
-        finalized window, so every flow is scored with a scaler that has
-        not seen it.
+        With global_scaler (default) the scaler is never fit. Otherwise it is
+        fit only by the training in step 4, on the whole training buffer, so
+        every prequential score uses a scaler that has not seen the flow.
         """
         try:
             self.training_count_window += 1
@@ -3271,7 +3277,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 f"Training window {window_n} closed, preparing batch", 1, 1
             )
 
-            # 1. flows from the DB, placed by ts
+            # 1. flows from the DB, into this window's cell (by read time)
             fetched, n_conn, n_arp = self._fetch_new_flows()
             self._sofar_ingest(fetched)
             placed = self._place_flows(window_n, fetched)
@@ -3697,9 +3703,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             )
             self.print("_train_batch: send_model_to_peers returned", 1, 1)
 
-            # After own training, try merge if we have pending peer models.
-            # Merge averages fc1, then fine-tunes the SAME pre-local head
-            # (before the 5-epoch local head tuning) under identical conditions.
+            # After own training, merge if any peer model is stored: the merge
+            # rule over the shared layers (+ the head with merge_head), then
+            # the same fine-tune as the local model, from the head after local
+            # training (or the merged head with merge_head).
             merged = False
             if len(self.peer_models) >= 1:
                 self.print(
@@ -3806,15 +3813,16 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         shared_before: Optional[dict] = None,
     ):
         """
-        Merge all peer models + own latest, retrain head, save merged model.
+        Merge own + every stored peer model, fine-tune, save the merged model.
 
-        Averages fc1 across peers + own model, then fine-tunes the head
-        starting from the head produced by local full training (before any
-        head-only fine-tuning). This makes local and merged models differ
-        only in the origin of fc1. With merge_head the rule also merges the
-        heads (own: the head after local full training) and the fine-tune
-        starts from the merged head. With finetune_fc_layers the merged
-        fine-tune also trains fc1, as the local one does.
+        Applies merge_rule to the shared layers of own (after local
+        training, before its fine-tune) + the latest model of every usable
+        peer, then fine-tunes the merged model exactly like the local one,
+        starting from the own head after local training. With merge_head the
+        rule also merges the heads and the fine-tune starts from the merged
+        head. With finetune_fc_layers (default) the merged fine-tune trains
+        fc1 + head, as the local one does; off, the head only. The merged
+        model is a copy: the local model is never overwritten.
 
         Args:
             head_before_w: Head weight tensor from after local full training.
@@ -4193,14 +4201,13 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
 
     def _align_head_on_buffer(self, X: np.ndarray, y: np.ndarray):
         """
-        Fine-tune the merged HEAD (fc1 frozen; with finetune_fc_layers fc1 and
-        head) on the provided batch for merge_finetune_epochs. With shared
-        init the averaged fc1 is already a good feature extractor, so by
-        default polishing only the head suffices.
+        Fine-tune the merged model on the provided batch for
+        merge_finetune_epochs (0 with finetune_head: false): fc1 + head with
+        finetune_fc_layers (default), else the head only with fc1 frozen.
 
-        X is the ALREADY-SCALED batch the local fine-tune used (_last_train_X):
-        it is neither fed to the scaler (fit on raw training features only) nor
-        scaled a second time.
+        X is an ALREADY-SCALED batch: the one the local fine-tune used
+        (_last_train_X), or with merge_scaler the raw batch scaled with the
+        pooled scaler. It is never fed to a scaler or scaled a second time.
         """
         try:
             if len(X) == 0:
@@ -4609,8 +4616,11 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         the alerts we read for labeling (circular) and would change SLIPS'
         alerting behaviour. The scoring harness (run_test_on_flow ->
         _classify_flow and the window close) still runs - it just never emits.
-        A dedicated experiment will turn this on later; to re-enable, delete
-        this override so the base implementation runs again:
+        Nothing in this module calls this method either: SLIPS calls it only
+        from the base class's _test_default, which this module's own
+        run_test_on_flow and window scoring replace. To emit evidence, a
+        dedicated experiment must call it from the scoring path AND delete
+        this override so the base implementation runs:
             return super().set_evidence_malicious_flow(*args, **kwargs)
         """
         return None
