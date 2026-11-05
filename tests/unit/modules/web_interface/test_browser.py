@@ -1062,6 +1062,7 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
               applyRunIdentity({output_dir:'output/en0',analysis_start:'live-start',server_pid:1});
               initializeRanges({input_type:'interface'});
               byId('evidence-range').value='24h'; byId('evidence-search').value='live host';
+              state.rangeChoices.add('evidence-range');
               saveViewPreferences();
             }""")
             page.reload()
@@ -1078,6 +1079,7 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
             assert page.evaluate("state.hideExcluded") is True
             page.evaluate("""() => {
               byId('evidence-search').value='pcap host'; byId('evidence-range').value='7d';
+              state.rangeChoices.add('evidence-range');
               saveViewPreferences();
             }""")
             page.reload()
@@ -1342,7 +1344,7 @@ def test_web_defaults_and_saved_view_choices(storage: str) -> None:
         assert page.locator("#device-view").is_checked() is enabled
         assert page.locator("#network-filter").is_checked() is enabled
         page.evaluate("() => loadHosts()")
-        assert queries[-1].get("network") == (["current"] if enabled else None)
+        assert queries[-1].get("network") == ["connection"]
         assert queries[-1].get("device") == (["1"] if enabled else None)
         if storage == "fresh":
             page.locator("#theme-toggle").click()
@@ -4895,6 +4897,98 @@ def test_p2p_graph_opens_original_evidence_across_connection_boundary(
             assert evidence_queries[-1].get("range") == ["all"]
             assert (evidence_queries[-1].get("network") == ["current"]) is not expand
             assert page.evaluate("localStorage.getItem('slips-network-only')") == "1"
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
+@pytest.mark.parametrize("input_type,saved,supported,completed,connected,expected", [
+    ("interface", False, True, False, True, "connection"),
+    ("interface", False, True, False, False, "connection"),
+    ("interface", True, False, True, False, "all"),
+    ("interface", False, True, True, False, "all"),
+    ("pcap", False, False, False, False, "all"),
+    ("zeek_folder", True, False, False, False, "all"),
+    ("stdin", False, False, False, False, "live"),
+    ("interface", False, False, False, True, "live"),
+])
+def test_history_defaults_are_initialized_from_first_heartbeat(
+    input_type: str, saved: bool, supported: bool, completed: bool,
+    connected: bool, expected: str,
+) -> None:
+    """Apply connection defaults on all live history pages before Overview loads.
+
+    Parameters:
+        input_type: Live or recorded input source.
+        saved: Whether this is a saved-data viewer.
+        supported: Whether the server supports network scopes.
+        completed: Whether the analysis has finished.
+        connected: Whether the interface is currently connected.
+        expected: Default range on history selectors supporting that value.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    identity = {"input_type":input_type,"analysis_end":"finished" if completed else "",
+        "review_actions":True,"network_filter_supported":supported,"device_view_supported":True,
+        "current_network_start":100 if connected else None,
+        "run_identity":{"output_dir":"output/test-defaults","analysis_start":"test","server_pid":1,"saved_view":saved}}
+
+    def respond(route: Any) -> None:
+        """Serve the real UI with a heartbeat and unavailable Overview.
+
+        Parameters:
+            route: Isolated browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/identity":
+            route.fulfill(json=identity)
+        else:
+            route.fulfill(status=503,json={"error":"Isolated range fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome",headless=True)
+        try:
+            page = browser.new_page()
+            page.on("pageerror",lambda error:errors.append(str(error)))
+            page.route("**/*",respond)
+            if expected == "connection" and connected:
+                page.add_init_script("""const key='slips-run-view-v2:'+JSON.stringify(['output/test-defaults','test']);
+                    if (!localStorage.getItem(key)) localStorage.setItem(key,JSON.stringify({controls:{
+                        'alerts-range':'live','evidence-range':'live','hosts-range':'live','host-range':'live',
+                        'p2p-range':'all','p2p-graph-range':'24h'}}));""")
+            page.goto("http://slips.test/")
+            page.wait_for_function("state.rangesInitialized")
+            assert page.evaluate("state.overview===null")
+            values = page.evaluate("Object.fromEntries(HISTORY_RANGE_IDS.map(id=>[id,byId(id).value]))")
+            assert values == {f"{prefix}-range":("all" if prefix=="p2p-graph" and expected=="live" else expected)
+                              for prefix in ["alerts","evidence","hosts","host","p2p","p2p-graph"]}
+            if expected == "connection":
+                page.evaluate("""() => {
+                    HISTORY_RANGE_IDS.forEach(id=>{
+                        byId(id).value=id==='alerts-range'?'live':'7d';
+                        byId(id).dispatchEvent(new Event('change',{bubbles:true}));
+                    });
+                    saveViewPreferences();
+                }""")
+                page.reload()
+                page.wait_for_function("state.rangesInitialized")
+                assert all(page.locator(f"#{prefix}-range").input_value()==("live" if prefix=="alerts" else "7d")
+                           for prefix in ["alerts","evidence","hosts","host","p2p","p2p-graph"])
+                identity["run_identity"]["server_pid"] = 2
+                page.evaluate("pollBackendStatus()")
+                assert page.locator("#alerts-range").input_value() == "live"
+                page.evaluate("byId('p2p-graph-reset').click()")
+                assert page.locator("#p2p-graph-range").input_value() == "connection"
+                identity["analysis_end"] = "finished"
+                page.evaluate("pollBackendStatus()")
+                assert page.locator("#p2p-graph-range").input_value() == "all"
+                assert page.locator("#evidence-range").input_value() == "7d"
+                page.evaluate("byId('p2p-graph-reset').click()")
+                assert page.locator("#p2p-graph-range").input_value() == "all"
             assert not errors, errors
         finally:
             browser.close()

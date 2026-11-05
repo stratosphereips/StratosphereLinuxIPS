@@ -64,13 +64,18 @@ retained Home Wi-Fi detections from the whole week, even after visiting other
 networks. **Full run** includes all retained activity on that network. Turn the
 switch off to include other networks. The browser saves this choice.
 
-**This connection** is a separate time range: it includes only activity since
-the latest reconnection to this network. It is available in Alerts, Evidence,
-Hosts, host details, P2P history/messages and P2P Graph during live interface
-capture. It follows a new reconnection automatically, shows no activity while
+**This connection** is the default time range during live interface capture
+in Alerts, Evidence, Hosts, host details, P2P history/messages and P2P Graph.
+The first heartbeat applies it without waiting for Overview. It includes only
+activity since the latest reconnection to this network. It follows a new
+reconnection automatically, shows no activity while
 disconnected, and preserves its boundary across a Slips restart on the same
-router with `--keep-history`. Packet captures, saved views and archives do not
-offer this range.
+router with `--keep-history`. Packet captures, completed analyses, saved views and archives do not
+offer this range and default to **Full run** instead. Explicitly selected
+ranges are remembered per analysis, including the P2P Graph range. Resetting
+the graph filters restores the input source's default time range. Older saved
+ranges matching the previous defaults migrate to the new defaults; other
+saved range choices are retained.
 
 Evidence, linked alerts and their grouped counts use the network identity saved
 with each detection, rather than the host's present IP or its most recent visit.

@@ -71,9 +71,12 @@ const state = {
   deviceView: true,
   deviceViewSupported: false,
   networkFilterSupported: false,
+  connectionRangeSupported: null,
   currentNetworkStart: null,
   headerNetwork: null,
   rangesInitialized: false,
+  defaultHistoryRange: null,
+  rangeChoices: new Set(),
   localSorts: {
     "arp-poisoning-hosts-table": { key: "ip", order: "asc" },
     "arp-poisoning-events-table": { key: "timestamp", order: "desc" },
@@ -114,6 +117,7 @@ const MACHINE_LEARNING_EVIDENCE = {
   },
 };
 const VIEW_PREFERENCES_KEY = "slips-view-preferences-v1";
+const HISTORY_RANGE_IDS = ["alerts", "evidence", "hosts", "host", "p2p", "p2p-graph"].map((name) => `${name}-range`);
 const VIEW_CONTROL_IDS = [
   "metrics-range", "module-search", "alerts-group", "alerts-search", "alerts-review",
   "alerts-range", "alerts-from", "alerts-to", "alerts-host-sort", "alerts-item-sort",
@@ -122,7 +126,7 @@ const VIEW_CONTROL_IDS = [
   "evidence-to", "hosts-search", "hosts-threat", "hosts-scope", "hosts-review",
   "hosts-alerts-only", "hosts-range", "hosts-from", "hosts-to",
   "host-range", "host-from", "host-to", "host-flow-limit",
-  "p2p-range", "p2p-message-filter", "configuration-search",
+  "p2p-range", "p2p-graph-range", "p2p-message-filter", "configuration-search",
   "whitelists-search", "whitelists-type", "firewall-search", "arp-poisoning-search",
   "device-view",
 ];
@@ -280,6 +284,7 @@ function saveViewPreferences() {
       paneWidths[id] = Object.fromEntries(names.map((name) => [name, element.style.getPropertyValue(name)]));
     });
   const preferences = {
+    rangeChoices: [...state.rangeChoices],
     controls, columns, paneWidths,
     hideExcluded: state.hideExcluded,
     alertSeverity: state.alertsWorkspace.severity,
@@ -324,15 +329,19 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
     saved = { columns: saved.columns, paneWidths: saved.paneWidths,
       controls: { "device-view": saved.controls?.["device-view"] ?? true } };
   }
+  const choices = Array.isArray(saved.rangeChoices) ? new Set(saved.rangeChoices) : null;
   Object.entries(saved.controls || {}).forEach(([id, value]) => {
     if (!VIEW_CONTROL_IDS.includes(id)) return;
     if (["evidence-threat", "hosts-threat"].includes(id)
         && /^(critical|high|medium|low|info)$/.test(value)) value = `${value}_or_more`;
     const element = byId(id);
     if (!element) return;
+    if (HISTORY_RANGE_IDS.includes(id)
+        && !(choices ? choices.has(id) : String(value) !== String(VIEW_CONTROL_DEFAULTS[id]))) return;
     if (element.type === "checkbox") element.checked = value === true;
     else if (element.tagName !== "SELECT" || [...element.options].some((option) => option.value === value)) {
       element.value = String(value);
+      if (HISTORY_RANGE_IDS.includes(id)) state.rangeChoices.add(id);
     }
   });
   document.querySelectorAll(".hosts-columns input[data-host-column]").forEach((input) => {
@@ -387,8 +396,7 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
       state.localSorts[name] = { key: sort.key, order: sort.order === "asc" ? "asc" : "desc" };
     }
   });
-  if (saved.controls?.["alerts-range"] || saved.controls?.["evidence-range"] || saved.controls?.["hosts-range"]) {
-    state.rangesInitialized = true;
+  if (state.rangeChoices.has("alerts-range")) {
     state.alertsWorkspace.rangeTouched = true;
   }
   byId("alerts-host-order").textContent = state.pages.alerts.order === "asc" ? "↑" : "↓";
@@ -1289,7 +1297,6 @@ function applyRunIdentity(identity) {
     state.configuration = null;
     state.alertsWorkspace.rangeTouched = false;
     state.alertsWorkspace.autoRange = "";
-    byId("alerts-range").value = "live";
     byId("alerts-range-note").hidden = true;
     state.rangesInitialized = false;
     state.hostNames.clear();
@@ -1311,6 +1318,8 @@ function applyRunIdentity(identity) {
     });
     state.rangesInitialized = false;
     state.alertsWorkspace.rangeTouched = false;
+    state.defaultHistoryRange = null;
+    state.rangeChoices.clear();
     state.viewPreferencesKey = preferencesKey;
     restoreViewPreferences();
     restoreViewPreferences(preferencesKey);
@@ -2490,22 +2499,25 @@ async function loadMetrics() {
  * @param {boolean} savedView Whether this server only shows saved results.
  */
 function initializeRanges(run, savedView = false) {
-  if (state.rangesInitialized) return;
   const inputType = String(run.input_type || "").toLowerCase();
-  const range = !savedView && ["interface", "stdin", "cyst"].includes(inputType) ? "live" : "all";
+  const live = !savedView && !run.analysis_end && ["interface", "stdin", "cyst"].includes(inputType);
+  const liveInterface = live && inputType === "interface" && state.networkFilterSupported;
+  const range = liveInterface ? "connection" : live ? "live" : "all";
+  state.defaultHistoryRange = range;
+  if (state.rangesInitialized) return;
   const preserveAlerts = state.alertsWorkspace.rangeTouched
     || Boolean(state.alertsWorkspace.autoRange);
-  const activeRange = ["alerts", "evidence", "hosts"].includes(state.activeTab)
-    ? byId(`${state.activeTab}-range`) : null;
-  const refreshActiveRange = activeRange && activeRange.value !== range
-    && !(state.activeTab === "alerts" && preserveAlerts);
-  ["alerts", "evidence", "hosts", "host"].forEach((name) => {
-    if (name === "alerts" && preserveAlerts) return;
-    byId(`${name}-range`).value = range;
+  const activePrefix = state.activeTab === "hosts" && state.host ? "host" : state.activeTab;
+  const activeRange = HISTORY_RANGE_IDS.includes(`${activePrefix}-range`) ? byId(`${activePrefix}-range`) : null;
+  const previousRange = activeRange?.value;
+  HISTORY_RANGE_IDS.forEach((id) => {
+    if (state.rangeChoices.has(id) || (id === "alerts-range" && preserveAlerts)) return;
+    const control = byId(id);
+    control.value = [...control.options].some((option) => option.value === range) ? range : "all";
   });
   state.rangesInitialized = true;
-  if (refreshActiveRange) {
-    resetPage(state.activeTab);
+  if (activeRange && previousRange !== activeRange.value) {
+    if (state.pages[activePrefix]) resetPage(activePrefix);
     currentLoader()().catch(() => {}).finally(schedulePoll);
   }
 }
@@ -5831,7 +5843,11 @@ function bindP2PGraph() {
   byId("p2p-graph-search").addEventListener("keydown", (event) => { if (event.key === "Enter") { clearTimeout(timer); renderP2PGraph(); } });
   byId("p2p-graph-reset").addEventListener("click", () => {
     byId("p2p-graph-search").value = ""; byId("p2p-graph-peer").value = ""; byId("p2p-graph-type").value = "";
-    byId("p2p-graph-direction").value = "all"; byId("p2p-graph-range").value = "24h"; renderP2PGraph();
+    byId("p2p-graph-direction").value = "all";
+    const range = byId("p2p-graph-range");
+    const defaultRange = state.defaultHistoryRange || "24h";
+    range.value = [...range.options].some((option) => option.value === defaultRange) ? defaultRange : "all";
+    renderP2PGraph();
   });
   [["zoom-in", 0.25], ["zoom-out", -0.25], ["fit", 0]].forEach(([name, amount]) => {
     byId(`p2p-graph-${name}`).addEventListener("click", () => {
@@ -8919,6 +8935,7 @@ async function pollBackendStatus() {
       updateReviewAvailability(identity.review_actions === true);
       updateNetworkFilterAvailability(identity);
       updateDeviceViewAvailability(identity);
+      if (identity.input_type) initializeRanges(identity, identity.run_identity?.saved_view === true);
       state.headerNetwork = identity.current_network || null;
       renderHeaderNetwork(state.overview || {run: {
         interface: identity.current_network?.interface || identity.interface,
@@ -9013,7 +9030,7 @@ function updateDeviceViewAvailability(identity) {
 
 /** Offer connection ranges only for active interface history. */
 function updateConnectionRangeAvailability() {
-  const available = state.networkFilterSupported && !state.archiveSource;
+  const available = state.networkFilterSupported && state.connectionRangeSupported !== false && !state.archiveSource;
   document.querySelectorAll('select option[value="connection"]').forEach((option) => {
     option.disabled = !available;
     option.hidden = !available;
@@ -9028,12 +9045,16 @@ function updateConnectionRangeAvailability() {
 function updateNetworkFilterAvailability(identity) {
   const supported = identity.network_filter_supported === true
     && identity.input_type === "interface";
+  const connectionSupported = supported && !identity.analysis_end;
   const start = Number.isFinite(Number(identity.current_network_start))
     && identity.current_network_start !== null
     ? Number(identity.current_network_start) : null;
   const changed = supported !== state.networkFilterSupported
-    || start !== state.currentNetworkStart;
+    || start !== state.currentNetworkStart
+    || connectionSupported !== state.connectionRangeSupported;
+  const hadConnectionRange = document.querySelector('select option[value="connection"]:checked');
   state.networkFilterSupported = supported;
+  state.connectionRangeSupported = connectionSupported;
   state.currentNetworkStart = start;
   updateConnectionRangeAvailability();
   if (changed) state.hostNames.clear();
@@ -9044,7 +9065,7 @@ function updateNetworkFilterAvailability(identity) {
     ? "Waiting for a monitored network connection"
     : "Show hosts, traffic, alerts and evidence recorded on this network, including earlier visits within the selected time range";
   const connectionRange = document.querySelector('select option[value="connection"]:checked');
-  if (changed && (state.networkOnly || connectionRange) && supported && state.overview) {
+  if (changed && (state.networkOnly || connectionRange || hadConnectionRange) && supported && state.overview) {
     refreshNetworkScopedViews();
   }
 }
@@ -9209,6 +9230,7 @@ document.addEventListener("input", (event) => {
   if (VIEW_CONTROL_IDS.includes(event.target.id)) scheduleViewPreferencesSave();
 });
 document.addEventListener("change", (event) => {
+  if (HISTORY_RANGE_IDS.includes(event.target.id)) state.rangeChoices.add(event.target.id);
   if (VIEW_CONTROL_IDS.includes(event.target.id)
       || event.target.closest?.(".hosts-columns")) {
     scheduleViewPreferencesSave();
