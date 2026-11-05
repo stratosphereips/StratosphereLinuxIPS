@@ -1699,3 +1699,5 @@ configuration, protection requirements, retention and coverage limits.
 Navigation tabs use names without totals. Counts remain inside each view beside the data and its active filters. Alert reviews appear after the related evidence and complete alert data.
 
 P2P Graph gives each visible IP its own color. Clicking a peer highlights its routes without hiding other boxes; the Peer dropdown applies filtering. Public IPs without DNS names can use their cached ASN organization as a display label, identified as **ASN organization** on hover; this does not create a reverse DNS record.
+
+Hidden controls stay hidden even when toolbar layout rules set their display mode. Detection archives hide export and disable editing. The loading indicator keeps an invisible reserved slot so polling does not move the header.

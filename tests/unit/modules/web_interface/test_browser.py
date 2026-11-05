@@ -3341,7 +3341,7 @@ def test_host_findings_range_and_saved_filters_in_chrome(
         assert "High+" in notice.inner_text()
         notice.get_by_role("button", name="Clear activity filters", exact=True).click()
         page.wait_for_function("state.pages['host-evidence'].total === 1")
-        assert "DEVICE_CHANGING_IP" in page.locator("#host-evidence-table tbody").inner_text()
+        assert "Device Changing IP" in page.locator("#host-evidence-table tbody").inner_text()
         assert page.locator("#host-activity-group").input_value() == "module"
         assert page.evaluate("state.pages['host-evidence'].sort") == "type"
         assert page.locator("#host-evidence-search").input_value() == ""
