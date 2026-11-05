@@ -3,8 +3,12 @@
 # SPDX-License-Identifier: GPL-2.0-only
 
 
+import contextlib
 import os
 
+import requests
+
+from modules.feeds_update_manager.remote_feed_updater_mixin import CHUNK_SIZE
 from slips_files.common.slips_utils import utils
 
 
@@ -92,39 +96,71 @@ class WhitelistUpdaterMixin:
         """
         Updates the mac db using the response stored in self.responses
         """
-        response = self.responses["mac_db"]
-        if response.status_code != 200:
-            return False
+        response = self.responses.pop("mac_db")
+        with response:
+            if response.status_code != 200:
+                return False
 
-        self.log("Updating the MAC database.")
-
-        # write to file the info as 1 json per line
-        mac_info = (
-            response.text.replace("]", "")
-            .replace("[", "")
-            .replace(",{", "\n{")
-        )
-        with open(self.path_to_mac_db, "w") as mac_db:
-            mac_db.write(mac_info)
+            self.log("Updating the MAC database.")
+            try:
+                self._write_mac_db(response)
+            except requests.exceptions.RequestException as e:
+                self.log(f"Error downloading the MAC database: {e}")
+                return False
 
         self._mark_feed_as_updated(self.mac_db_link)
         return True
+
+    def _write_mac_db(self, response) -> None:
+        """
+        Streams the mac db to disk as 1 json per line. It is written to a
+        temp file first so a failed download never corrupts the current db.
+        """
+        tmp_path = f"{self.path_to_mac_db}.tmp"
+        try:
+            with open(tmp_path, "wb") as mac_db:
+                # a ",{" separator may be split between 2 chunks, so a
+                # trailing "," is held back until the next chunk arrives
+                pending = b""
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    data = pending + chunk
+                    pending = b"," if data.endswith(b",") else b""
+                    if pending:
+                        data = data[:-1]
+                    mac_db.write(
+                        data.replace(b"]", b"")
+                        .replace(b"[", b"")
+                        .replace(b",{", b"\n{")
+                    )
+                mac_db.write(pending)
+            os.replace(tmp_path, self.path_to_mac_db)
+        except Exception:
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(tmp_path)
+            raise
 
     def _update_online_whitelist(self) -> None:
         """
         Updates online tranco whitelist defined in slips.yaml
          online_whitelist key
         """
-        response = self.responses["tranco_whitelist"]
+        response = self.responses.pop("tranco_whitelist")
         domains = []
-        for line in response.text.splitlines():
-            parts = line.split(",", 1)
-            if len(parts) != 2:
-                continue
-            domain = parts[1].strip().lower()
-            if not utils.is_valid_domain(domain):
-                continue
-            domains.append(domain)
+        try:
+            with response:
+                for raw_line in response.iter_lines():
+                    parts = raw_line.decode("utf-8", errors="replace").split(
+                        ",", 1
+                    )
+                    if len(parts) != 2:
+                        continue
+                    domain = parts[1].strip().lower()
+                    if not utils.is_valid_domain(domain):
+                        continue
+                    domains.append(domain)
+        except requests.exceptions.RequestException as e:
+            self.log(f"Error downloading the tranco whitelist: {e}")
+            return
 
         self.db.store_tranco_whitelisted_domains(domains)
 

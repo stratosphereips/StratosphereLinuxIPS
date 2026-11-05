@@ -35,6 +35,25 @@ def ensure_redis_options(monkeypatch: Any) -> None:
     monkeypatch.setattr(RedisDB, "_options", {}, raising=False)
 
 
+@pytest.fixture(autouse=True)
+def fresh_redis_db_per_test(monkeypatch: Any) -> None:
+    """
+    Make every test connect its own RedisDB instead of reusing a cached one.
+
+    RedisDB caches one instance per port but keeps its connection
+    (r, rcache, redis_port) on the class, so creating a db on another port
+    (e.g. 6392) silently repoints the cached 6379 instance too. Which tests
+    share a process depends on the xdist scheduling, hence the flakiness.
+
+    Parameters:
+        monkeypatch: Pytest fixture used to patch RedisDB class state.
+
+    Return value:
+        None.
+    """
+    monkeypatch.setattr(RedisDB, "instances", {})
+
+
 # random values for testing
 profileid = "profile_192.168.1.1"
 twid = "timewindow1"
@@ -191,7 +210,8 @@ def test_subscribe():
 
 
 def test_get_available_llm_backends_returns_empty_dict_when_unset():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    with patch.object(DBManager, "get_used_redis_port", return_value=6392):
+        db = ModuleFactory().create_db_manager_obj(6392, flush_db=True)
     db.r.delete(db.rdb.constants.AVAILABLE_LLM_BACKENDS)
 
     assert db.get_available_llm_backends() == {
@@ -201,7 +221,8 @@ def test_get_available_llm_backends_returns_empty_dict_when_unset():
 
 
 def test_set_and_get_available_llm_backends():
-    db = ModuleFactory().create_db_manager_obj(6379, flush_db=True)
+    with patch.object(DBManager, "get_used_redis_port", return_value=6393):
+        db = ModuleFactory().create_db_manager_obj(6393, flush_db=True)
 
     db.set_available_llm_backends(
         {
@@ -466,10 +487,17 @@ def test_current_timewindow_wrappers_delegate_to_redis_db():
         mock_set.assert_called_once_with(None, RiskWeight.LOW)
 
 
-def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
+def test_tranco_whitelist_stores_ordered_domains_with_limit(
+    monkeypatch,
+) -> None:
     """Test Tranco whitelist storage preserves order and supports limits."""
     with patch.object(DBManager, "get_used_redis_port", return_value=6390):
         db = ModuleFactory().create_db_manager_obj(6390, flush_db=True)
+    # rcache is always 6379 db 1 regardless of the port above, so use a key
+    # the other tranco test can't touch when xdist runs them concurrently
+    monkeypatch.setattr(
+        db.rdb.constants, "TRANCO_WHITELISTED_DOMAINS", "tranco_test_ordered"
+    )
 
     db.store_tranco_whitelisted_domains(
         ["example.com", "google.com", "github.com"],
@@ -482,10 +510,16 @@ def test_tranco_whitelist_stores_ordered_domains_with_limit() -> None:
     assert db.is_whitelisted_tranco_domain("github.com") is False
 
 
-def test_tranco_whitelist_discards_legacy_cache_key_type() -> None:
+def test_tranco_whitelist_discards_legacy_cache_key_type(
+    monkeypatch,
+) -> None:
     """Test Tranco cache reads recover from legacy non-sorted-set keys."""
     with patch.object(DBManager, "get_used_redis_port", return_value=6391):
         db = ModuleFactory().create_db_manager_obj(6391, flush_db=True)
+    # rcache is shared across ports, see the test above
+    monkeypatch.setattr(
+        db.rdb.constants, "TRANCO_WHITELISTED_DOMAINS", "tranco_test_legacy"
+    )
 
     key = db.rdb.constants.TRANCO_WHITELISTED_DOMAINS
     db.rdb.rcache.set(key, "legacy-cache-value")

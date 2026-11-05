@@ -1,3 +1,17 @@
+1.1.24 (Sep 30th, 2026)
+
+* Redesign the local web interface with Overview, Alerts, Evidence, Hosts, Firewall, ARP poisoning, P2P, Logs, Configuration, and Whitelists tabs.
+* Require a password to log in to the web interface.
+* Show host score history, firewall blocks, ARP poisoning events, and P2P statistics in the web interface.
+* Add firewall rule recovery when Slips shuts down.
+* Exclude P2P flows from port scan evidence, ML detection, and scoring.
+* Speed up whitelist lookups.
+* Fix duplicate alerts.
+* Reduce CPU and memory usage.
+* Enable TLS certificate verification and fix an authentication bypass and Redis password handling in Iris.
+* Fix issues disabling detections in slips.yaml.
+
+
 1.1.23 (Aug 31st, 2026)
 
 * Add an LLM-powered Alert Summary module that generates natural-language analyst summaries of alerts, with historical context and memory across summaries.

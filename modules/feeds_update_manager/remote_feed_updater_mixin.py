@@ -4,6 +4,7 @@
 
 
 import asyncio
+import contextlib
 import datetime
 import json
 import os
@@ -13,13 +14,26 @@ import traceback
 
 import requests
 
+CHUNK_SIZE = 64 * 1024
+
 
 class RemoteFeedUpdaterMixin:
     """Download, persist, and parse remote feeds."""
 
-    def write_file_to_disk(self, response, full_path):
-        with open(full_path, "w") as f:
-            f.write(response.text)
+    def write_file_to_disk(self, response, full_path: str) -> None:
+        """
+        Streams the response body to disk chunk by chunk, so the feed is
+        never fully held in memory. Closes the response when done.
+        """
+        try:
+            with response, open(full_path, "wb") as f:
+                for chunk in response.iter_content(chunk_size=CHUNK_SIZE):
+                    f.write(chunk)
+        except Exception:
+            # don't leave a partially downloaded feed on disk
+            with contextlib.suppress(FileNotFoundError):
+                os.remove(full_path)
+            raise
 
     async def update_ti_file(self, link_to_download: str) -> bool:
         """
@@ -44,8 +58,13 @@ class RemoteFeedUpdaterMixin:
         """
         try:
             self.log(f"Updating the remote file {link_to_download}")
-            response = self.responses[link_to_download]
             file_name_to_download = link_to_download.split("/")[-1]
+
+            # only the headers were fetched when checking the e-tag,
+            # download the body now
+            response = self.download_file(link_to_download)
+            if not response:
+                return False
 
             # first download the file and save it locally
             feed_local_path = os.path.join(

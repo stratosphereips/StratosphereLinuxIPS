@@ -106,3 +106,15 @@ def test_print_skipping_flows_warning_extends_existing_sampling_window():
 
     input_process.print.assert_called_once()
     assert "still under high traffic" in input_process.print.call_args[0][0]
+
+
+def test_get_number_of_flows_to_skip_caches_decision():
+    protector, _, db = make_protector(
+        is_running_non_stop=True, flows_per_second=0
+    )
+
+    assert protector.get_number_of_flows_to_skip() == 0
+    assert protector.get_number_of_flows_to_skip() == 0
+    assert protector.get_number_of_flows_to_skip() == 0
+
+    db.get_core_module_flows_per_second.assert_called_once()
