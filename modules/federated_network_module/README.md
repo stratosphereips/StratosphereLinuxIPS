@@ -339,10 +339,13 @@ own standard deviations; pooled / own scale per feature), and a
 
 `global_scaler` (optional, default false) gives every model, local and
 merged, one fixed pretrained scaler: `artifacts/global_scaler.json`, the
-statistics (per-feature mean, variance, scale, samples seen, feature names)
-of the scaler of the pretrained base models of a22196607, fit on all 19,635
-labeled conn flows of Stratosphere captures 008, 010 and 011 with the same
-18-feature extraction as now. It is loaded at start (and again after the base
+statistics (per-feature mean, variance, scale, samples seen, feature names,
+source) of a StandardScaler fit on every conn flow of the published
+[security-datasets-for-testing](https://github.com/stratosphereips/security-datasets-for-testing)
+(707,212 flows of 34 Zeek conn logs at e1222857, repeated uids skipped), each
+flow through SLIPS's Zeek parser and this module's feature extraction. The
+datasets hold no ARP records, so ARP records are scaled with conn statistics.
+It is loaded at start (and again after the base
 class's artifact loading, which would replace it with an empty scaler) and
 never fit: `update_preprocessor` does nothing, so `scaler_stats.jsonl` logs
 the same statistics at every training. A file whose feature names differ from

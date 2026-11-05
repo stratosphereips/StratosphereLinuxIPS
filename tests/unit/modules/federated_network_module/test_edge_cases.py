@@ -1532,16 +1532,18 @@ def test_the_final_merged_scaler_artifact_is_the_pooled_one(tmp_path):
 GLOBAL_SCALER = os.path.join(
     os.path.dirname(fnm.__file__), "artifacts", "global_scaler.json"
 )
+with open(GLOBAL_SCALER) as _fh:
+    GLOBAL_N = json.load(_fh)["n_samples_seen"]
 
 
 def test_the_shipped_global_scaler_loads_for_the_module_features(tmp_path):
     m = _trainable(tmp_path)
     sc = fnm.load_global_scaler(GLOBAL_SCALER, m._get_feature_order())
-    assert sc.n_features_in_ == 18 and sc.n_samples_seen_ == 19635
+    assert sc.n_features_in_ == 18 and sc.n_samples_seen_ == GLOBAL_N > 0
     x = np.random.default_rng(0).normal(size=(4, 18)).astype(np.float32)
     assert np.allclose(sc.transform(x), (x - sc.mean_) / sc.scale_)
     # scale = sqrt(var), 1 where StandardScaler's rule saw a constant feature
-    # (dir_num: variance 3e-33 at mean 1)
+    # (dir_num: always 1)
     eps = np.finfo(np.float64).eps
     n, var = sc.n_samples_seen_, sc.var_
     constant = var <= n * eps * var + (n * sc.mean_ * eps) ** 2
@@ -1611,7 +1613,7 @@ def test_with_global_scaler_no_model_ever_fits_a_scaler(
     raw = np.stack(m.training_buffer_x)
     m._train_batch()
     assert m._using_merged_model
-    assert m.scaler.n_samples_seen_ == 19635
+    assert m.scaler.n_samples_seen_ == GLOBAL_N
     assert np.array_equal(m.scaler.mean_, gs.mean_)
     for stage in ("local", "local_head", "merged"):
         assert np.allclose(seen[stage], gs.transform(raw)), stage
@@ -1625,7 +1627,7 @@ def test_with_global_scaler_no_model_ever_fits_a_scaler(
         .read_text()
         .splitlines()
     ]
-    assert row["n_seen"] == 19635 and np.allclose(row["mean"], gs.mean_)
+    assert row["n_seen"] == GLOBAL_N and np.allclose(row["mean"], gs.mean_)
 
 
 def test_the_base_read_model_does_not_replace_the_global_scaler(
@@ -1644,5 +1646,5 @@ def test_the_base_read_model_does_not_replace_the_global_scaler(
     m.global_scaler_path = GLOBAL_SCALER
     m._warm_started = False
     m.read_model()
-    assert m.scaler.n_samples_seen_ == 19635
+    assert m.scaler.n_samples_seen_ == GLOBAL_N
     assert m.preprocessor is m.scaler and m.is_preprocessor_fitted
