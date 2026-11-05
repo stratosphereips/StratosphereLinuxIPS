@@ -86,11 +86,8 @@ class FeedsUpdateManager(
             "score",
         )
         self.ignored_IoCs = ("email", "url", "file_hash", "file")
-        # to track how many times an ip is present in different blacklists
-        self.ips_ctr = {}
-        self.first_time_reading_files = False
-        # store the responses of the files that should be updated when their
-        # update period passed
+        # store the streamed responses of the mac db and tranco whitelist
+        # until they're consumed
         self.responses = {}
 
     def subscribe_to_channels(self):
@@ -188,9 +185,6 @@ class FeedsUpdateManager(
                 files_to_download, should_update_results
             ):
                 if needs_update:
-                    # this run wasn't started with existing ti files in the db
-                    self.first_time_reading_files = True
-
                     task = asyncio.create_task(
                         self.update_ti_file(file_to_download)
                     )
@@ -216,7 +210,6 @@ class FeedsUpdateManager(
                     return False
 
             self.db.set_loaded_ti_files(self.loaded_ti_files)
-            self.print_duplicate_ip_summary()
             self.loaded_ti_files = 0
         except KeyboardInterrupt:
             return False

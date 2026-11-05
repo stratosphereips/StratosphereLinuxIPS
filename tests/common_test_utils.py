@@ -390,6 +390,22 @@ def get_slips_test_command(arguments):
     return f"{sys.executable} ./slips.py {arguments}"
 
 
+def create_config_without_ti_update(output_dir) -> PosixPath:
+    """
+    Creates a slips config that disables the feeds_update_manager, so
+    tests that don't check TI detections don't wait for the TI feeds
+    download when slips is stopping.
+
+    :param output_dir: directory to store the generated config in
+    :return: path to the generated config file
+    """
+    return modify_yaml_config(
+        output_filename="no_ti_update_slips.yaml",
+        output_dir=output_dir,
+        changes={"modules": {"disable": ["template", "feeds_update_manager"]}},
+    )
+
+
 def get_random_uid():
     return base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode("utf-8")
 
