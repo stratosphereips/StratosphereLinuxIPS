@@ -26,6 +26,8 @@ const state = {
   firewall: null,
   configurationSort: { key: null, order: "asc" },
   host: null,
+  hostHistory: [],
+  hostOpenGeneration: 0,
   hostActivity: "alerts",
   hostActivityPreferred: false,
   hostActivityGroups: { alerts: "", evidence: "", flows: "" },
@@ -6348,12 +6350,82 @@ function investigationHeading(title, explanation = "") {
   return heading;
 }
 
-/** Navigate from a detection or flow IP to the full host workspace. */
+/** Retain a bounded host investigation before following another IP.
+ * @returns {object} Host, filters, paging, selected evidence and scroll positions.
+ */
+function captureHostInvestigation() {
+  const content = byId("evidence-detail-content");
+  return {
+    ip: state.host.ip,
+    activity: state.hostActivity,
+    preferred: state.hostActivityPreferred,
+    groups: { ...state.hostActivityGroups },
+    threats: { ...state.hostActivityThreats },
+    controls: Object.fromEntries(["host-range", "host-from", "host-to", "host-alert-search",
+      "host-evidence-search", "host-flow-search"].map((id) => [id, byId(id).value])),
+    pages: Object.fromEntries(["hostAlerts", "hostFlows", "host-evidence"].map((name) =>
+      [name, { index: state.pages[name].index, sort: state.pages[name].sort,
+        order: state.pages[name].order, cursors: [...state.pages[name].cursors] }])),
+    evidence: state.evidenceDetail.inHostPane ? {
+      record: state.evidenceDetail.record,
+      records: state.evidenceDetail.records,
+      fields: [...content.querySelectorAll(".review-editor :is(input, select, textarea)")].map((node) =>
+        ({ value: node.value, checked: node.checked })),
+      details: [...content.querySelectorAll("details")].map((node) => node.open),
+      tabs: [...content.querySelectorAll(".evidence-flow-tabs")].map((node) =>
+        [...node.children].findIndex((tab) => tab.getAttribute("aria-selected") === "true")),
+    } : null,
+    scroll: [...document.querySelectorAll("#host-detail-view, .host-left-column, .host-center-column, "
+      + ".host-right-column, #host-detail-view .table-wrap, #evidence-detail")]
+      .map((node) => ({ node, top: node.scrollTop, left: node.scrollLeft })),
+    windowScroll: [window.scrollX, window.scrollY],
+  };
+}
+
+/** Label Back with its actual destination rather than always saying Hosts. */
+function updateHostBackButton() {
+  const previous = state.hostHistory.at(-1);
+  const button = byId("host-back");
+  button.textContent = previous ? "← Back" : "← Hosts";
+  button.title = previous ? `Return to the investigation of ${previous.ip}` : "Return to the Hosts inventory";
+}
+
+/** Restore the previous host investigation, or return to the inventory.
+ * @returns {Promise<void>} Completes when the previous host view is restored.
+ */
+async function goBackHost() {
+  const previous = state.hostHistory.pop();
+  if (!previous) { closeHost(); return; }
+  closeDrawer();
+  window.clearTimeout(state.timer);
+  try {
+    await openHost(previous.ip, null, previous);
+  } finally {
+    schedulePoll();
+  }
+}
+
+/** Navigate from a detection or flow IP to the full host workspace.
+ * @param {string} ip Address selected in the investigation.
+ * @returns {Promise<void>} Completes after the linked host loads.
+ */
 async function inspectHost(ip) {
   if (!ip) return;
+  if (state.activeTab === "hosts" && !byId("host-detail-view").hidden) {
+    if (state.host?.ip === ip) return;
+    if (state.host) {
+      state.hostHistory.push(captureHostInvestigation());
+      if (state.hostHistory.length > 12) state.hostHistory.shift();
+    }
+  } else state.hostHistory = [];
   closeDrawer();
-  switchTab("hosts");
-  await openHost(ip);
+  if (state.activeTab !== "hosts") switchTab("hosts");
+  window.clearTimeout(state.timer);
+  try {
+    await openHost(ip);
+  } finally {
+    schedulePoll();
+  }
 }
 
 /** Render an IP as a host-workspace navigation control. */
@@ -8674,29 +8746,37 @@ async function loadLegacyScoreHistory(params) {
 /** Load bounded score history without fabricating a timeline on older servers. */
 async function loadHostScoreHistory() {
   if (!state.host) return;
+  const ip = state.host.ip;
+  const generation = state.hostOpenGeneration;
   const params = hostRangeParams();
   params.set("max_points", "600");
   if (state.archiveSource) params.set("archive", state.archiveSource);
-  const path = `/api/hosts/${escapePath(state.host.ip)}/score-history?${params}`;
+  const path = `/api/hosts/${escapePath(ip)}/score-history?${params}`;
   try {
     const response = await fetch(path, { cache: "no-store" });
     if (response.status === 404) {
-      renderHostScoreHistory(await loadLegacyScoreHistory(params));
+      if (state.host?.ip !== ip || generation !== state.hostOpenGeneration) return;
+      const history = await loadLegacyScoreHistory(params);
+      if (state.host?.ip === ip && generation === state.hostOpenGeneration) renderHostScoreHistory(history);
       return;
     }
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) throw new Error(payload.detail || payload.error || `HTTP ${response.status}`);
     applyRunIdentity(payload.run_identity);
+    if (state.host?.ip !== ip || generation !== state.hostOpenGeneration) return;
     renderHostScoreHistory(payload);
   } catch (error) {
-    showError(`Score history unavailable: ${error.message}`);
+    if (state.host?.ip === ip && generation === state.hostOpenGeneration) {
+      showError(`Score history unavailable: ${error.message}`);
+    }
   }
 }
 
 /** Explain why an address seen in evidence has no Slips host profile.
- * @param {string} ip - Address selected from evidence or traffic.
+ * @param {string} ip Address selected from evidence or traffic.
+ * @param {number} generation Host navigation request that owns this view.
  */
-async function showUnprofiledHost(ip) {
+async function showUnprofiledHost(ip, generation = state.hostOpenGeneration) {
   let direction = "";
   try {
     let config = state.configuration;
@@ -8713,6 +8793,8 @@ async function showUnprofiledHost(ip) {
   } catch (error) {
     // The profile explanation still works if the captured config is unavailable.
   }
+  if (generation !== state.hostOpenGeneration) return;
+  updateHostBackButton();
   const explanation = direction === "out"
     ? "This run analyzes outgoing traffic only (analysis_direction: out). Slips profiles the source IP; a destination can appear in evidence or a flow without getting its own Host profile."
     : "This IP appears in evidence or traffic, but Slips did not create a Host profile for it in this run. Host workspaces show only profiled IPs.";
@@ -8727,8 +8809,26 @@ async function showUnprofiledHost(ip) {
   clearError();
 }
 
-async function openHost(ip, summary = null) {
-  resetHostActivityFilters();
+/** Open a host, optionally restoring a previous investigation.
+ * @param {string} ip Host address to inspect.
+ * @param {object|null} summary Inventory row used to initialize the host range.
+ * @param {object|null} previous Saved filters, paging and evidence selection.
+ * @returns {Promise<void>} Completes after the host and its activity load.
+ */
+async function openHost(ip, summary = null, previous = null) {
+  const generation = ++state.hostOpenGeneration;
+  if (summary) state.hostHistory = [];
+  if (previous) {
+    state.hostActivity = previous.activity;
+    state.hostActivityPreferred = previous.preferred;
+    state.hostActivityGroups = { ...previous.groups };
+    state.hostActivityThreats = { ...previous.threats };
+    Object.entries(previous.controls).forEach(([id, value]) => { byId(id).value = value; });
+    byId("host-from").hidden = byId("host-to").hidden = byId("host-range").value !== "custom";
+  } else resetHostActivityFilters();
+  updateHostBackButton();
+  ["hostAlerts", "hostEvidence", "hostFlows", "hostSummary", "hostScore"].forEach((key) =>
+    state.requests.get(key)?.abort());
   if (state.evidenceDetail.inHostPane && state.host?.ip !== ip) closeEvidenceDetail(false, true);
   if (summary) {
     ["range", "from", "to"].forEach((name) => {
@@ -8742,9 +8842,9 @@ async function openHost(ip, summary = null) {
   if (state.networkOnly && state.networkFilterSupported) detailParams.set("network", "current");
   if (state.deviceView) detailParams.set("device", "1");
   const detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
-  if (!detail) return;
+  if (!detail || generation !== state.hostOpenGeneration) return;
   if (detail.not_found) {
-    await showUnprofiledHost(ip);
+    await showUnprofiledHost(ip, generation);
     return;
   }
   const detailHasScore = detail.alert_score !== null
@@ -8765,6 +8865,7 @@ async function openHost(ip, summary = null) {
     const hostPage = await api("hostScore", `/api/hosts?${params}`);
     scoreSource = hostPage?.items?.find((row) => row.ip === ip) || null;
   }
+  if (generation !== state.hostOpenGeneration) return;
   const host = { ...(scoreSource || {}), ...detail };
   if (!detailHasScore && scoreSource) {
     ["alert_score", "alert_threshold", "alert_score_mode", "alert_score_basis"]
@@ -8782,9 +8883,10 @@ async function openHost(ip, summary = null) {
   state.host = host;
   rememberHostRecord(host);
   refreshHostLabels();
-  resetPage("hostAlerts");
-  resetPage("hostFlows");
-  resetPage("host-evidence");
+  ["hostAlerts", "hostFlows", "host-evidence"].forEach((name) => {
+    if (previous) Object.assign(state.pages[name], previous.pages[name]);
+    else resetPage(name);
+  });
   byId("host-alerts").replaceChildren(text("p", "Loading alerts…", "muted"));
   byId("host-evidence-table").querySelector("tbody").replaceChildren();
   byId("host-flows-table").querySelector("tbody").replaceChildren();
@@ -8801,9 +8903,28 @@ async function openHost(ip, summary = null) {
   const initialActivity = hasExactAlerts || (host.exact_aggregates !== false && host.alert_count)
     ? "alerts" : host.evidence_count ? "evidence" : "flows";
   await Promise.all([
-    showHostActivity(state.hostActivityPreferred ? state.hostActivity : initialActivity),
+    showHostActivity(previous ? previous.activity : state.hostActivityPreferred ? state.hostActivity : initialActivity),
     loadHostSummary(), loadHostScoreHistory(),
   ]);
+  if (!previous || generation !== state.hostOpenGeneration) return;
+  if (previous.evidence) {
+    await openEvidence(previous.evidence.record, previous.evidence.records);
+    if (generation !== state.hostOpenGeneration) return;
+    const content = byId("evidence-detail-content");
+    content.querySelectorAll(".evidence-flow-tabs").forEach((tabs, index) => {
+      tabs.children[previous.evidence.tabs[index]]?.click();
+    });
+    content.querySelectorAll("details").forEach((node, index) => { node.open = Boolean(previous.evidence.details[index]); });
+    content.querySelectorAll(".review-editor :is(input, select, textarea)").forEach((node, index) => {
+      const field = previous.evidence.fields[index];
+      if (!field) return;
+      node.value = field.value;
+      if (field.checked !== undefined) node.checked = field.checked;
+    });
+  }
+  previous.scroll.forEach(({ node, top, left }) => { node.scrollTop = top; node.scrollLeft = left; });
+  window.scrollTo(...previous.windowScroll);
+  scheduleViewPreferencesSave();
 }
 
 async function refreshHostWorkspace() {
@@ -8839,6 +8960,11 @@ async function refreshHostWorkspace() {
 }
 
 function closeHost() {
+  state.hostOpenGeneration += 1;
+  state.hostHistory = [];
+  updateHostBackButton();
+  state.requests.get("host")?.abort();
+  state.requests.get("hostScore")?.abort();
   if (state.evidenceDetail.inHostPane) closeEvidenceDetail(false, true);
   state.host = null;
   state.requests.get("hostAlerts")?.abort();
@@ -9337,7 +9463,7 @@ document.addEventListener("keydown", (event) => {
     else closeDrawer();
   }
 });
-byId("host-back").addEventListener("click", closeHost);
+byId("host-back").addEventListener("click", () => goBackHost().catch(() => {}));
 byId("host-ti-copy").addEventListener("click", () =>
   copyText(byId("host-ti").textContent, "Threat intelligence JSON"));
 document.querySelectorAll("[data-host-activity]").forEach((button) =>

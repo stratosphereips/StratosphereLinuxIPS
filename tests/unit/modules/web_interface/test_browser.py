@@ -2052,6 +2052,115 @@ def test_host_evidence_opens_beside_table_in_chrome(theme: str, width: int) -> N
         browser.close()
 
 
+@pytest.mark.parametrize("profiled", [True, False])
+def test_host_back_restores_evidence_investigation(profiled: bool) -> None:
+    """Return from a linked IP to the selected evidence and its host filters.
+
+    Parameters:
+        profiled: Whether the destination has a host profile.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    source, destination = "192.0.2.10", "198.51.100.20"
+    host = {"ip": source, "scope": "local", "all_ips": [source],
+            "alert_count": 0, "evidence_count": 2, "alert_score": 0,
+            "alert_threshold": 5, "load": {"flows": 2}}
+    records = [{"id": f"return-evidence-{index}", "profile_ip": source,
+                "evidence_type": "UNKNOWN_PORT", "threat_level": "medium",
+                "description": "Unknown destination port", "confidence": 1,
+                "timestamp": 1792830000 + index, "module": Modules.CONN_ANALYZER.value,
+                "flow_count": 1, "alert_ids": []} for index in range(2)]
+    queries, errors = [], []
+
+    def respond(route: Any) -> None:
+        """Serve a host investigation and its linked destination in isolation.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/api/evidence":
+            queries.append(parse_qs(url.query))
+            route.fulfill(json={"items": records, "total": 2, "page_size": 2})
+        elif url.path.startswith("/api/evidence/") and url.path.endswith("/flows"):
+            route.fulfill(json={"items": [{"uid": "return-flow", "network_flow": {"uid": "return-flow", "flow": {
+                "uid": "return-flow", "type_": "conn", "saddr": source, "daddr": destination,
+                "sport": 50000, "dport": 23423, "proto": "tcp", "dur": 12}}}], "linked_uid_count": 1})
+        elif url.path == f"/api/hosts/{destination}" and not profiled:
+            route.fulfill(status=404, json={"error": "No profile"})
+        elif url.path.endswith("/traffic-summary"):
+            route.fulfill(json={"timeline": [], "protocols": [], "peers": []})
+        elif url.path.endswith("/score-history"):
+            route.fulfill(json={"timeline": [], "threshold": 5, "evidence_total": 2})
+        elif url.path.startswith("/api/hosts/"):
+            route.fulfill(json={**host, "ip": url.path.split("/")[3]})
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated investigation fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1800, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof openHost === 'function'")
+            page.evaluate("""async host => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);clearInterval(state.titleTimer);
+                state.activeTab='hosts';state.hostActivity='evidence';state.hostActivityPreferred=true;
+                state.networkOnly=false;state.deviceView=false;state.whitelists={evidence_types:[]};
+                document.body.classList.add('hosts-active');document.body.classList.remove('overview-active');
+                document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='hosts'));
+                await openHost(host.ip,host);
+                byId('host-range').value='7d';byId('host-evidence-search').value='destination';
+                state.hostActivityGroups.evidence='module';state.hostActivityThreats.evidence='medium_or_more';
+                Object.assign(state.pages['host-evidence'],{index:1,cursors:[null,'source-page-2'],sort:'type',order:'asc'});
+                await showHostActivity('evidence');
+            }""", host)
+            page.locator("#host-evidence-table tbody tr[data-clickable]").nth(1).click()
+            page.wait_for_function("state.evidenceDetail.record?.id==='return-evidence-1' && !state.requests.has('evidenceFlows')")
+            inspector = page.locator("#host-evidence-pane #evidence-detail")
+            inspector.locator(".review-editor textarea").fill("Unsaved investigation note")
+            inspector.locator(".flow-card .ip-link").filter(has_text=source).click()
+            assert page.evaluate("state.hostHistory.length") == 0
+            assert inspector.locator(".review-editor textarea").input_value() == "Unsaved investigation note"
+            inspector.evaluate("node => node.scrollTop = 100")
+            inspector.locator(".flow-card .ip-link").filter(has_text=destination).click()
+            page.wait_for_function("ip => state.host?.ip===ip || byId('host-unprofiled').hidden===false", arg=destination)
+            saved_scroll = page.evaluate("state.hostHistory[0].scroll.find(item=>item.node.id==='evidence-detail').top")
+            if profiled:
+                page.evaluate("() => inspectHost('203.0.113.30')")
+                assert page.evaluate("state.hostHistory.length") == 2
+                page.locator("#host-back").click()
+                page.wait_for_function("state.host?.ip==='198.51.100.20' && !state.requests.has('hostEvidence')")
+            page.locator("#host-back").click()
+            page.wait_for_function("state.host?.ip==='192.0.2.10' && state.evidenceDetail.record?.id==='return-evidence-1' && !state.requests.has('evidenceFlows')")
+            assert inspector.is_visible()
+            assert abs(inspector.evaluate("node => node.scrollTop") - saved_scroll) <= 1
+            assert "Record 2 of 2" in inspector.inner_text()
+            assert inspector.locator(".review-editor textarea").input_value() == "Unsaved investigation note"
+            assert page.locator("#host-range").input_value() == "7d"
+            assert page.locator("#host-evidence-search").input_value() == "destination"
+            assert page.locator("#host-activity-group").input_value() == "module"
+            assert page.locator("#host-activity-threat").input_value() == "medium_or_more"
+            assert queries[-1]["profile"] == [source]
+            assert queries[-1]["cursor"] == ["source-page-2"]
+            assert queries[-1]["range"] == ["7d"]
+            assert queries[-1]["sort"] == ["type"]
+            inspector.get_by_role("button", name="↑ prev").click()
+            page.wait_for_function("state.evidenceDetail.record?.id==='return-evidence-0' && !state.requests.has('evidenceFlows')")
+            page.locator("#host-back").click()
+            assert page.locator("#hosts-list-view").is_visible()
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("activity", ["alerts", "evidence", "flows"])
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_host_tab_names_stay_plain_during_polling_in_chrome(activity: str, theme: str) -> None:
