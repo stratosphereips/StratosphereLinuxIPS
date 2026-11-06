@@ -1095,6 +1095,22 @@ This module works by
   3. Running the compiled rules on the given PCAP
   4. Once we find a match, we get the packet containing this match and set evidence.
 
+Packet findings carry their source and destination IPs, ports, transport, timestamp
+and capture offset. The detector links a finding to the real Zeek connection by
+matching both directions of that five-tuple and checking its time interval. It
+never invents a flow UID. When profiling has not stored the connection yet, the
+web resolves the saved packet metadata after that flow becomes available;
+ambiguous matches remain unlinked.
+
+A validated JSON reply to an `ip-api.com/json` or `pro.ip-api.com/json` lookup is
+recorded as **IP Geolocation Response**, with informational severity. This records
+IP-derived coordinates returned by the service. Latitude and longitude matches
+in the same response produce one observation. Coordinate uploads, unrelated HTTP
+responses and unverified payloads retain the normal coordinate-pattern detection.
+Matching and enrichment run in the leak detector and web workers; the capture and
+profiler paths perform no packet lookup for this feature.
+
+
 
 ### Extending
 

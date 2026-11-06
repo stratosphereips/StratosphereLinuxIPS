@@ -130,6 +130,7 @@ The table below lists the evidence types currently emitted by Slips modules and 
 | `http_analyzer` | `WEIRD_HTTP_METHOD` | `PAMP` |
 | `ip_info` | `MALICIOUS_JARM` | `PAMP` |
 | `leak_detector` | `NETWORK_GPS_LOCATION_LEAKED` | `PAMP` |
+| `leak_detector` | `IP_GEOLOCATION_RESPONSE` | `DAMP` |
 | `network_discovery` | `DHCP_SCAN` | `PAMP` |
 | `network_discovery` | `ICMP_ADDRESS_MASK_SCAN` | `PAMP` |
 | `network_discovery` | `ICMP_ADDRESS_SCAN` | `PAMP` |

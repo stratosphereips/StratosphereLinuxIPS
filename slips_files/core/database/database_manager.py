@@ -1601,6 +1601,9 @@ class DBManager:
         """returns the raw flow as read from the log file"""
         return self.sqlite.get_flow(*args, **kwargs)
 
+    def get_flow_for_packet(self, *args, **kwargs):
+        return self.sqlite.get_flow_for_packet(*args, **kwargs)
+
     def add_flow(self, flow, profileid: str, twid: str, label="benign"):
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)

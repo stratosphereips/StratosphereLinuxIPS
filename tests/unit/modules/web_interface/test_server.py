@@ -9272,3 +9272,36 @@ def test_host_label_uses_cached_organization_ranges(
         pipeline.execute.assert_not_called()
     else:
         pipeline.execute.assert_called_once()
+
+
+@pytest.mark.parametrize("kind", ["NETWORK_GPS_LOCATION_LEAKED", "IP_GEOLOCATION_RESPONSE"])
+def test_packet_evidence_resolves_flow_that_arrives_after_detection(tmp_path: Path, kind: str) -> None:
+    """Resolve a packet finding after profiling supplies the real connection.
+
+    Parameters:
+        tmp_path: Independent run database.
+        kind: Coordinate finding whose original UID was not yet available.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger,str(tmp_path),12345)
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.sqlite_path = Path(db.get_db_path())
+    reader.redis = Mock()
+    packet = {"saddr":"208.95.112.1","daddr":"147.32.80.44","sport":80,"dport":53400,"proto":"tcp","timestamp":100.5}
+    data = {"evidence_type":kind,"uid":[],"detection_details":{"packet":packet}}
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,data) VALUES (?,?,?,?,?)",
+               ("coordinates",100.5,"147.32.80.44",kind,json.dumps(data)))
+    assert reader.flows_for_evidence("coordinates")["items"] == []
+    flow = {"saddr":"147.32.80.44","daddr":"208.95.112.1","sport":53400,"dport":80,"proto":"tcp","dur":1.0}
+    db.execute("INSERT INTO flows(uid,flow,profileid,twid,event_time) VALUES (?,?,?,?,?)",
+               ("real-uid",json.dumps(flow),"profile_147.32.80.44","timewindow1",100))
+    db.execute("INSERT INTO altflows(uid,flow,profileid,twid,flow_type,event_time) VALUES (?,?,?,?,?,?)",
+               ("real-uid",json.dumps({**flow,"type_":"http","host":"ip-api.com","uri":"/json"}),"profile_147.32.80.44","timewindow1","http",100.2))
+    result = reader.flows_for_evidence("coordinates")
+    assert result["linked_uid_count"] == 1
+    assert result["unavailable_flow_count"] == 0
+    assert result["items"][0]["uid"] == "real-uid"
+    assert result["items"][0]["network_flow"]["flow"] == flow
+    assert result["items"][0]["protocol_flows"][0]["flow"]["host"] == "ip-api.com"
+    db.close()

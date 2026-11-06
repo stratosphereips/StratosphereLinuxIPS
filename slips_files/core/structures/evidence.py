@@ -101,6 +101,7 @@ class EvidenceType(Enum):
     HTTP_TRAFFIC = auto()
     MALICIOUS_JARM = auto()
     NETWORK_GPS_LOCATION_LEAKED = auto()
+    IP_GEOLOCATION_RESPONSE = auto()
     ICMP_TIMESTAMP_SCAN = auto()
     ICMP_ADDRESS_SCAN = auto()
     ICMP_ADDRESS_MASK_SCAN = auto()

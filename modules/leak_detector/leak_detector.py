@@ -1,13 +1,15 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import sys
-import base64
 import time
-import binascii
 import os
 import subprocess
 import json
 import shutil
+import ipaddress
+import math
+from collections import deque
+from urllib.parse import urlsplit
 from typing import (
     Dict,
     List,
@@ -26,6 +28,8 @@ from slips_files.core.structures.evidence import (
     EvidenceType,
     IoCType,
     Direction,
+    Victim,
+    EvidenceSignal,
 )
 
 
@@ -47,6 +51,8 @@ class LeakDetector(IModule):
         self.compiled_yara_rules_path = self.get_module_specific_output_path(
             "compiled_yara_rules"
         )
+        self.packet_details = {}
+        self._geolocation_packets = deque(maxlen=1024)
         self.bin_found = False
         if self.is_yara_installed():
             self.bin_found = True
@@ -87,6 +93,7 @@ class LeakDetector(IModule):
         Parse pcap and determine the packet at this offset
         returns  a tuple with packet info (srcip, dstip, proto, sport, dport, ts) or False if not found
         """
+        self.packet_details = {}
         offset = int(offset)
         with open(self.pcap, "rb") as f:
             # every pcap header is 24 bytes
@@ -129,13 +136,23 @@ class LeakDetector(IModule):
                         return
 
                     # use tshark to get packet info
-                    cmd = f'tshark -r "{self.pcap}" -T json -Y frame.number=={packet_number}'
+                    cmd = [
+                        "tshark",
+                        "-n",
+                        "-r",
+                        self.pcap,
+                        "-c",
+                        str(packet_number),
+                        "-T",
+                        "json",
+                        "-Y",
+                        f"frame.number=={packet_number}",
+                    ]
                     tshark_proc = subprocess.Popen(
                         cmd,
                         stdout=subprocess.PIPE,
                         stderr=subprocess.DEVNULL,
                         stdin=subprocess.PIPE,
-                        shell=True,
                     )
 
                     result, error = tshark_proc.communicate()
@@ -182,103 +199,214 @@ class LeakDetector(IModule):
                         except KeyError:
                             return
 
+                        self.packet_details = {
+                            "frame_number": packet_number,
+                            "geolocation": self.ip_geolocation_response(
+                                json_packet
+                            ),
+                        }
                         return srcip, dstip, proto, sport, dport, ts
 
         return False
 
-    def set_evidence_yara_match(self, info: dict):
+    @staticmethod
+    def ip_geolocation_response(layers: dict) -> dict | None:
+        """Recognize an IP-geolocation JSON reply from its HTTP request context.
+
+        Parameters:
+            layers: Dissected packet protocol layers from tshark.
+
+        Returns:
+            Validated lookup coordinates and queried IP, or None.
         """
-        This function is called when yara finds a match
-        :param info: a dict with info about the matched rule,
-         example keys 'vars_matched', 'index',
-        'rule', 'srings_matched'
+        http = layers.get("http", {})
+        if not isinstance(http, dict) or str(http.get("http.response")) != "1":
+            return None
+        try:
+            uri = urlsplit(str(http.get("http.response_for.uri") or ""))
+            host = uri.hostname
+        except ValueError:
+            return None
+        if (
+            uri.scheme not in {"http", "https"}
+            or host not in {"ip-api.com", "pro.ip-api.com"}
+            or not (uri.path == "/json" or uri.path.startswith("/json/"))
+        ):
+            return None
+        raw = http.get("http.file_data", "")
+        if not isinstance(raw, str) or len(raw) > 65536:
+            return None
+        try:
+            payload = json.loads(bytes.fromhex(raw.replace(":", "")).decode())
+            if (
+                not isinstance(payload, dict)
+                or payload.get("status") != "success"
+            ):
+                return None
+            query_ip = str(ipaddress.ip_address(payload["query"]))
+            latitude, longitude = float(payload["lat"]), float(payload["lon"])
+            if not (
+                math.isfinite(latitude)
+                and math.isfinite(longitude)
+                and -90 <= latitude <= 90
+                and -180 <= longitude <= 180
+            ):
+                return None
+        except (ValueError, KeyError, TypeError, UnicodeError):
+            return None
+        return {
+            "host": host,
+            "query_ip": query_ip,
+            "latitude": latitude,
+            "longitude": longitude,
+        }
+
+    def packet_timewindow(
+        self, ip: str, timestamp: float
+    ) -> TimeWindow | None:
+        """Wait briefly in this worker for profiling to create a packet's window.
+
+        Parameters:
+            ip: Evidence profile address.
+            timestamp: Packet timestamp in seconds.
+
+        Returns:
+            Recorded time window, or None when unavailable or stopping.
         """
-        rule = info.get("rule").replace("_", " ")
-        offset = info.get("offset")
-        # vars_matched = info.get('vars_matched')
-        strings_matched = info.get("strings_matched")
-        # we now know there's a match at offset x, we need
-        # to know offset x belongs to which packet
-        packet_info = self.get_packet_info(offset)
+        deadline = time.monotonic() + 4
+        while True:
+            twid = self.db.get_tw_of_ts(f"profile_{ip}", timestamp)
+            if twid:
+                return TimeWindow(
+                    number=int(twid[0].replace("timewindow", ""))
+                )
+            if time.monotonic() >= deadline or self.termination_event.wait(
+                0.1
+            ):
+                return None
+
+    def set_evidence_yara_match(self, info: dict) -> None:
+        """Attach one YARA packet finding to its real connection when available.
+
+        Parameters:
+            info: Rule, packet byte offset and matched coordinate text.
+        """
+        packet_info = self.get_packet_info(info["offset"])
         if not packet_info:
             return
-
-        srcip, dstip, proto, _, dport, ts = (
-            packet_info[0],
-            packet_info[1],
-            packet_info[2],
-            packet_info[3],
-            packet_info[4],
-            packet_info[5],
-        )
-
+        srcip, dstip, proto, sport, dport, ts = packet_info
+        packet = {
+            "saddr": srcip,
+            "daddr": dstip,
+            "proto": proto,
+            "sport": int(sport),
+            "dport": int(dport),
+            "timestamp": float(ts),
+        }
+        context = self.db.get_flow_for_packet(packet)
+        context = context if isinstance(context, dict) else {}
+        uid = [context["uid"]] if context.get("uid") else []
+        details = {
+            "packet": packet,
+            "pcap_offset": int(info["offset"]),
+            "frame_number": self.packet_details.get("frame_number"),
+            "rule": info["rule"],
+            "matched_text": info.get("strings_matched", ""),
+        }
+        interface = context.get("flow", {}).get("interface", self.pcap)
+        geolocation = self.packet_details.get("geolocation")
+        if geolocation:
+            identity = (srcip, dstip, sport, dport, float(ts))
+            if identity in self._geolocation_packets:
+                return
+            window = self.packet_timewindow(dstip, float(ts))
+            if window is None:
+                return
+            details["geolocation"] = geolocation
+            description = (
+                f"IP geolocation response from {srcip}:{sport} to {dstip}:{dport} "
+                f"via {geolocation['host']}. Queried IP: {geolocation['query_ip']}; "
+                f"latitude: {geolocation['latitude']}, longitude: {geolocation['longitude']}."
+            )
+            self.db.set_evidence(
+                Evidence(
+                    evidence_type=EvidenceType.IP_GEOLOCATION_RESPONSE,
+                    attacker=Attacker(
+                        direction=Direction.SRC,
+                        ioc_type=IoCType.IP,
+                        value=dstip,
+                    ),
+                    victim=Victim(
+                        direction=Direction.DST,
+                        ioc_type=IoCType.IP,
+                        value=srcip,
+                    ),
+                    threat_level=ThreatLevel.INFO,
+                    confidence=0.9,
+                    description=description,
+                    profile=ProfileID(ip=dstip),
+                    timewindow=window,
+                    uid=uid,
+                    timestamp=utils.convert_ts_format(ts, utils.alerts_format),
+                    proto=Proto(proto.lower()),
+                    src_port=int(dport),
+                    dst_port=int(sport),
+                    interface=interface,
+                    evidence_signal=EvidenceSignal.DAMP,
+                    detection_details=details,
+                )
+            )
+            self._geolocation_packets.append(identity)
+            return
+        window = self.packet_timewindow(srcip, float(ts))
+        if window is None:
+            return
         portproto = f"{dport}/{proto}"
         port_info = self.db.get_port_info(portproto)
-
-        # generate a random uid
-        uid = base64.b64encode(binascii.b2a_hex(os.urandom(9))).decode("utf-8")
-        profileid = f"profile_{srcip}"
-        # sometimes this module tries to find the profile before it's created. so
-        # wait a while before alerting.
-        time.sleep(4)
-
         description = (
-            f"{rule} to destination address: {dstip} "
-            f"port: {portproto} {port_info or ''}. "
-            f"Leaked location: {strings_matched}"
+            f"Coordinates observed in a packet from {srcip}:{sport} to {dstip}:{dport} "
+            f"using {proto.upper()} {port_info or ''}. Matched: {info.get('strings_matched', '')}"
         )
-
-        # in which tw is this ts?
-        twid = self.db.get_tw_of_ts(profileid, ts)
-        # convert ts to a readable format
-        ts = utils.convert_ts_format(ts, utils.alerts_format)
-
-        if not twid:
-            return
-
-        twid_number = int(twid[0].replace("timewindow", ""))
-        # to add a correlation between the 2 evidence in alerts.json
-        evidence_id_of_dstip_as_the_attacker = str(uuid4())
-        evidence_id_of_srcip_as_the_attacker = str(uuid4())
-        evidence = Evidence(
-            id=evidence_id_of_srcip_as_the_attacker,
-            rel_id=[evidence_id_of_dstip_as_the_attacker],
-            evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
-            attacker=Attacker(
-                direction=Direction.SRC, ioc_type=IoCType.IP, value=srcip
-            ),
-            threat_level=ThreatLevel.LOW,
-            confidence=0.9,
-            description=description,
-            profile=ProfileID(ip=srcip),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=ts,
-            proto=Proto(proto.lower()),
-            dst_port=int(dport),
-        )
-
-        self.db.set_evidence(evidence)
-
-        evidence = Evidence(
-            id=evidence_id_of_dstip_as_the_attacker,
-            rel_id=[evidence_id_of_srcip_as_the_attacker],
-            evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
-            attacker=Attacker(
-                direction=Direction.DST, ioc_type=IoCType.IP, value=dstip
-            ),
-            threat_level=ThreatLevel.HIGH,
-            confidence=0.9,
-            description=description,
-            profile=ProfileID(ip=dstip),
-            timewindow=TimeWindow(number=twid_number),
-            uid=[uid],
-            timestamp=ts,
-            proto=Proto(proto.lower()),
-            dst_port=int(dport),
-        )
-
-        self.db.set_evidence(evidence)
+        ids = [str(uuid4()), str(uuid4())]
+        for index, (
+            ip,
+            direction,
+            opposite,
+            opposite_direction,
+            level,
+        ) in enumerate(
+            (
+                (srcip, Direction.SRC, dstip, Direction.DST, ThreatLevel.LOW),
+                (dstip, Direction.DST, srcip, Direction.SRC, ThreatLevel.HIGH),
+            )
+        ):
+            self.db.set_evidence(
+                Evidence(
+                    id=ids[index],
+                    rel_id=[ids[1 - index]],
+                    evidence_type=EvidenceType.NETWORK_GPS_LOCATION_LEAKED,
+                    attacker=Attacker(
+                        direction=direction, ioc_type=IoCType.IP, value=ip
+                    ),
+                    victim=Victim(
+                        direction=opposite_direction,
+                        ioc_type=IoCType.IP,
+                        value=opposite,
+                    ),
+                    threat_level=level,
+                    confidence=0.9,
+                    description=description,
+                    profile=ProfileID(ip=ip),
+                    timewindow=window,
+                    uid=uid,
+                    timestamp=utils.convert_ts_format(ts, utils.alerts_format),
+                    proto=Proto(proto.lower()),
+                    src_port=int(sport),
+                    dst_port=int(dport),
+                    interface=interface,
+                    detection_details=details,
+                )
+            )
 
     def compile_and_save_rules(self):
         """

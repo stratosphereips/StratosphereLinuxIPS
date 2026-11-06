@@ -102,6 +102,7 @@ from slips_files.common.p2p_reports import (
     evidence_display_type,
     reported_detections,
 )
+from slips_files.core.database.sqlite_db.packet_flows import find_packet_flow
 from slips_files.common.web_auth import (
     SESSION_TTL_SECONDS,
     is_locked_out,
@@ -183,6 +184,7 @@ EVIDENCE_MODULE = {
     "HTTP_BINARY_RESPONSE_AS_HTML": Modules.HTTP_ANALYZER,
     "MALICIOUS_JARM": Modules.IP_INFO,
     "NETWORK_GPS_LOCATION_LEAKED": Modules.LEAK_DETECTOR,
+    "IP_GEOLOCATION_RESPONSE": Modules.LEAK_DETECTOR,
     "HORIZONTAL_PORT_SCAN": Modules.NETWORK_DISCOVERY,
     "VERTICAL_PORT_SCAN": Modules.NETWORK_DISCOVERY,
     "ICMP_TIMESTAMP_SCAN": Modules.NETWORK_DISCOVERY,
@@ -5413,9 +5415,18 @@ class RunDataReader:
                 ).fetchone()
                 if row:
                     durable_found = True
-                    uids = self._id_list(
-                        self._loads(row[0], {}).get("uid", [])
-                    )
+                    evidence = self._loads(row[0], {})
+                    uids = self._id_list(evidence.get("uid", []))
+                    if not uids and evidence.get("evidence_type") in {
+                        "NETWORK_GPS_LOCATION_LEAKED",
+                        "IP_GEOLOCATION_RESPONSE",
+                    }:
+                        packet = evidence.get("detection_details", {}).get(
+                            "packet", {}
+                        )
+                        matched = find_packet_flow(connection, packet)
+                        if matched:
+                            uids = [matched["uid"]]
         if not total_uids:
             if not uids and not durable_found:
                 uids = self._flow_uids_for_evidence(evidence_id)
