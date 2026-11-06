@@ -70,6 +70,8 @@ class MACAnalyzer(IWhitelistAnalyzer):
         if not self.is_valid_mac(mac):
             return False
 
+        mac = mac.lower().replace("-", ":")
+        self.refresh_rules("macs", "mac_addrs")
         if mac not in self.manager.bloom_filters.mac_addrs:
             # defnitely not whitelisted
             self.bf_hits += 1

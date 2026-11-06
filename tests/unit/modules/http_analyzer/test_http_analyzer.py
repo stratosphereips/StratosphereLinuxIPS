@@ -342,6 +342,8 @@ def test_set_evidence_http_traffic(mocker):
     http_analyzer.set_evidence.http_traffic(twid, flow)
 
     http_analyzer.db.set_evidence.assert_called_once()
+    evidence = http_analyzer.db.set_evidence.call_args.args[0]
+    assert evidence.victim.queries == ["google.com"]
 
 
 def test_set_evidence_weird_http_method(mocker):

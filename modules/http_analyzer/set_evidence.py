@@ -312,6 +312,7 @@ class SetEvidenceHelper:
                 direction=Direction.DST,
                 ioc_type=IoCType.IP,
                 value=flow.daddr,
+                queries=[flow.host] if flow.host else [],
             ),
         )
 

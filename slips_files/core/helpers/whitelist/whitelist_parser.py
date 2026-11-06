@@ -5,6 +5,7 @@ import fcntl
 import os
 import shutil
 import tempfile
+from functools import lru_cache
 from pathlib import Path
 from typing import TextIO, List, Dict, Optional
 import validators
@@ -12,6 +13,27 @@ import validators
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import EvidenceType
+
+
+@lru_cache(maxsize=4096)
+def normalize_whitelist_domain(value: str) -> str:
+    """Validate a DNS host without broadening it to its parent domain.
+
+    Parameters:
+        value: Domain name, without a scheme, port or path.
+
+    Returns:
+        Lowercase ASCII DNS name. Invalid names raise ValueError.
+    """
+    if not isinstance(value, str):
+        raise ValueError("Enter a domain or HTTP host name")
+    try:
+        domain = value.strip().rstrip(".").encode("idna").decode().lower()
+    except UnicodeError as error:
+        raise ValueError("Invalid domain name") from error
+    if len(domain) > 253 or not validators.domain(domain):
+        raise ValueError("Enter a domain without a scheme, port or path")
+    return domain
 
 
 def split_ip_destination_port(value: str) -> tuple[str, str]:
@@ -259,16 +281,20 @@ class WhitelistParser:
             cache.pop(key)
         return True
 
-    def update_whitelisted_domains(self, domain: str, info: Dict[str, str]):
-        if not utils.is_valid_domain(domain):
-            return
+    def update_whitelisted_domains(
+        self, domain: str, info: Dict[str, str]
+    ) -> None:
+        """Store the supplied host and its rule, without adding parent aliases.
 
+        Parameters:
+            domain: Explicit domain or host to whitelist.
+            info: Direction and suppression settings.
+        """
+        try:
+            domain = normalize_whitelist_domain(domain)
+        except ValueError:
+            return
         self.whitelisted_domains[domain] = info
-        # to be able to whitelist subdomains faster
-        # the goal is to have an entry for each
-        # subdomain and its parent domain
-        hostname = utils.extract_hostname(domain)
-        self.whitelisted_domains[hostname] = info
 
     def update_whitelisted_orgs(self, org: str, info: Dict[str, str]):
         if org not in utils.supported_orgs:
@@ -287,7 +313,7 @@ class WhitelistParser:
     def update_whitelisted_mac_addresses(self, mac: str, info: Dict[str, str]):
         if not validators.mac_address(mac):
             return
-        self.whitelisted_mac[mac] = info
+        self.whitelisted_mac[mac.lower().replace("-", ":")] = info
 
     def update_whitelisted_uris(self, uri: str, info: Dict[str, str]) -> None:
         """Store a literal request URI for flow suppression.

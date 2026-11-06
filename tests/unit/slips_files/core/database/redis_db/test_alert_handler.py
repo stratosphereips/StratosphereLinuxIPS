@@ -819,3 +819,22 @@ def test_get_tw_limits_recovers_when_redis_anchor_is_missing(
 
     assert start == expected_start
     assert end == expected_start + alert_handler.width
+
+
+@pytest.mark.parametrize("cached", [[], ["icanhazip.com", "shared.example.com"]])
+@pytest.mark.parametrize("observed", ["icanhazip.com", "unrelated.example.com"])
+def test_enrichment_preserves_observed_http_host(cached: list[str], observed: str) -> None:
+    """Retain the actual request host when DNS enrichment is absent or shared.
+
+    Parameters:
+        cached: Names previously resolved to this destination IP.
+        observed: Actual HTTP Host, independent of other CDN names.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.get_ip_identification = Mock(return_value={"queries": cached, "SNI": "icanhazip.com"})
+    victim = Victim(direction=Direction.DST, ioc_type=IoCType.IP,
+                    value="104.16.184.241", queries=[observed])
+    evidence = SimpleNamespace(attacker=None, victim=victim)
+    result = handler._get_more_info_about_evidence(evidence)
+    assert result.victim.queries == [observed]
+    assert result.victim.SNI is None

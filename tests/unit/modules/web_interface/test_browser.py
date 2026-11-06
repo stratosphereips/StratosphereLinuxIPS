@@ -5675,3 +5675,116 @@ def test_alert_identity_hierarchy_and_review_at_bottom(theme: str, width: int) -
             assert not errors, errors
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("theme,width", [("light", 1600), ("dark", 900)])
+def test_http_host_and_all_whitelist_kinds_in_chrome(theme: str, width: int) -> None:
+    """Offer the actual HTTP host and save/remove every supported rule kind.
+
+    Parameters:
+        theme: Browser color theme.
+        width: Wide or narrow investigation workspace.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def route_request(route: Any) -> None:
+        """Serve isolated local web assets.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        else:
+            route.fulfill(status=503, json={"error": "Isolated fixture"})
+
+    with playwright.sync_playwright() as engine:
+        try:
+            browser = engine.chromium.launch(channel="chrome", headless=True)
+        except playwright.Error as error:
+            pytest.skip(f"Chrome is unavailable: {error}")
+        page = browser.new_page(viewport={"width": width, "height": 1100})
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.on("dialog", lambda dialog: dialog.accept())
+        page.route("**/*", route_request)
+        page.goto("http://slips.test/")
+        page.wait_for_function("() => state.requests.size === 0")
+        page.evaluate("""theme => {
+            clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+            setTheme(theme); state.deviceView = false;
+            state.whitelists = {evidence_types:['HTTP_TRAFFIC'], supports_dst_port_rules:true,
+                organizations:['google','microsoft','apple','facebook','twitter']};
+            window.whitelistChanges = [];
+            saveWhitelistRule = async change => {window.whitelistChanges.push(change); return change;};
+            const record = {evidence_type:'HTTP_TRAFFIC', profile_ip:'192.168.1.100',
+                attacker:{ioc_type:'IP',value:'192.168.1.100',direction:'SRC'},
+                victim:{ioc_type:'IP',value:'104.16.184.241',direction:'DST'}};
+            const editor = whitelistEditor('host-test',record); editor.id = 'host-test';
+            editor.style.width = '420px'; editor.style.maxWidth = '100%';
+            const side = document.createElement('div'); side.className = 'evidence-detail-side';
+            side.style.width = '420px'; side.style.maxWidth = '100%';
+            side.append(editor); document.body.append(side);
+            updateWhitelistSuggestions(editor, record, [{network_flow:{flow:{proto:'tcp',
+                saddr:'192.168.1.100',daddr:'104.16.184.241',sport:65059,dport:80}},
+                protocol_flows:[{flow:{host:'icanhazip.com:80',uri:'/',smac:'aa:bb:cc:dd:ee:ff'}}]}]);
+        }""", theme)
+        editor = page.locator("#host-test")
+        selects = editor.locator("select")
+        assert selects.nth(0).locator("option").evaluate_all("options => options.map(o=>o.value)") == [
+            "ip", "domain", "organization", "mac", "uri"
+        ]
+        assert editor.locator(".whitelist-quick-value").first.inner_text() == "icanhazip.com"
+        port = editor.locator(".whitelist-dst-port")
+        port.fill("80")
+        editor.get_by_role("button", name="icanhazip.com", exact=True).click()
+        assert selects.nth(0).input_value() == "domain"
+        assert selects.nth(1).input_value() == "dst"
+        assert selects.nth(2).input_value() == "alerts"
+        assert selects.nth(3).input_value() == ""
+        assert not selects.nth(3).is_visible()
+        assert port.input_value() == "" and not port.is_visible()
+        assert "subdomains" in editor.locator(".whitelist-rule-hint").inner_text()
+        assert editor.evaluate("section => section.scrollWidth <= section.clientWidth")
+        assert editor.locator(".whitelist-form label:visible").evaluate_all("""labels => labels.every(label => {
+            const control = label.querySelector('input,select');
+            return !control || control.getBoundingClientRect().right <= label.getBoundingClientRect().right + 1;
+        })""")
+        artifact = Path('output/whitelist-panel-validation')
+        artifact.mkdir(parents=True, exist_ok=True)
+        editor.screenshot(path=str(artifact / f'{theme}-host.png'))
+        editor.get_by_role("button", name="Add rule", exact=True).click()
+        page.wait_for_function("() => window.whitelistChanges.length === 1")
+        assert page.evaluate("window.whitelistChanges[0]") == {
+            "action":"add", "rule_type":"domain", "value":"icanhazip.com",
+            "direction":"dst", "ignore":"alerts", "evidence_type":"",
+        }
+        for index, (kind, value, label) in enumerate([
+            ("organization", "google", "Organization"),
+            ("mac", "aa:bb:cc:dd:ee:ff", "MAC address"),
+            ("uri", "/", "Request URI"),
+        ]):
+            selects.nth(0).select_option(kind)
+            editor.locator("input[list]").fill(value)
+            if kind == "uri":
+                assert "ALL hosts" in editor.locator(".whitelist-rule-hint").inner_text()
+            editor.get_by_role("button", name="Add rule", exact=True).click()
+            page.wait_for_function("count => window.whitelistChanges.length === count", arg=index * 2 + 2)
+            saved = page.evaluate("window.whitelistChanges.at(-1)")
+            assert saved["rule_type"] == kind and saved["evidence_type"] == ""
+            page.evaluate("""({saved,label}) => {
+                byId('whitelists').classList.add('active');
+                state.whitelists.rules = [{...saved, type:label, managed:true}];
+                state.whitelists.total = 1; renderWhitelists();
+            }""", {"saved":saved, "label":label})
+            page.locator("#whitelists-table").get_by_role("button", name="Remove", exact=True).click()
+            page.wait_for_function("count => window.whitelistChanges.length === count", arg=index * 2 + 3)
+            removed = page.evaluate("window.whitelistChanges.at(-1)")
+            assert removed["action"] == "remove" and removed["rule_type"] == kind
+        selects.nth(0).select_option("domain")
+        assert selects.nth(2).input_value() == "alerts"
+        assert errors == []
+        browser.close()

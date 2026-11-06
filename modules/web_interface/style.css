@@ -644,7 +644,7 @@ body.configuration-active main { max-width: none; padding: .75rem 1rem 2rem; }
 .whitelist-form label { display: flex; min-width: 135px; flex: 1 1 150px; flex-direction: column; gap: .3rem; color: var(--muted); font-size: .7rem; font-weight: 700; }
 .whitelist-form label[hidden] { display: none; }
 .whitelist-form label:nth-child(2) { flex: 2 1 220px; }
-.whitelist-form input, .whitelist-form select { width: 100%; }
+.whitelist-form input, .whitelist-form select { width: 100%; min-width: 0; }
 .whitelist-form button { flex: 0 0 auto; }
 .whitelist-quick-values { display: flex; flex-wrap: wrap; gap: .3rem; margin: 0 0 .55rem; }
 .whitelist-quick-values:empty { display: none; }
@@ -1141,8 +1141,9 @@ body.evidence-detail-active main > .panel:not(#evidence-detail) { display: none;
 .evidence-detail-alert-links { display: grid; gap: .15rem; }
 .evidence-detail-side .whitelist-editor { margin: 0; }
 .evidence-detail-side .whitelist-editor p { font-size: .68rem; }
-.evidence-detail-side .whitelist-form { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .4rem; }
+.evidence-detail-side .whitelist-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .4rem; }
 .evidence-detail-side .whitelist-form label { min-width: 0; }
+.evidence-detail-side .whitelist-form label:first-child { grid-column: 1 / -1; }
 .evidence-detail-side .whitelist-form label:nth-child(2) { grid-column: span 2; }
 .evidence-detail-side .whitelist-form datalist { display: none; }
 .evidence-detail-side .whitelist-form button { grid-column: 1 / -1; }

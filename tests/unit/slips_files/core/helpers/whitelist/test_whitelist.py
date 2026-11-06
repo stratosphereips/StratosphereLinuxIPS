@@ -1588,3 +1588,162 @@ def test_large_upload_destination_organization_is_whitelisted(whitelisted: bool)
     whitelist.db.is_ip_in_org_ips.return_value = ["142.250.0.0/15"]
     assert evidence.victim.value == "142.250.82.212"
     assert whitelist.is_whitelisted_evidence(evidence) is whitelisted
+
+
+@pytest.mark.parametrize("domain,expected", [
+    ("api.example.com", True),
+    ("child.api.example.com", True),
+    ("API.EXAMPLE.COM.:80", True),
+    ("example.com", False),
+    ("other.example.com", False),
+    ("api.example.com.evil.test", False),
+])
+def test_domain_host_rule_does_not_whitelist_parent_or_siblings(
+    domain: str, expected: bool,
+) -> None:
+    """Match explicit hosts and children without broadening shared domains.
+
+    Parameters:
+        domain: Observed HTTP Host or domain.
+        expected: Whether the explicit api.example.com rule covers it.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.update_whitelisted_domains(
+        "API.EXAMPLE.COM.", {"from": "dst", "what_to_ignore": "alerts"}
+    )
+    rules = whitelist.parser.whitelisted_domains
+    assert list(rules) == ["api.example.com"]
+    whitelist.bloom_filters.domains = set(rules)
+    whitelist.db.is_whitelisted.side_effect = lambda key, _kind: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    analyzer = whitelist.domain_analyzer
+    analyzer.enable_local_whitelist = True
+    analyzer.enable_online_whitelist = False
+    whitelist.db.is_whitelisted_tranco_domain.return_value = True
+    assert analyzer.is_whitelisted(domain, Direction.DST, "alerts") is expected
+    assert not analyzer.is_whitelisted(domain, Direction.SRC, "alerts")
+    assert not analyzer.is_whitelisted(domain, Direction.DST, "flows")
+
+
+@pytest.mark.parametrize("kind,analyzer_name,filter_name,value", [
+    ("domains", "domain_analyzer", "domains", "icanhazip.com"),
+    ("macs", "mac_analyzer", "mac_addrs", "aa:bb:cc:dd:ee:ff"),
+])
+def test_named_rules_refresh_live_without_per_flow_rule_scans(
+    kind: str, analyzer_name: str, filter_name: str, value: str,
+) -> None:
+    """New rules and removals refresh within two seconds, with bounded reads.
+
+    Parameters:
+        kind: Redis whitelist category.
+        analyzer_name: Running analyzer attribute.
+        filter_name: Process-local filter attribute.
+        value: Matching host or MAC.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    analyzer = getattr(whitelist, analyzer_name)
+    analyzer.enable_local_whitelist = True
+    if kind == "domains":
+        analyzer.enable_online_whitelist = False
+    rule = json.dumps({"from": "dst", "what_to_ignore": "alerts"})
+    whitelist.db.get_whitelist.return_value = {value: rule}
+    whitelist.db.is_whitelisted.side_effect = lambda key, _kind: rule if key == value else None
+    whitelist.bloom_filters._create_bloom_filter.side_effect = lambda keys, _error: set(keys)
+    setattr(whitelist.bloom_filters, filter_name, set())
+    whitelist.db.get_whitelist.reset_mock()
+    with patch("slips_files.common.abstracts.iwhitelist_analyzer.time.monotonic", return_value=100):
+        analyzer._next_rules_refresh = 0
+        for _ in range(100):
+            assert analyzer.is_whitelisted(value, Direction.DST, "alerts")
+        whitelist.db.get_whitelist.assert_called_once_with(kind)
+        whitelist.db.get_whitelist.return_value = {}
+    with patch("slips_files.common.abstracts.iwhitelist_analyzer.time.monotonic", return_value=103):
+        assert not analyzer.is_whitelisted(value, Direction.DST, "alerts")
+    assert whitelist.db.get_whitelist.call_count == 2
+    assert not getattr(whitelist.bloom_filters, filter_name)
+
+
+def test_organization_rules_refresh_when_added_and_removed_live() -> None:
+    """Refresh cached organization rules without scanning them on every call."""
+    whitelist = ModuleFactory().create_whitelist_obj()
+    analyzer = whitelist.org_analyzer
+    analyzer.whitelisted_orgs = {}
+    analyzer.is_domain_in_org = Mock(return_value=True)
+    whitelist.db.get_whitelist.return_value = {
+        "google": json.dumps({"from": "dst", "what_to_ignore": "alerts"})
+    }
+    whitelist.db.get_whitelist.reset_mock()
+    with patch("slips_files.common.abstracts.iwhitelist_analyzer.time.monotonic", return_value=100):
+        analyzer._next_rules_refresh = 0
+        for _ in range(100):
+            assert analyzer._is_part_of_a_whitelisted_org(
+                "google.com", IoCType.DOMAIN, Direction.DST, "alerts"
+            )
+        whitelist.db.get_whitelist.assert_called_once_with("organizations")
+        whitelist.db.get_whitelist.return_value = {}
+    with patch("slips_files.common.abstracts.iwhitelist_analyzer.time.monotonic", return_value=103):
+        assert not analyzer._is_part_of_a_whitelisted_org(
+            "google.com", IoCType.DOMAIN, Direction.DST, "alerts"
+        )
+    assert whitelist.db.get_whitelist.call_count == 2
+
+
+def test_observed_http_host_rule_matches_without_dns_or_ip_exemption() -> None:
+    """An HTTP host rule matches its evidence while a different CDN host stays visible."""
+    whitelist = ModuleFactory().create_whitelist_obj()
+    analyzer = whitelist.domain_analyzer
+    analyzer.enable_local_whitelist = True
+    analyzer.enable_online_whitelist = False
+    whitelist.bloom_filters.domains = {"icanhazip.com"}
+    whitelist.db.is_whitelisted.side_effect = lambda value, kind: (
+        json.dumps({"from":"dst", "what_to_ignore":"alerts"})
+        if kind == "domains" and value == "icanhazip.com" else None
+    )
+    whitelist.ip_analyzer.is_whitelisted = Mock(return_value=False)
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(return_value=False)
+    whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
+    victim = Victim(direction=Direction.DST, ioc_type=IoCType.IP,
+                    value="104.16.184.241", queries=["icanhazip.com"])
+    evidence = SimpleNamespace(victim=victim, src_port=65059, dst_port=80,
+                               evidence_type=EvidenceType.HTTP_TRAFFIC)
+    assert whitelist._is_whitelisted_entity(evidence, "victim")
+    victim.queries = ["unrelated.example.com"]
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.get_ip_identification = Mock(return_value={
+        "queries":["icanhazip.com"], "SNI":"icanhazip.com",
+    })
+    handler._get_more_info_about_evidence(evidence)
+    assert not whitelist._is_whitelisted_entity(evidence, "victim")
+
+
+@pytest.mark.parametrize("flow_type,field", [
+    ("http", "host"), ("ssl", "server_name"), ("dns", "query"),
+])
+def test_protocol_host_takes_precedence_over_cached_shared_ip_names(
+    flow_type: str, field: str,
+) -> None:
+    """Match the observed protocol host without inheriting another CDN name.
+
+    Parameters:
+        flow_type: Protocol with an explicit destination name.
+        field: Parsed name field used by the whitelist.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    flow = SimpleNamespace(type_=flow_type, daddr="104.16.184.241", subject="")
+    setattr(flow, field, "unrelated.example.com")
+    whitelist.db.get_ip_info.return_value = [{"server_name":"icanhazip.com"}]
+    whitelist.db.get_dns_resolution.return_value = {"domains":["icanhazip.com"]}
+    assert whitelist.domain_analyzer.get_dst_domains_of_flow(flow) == ["unrelated.example.com"]
+    whitelist.db.get_ip_info.assert_not_called()
+    whitelist.db.get_dns_resolution.assert_not_called()
+    analyzer = whitelist.domain_analyzer
+    analyzer.enable_local_whitelist = True
+    analyzer.enable_online_whitelist = False
+    whitelist.bloom_filters.domains = {"icanhazip.com"}
+    whitelist.db.is_whitelisted.return_value = json.dumps({"from":"dst", "what_to_ignore":"both"})
+    assert not any(analyzer.is_whitelisted(name, Direction.DST, "flows")
+                   for name in analyzer.get_dst_domains_of_flow(flow))
+    setattr(flow, field, "icanhazip.com")
+    assert any(analyzer.is_whitelisted(name, Direction.DST, "flows")
+               for name in analyzer.get_dst_domains_of_flow(flow))

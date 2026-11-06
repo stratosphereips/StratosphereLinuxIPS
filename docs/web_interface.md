@@ -1190,12 +1190,28 @@ can be refreshed independently of an already completed run.
 While Slips is running, use **Add a whitelist rule** in the Whitelists tab,
 or **Whitelist future matches from this evidence** in an individual evidence
 drawer. The evidence editor suggests source and destination IPs, exact
-IP:port pairs, and `*:port` rules from the evidence and linked flows. A
-port-only rule applies to that port on any IP, so choose its source or
+IP:port pairs, and `*:port` rules from the evidence and linked flows. It also
+offers HTTP Host, TLS server name, DNS names and observed MAC addresses.
+For example, click **icanhazip.com** to select **Domain / HTTP host** with
+**Destination** and **Future evidence and alerts**. This keeps the flow visible.
+Domain rules cover the entered name and its subdomains, not its parent or
+siblings; `api.example.com` does not exempt `other.example.com`. Observed HTTP
+hosts remain attached to HTTP traffic evidence even without a captured DNS lookup.
+Explicit protocol names take precedence over cached IP names during flow matching;
+HTTP traffic evidence also preserves its observed host during enrichment. This
+avoids exempting unrelated requests to a shared CDN address.
+A port-only rule applies to that port on any IP, so choose its source or
 destination side carefully. Rules can suppress future evidence and alerts
 (the default), flows, or both. Existing evidence and alerts remain in the
-record. New IP rules become active in running workers within a few seconds.
-Web-added rules appear in the Whitelists table with a **Remove** action.
+record. All five existing rule kinds are available: **IP or port**,
+**Domain / HTTP host**, **Organization**, **MAC address**, and **Request URI**.
+Organizations are limited to the engine's supported names shown in the editor.
+Evidence-type and destination-port conditions apply only to IP rules; domain,
+organization and MAC rules cover all evidence types. Blocking-only rules require
+an individual IP. New rules become active in running workers within a few seconds;
+worker-local filters refresh at most once every two seconds.
+Web-added rules of every kind appear in the Whitelists table with a **Remove**
+action.
 Choose an **Evidence type** to limit an IP rule to one detection, for example
 `192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
 only that evidence type; they do not hide its flows or other detections.
@@ -1238,8 +1254,10 @@ re-blocking the host. After updating the Python code, restart Slips once to
 load this feature. Restart also refreshes any old alert/flow suppression rules
 replaced by editing the file; those other rules remain independent.
 
-Choose **Request URI** to suppress an exact URI independently of IP
-and port. URI rules drop matching future HTTP records before detection. For
+Choose **Request URI** to suppress an exact request path and query independently
+of host, IP and port. A `/` rule covers that path across all hosts. To allow one
+HTTP host instead, choose **Domain / HTTP host**; full URLs are not domain rules.
+URI rules drop matching future HTTP records before detection. For
 AirPlay discovery, enter `/info?txtAirPlay&txtRAOP RTSP/1.`; Zeek records
 this RTSP request in `http.log` as an HTTP/0.9 URI and tags the related
 `conn.log` record as `airplay-info`. Slips drops that tagged connection only

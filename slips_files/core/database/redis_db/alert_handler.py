@@ -299,9 +299,10 @@ class AlertHandler:
                 entity.AS = ip_identification.get("AS")
                 entity.TI = ip_identification.get("TI")
                 entity.rDNS = ip_identification.get("rDNS")
-                entity.SNI = ip_identification.get("SNI")
-                # queries resolved to that ip
-                entity.queries = ip_identification.get("queries")
+                # An observed request host is more specific than cached IP names.
+                if not entity.queries:
+                    entity.SNI = entity.SNI or ip_identification.get("SNI")
+                    entity.queries = ip_identification.get("queries")
 
             elif entity.ioc_type == IoCType.DOMAIN:
                 domain_info: Any

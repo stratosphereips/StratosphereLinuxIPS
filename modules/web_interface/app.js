@@ -4489,7 +4489,7 @@ function reviewEditor(entity, record) {
   return panel;
 }
 
-/** Offer IP and port values present in an evidence and its linked flows.
+/** Offer supported rule values observed in evidence and its linked flows.
  * @param {object|null} record - Individual evidence, if available.
  * @param {object[]} groups - Triggering flow groups.
  * @returns {Map<string, object>} Suggested values and their directions.
@@ -4511,7 +4511,7 @@ function whitelistSuggestions(record, groups = []) {
     }
     choices.set(key, {
       direction: existing && existing.direction !== direction ? "both" : direction,
-      label: existing?.label || label,
+      label: label === "HTTP host" ? label : existing?.label || label,
       ruleType,
     });
   };
@@ -4530,15 +4530,34 @@ function whitelistSuggestions(record, groups = []) {
       add(`*:${port}`, direction, `${label} port on any IP`);
     }
   };
+  /** Suggest a DNS host, retaining subdomains and excluding URL paths.
+   * @param {string} name - Observed HTTP host, SNI or DNS name.
+   * @param {string} direction - Traffic side.
+   * @param {string} label - Suggestion label.
+   */
+  const addDomain = (name, direction, label) => {
+    if (typeof name !== "string") return;
+    const domain = name.trim().replace(/:\d+$/, "").replace(/\.$/, "").toLowerCase();
+    if (!peerAddress(domain) && domain.length <= 253
+        && /^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i.test(domain)) {
+      add(domain, direction, label, "domain");
+    }
+  };
   if (record?.profile_ip) add(record.profile_ip, "both", "Profile host IP");
   const icmpEvidence = isIcmpProtocol(record?.proto);
   addSide(null, icmpEvidence ? null : record?.src_port, "src", "Evidence source");
   addSide(null, icmpEvidence ? null : record?.dst_port, "dst", "Evidence destination");
   for (const role of ["attacker", "victim"]) {
     const entity = record?.[role];
-    if (String(entity?.ioc_type || "").toUpperCase() !== "IP") continue;
+    if (!entity) continue;
     const direction = String(entity.direction || "").toLowerCase().includes("src")
       ? "src" : String(entity.direction || "").toLowerCase().includes("dst") ? "dst" : "both";
+    if (String(entity.ioc_type || "").toUpperCase() === "DOMAIN") {
+      addDomain(entity.value, direction, "Evidence domain");
+    }
+    [...(entity.queries || []), ...(entity.CNAME || []), entity.SNI, entity.rDNS]
+      .forEach((domain) => addDomain(domain, direction, "Observed domain"));
+    if (String(entity.ioc_type || "").toUpperCase() !== "IP") continue;
     const port = icmpEvidence ? null : direction === "src" ? record.src_port
       : direction === "dst" ? record.dst_port : null;
     addSide(entity.value, port, direction, role);
@@ -4551,6 +4570,15 @@ function whitelistSuggestions(record, groups = []) {
         icmp ? null : flowValue(flow, "sport", "src_port", "id.orig_p"), "src", "Flow source");
       addSide(flowValue(flow, "daddr", "dst_ip", "id.resp_h"),
         icmp ? null : flowValue(flow, "dport", "dst_port", "id.resp_p"), "dst", "Flow destination");
+      addDomain(flow.host, "dst", "HTTP host");
+      addDomain(flow.server_name, "dst", "TLS server name");
+      addDomain(flow.query, "dst", "DNS query");
+      for (const [field, direction] of [["smac", "src"], ["dmac", "dst"]]) {
+        const mac = flow[field];
+        if (typeof mac === "string" && /^(?:[a-f0-9]{2}:){5}[a-f0-9]{2}$/i.test(mac)) {
+          add(mac.toLowerCase(), direction, "Flow MAC address", "mac");
+        }
+      }
       if (flow.uri && String(flow.uri).startsWith("/")) {
         add(String(flow.uri), "both", "Request URI", "uri");
       }
@@ -4569,6 +4597,9 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
   if (!list) return;
   list.replaceChildren();
   const choices = whitelistSuggestions(record, groups);
+  (state.whitelists?.organizations || []).forEach((organization) => {
+    choices.set(organization, {direction: "both", label: "Supported organization", ruleType: "organization"});
+  });
   choices.forEach((choice, value) => {
     const option = document.createElement("option");
     option.value = value;
@@ -4581,10 +4612,11 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
   if (!quick) return;
   quick.replaceChildren();
   const ranked = [...choices.entries()].sort(([leftValue, left], [rightValue, right]) => {
-    const rank = (value, choice) => choice.label.includes("Flow destination IP and port") ? 0
-      : choice.ruleType === "uri" ? 1 : value.startsWith("*:") ? 2
-        : choice.label.includes("IP and port") ? 3
-          : choice.label.includes("Flow source IP") ? 4 : 5;
+    const rank = (value, choice) => choice.label === "HTTP host" ? 0
+      : choice.ruleType === "domain" ? 1
+        : choice.label.includes("Flow destination IP and port") ? 2
+          : choice.ruleType === "uri" ? 3 : value.startsWith("*:") ? 4
+            : choice.label.includes("IP and port") ? 5 : 6;
     return rank(leftValue, left) - rank(rightValue, right);
   });
   ranked.slice(0, 5).forEach(([suggestion]) => {
@@ -4601,7 +4633,7 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
   });
 }
 
-/** Build an IP or request URI whitelist editor for the tab or evidence.
+/** Build an editor for every supported whitelist kind.
  * @param {string} kind - Unique list prefix for tab or evidence.
  * @param {object|null} record - Individual evidence, if available.
  * @returns {Element} Editor with its own submit handler.
@@ -4611,7 +4643,7 @@ function whitelistEditor(kind, record = null, host = null) {
   section.className = "surface whitelist-editor";
   section.append(
     text("h3", host ? "Whitelist this host" : record ? "Whitelist future matches from this evidence" : "Add a whitelist rule"),
-    text("p", "Choose an IP, port, or request URI. URI rules suppress matching future flows and their detections regardless of IP or port. Existing evidence stays in the record.", "muted"),
+    text("p", "Choose an IP, domain / HTTP host, organization, MAC address, or URI path. Existing evidence stays in the record.", "muted"),
   );
   const form = document.createElement("form");
   form.className = "whitelist-form";
@@ -4619,7 +4651,8 @@ function whitelistEditor(kind, record = null, host = null) {
   const ruleTypeLabel = document.createElement("label");
   ruleTypeLabel.append(text("span", "Rule type"));
   const ruleType = document.createElement("select");
-  [["ip", "IP or port"], ["uri", "Request URI"]].forEach(([key, label]) => {
+  [["ip", "IP or port"], ["domain", "Domain / HTTP host"],
+    ["organization", "Organization"], ["mac", "MAC address"], ["uri", "Request URI"]].forEach(([key, label]) => {
     const option = text("option", label);
     option.value = key;
     ruleType.append(option);
@@ -4634,6 +4667,7 @@ function whitelistEditor(kind, record = null, host = null) {
   value.placeholder = "192.168.1.10:443 or *:443";
   value.setAttribute("list", `${kind}-whitelist-values`);
   valueLabel.append(value);
+  const ruleHint = text("p", "", "muted whitelist-rule-hint");
   const list = document.createElement("datalist");
   list.id = `${kind}-whitelist-values`;
   const directionLabel = document.createElement("label");
@@ -4708,43 +4742,72 @@ function whitelistEditor(kind, record = null, host = null) {
       evidenceType.value = "";
     }
     direction.disabled = blocking;
-    evidenceType.disabled = blocking;
+    evidenceType.disabled = blocking || ruleType.value !== "ip";
     if (ignored.value !== "alerts") dstPort.value = "";
-    value.placeholder = blocking ? "192.168.1.10" : "192.168.1.10:443 or *:443";
+    if (ruleType.value === "ip") {
+      value.placeholder = blocking ? "192.168.1.10" : "192.168.1.10:443 or *:443";
+    }
     updateDestinationPort();
   });
   typeLabel.append(evidenceType);
   ruleType.addEventListener("change", () => {
-    const uri = ruleType.value === "uri";
-    allAddresses.disabled = uri;
-    if (uri) allAddresses.checked = false;
-    valueLabel.querySelector("span").textContent = uri ? "Request URI" : "IP or port";
-    value.maxLength = uri ? 256 : 128;
-    value.placeholder = uri ? "/info?txtAirPlay&txtRAOP RTSP/1." : "192.168.1.10:443 or *:443";
+    const type = ruleType.value;
+    const uri = type === "uri";
+    const ip = type === "ip";
+    allAddresses.disabled = !ip;
+    if (!ip) {
+      allAddresses.checked = false;
+      value.disabled = false;
+      dstPort.value = "";
+      evidenceType.value = "";
+      if (ignored.value === "blocking") ignored.value = "alerts";
+    }
+    const labels = {ip: "IP or port", domain: "Domain / HTTP host", organization: "Organization",
+      mac: "MAC address", uri: "Request URI"};
+    const placeholders = {ip: "192.168.1.10:443 or *:443", domain: "icanhazip.com",
+      organization: (state.whitelists?.organizations || ["google", "microsoft", "apple", "facebook", "twitter"]).join(", "),
+      mac: "aa:bb:cc:dd:ee:ff", uri: "/path?query=value"};
+    valueLabel.querySelector("span").textContent = labels[type];
+    value.maxLength = uri ? 256 : type === "domain" ? 253 : 128;
+    value.placeholder = placeholders[type];
     directionLabel.hidden = uri;
     ignoreLabel.hidden = uri;
-    typeLabel.hidden = uri;
+    typeLabel.hidden = !ip;
+    evidenceType.disabled = !ip;
+    ignored.disabled = Boolean(evidenceType.value);
+    ignored.querySelector('option[value="blocking"]').disabled = !ip;
     if (uri) {
       direction.value = "both";
       ignored.value = "flows";
-      evidenceType.value = "";
-      ignored.disabled = false;
       direction.disabled = false;
       evidenceType.disabled = false;
-      dstPort.value = "";
+    } else if (previousType === "uri") {
+      ignored.value = "alerts";
+      direction.value = "dst";
     }
+    const hints = {
+      ip: "",
+      domain: "Matches this host and its subdomains, including HTTP Host, TLS server name and DNS names. Enter a name without a scheme, port or path. Applies to all evidence types.",
+      organization: "Supported organizations: " + placeholders.organization + ". Matches known organization IPs and domains, for all evidence types.",
+      mac: "Matches this device address on the selected side, for all evidence types.",
+      uri: "Exact request path and query, across ALL hosts and ports. Matching future HTTP records and their detections are suppressed. To allow one host, choose Domain / HTTP host.",
+    };
+    ruleHint.textContent = hints[type];
+    ruleHint.hidden = !hints[type];
+    previousType = type;
     updateDestinationPort();
   });
+  let previousType = "ip";
   /** Keep destination-port conditions source-only and unavailable on older backends. */
   function updateDestinationPort() {
     const supported = state.whitelists?.supports_dst_port_rules === true;
-    const uri = ruleType.value === "uri";
+    const ip = ruleType.value === "ip";
     const portless = record && (isIcmpProtocol(record.proto)
       || String(record.proto || "").toLowerCase() === "arp"
       || /^ARP_/.test(String(record.evidence_type || "").toUpperCase()));
-    const available = supported && !uri && !portless && ignored.value === "alerts";
-    dstPortLabel.hidden = uri || portless;
-    dstPortHint.hidden = uri || portless;
+    const available = supported && ip && !portless && ignored.value === "alerts";
+    dstPortLabel.hidden = !ip || portless;
+    dstPortHint.hidden = !ip || portless;
     dstPort.disabled = !available;
     direction.disabled = ignored.value === "blocking" || (available && Boolean(dstPort.value));
     if (available && dstPort.value) {
@@ -4774,7 +4837,7 @@ function whitelistEditor(kind, record = null, host = null) {
     section.append(text("p", "This saves a separate rule for each listed address. New addresses require their own rule.", "muted"));
   }
   form.append(ruleTypeLabel, valueLabel, list, directionLabel, dstPortLabel, ignoreLabel, typeLabel, save);
-  section.append(form, dstPortHint, feedback);
+  section.append(form, ruleHint, dstPortHint, feedback);
   updateDestinationPort();
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -4839,7 +4902,8 @@ function renderWhitelists() {
         remove.disabled = true;
         try {
           await saveWhitelistRule({
-            action: "remove", rule_type: row.type === "Request URI" ? "uri" : "ip",
+            action: "remove", rule_type: row.rule_type || ({"IP address": "ip", "Domain": "domain",
+              "Organization": "organization", "MAC address": "mac", "Request URI": "uri"})[row.type],
             value: row.value, direction: row.direction,
             ignore: row.ignore, evidence_type: row.evidence_type,
           });

@@ -2338,11 +2338,15 @@ def test_web_whitelist_rejects_invalid_alert_scope(
 
 
 @pytest.mark.parametrize("dst_port", [None, 902])
-def test_local_web_request_can_add_whitelist_rule(dst_port: int | None) -> None:
+@pytest.mark.parametrize("rule_type", [None, "domain", "mac", "organization", "uri"])
+def test_local_web_request_can_add_whitelist_rule(
+    dst_port: int | None, rule_type: str | None,
+) -> None:
     """Route legacy and destination-port requests to the whitelist writer.
 
     Parameters:
         dst_port: Optional new condition in the JSON request.
+        rule_type: Explicit kind that must reach the writer unchanged.
     """
     _module_factory = ModuleFactory()
     reader = Mock()
@@ -2363,6 +2367,7 @@ def test_local_web_request_can_add_whitelist_rule(dst_port: int | None) -> None:
                 "value": "192.0.2.4:443",
                 "direction": "dst",
                 "ignore": "alerts",
+                **({"rule_type": rule_type} if rule_type else {}),
                 **({"dst_port": dst_port} if dst_port is not None else {}),
             }
         ).encode(),
@@ -2378,6 +2383,7 @@ def test_local_web_request_can_add_whitelist_rule(dst_port: int | None) -> None:
             assert json.load(response)["value"] == "192.0.2.4:443"
         reader.save_whitelist_rule.assert_called_once_with(
             "add", "192.0.2.4:443", "dst", "alerts",
+            *((None, rule_type) if rule_type else ()),
             **({"dst_port": dst_port} if dst_port is not None else {}),
         )
     finally:
@@ -9296,3 +9302,89 @@ def test_packet_evidence_resolves_flow_that_arrives_after_detection(tmp_path: Pa
     assert result["items"][0]["network_flow"]["flow"] == flow
     assert result["items"][0]["protocol_flows"][0]["flow"]["host"] == "ip-api.com"
     db.close()
+
+
+@pytest.mark.parametrize("kind,value,normalized,category,attribute", [
+    ("domain", "ICANHAZIP.com.", "icanhazip.com", "domains", "whitelisted_domains"),
+    ("domain", "api.example.com", "api.example.com", "domains", "whitelisted_domains"),
+    ("mac", "AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff", "macs", "whitelisted_mac"),
+    ("organization", "Google", "google", "organizations", "whitelisted_orgs"),
+])
+def test_web_named_whitelist_rules_survive_reload_and_removal(
+    tmp_path: Path, kind: str, value: str, normalized: str,
+    category: str, attribute: str,
+) -> None:
+    """Round-trip non-IP rules through file, parser, runtime list and deletion.
+
+    Parameters:
+        tmp_path: Isolated whitelist directory.
+        kind: API rule kind.
+        value: Browser input.
+        normalized: Saved canonical value.
+        category: Redis whitelist category.
+        attribute: Parser rule dictionary.
+    """
+    factory = ModuleFactory()
+    metadata = tmp_path / "metadata"
+    metadata.mkdir()
+    path = tmp_path / "whitelist.conf"
+    path.write_text("")
+    (metadata / "run.yaml").write_text(
+        "whitelists:\n  enable_local_whitelist: true\n"
+        f"  local_whitelist_path: {path}\n"
+    )
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.output_dir = tmp_path
+    reader.redis = Mock()
+    reader.redis.hexists.return_value = False
+    reader.response_metadata = Mock(return_value={"backend_status": {"connected": True}})
+    saved = reader.save_whitelist_rule("add", value, "dst", "alerts", rule_type=kind)
+    assert saved["value"] == normalized
+    assert f"{kind},{normalized},dst,alerts\n" in path.read_text()
+    whitelist = factory.create_whitelist_obj()
+    whitelist.parser.local_whitelist_path = str(path)
+    whitelist.parser.parse()
+    assert getattr(whitelist.parser, attribute) == {
+        normalized: {"from": "dst", "what_to_ignore": "alerts"}
+    }
+    serialized = reader.redis.hset.call_args.args[2]
+    reader.redis.hgetall.side_effect = lambda key: (
+        {normalized: serialized} if key == f"whitelist_{category}" else {}
+    )
+    rules = reader._runtime_whitelist_rules()
+    assert len(rules) == 1
+    assert rules[0]["rule_type"] == kind
+    assert rules[0]["managed"] is True
+    reader.save_whitelist_rule("remove", normalized, "dst", "alerts", rule_type=kind)
+    reader.redis.hdel.assert_called_once_with(f"whitelist_{category}", normalized)
+    assert f"{kind},{normalized}," not in path.read_text()
+
+
+@pytest.mark.parametrize("kind,value,options", [
+    ("domain", "https://icanhazip.com/", {}),
+    ("domain", "icanhazip.com/path", {}),
+    ("domain", "icanhazip.com:80", {}),
+    ("domain", "icanhazip.com,src,flows", {}),
+    ("domain", "icanhazip.com\nip,192.0.2.1,both,flows", {}),
+    ("domain", "icanhazip.com", {"evidence_type": "HTTP_TRAFFIC"}),
+    ("domain", "icanhazip.com", {"dst_port": 80}),
+    ("organization", "cloudflare", {}),
+    ("mac", "not-a-mac", {}),
+    ([], "icanhazip.com", {}),
+])
+def test_web_named_whitelist_rejects_unsupported_or_ambiguous_rules(
+    kind: object, value: str, options: dict,
+) -> None:
+    """Reject invalid kinds, CSV injection and unsupported scope before writes.
+
+    Parameters:
+        kind: Requested rule kind.
+        value: Untrusted browser input.
+        options: Unsupported rule condition, if any.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    with pytest.raises(ValueError):
+        reader.save_whitelist_rule("add", value, "dst", "alerts", rule_type=kind, **options)
+    reader.redis.hset.assert_not_called()

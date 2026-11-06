@@ -239,6 +239,9 @@ class OrgAnalyzer(IWhitelistAnalyzer):
             if utils.is_private_ip(ioc):
                 return False
 
+        rules = self.refresh_rules("organizations")
+        if rules is not None:
+            self.whitelisted_orgs = rules
         if not self.whitelisted_orgs:
             return False
 
