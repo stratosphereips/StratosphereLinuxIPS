@@ -148,8 +148,14 @@ class MetadataManager:
             "input_type": self.main.input_type,
             "evidence_detection_threshold": self.main.conf.evidence_detection_threshold(),
         }
-        if self.main.args.interface:
-            info.update({"interface": self.main.args.interface})
+        if self.main.args.interface or self.main.args.access_point:
+            info.update(
+                {
+                    "interface": ",".join(
+                        utils.get_all_interfaces(self.main.args)
+                    )
+                }
+            )
 
         zeek_dir = self.main.db.get_zeek_output_dir()
         if isinstance(zeek_dir, str) and zeek_dir:

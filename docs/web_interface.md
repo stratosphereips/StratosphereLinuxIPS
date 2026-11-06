@@ -68,6 +68,22 @@ retained Home Wi-Fi detections from the whole week, even after visiting other
 networks. **Full run** includes all retained activity on that network. Turn the
 switch off to include other networks. The browser saves this choice.
 
+For a live AP capture such as `-ap wlan0,eth0`, the header instead offers
+**Network** and **Interface** selectors. **All active networks** and **All
+interfaces** are the defaults. Select a named network or one interface to
+inspect its activity; **All retained networks** includes older and unidentified
+history. Network and interface selections do not reset severity, grouping,
+review, search or time choices. Overview shows each monitored interface's
+network and addresses, and the shared header refreshes all of them.
+The operational cards for retained hosts and processed input are labeled
+**full run**; they remain run-wide totals rather than selected table counts.
+
+The web supports older AP outputs whose metadata omitted the interface list:
+it recovers the monitored names from the run's saved network states. It does
+not split the run display name, so interface names containing underscores
+remain intact. General comma-separated `-i` capture syntax is still separate
+from this web support; use the existing `-ap` capture mode for an AP and uplink.
+
 **This connection** is the default time range during live interface capture
 in Alerts, Evidence, Hosts, host details, P2P history/messages and P2P Graph.
 The first heartbeat applies it without waiting for Overview. It includes only
@@ -81,6 +97,15 @@ the graph filters restores the input source's default time range. Older saved
 ranges matching the previous defaults migrate to the new defaults; other
 saved range choices are retained.
 
+With several interfaces, **This connection** uses each selected interface's
+own session boundary. Reconnecting Wi-Fi does not discard Ethernet activity
+from its still-active connection. Interfaces on the same identified LAN share
+one network choice while retaining independent session boundaries. Disconnected
+interfaces remain available for retained-history inspection. Detection and
+traffic queries use the recorded interface and network context before counts,
+grouping and pagination; a single earliest/latest timestamp is not used as
+the membership rule for every interface.
+
 Evidence, linked alerts and their grouped counts use the network identity saved
 with each detection, rather than the host's present IP or its most recent visit.
 The web worker also retains up to 4096 network transitions in
@@ -89,6 +114,22 @@ explicit network identity. A legacy record whose network cannot be established
 remains available with **Current network only** off; Slips does not assign it to
 the current network by guessing. Networks without a router MAC conservatively
 use their current connection. This bookkeeping runs outside capture and profiling.
+When older evidence lacks an interface label, its linked connection or protocol
+records may establish it. This fallback requires every linked record to exist
+and agree on the interface. Ambiguous history remains visible under **All
+retained networks**. These web changes do not migrate the capture engine's
+IP-keyed detector state or correlate/deduplicate forwarded connections across
+interfaces; the same private IP on separate networks still requires that
+separate engine work. Live connectivity and protection status remain operational
+run-wide information, rather than historical detection counts.
+
+The API accepts `network=current` for the active-network union,
+`network=connection` or `range=connection` for current sessions, `network_id`
+for one advertised network, and `interface` for one advertised capture
+interface. With only `interface` and a retained time range, records from earlier
+networks on that interface are included. File analyses, saved viewers and
+archives continue to use their recorded history independently of the viewing
+computer's live interfaces.
 
 Grouped Evidence views label both **groups** and **records** explicitly. A single
 device row can contain many evidence records; its group count is not the number

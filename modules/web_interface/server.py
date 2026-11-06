@@ -76,6 +76,7 @@ from slips_files.core.helpers.whitelist.whitelist_parser import (
 from modules.web_interface.network_scope import (
     NetworkScope,
     network_filtered,
+    NetworkSelection,
     network_visits,
     record_network_visits,
 )
@@ -1861,6 +1862,8 @@ class RunDataReader:
             now = time.time()
         if range_name in TIME_RANGES:
             return now - TIME_RANGES[range_name], now, range_name
+        if range_name == "connection":
+            return None, now, "connection"
         if range_name in {"all", "full"}:
             return None, now, "all"
         if range_name == "custom":
@@ -1922,16 +1925,130 @@ class RunDataReader:
             f"({expression} = ? AND {stable_id} {operator} ?))"
         )
 
+    def _capture_interfaces(
+        self, analysis: Optional[Dict[str, Any]] = None
+    ) -> List[str]:
+        """Read monitored interface names, including legacy AP runs.
+
+        Parameters:
+            analysis: Optional already-read run metadata.
+
+        Returns:
+            Ordered interface names from metadata or captured network states.
+        """
+        analysis = (
+            analysis
+            if analysis is not None
+            else self.redis.hgetall("analysis")
+        )
+        value = analysis.get("interface", "")
+        names = (
+            [item.strip() for item in value.split(",") if item.strip()]
+            if isinstance(value, str)
+            else []
+        )
+        if not names and analysis.get("input_type") == "interface":
+            states = self.redis.hgetall("network_states")
+            names = sorted(states) if isinstance(states, dict) else []
+        return list(dict.fromkeys(names))
+
+    def _network_members(self) -> tuple[tuple[str, NetworkScope], ...]:
+        """Cache each capture interface's recorded network and session boundary.
+
+        Returns:
+            Interface scopes, including disconnected entries for display.
+        """
+        analysis = self.redis.hgetall("analysis")
+        states = [
+            (name, self._loads(self.redis.hget("network_states", name), {}))
+            for name in self._capture_interfaces(analysis)
+        ]
+        states = [
+            (name, value if isinstance(value, dict) else {})
+            for name, value in states
+        ]
+        run_name = self._network_run_name()
+        signature = (
+            json.dumps(
+                [
+                    (
+                        name,
+                        {
+                            key: state.get(key)
+                            for key in (
+                                "connected",
+                                "changed_at",
+                                "gateway_mac",
+                                "history",
+                            )
+                        },
+                    )
+                    for name, state in states
+                ],
+                sort_keys=True,
+            ),
+            run_name,
+        )
+        lock = self.__dict__.setdefault(
+            "_network_scope_lock", threading.Lock()
+        )
+        with lock:
+            cached = getattr(self, "_network_scope_cache", None)
+            if cached and cached[0] == signature:
+                return cached[1]
+            saved = {}
+            path = getattr(self, "history_path", None)
+            try:
+                if path is not None and path.exists():
+                    with connect_history(path, read_only=True) as connection:
+                        row = connection.execute(
+                            "SELECT value FROM metadata WHERE key=?",
+                            (NETWORK_SCOPES_KEY,),
+                        ).fetchone()
+                    saved = self._loads(row[0], {}) if row else {}
+            except (OSError, sqlite3.Error):
+                pass
+            saved = saved if isinstance(saved, dict) else {}
+            members = []
+            for name, state in states:
+                checkpoint = network_connection_scope(state, saved.get(name))
+                try:
+                    visits = (
+                        record_network_visits(
+                            path, name, state, run_name, saved.get(name)
+                        )
+                        if path is not None
+                        else network_visits(state, run_name, saved.get(name))
+                    )
+                except (OSError, sqlite3.Error):
+                    visits = network_visits(state, run_name, saved.get(name))
+                identity = (
+                    HostProfileStore.network_id_for_state(state, run_name)
+                    if checkpoint.get("start") is not None
+                    else "unavailable"
+                )
+                members.append(
+                    (
+                        name,
+                        NetworkScope(
+                            identity, visits, checkpoint.get("start")
+                        ),
+                    )
+                )
+            result = tuple(members)
+            self._network_scope_cache = (signature, result)
+            return result
+
     def _for_network_scope(
         self, query: Dict[str, List[str]]
     ) -> "RunDataReader":
-        """Clone this reader for one network-filtered request.
+        """Clone a reader with a union of selected interface/network sessions.
 
         Parameters:
-            query: Network and optional connection selection.
+            query: Network, interface and optional connection selection.
 
         Returns:
-            Independent reader using recorded membership across all visits.
+            Request-local reader preserving each interface's time boundary.
         """
         if getattr(self, "saved_view", False) or getattr(
             self, "archive_mode", False
@@ -1940,52 +2057,51 @@ class RunDataReader:
         analysis = self.redis.hgetall("analysis")
         if analysis.get("input_type") != "interface":
             return self
-        interface = (
-            str(analysis.get("interface") or "").split(",", 1)[0].strip()
+        all_members = self._network_members()
+        interface = self._query_value(query, "interface")
+        identity = self._query_value(query, "network_id")
+        connection_only = (
+            self._query_value(query, "network") == "connection"
+            or self._query_value(query, "range") == "connection"
         )
-        state = self._loads(self.redis.hget("network_states", interface), {})
-        state = state if isinstance(state, dict) else {}
-        run_name = self._network_run_name()
-        signature = (
-            interface,
-            state.get("changed_at"),
-            state.get("connected"),
-            state.get("gateway_mac"),
-            run_name,
+        all_networks = (
+            self._query_value(query, "network")
+            not in {"current", "connection"}
+            and not identity
+            and not connection_only
         )
-        cached = getattr(self, "_network_scope_cache", None)
-        if cached is None or cached[0] != signature:
-            saved = {}
-            path = getattr(self, "history_path", None)
-            try:
-                if path is not None:
-                    with connect_history(path, read_only=True) as connection:
-                        row = connection.execute(
-                            "SELECT value FROM metadata WHERE key=?",
-                            (NETWORK_SCOPES_KEY,),
-                        ).fetchone()
-                    saved = (
-                        self._loads(row[0], {}).get(interface, {})
-                        if row
-                        else {}
-                    )
-                    visits = record_network_visits(
-                        path, interface, state, run_name, saved
-                    )
-                else:
-                    visits = network_visits(state, run_name)
-            except (OSError, sqlite3.Error):
-                visits = network_visits(state, run_name, saved)
-            checkpoint = network_connection_scope(state, saved)
-            network_id = (
-                HostProfileStore.network_id_for_state(state, run_name)
-                if checkpoint.get("start") is not None
-                else "unavailable"
+        members = tuple(
+            (name, scope)
+            for name, scope in all_members
+            if (all_networks or scope.connection_start is not None)
+            and (not interface or name == interface)
+            and (not identity or scope.network_id == identity)
+        )
+        ids = {scope.network_id for _, scope in members}
+        network_id = (
+            "all"
+            if all_networks and members
+            else (
+                next(iter(ids))
+                if len(ids) == 1
+                else "multiple" if ids else "unavailable"
             )
-            scope = NetworkScope(network_id, visits, checkpoint.get("start"))
-            self._network_scope_cache = (signature, scope)
-        else:
-            scope = cached[1]
+        )
+        starts = [
+            scope.connection_start
+            for _, scope in members
+            if scope.connection_start is not None
+        ]
+        scope = NetworkSelection(
+            network_id=network_id,
+            visits=(),
+            connection_start=min(starts, default=None),
+            members=members,
+            allow_untagged=len(all_members) == 1,
+            connection_only=connection_only,
+            all_networks=all_networks,
+            filter_interface=bool(interface),
+        )
         reader = copy.copy(self)
         reader._overview_counts_cache = self.__dict__.setdefault(
             "_overview_counts_cache", {}
@@ -1994,9 +2110,7 @@ class RunDataReader:
             "_overview_counts_lock", threading.Lock()
         )
         reader._active_network_scope = scope
-        reader._connection_only = self._query_value(
-            query, "network"
-        ) == "connection" or scope.network_id.startswith("run:")
+        reader._connection_only = connection_only
         return reader
 
     def _attach_run_database(self, connection: sqlite3.Connection) -> None:
@@ -2808,10 +2922,10 @@ class RunDataReader:
         }
 
     def _current_network_start(self) -> Optional[float]:
-        """Find the current connection boundary, including retained restarts.
+        """Return the earliest active session start for compatible web clients.
 
         Returns:
-            Earliest retained timestamp on the current network, if connected.
+            Earliest start; request scopes still enforce each session separately.
         """
         if getattr(self, "saved_view", False):
             return None
@@ -2820,29 +2934,14 @@ class RunDataReader:
             "analysis_end"
         ):
             return None
-        interface = (
-            str(analysis.get("interface") or "").split(",", 1)[0].strip()
+        return min(
+            (
+                scope.connection_start
+                for _, scope in self._network_members()
+                if scope.connection_start is not None
+            ),
+            default=None,
         )
-        state = self._loads(self.redis.hget("network_states", interface), {})
-        if not isinstance(state, dict) or not state.get("connected"):
-            return None
-        saved = {}
-        history_path = getattr(self, "history_path", None)
-        if history_path and history_path.exists():
-            try:
-                with connect_history(
-                    history_path, read_only=True
-                ) as connection:
-                    row = connection.execute(
-                        "SELECT value FROM metadata WHERE key=?",
-                        (NETWORK_SCOPES_KEY,),
-                    ).fetchone()
-                scopes = self._loads(row["value"], {}) if row else {}
-                if isinstance(scopes, dict):
-                    saved = scopes.get(interface, {})
-            except (OSError, sqlite3.Error):
-                pass
-        return network_connection_scope(state, saved).get("start")
 
     def _scoped_start(
         self, query: Dict[str, List[str]], start: Optional[float]
@@ -2859,8 +2958,11 @@ class RunDataReader:
         if (
             getattr(self, "archive_mode", False)
             or getattr(self, "saved_view", False)
-            or self._query_value(query, "network")
-            not in {"current", "connection"}
+            or (
+                not getattr(self, "_active_network_scope", None)
+                and self._query_value(query, "network")
+                not in {"current", "connection"}
+            )
         ):
             return start
         scope = getattr(self, "_active_network_scope", None)
@@ -2878,34 +2980,37 @@ class RunDataReader:
                 if scope.network_id != "unavailable"
                 else float("inf")
             )
-        network_start = self._current_network_start()
+        network_start = (
+            scope.connection_start if scope else self._current_network_start()
+        )
         if network_start is None:
             return float("inf")
         return max(start or 0.0, network_start)
 
     def identity(self) -> Dict[str, Any]:
         """Return a signed identity response for stale-server detection."""
+        header = self._current_header_network(refresh=True)
         return {
             "service": "slips-web-interface",
             "pid": os.getpid(),
             "review_actions": True,
             "network_filter_supported": not getattr(self, "saved_view", False),
-            "network_scope_version": 2,
+            "network_scope_version": 3,
+            "current_networks": header.get("networks", []),
             "device_view_supported": True,
             "current_network_start": self._current_network_start(),
-            "current_network": self._current_header_network(refresh=True),
+            "current_network": header,
             **self.validate_run_identity(),
         }
 
     def _current_header_network(self, refresh: bool = False) -> Dict[str, Any]:
-        """Return the named live network for the shared page header.
+        """Return all monitored networks for the shared header and selectors.
 
         Parameters:
-            refresh: Use OS fallback readings for the header heartbeat only;
-                detection scopes continue using capture-owned settings.
+            refresh: Refresh display settings from the OS when capture lags.
 
         Returns:
-            Current monitored interface, connection, name and all its IPs.
+            Compatible aggregate header plus per-interface network entries.
         """
         if getattr(self, "saved_view", False):
             return {}
@@ -2914,21 +3019,25 @@ class RunDataReader:
             "analysis_end"
         ):
             return {}
-        interfaces = str(analysis.get("interface") or "")
-        interface = interfaces.split(",", 1)[0]
-        if not interface:
+        interfaces = self._capture_interfaces(analysis)
+        if not interfaces:
             return {}
-        raw_state = self.redis.hget("network_states", interface)
-        state = self._loads(raw_state, {})
-        if not isinstance(state, dict):
-            return {}
-        addresses = self._interface_addresses(interfaces)
+        states = []
+        for interface in interfaces:
+            state = self._loads(
+                self.redis.hget("network_states", interface), {}
+            )
+            states.append(
+                {
+                    **(state if isinstance(state, dict) else {}),
+                    "interface": interface,
+                }
+            )
+        addresses = self._interface_addresses(",".join(interfaces))
         if refresh:
             key = (
-                interfaces,
-                raw_state,
-                tuple(addresses.get("ipv4", [])),
-                tuple(addresses.get("ipv6", [])),
+                json.dumps(states, sort_keys=True),
+                json.dumps(addresses, sort_keys=True),
             )
             lock = self.__dict__.setdefault(
                 "_header_network_lock", threading.Lock()
@@ -2940,38 +3049,51 @@ class RunDataReader:
                     and cached[0] == key
                     and time.monotonic() - cached[1] < 5
                 ):
-                    state = cached[2]
+                    states = cached[2]
                 else:
-                    state = self._current_network_states(
-                        analysis, [state], addresses
-                    )[0]
+                    states = self._current_network_states(
+                        {**analysis, "interface": ",".join(interfaces)},
+                        states,
+                        addresses,
+                    )
                     self._header_network_snapshot = (
                         key,
                         time.monotonic(),
-                        state,
+                        states,
                     )
-        if not state.get("connected"):
-            return {
-                "interface": interface,
-                "connected": False,
-                "host_addresses": addresses,
-            }
         try:
-            network = self._named_network_states([state])[0]
+            states = self._named_network_states(states)
         except sqlite3.Error:
-            network = state
+            pass
+        starts = {
+            name: scope.connection_start
+            for name, scope in self._network_members()
+        }
+        networks = [
+            {
+                **state,
+                **({"name": ""} if not state.get("connected") else {}),
+                "connection_start": starts.get(state["interface"]),
+                "host_addresses": self._interface_addresses(
+                    state["interface"]
+                ),
+            }
+            for state in states
+        ]
+        if len(networks) == 1:
+            return {**networks[0], "networks": networks}
         return {
-            "interface": interface,
-            "connected": True,
-            "name": network.get("name") or "",
-            "network_id": network.get("network_id") or "",
-            "host_ip": network.get("host_ip") or "",
+            "interface": ",".join(interfaces),
+            "connected": any(n.get("connected") for n in networks),
+            "name": " · ".join(
+                dict.fromkeys(
+                    n.get("name") or n.get("local_network") or n["interface"]
+                    for n in networks
+                    if n.get("connected")
+                )
+            ),
             "host_addresses": addresses,
-            **{
-                key: network[key]
-                for key in ("changed_at", "observed_at")
-                if key in network
-            },
+            "networks": networks,
         }
 
     @network_filtered
@@ -5655,13 +5777,25 @@ class RunDataReader:
         Returns:
             Selected private-network keys, or an empty list for all history.
         """
+        scope = getattr(self, "_active_network_scope", None)
+        if scope is not None:
+            return (
+                []
+                if getattr(scope, "all_networks", False)
+                else sorted(getattr(scope, "network_ids", {scope.network_id}))
+            )
         if self._query_value(query, "network") not in {
             "current",
             "connection",
         }:
             return []
-        network_id = self._current_header_network().get("network_id", "")
-        return [network_id] if network_id else []
+        return sorted(
+            {
+                scope.network_id
+                for _, scope in self._network_members()
+                if scope.connection_start is not None
+            }
+        )
 
     def _organization_range_names(
         self, ips: List[str]
@@ -5999,7 +6133,7 @@ class RunDataReader:
                 return keys
             known_ips = {str(row["ip"]) for row in rows}
             interfaces = psutil.net_if_addrs()
-            for name in str(analysis.get("interface") or "").split(","):
+            for name in self._capture_interfaces(analysis):
                 addresses = interfaces.get(name.strip(), [])
                 mac = next(
                     (
@@ -7837,7 +7971,11 @@ class RunDataReader:
         )
         for item in items:
             scope = getattr(self, "_active_network_scope", None)
-            if scope:
+            if scope and scope.network_id not in {
+                "all",
+                "multiple",
+                "unavailable",
+            }:
                 item.update(
                     network_id=scope.network_id,
                     network_name=names.get(scope.network_id, ""),
@@ -7993,9 +8131,7 @@ class RunDataReader:
         )
         if network_start is not None:
             capture = self._current_header_network()
-            network_ids = {
-                capture.get("network_id", ""),
-            }
+            network_ids = set(self._annotation_networks(query or {}))
             if ipaddress.ip_address(ip).is_global:
                 network_ids.add("public")
             host["current_network_profiles"] = [
@@ -8050,7 +8186,7 @@ class RunDataReader:
             and analysis.get("input_type") == "interface"
             and not analysis.get("analysis_end")
         ):
-            for interface in str(analysis.get("interface") or "").split(","):
+            for interface in self._capture_interfaces(analysis):
                 interface = interface.strip()
                 if not interface:
                     continue
@@ -9229,11 +9365,7 @@ class RunDataReader:
             raise ValueError("Network name request must contain text values")
         name = self._validated_network_name(name)
         analysis = self.redis.hgetall("analysis")
-        interfaces = [
-            item.strip()
-            for item in str(analysis.get("interface", "")).split(",")
-            if item.strip()
-        ]
+        interfaces = self._capture_interfaces(analysis)
         if (
             analysis.get("input_type") != "interface"
             or analysis.get("analysis_end")
@@ -9610,14 +9742,32 @@ class RunDataReader:
         )
         firewall = self._firewall_overview()
         host_addresses = self._interface_addresses(
-            str(analysis.get("interface") or run_metadata.get("File", ""))
+            ",".join(self._capture_interfaces(analysis))
+            or str(run_metadata.get("File", ""))
         )
+        capture_interfaces = self._capture_interfaces(analysis)
+        analysis = {
+            **analysis,
+            **(
+                {"interface": ",".join(capture_interfaces)}
+                if capture_interfaces
+                else {}
+            ),
+        }
         saved_network_states = [
-            json.loads(value)
-            for _, value in sorted(
-                self.redis.hgetall("network_states").items()
-            )
+            {
+                **self._loads(self.redis.hget("network_states", name), {}),
+                "interface": name,
+            }
+            for name in capture_interfaces
         ]
+        if not capture_interfaces:
+            raw_states = self.redis.hgetall("network_states")
+            saved_network_states = (
+                [self._loads(raw, {}) for raw in raw_states.values()]
+                if isinstance(raw_states, dict)
+                else []
+            )
         current_network_states = self._named_network_states(
             self._current_network_states(
                 analysis, saved_network_states, host_addresses
@@ -10667,6 +10817,34 @@ class RunDataReader:
         except sqlite3.Error:
             return []
 
+    def _scoped_p2p_events(
+        self, items: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Filter bounded P2P observations using recorded capture context.
+
+        Parameters:
+            items: Message, report or trust history records.
+
+        Returns:
+            Matching observations; unknown multi-interface provenance is excluded.
+        """
+        scope = getattr(self, "_active_network_scope", None)
+        if scope is None:
+            return items
+        return [
+            item
+            for item in items
+            if scope.matches(
+                self._event_timestamp(item.get("timestamp")),
+                str(item.get("network_id") or ""),
+                (
+                    str(item.get("interface") or "")
+                    if item.get("interface") != "default"
+                    else ""
+                ),
+            )
+        ]
+
     @network_filtered
     def p2p_graph(
         self, query: Optional[Dict[str, List[str]]] = None
@@ -10755,21 +10933,8 @@ class RunDataReader:
                             }
             except sqlite3.Error:
                 pass
-        scope = getattr(self, "_active_network_scope", None)
-        if scope:
-            start = self._scoped_start(query or {}, None) or 0
-            activity = [
-                item
-                for item in activity
-                if self._event_timestamp(item.get("timestamp")) >= start
-                and scope.matches(self._event_timestamp(item.get("timestamp")))
-            ]
-            reports = [
-                item
-                for item in reports
-                if self._event_timestamp(item.get("timestamp")) >= start
-                and scope.matches(self._event_timestamp(item.get("timestamp")))
-            ]
+        activity = self._scoped_p2p_events(activity)
+        reports = self._scoped_p2p_events(reports)
         multiaddress = str(self.redis.get("multiAddress") or "")
         match = re.search(r"/p2p/([^/\s]+)", multiaddress)
         return {
@@ -10817,6 +10982,7 @@ class RunDataReader:
         )
         return network_scope(state) if isinstance(state, dict) else ""
 
+    @network_filtered
     def p2p(
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
@@ -11196,7 +11362,13 @@ class RunDataReader:
                     listener, local_peer_id = matches[-1]
             except OSError:
                 pass
-        current_reports = [item for item in reports if item["this_run"]]
+        current_reports = self._scoped_p2p_events(
+            [item for item in reports if item["this_run"]]
+        )
+        activity = self._scoped_p2p_events(
+            [item for item in activity if isinstance(item, dict)]
+        )
+        trust_history = self._scoped_p2p_events(trust_history)
         try:
             catchup = CatchupStore.view(
                 validation_path.with_name("catchup.sqlite"),
@@ -11223,8 +11395,8 @@ class RunDataReader:
             "local_peer_id": local_peer_id,
             "peers": peers,
             "trust_history": trust_history,
-            "calculated_trust_history": self._p2p_calculated_trust_history(
-                trust_path, query
+            "calculated_trust_history": self._scoped_p2p_events(
+                self._p2p_calculated_trust_history(trust_path, query)
             ),
             "trust_range": trust_range,
             "reports": current_reports[:200],

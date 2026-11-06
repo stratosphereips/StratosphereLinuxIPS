@@ -1576,3 +1576,6 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .p2p-graph-route.selected .p2p-graph-report rect { stroke: var(--target-color); stroke-width: 3; }
 
 .tabs .badge[hidden], .host-activity-tabs [hidden], #p2p-graph-scroll[hidden] { display: none; }
+
+#network-selection, #interface-selection { max-width: 23rem; font-size: inherit; }
+#network-states .network-state + .network-state { margin-top: .8rem; padding-top: .8rem; border-top: 1px solid var(--line); }

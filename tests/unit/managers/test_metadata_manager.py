@@ -280,3 +280,24 @@ def test_update_slips_stats_in_the_db(
         metadata_manager.main.db.set_slips_internal_time.call_args_list
         == expected_set_slips_internal_time_call_args
     )
+
+
+@pytest.mark.parametrize("interface,access_point,expected", [
+    ("en0", False, "en0"),
+    (False, "wlan_ap0,eth0", "wlan_ap0,eth0"),
+])
+def test_input_metadata_records_every_capture_interface(interface: str | bool, access_point: str | bool, expected: str) -> None:
+    """Expose both AP interfaces without parsing the output display name.
+
+    Parameters:
+        interface: Single-interface CLI value.
+        access_point: AP-mode CLI value.
+        expected: Comma-separated metadata for web readers.
+    """
+    manager = ModuleFactory().create_metadata_manager_obj()
+    manager.main.proc_man.get_disabled_modules = Mock(return_value=(set(), set()))
+    manager.main.args.interface = interface
+    manager.main.args.access_point = access_point
+    manager.main.args.filepath = False
+    manager.set_input_metadata()
+    assert manager.main.db.set_input_metadata.call_args.args[0]["interface"] == expected

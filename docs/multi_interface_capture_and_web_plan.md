@@ -4,7 +4,42 @@ This document records testing of `sebas_testing` at `a8c598af4` on 6 November
 2026 and the proposed design for general multi-interface support. The agreed
 web default is **All active networks**, with independent network and interface
 filters. This is a test report and implementation plan, not a claim that the
-multi-interface web interface is already implemented.
+general multi-interface capture engine is already implemented. The AP web
+support described below was subsequently implemented on this branch.
+
+## Implemented AP web support
+
+The web now reads both AP interfaces, including legacy runs without the
+`analysis.interface` field. Its default is **All active networks**, with a
+separate **Interface** selector. The header and Overview show both interfaces.
+Network and interface filters retain the other investigation filters.
+
+The request scope is a union of interface-specific network histories and
+connection sessions. Each interface keeps its own reconnection boundary;
+reconnecting one does not reset the other. Evidence, linked alerts, host
+findings and traffic use this scope before grouping and pagination. Legacy
+evidence can recover its interface from unambiguous linked connection or
+protocol records. Unattributable history remains in All retained networks.
+
+Validation includes real Chrome checks in both themes, macOS unit/API
+regressions, and Linux/RPi tests. The isolated RPi web check reuses the real
+connected-client capture recorded below, rather than simulating client traffic.
+It verifies that combined evidence IDs equal the union of the separate Wi-Fi
+and Ethernet results and that the Wi-Fi client's saved flows are visible.
+The final HTTP check returns 75 hosts and all 28 evidence records for the
+active-network union, with 26 evidence records on Ethernet and 2 on Wi-Fi.
+Those two Wi-Fi findings are stored whitelist exclusions: the browser shows
+them when **Show Whitelisted Evidence** is selected. The Wi-Fi client's 205
+stored flows are available independently of that evidence visibility choice.
+The real browser check shows both network cards and selectors and opens the
+Wi-Fi Hosts and Evidence views without JavaScript errors. Scoped evidence
+HTTP queries in this small replay took about 20–50 ms on the RPi; these are
+sample timings, not a sustained-load benchmark.
+
+The remaining capture-engine design below still applies: this change does not
+introduce general `-i` interface-list syntax, migrate IP-keyed detector state,
+or deduplicate forwarded connections. Existing single-interface, saved-view
+and archive behavior is retained.
 
 ## An interface is not a network
 
@@ -30,13 +65,13 @@ can reuse the same addresses.
 | Interface-bound HTTP requests | Both interfaces completed HTTP requests with their respective source addresses. |
 | Ethernet request visibility in AP mode | Its outbound HTTP connection was absent from the Ethernet log. The AP code deliberately applies `dst net <Ethernet subnet>`, capturing only that direction. |
 | macOS stored data at API inspection | 313 hosts, 5 evidence records and 3,468 processed input records. These are a live snapshot, not final capture totals. |
-| Same data with `network=current` | Zero hosts and zero evidence records. This reproduces #2186. |
+| Same data with `network=current`, before the web fix | Zero hosts and zero evidence records. This reproduced #2186. |
 | Three interfaces passed to the legacy AP interface storage function | Rejected with `too many values to unpack (expected 2)` before any database write. |
 | General comma-separated `-i en0,en16` validation | Rejected as an invalid interface name; this syntax is not implemented yet. |
 | RPi native `-ap wlan0,eth0` capture | Started without a harness or AP override; both capture workers and local networks were recognized. |
 | RPi stored observations at API inspection | 326 Ethernet flows and 9 AP flows, with the correct interface tags. An interface-bound HTTP request returned 200 over Ethernet; an mDNS query was emitted and captured on the AP interface. |
 | RPi unfiltered web results | 261 hosts and 12 evidence records. |
-| RPi web results with `network=current` | Zero hosts and zero evidence records: the same #2186 failure as macOS. |
+| RPi web results with `network=current`, before the web fix | Zero hosts and zero evidence records: the same #2186 failure as macOS. |
 | RPi Wi-Fi client forwarding | Validated in a second isolated capture with a real client at `192.168.12.76`. Its `example.com` QUIC connection and translated Ethernet response match by protocol, remote endpoint, client port, timing and response byte count. |
 
 The macOS engine exercise used an isolated output, permanent directory, Redis
@@ -118,18 +153,17 @@ flowchart LR
     end
 ```
 
-## Why the current web view loses the data
+## Original cause of #2186
 
-`MetadataManager` writes `analysis.interface` for `-i`, but not for `-ap`.
-The AP run nevertheless records both entries in `network_states` and retains
-the interface on captured flows. The web reader's current-network path reads
-`analysis.interface` and builds an empty scope when it is missing. Unfiltered
-queries return the captured hosts and evidence.
+`MetadataManager` previously wrote `analysis.interface` for `-i`, but not for
+`-ap`. AP runs nevertheless recorded both entries in `network_states` and
+retained the interface on captured flows. The web reader's current-network
+path read `analysis.interface` and built an empty scope when it was missing.
+Unfiltered queries returned the captured hosts and evidence.
 
-There is a second limitation: several web paths select only the first
-interface from a comma-separated string. Merely setting that string for an
-AP run would still select one interface's context and would not implement
-correct simultaneous network selection.
+Several web paths also selected only the first interface from a comma-separated
+string. Fixing metadata alone would still have selected one interface's context.
+The implementation now uses the selected interface/session union instead.
 
 Other dependencies to address before claiming general support:
 

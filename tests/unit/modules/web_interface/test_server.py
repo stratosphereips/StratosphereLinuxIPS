@@ -1744,7 +1744,7 @@ def test_header_tracks_backend_heartbeat_and_freezes_uptime() -> None:
     assert 'label.textContent = "Viewing saved results"' in connection_renderer
     assert "payload.run_identity?.saved_view === true" in api_handler
     assert "renderConnectionState(false);" in api_handler
-    assert 'api("backendStatus", "/api/identity", false)' in app_source
+    assert 'api("backendStatus", "/api/identity", false, false, 10000)' in app_source
     assert "scheduleBackendStatusPoll();" in app_source
     assert ".run-state small.error { color: var(--danger); }" in style_source
 
@@ -7852,15 +7852,11 @@ def test_identity_returns_current_named_network_in_any_tab(interfaces: str, conn
     reader.redis.hget.return_value = json.dumps(
         {"interface": "en0", "connected": connected, "host_ip": "192.0.2.4"}
     )
-    reader._named_network_states = Mock(
-        return_value=[
-            {
-                "name": "Office",
-                "network_id": "router-1",
-                "host_ip": "192.0.2.4",
-            }
-        ]
-    )
+    reader._named_network_states = Mock(side_effect=lambda states: [
+        {**state, "name": "Office", "network_id": "router-1"} for state in states
+    ])
+    reader._network_members = Mock(return_value=())
+
 
     current_addresses = {
         "en0": [SimpleNamespace(family=socket.AF_INET,address="192.0.2.4"),
@@ -7870,24 +7866,19 @@ def test_identity_returns_current_named_network_in_any_tab(interfaces: str, conn
             SimpleNamespace(family=socket.AF_INET6,address="2001:db8::5")],
         "en1": [SimpleNamespace(family=socket.AF_INET,address="198.51.100.4")],
     }
-    expected = {
-        "interface": "en0",
-        "connected": True,
-        "name": "Office",
-        "network_id": "router-1",
-        "host_ip": "192.0.2.4",
-    } if connected else {"interface":"en0", "connected":False}
-    expected["host_addresses"] = {
-        "ipv4": ["192.0.2.4"] + (["198.51.100.4"] if "," in interfaces else []),
-        "ipv6": ["fe80::4", "fd00::4", "2001:db8::4", "2001:db8::5"],
-    }
     with (
         patch("modules.web_interface.server.psutil.net_if_addrs", return_value=current_addresses),
-        patch("modules.web_interface.server.collect_network_state", return_value={
-            "interface":"en0","connected":connected,"host_ip":"192.0.2.4",
+        patch("modules.web_interface.server.collect_network_state", side_effect=lambda interface, count: {
+            "interface": interface, "connected": connected, "host_ip": "192.0.2.4" if interface == "en0" else "198.51.100.4",
         }),
     ):
-        assert reader._current_header_network(refresh=True) == expected
+        result = reader._current_header_network(refresh=True)
+        assert result["interface"] == interfaces
+        assert result["connected"] is connected
+        assert [item["interface"] for item in result["networks"]] == interfaces.split(",")
+        assert result["host_addresses"]["ipv4"] == ["192.0.2.4"] + (["198.51.100.4"] if "," in interfaces else [])
+        assert all(item["name"] == ("Office" if connected else "") for item in result["networks"])
+        assert result["networks"][0]["host_addresses"]["ipv4"] == ["192.0.2.4"]
         current_addresses["en0"][4].address = "2001:db8::6"
         assert reader._current_header_network(refresh=True)["host_addresses"]["ipv6"][-1] == "2001:db8::6"
     reader.redis.hset.assert_not_called()

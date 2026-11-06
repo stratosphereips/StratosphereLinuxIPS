@@ -76,6 +76,12 @@ const state = {
   connectionRangeSupported: null,
   currentNetworkStart: null,
   headerNetwork: null,
+  networkScopeVersion: 2,
+  networks: [],
+  networkSelection: "current",
+  interfaceSelection: "",
+  networkInventoryInitialized: false,
+  networkSignature: "",
   rangesInitialized: false,
   defaultHistoryRange: null,
   rangeChoices: new Set(),
@@ -669,12 +675,15 @@ async function loadHostNames() {
       const networkOnly = state.networkOnly && state.networkFilterSupported;
       const networkStart = state.currentNetworkStart;
       if (networkOnly) params.set("network", "current");
+      applyNetworkSelection(params);
+      const selection = state.networkSignature + state.networkSelection + state.interfaceSelection;
       ips.forEach((ip) => params.append("ip", ip));
       const response = await fetch(`/api/host-names?${params}`, { cache: "no-store" });
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const payload = await response.json();
       if (networkOnly !== (state.networkOnly && state.networkFilterSupported)
-          || networkStart !== state.currentNetworkStart) continue;
+          || networkStart !== state.currentNetworkStart
+          || selection !== state.networkSignature + state.networkSelection + state.interfaceSelection) continue;
       applyRunIdentity(payload.run_identity);
       ips.forEach((ip) => {
         if (!Object.hasOwn(payload.names || {}, ip)) return;
@@ -1308,6 +1317,11 @@ function applyRunIdentity(identity) {
     state.ownAddresses.clear();
     state.computerName = "";
     state.headerNetwork = null;
+    state.networks = [];
+    state.networkSelection = "current";
+    state.interfaceSelection = "";
+    state.networkInventoryInitialized = false;
+    state.networkSignature = "";
     toast("A new Slips run is now active. Investigation state was cleared.");
   }
   const preferencesKey = `slips-run-view-v2:${JSON.stringify([identity.output_dir, identity.analysis_start || ""])}`;
@@ -1342,7 +1356,28 @@ function renderRequestActivity() {
   document.querySelector("main").setAttribute("aria-busy", String(busy));
 }
 
+/** Apply the independent global network and interface selections to a query.
+ * @param {URLSearchParams} params Request filters, including any connection range.
+ * @returns {URLSearchParams} The same parameters with selected capture context.
+ */
+function applyNetworkSelection(params) {
+  if (!state.networkFilterSupported || state.archiveSource) return params;
+  if (state.networkOnly && !params.has("network")) params.set("network", "current");
+  if (state.networkOnly && !["all", "current"].includes(state.networkSelection)) params.set("network_id", state.networkSelection);
+  if (state.interfaceSelection) params.set("interface", state.interfaceSelection);
+  return params;
+}
+
+/** Identify requests that display captured activity rather than global settings. */
+function scopedRequestPath(path) {
+  if (!/^\/api\/(?:overview|alerts|evidence|hosts|host-names|flows|p2p|p2p-graph)(?:[/?]|$)/.test(path)) return path;
+  const url = new URL(path, window.location.origin);
+  applyNetworkSelection(url.searchParams);
+  return `${url.pathname}${url.search}`;
+}
+
 async function api(key, path, trackFailures = true, allowNotFound = false, timeoutMs = 0) {
+  path = scopedRequestPath(path);
   state.requests.get(key)?.abort();
   const controller = new AbortController();
   controller.activityLabel = ["backendStatus", "archiveCatalog"].includes(key)
@@ -1354,7 +1389,7 @@ async function api(key, path, trackFailures = true, allowNotFound = false, timeo
     if (state.archiveSource && /^\/api\/(?:alerts|evidence|hosts|flows)(?:[/?]|$)/.test(path)) {
       const url = new URL(path, window.location.origin);
       url.searchParams.set("archive", state.archiveSource);
-      url.searchParams.delete("network");
+      ["network", "network_id", "interface"].forEach((name) => url.searchParams.delete(name));
       path = `${url.pathname}${url.search}`;
     }
     const response = await fetch(path, {
@@ -1521,8 +1556,10 @@ function rangeQuery(prefix) {
   if (state.deviceView && state.deviceViewSupported) params.set("device", "1");
   if (range === "connection") {
     params.set("network", "connection");
-    params.set("range", "custom");
-    params.set("from", String(state.currentNetworkStart ?? Number.MAX_VALUE));
+    if (state.networkScopeVersion < 3) {
+      params.set("range", "custom");
+      params.set("from", String(state.currentNetworkStart ?? Number.MAX_VALUE));
+    }
   }
   if (prefix === "alerts" && ["5m", "15m"].includes(range)) {
     const seconds = range === "5m" ? 300 : 900;
@@ -1537,7 +1574,7 @@ function rangeQuery(prefix) {
     if (from) params.set("from", String(new Date(from).getTime() / 1000));
     if (to) params.set("to", String(new Date(to).getTime() / 1000));
   }
-  return params;
+  return applyNetworkSelection(params);
 }
 
 /** Keep rolling alert windows stable when deciding whether details need reload. */
@@ -1545,7 +1582,7 @@ function alertRangeSignature() {
   const range = byId("alerts-range").value;
   const custom = range === "custom"
     ? `${byId("alerts-from").value}|${byId("alerts-to").value}` : "";
-  return `${range}|${custom}|${state.hideExcluded}|${state.alertsWorkspace.severity}|${state.networkOnly && state.networkFilterSupported}|${state.deviceView && state.deviceViewSupported}`;
+  return `${range}|${custom}|${state.hideExcluded}|${state.alertsWorkspace.severity}|${state.networkOnly && state.networkFilterSupported}|${state.deviceView && state.deviceViewSupported}|${state.networkSelection}|${state.interfaceSelection}|${state.networkSignature}`;
 }
 
 function rangeIsLive(prefix) {
@@ -1842,7 +1879,8 @@ function renderHeaderNetwork(data) {
   const overviewNetwork = (data.network_states || []).find((network) =>
     network.connected && network.interface === run.interface)
     || (data.network_states || []).find((network) => network.connected);
-  const liveNetwork = String(run.interface || "").split(/[,\s]+/).includes(state.headerNetwork?.interface)
+  const liveNetwork = (String(run.interface || "") === state.headerNetwork?.interface
+    || String(run.interface || "").split(/[,\s]+/).includes(state.headerNetwork?.interface))
     ? state.headerNetwork : null;
   const overviewTime = Number(overviewNetwork?.changed_at) || 0;
   const liveTime = Number(liveNetwork?.changed_at) || 0;
@@ -1854,8 +1892,10 @@ function renderHeaderNetwork(data) {
   detailsLink.addEventListener("click", () => switchTab("metadata"));
   byId("run-meta").replaceChildren(
     text("span", [
-      run.interface || metadata.File || run.input_type || "input",
-      network?.connected ? network.name || "" : "",
+      network?.networks?.length > 1 ? "" : run.interface || metadata.File || run.input_type || "input",
+      network?.networks?.length > 1
+        ? network.networks.map((item) => `${item.interface}: ${item.connected ? item.name || item.local_network || "connected" : "disconnected"}`).join(" · ")
+        : network?.connected ? network.name || "" : "",
       metadata["Slips version"] ? `Slips ${metadata["Slips version"]}` : "",
     ].filter(Boolean).join(" · ")),
     text("span", " · "), detailsLink,
@@ -1944,8 +1984,8 @@ function renderOverview() {
   setSummaryCards([
     ["Alerts", selectedAlerts === undefined ? "…" : compact(selectedAlerts)],
     ["Evidence", compact(data.counts.evidence)],
-    ["Hosts seen", compact(data.counts.hosts)],
-    ["Flows processed", compact(data.counts.processed_flows)],
+    [state.networks.length > 1 ? "Hosts retained · full run" : "Hosts seen", compact(data.counts.hosts)],
+    [state.networks.length > 1 ? "Flows processed · full run" : "Flows processed", compact(data.counts.processed_flows)],
     ["Firewall blocks", firewall.current ? compact(firewall.current)
       : (data.modules || []).some((module) => module.name === "blocking") ? "0" : "off"],
   ]);
@@ -2037,7 +2077,9 @@ function renderOverviewStatus(data) {
     return;
   }
   const selectedFilters = [
-    state.networkOnly && state.networkFilterSupported ? "Current network" : null,
+    state.networkOnly && state.networkFilterSupported
+      ? state.networks.length > 1 ? byId("network-selection").selectedOptions[0]?.textContent : "Current network" : null,
+    state.interfaceSelection || null,
     byId("alerts-review").selectedOptions[0]?.textContent,
     byId("alerts-range").selectedOptions[0]?.textContent,
     state.alertsWorkspace.severity
@@ -2046,12 +2088,14 @@ function renderOverviewStatus(data) {
       ? `Search: ${byId("alerts-search").value.trim()}` : null,
   ].filter(Boolean).join(" · ");
   if (!hasAlerts) {
+    const selectedCapture = state.networks.length > 1 && (state.networkOnly || state.interfaceSelection);
     byId("overview-status-title").textContent = numeric(summary.full_total)
-      ? "No alerts match the selected filters" : "No alerts in this run";
+      ? "No alerts match the selected filters" : selectedCapture ? "No alerts in this selection" : "No alerts in this run";
     const top = data.highest_score;
     const threshold = numeric(data.alert_threshold) || 5;
     byId("overview-status-description").textContent =
-      numeric(summary.full_total) ? selectedFilters
+      selectedCapture ? `${selectedFilters} · ${compact(data.counts.evidence)} evidence records.`
+        : numeric(summary.full_total) ? selectedFilters
         : `${compact(data.counts.evidence)} evidence records from ${compact(data.counts.hosts)} hosts. `
           + `No host crossed the alert threshold (${threshold}).`
           + (top?.ip && top.score !== null ? ` Highest current score: ${numeric(top.score).toFixed(2)} on ${top.ip}.` : "");
@@ -2139,15 +2183,11 @@ function renderNetworkStates(networkStates) {
     container.append(text("p", "Live network settings are available when Slips monitors an interface.", "muted"));
     return;
   }
-  const monitored = networkStates.find((network) =>
-    network.interface === state.overview?.run?.interface && network.connected)
-    || networkStates.find((network) => network.connected)
-    || networkStates[0];
-  [monitored].forEach((network) => {
+  networkStates.forEach((network) => {
     const card = document.createElement("div");
     card.className = "network-state";
     const head = text("div", "", "overview-card-head");
-    head.append(text("h3", `${network.name || network.interface} · ${network.connected ? "connected" : "disconnected"}`));
+    head.append(text("h3", `${network.name || network.local_network || network.interface} · ${network.interface} · ${network.connected ? "connected" : "disconnected"}`));
     const rename = text("button", "Rename", "overview-link");
     rename.type = "button";
     rename.disabled = !network.connected || !network.network_id;
@@ -5151,7 +5191,7 @@ function renderP2PMessages() {
   const payload = state.p2p || {};
   const filter = byId("p2p-message-filter").value;
   const rows = p2pMessageRows(payload);
-  const cutoff = byId("p2p-range").value === "connection" ? state.currentNetworkStart ?? Infinity : 0;
+  const cutoff = state.networkScopeVersion < 3 && byId("p2p-range").value === "connection" ? state.currentNetworkStart ?? Infinity : 0;
   const visible = rows.filter((row) => {
     if (numeric(row.timestamp) < cutoff) return false;
     if (state.p2pSelectedPeer && row.peer !== state.p2pSelectedPeer.peer_id
@@ -5462,7 +5502,7 @@ function p2pGraphGroups(payload) {
   const range = byId("p2p-graph-range").value;
   const seconds = ({ "1h": 3600, "24h": 86400, "7d": 604800 })[range];
   const cutoff = Math.max(seconds ? Date.now() / 1000 - seconds : 0,
-    range === "connection" ? state.currentNetworkStart ?? Infinity : 0);
+    state.networkScopeVersion < 3 && range === "connection" ? state.currentNetworkStart ?? Infinity : 0);
   const search = byId("p2p-graph-search").value.trim().toLowerCase();
   const direction = byId("p2p-graph-direction").value;
   const peer = byId("p2p-graph-peer").value;
@@ -8839,7 +8879,7 @@ async function openHost(ip, summary = null, previous = null) {
     scheduleViewPreferencesSave();
   }
   const detailParams = hostRangeParams();
-  if (state.networkOnly && state.networkFilterSupported) detailParams.set("network", "current");
+  applyNetworkSelection(detailParams);
   if (state.deviceView) detailParams.set("device", "1");
   const detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
   if (!detail || generation !== state.hostOpenGeneration) return;
@@ -8931,7 +8971,7 @@ async function refreshHostWorkspace() {
   if (!state.host) return;
   const ip = state.host.ip;
   const params = hostRangeParams();
-  if (state.networkOnly && state.networkFilterSupported) params.set("network", "current");
+  applyNetworkSelection(params);
   if (state.deviceView) params.set("device", "1");
   const detail = await api("host", `/api/hosts/${escapePath(ip)}${params.size ? `?${params}` : ""}`);
   if (!detail || !state.host || state.host.ip !== ip) return;
@@ -9138,6 +9178,7 @@ byId("history-source").addEventListener("change", (event) => {
   updateReviewAvailability(true);
   updateConnectionRangeAvailability();
   byId("network-filter").disabled = Boolean(state.archiveSource) || !state.networkFilterSupported;
+  renderNetworkSelections(state.networks);
   refreshNetworkScopedViews();
 });
 
@@ -9168,6 +9209,50 @@ function updateConnectionRangeAvailability() {
   });
 }
 
+/** Refresh choices without changing severity, grouping or review filters.
+ * @param {object[]} networks All monitored interface states from the heartbeat.
+ */
+function renderNetworkSelections(networks) {
+  const multiple = networks.length > 1;
+  byId("network-selection-label").hidden = !multiple || !state.networkFilterSupported;
+  byId("interface-selection-label").hidden = !multiple || !state.networkFilterSupported;
+  const network = byId("network-selection");
+  const iface = byId("interface-selection");
+  const groups = new Map();
+  networks.filter((item) => item.connected && item.network_id).forEach((item) => {
+    const group = groups.get(item.network_id) || {label: item.name || item.local_network || item.interface, interfaces: []};
+    group.interfaces.push(item.interface); groups.set(item.network_id, group);
+  });
+  const choices = [["current", "All active networks"], ["all", "All retained networks"],
+    ...[...groups].map(([id, group]) => [id, `${group.label} · ${group.interfaces.join(", ")}`])];
+  const interfaceChoices = [["", "All interfaces"], ...networks.map((item) => [item.interface,
+    `${item.interface}${item.host_ip ? ` · ${item.host_ip}` : ""}${item.connected ? "" : " · disconnected"}`])];
+  [[network, choices], [iface, interfaceChoices]].forEach(([select, entries]) => {
+    const signature = JSON.stringify(entries);
+    if (select.dataset.options === signature) return;
+    select.replaceChildren(...entries.map(([value, label]) => new Option(label, value)));
+    select.dataset.options = signature;
+  });
+  if (!choices.some(([value]) => value === state.networkSelection)) state.networkSelection = "current";
+  if (!interfaceChoices.some(([value]) => value === state.interfaceSelection)) state.interfaceSelection = "";
+  network.value = state.networkOnly ? state.networkSelection : "all";
+  iface.value = state.interfaceSelection;
+  network.disabled = iface.disabled = Boolean(state.archiveSource);
+}
+
+byId("network-selection").addEventListener("change", (event) => {
+  state.networkSelection = event.currentTarget.value;
+  state.networkOnly = state.networkSelection !== "all";
+  byId("network-filter").checked = state.networkOnly;
+  state.hostNames.clear();
+  refreshNetworkScopedViews();
+});
+byId("interface-selection").addEventListener("change", (event) => {
+  state.interfaceSelection = event.currentTarget.value;
+  state.hostNames.clear();
+  refreshNetworkScopedViews();
+});
+
 /** Apply backend support and refresh scoped panes when the network changes.
  * @param {Object} identity Current web server identity and network scope.
  */
@@ -9178,17 +9263,29 @@ function updateNetworkFilterAvailability(identity) {
   const start = Number.isFinite(Number(identity.current_network_start))
     && identity.current_network_start !== null
     ? Number(identity.current_network_start) : null;
-  const changed = supported !== state.networkFilterSupported
+  state.networkScopeVersion = identity.network_scope_version || 2;
+  const networks = identity.current_networks || identity.current_network?.networks || [];
+  const signature = JSON.stringify(networks.map((item) => [item.interface, item.network_id, item.connected, item.connection_start, item.changed_at]));
+  if (!state.networkInventoryInitialized && networks.length > 1) {
+    state.networkOnly = true;
+    state.networkSelection = "current";
+    byId("network-filter").checked = true;
+  }
+  if (networks.length) state.networkInventoryInitialized = true;
+  state.networks = networks;
+  const changed = signature !== state.networkSignature || supported !== state.networkFilterSupported
     || start !== state.currentNetworkStart
     || connectionSupported !== state.connectionRangeSupported;
   const hadConnectionRange = document.querySelector('select option[value="connection"]:checked');
   state.networkFilterSupported = supported;
   state.connectionRangeSupported = connectionSupported;
   state.currentNetworkStart = start;
+  state.networkSignature = signature;
+  renderNetworkSelections(networks);
   updateConnectionRangeAvailability();
   if (changed) state.hostNames.clear();
   const label = byId("network-filter-label");
-  label.hidden = !supported;
+  label.hidden = !supported || networks.length > 1;
   byId("network-filter").disabled = !supported || start === null || Boolean(state.archiveSource);
   label.title = start === null
     ? "Waiting for a monitored network connection"

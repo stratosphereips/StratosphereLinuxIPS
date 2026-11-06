@@ -44,7 +44,12 @@ def network_filtered(method: Callable[..., Any]) -> Callable[..., Any]:
             )
         if (
             isinstance(query, dict)
-            and query.get("network", [""])[0] in {"current", "connection"}
+            and (
+                query.get("network", [""])[0] in {"current", "connection"}
+                or query.get("interface", [""])[0]
+                or query.get("network_id", [""])[0]
+                or query.get("range", [""])[0] == "connection"
+            )
             and not getattr(reader, "_active_network_scope", None)
         ):
             reader = reader._for_network_scope(query)
@@ -145,12 +150,15 @@ class NetworkScope:
     visits: tuple[tuple[float, str], ...]
     connection_start: float | None
 
-    def matches(self, timestamp: float, network_id: str = "") -> bool:
+    def matches(
+        self, timestamp: float, network_id: str = "", interface: str = ""
+    ) -> bool:
         """Check a bounded message's explicit identity or recorded capture period.
 
         Parameters:
             timestamp: Message or observation time.
             network_id: Explicit recorded identity, when available.
+            interface: Optional interface provided by multi-interface callers.
 
         Returns:
             Whether the observation belongs to the selected network.
@@ -199,6 +207,31 @@ class NetworkScope:
             + identity
         )
 
+    def _predicate(
+        self,
+        connection: sqlite3.Connection,
+        timestamp: str,
+        recorded: str = "''",
+        interface: str = "''",
+    ) -> str:
+        """Build membership SQL for trusted observation expressions.
+
+        Parameters:
+            connection: Request-local read-only query connection.
+            timestamp: SQL event timestamp.
+            recorded: SQL recorded network identity.
+            interface: SQL recorded capture interface.
+
+        Returns:
+            SQL predicate selecting this network's observations.
+        """
+        identity = self._prepare(connection)
+        period = self._recorded_period(timestamp, identity)
+        return (
+            f"CASE ({recorded}) WHEN {identity} THEN 1 WHEN '' THEN {period} "
+            f"ELSE CASE WHEN ({recorded}) LIKE 'run:%' THEN {period} ELSE 0 END END"
+        )
+
     def install_detections(
         self,
         connection: sqlite3.Connection,
@@ -214,7 +247,6 @@ class NetworkScope:
         """
         if (database, prefix) not in {("main", ""), ("run_db", "scoped_")}:
             raise ValueError("Unsupported network view")
-        identity = self._prepare(connection)
         tables = {
             row[0]
             for row in connection.execute(
@@ -223,16 +255,41 @@ class NetworkScope:
         }
         if "evidence" in tables:
             recorded = "CASE WHEN json_valid(e.data) THEN COALESCE(json_extract(e.data,'$.detection_provenance.network_id'),'') ELSE '' END"
-            period = self._recorded_period("e.evidence_time", identity)
+            interface = "CASE WHEN json_valid(e.data) THEN COALESCE(NULLIF(json_extract(e.data,'$.interface'),'default'),'') ELSE '' END"
+            if "evidence_flows" in tables and tables & {"flows", "altflows"}:
+                sources = [
+                    (name, alias)
+                    for name, alias in (("flows", "rf"), ("altflows", "af"))
+                    if name in tables
+                ]
+                payloads = [f"{alias}.flow" for _, alias in sources]
+                payload = (
+                    payloads[0]
+                    if len(payloads) == 1
+                    else f"COALESCE({','.join(payloads)})"
+                )
+                flow_interface = f"CASE WHEN json_valid({payload}) THEN NULLIF(json_extract({payload},'$.interface'),'default') END"
+                joins = " ".join(
+                    f"LEFT JOIN {database}.{name} {alias} ON {alias}.uid=ef.uid"
+                    for name, alias in sources
+                )
+                linked_interface = (
+                    f"(SELECT CASE WHEN COUNT(DISTINCT {flow_interface})=1 AND COUNT(*)=COUNT({flow_interface}) THEN MIN({flow_interface}) END "
+                    f"FROM {database}.evidence_flows ef {joins} "
+                    "WHERE ef.evidence_id=e.evidence_id)"
+                )
+                interface = (
+                    f"COALESCE(NULLIF(({interface}),''),{linked_interface},'')"
+                )
+            period = self._predicate(
+                connection, "e.evidence_time", recorded, interface
+            )
             connection.execute(
                 f"CREATE TEMP VIEW {prefix}evidence AS SELECT e.* FROM {database}.evidence e "
-                f"WHERE CASE ({recorded}) WHEN {identity} THEN 1 WHEN '' THEN {period} "
-                f"ELSE CASE WHEN ({recorded}) LIKE 'run:%' THEN {period} ELSE 0 END END"
+                f"WHERE {period}"
             )
         if "alerts" in tables:
-            period = self._recorded_period(
-                "CAST(a.alert_time AS REAL)", identity
-            )
+            period = self._predicate(connection, "CAST(a.alert_time AS REAL)")
             if {"evidence", "alert_evidence"} <= tables:
                 period = (
                     f"EXISTS (SELECT 1 FROM {database}.alert_evidence ae JOIN {prefix}evidence e "
@@ -276,8 +333,10 @@ class NetworkScope:
         Parameters:
             connection: History connection with scoped run detections attached.
         """
-        identity = self._prepare(connection)
-        period = self._recorded_period("f.event_time", identity)
+        interface = "(SELECT CASE WHEN json_valid(rf.flow) THEN COALESCE(NULLIF(json_extract(rf.flow,'$.interface'),'default'),'') ELSE '' END FROM run_db.flows rf WHERE rf.uid=f.uid)"
+        period = self._predicate(
+            connection, "f.event_time", interface=f"COALESCE({interface},'')"
+        )
         tables = {
             row[0]
             for row in connection.execute(
@@ -291,4 +350,121 @@ class NetworkScope:
             )
         connection.execute(
             f"CREATE TEMP VIEW flow_index AS SELECT f.* FROM main.flow_index f WHERE {period}"
+        )
+
+
+@dataclass(frozen=True)
+class NetworkSelection(NetworkScope):
+    """Union of selected interface sessions, each with independent history."""
+
+    members: tuple[tuple[str, NetworkScope], ...] = ()
+    allow_untagged: bool = False
+    connection_only: bool = False
+    all_networks: bool = False
+    filter_interface: bool = False
+
+    @property
+    def network_ids(self) -> frozenset[str]:
+        """Return the selected network identities."""
+        return frozenset(scope.network_id for _, scope in self.members)
+
+    def matches(
+        self, timestamp: float, network_id: str = "", interface: str = ""
+    ) -> bool:
+        """Match a message against its own interface's session boundary.
+
+        Parameters:
+            timestamp: Observation timestamp.
+            network_id: Recorded network identity, if available.
+            interface: Recorded capture interface, if available.
+
+        Returns:
+            Whether any selected session contains this observation.
+        """
+        if self.all_networks:
+            return math.isfinite(timestamp) and any(
+                name == interface for name, _ in self.members
+            )
+        explicit = bool(network_id and not network_id.startswith("run:"))
+        if explicit and not self.connection_only and not self.filter_interface:
+            return math.isfinite(timestamp) and network_id in self.network_ids
+        if not interface and not explicit and not self.allow_untagged:
+            return False
+        return any(
+            (not interface or interface == name)
+            and (
+                not (
+                    self.connection_only or scope.network_id.startswith("run:")
+                )
+                or (
+                    scope.connection_start is not None
+                    and timestamp >= scope.connection_start
+                )
+            )
+            and scope.matches(timestamp, network_id)
+            for name, scope in self.members
+        )
+
+    def _predicate(
+        self,
+        connection: sqlite3.Connection,
+        timestamp: str,
+        recorded: str = "''",
+        interface: str = "''",
+    ) -> str:
+        """Build an indexed union of interface-specific network visits.
+
+        Parameters:
+            connection: Request-local query connection.
+            timestamp: SQL event timestamp.
+            recorded: SQL recorded network identity.
+            interface: SQL recorded capture interface.
+
+        Returns:
+            SQL predicate retaining separate reconnection boundaries.
+        """
+        connection.execute(
+            "CREATE TEMP TABLE IF NOT EXISTS scope_attachments "
+            "(interface TEXT PRIMARY KEY,network_id TEXT,start REAL,connection_only INTEGER)"
+        )
+        connection.execute(
+            "CREATE TEMP TABLE IF NOT EXISTS scope_interface_visits "
+            "(interface TEXT,changed_at REAL,network_id TEXT,PRIMARY KEY(interface,changed_at)) WITHOUT ROWID"
+        )
+        connection.executemany(
+            "INSERT OR IGNORE INTO scope_attachments VALUES (?,?,?,?)",
+            [
+                (
+                    name,
+                    scope.network_id,
+                    scope.connection_start,
+                    self.connection_only
+                    or scope.network_id.startswith("run:"),
+                )
+                for name, scope in self.members
+            ],
+        )
+        connection.executemany(
+            "INSERT OR IGNORE INTO scope_interface_visits VALUES (?,?,?)",
+            [
+                (name, stamp, identity)
+                for name, scope in self.members
+                for stamp, identity in scope.visits
+            ],
+        )
+        if self.all_networks:
+            return f"EXISTS (SELECT 1 FROM scope_attachments a WHERE ({interface})=a.interface)"
+        period = (
+            "(SELECT v.network_id FROM scope_interface_visits v "
+            f"WHERE v.interface=a.interface AND v.changed_at<={timestamp} "
+            "ORDER BY v.changed_at DESC LIMIT 1)=a.network_id"
+        )
+        return (
+            "EXISTS (SELECT 1 FROM scope_attachments a WHERE "
+            f"((NOT a.connection_only AND {int(not self.filter_interface)} AND ({recorded})=a.network_id) OR ("
+            f"(({interface})=a.interface OR (({interface})='' AND "
+            f"({int(self.allow_untagged)} OR (({recorded})<>'' AND ({recorded}) NOT LIKE 'run:%')))) "
+            f"AND (NOT a.connection_only OR {timestamp}>=a.start) "
+            f"AND CASE WHEN ({recorded})=a.network_id THEN 1 "
+            f"WHEN ({recorded})='' OR ({recorded}) LIKE 'run:%' THEN {period} ELSE 0 END)))"
         )
