@@ -6186,6 +6186,67 @@ def _group_records_reader(tmp_path: Path) -> RunDataReader:
     return reader
 
 
+@pytest.mark.parametrize("network", ["", "current", "connection"])
+@pytest.mark.parametrize("include_full_total", [None, "1", "0"])
+def test_evidence_group_page_can_skip_network_full_total(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, network: str, include_full_total: str | None,
+) -> None:
+    """Keep selected records exact without a full-network recount when omitted.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Match the live clock to the fixture.
+        network: Unfiltered, current network or current connection scope.
+        include_full_total: Default, explicit count or count opt-out.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    query = {"range":["all"], "profile":["192.168.1.22"], "type":["ARP_SCAN"], "limit":["1"]}
+    if network:
+        query["network"] = [network]
+    expected = reader.evidence(query)
+    if include_full_total is not None:
+        query["include_full_total"] = [include_full_total]
+    from modules.web_interface.server import detection_total
+    with patch("modules.web_interface.server.detection_total", wraps=detection_total) as count:
+        result = reader.evidence(query)
+    if include_full_total == "0":
+        count.assert_not_called()
+        expected.pop("full_total")
+    else:
+        count.assert_called_once()
+    assert result == expected
+    assert result["total"] == 1
+    assert result["items"][0]["id"] == "new"
+
+
+@pytest.mark.parametrize("origin", ["", "local", "p2p"])
+@pytest.mark.parametrize("order", ["asc", "desc"])
+def test_evidence_group_page_without_full_total_keeps_filtered_pagination(
+    tmp_path: Path, origin: str, order: str,
+) -> None:
+    """Keep filtering, exact group totals and cursors identical on later pages.
+
+    Parameters:
+        tmp_path: Independent detection database.
+        origin: All reports, local detections or P2P reports.
+        order: Requested time sort direction.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    query = {"range":["all"], "profile":["192.0.2.20"], "type":["UNKNOWN_PORT"],
+        "limit":["7"], "origin":[origin], "order":[order], "hide_excluded":["1"], "threat":["low_or_more"]}
+    for _ in range(2):
+        expected = reader.evidence(query)
+        expected.pop("full_total")
+        with patch("modules.web_interface.server.detection_total", side_effect=AssertionError("Unneeded full-network count")):
+            actual = reader.evidence({**query, "include_full_total":["0"]})
+        assert actual == expected
+        assert actual["next_cursor"]
+        query["cursor"] = [actual["next_cursor"]]
+
+
 @pytest.mark.parametrize("origin, count", [("", 123), ("p2p", 31), ("local", 92)])
 def test_group_record_source_filter_precedes_cursor_pagination(tmp_path: Path, origin: str, count: int) -> None:
     """Filter all group records without losing source constraints on later pages.

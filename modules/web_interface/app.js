@@ -3587,6 +3587,7 @@ function selectEvidenceGroup(group) {
 function evidenceGroupQuery() {
   const workspace = state.evidenceWorkspace;
   const params = rangeQuery("evidence");
+  params.set("include_full_total", "0");
   if (state.deviceView && workspace.group?.device_id) params.set("device_id", workspace.group.device_id);
   else if (workspace.group?.profile_ip) params.set("profile", workspace.group.profile_ip);
   if (workspace.group?.evidence_type || workspace.typeFilter) {

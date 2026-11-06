@@ -127,7 +127,7 @@ and excluded records before reading full evidence details. Hosts calculates
 finding statistics after search and pagination when the selected sort and
 filters allow it. Device searches filter identities before aggregating
 traffic, while retaining every address belonging to a matching device.
-Evidence counts are reused from the same finding statistics. These paths add
+Evidence counts are reused from the same finding statistics. Opening an evidence group requests only its filtered records and exact group count, skipping the unused full-network total. The individual evidence API accepts `include_full_total=0` to omit that total; other requests retain the existing response. These paths add
 no database indexes, background workers, or persistent result caches.
 
 The input watcher observes only Zeek log files. It does not watch or remove

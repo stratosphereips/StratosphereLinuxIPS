@@ -3851,6 +3851,9 @@ class RunDataReader:
         """Return one filtered, cursor-bounded evidence page."""
         if self._query_value(query, "group") in {"host_type", "type", "host"}:
             return self._grouped_evidence(query)
+        include_full_total = (
+            self._query_value(query, "include_full_total", "1") != "0"
+        )
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
         searches = list(
@@ -3931,7 +3934,11 @@ class RunDataReader:
                 latest_row = connection.execute(
                     "SELECT MAX(evidence_time) AS latest FROM evidence"
                 ).fetchone()
-                full_total = detection_total(connection, "evidence")
+                full_total = (
+                    detection_total(connection, "evidence")
+                    if include_full_total
+                    else None
+                )
                 latest = float(latest_row["latest"] or 0)
                 start, end, range_name = self._time_bounds(query, latest)
                 start = self._scoped_start(query, start)
@@ -4120,7 +4127,7 @@ class RunDataReader:
                 sort_values = [row["sort_value"] for row in rows]
         except sqlite3.Error:
             records = self._redis_evidence()
-            full_total = len(records)
+            full_total = len(records) if include_full_total else None
             if self._query_value(query, "hide_excluded") == "1":
                 records = [
                     item for item in records if not item.get("whitelisted")
@@ -4242,7 +4249,11 @@ class RunDataReader:
         return {
             "items": items,
             "total": int(total),
-            "full_total": int(full_total),
+            **(
+                {"full_total": int(full_total)}
+                if full_total is not None
+                else {}
+            ),
             "page_size": len(items),
             "next_cursor": next_cursor,
             "range": range_name,

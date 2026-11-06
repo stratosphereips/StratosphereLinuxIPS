@@ -1187,6 +1187,7 @@ def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, them
         assert rows.first.get_attribute("data-evidence-id") == "record-003"
         assert queries[-1]["search"] == ["alpha"]
         assert queries[-1]["record_search"] == ["needle"]
+        assert all(query.get("include_full_total") == ["0"] for query in queries)
         assert search.evaluate("element => document.activeElement === element")
         page.evaluate("byId('evidence-search').value='beta'")
         search.press("Enter")
