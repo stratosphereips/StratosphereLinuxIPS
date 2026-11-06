@@ -1537,7 +1537,7 @@ body.overview-active main { max-width: none; padding: 1rem 1.15rem .75rem; }
 .filter-popup :is(.alerts-severity-filters, .hosts-filter-group) { display: flex; flex-wrap: wrap; gap: .25rem; }
 .filter-popup .alerts-time-controls { display: grid; gap: .8rem; margin: 0; }
 .filter-popup .alerts-time-controls label { gap: .3rem; font-size: var(--control-font); }
-.filter-popup-field:has(> input[hidden]) { display: none; }
+.filter-popup .filter-popup-field:has(> input[hidden]) { display: none; }
 .filter-popup .alerts-group-options { margin: 0; }
 .alerts-host-controls:has(.filter-popup-trigger) { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
 .alerts-host-controls:has(.filter-popup-trigger) > input { flex: 1 1 180px; width: 180px; }

@@ -213,8 +213,10 @@ visible, with a funnel icon opening the other filtering options in a popup.
 Filters apply immediately; no Apply step is needed. The icon shows the number
 of active criteria, and a compact summary keeps the range and severity visible.
 Grouping, review, severity, whitelist visibility, score, scope, alert-link and
-time controls remain available in their respective tabs. Custom dates appear
-when **Custom** is selected. Controls share the same font and height.
+time controls remain available in their respective tabs. In Hosts, both severity
+and scope use **All** without a result count. **From** and **To** labels and their
+date fields appear together only when **Custom** is selected. Controls share the
+same font and height.
 Close the popup with its close button, Escape, or a click outside it. Changing
 tabs closes it too. Closing it preserves selections; existing saved browser
 preferences still apply. Table sorting and column controls stay beside the tables.

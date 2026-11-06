@@ -302,7 +302,7 @@ def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, wid
             route.fulfill(path=str(assets / ("index.html" if parsed.path == "/" else parsed.path[1:])))
         elif parsed.path == f"/api/{tab}":
             queries.append(parse_qs(parsed.query))
-            route.fulfill(json={"items": [], "total": 0, "full_total": 0, "open_total": 0,
+            route.fulfill(json={"items": [], "total": 5 if tab == "hosts" else 0, "full_total": 5 if tab == "hosts" else 0, "open_total": 0,
                                 "page_size": 0, "next_cursor": None})
         else:
             route.fulfill(status=503, json={"error": "Isolated popup fixture"})
@@ -328,6 +328,13 @@ def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, wid
             trigger.click()
             page.wait_for_function("tab => byId(`${tab}-filter-button`).getAttribute('aria-expanded') === 'true'", arg=tab)
             assert popup.is_visible()
+            for suffix in ("from", "to"):
+                field = page.locator(f"#{tab}-{suffix}")
+                assert field.is_hidden()
+                assert field.locator("..").is_hidden()
+            if tab == "hosts":
+                for group in ("threat", "scope"):
+                    assert page.locator(f"#hosts-{group}-chips button").first.inner_text() == "All"
             bounds = popup.bounding_box()
             assert 0 <= bounds["x"] and bounds["x"] + bounds["width"] <= width
             assert 0 <= bounds["y"] and bounds["y"] + bounds["height"] <= 850
@@ -368,6 +375,16 @@ def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, wid
                 page.locator(f"#{tab}-range").select_option("custom")
             assert page.locator(f"#{tab}-from").is_visible()
             assert page.locator(f"#{tab}-to").is_visible()
+            assert page.locator(f"#{tab}-from").locator("..").inner_text() == "From"
+            assert page.locator(f"#{tab}-to").locator("..").inner_text() == "To"
+            with page.expect_response(lambda response: urlparse(response.url).path == f"/api/{tab}"):
+                page.locator(f"#{tab}-range").select_option("7d")
+            page.wait_for_function("tab => !state.requests.has(tab)", arg=tab)
+            for suffix in ("from", "to"):
+                assert page.locator(f"#{tab}-{suffix}").locator("..").is_hidden()
+            if tab == "hosts":
+                for group in ("threat", "scope"):
+                    assert page.locator(f"#hosts-{group}-chips button").first.inner_text() == "All"
             for field in popup.locator("select, input:not([hidden])").all():
                 if field.is_visible():
                     box = field.bounding_box()

@@ -6242,7 +6242,7 @@ function renderHostFilterChips(payload) {
   const ranks = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
   const groups = [
     ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]], "max_threat_level"],
-    ["hosts-scope-chips", "hosts-scope", [["", "All scopes"], ["local", "Local"], ["public", "Public"]], "scope"],
+    ["hosts-scope-chips", "hosts-scope", [["", "All"], ["local", "Local"], ["public", "Public"]], "scope"],
   ];
   groups.forEach(([targetId, selectId, options, field]) => {
     const target = byId(targetId);
@@ -6258,8 +6258,8 @@ function renderHostFilterChips(payload) {
           return field === "max_threat_level" && value.endsWith("_or_more")
             ? (ranks[rowValue] ?? 0) >= ranks[minimum] : rowValue === value;
         }).length;
-      const showCount = !value || select.value === value
-        || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value);
+      const showCount = Boolean(value) && (select.value === value
+        || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value));
       const button = text("button", `${label}${showCount ? ` ${compact(count)}` : ""}`, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
       button.type = "button";
       button.addEventListener("click", () => {
