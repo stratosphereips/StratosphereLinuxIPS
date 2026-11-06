@@ -230,14 +230,6 @@ class Whitelist:
             dst_ip = str(ipaddress.ip_address(str(flow.daddr)))
         except ValueError:
             return False
-        if proto == "tcp" and str(dst_port) == "43":
-            if (
-                self.db.is_slips_own_service_port(
-                    self.db.main_pid, proto, dst_port, src_ip
-                )
-                is True
-            ):
-                return True
         now = time.monotonic()
         cached = self._own_source_cache.get(src_ip)
         if cached is None or cached[1] <= now:

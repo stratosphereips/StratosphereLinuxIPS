@@ -105,26 +105,6 @@ def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
     db.r.exists.assert_called_once_with(key)
 
 
-def test_slips_own_service_port_window_expires() -> None:
-    """Bound external WHOIS traffic marks to a short run-specific window."""
-    _module_factory = ModuleFactory()
-    db = object.__new__(RedisDB)
-    db.r = Mock()
-    db.constants = Constants()
-
-    db.record_slips_own_service_port(123, "tcp", 43, ["192.0.2.10", "2001:db8::10"])
-
-    key = "slips:own_service_port:123:tcp:43"
-    pipe = db.r.pipeline.return_value
-    pipe.sadd.assert_called_once_with(key, "192.0.2.10", "2001:db8::10")
-    pipe.expire.assert_called_once_with(key, 10)
-    pipe.execute.assert_called_once()
-
-    db.r.sismember.return_value = 1
-    assert db.is_slips_own_service_port(123, "TCP", "43", "192.0.2.10")
-    db.r.sismember.assert_called_once_with(key, "192.0.2.10")
-
-
 # random values for testing
 profileid = "profile_192.168.1.1"
 twid = "timewindow1"

@@ -1184,6 +1184,8 @@ twimewindow (1 hour by default)
 
 Slips uses online databases to query information about many different things, for example (user agents, mac vendors etc.)
 
+During live capture, only connections attributed to Slips sockets are automatically excluded, using their full IP/port tuple and transport for the current run. The default whitelist does not exempt these services for all applications or imported PCAPs. Unattributed external command traffic remains eligible for detection. See [Connections Made By Slips](features.md#connections-made-by-slips) for details.
+
 The list below contains all connections made by Slips
 
 useragentstring.com -> For getting user agent info if no info was found in Zeek

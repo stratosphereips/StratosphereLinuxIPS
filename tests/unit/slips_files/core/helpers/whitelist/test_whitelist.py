@@ -19,26 +19,23 @@ from slips_files.core.helpers.whitelist.whitelist_parser import (
 )
 
 
-@pytest.mark.parametrize("ip,port,direction,ignored,expected", [
-    ("165.160.32.149", 43, Direction.DST, "alerts", True),
-    ("54.151.0.246", 43, Direction.DST, "alerts", True),
-    ("165.160.32.149", 443, Direction.DST, "alerts", False),
-    ("54.151.0.246", 443, Direction.DST, "alerts", False),
-    ("192.0.2.43", 43, Direction.DST, "alerts", False),
-    ("165.160.32.149", 43, Direction.SRC, "alerts", False),
-    ("165.160.32.149", 43, Direction.DST, "flows", False),
+@pytest.mark.parametrize("domain,ip,port", [
+    ("ip-api.com", "208.95.112.1", 80),
+    ("ipinfo.io", "34.117.59.81", 443),
+    ("useragentstring.com", "92.205.111.3", 80),
+    ("whois.namecheap.com", "54.151.0.246", 43),
+    ("whois.name.com", "165.160.32.149", 43),
+    ("maclookup.app", "104.21.59.235", 443),
 ])
-def test_default_whois_rules_require_server_and_destination_port(
-    ip: str, port: int, direction: Direction, ignored: str, expected: bool,
+def test_default_whitelist_does_not_exempt_entire_lookup_services(
+    domain: str, ip: str, port: int,
 ) -> None:
-    """Keep default WHOIS exceptions narrower than all port 43 traffic.
+    """Keep non-Slips traffic visible at enrichment service endpoints.
 
     Parameters:
-        ip: Endpoint being matched.
-        port: Port belonging to that endpoint.
-        direction: Whether it is the source or destination.
-        ignored: Evidence or flow suppression request.
-        expected: Whether the default file should suppress the match.
+        domain: Enrichment service formerly exempted globally.
+        ip: Service address, including shared hosting addresses.
+        port: Destination service port.
     """
     whitelist = ModuleFactory().create_whitelist_obj()
     for line in Path("config/whitelist.conf").read_text().splitlines():
@@ -48,8 +45,9 @@ def test_default_whois_rules_require_server_and_destination_port(
     rules = whitelist.parser.whitelisted_ips
     whitelist.bloom_filters.ips = rules
     whitelist.db.is_whitelisted.side_effect = lambda key, _: json.dumps(rules[key]) if key in rules else None
+    assert domain not in whitelist.parser.whitelisted_domains
     assert "*:43" not in rules
-    assert whitelist.ip_analyzer.is_whitelisted(ip, direction, ignored, port) is expected
+    assert not whitelist.ip_analyzer.is_whitelisted(ip, Direction.DST, "alerts", port)
 
 
 @pytest.mark.parametrize("value,source,port", [
@@ -439,47 +437,35 @@ def test_offline_flow_ignores_live_slips_socket_registry() -> None:
     whitelist.db.is_slips_own_source_ip.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "proto,dst_port,marked,expected",
-    [
-        ("tcp", 43, True, True),
-        ("tcp", 43, False, False),
-        ("udp", 43, True, False),
-        ("tcp", 443, True, False),
-    ],
-)
-def test_whois_subprocess_allowance_is_limited_to_tcp_43(
-    proto: str, dst_port: int, marked: bool, expected: bool
+@pytest.mark.parametrize("source_port,registered_port,expected", [
+    (51234, 51234, True),
+    (51235, 51234, False),
+])
+def test_whois_requires_the_exact_slips_source_port(
+    source_port: int, registered_port: int, expected: bool,
 ) -> None:
-    """Apply the brief WHOIS mark only to its source and service port.
+    """Do not exempt another application's concurrent WHOIS request.
 
     Parameters:
-        proto: Captured transport.
-        dst_port: Captured destination port.
-        marked: Whether the current local IP is in the WHOIS window.
-        expected: Whether this flow is excluded from profiling.
+        source_port: Port of the captured connection.
+        registered_port: Port of the socket actually opened by Slips.
+        expected: Whether the exact connection belongs to Slips.
     """
     factory = ModuleFactory()
     whitelist = factory.create_whitelist_obj()
     whitelist._filter_slips_own_traffic = True
     whitelist.db.main_pid = 123
-    whitelist.db.is_slips_own_service_port.return_value = marked
-    whitelist.db.is_slips_own_source_ip.return_value = False
+    whitelist.db.is_slips_own_source_ip.return_value = True
+    whitelist.db.is_slips_own_connection.side_effect = (
+        lambda run, proto, src, sport, dst, dport: sport == registered_port
+    )
     flow = SimpleNamespace(
-        saddr="192.0.2.10",
-        sport=51234,
-        daddr="198.51.100.43",
-        dport=dst_port,
-        proto=proto,
+        saddr="192.0.2.10", sport=source_port,
+        daddr="198.51.100.43", dport=43, proto="tcp",
     )
 
     assert whitelist._is_slips_own_flow(flow) is expected
-    if proto == "tcp" and dst_port == 43:
-        whitelist.db.is_slips_own_service_port.assert_called_once_with(
-            123, "tcp", 43, "192.0.2.10"
-        )
-    else:
-        whitelist.db.is_slips_own_service_port.assert_not_called()
+    whitelist.db.is_slips_own_service_port.assert_not_called()
 
 
 @pytest.mark.parametrize("org,asn", [("google", "AS6432")])

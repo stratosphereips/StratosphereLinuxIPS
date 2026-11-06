@@ -1166,48 +1166,6 @@ class RedisDB(
         )
         return bool(self.r.exists(key))
 
-    def record_slips_own_service_port(
-        self, run_id: int, proto: str, dst_port: int, source_ips: list[str]
-    ) -> None:
-        """Mark local addresses for a brief external lookup command.
-
-        Parameters:
-            run_id: Main Slips process ID.
-            proto: TCP or UDP transport.
-            dst_port: Service port used by the external command.
-            source_ips: Current local interface addresses.
-        """
-        if not source_ips:
-            return
-        key = (
-            f"{self.constants.SLIPS_OWN_SERVICE_PORT_PREFIX}{run_id}:"
-            f"{proto.lower()}:{dst_port}"
-        )
-        pipe = self.r.pipeline(transaction=False)
-        pipe.sadd(key, *source_ips)
-        pipe.expire(key, self.constants.SLIPS_OWN_SERVICE_PORT_TTL)
-        pipe.execute()
-
-    def is_slips_own_service_port(
-        self, run_id: int, proto: str, dst_port: int | str, src_ip: str
-    ) -> bool:
-        """Check a short lived external lookup allowance.
-
-        Parameters:
-            run_id: Main Slips process ID.
-            proto: TCP or UDP transport.
-            dst_port: Flow destination port.
-            src_ip: Flow source IP.
-
-        Returns:
-            True when this source and service port were marked for this run.
-        """
-        key = (
-            f"{self.constants.SLIPS_OWN_SERVICE_PORT_PREFIX}{run_id}:"
-            f"{proto.lower()}:{dst_port}"
-        )
-        return bool(self.r.sismember(key, src_ip))
-
     def get_interface(self) -> str:
         return self.r.hget(
             self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE

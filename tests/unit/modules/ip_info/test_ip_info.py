@@ -36,42 +36,14 @@ def test_pending_mac_queries_stay_inside_ip_info_process() -> None:
     assert isinstance(ip_info.pending_mac_queries, Queue)
 
 
-def test_local_lookup_source_ips_use_current_interfaces() -> None:
-    """Discard loopback and IPv6 scope suffixes before marking WHOIS."""
+def test_query_whois_does_not_exempt_other_applications() -> None:
+    """Keep enrichment without granting a host-wide TCP/43 exemption."""
     ip_info = ModuleFactory().create_ip_info_obj()
-    with (
-        patch("modules.ip_info.ip_info.netifaces.interfaces", return_value=["en0"]),
-        patch(
-            "modules.ip_info.ip_info.netifaces.ifaddresses",
-            return_value={
-                socket.AF_INET: [
-                    {"addr": "192.0.2.10"}, {"addr": "127.0.0.1"}
-                ],
-                socket.AF_INET6: [{"addr": "2001:db8::10%en0"}],
-            },
-        ),
-    ):
-        assert ip_info._local_lookup_source_ips() == [
-            "192.0.2.10", "2001:db8::10"
-        ]
-
-
-def test_query_whois_marks_external_command_before_lookup() -> None:
-    """Suppress command-originated WHOIS flows without skipping enrichment."""
-    ip_info = ModuleFactory().create_ip_info_obj()
-    ip_info.db.main_pid = 123
     result = Mock()
-    with (
-        patch.object(
-            ip_info, "_local_lookup_source_ips", return_value=["192.0.2.10"]
-        ),
-        patch("modules.ip_info.ip_info.whois.query", return_value=result) as query,
-    ):
+    with patch("modules.ip_info.ip_info.whois.query", return_value=result) as query:
         assert ip_info.query_whois("example.com") is result
 
-    ip_info.db.record_slips_own_service_port.assert_called_once_with(
-        123, "tcp", 43, ["192.0.2.10"]
-    )
+    ip_info.db.record_slips_own_service_port.assert_not_called()
     query.assert_called_once_with("example.com", timeout=2.0)
 
 
