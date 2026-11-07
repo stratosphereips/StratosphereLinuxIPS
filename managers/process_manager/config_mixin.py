@@ -23,6 +23,7 @@ class ConfigMixin:
         (Modules.ALERT_SUMMARY, "alert_summary_enabled"),
         (Modules.REGEX_GENERATOR, "regex_generator_enabled"),
         (Modules.WEB_INTERFACE, "web_interface_enabled"),
+        (Modules.T_CELL, "t_cell_enabled"),
     )
 
     def read_config(self) -> None:

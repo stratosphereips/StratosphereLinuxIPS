@@ -72,6 +72,7 @@ def test_get_user_disabled_modules(
     process_manager.main.conf.llm_enabled.return_value = True
     process_manager.main.conf.alert_summary_enabled.return_value = True
     process_manager.main.conf.regex_generator_enabled.return_value = True
+    process_manager.main.conf.t_cell_enabled.return_value = True
     process_manager.main.conf.read_configuration.reset_mock()
     process_manager.main.conf.read_configuration.side_effect = None
     process_manager.main.conf.read_configuration.return_value = configured_modules
@@ -144,6 +145,7 @@ def test_get_disabled_modules(
     process_manager.main.conf.llm_enabled.return_value = True
     process_manager.main.conf.alert_summary_enabled.return_value = True
     process_manager.main.conf.regex_generator_enabled.return_value = True
+    process_manager.main.conf.t_cell_enabled.return_value = True
     process_manager.main.input_type = input_type
     process_manager.main.args.clearblocking = False
     process_manager.main.args.blocking = False
@@ -197,8 +199,42 @@ def test_get_user_disabled_modules_includes_feature_toggled_modules(
     process_manager.main.conf.regex_generator_enabled.return_value = (
         regex_generator_enabled
     )
+    process_manager.main.conf.t_cell_enabled.return_value = True
 
     assert process_manager.get_user_disabled_modules() == expected
+
+
+@pytest.mark.parametrize(
+    "t_cell_enabled, is_in_disabled",
+    [
+        (False, True),
+        (True, False),
+    ],
+)
+def test_get_user_disabled_modules_respects_t_cell_toggle(
+    t_cell_enabled: bool, is_in_disabled: bool
+) -> None:
+    """
+    Verify ProcessManager gates T_CELL via t_cell_enabled feature toggle.
+
+    Parameters:
+        t_cell_enabled: Whether t_cell is enabled in configuration.
+        is_in_disabled: Whether Modules.T_CELL is expected in disabled set.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.read_configuration.side_effect = None
+    process_manager.main.conf.read_configuration.return_value = []
+    process_manager.main.conf.llm_enabled.return_value = True
+    process_manager.main.conf.alert_summary_enabled.return_value = True
+    process_manager.main.conf.regex_generator_enabled.return_value = True
+    process_manager.main.conf.t_cell_enabled.return_value = t_cell_enabled
+
+    disabled_modules = process_manager.get_user_disabled_modules()
+
+    if is_in_disabled:
+        assert Modules.T_CELL in disabled_modules
+    else:
+        assert Modules.T_CELL not in disabled_modules
 
 
 def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
