@@ -9,6 +9,7 @@ from slips_files.core.profiler_worker import ProfilerWorker
 from slips_files.core.aid_manager import AIDManager
 
 FIVE_MINS = 300
+THROUGHPUT_CHECK_SECONDS = 15
 NUM_INITIAL_PROFILER_WORKERS = 3
 
 
@@ -39,7 +40,7 @@ class WorkerManagerMixin:
         # detected
         self.max_workers = 6
         now = time.monotonic()
-        self.next_throughput_check_time = now + FIVE_MINS
+        self.next_throughput_check_time = now + THROUGHPUT_CHECK_SECONDS
         self.next_worker_decrease_check_time = now + FIVE_MINS
         self.profiler_monitor_thread = threading.Thread(
             target=self._run_profiler_workers_manager_loop,
@@ -101,9 +102,9 @@ class WorkerManagerMixin:
         self.active_profiler_workers += 1
         self.db.increment_profiler_workers_started()
 
-    def did_5min_pass_since_last_throughput_check(self) -> bool:
+    def _throughput_check_due(self) -> bool:
         """
-        Return whether 5 minutes passed since the last throughput check.
+        Return whether the short burst-response interval elapsed.
 
         Return:
         True when throughput should be checked.
@@ -113,7 +114,7 @@ class WorkerManagerMixin:
             return False
 
         while self.next_throughput_check_time <= now:
-            self.next_throughput_check_time += FIVE_MINS
+            self.next_throughput_check_time += THROUGHPUT_CHECK_SECONDS
         return True
 
     def did_5min_pass_since_last_worker_decrease_check(self) -> bool:
@@ -175,12 +176,12 @@ class WorkerManagerMixin:
         if self.max_workers_started():
             return
 
-        if not self.did_5min_pass_since_last_throughput_check():
+        if not self._throughput_check_due():
             return
 
         profiler_fps = self._get_flows_per_second(self.name)
         input_fps = self._get_flows_per_second("input")
-        if input_fps > (profiler_fps * 1.1):
+        if input_fps > (profiler_fps * 1.1) or not self.profiler_queue.empty():
             worker_id = self.last_worker_id + 1
             self.start_profiler_worker(worker_id)
             self.last_worker_id = worker_id
@@ -224,6 +225,9 @@ class WorkerManagerMixin:
             return
 
         if not self.did_5min_pass_since_last_worker_decrease_check():
+            return
+
+        if not self.profiler_queue.empty():
             return
 
         profiler_fps = self._get_flows_per_second(self.name)

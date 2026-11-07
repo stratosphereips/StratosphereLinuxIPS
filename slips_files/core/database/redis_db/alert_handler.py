@@ -123,11 +123,94 @@ class AlertHandler:
             # no previous alerts for this profileid twid
             profileid_twid_alerts = json.dumps(alert_dict)
 
-        self.r.hset(
+        index_key = f"{alert.profile}_{alert.timewindow}:alerted_evidence"
+        ids = list(alert.correl_id)
+        if not self.r.sismember(index_key, "__indexed__"):
+            ids = [
+                evidence_id
+                for values in old_profileid_twid_alerts.values()
+                for evidence_id in json.loads(values)
+            ] + ids
+        pipe = self.r.pipeline()
+        pipe.hset(
             f"{alert.profile}_{alert.timewindow}",
             self.constants.ALERTS,
             profileid_twid_alerts,
         )
+        pipe.sadd(index_key, "__indexed__", *ids)
+        pipe.expire(index_key, self.default_ttl)
+        pipe.execute()
+
+    def _ensure_alert_evidence_index(self, profileid: str, twid: str) -> str:
+        """Index retained alert membership once when upgrading an existing run.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Detection time window.
+
+        Returns:
+            Expiring set containing correlated evidence IDs and its marker.
+        """
+        key = f"{profileid}_{twid}:alerted_evidence"
+        if not self.r.sismember(key, "__indexed__"):
+            alerts = self.get_profileid_twid_alerts(profileid, twid)
+            ids = [
+                identifier
+                for values in alerts.values()
+                for identifier in json.loads(values)
+            ]
+            pipe = self.r.pipeline()
+            pipe.sadd(key, "__indexed__", *ids)
+            pipe.expire(key, self.default_ttl)
+            pipe.execute()
+        return key
+
+    def is_evidence_in_past_alert(
+        self, profileid: str, twid: str, evidence_id: str
+    ) -> bool:
+        """Check past-alert membership without downloading historical alert lists.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Detection time window.
+            evidence_id: Evidence UUID to check.
+
+        Returns:
+            Whether an existing alert already contains this evidence.
+        """
+        key = f"{profileid}_{twid}:alerted_evidence"
+        indexed, member = self.r.smismember(key, ["__indexed__", evidence_id])
+        if indexed:
+            return bool(member)
+        return bool(
+            self.r.sismember(
+                self._ensure_alert_evidence_index(profileid, twid), evidence_id
+            )
+        )
+
+    def get_pending_processed_evidence(
+        self, profileid: str, twid: str
+    ) -> Dict[str, str]:
+        """Fetch processed evidence that has not yet contributed to an alert.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Detection time window.
+
+        Returns:
+            Evidence UUIDs and their stored JSON records.
+        """
+        correlated = self._ensure_alert_evidence_index(profileid, twid)
+        processed = f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        ids = list(self.r.sdiff(processed, correlated))
+        if not ids:
+            return {}
+        records = self.r.hmget(f"{profileid}_{twid}_evidence", ids)
+        return {
+            identifier: record
+            for identifier, record in zip(ids, records)
+            if record
+        }
 
     def get_number_of_alerts_so_far(self):
         return self.r.get(self.constants.NUMBER_OF_ALERTS)

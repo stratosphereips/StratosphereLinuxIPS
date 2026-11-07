@@ -2,6 +2,7 @@
 
 import multiprocessing
 import os
+from queue import Empty
 import signal
 import threading
 import time
@@ -186,6 +187,7 @@ def test_aid_worker_owns_database_and_drains_tasks() -> None:
 
     flow = Mock()
     queue = Mock()
+    queue.get_nowait.side_effect = Empty
     queue.get.side_effect = [
         {
             "flow": flow,
@@ -207,8 +209,8 @@ def test_aid_worker_owns_database_and_drains_tasks() -> None:
     ):
         AIDManager._run_worker(queue, options)
         database_class.assert_called_once_with(**options)
-        database_class.return_value.add_flow.assert_called_once_with(
-            flow, "profile_1", "tw1", label="benign"
+        database_class.return_value.add_flows.assert_called_once_with(
+            [{"flow": flow, "profileid": "profile_1", "twid": "tw1", "label": "benign"}]
         )
         assert flow.aid == "aid-value"
 

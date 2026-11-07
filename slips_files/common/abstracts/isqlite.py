@@ -255,6 +255,12 @@ class ISQLite(ABC):
                 with self.conn_lock:
                     try:
                         cursor = self.conn.cursor()
+                        if (
+                            not self.conn.in_transaction
+                            and query.lstrip().upper().startswith("SELECT ")
+                        ):
+                            cursor.execute(query, params or ())
+                            return cursor
                         if self.conn.in_transaction is False:
                             cursor.execute("BEGIN")
 

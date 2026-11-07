@@ -1800,6 +1800,10 @@ range, then resolves their latest observation; inactive retained profiles do not
 trigger repeated historical lookups. Connection queries expose their earliest
 session boundary to SQLite's time indexes while preserving each interface's
 independent reconnection boundary.
+Indexing a new flow also adds its observed source IP to the Hosts inventory,
+without waiting for the next identity snapshot or for a detector to emit evidence.
+Existing names and MAC metadata are preserved. Destination addresses alone do not
+create host entries, so an unanswered probe does not invent an observed host.
 Grouped evidence looks up the selected IDs directly instead of scanning the
 entire retained evidence index again for its count and rows.
 Connection-scoped alerts derive linked alert IDs from the current evidence set,

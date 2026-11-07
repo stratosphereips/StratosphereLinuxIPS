@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+from types import SimpleNamespace
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, patch
@@ -1058,3 +1059,20 @@ def test_score_storage_failure_does_not_prevent_alert_generation() -> None:
     assert worker._score_evidence_and_maybe_alert(SimpleNamespace(id='trigger'), 'profile_1.2.3.4', 'timewindow1') == (1.28, .4096)
     worker._generate_alert_if_threshold_crossed.assert_called_once()
     assert 'Unable to persist evidence score' in worker.print.call_args.args[0]
+@pytest.mark.parametrize("already_correlated", [False, True])
+def test_scoring_checks_index_instead_of_loading_past_alerts(already_correlated: bool) -> None:
+    """Keep scoring independent of a profile's accumulated alert history.
+
+    Parameters:
+        already_correlated: Whether this finding already belongs to an alert.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = SimpleNamespace(id="finding", threat_level=ThreatLevel.LOW, evidence_type=EvidenceType.ARP_SCAN)
+    worker.db.is_evidence_in_past_alert.return_value = already_correlated
+    worker.db.get_accumulated_threat_level.return_value = .1
+    worker.update_accumulated_threat_level = Mock(return_value=.2)
+    worker.is_filtered_evidence = Mock(return_value=False)
+    worker.get_evidence_that_were_part_of_a_past_alert = Mock(side_effect=AssertionError("Historical scan"))
+    assert worker.get_accumulated_threat_level("profile_1", "timewindow1", evidence) == (.1 if already_correlated else .2)
+    worker.db.is_evidence_in_past_alert.assert_called_once_with("profile_1", "timewindow1", "finding")
+    assert worker.update_accumulated_threat_level.call_count == int(not already_correlated)

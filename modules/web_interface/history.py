@@ -453,6 +453,41 @@ class HistoryCollector:
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     indexed,
                 )
+                origins = {}
+                for _, _, stamp, source_ip, *_ in indexed:
+                    try:
+                        address = ipaddress.ip_address(source_ip)
+                    except ValueError:
+                        continue
+                    if (
+                        not math.isfinite(stamp)
+                        or address.is_unspecified
+                        or address.is_multicast
+                    ):
+                        continue
+                    origins[source_ip] = max(
+                        stamp, origins.get(source_ip, stamp)
+                    )
+                history.executemany(
+                    "INSERT OR IGNORE INTO host_snapshots(ip,observed_at,data) VALUES (?,?,?)",
+                    [
+                        (
+                            ip,
+                            stamp,
+                            json.dumps(
+                                {
+                                    "ip": ip,
+                                    "scope": (
+                                        "local"
+                                        if ipaddress.ip_address(ip).is_private
+                                        else "public"
+                                    ),
+                                }
+                            ),
+                        )
+                        for ip, stamp in origins.items()
+                    ],
+                )
             if rows:
                 self._metadata_set(
                     history, "flow_last_rowid", rows[-1]["rowid"]

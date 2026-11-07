@@ -1,7 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from datetime import datetime
-from typing import List, Dict
+from typing import Any, List, Dict
 import os.path
 import json
 import csv
@@ -24,6 +24,15 @@ from slips_files.common.network_context import (
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import Evidence
 from slips_files.core.output import Output
+
+MAX_FLOW_WRITE_BATCH_SIZE = 64
+FLOW_UPSERT_SQL = (
+    "INSERT INTO flows (profileid, twid, uid, flow, label, aid, event_time) "
+    "VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(uid) DO UPDATE SET "
+    "profileid=excluded.profileid, twid=excluded.twid, "
+    "flow=excluded.flow, label=excluded.label, aid=excluded.aid, "
+    "event_time=excluded.event_time"
+)
 from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
     initialize_detection_history,
@@ -618,15 +627,42 @@ class SQLiteDB(ISQLite):
             getattr(flow, "aid", None),
             self._flow_event_time(flow),
         )
-        self.execute(
-            "INSERT INTO flows (profileid, twid, uid, flow, label, aid, "
-            "event_time) VALUES (?, ?, ?, ?, ?, ?, ?) "
-            "ON CONFLICT(uid) DO UPDATE SET "
-            "profileid=excluded.profileid, twid=excluded.twid, "
-            "flow=excluded.flow, label=excluded.label, aid=excluded.aid, "
-            "event_time=excluded.event_time",
-            parameters,
-        )
+        self.execute(FLOW_UPSERT_SQL, parameters)
+
+    def add_flows(self, tasks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Commit a bounded group of connection records before publication.
+
+        Parameters:
+            tasks: Flow, profileid, twid and label storage tasks in queue order.
+
+        Returns:
+            Committed tasks, preserving repeated UIDs and their publication order.
+        """
+        if len(tasks) > MAX_FLOW_WRITE_BATCH_SIZE:
+            raise ValueError("Flow write batch exceeds its limit")
+        if not tasks:
+            return []
+        parameters = [
+            (
+                task["profileid"],
+                task["twid"],
+                task["flow"].uid,
+                json.dumps(asdict(task["flow"])),
+                task["label"],
+                getattr(task["flow"], "aid", None),
+                self._flow_event_time(task["flow"]),
+            )
+            for task in tasks
+        ]
+        with self.conn_lock:
+            with self._acquire_flock():
+                try:
+                    self.conn.executemany(FLOW_UPSERT_SQL, parameters)
+                    self.conn.commit()
+                except Exception:
+                    self.conn.rollback()
+                    raise
+        return tasks
 
     def get_flows_count(self, profileid=None, twid=None) -> int:
         """

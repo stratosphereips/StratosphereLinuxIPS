@@ -855,6 +855,14 @@ class DBManager:
     def get_evidence_causing_alert(self, *args, **kwargs):
         return self.rdb.get_evidence_causing_alert(*args, **kwargs)
 
+    def is_evidence_in_past_alert(self, *args: Any, **kwargs: Any) -> bool:
+        return self.rdb.is_evidence_in_past_alert(*args, **kwargs)
+
+    def get_pending_processed_evidence(
+        self, *args: Any, **kwargs: Any
+    ) -> Dict[str, str]:
+        return self.rdb.get_pending_processed_evidence(*args, **kwargs)
+
     def get_evidence_by_id(self, *args, **kwargs):
         return self.rdb.get_evidence_by_id(*args, **kwargs)
 
@@ -1605,6 +1613,10 @@ class DBManager:
         return self.rdb.add_flow(
             flow, profileid=profileid, twid=twid, label=label
         )
+
+    def add_flows(self, *args: Any, **kwargs: Any) -> None:
+        for task in self.sqlite.add_flows(*args, **kwargs):
+            self.rdb.add_flow(**task)
 
     def get_slips_start_time(self):
         return self.rdb.get_slips_start_time()

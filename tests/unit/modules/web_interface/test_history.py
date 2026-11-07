@@ -533,6 +533,10 @@ def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
     assert len(rows) == 1
     assert rows[0]["bytes"] == 200
     assert rows[0]["source_packets"] == 1
+    with connect_history(history_path, read_only=True) as connection:
+        hosts = connection.execute("SELECT ip,observed_at,data FROM host_snapshots").fetchall()
+    assert [(row["ip"], row["observed_at"]) for row in hosts] == [("10.0.0.1", 10)]
+    assert json.loads(hosts[0]["data"])["scope"] == "local"
     assert checkpoint == "2"
 
 

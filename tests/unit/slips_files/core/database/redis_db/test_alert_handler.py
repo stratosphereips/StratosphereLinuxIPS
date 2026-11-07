@@ -26,6 +26,52 @@ from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.risk_weights import RiskWeight
 
 
+@pytest.mark.parametrize("member", [False, True])
+def test_alert_membership_does_not_read_historical_lists(member: bool) -> None:
+    """Use one indexed lookup regardless of the number of old alerts.
+
+    Parameters:
+        member: Whether the indexed evidence was already correlated.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.r = MagicMock()
+    handler.r.smismember.return_value = [1, int(member)]
+    handler.get_profileid_twid_alerts = Mock(side_effect=AssertionError("Historical scan"))
+    assert handler.is_evidence_in_past_alert("profile_1", "timewindow1", "evidence") is member
+    handler.r.smismember.assert_called_once_with(
+        "profile_1_timewindow1:alerted_evidence", ["__indexed__", "evidence"])
+    handler.r.hget.assert_not_called()
+
+
+def test_alert_membership_upgrades_retained_alerts_with_expiry() -> None:
+    """Build a complete expiring index when a retained run predates the new index."""
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.r = MagicMock()
+    handler.r.smismember.return_value = [0, 0]
+    handler.r.sismember.side_effect = [False, True]
+    handler.get_profileid_twid_alerts = Mock(return_value={"old-alert": '["old-1","old-2"]'})
+    handler.default_ttl = 600
+    assert handler.is_evidence_in_past_alert("profile_1", "timewindow1", "old-2") is True
+    pipeline = handler.r.pipeline.return_value
+    pipeline.sadd.assert_called_once_with("profile_1_timewindow1:alerted_evidence", "__indexed__", "old-1", "old-2")
+    pipeline.expire.assert_called_once_with("profile_1_timewindow1:alerted_evidence", 600)
+    pipeline.execute.assert_called_once_with()
+
+
+def test_pending_processed_evidence_fetches_only_uncorrelated_records() -> None:
+    """Exclude past alerts, unprocessed findings and deleted records before decoding."""
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.r = MagicMock()
+    handler.r.sismember.return_value = True
+    handler.r.sdiff.return_value = ["pending", "deleted"]
+    handler.r.hmget.return_value = ['{"id":"pending"}', None]
+    assert handler.get_pending_processed_evidence("profile_1", "timewindow1") == {"pending": '{"id":"pending"}'}
+    handler.r.sdiff.assert_called_once_with(
+        f"{handler.constants.PROCESSED_EVIDENCE}_profile_1_timewindow1",
+        "profile_1_timewindow1:alerted_evidence")
+    handler.r.hgetall.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "threat_info, expected",
     [
@@ -167,10 +213,16 @@ def test_set_evidence_causing_alert(
     alert_handler.set_evidence_causing_alert(alert)
 
     alert_handler.r.incr.assert_not_called()
-    alert_handler.r.hset.assert_called_once_with(
+    pipeline = alert_handler.r.pipeline.return_value
+    pipeline.hset.assert_called_once_with(
         f"profile_{profile_ip}_timewindow{twid}", "alerts", ANY
     )
-    called_args, _ = alert_handler.r.hset.call_args
+    called_args, _ = pipeline.hset.call_args
+    pipeline.sadd.assert_called_once()
+    assert pipeline.sadd.call_args.args[:2] == (
+        f"profile_{profile_ip}_timewindow{twid}:alerted_evidence", "__indexed__")
+    assert set(pipeline.sadd.call_args.args[2:]) == set(evidence_ids)
+    pipeline.execute.assert_called_once_with()
     alerts_added: Dict[str, str] = json.loads(called_args[2])
     for alert_id, expected_evidence_list in expected_new_alerts.items():
         assert alert_id in alerts_added

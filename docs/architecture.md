@@ -187,6 +187,28 @@ Slips has 5 threat levels.
 
 For more techincal details about this check https://stratospherelinuxips.readthedocs.io/en/develop/contributing.html#faq
 
+### Handling traffic bursts
+
+The AID worker commits up to 64 already queued connection records per transaction
+before publishing their events. It never waits for a batch to fill. Each task
+retains its original profile, time window, label and UID; shutdown drains queued
+tasks before stopping. Read-only SQLite queries use WAL reader concurrency and
+do not take the inter-process writer lock.
+
+Profiler capacity is checked every 15 seconds, including when input has stopped
+but queued work remains. The existing six-worker limit is preserved. Removing
+extra workers still requires the five-minute check and an empty input queue.
+
+ML inference processes up to 32 ready messages together. Every supported flow
+still receives its own prediction, evaluation result and evidence attribution;
+neither detector is disabled and scan probes are not discarded. Sparse traffic
+is processed immediately. Training behavior is unchanged.
+
+The Evidence Handler uses an expiring Redis set for past-alert membership. It
+upgrades retained alert relationships lazily and retrieves only processed,
+uncorrelated evidence when building a new alert. Scoring an individual finding
+does not download and decode all previous alerts in its time window.
+
 
 </tbody>
 </table>

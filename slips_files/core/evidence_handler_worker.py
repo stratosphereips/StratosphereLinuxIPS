@@ -263,21 +263,18 @@ class EvidenceHandlerWorker(IModule):
     def get_evidence_for_tw(
         self, profileid: str, twid: str
     ) -> Optional[Dict[str, Evidence]]:
-        tw_evidence: Dict[str, dict] = self.db.get_twid_evidence(
+        tw_evidence: Dict[str, str] = self.db.get_pending_processed_evidence(
             profileid, twid
         )
         if not tw_evidence:
             return None
 
-        past_evidence_ids = self.get_evidence_that_were_part_of_a_past_alert(
-            profileid, twid
-        )
         filtered_evidence = {}
 
         for evidence_id, raw_evidence in tw_evidence.items():
             evidence = dict_to_evidence(json.loads(raw_evidence))
 
-            if self.is_filtered_evidence(evidence, past_evidence_ids):
+            if self.is_filtered_evidence(evidence, []):
                 continue
 
             if self.db.is_whitelisted_evidence(evidence_id):
@@ -473,10 +470,9 @@ class EvidenceHandlerWorker(IModule):
         ):
             return self.db.get_accumulated_threat_level(profileid, twid)
 
-        past_evidence_ids = self.get_evidence_that_were_part_of_a_past_alert(
-            profileid, twid
-        )
-        if not self.is_filtered_evidence(evidence, past_evidence_ids):
+        if self.db.is_evidence_in_past_alert(
+            profileid, twid, evidence.id
+        ) is not True and not self.is_filtered_evidence(evidence, []):
             return self.update_accumulated_threat_level(evidence)
 
         return self.db.get_accumulated_threat_level(profileid, twid)

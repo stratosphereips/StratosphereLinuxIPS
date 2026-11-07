@@ -1,8 +1,12 @@
 from multiprocessing import Process, Queue
 from queue import Empty
+from typing import Any
 
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.database.sqlite_db.database import (
+    MAX_FLOW_WRITE_BATCH_SIZE,
+)
 
 
 class AIDManager:
@@ -73,9 +77,12 @@ class AIDManager:
         finally:
             watchdog.set()
 
-    def _worker_loop(self, aid_queue, db: DBManager):
-        """
-        Runs in its own process
+    def _worker_loop(self, aid_queue: Any, db: DBManager) -> None:
+        """Hash and commit already queued flows in bounded batches.
+
+        Parameters:
+            aid_queue: Queue containing storage tasks or the stop sentinel.
+            db: Child-local database used to store and publish each batch.
         """
         while True:
             try:
@@ -83,14 +90,22 @@ class AIDManager:
                 if task == "stop":
                     break
 
-                flow = task["flow"]
-                profileid = task["profileid"]
-                twid = task["twid"]
-                label = task["label"]
-
-                # CPU-heavy hashing
-                flow.aid = utils.get_aid(flow)
-                db.add_flow(flow, profileid, twid, label=label)
+                tasks = [task]
+                stopping = False
+                while len(tasks) < MAX_FLOW_WRITE_BATCH_SIZE:
+                    try:
+                        pending = aid_queue.get_nowait()
+                    except Empty:
+                        break
+                    if pending == "stop":
+                        stopping = True
+                        break
+                    tasks.append(pending)
+                for task in tasks:
+                    task["flow"].aid = utils.get_aid(task["flow"])
+                db.add_flows(tasks)
+                if stopping:
+                    break
             except KeyboardInterrupt:
                 continue
             except Empty:
