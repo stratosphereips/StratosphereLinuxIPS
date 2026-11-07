@@ -229,6 +229,7 @@ def test_browser_combined_networks_and_independent_selectors(tmp_path: Path, mon
             page.locator('.tab[data-tab="evidence"]').click()
             page.wait_for_function("byId('evidence-count').textContent === '3 records'")
             page.evaluate("""() => { byId('evidence-threat').value='low_or_more'; byId('evidence-view').value='grouped'; }""")
+            page.locator("#evidence-filter-button").click()
             page.locator("#interface-selection").select_option("eth0")
             page.wait_for_function("byId('evidence-count').textContent === '2 records'")
             assert page.locator("#evidence-threat").input_value() == "low_or_more"
@@ -337,3 +338,20 @@ def test_network_history_retains_a_previous_capture_interface(tmp_path: Path, mo
         connection.execute("UPDATE evidence SET data=? WHERE evidence_id='eth-new'", (json.dumps(payload),))
     ids = {item["id"] for item in reader.evidence(query)["items"]}
     assert ("eth-new" in ids) is visible
+
+
+def test_connection_scope_exposes_its_lower_bound_to_sqlite(tmp_path: Path) -> None:
+    """Keep historical evidence out of a connection query before membership checks.
+
+    Parameters:
+        tmp_path: Two interfaces with separate reconnection times.
+    """
+    _factory = ModuleFactory()
+    reader, _ = multiple_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE INDEX evidence_time_lookup ON evidence(evidence_time)")
+    scoped = reader._for_network_scope({"network":["connection"]})
+    with scoped._connect_sqlite() as connection:
+        plan = [str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM evidence")]
+        assert any("SEARCH e USING INDEX evidence_time_lookup" in step for step in plan)
+        assert connection.execute("SELECT COUNT(*) FROM evidence").fetchone()[0] == 3

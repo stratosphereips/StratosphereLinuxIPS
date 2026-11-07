@@ -231,12 +231,18 @@ def test_overview_resources_and_separate_throughput(theme: str, width: int, meas
                 setTheme(theme);state.overviewAlertGroups={items:[],total:0,matching_total:0,full_total:0};
                 state.overview={run:{state:'running',input_type:'interface',interface:'en0',output_dir:'output/resources',uptime_seconds:60},
                     backend_status:{connected:true},computer_name:'Test host',network_states:[],modules:[],
-                    counts:{alerts:0,evidence:3,hosts:2,processed_flows:100},
+                    evidence_scope:'run',counts:{alerts:0,evidence:3,hosts:2,processed_flows:100},
                     system:{cpu_percent:40,memory_percent:60,output_disk_percent:20,output_disk_free:10000000000,
                         load_average:[1,2,3],flows_db_size:1024,run_resources:measurement==='unavailable'?null:{
                             cpu_percent:12.5,memory_percent:25,memory_bytes:805306368,complete:measurement==='complete'}}};
                 renderOverview();await loadMetrics();clearError();
             }""", {"theme":theme,"measurement":measurement})
+            assert page.locator("#summary-cards").inner_text().find("Evidence retained · full run") >= 0
+            page.evaluate("""() => {
+                state.overviewEvidence={evidence:2,modules:{}};
+                applyOverviewEvidence(state.overview);renderOverview();
+            }""")
+            assert page.locator("#summary-cards .summary-card").nth(1).inner_text() == "Evidence\n2"
             assert page.locator("#system-load .metric").count() == 5
             assert page.locator('[data-metric="host-cpu"] strong').inner_text() == "40.0%"
             assert page.locator('[data-metric="host-memory"] strong').inner_text() == "60.0%"

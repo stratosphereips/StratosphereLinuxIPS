@@ -2650,14 +2650,16 @@ def test_live_title_counts_match_alert_and_host_ranges(
     assert reader.live_counts() == {"alerts": 1, "hosts": 2}
 
 
+@pytest.mark.parametrize("device", [None, False, True])
 def test_live_counts_bound_work_to_recent_host_activity(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool | None,
 ) -> None:
     """Keep live counts cheap when many inactive hosts have retained flow history.
 
     Parameters:
         tmp_path: Isolated retained history.
         monkeypatch: Freezes capture time and instruments SQLite work.
+        device: Inventory mode, or None for the compatibility counter.
     """
     _factory = ModuleFactory()
     reader = _network_scope_reader(tmp_path)
@@ -2684,7 +2686,7 @@ def test_live_counts_bound_work_to_recent_host_activity(
             Nonzero when the live request exceeds its work budget.
         """
         work[0] += 1
-        return int(work[0] > 100)
+        return int(work[0] > 400)
 
     def measured_connection(scoped_reader: RunDataReader) -> sqlite3.Connection:
         """Instrument the history connection without changing network views.
@@ -2700,8 +2702,13 @@ def test_live_counts_bound_work_to_recent_host_activity(
         return connection
 
     monkeypatch.setattr(RunDataReader, "_connect_history", measured_connection)
-    assert reader.live_counts({"network": ["current"]}) == {"alerts": 1, "hosts": 5}
-    assert work[0] <= 100
+    if device is None:
+        assert reader.live_counts({"network": ["current"]}) == {"alerts": 1, "hosts": 5}
+    else:
+        payload = reader.hosts({"network":["current"], "range":["live"],
+                                "device":["1" if device else "0"]})
+        assert payload["total"] == (4 if device else 5)
+    assert work[0] <= 400
 
 
 def test_overview_network_counts_reuse_work_and_expire(
@@ -2945,14 +2952,16 @@ assert.equal(JSON.stringify(flow), original, 'The source result must remain inta
 
 
 @pytest.mark.parametrize("runtime_messages", [0, 3])
+@pytest.mark.parametrize("scoped", [False, True])
 def test_overview_uses_counter_without_scanning_retained_evidence(
-    tmp_path: Path, runtime_messages: int,
+    tmp_path: Path, runtime_messages: int, scoped: bool,
 ) -> None:
     """Keep the first Overview response independent of retained Redis size.
 
     Parameters:
         tmp_path: Isolated output directory for durable web data.
         runtime_messages: Informational runtime entries excluded from errors.
+        scoped: Whether network views mask the underlying run tables.
     """
     _module_factory = ModuleFactory()
     reader = RunDataReader.__new__(RunDataReader)
@@ -3011,7 +3020,11 @@ def test_overview_uses_counter_without_scanning_retained_evidence(
         connection.execute("CREATE TABLE alerts (alert_id TEXT)")
         connection.execute("CREATE TABLE evidence (evidence_id TEXT)")
 
+    if scoped:
+        reader._active_network_scope = NetworkScope("gateway:test", ((0, "gateway:test"),), 0)
+    reader._overview_evidence_total = Mock(side_effect=AssertionError("Overview must not evaluate network counts"))
     result = reader.overview()
+    assert result["evidence_scope"] == "run"
 
     assert result["counts"]["evidence"] == 123456
     assert result["network_states"][0]["dns_servers"] == ["10.0.0.53"]
@@ -9388,3 +9401,30 @@ def test_web_named_whitelist_rejects_unsupported_or_ambiguous_rules(
     with pytest.raises(ValueError):
         reader.save_whitelist_rule("add", value, "dst", "alerts", rule_type=kind, **options)
     reader.redis.hset.assert_not_called()
+
+
+@pytest.mark.parametrize("input_type,saved,read_latest", [
+    ("interface", False, False), ("stdin", False, False),
+    ("pcap", False, True), ("interface", True, True),
+])
+def test_detection_range_clock_does_not_scan_live_history(
+    input_type: str, saved: bool, read_latest: bool,
+) -> None:
+    """Use wall time during capture and retain saved-data clock semantics.
+
+    Parameters:
+        input_type: Active input or saved PCAP.
+        saved: Whether an interface capture is being viewed offline.
+        read_latest: Whether a stored timestamp must be read.
+    """
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.redis = Mock()
+    reader.redis.hget.return_value = input_type
+    reader.saved_view = saved
+    connection = Mock()
+    connection.execute.return_value.fetchone.return_value = [123.0]
+    assert reader._latest_detection_time(connection, "alerts") == (123.0 if read_latest else 0.0)
+    assert connection.execute.called is read_latest
+    with pytest.raises(ValueError):
+        reader._latest_detection_time(connection, "untrusted_table")

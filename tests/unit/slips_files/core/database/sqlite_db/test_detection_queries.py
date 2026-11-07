@@ -52,3 +52,25 @@ def test_summary_falls_back_for_legacy_or_invalid_ranges(
     _factory = ModuleFactory()
     with sqlite3.connect(":memory:") as connection:
         assert hourly_evidence_source(connection, start, end) is None
+
+
+@pytest.mark.parametrize("counted", [False, True])
+def test_run_totals_bypass_scoped_views(counted: bool) -> None:
+    """Read explicit run totals without evaluating expensive network views.
+
+    Parameters:
+        counted: Whether the run has maintained counters or a legacy table.
+    """
+    _factory = ModuleFactory()
+    with sqlite3.connect(":memory:") as connection:
+        connection.execute("CREATE TABLE evidence(evidence_id TEXT)")
+        connection.execute("INSERT INTO evidence VALUES ('one'),('two')")
+        if counted:
+            connection.execute("CREATE TABLE history_totals(entity TEXT,count INTEGER)")
+            connection.execute("INSERT INTO history_totals VALUES ('evidence',2)")
+            connection.execute("CREATE TEMP VIEW history_totals AS SELECT * FROM main.history_totals WHERE 0")
+        connection.execute("CREATE TEMP VIEW evidence AS SELECT * FROM main.evidence WHERE 0")
+        assert detection_total(connection, "evidence") == 0
+        assert detection_total(connection, "evidence", "main") == 2
+        with pytest.raises(ValueError):
+            detection_total(connection, "evidence", "untrusted.schema")

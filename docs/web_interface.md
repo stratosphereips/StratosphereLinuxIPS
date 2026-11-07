@@ -1789,3 +1789,21 @@ P2P Graph gives each visible IP its own color, shared across reporting peer, rep
 Public IPs without DNS names can use their cached ASN organization as a display label, identified as **ASN organization** on hover. If that cache entry is absent, the web checks locally cached organization IP ranges and labels a match **Organization IP range**. It uses the most specific matching range and leaves equal-specificity ownership conflicts unnamed. These labels do not create reverse DNS records or change whitelist rules; matching a configured organization whitelist does not require DNS or ASN enrichment. The lookups run in the web process and make no external requests.
 
 Hidden controls stay hidden even when toolbar layout rules set their display mode. Detection archives hide export and disable editing. The loading indicator keeps an invisible reserved slot so polling does not move the header.
+
+### Loading large retained histories
+
+Live pages use the capture clock directly. They do not scan old evidence and
+alerts just to find the newest timestamp. Saved runs continue to use their own
+recorded timestamps. Hosts first finds addresses with activity in the selected
+range, then resolves their latest observation; inactive retained profiles do not
+trigger repeated historical lookups. Connection queries expose their earliest
+session boundary to SQLite's time indexes while preserving each interface's
+independent reconnection boundary.
+Grouped evidence looks up the selected IDs directly instead of scanning the
+entire retained evidence index again for its count and rows.
+
+Overview's **Evidence retained · full run** card reads the maintained run total.
+It does not recount every record's network membership before rendering the page.
+**Load evidence counts** still loads exact counts for the selected network and
+per-module attribution explicitly. The card then reads **Evidence**. Alert groups
+and the investigation tabs continue to use the selected network and range.

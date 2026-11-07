@@ -1864,6 +1864,50 @@ class RunDataReader:
         except ValueError:
             return default
 
+    def _live_clock(self) -> bool:
+        """Return whether range queries use the active capture clock.
+
+        Returns:
+            True for active interface, stdin or CYST captures.
+        """
+        try:
+            input_type = str(
+                getattr(self, "redis", None).hget("analysis", "input_type")
+                or ""
+            ).lower()
+        except (AttributeError, redis.RedisError):
+            input_type = ""
+        return input_type in {"interface", "stdin", "cyst"} and not (
+            getattr(self, "archive_mode", False)
+            or getattr(self, "saved_view", False)
+        )
+
+    def _latest_detection_time(
+        self, connection: sqlite3.Connection, table: str
+    ) -> float:
+        """Read an offline clock anchor without scanning live detection history.
+
+        Parameters:
+            connection: Request-local detection connection.
+            table: Evidence or alerts table.
+
+        Returns:
+            Latest stored timestamp, or zero when the live clock is authoritative.
+        """
+        if table not in {"evidence", "alerts"}:
+            raise ValueError("Unsupported detection table")
+        if self._live_clock():
+            return 0.0
+        expression = (
+            "evidence_time"
+            if table == "evidence"
+            else "CAST(alert_time AS REAL)"
+        )
+        row = connection.execute(
+            f"SELECT MAX({expression}) FROM {table}"
+        ).fetchone()
+        return float(row[0] or 0)
+
     def _time_bounds(
         self,
         query: Dict[str, List[str]],
@@ -1881,18 +1925,7 @@ class RunDataReader:
         """
         range_name = self._query_value(query, "range", "live")
         now = float(latest_event or time.time())
-        try:
-            input_type = str(
-                getattr(self, "redis", None).hget("analysis", "input_type")
-                or ""
-            ).lower()
-        except (AttributeError, redis.RedisError):
-            input_type = ""
-        if (
-            input_type in {"interface", "stdin", "cyst"}
-            and not getattr(self, "archive_mode", False)
-            and not getattr(self, "saved_view", False)
-        ):
+        if self._live_clock():
             now = time.time()
         if range_name in TIME_RANGES:
             return now - TIME_RANGES[range_name], now, range_name
@@ -3602,9 +3635,9 @@ class RunDataReader:
                 "evidence_module", 1, self._module_for_evidence
             )
             module_expression = self._evidence_module_expression(connection)
-            latest_row = connection.execute(
-                "SELECT MAX(evidence_time) AS latest FROM evidence"
-            ).fetchone()
+            latest_row = {
+                "latest": self._latest_detection_time(connection, "evidence")
+            }
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
@@ -4089,9 +4122,11 @@ class RunDataReader:
                     "THEN SUBSTR(description, INSTR(description, 'peer: ') + 6) "
                     "ELSE '' END)"
                 )
-                latest_row = connection.execute(
-                    "SELECT MAX(evidence_time) AS latest FROM evidence"
-                ).fetchone()
+                latest_row = {
+                    "latest": self._latest_detection_time(
+                        connection, "evidence"
+                    )
+                }
                 full_total = (
                     detection_total(connection, "evidence")
                     if include_full_total
@@ -4573,12 +4608,7 @@ class RunDataReader:
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
             score = self._detector_score_expression(connection, "alerts")
-            latest = float(
-                connection.execute(
-                    "SELECT MAX(CAST(alert_time AS REAL)) FROM alerts"
-                ).fetchone()[0]
-                or 0
-            )
+            latest = self._latest_detection_time(connection, "alerts")
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
             full_total = detection_total(connection, "alerts")
@@ -4825,9 +4855,9 @@ class RunDataReader:
             score_expression = self._detector_score_expression(
                 connection, "alerts"
             )
-            latest_row = connection.execute(
-                "SELECT MAX(CAST(alert_time AS REAL)) AS latest FROM alerts"
-            ).fetchone()
+            latest_row = {
+                "latest": self._latest_detection_time(connection, "alerts")
+            }
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
@@ -5066,9 +5096,9 @@ class RunDataReader:
             score_expression = self._detector_score_expression(
                 connection, "alerts"
             )
-            latest_row = connection.execute(
-                "SELECT MAX(CAST(alert_time AS REAL)) AS latest FROM alerts"
-            ).fetchone()
+            latest_row = {
+                "latest": self._latest_detection_time(connection, "alerts")
+            }
             full_total = detection_total(connection, "alerts")
             open_total = full_total - (
                 int(
@@ -6520,9 +6550,13 @@ class RunDataReader:
                         )
                         in columns
                     ):
-                        latest = connection.execute(
-                            f"SELECT MAX({time_column}) FROM {table}"
-                        ).fetchone()[0]
+                        latest = (
+                            None
+                            if self._live_clock()
+                            else connection.execute(
+                                f"SELECT MAX({time_column}) FROM {table}"
+                            ).fetchone()[0]
+                        )
                         start, end, _ = self._time_bounds(query, latest)
                         start = self._scoped_start(query, start)
                     scope = (
@@ -6629,7 +6663,7 @@ class RunDataReader:
                     connection.execute(
                         "SELECT MAX(evidence_time) FROM evidence"
                     ).fetchone()[0]
-                    if "evidence_time" in columns
+                    if "evidence_time" in columns and not self._live_clock()
                     else 0
                 )
                 start, end, _ = self._time_bounds(
@@ -7006,6 +7040,18 @@ class RunDataReader:
             clauses = ["1 = 1"]
             params: List[Any] = []
             if start is not None:
+                candidates = (
+                    self._live_host_candidates(
+                        connection, network_start is not None
+                    )
+                    .replace(":live_start", repr(min(start, 1e300)))
+                    .replace(
+                        ":live_end",
+                        repr(min(end, 1e300) if end is not None else 1e300),
+                    )
+                )
+                clauses.append(f"hs.ip IN ({candidates})")
+            if start is not None:
                 clauses.append(f"{last_seen_expression} >= ?")
                 params.append(start)
             if (
@@ -7264,20 +7310,25 @@ class RunDataReader:
                     )
                 }
             )
-            if network_start is not None:
+            latest = self._host_latest_event(connection)
+            start, _, _ = self._time_bounds(query, latest)
+            candidate_start = self._scoped_start(query, start)
+            scoped = network_start is not None
+            if scoped:
                 self._attach_run_database(connection)
-                seen = self._host_last_seen_expression(connection, True)
+            seen = self._host_last_seen_expression(connection, scoped)
+            if candidate_start is not None:
+                candidates = self._live_host_candidates(connection, scoped)
                 snapshots = connection.execute(
                     f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs "
-                    f"WHERE {seen} >= ?",
-                    (network_start,),
+                    f"WHERE hs.ip IN ({candidates}) AND {seen} >= :live_start",
+                    {"live_start": candidate_start, "live_end": 1e300},
                 ).fetchall()
             else:
-                seen = self._host_last_seen_expression(connection, False)
                 snapshots = connection.execute(
                     f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs"
                 ).fetchall()
-            latest = self._host_latest_event(connection)
+
         ips = [str(row["ip"]) for row in snapshots]
         search = self._query_value(query, "search").lower()
         scope = self._query_value(query, "scope")
@@ -8722,9 +8773,9 @@ class RunDataReader:
                     "PRAGMA table_info(evidence)"
                 ).fetchall()
             }
-            latest_row = connection.execute(
-                "SELECT MAX(evidence_time) AS latest FROM evidence"
-            ).fetchone()
+            latest_row = {
+                "latest": self._latest_detection_time(connection, "evidence")
+            }
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
@@ -9660,13 +9711,6 @@ class RunDataReader:
         self, query: Optional[Dict[str, List[str]]] = None
     ) -> Dict[str, Any]:
         """Build a bounded current-run operational overview."""
-        scoped_start = self._scoped_start(query or {}, None)
-        alert_scope = (
-            " AND CAST(alert_time AS REAL) >= ?"
-            if scoped_start is not None
-            else ""
-        )
-        scope_params = (scoped_start,) if scoped_start is not None else ()
         analysis = self.redis.hgetall("analysis")
         run_metadata = self._run_metadata()
         complete = bool(analysis.get("analysis_end"))
@@ -9675,16 +9719,14 @@ class RunDataReader:
             with self._connect_sqlite() as connection:
                 alert_count = int(
                     connection.execute(
-                        "SELECT COUNT(*) AS count FROM alerts WHERE "
+                        "SELECT COUNT(*) AS count FROM main.alerts AS alerts WHERE "
                         + self._review_clause(
                             connection, "alert", "open", "alerts"
-                        )
-                        + alert_scope,
-                        scope_params,
+                        ),
                     ).fetchone()["count"]
                 )
-                durable_evidence = self._overview_evidence_total(
-                    connection, scoped_start
+                durable_evidence = detection_total(
+                    connection, "evidence", "main"
                 )
         except sqlite3.Error:
             alert_count = 0
@@ -9695,11 +9737,7 @@ class RunDataReader:
             )
         except (TypeError, ValueError, redis.RedisError):
             redis_evidence_count = 0
-        evidence_count = (
-            durable_evidence
-            if scoped_start is not None
-            else durable_evidence or redis_evidence_count
-        )
+        evidence_count = durable_evidence or redis_evidence_count
         with self._connect_history() as history:
             log_where, log_parameters, _, _ = self._log_scope(
                 analysis=analysis
@@ -9823,6 +9861,7 @@ class RunDataReader:
                 if row:
                     highest_score = {"ip": row["ip"], "score": row["score"]}
         return {
+            "evidence_scope": "run",
             "run": {
                 **analysis,
                 "state": (

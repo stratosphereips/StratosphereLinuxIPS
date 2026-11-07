@@ -175,6 +175,9 @@ def test_group_queries_resolve_membership_once(
     with reader._connect_sqlite() as connection:
         expected = {row[0] for row in connection.execute("SELECT evidence_id FROM evidence")}
         reader._active_network_scope.materialize_evidence(connection)
+        plan = [str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM evidence")]
+        assert any("SCAN s" in step for step in plan)
+        assert any("SEARCH e USING" in step for step in plan)
         connection.create_function("json_valid", 1, lambda _: pytest.fail("Membership reparsed"))
         for _ in range(3):
             actual = {row[0] for row in connection.execute("SELECT evidence_id FROM evidence")}

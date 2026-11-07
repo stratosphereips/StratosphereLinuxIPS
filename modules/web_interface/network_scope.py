@@ -323,8 +323,8 @@ class NetworkScope:
         )
         connection.execute("DROP VIEW temp.evidence")
         connection.execute(
-            "CREATE TEMP VIEW evidence AS SELECT e.* FROM main.evidence e "
-            "JOIN scope_evidence_ids s ON s.evidence_id=e.evidence_id"
+            "CREATE TEMP VIEW evidence AS SELECT e.* FROM scope_evidence_ids s "
+            "CROSS JOIN main.evidence e ON e.evidence_id=s.evidence_id"
         )
 
     def install_flows(self, connection: sqlite3.Connection) -> None:
@@ -459,7 +459,7 @@ class NetworkSelection(NetworkScope):
             f"WHERE v.interface=a.interface AND v.changed_at<={timestamp} "
             "ORDER BY v.changed_at DESC LIMIT 1)=a.network_id"
         )
-        return (
+        predicate = (
             "EXISTS (SELECT 1 FROM scope_attachments a WHERE "
             f"((NOT a.connection_only AND {int(not self.filter_interface)} AND ({recorded})=a.network_id) OR ("
             f"(({interface})=a.interface OR (({interface})='' AND "
@@ -468,3 +468,16 @@ class NetworkSelection(NetworkScope):
             f"AND CASE WHEN ({recorded})=a.network_id THEN 1 "
             f"WHEN ({recorded})='' OR ({recorded}) LIKE 'run:%' THEN {period} ELSE 0 END)))"
         )
+        if self.connection_only or all(
+            scope.network_id.startswith("run:") for _, scope in self.members
+        ):
+            starts = [
+                scope.connection_start
+                for _, scope in self.members
+                if scope.connection_start is not None
+            ]
+            if not starts:
+                return "0"
+            # Keep the shared lower bound visible to SQLite's time indexes.
+            return f"{timestamp}>={min(starts)!r} AND ({predicate})"
+        return predicate

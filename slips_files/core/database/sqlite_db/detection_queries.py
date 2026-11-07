@@ -6,28 +6,37 @@ import sqlite3
 from .detection_history import NULLABLE_SCORE_SUMMARIES
 
 
-def detection_total(connection: sqlite3.Connection, table: str) -> int:
+def detection_total(
+    connection: sqlite3.Connection, table: str, schema: str = ""
+) -> int:
     """Read a maintained count, falling back for databases predating counters.
 
     Parameters:
         connection: Read-only run or archive connection.
         table: Internal evidence or alerts table name.
+        schema: Main storage when bypassing request-local scope views.
 
     Returns:
         Exact number of active records in the requested table.
     """
     if table not in {"evidence", "alerts"}:
         raise ValueError("Unsupported detection table")
+    if schema not in {"", "main"}:
+        raise ValueError("Unsupported detection schema")
+    prefix = f"{schema}." if schema else ""
     if connection.execute(
-        "SELECT 1 FROM sqlite_master WHERE name='history_totals'"
+        f"SELECT 1 FROM {prefix}sqlite_master WHERE name='history_totals'"
     ).fetchone():
         row = connection.execute(
-            "SELECT count FROM history_totals WHERE entity=?", (table,)
+            f"SELECT count FROM {prefix}history_totals WHERE entity=?",
+            (table,),
         ).fetchone()
         if row:
             return int(row[0])
     return int(
-        connection.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+        connection.execute(f"SELECT COUNT(*) FROM {prefix}{table}").fetchone()[
+            0
+        ]
     )
 
 

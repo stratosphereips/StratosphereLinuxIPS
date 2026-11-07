@@ -2014,7 +2014,7 @@ function renderOverview() {
   const selectedAlerts = state.overviewAlertGroups?.matching_total;
   setSummaryCards([
     ["Alerts", selectedAlerts === undefined ? "…" : compact(selectedAlerts)],
-    ["Evidence", compact(data.counts.evidence)],
+    [data.evidence_scope === "run" ? "Evidence retained · full run" : "Evidence", compact(data.counts.evidence)],
     [state.networks.length > 1 ? "Hosts retained · full run" : "Hosts seen", compact(data.counts.hosts)],
     [state.networks.length > 1 ? "Flows processed · full run" : "Flows processed", compact(data.counts.processed_flows)],
     ["Firewall blocks", firewall.current ? compact(firewall.current)
@@ -2125,7 +2125,8 @@ function renderOverviewStatus(data) {
     const top = data.highest_score;
     const threshold = numeric(data.alert_threshold) || 5;
     byId("overview-status-description").textContent =
-      selectedCapture ? `${selectedFilters} · ${compact(data.counts.evidence)} evidence records.`
+      data.evidence_scope === "run" && state.networkOnly && state.networkFilterSupported ? selectedFilters
+        : selectedCapture ? `${selectedFilters} · ${compact(data.counts.evidence)} evidence records.`
         : numeric(summary.full_total) ? selectedFilters
         : `${compact(data.counts.evidence)} evidence records from ${compact(data.counts.hosts)} hosts. `
           + `No host crossed the alert threshold (${threshold}).`
@@ -2606,6 +2607,7 @@ function applyOverviewEvidence(payload) {
     module.evidence_count = numeric(moduleCounts[module.name]);
   });
   payload.evidence_details_loaded = true;
+  payload.evidence_scope = "selection";
 }
 
 /** Load the operational overview and its bounded history charts. */
