@@ -1092,7 +1092,7 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
             assert page.locator("#evidence-search").input_value() == ""
             assert page.locator("#evidence-threat").input_value() == ""
             assert page.locator("#evidence-review").input_value() == "all"
-            assert not page.locator("#device-view").is_checked()
+            assert page.locator("#device-view").count() == 0
             assert page.evaluate("state.hideExcluded") is True
             page.evaluate("""() => {
               byId('evidence-search').value='pcap host'; byId('evidence-range').value='7d';
@@ -1359,26 +1359,28 @@ def test_web_defaults_and_saved_view_choices(storage: str) -> None:
         page.wait_for_function("state.networkFilterSupported && state.deviceViewSupported")
         enabled = storage != "saved"
         assert page.locator("html").get_attribute("data-theme") == ("light" if enabled else "dark")
-        assert page.locator("#device-view").is_checked() is enabled
+        assert page.locator("#device-view").count() == 0
+        assert page.evaluate("state.deviceView") is True
         assert page.locator("#network-filter").is_checked() is enabled
         page.evaluate("() => loadHosts()")
         assert queries[-1].get("network") == ["connection"]
-        assert queries[-1].get("device") == (["1"] if enabled else None)
+        assert queries[-1].get("device") == ["1"]
         if storage == "fresh":
             page.locator("#theme-toggle").click()
-            page.locator("#device-view").uncheck()
+            page.get_by_role("button", name="Overview filters", exact=True).click()
             page.locator("#network-filter").uncheck()
             page.reload()
             page.wait_for_function("state.networkFilterSupported && state.deviceViewSupported")
             assert page.locator("html").get_attribute("data-theme") == "dark"
-            assert not page.locator("#device-view").is_checked()
+            assert page.locator("#device-view").count() == 0
+            assert page.evaluate("state.deviceView") is True
             assert not page.locator("#network-filter").is_checked()
         page.evaluate("""() => {
             updateNetworkFilterAvailability({input_type:'pcap',network_filter_supported:false});
             updateDeviceViewAvailability({device_view_supported:false});
         }""")
         assert page.locator("#network-filter").is_disabled()
-        assert page.locator("#device-view").is_disabled()
+        assert page.locator("#device-view").count() == 0
         assert page.evaluate("() => rangeQuery('hosts').has('network') || rangeQuery('hosts').has('device')") is False
         assert not errors
         browser.close()
@@ -3145,14 +3147,14 @@ def test_request_indicator_preserves_header_geometry_in_chrome(width: int, theme
             setTheme(theme);
             byId('run-name').textContent='sebas-en0';
             byId('run-device').textContent='This device · sebas-MacBook-Pro.local';
-            for (const id of ['history-source-label','network-filter-label','device-view-label']) byId(id).hidden=false;
+            byId('history-source-label').hidden=false;
             state.requests.clear(); renderRequestActivity();
             const measure = () => ({
                 scrollWidth:document.documentElement.scrollWidth,
                 clientWidth:document.documentElement.clientWidth,
                 brandScrollWidth:document.querySelector('.brand').scrollWidth,
                 brandClientWidth:document.querySelector('.brand').clientWidth,
-                checkboxWidths:[...document.querySelectorAll('.network-filter input')].map(input=>input.getBoundingClientRect().width),
+                checkboxWidths:[...document.querySelectorAll('.topbar .network-filter input')].map(input=>input.getBoundingClientRect().width),
                 boxes:['.topbar','.brand','.topbar-actions','.tabs','main','#request-status'].map(selector => {
                     const rect=document.querySelector(selector).getBoundingClientRect();
                     return [rect.x,rect.y,rect.width,rect.height];
@@ -5788,3 +5790,108 @@ def test_http_host_and_all_whitelist_kinds_in_chrome(theme: str, width: int) -> 
         assert selects.nth(2).input_value() == "alerts"
         assert errors == []
         browser.close()
+
+
+@pytest.mark.parametrize("theme,width", [("light", 1600), ("dark", 900)])
+def test_compact_history_and_shared_network_scope_in_tab_filters(theme: str, width: int) -> None:
+    """Keep history quiet and move the same network controls between tab menus.
+
+    Parameters:
+        theme: Browser color theme.
+        width: Desktop or compact viewport.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve local assets and an isolated archive catalog.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/archives":
+            route.fulfill(json={"items":[{"id":"detections-2026-10.sqlite", "size_bytes":1048576,
+                "start_time":1790812800, "end_time":1793491199}]})
+        else:
+            route.fulfill(status=503, json={"error":"Isolated header fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width":width,"height":1100})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("() => state.requests.size === 0")
+            page.evaluate("""async theme => {
+                clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer);
+                setTheme(theme); await loadArchiveCatalog();
+                updateNetworkFilterAvailability({input_type:'interface', network_filter_supported:true,
+                    current_network_start:100, network_scope_version:3});
+                updateDeviceViewAvailability({device_view_supported:true});
+                byId('evidence-range').value='7d'; byId('evidence-threat').value='low_or_more';
+                byId('evidence-view').value='host';
+            }""", theme)
+            assert page.locator("#device-view").count() == 0
+            assert page.locator(".topbar #network-filter").count() == 0
+            history = page.get_by_role("combobox", name="Detection history source")
+            bounds = history.bounding_box()
+            assert bounds and bounds["width"] <= 180 and bounds["height"] <= 28
+            assert history.locator("option").first.inner_text() == "History · Active"
+            assert page.locator(".topbar-actions > :last-child").get_attribute("id") == "history-source-label"
+            checked = True
+            for tab in ("overview", "alerts", "evidence", "hosts", "p2p", "p2p-graph", "firewall", "arp-poisoning"):
+                page.evaluate("tab => {switchTab(tab); clearTimeout(state.timer);}", tab)
+                if tab in {"firewall", "arp-poisoning"}:
+                    page.locator(f"#{tab}-stats").evaluate("node => node.hidden=false")
+                button = page.locator(f"#{tab}-filter-button")
+                button.click()
+                popup = page.locator(f"#{tab}-filter-popup")
+                assert popup.is_visible()
+                checkbox = popup.get_by_label("Current network only", exact=True)
+                assert checkbox.is_checked() is checked
+                checkbox.set_checked(not checked)
+                checked = not checked
+                assert page.evaluate("state.networkOnly") is checked
+                assert page.evaluate("rangeQuery('evidence').has('network')") is checked
+                assert page.locator("#evidence-range").input_value() == "7d"
+                assert page.locator("#evidence-threat").input_value() == "low_or_more"
+                assert page.locator("#evidence-view").input_value() == "host"
+                page.keyboard.press("Escape")
+            page.evaluate("""() => {
+                switchTab('hosts'); byId('host-detail-view').hidden=false;
+                byId('hosts-list-view').hidden=true; syncFilterPopups();
+            }""")
+            page.locator("#host-filter-button").click()
+            assert page.locator("#host-filter-popup #network-filter").is_visible()
+            page.keyboard.press("Escape")
+            page.evaluate("() => {closeHost(); switchTab('overview');}")
+            page.locator("#overview-filter-button").click()
+            assert page.locator("#overview-filter-popup #network-filter").is_visible()
+            page.keyboard.press("Escape")
+            page.evaluate("""() => updateNetworkFilterAvailability({input_type:'interface',
+                network_filter_supported:true, current_network_start:100, current_networks:[
+                {interface:'eth0',network_id:'uplink',name:'Stratoguest',connected:true,host_ip:'192.168.1.170'},
+                {interface:'wlan0',network_id:'ap',name:'slips_wifi',connected:true,host_ip:'192.168.12.1'}]})""")
+            page.locator("#overview-filter-button").click()
+            page.locator("#network-selection").select_option("ap")
+            page.locator("#interface-selection").select_option("wlan0")
+            assert page.evaluate("state.networkSelection") == "ap"
+            page.keyboard.press("Escape")
+            page.evaluate("() => switchTab('evidence')")
+            page.locator("#evidence-filter-button").click()
+            assert page.locator("#network-selection").input_value() == "ap"
+            assert page.locator("#interface-selection").input_value() == "wlan0"
+            artifact = Path("output/compact-header-validation")
+            artifact.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(artifact / f"{theme}-{width}-filters.png"))
+            page.keyboard.press("Escape")
+            page.screenshot(path=str(artifact / f"{theme}-{width}.png"))
+            assert not errors, errors
+        finally:
+            browser.close()

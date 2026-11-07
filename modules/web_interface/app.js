@@ -136,7 +136,6 @@ const VIEW_CONTROL_IDS = [
   "host-range", "host-from", "host-to", "host-flow-limit",
   "p2p-range", "p2p-graph-range", "p2p-message-filter", "configuration-search",
   "whitelists-search", "whitelists-type", "firewall-search", "arp-poisoning-search",
-  "device-view",
 ];
 const VIEW_CONTROL_DEFAULTS = Object.fromEntries(VIEW_CONTROL_IDS.map((id) => {
   const element = byId(id);
@@ -169,9 +168,10 @@ function positionFilterPopup(popup) {
 
 /** Keep hidden filter criteria visible through a count and compact range summary. */
 function syncFilterPopups() {
+  mountNetworkFilters();
   document.querySelectorAll(".filter-popup").forEach((popup) => {
     const tab = popup.dataset.filterTab;
-    const criteria = popup.dataset.filterControls.split(" ");
+    const criteria = popup.dataset.filterControls.split(" ").filter(Boolean);
     let count = criteria.filter((id) => {
       const control = byId(id);
       const value = control.type === "checkbox" ? control.checked : control.value;
@@ -180,12 +180,23 @@ function syncFilterPopups() {
     if (tab === "alerts" && state.alertsWorkspace.severity) count += 1;
     if (popup.querySelector(".excluded-visibility-toggle") && !state.hideExcluded) count += 1;
     const range = byId(`${tab}-range`);
-    if (!["live", "all"].includes(range.value)) count += 1;
+    if (range && !["live", "all"].includes(range.value)) count += 1;
     const selected = tab === "alerts" ? state.alertsWorkspace.severity
-      : byId(`${tab}-threat`).value;
-    const labels = [range.selectedOptions[0]?.textContent || "Live"];
+      : byId(`${tab}-threat`)?.value;
+    const labels = range ? [range.selectedOptions[0]?.textContent || "Live"] : [];
+    if (state.networkFilterSupported) {
+      if (state.networkOnly && !state.archiveSource) count += 1;
+      if (state.interfaceSelection && !state.archiveSource) count += 1;
+      const network = byId("network-selection").selectedOptions[0]?.textContent;
+      labels.push(state.networkOnly && !state.archiveSource
+        ? state.networks.length > 1 ? network?.split(" · ")[0] || "Current networks" : "Current network" : "All networks");
+      if (state.interfaceSelection && !state.archiveSource) labels.push(state.interfaceSelection);
+    }
     if (selected) labels.push(selected[0].toUpperCase() + selected.slice(1).replace("_or_more", "+"));
     const button = byId(`${tab}-filter-button`);
+    const scopeOnly = popup.dataset.scopeOnly === "true";
+    button.hidden = scopeOnly && !state.networkFilterSupported;
+    byId(`${tab}-filter-summary`).hidden = scopeOnly && !state.networkFilterSupported;
     button.dataset.active = String(count > 0);
     const badge = button.querySelector(".filter-count");
     badge.textContent = String(count);
@@ -195,6 +206,17 @@ function syncFilterPopups() {
     byId(`${tab}-filter-summary`).textContent = labels.join(" · ");
     positionFilterPopup(popup);
   });
+}
+
+/** Put the shared network scope inside the active investigation's filter menu. */
+function mountNetworkFilters() {
+  const tab = state.activeTab === "hosts" && !byId("host-detail-view").hidden
+    ? "host" : state.activeTab;
+  const fields = byId(`${tab}-filter-popup`)?.querySelector(".filter-popup-fields");
+  const scope = byId("network-scope-controls");
+  if (!scope) return;
+  scope.hidden = !fields || !state.networkFilterSupported;
+  if (fields && scope.parentElement !== fields) fields.append(scope);
 }
 
 /** Move existing tab controls into accessible, immediately applied filter popups. */
@@ -216,6 +238,14 @@ function initFilterPopups() {
       ["#hosts-from", "From"], ["#hosts-to", "To"],
     ]],
   ];
+  definitions.push(
+    ["overview", "Overview", "#overview-status .overview-card-head", "", []],
+    ["host", "Host", "#host-detail-view .compact-toolbar", "", []],
+    ["firewall", "Firewall", "#firewall .toolbar", "", []],
+    ["arp-poisoning", "ARP poisoning", "#arp-poisoning .toolbar", "", []],
+    ["p2p", "P2P", ".p2p-network-actions", "", []],
+    ["p2p-graph", "P2P graph", ".p2p-graph-filters", "", []],
+  );
   definitions.forEach(([tab, title, selector, criteria, fields]) => {
     const toolbar = document.querySelector(selector);
     const button = document.createElement("button");
@@ -236,6 +266,7 @@ function initFilterPopups() {
     popup.setAttribute("aria-label", `${title} filters`);
     popup.dataset.filterTab = tab;
     popup.dataset.filterControls = criteria;
+    popup.dataset.scopeOnly = String(fields.length === 0);
     const heading = document.createElement("div");
     heading.className = "filter-popup-heading";
     const close = text("button", "×", "text-button");
@@ -258,7 +289,9 @@ function initFilterPopups() {
     });
     if (tab === "alerts") toolbar.querySelector(".alerts-custom-time").remove();
     popup.append(heading, body);
-    byId(`${tab}-search`).after(button, summary, popup);
+    const search = byId(`${tab}-search`);
+    if (search && toolbar.contains(search)) search.after(button, summary, popup);
+    else toolbar.append(button, summary, popup);
     popup.addEventListener("toggle", (event) => {
       button.setAttribute("aria-expanded", String(event.newState === "open"));
       if (event.newState !== "open") return;
@@ -334,8 +367,7 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   }
   if (!saved || typeof saved !== "object") return;
   if (key === VIEW_PREFERENCES_KEY) {
-    saved = { columns: saved.columns, paneWidths: saved.paneWidths,
-      controls: { "device-view": saved.controls?.["device-view"] ?? true } };
+    saved = { columns: saved.columns, paneWidths: saved.paneWidths };
   }
   const choices = Array.isArray(saved.rangeChoices) ? new Set(saved.rangeChoices) : null;
   Object.entries(saved.controls || {}).forEach(([id, value]) => {
@@ -369,7 +401,6 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   });
   state.hideExcluded = saved.hideExcluded !== false;
   syncExcludedVisibility();
-  state.deviceView = byId("device-view").checked;
   state.alertsWorkspace.severity = String(saved.alertSeverity || "");
   state.alertsWorkspace.severity = state.alertsWorkspace.severity.replace(/^(critical|high|medium|low|info)$/, "$1_or_more");
   state.alertsWorkspace.grouping = byId("alerts-group").value;
@@ -1326,7 +1357,7 @@ function applyRunIdentity(identity) {
   }
   const preferencesKey = `slips-run-view-v2:${JSON.stringify([identity.output_dir, identity.analysis_start || ""])}`;
   if (state.viewPreferencesKey !== preferencesKey) {
-    VIEW_CONTROL_IDS.filter((id) => id !== "device-view").forEach((id) => {
+    VIEW_CONTROL_IDS.forEach((id) => {
       const element = byId(id);
       if (!element) return;
       if (element.type === "checkbox") element.checked = VIEW_CONTROL_DEFAULTS[id];
@@ -8905,6 +8936,7 @@ async function showUnprofiledHost(ip, generation = state.hostOpenGeneration) {
   state.host = null;
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
+  syncFilterPopups();
   byId("host-detail-view").classList.add("unprofiled");
   byId("host-title").replaceChildren(hostIdentity(ip));
   byId("host-subtitle").textContent = "No Slips profile in this run";
@@ -9000,6 +9032,7 @@ async function openHost(ip, summary = null, previous = null) {
   });
   byId("hosts-list-view").hidden = true;
   byId("host-detail-view").hidden = false;
+  syncFilterPopups();
   byId("host-detail-view").classList.remove("unprofiled");
   byId("host-unprofiled").hidden = true;
   renderHostCards(host);
@@ -9076,6 +9109,8 @@ function closeHost() {
   state.requests.get("hostSummary")?.abort();
   state.requests.get("hostEvidence")?.abort();
   byId("host-detail-view").hidden = true;
+  byId("host-filter-popup")?.hidePopover();
+  syncFilterPopups();
   byId("host-detail-view").classList.remove("unprofiled");
   byId("host-unprofiled").hidden = true;
   byId("hosts-list-view").hidden = false;
@@ -9207,7 +9242,7 @@ async function loadArchiveCatalog() {
   const payload = await api("archiveCatalog", "/api/archives", false, true);
   if (!payload || payload.not_found) return;
   const select = byId("history-source");
-  select.replaceChildren(new Option("Active detection history", ""));
+  select.replaceChildren(new Option("History · Active", ""));
   (payload.items || []).forEach((item) => {
     const option = new Option(archiveChoiceLabel(item), item.id);
     option.title = `${item.id} · ${formatBytes(item.size_bytes)}\nFrom ${timeTitle(item.start_time) || "unknown"}\nTo ${timeTitle(item.end_time) || "unknown"}`;
@@ -9220,6 +9255,7 @@ async function loadArchiveCatalog() {
     toast("The selected archive expired. Showing active detection history.");
     refreshNetworkScopedViews();
   }
+  select.title = select.selectedOptions[0]?.title || "Active detection history";
   const status = payload.maintenance || {};
   const storage = byId("history-storage-status");
   storage.replaceChildren();
@@ -9232,6 +9268,7 @@ async function loadArchiveCatalog() {
 
 byId("history-source").addEventListener("change", (event) => {
   state.archiveSource = event.currentTarget.value;
+  event.currentTarget.title = event.currentTarget.selectedOptions[0]?.title || "Active detection history";
   if (state.archiveSource) {
     state.networkOnly = false;
     byId("network-filter").checked = false;
@@ -9251,9 +9288,7 @@ function updateDeviceViewAvailability(identity) {
   const supported = identity.device_view_supported === true;
   const changed = supported !== state.deviceViewSupported;
   state.deviceViewSupported = supported;
-  state.deviceView = supported && byId("device-view").checked;
-  byId("device-view-label").hidden = !supported;
-  byId("device-view").disabled = !supported;
+  state.deviceView = supported;
   if (changed) {
     byId("alerts-list-heading").textContent = state.alertsWorkspace.grouping === "host"
       ? `Alerts grouped by ${state.deviceView ? "device" : "host"}` : "All alerts";
@@ -9354,6 +9389,7 @@ function updateNetworkFilterAvailability(identity) {
   label.title = start === null
     ? "Waiting for a monitored network connection"
     : "Show hosts, traffic, alerts and evidence recorded on this network, including earlier visits within the selected time range";
+  syncFilterPopups();
   const connectionRange = document.querySelector('select option[value="connection"]:checked');
   if (changed && (state.networkOnly || connectionRange || hadConnectionRange) && supported && state.overview) {
     refreshNetworkScopedViews();
@@ -9364,6 +9400,7 @@ function updateNetworkFilterAvailability(identity) {
  * @param {boolean} reload Whether to reload immediately or let navigation load its destination.
  */
 function refreshNetworkScopedViews(reload = true) {
+  syncFilterPopups();
   ["alerts", "evidence", "hosts", "hostAlerts", "host-evidence", "hostFlows"].forEach(resetPage);
   document.activeElement?.blur();
   closeAlertHostPane();
@@ -9392,13 +9429,6 @@ byId("network-filter").addEventListener("change", (event) => {
   } catch (_) {
     // The filter still works when browser storage is unavailable.
   }
-  refreshNetworkScopedViews();
-});
-byId("device-view").addEventListener("change", (event) => {
-  state.deviceView = event.currentTarget.checked;
-  renderEvidenceGroupControls();
-  byId("alerts-list-heading").textContent = state.alertsWorkspace.grouping === "host"
-    ? `Alerts grouped by ${state.deviceView ? "device" : "host"}` : "All alerts";
   refreshNetworkScopedViews();
 });
 
@@ -9437,6 +9467,7 @@ function switchTab(name) {
   if (name === "alerts" && state.activeTab !== "alerts") resetAlertPaneWidths();
   closeEvidenceDetail(false, true);
   state.activeTab = name;
+  syncFilterPopups();
   document.body.classList.toggle("overview-active", name === "overview");
   document.body.classList.toggle("alerts-active", name === "alerts");
   document.body.classList.toggle("evidence-active", name === "evidence");

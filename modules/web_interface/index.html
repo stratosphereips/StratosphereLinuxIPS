@@ -21,16 +21,12 @@
       </div>
     </div>
     <div class="topbar-actions">
-      <label id="history-source-label" class="network-filter" hidden>Detection history <select id="history-source" aria-label="Detection history source"><option value="">Active · last 90 days</option></select></label>
-      <label id="network-filter-label" class="network-filter" title="Show activity recorded on this network, including earlier visits within the selected time range" hidden><input id="network-filter" type="checkbox" checked disabled><span>Current network only</span></label>
-      <label id="network-selection-label" class="network-filter" hidden>Network <select id="network-selection" aria-label="Capture network"><option value="current">All active networks</option><option value="all">All retained networks</option></select></label>
-      <label id="interface-selection-label" class="network-filter" hidden>Interface <select id="interface-selection" aria-label="Capture interface"><option value="">All interfaces</option></select></label>
-      <label id="device-view-label" class="network-filter" title="Group local IPv4 and IPv6 hosts that have the same verified MAC address" hidden><input id="device-view" type="checkbox" checked disabled><span>Device view</span></label>
       <button id="theme-toggle" class="theme-toggle secondary" type="button" aria-label="Switch to dark theme"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-label">Dark</span></button>
       <div class="run-state">
         <div class="run-state-pill"><span id="state-dot" class="state-dot"></span><strong id="run-state">Connecting</strong></div>
         <div class="run-state-meta"><small id="run-uptime">Uptime —</small><small id="updated-at">Not updated</small></div>
       </div>
+      <label id="history-source-label" class="history-source-control" hidden><span class="visually-hidden">Detection history</span><select id="history-source" aria-label="Detection history source"><option value="">History · Active</option></select></label>
     </div>
   </header>
 
@@ -49,6 +45,12 @@
     <button class="tab" data-tab="whitelists">Whitelists</button>
     <button class="tab" data-tab="metadata">Metadata</button>
   </nav>
+
+  <div id="network-scope-controls" class="filter-popup-fields network-scope-controls" hidden>
+    <label id="network-filter-label" class="network-filter" title="Show activity recorded on this network, including earlier visits within the selected time range" hidden><input id="network-filter" type="checkbox" checked disabled><span>Current network only</span></label>
+    <label id="network-selection-label" class="network-filter" hidden>Network <select id="network-selection" aria-label="Capture network"><option value="current">All active networks</option><option value="all">All retained networks</option></select></label>
+    <label id="interface-selection-label" class="network-filter" hidden>Interface <select id="interface-selection" aria-label="Capture interface"><option value="">All interfaces</option></select></label>
+  </div>
 
   <main>
     <section id="overview" class="panel active" aria-labelledby="overview-title">

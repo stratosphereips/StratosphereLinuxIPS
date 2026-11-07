@@ -61,6 +61,12 @@ daylight and dark themes. The choice is saved in this browser and restored when
 the page is reopened, including after a Slips restart. The default is the light
 (white) theme. Saved browser choices take precedence over the defaults.
 
+The header's compact **Detection history** selector sits at the far right; hover
+an archive to see its full date range and size. **Current network only** lives in
+each applicable tab's filter menu, including Overview, Alerts, Evidence, Hosts,
+P2P and its graph, and enforcement pages. The same network scope follows you
+between tabs; changing it keeps severity, grouping and time selections intact.
+
 For live interface capture, **Current network only** is enabled by default. It
 selects activity recorded on the connected network, including **earlier visits**
 within the chosen time range. For example, **7 days** on Home Wi-Fi includes
@@ -68,7 +74,7 @@ retained Home Wi-Fi detections from the whole week, even after visiting other
 networks. **Full run** includes all retained activity on that network. Turn the
 switch off to include other networks. The browser saves this choice.
 
-For a live AP capture such as `-ap wlan0,eth0`, the header instead offers
+For a live AP capture such as `-ap wlan0,eth0`, the filter menus instead offer
 **Network** and **Interface** selectors. **All active networks** and **All
 interfaces** are the defaults. Select a named network or one interface to
 inspect its activity; **All retained networks** includes older and unidentified
@@ -135,8 +141,9 @@ Grouped Evidence views label both **groups** and **records** explicitly. A singl
 device row can contain many evidence records; its group count is not the number
 of detections. Selecting **None** shows individual records.
 
-**Device view** is enabled by default when supported. It combines local IPv4
-and IPv6 profiles that have the same recorded unicast MAC address. It affects the Hosts inventory, grouped Alerts,
+Verified device grouping is automatic when supported, without a **Device view**
+switch. Old saved switch preferences no longer disable grouping. It combines local
+IPv4 and IPv6 profiles that have the same recorded unicast MAC address. It affects the Hosts inventory, grouped Alerts,
 grouped Evidence, and the selected device's alert, evidence, and traffic
 pages. Each device row lists its addresses. Public profiles and ambiguous MACs
 shared by more than 16 profiles remain separate. Slips still scores each IP
@@ -155,7 +162,7 @@ in browser storage. Host-specific activity searches and threat selections apply
 only while inspecting the current host; opening or reopening a host clears them.
 Searches, time ranges, threat and review filters belong to the output folder
 and analysis start time. A different analysis reusing the same web port starts
-with fresh filters. Layout, theme and Device view remain shared browser choices.
+with fresh filters. Layout and theme remain shared browser choices.
 Reopening the same analysis with `--view` restores its own filters; a first
 visit starts with **Full run**, including saved interface captures. Select
 **Full run** to compare all saved evidence. Some synthetic Zeek datasets mix
@@ -749,7 +756,7 @@ Size limits are soft while recent records or unfinished transfers are protected.
 Copying pauses when less than 1 GiB of disk space is free. Imported captures
 are preserved. See [Usage](usage.md) for the complete configuration example.
 
-Use the header's **Detection history** selector to open an archive explicitly.
+Use the small **Detection history** selector at the right of the header to open an archive explicitly.
 Each choice shows the earliest and latest detection dates inside that file,
 in your browser's local timezone. Single-day archives also show their start
 and end times. A secondary **part** number distinguishes overlapping ranges.
@@ -1036,7 +1043,7 @@ they do not imply that a remote peer supplied its alert records or flow data.
 
 Search matches peer IDs, IPs, known names, reported hosts, evidence names and
 descriptions. Direction, peer, evidence type and time filters narrow the graph
-without extra database queries. The global **Current network only** filter
+without extra database queries. The shared **Current network only** setting in tab filters
 also applies by recorded network membership, across earlier visits. Reset filters
 restores the 24-hour view. Use the route limit, zoom buttons, Fit width and
 the graph's scroll area for larger views. Selection survives refreshes, and
@@ -1505,7 +1512,7 @@ table, so the next selection starts a new investigation.
 
 Host activity includes retained evidence and alerts as well as traffic. Recent
 findings keep their host visible after raw flows expire or Redis profiles are
-cleared. Host and Device views use the same activity timestamps and capture
+cleared. Host and grouped device pages use the same activity timestamps and capture
 clock; refreshing an identity cache does not move an old finding into a new
 network connection.
 
@@ -1534,7 +1541,7 @@ learning a hostname cannot make an old host current. New packet observations
 are kept separately in `permanent/host_profiles/hosts.sqlite`; older runs can
 still establish activity through retained flows and detections. Refreshing the
 inventory replaces every loaded page, so an old row beyond the first page does
-not survive a filter or network change. Device view includes only addresses
+not survive a filter or network change. Device grouping includes only addresses
 observed on the selected network and within the selected time range.
 For a live interface capture, the operating system verifies which current
 IPv4 and IPv6 addresses belong to the monitored interface's MAC. Those
@@ -1558,14 +1565,14 @@ an explanation and empty scoped activity.
 
 Following an IP from a host's evidence or traffic opens that address with a **Back** button. Back restores the previous host, selected evidence and record navigation, activity filters, time range, paging, review draft and scroll position. This also works when the destination has no Slips host profile. The investigation trail retains up to twelve hosts; after returning to its start, **Hosts** returns to the inventory. Starting another inventory investigation or switching runs clears the trail.
 
-Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens a rule editor beside the host, with its IP filled in and **Both sides** selected. Suppression and evidence type remain editable. In Device view, a checkbox can save one rule for each known address; addresses learned later need their own rules. Rules use the existing persistence mechanism and the run's configured whitelist file, including a custom personal whitelist path.
+Selecting a host opens a three-column workspace. The left column holds identity and permanent network names, the center places the score plot above **Alerts**, **Evidence**, and **Flows** tabs, and the right column holds peers and protocols. The traffic plots sit below the activity tabs. A host with alerts opens on Alerts; otherwise it opens on Evidence when evidence exists, or Flows when neither exists. Alerts and Evidence are filtered to the selected profile IP, use the selected time range, and retain investigation links and cursor paging. Each column scrolls internally so the shared navigation stays visible. **Whitelist** opens a rule editor beside the host, with its IP filled in and **Both sides** selected. Suppression and evidence type remain editable. For a grouped device, a checkbox can save one rule for each known address; addresses learned later need their own rules. Rules use the existing persistence mechanism and the run's configured whitelist file, including a custom personal whitelist path.
 
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
 Alerts, Evidence, and Flows tabs use stable names without total badges.
 The active view shows its own filtered count next to its records.
 
-In Device view, the flow table uses the same server-verified address set as the
+For a grouped device, the flow table uses the same server-verified address set as the
 traffic cards and plots. A device selected through an old IPv4 address can have
 all its current traffic on another IPv4 address or on IPv6; those flows remain
 visible, with their original addresses and direction. The table footer states
@@ -1580,7 +1587,7 @@ and activity tables use that range and the current-network selection.
 Hiding whitelisted evidence also excludes it from the peak, threat,
 and evidence count. Select **Full run** to inspect earlier findings. The
 header separates the current active time-window score from the peak in the
-selected range. In Device view, the host header shows every associated IPv4
+selected range. For a grouped device, the host header shows every associated IPv4
 and IPv6 address in full. It uses the available width and wraps addresses,
 identity details, and controls onto additional lines when needed. The address
 list updates when the host refreshes, including newly learned IPv6 addresses.
@@ -1697,7 +1704,7 @@ Slips process or profiler. Restart Slips to load the updated Zeek policy.
 
 DNS resolution context is shown as structured fields: domains pointing to the selected IP, the hosts that requested those resolutions, and the latest observation time and flow UID. Resolver addresses are clickable and open their host workspace.
 
-In Host view, traffic, scores, alerts, and evidence match only the selected Slips profile IP. In Device view, local addresses with the same verified MAC are combined for traffic, alerts, and evidence. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
+Local addresses with the same verified MAC are combined automatically for traffic, alerts, and evidence when the backend supports grouping. Otherwise, traffic, scores, alerts, and evidence match only the selected Slips profile IP. The score chart continues to show the representative IP's own Slips accumulator. Rows show normalized direction, peer, addresses, ports, protocol/application, state, duration, packets, bytes, label, UID, and expandable raw details.
 
 Selecting a host flow opens the resizable investigation panel with the same flow cards used in evidence details: named source and destination endpoints, ports, connection metrics, compact additional fields, a copyable UID, and expandable complete JSON. Related DNS, HTTP, TLS, and other protocol records sharing that UID load only when the panel opens, in pages of 20. **Load more protocol records** keeps additional records accessible without enlarging the initial host-table response. Protocol tabs and JSON are built only when selected or expanded. Closing or switching the panel cancels the request; connection details remain readable if loading related records fails. The panel supports both themes and narrow widths.
 
