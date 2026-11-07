@@ -8677,9 +8677,10 @@ async function openHostFlow(row) {
       if (payload.network_flow && Object.keys(payload.network_flow.flow || {}).length) {
         group.network_flow = payload.network_flow;
       }
+      const active = group.protocol_flows.length
+        ? contents.querySelector('[role="tab"].active')?.textContent : null;
       group.protocol_flows.push(...(payload.protocol_flows || []));
       cursor = payload.next_cursor;
-      const active = contents.querySelector('[role="tab"].active')?.textContent;
       contents.replaceChildren(flowCard(group, 1, 1, "Connection details"));
       if (active) [...contents.querySelectorAll('[role="tab"]')]
         .find((tab) => tab.textContent === active)?.click();

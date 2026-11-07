@@ -2881,6 +2881,9 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(
         page.evaluate("clearTimeout(state.timer); clearTimeout(state.statusTimer); clearInterval(state.titleTimer); clearError();")
         inspector = page.locator(".host-flow-inspector")
         assert inspector.locator(".flow-group").count() == 1
+        assert inspector.get_by_role("tab", name="Related DNS · 1", exact=True).get_attribute("aria-selected") == "true"
+        assert inspector.locator(".protocol-dns").is_visible()
+        inspector.get_by_role("tab", name="conn · flow", exact=True).click()
         assert source in inspector.locator(".flow-path").inner_text()
         assert inspector.locator(".flow-path .host-name").first.text_content() == "Android"
         assert "ff02::fb" in inspector.locator(".flow-path").inner_text()
@@ -2929,11 +2932,12 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(
         for index, kind, expected in ((1,"http","example.test"),(2,"ssl","secure.example.test")):
             table.locator("tbody tr").nth(index).click()
             page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('1 of 1')")
-            inspector.get_by_role("tab",name=f"Related {kind.upper()} · 1",exact=True).click()
+            assert inspector.get_by_role("tab",name=f"Related {kind.upper()} · 1",exact=True).get_attribute("aria-selected") == "true"
             assert expected in inspector.locator(f".protocol-{kind}").inner_text()
             page.locator("#drawer-close").click()
         table.locator("tbody tr").nth(3).click()
         page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('No related')")
+        assert inspector.get_by_role("tab", name="conn · flow", exact=True).get_attribute("aria-selected") == "true"
         assert inspector.locator(".flow-metric").count() == 8
         assert "192.0.2.11" in inspector.locator(".flow-path").inner_text()
         page.locator("#drawer-close").click()
@@ -2944,6 +2948,7 @@ def test_host_flow_inspector_uses_shared_cards_in_chrome(
         fail_http = False
         inspector.get_by_role("button",name="Retry loading protocol records",exact=True).click()
         page.wait_for_function("document.querySelector('.host-flow-protocol-status').textContent.includes('1 of 1')")
+        assert inspector.get_by_role("tab", name="Related HTTP · 1", exact=True).get_attribute("aria-selected") == "true"
         page.locator("#drawer-close").click()
         page.evaluate("row => {openHostFlow({...row,uid:'slow-flow'});}", rows[0])
         page.wait_for_function("state.requests.has('hostFlowDetail')")
