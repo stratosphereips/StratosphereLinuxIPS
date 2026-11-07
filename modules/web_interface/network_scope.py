@@ -291,9 +291,18 @@ class NetworkScope:
         if "alerts" in tables:
             period = self._predicate(connection, "CAST(a.alert_time AS REAL)")
             if {"evidence", "alert_evidence"} <= tables:
+                linked = (
+                    f"a.alert_id IN (SELECT ae.alert_id FROM {prefix}evidence e "
+                    f"CROSS JOIN {database}.alert_evidence ae "
+                    "ON ae.evidence_id=e.evidence_id)"
+                    if getattr(self, "connection_only", False)
+                    else (
+                        f"EXISTS (SELECT 1 FROM {database}.alert_evidence ae JOIN {prefix}evidence e "
+                        "ON e.evidence_id=ae.evidence_id WHERE ae.alert_id=a.alert_id)"
+                    )
+                )
                 period = (
-                    f"EXISTS (SELECT 1 FROM {database}.alert_evidence ae JOIN {prefix}evidence e "
-                    "ON e.evidence_id=ae.evidence_id WHERE ae.alert_id=a.alert_id) OR "
+                    f"{linked} OR "
                     f"(NOT EXISTS (SELECT 1 FROM {database}.alert_evidence ae WHERE ae.alert_id=a.alert_id) AND {period})"
                 )
             connection.execute(

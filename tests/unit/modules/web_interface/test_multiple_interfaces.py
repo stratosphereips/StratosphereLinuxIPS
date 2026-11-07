@@ -355,3 +355,38 @@ def test_connection_scope_exposes_its_lower_bound_to_sqlite(tmp_path: Path) -> N
         plan = [str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM evidence")]
         assert any("SEARCH e USING INDEX evidence_time_lookup" in step for step in plan)
         assert connection.execute("SELECT COUNT(*) FROM evidence").fetchone()[0] == 3
+
+
+def test_connection_alert_membership_bounds_historical_work(tmp_path: Path) -> None:
+    """Resolve current evidence once while preserving linked and unlinked alerts.
+
+    Parameters:
+        tmp_path: Two interfaces with retained alerts outside their sessions.
+    """
+    _factory = ModuleFactory()
+    reader, _ = multiple_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE INDEX alert_links_evidence ON alert_evidence(evidence_id)")
+        connection.execute("CREATE INDEX alert_links_alert ON alert_evidence(alert_id)")
+        connection.executemany(
+            "INSERT INTO alerts VALUES (?,? ,?,'malicious',5)",
+            [(f"old-{number}", HOST, NOW-1000) for number in range(5000)]
+            + [("unlinked-new", HOST, NOW-50), ("unlinked-old", HOST, NOW-1000), ("linked-new", HOST, NOW-1000)],
+        )
+        connection.executemany(
+            "INSERT INTO alert_evidence VALUES (?,?)",
+            [(f"old-{number}", "ap-earlier") for number in range(5000)]
+            + [("linked-new", "eth-new")],
+        )
+    scoped = reader._for_network_scope({"network": ["connection"]})
+    with scoped._connect_sqlite() as connection:
+        work = [0]
+
+        def budget() -> int:
+            """Return nonzero when membership exceeds 500,000 SQLite instructions."""
+            work[0] += 1
+            return int(work[0] > 500)
+
+        connection.set_progress_handler(budget, 1000)
+        ids = {row[0] for row in connection.execute("SELECT alert_id FROM alerts")}
+        assert ids == {"eth-earlier", "eth-new", "ap-new", "linked-new"}

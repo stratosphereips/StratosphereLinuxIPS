@@ -1801,6 +1801,8 @@ session boundary to SQLite's time indexes while preserving each interface's
 independent reconnection boundary.
 Grouped evidence looks up the selected IDs directly instead of scanning the
 entire retained evidence index again for its count and rows.
+Connection-scoped alerts derive linked alert IDs from the current evidence set,
+avoiding repeated network membership checks for every historical alert.
 
 Overview's **Evidence retained · full run** card reads the maintained run total.
 It does not recount every record's network membership before rendering the page.
