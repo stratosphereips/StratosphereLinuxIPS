@@ -5849,7 +5849,8 @@ def test_compact_history_and_shared_network_scope_in_tab_filters(theme: str, wid
             bounds = history.bounding_box()
             assert bounds and bounds["width"] <= 180 and bounds["height"] <= 28
             assert history.locator("option").first.inner_text() == "History · Active"
-            assert page.locator(".topbar-actions > :last-child").get_attribute("id") == "history-source-label"
+            assert page.locator(".topbar-actions > :last-child").get_attribute("class") == "run-state"
+            assert page.locator(".run-state > :last-child").get_attribute("class") == "run-state-meta"
             checked = True
             for tab in ("overview", "alerts", "evidence", "hosts", "p2p", "p2p-graph", "firewall", "arp-poisoning"):
                 page.evaluate("tab => {switchTab(tab); clearTimeout(state.timer);}", tab)

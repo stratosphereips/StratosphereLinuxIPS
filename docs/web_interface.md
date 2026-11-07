@@ -61,8 +61,9 @@ daylight and dark themes. The choice is saved in this browser and restored when
 the page is reopened, including after a Slips restart. The default is the light
 (white) theme. Saved browser choices take precedence over the defaults.
 
-The header's compact **Detection history** selector sits at the far right; hover
-an archive to see its full date range and size. **Current network only** lives in
+The header's compact **Detection history** selector sits before the run status;
+uptime and update time stay at the far right. Hover an archive to see its full
+date range and size. **Current network only** lives in
 each applicable tab's filter menu, including Overview, Alerts, Evidence, Hosts,
 P2P and its graph, and enforcement pages. The same network scope follows you
 between tabs; changing it keeps severity, grouping and time selections intact.
