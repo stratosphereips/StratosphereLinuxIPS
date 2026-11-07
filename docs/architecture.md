@@ -174,7 +174,8 @@ Slips has 5 threat levels.
     <td class="tg-0pky">Critical for your security, results in a direct block</td>
     <td class="tg-0pky">Malicious downloaded Files</td>
   </tr>
-
+</tbody>
+</table>
 
 ### How Slips Stops
 
@@ -208,7 +209,3 @@ The Evidence Handler uses an expiring Redis set for past-alert membership. It
 upgrades retained alert relationships lazily and retrieves only processed,
 uncorrelated evidence when building a new alert. Scoring an individual finding
 does not download and decode all previous alerts in its time window.
-
-
-</tbody>
-</table>
