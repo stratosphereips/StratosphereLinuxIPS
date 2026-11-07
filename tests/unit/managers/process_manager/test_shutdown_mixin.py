@@ -17,6 +17,53 @@ from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("delay", [0, 5.2])
+def test_evidence_shutdown_drains_queued_work_without_five_second_kill(
+    delay: float,
+) -> None:
+    """Retain every queued task when finishing takes longer than five seconds.
+
+    Parameters:
+        delay: Consumer pause before processing accepted evidence.
+    """
+    _manager = ModuleFactory().create_process_manager_obj()
+    script = '''
+import time
+from multiprocessing import get_context
+from managers.process_manager.shutdown_mixin import drain_evidence_workers
+context = get_context("fork")
+queue = context.Queue()
+reader, writer = context.Pipe(duplex=False)
+def consume():
+    time.sleep(DELAY)
+    values = []
+    while True:
+        item = queue.get()
+        if item == "stop":
+            break
+        values.append(item)
+    writer.send(values)
+    writer.close()
+worker = context.Process(target=consume)
+worker.start()
+for number in range(80):
+    queue.put(number)
+drain_evidence_workers([worker], queue)
+assert worker.exitcode == 0
+assert reader.poll(1) and reader.recv() == list(range(80))
+queue.close()
+queue.join_thread()
+reader.close()
+writer.close()
+worker.close()
+'''.replace("DELAY", repr(delay))
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True,
+        timeout=25, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.parametrize("unread", [False, True])
 def test_shutdown_queue_cleanup_cannot_hold_interpreter_open(unread: bool) -> None:
     """Exit after workers stop even when IPC feeder pipes still contain unread data.

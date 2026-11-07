@@ -4,7 +4,7 @@ import json
 from types import SimpleNamespace
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
@@ -26,6 +26,22 @@ from slips_files.core.structures.risk_weights import (
     get_risk_weight_for_accumulated_threat_level,
 )
 from tests.module_factory import ModuleFactory
+
+
+def test_shutdown_flushes_pending_evidence_logs_before_exit() -> None:
+    """Keep worker-produced log records until the active logger receives them."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.evidence_queue = Mock()
+    worker.evidence_logger_q = Mock()
+    sequence = Mock()
+    sequence.attach_mock(worker.evidence_logger_q.close, "close")
+    sequence.attach_mock(worker.evidence_logger_q.join_thread, "flush")
+
+    worker.shutdown_gracefully()
+
+    worker.evidence_queue.cancel_join_thread.assert_called_once_with()
+    worker.evidence_logger_q.cancel_join_thread.assert_not_called()
+    assert sequence.mock_calls == [call.close(), call.flush()]
 
 
 @pytest.mark.parametrize("already_blocked", [False, True])

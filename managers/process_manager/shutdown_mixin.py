@@ -13,6 +13,7 @@ import time
 from datetime import datetime
 from multiprocessing import Process
 from multiprocessing.process import BaseProcess
+from multiprocessing.queues import Queue as MultiprocessingQueue
 from typing import List, Optional, Tuple
 
 from modules.supported_module_names import Modules
@@ -34,6 +35,24 @@ except ImportError:
     clear_firewall_recovery_state = None
     del_slips_blocking_chain = None
     has_slips_firewall_rules = None
+
+
+def drain_evidence_workers(
+    workers: List[BaseProcess], worker_queue: MultiprocessingQueue
+) -> None:
+    """Drain accepted evidence before workers exit under the run's shutdown deadline.
+
+    Parameters:
+        workers: Evidence consumers owned by the handler.
+        worker_queue: FIFO containing accepted tasks followed by stop markers.
+    """
+    for _ in workers:
+        worker_queue.put("stop")
+    for worker in workers:
+        try:
+            worker.join()
+        except (OSError, ChildProcessError):
+            pass
 
 
 class ShutdownMixin:

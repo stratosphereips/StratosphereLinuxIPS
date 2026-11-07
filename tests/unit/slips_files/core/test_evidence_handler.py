@@ -86,7 +86,7 @@ def test_shutdown_gracefully():
 
     handler.stop_evidence_workers.assert_called_once()
     handler.logger_stop_signal.set.assert_called_once()
-    handler.logger_thread.join.assert_called_once_with(timeout=5)
+    handler.logger_thread.join.assert_called_once_with()
     handler.evidence_worker_queue.cancel_join_thread.assert_called_once()
     handler.evidence_worker_queue.close.assert_called_once()
     handler.evidence_logger_q.cancel_join_thread.assert_called_once()
@@ -97,8 +97,6 @@ def test_stop_evidence_workers():
     handler = ModuleFactory().create_evidence_handler_obj()
     process_1 = Mock()
     process_2 = Mock()
-    process_1.is_alive.return_value = False
-    process_2.is_alive.return_value = True
     handler.evidence_worker_child_processes = [process_1, process_2]
     handler.evidence_worker_queue = Mock()
     handler.print = Mock()
@@ -109,11 +107,11 @@ def test_stop_evidence_workers():
         call("stop"),
         call("stop"),
     ]
-    process_1.join.assert_called_once_with(timeout=5)
+    process_1.join.assert_called_once_with()
     process_1.kill.assert_not_called()
-    process_2.join.assert_has_calls([call(timeout=5), call(timeout=1)])
-    process_2.kill.assert_called_once()
-    handler.print.assert_called_once()
+    process_2.join.assert_called_once_with()
+    process_2.kill.assert_not_called()
+    handler.print.assert_not_called()
 
 
 @patch(

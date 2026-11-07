@@ -209,3 +209,8 @@ The Evidence Handler uses an expiring Redis set for past-alert membership. It
 upgrades retained alert relationships lazily and retrieves only processed,
 uncorrelated evidence when building a new alert. Scoring an individual finding
 does not download and decode all previous alerts in its time window.
+
+During shutdown, evidence stop markers follow all accepted tasks in the worker
+queue. Workers finish those tasks and flush their log records before exiting;
+the handler no longer kills them after five seconds. The process manager still
+enforces the run's overall shutdown deadline.
