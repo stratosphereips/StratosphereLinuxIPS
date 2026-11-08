@@ -207,16 +207,35 @@ Threat level used in evidence:
 
 ## Evidence format
 
-Evidence description is human-readable and concise:
+The module emits a short headline followed by the observations that triggered
+the finding. For example:
 
-`HTTPS anomaly: type=<type>; confidence=<level> (<score>); reason=<reason>; value=<value>; why=<explanation>.`
+> Unusual hourly HTTPS activity from 192.168.1.26. 734 encrypted connections
+> (usual: 4.9); 67 different servers (usual: 3.2); 1 previously unseen server
+> (usual: <1); 390 new client encryption patterns across servers (usual: 3.8).
 
-Examples of reasons:
+"Usual" is the host's learned reference level, shown in the original count or
+byte units and rounded for readability. A fractional count below one is shown
+as `<1`, rather than zero. The reference is an adaptive model level, not a
+guarantee of what the host should do next. Numerical deviations can be increases
+or decreases, so descriptions do not label every deviation as an increase.
 
-- New Server
-- New JA3S
-- Bytes to Known Server
-- Hourly feature deviations (e.g., New Servers Count, JA3 Changes)
+Client encryption patterns refer to TLS client fingerprints (JA3). The hourly
+count increments when a fingerprint is first seen for a particular server;
+the same fingerprint first seen at two servers counts twice. It is not a count
+of applications. New server encryption handshake patterns refer to server TLS
+fingerprints (JA3S). Neither statement implies a certificate change.
+
+Flow descriptions identify the destination when available. Data-volume
+observations include both sent and received bytes and use B, KiB or MiB units.
+
+Exact feature values, reference levels, z-scores, thresholds and confidence
+factors remain in `detection_details.https_anomaly` in the evidence JSON.
+Hourly records also include the window start and end. Detection decisions,
+threat levels and confidence values are unchanged. Existing historical
+descriptions are preserved; the new wording applies to newly emitted findings
+after restarting Slips. The web shows the first sentence as a short heading
+and the remaining observations as normal text.
 
 ## Configuration keys
 

@@ -680,6 +680,116 @@ class AnomalyDetectionHTTPS(IModule):
             )
         return None
 
+    @staticmethod
+    def _display_measurement(
+        value: object, *, byte_count: bool = False, baseline: bool = False
+    ) -> str:
+        """Format an observation without statistical notation or false precision.
+
+        Parameters:
+            value: Observed quantity or learned reference level.
+            byte_count: Render data volume using binary byte units.
+            baseline: Preserve rare count baselines as less than one.
+
+        Returns:
+            Readable quantity, or an unavailable marker for invalid values.
+        """
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return "unavailable"
+        if not math.isfinite(number):
+            return "unavailable"
+        if byte_count:
+            for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+                if abs(number) < 1024 or unit == "TiB":
+                    amount = f"{number:,.1f}".rstrip("0").rstrip(".")
+                    return f"{amount} {unit}"
+                number /= 1024
+        if baseline and 0 < number < 1:
+            return "<1"
+        return f"{number:,.1f}".rstrip("0").rstrip(".")
+
+    def _describe_anomaly_reason(self, reason: dict) -> str:
+        """Explain one observed HTTPS change using everyday terms and units.
+
+        Parameters:
+            reason: Feature, observed value and optional learned reference.
+
+        Returns:
+            Short factual explanation without z-scores or confidence metadata.
+        """
+        feature = str(reason.get("feature", "HTTPS activity"))
+        value = reason.get("value")
+        if feature == "new_server":
+            return f"Server {value} was not previously seen for this host"
+        if feature == "new_ja3s":
+            return "The server used a previously unseen encryption handshake pattern"
+        byte_count = feature in {
+            "bytes_to_known_server",
+            "known_server_avg_bytes",
+        }
+        observed = self._display_measurement(value, byte_count=byte_count)
+        counts = {
+            "ssl_flows": ("encrypted connection", "encrypted connections"),
+            "unique_servers": ("different server", "different servers"),
+            "new_servers": (
+                "previously unseen server",
+                "previously unseen servers",
+            ),
+            "ja3_changes": (
+                "new client encryption pattern across servers",
+                "new client encryption patterns across servers",
+            ),
+        }
+        if feature in counts:
+            singular, plural = counts[feature]
+            text = f"{observed} {singular if value == 1 else plural}"
+        elif feature == "bytes_to_known_server":
+            text = f"{observed} transferred, counting sent and received data"
+        elif feature == "known_server_avg_bytes":
+            text = (
+                f"Average data per connection to familiar servers: {observed}"
+            )
+        else:
+            text = f"{feature.replace('_', ' ')}: {observed}"
+        mean = reason.get("mean")
+        if mean is not None:
+            usual = self._display_measurement(
+                mean, byte_count=byte_count, baseline=True
+            )
+            if usual != "unavailable":
+                text += f" (usual: {usual})"
+        return text
+
+    def anomaly_description(
+        self, srcip: str, kind: str, reasons: List[dict], server: str = ""
+    ) -> str:
+        """Separate a short HTTPS anomaly headline from its observed changes.
+
+        Parameters:
+            srcip: Host whose activity was evaluated.
+            kind: Hourly aggregate or individual flow.
+            reasons: Measurements or novelty checks triggering the detection.
+            server: Destination identity for a flow, when known.
+
+        Returns:
+            Plain-language evidence text shared by logs, peers and the web.
+        """
+        if kind == "hourly":
+            headline = f"Unusual hourly HTTPS activity from {srcip}."
+        else:
+            destination = (
+                f" to {server}"
+                if server and server != "<unknown_server>"
+                else ""
+            )
+            headline = f"Unusual HTTPS connection from {srcip}{destination}."
+        observations = "; ".join(
+            self._describe_anomaly_reason(reason) for reason in reasons
+        )
+        return f"{headline} {observations}." if observations else headline
+
     def emit_anomaly_evidence(
         self,
         profileid: str,
@@ -710,59 +820,18 @@ class AnomalyDetectionHTTPS(IModule):
         threat_level = self.threat_level_from_confidence_level(
             str(confidence.get("level", "low"))
         )
-        reason_parts = []
-        for reason in reasons:
-            feature = str(reason.get("feature", "unknown"))
-            value = reason.get("value", "")
-            mean = reason.get("mean")
-            zscore = reason.get("zscore")
-            threshold = reason.get(
-                "threshold",
-                (
-                    self.flow_zscore_threshold
-                    if feature == "bytes_to_known_server"
-                    else self.hourly_zscore_threshold
-                ),
-            )
-
-            if feature == "new_server":
-                reason_name = "New Server"
-                why = "not seen before in this host baseline"
-            elif feature == "new_ja3s":
-                reason_name = "New JA3S"
-                why = "not seen before in this host baseline"
-            elif feature == "bytes_to_known_server":
-                reason_name = "Bytes to Known Server"
-                why = (
-                    f"bytes above normal (z-score={zscore}; threshold={threshold:.2f})"
-                    if zscore is not None
-                    else "bytes deviates from learned baseline"
-                )
-            else:
-                reason_name = feature.replace("_", " ").title()
-                if zscore is not None and mean is not None:
-                    why = (
-                        "value above baseline "
-                        f"(mean={mean}; z-score={zscore}; threshold={threshold:.2f})"
-                    )
-                elif zscore is not None:
-                    why = f"value above baseline (z-score={zscore}; threshold={threshold:.2f})"
-                else:
-                    why = "value deviates from learned baseline"
-
-            reason_parts.append(
-                f"reason={reason_name}; value={value}; why={why}"
-            )
-
-        reasons_text = (
-            " | ".join(reason_parts)
-            if reason_parts
-            else "reason=Unknown; value=; why=not provided"
+        description = self.anomaly_description(
+            srcip, kind, reasons, sni or server or daddr
         )
-        description = (
-            f"HTTPS anomaly: type={kind}; confidence={confidence.get('level')} "
-            f"({confidence_score:.3f}); {reasons_text}."
-        )
+        details = {
+            "version": 1,
+            "kind": kind,
+            "reasons": [dict(reason) for reason in reasons],
+            "confidence": dict(confidence),
+        }
+        if kind == "hourly":
+            details["window_start"] = traffic_ts
+            details["window_end"] = traffic_ts + 3600
 
         uid_list = [uid] if uid else []
         if kind == "hourly" and extra and "uids" in extra:
@@ -801,6 +870,7 @@ class AnomalyDetectionHTTPS(IModule):
             src_port=src_port,
             method=Method.STATISTICAL,
             confidence=confidence_score,
+            detection_details={"https_anomaly": details},
         )
         self.db.set_evidence(evidence)
         self.log_event(
