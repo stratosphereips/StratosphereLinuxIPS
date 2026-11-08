@@ -24,13 +24,13 @@ jobs:
 
       # should come before buildx action
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@1f40c72289eff860ee54a304f1438e3cff362e0a # v4.3.0
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
 
       # Set up Docker Buildx with docker-container driver is required
       # at the moment to be able to use a subdirectory with Git context
       - name: Create and use Buildx builder
         id: create_builder
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           driver: docker-container  #  allows multi-platform builds
           #  allows you to enable special permissions for the build environment that are normally considered insecure,
@@ -56,7 +56,7 @@ jobs:
 
     steps:
       - name: Use existing Buildx builder
-        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
           name: slips_multi_arch_builder
           install: true
@@ -73,7 +73,7 @@ jobs:
           submodules: true
 
       - name: Login to DockerHub
-        uses: docker/login-action@371161bbe7024a29a25c5e19bfcbc0804fe9ad2c # v4.5.2
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           username: stratosphereips
           password: ${{ secrets.DOCKER_HUB_ACCESS_TOKEN }}
