@@ -461,7 +461,7 @@ def test_trust_recommendation_response(
         "-P",
         str(redis_port),
     ]
-    # success = False
+    success = False
     process = None
     cached_network_opinion = None
 
@@ -545,9 +545,6 @@ def test_trust_recommendation_response(
             "confidence": "0.0",
         }
         success = True
-    except Exception:
-        pass
-
     finally:
         if process is not None and process.poll() is None:
             stop_process_group(process, "fides slips")
