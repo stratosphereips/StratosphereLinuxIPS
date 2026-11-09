@@ -81,7 +81,16 @@ class ModuleFactory:
         )
         conf.get_tw_width_as_float = Mock(return_value=3600.0)
         conf.get_tw_width_in_seconds = Mock(return_value=3600)
-        conf.get_args = Mock(return_value=Mock(killall=False))
+        # realistic args: slips reads these during RedisDB.__new__
+        slips_args = Mock(
+            killall=False,
+            interface=None,
+            access_point=None,
+            growing=False,
+            save=False,
+            is_slips_started_by_an_update=False,
+        )
+        conf.get_args = Mock(return_value=slips_args)
         conf.client_ips = Mock(return_value=[])
         conf.use_local_p2p = Mock(return_value=False)
         conf.permanent_dir = Mock(return_value="permanent")
