@@ -455,8 +455,10 @@ class EvidenceHandlerWorker(IModule):
             evidence_threat_level,
         )
 
-    def show_popup(self, alert: Alert):
-        alert_description = self.formatter.get_printable_alert(alert)
+    def show_popup(self, alert: Alert) -> None:
+        alert_description = self.formatter.get_notification_alert(
+            alert, self.detection_threshold_in_this_width
+        )
         self.notify.show_popup(alert_description)
 
     def get_accumulated_threat_level(

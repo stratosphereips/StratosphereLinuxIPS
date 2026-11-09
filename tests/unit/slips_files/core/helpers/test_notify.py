@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import patch, MagicMock
+from pathlib import Path
 import subprocess
 import logging
 import pytest
@@ -216,7 +217,7 @@ def test_notifications_are_disabled_in_docker() -> None:
         "-leading-dash",
     ],
 )
-def test_show_popup(system: str, prefix: list[str], alert: str) -> None:
+def test_show_popup(system: str, prefix: list[str], alert: str, tmp_path: Path) -> None:
     factory = ModuleFactory()
     import shlex
 
@@ -233,6 +234,7 @@ def test_show_popup(system: str, prefix: list[str], alert: str) -> None:
             "slips_files.core.helpers.notify.Notify._setup_notifications_if_root"
         ),
         patch("slips_files.core.helpers.notify.subprocess.run") as run,
+        patch("slips_files.core.helpers.notify.notification_app_path", return_value=tmp_path / "absent.app"),
     ):
         notify = factory.create_notify_obj()
         notify.notify_cmd = shlex.join(prefix)
@@ -244,15 +246,62 @@ def test_show_popup(system: str, prefix: list[str], alert: str) -> None:
             assert command[1] == "-e"
             assert alert not in command[2]
             assert (
-                'display notification (item 1 of argv) with title "Slips"'
+                'display notification (item 1 of argv) with title "Slips alert"'
                 in command[2]
             )
             assert command[-2] == "--"
         else:
-            assert command == [*prefix, "Slips", alert]
+            assert command == [*prefix, "--app-name=Slips", "--icon",
+                               str(Path("modules/web_interface/slips-logo.png").resolve()), "Slips alert", alert]
         run.assert_called_once_with(
             command, capture_output=True, text=True, check=True, timeout=5
         )
+
+
+def test_native_mac_notification_uses_branded_bundle_and_literal_text(tmp_path: Path) -> None:
+    """Use the signed Slips helper without shell or AppleScript interpolation.
+
+    Parameters:
+        tmp_path: Isolated ready app bundle.
+    """
+    factory = ModuleFactory()
+    app = tmp_path / "Slips test.app"
+    binary = app / "Contents/MacOS/SlipsNotification"
+    binary.parent.mkdir(parents=True)
+    binary.touch()
+    message = '192.0.2.1\nHost "name" $(touch unsafe); `id`'
+    with (
+        patch("slips_files.core.helpers.notify.IS_IN_A_DOCKER_CONTAINER", False),
+        patch("platform.system", return_value="Darwin"),
+        patch("slips_files.core.helpers.notify.shutil.which", return_value="osascript"),
+        patch("slips_files.core.helpers.notify.notification_app_path", return_value=app),
+        patch("slips_files.core.helpers.notify.subprocess.run") as run,
+    ):
+        notify = factory.create_notify_obj()
+        notify.show_popup(message)
+    run.assert_called_once_with([str(binary), "Security alert", message],
+                                capture_output=True, text=True, check=True, timeout=5)
+
+
+@pytest.mark.parametrize("system,enabled,expected", [("Darwin", True, 1), ("Linux", True, 0), ("Darwin", False, 0)])
+def test_native_preparation_runs_off_the_detection_path(system: str, enabled: bool, expected: int) -> None:
+    """Register background preparation only for enabled macOS notifications.
+
+    Parameters:
+        system: Target operating system.
+        enabled: Whether desktop notifications are enabled.
+        expected: Number of tracked threads launched.
+    """
+    factory = ModuleFactory()
+    with patch("slips_files.core.helpers.notify.utils.start_thread") as start:
+        notify = factory.create_notify_obj()
+        notify.enabled = enabled
+        with patch("platform.system", return_value=system):
+            notify.prepare(factory.logger)
+    assert start.call_count == expected
+    if expected:
+        assert start.call_args.args[0].daemon
+        assert start.call_args.args[1] is factory.logger
 
 
 @pytest.mark.parametrize(

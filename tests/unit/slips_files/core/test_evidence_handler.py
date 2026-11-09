@@ -338,14 +338,14 @@ def test_show_popup():
     evidence_handler = ModuleFactory().create_evidence_handler_obj()
     evidence_handler.notify = Mock()
     alert = Mock(spec=Alert)
-    evidence_handler.formatter.get_printable_alert = Mock(
-        return_value="alert_time_desc"
+    evidence_handler.formatter.get_notification_alert = Mock(
+        return_value="alert_summary"
     )
 
     evidence_handler.show_popup(alert)
 
     evidence_handler.notify.show_popup.assert_called_once_with(
-        "alert_time_desc"
+        "alert_summary"
     )
 
 

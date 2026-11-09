@@ -132,6 +132,7 @@ class EvidenceHandler(ICore):
         self.notify = None
         if self.popup_alerts:
             self.notify = Notify()
+            self.notify.prepare(self.db)
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("evidence_added")
@@ -157,6 +158,11 @@ class EvidenceHandler(ICore):
         self.UID = conf.get_UID()
 
         self.popup_alerts = conf.popup_alerts()
+        self.detection_threshold_in_this_width = (
+            conf.risk_accumulated_threat_level()
+            if self.db.is_running_non_stop()
+            else self.detection_threshold * self.width / 60
+        )
         # In docker, disable alerts no matter what slips.yaml says
         # if IS_IN_A_DOCKER_CONTAINER:
         #     self.popup_alerts = False

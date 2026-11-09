@@ -8,6 +8,15 @@ import pwd
 import shlex
 import shutil
 import subprocess
+import threading
+from pathlib import Path
+from typing import Any
+
+from slips_files.common.slips_utils import utils
+from slips_files.core.helpers.mac_notifications import (
+    prepare_notification_app,
+    notification_app_path,
+)
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
@@ -27,6 +36,21 @@ class Notify:
         elif platform.system() == "Linux" and self._is_notify_send_installed():
             self.enabled = True
             self._setup_notifications_if_root()
+
+    def prepare(self, db: Any) -> None:
+        """Build macOS branding in the background without delaying detection.
+
+        Parameters:
+            db: Run database used to track the preparation thread.
+        """
+        if not self.enabled or platform.system() != "Darwin":
+            return
+        thread = threading.Thread(
+            target=prepare_notification_app,
+            daemon=True,
+            name="slips_notification_prepare",
+        )
+        utils.start_thread(thread, db)
 
     def _is_notify_send_installed(self) -> bool:
         """
@@ -92,14 +116,27 @@ class Notify:
         if not self.enabled or IS_IN_A_DOCKER_CONTAINER:
             return
         if platform.system() == "Linux":
-            command = [*shlex.split(self.notify_cmd), "Slips", alert_to_log]
+            command = [
+                *shlex.split(self.notify_cmd),
+                "--app-name=Slips",
+                "--icon",
+                str(Path("modules/web_interface/slips-logo.png").resolve()),
+                "Slips alert",
+                alert_to_log,
+            ]
         elif platform.system() == "Darwin":
-            script = (
-                "on run argv\n"
-                'display notification (item 1 of argv) with title "Slips"\n'
-                "end run"
+            binary = (
+                notification_app_path() / "Contents/MacOS/SlipsNotification"
             )
-            command = ["osascript", "-e", script, "--", alert_to_log]
+            if binary.is_file():
+                command = [str(binary), "Security alert", alert_to_log]
+            else:
+                script = (
+                    "on run argv\n"
+                    'display notification (item 1 of argv) with title "Slips alert"\n'
+                    "end run"
+                )
+                command = ["osascript", "-e", script, "--", alert_to_log]
         else:
             return
         try:

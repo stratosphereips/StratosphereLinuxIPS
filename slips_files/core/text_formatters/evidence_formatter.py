@@ -98,6 +98,57 @@ class EvidenceFormatter:
 
         return alert_to_print
 
+    def get_notification_alert(self, alert: Alert, threshold: float) -> str:
+        """Summarize the host, triggering finding and threshold for a desktop banner.
+
+        Parameters:
+            alert: Alert with its actual triggering evidence and stored scores.
+            threshold: Detector threshold used for this alert.
+
+        Returns:
+            Three short lines without time-window or risk-weight internals.
+        """
+        host = alert.profile.ip
+        hostname = self.db.get_hostname_from_profile(str(alert.profile))
+        if isinstance(hostname, str) and hostname.strip():
+            name = " ".join(hostname.split())
+            if len(name) > 60:
+                name = name[:59] + "…"
+            host += f" ({name})"
+        kind = (
+            str(alert.last_evidence.evidence_type)
+            .replace("_", " ")
+            .capitalize()
+        )
+        acronyms = {
+            "ip",
+            "dns",
+            "ssh",
+            "http",
+            "https",
+            "tls",
+            "ssl",
+            "arp",
+            "ml",
+            "p2p",
+            "dga",
+            "c2",
+        }
+        kind = " ".join(
+            word.upper() if word.lower() in acronyms else word
+            for word in kind.split()
+        )
+        score = (
+            alert.accumulated_ratl
+            if self.db.is_running_non_stop()
+            else alert.accumulated_threat_level
+        )
+        return (
+            f"{host}\nLatest finding: {kind}\n"
+            f"Host score {score:.3f}".rstrip("0").rstrip(".")
+            + f" (alert threshold {threshold:g})."
+        )
+
     def format_evidence_for_printing(
         self,
         alert: Alert,
