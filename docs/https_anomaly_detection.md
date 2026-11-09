@@ -237,6 +237,16 @@ descriptions are preserved; the new wording applies to newly emitted findings
 after restarting Slips. The web shows the first sentence as a short heading
 and the remaining observations as normal text.
 
+The web also renders the older single-reason `New Server` flow format in plain
+language. For example, a retained finding for `files.pythonhosted.org` reads:
+
+> Unusual HTTPS connection from 192.168.1.26 to files.pythonhosted.org.
+> Server files.pythonhosted.org was not previously seen for this host.
+
+Confidence remains in its usual badge. This display conversion preserves the
+original description in JSON, exports and saved history. Formats with additional
+or unrecognized reasons remain unchanged so their details are not discarded.
+
 ## Configuration keys
 
 Use section `anomaly_detection_https` in the configuration passed with `-c`.

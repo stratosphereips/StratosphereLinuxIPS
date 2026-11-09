@@ -21,6 +21,79 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("theme,width", [("light", 1100), ("dark", 390)])
+def test_legacy_https_new_server_text_is_readable_without_rewriting_evidence(
+    theme: str, width: int,
+) -> None:
+    """Render old HTTPS text plainly while preserving exact saved evidence.
+
+    Parameters:
+        theme: Browser theme.
+        width: Available evidence inspector width.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    errors: list[str] = []
+    record = {
+        "id": "old-https", "evidence_type": "ANOMALOUS_FLOW",
+        "module": "anomaly_detection_https", "profile_ip": "192.168.1.26",
+        "timestamp": 1794067982, "threat_level": "low", "confidence": 0.5356,
+        "description": "HTTPS anomaly: type=flow; confidence=low (0.536); reason=New Server; "
+                       "value=files.pythonhosted.org; why=not seen before in this host baseline.",
+    }
+
+    def respond(route: Any) -> None:
+        """Serve shipped assets and an isolated historical record's flow page.
+
+        Parameters:
+            route: Browser request to fulfill.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/app.js", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/api/evidence/old-https/flows":
+            route.fulfill(json={"items": [], "linked_uid_count": 0, "next_cursor": None})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated HTTPS fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.wait_for_function("typeof openEvidence === 'function'")
+            page.evaluate("""theme => {
+                clearTimeout(state.timer);clearTimeout(state.statusTimer);
+                setTheme(theme);state.activeTab='overview';
+            }""", theme)
+            result = page.evaluate("""async record => {
+                const original=JSON.stringify(record);
+                await openEvidence(record);
+                return {unchanged:original===JSON.stringify(record),
+                    description:hostDescription(record).textContent,
+                    unsupported:readableEvidenceDescription({...record,
+                        description:record.description+' | reason=Other; value=42; why=additional detail'}),
+                    otherType:readableEvidenceDescription({...record,evidence_type:'UNKNOWN_PORT'})};
+            }""", record)
+            banner = page.locator(".evidence-detail-banner")
+            assert "Unusual HTTPS connection from" in banner.locator("h2").inner_text()
+            assert "files.pythonhosted.org" in banner.locator("h2").inner_text()
+            assert "Server files.pythonhosted.org was not previously seen for this host." in banner.inner_text()
+            assert "54%" in banner.inner_text()
+            assert all(token not in banner.inner_text() for token in ("type=flow", "confidence=", "reason=", "why="))
+            assert result["unchanged"]
+            assert "was not previously seen" in result["description"]
+            assert result["unsupported"].endswith("reason=Other; value=42; why=additional detail")
+            assert result["otherType"] == record["description"]
+            assert not errors, errors
+            page.screenshot(path=f"output/https-legacy-new-server-{theme}.png")
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_metadata_more_remains_expanded_during_refresh(theme: str) -> None:
     """Keep the metadata disclosure and keyboard focus across automatic refreshes.

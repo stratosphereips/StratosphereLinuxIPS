@@ -772,9 +772,24 @@ function deviceIdentity(row, field = "ip") {
   return element;
 }
 
+/** Explain a saved legacy new-server finding without changing its original text.
+ * @param {object} record Evidence or a copy used for display.
+ * @returns {string} Readable description; unrecognized formats remain unchanged.
+ */
+function readableEvidenceDescription(record) {
+  const description = String(record.description || "");
+  if (record.evidence_type !== "ANOMALOUS_FLOW") return description;
+  const match = description.match(/^HTTPS anomaly: type=flow; confidence=(?:low|medium|high) \([\d.]+\); reason=New Server; value=([^;\r\n]+); why=not seen before in this host baseline\.?$/);
+  if (!match) return description;
+  const source = record.profile_ip || record.profile?.ip || record.attacker?.value;
+  const server = match[1].trim();
+  if (!source || !server) return description;
+  return `Unusual HTTPS connection from ${source} to ${server}. Server ${server} was not previously seen for this host.`;
+}
+
 /** Add host names and compact MAC markers to detection descriptions. */
 function hostDescription(record, className = "") {
-  const description = String(record.description || "—");
+  const description = readableEvidenceDescription(record) || "—";
   const addresses = new Set(description.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []);
   const macs = new Set(description.match(/(?<![\w:])(?:[0-9a-f]{1,2}:){5}[0-9a-f]{1,2}(?![\w:])/gi) || []);
   [record.attacker, record.victim].forEach((entity) => {
@@ -7607,7 +7622,7 @@ function evidenceDetailHeadline(record, groups = []) {
       return `${source} connected to unknown port ${port}${protocol ? `/${String(protocol).toUpperCase()}` : ""} on ${state.ownAddresses.has(destination) ? "this device" : destination}`;
     }
   }
-  return String(record.description || (record.evidence_type ? alertTypeName(record.evidence_type) : "Evidence"))
+  return String(readableEvidenceDescription(record) || (record.evidence_type ? alertTypeName(record.evidence_type) : "Evidence"))
     .split(/\.(?:\s|$)/)[0];
 }
 
@@ -7617,7 +7632,7 @@ function evidenceDetailHeadline(record, groups = []) {
  * @returns {string} Remaining description, including any additional details.
  */
 function evidenceDescriptionRemainder(record, headline) {
-  const description = String(record.description || "").trim();
+  const description = readableEvidenceDescription(record).trim();
   if (description.toLowerCase().startsWith(headline.toLowerCase())) {
     return description.slice(headline.length).replace(/^[\s.;:]+/, "");
   }
