@@ -311,7 +311,6 @@ class RedisManager:
             host=redis_host,
             port=redis_port,
             db=1,
-            charset="utf-8",
             decode_responses=True,
         )
         rcache.flushdb()
