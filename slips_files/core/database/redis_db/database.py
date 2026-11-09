@@ -448,7 +448,6 @@ class RedisDB(
             host=LOCALHOST,
             port=port,
             db=db,
-            charset="utf-8",
             decode_responses=True,
             health_check_interval=10,
             socket_connect_timeout=5,
