@@ -38,7 +38,7 @@ termcolor==3.3.0
 yappi==1.7.3
 pytest-sugar==1.1.1
 aid_hash==1.1
-cachetools==7.1.7
+cachetools==7.2.7
 black==26.3.1
 ruff==0.16.7
 pre-commit==4.3.0
