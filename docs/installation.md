@@ -396,7 +396,7 @@ follow the official docker [installation instructions for Debian](https://docs.d
 ## Enabling the memory protection for Docker
 The default raspbian image disables by default the memory protection that Docker needs.
 
-To test if your rpi is correctly configured you can do 
+To test if your rpi is correctly configured you can do
 
 	grep -qw memory /sys/fs/cgroup/cgroup.controllers && echo "PASS: memory cgroups enabled" || echo "FAIL: memory cgroups disabled"
 
@@ -407,7 +407,7 @@ If your rpi is not correctly configured, you can correctly configured it with
 
 ## Running Slips' Docker in the Pi
 
-This command 
+This command
 
 	docker run --restart unless-stopped -d --cpu-shares "700" --memory="14g" --memory-swap="40g" --net=host --cap-add=NET_ADMIN -v $(pwd)/output:/StratosphereLinuxIPS/output --name slips_rpi stratosphereips/slips:latest /StratosphereLinuxIPS/slips.py -i eth0 -w -p -c config/slips.yaml -o output/slips_rpi
 
@@ -509,3 +509,5 @@ docker run --restart unless-stopped -d --cpu-shares "700" --memory="14g" --memor
 ```
 
 Now connect your devices to the rpi_wifi with "changemysecurepassword" as the password, and enjoy the protection of Slips.
+
+You can also monitoring the RPI's 2 interfaces with Slips by following the instructions [here](https://stratospherelinuxips.readthedocs.io/en/develop/immune/ids_in_the_middle_traffic_routing.html).
