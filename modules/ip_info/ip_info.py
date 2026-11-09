@@ -21,7 +21,8 @@ import netifaces
 import asyncio
 import multiprocessing
 import time
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, thread as _cf_thread
+import threading
 from functools import lru_cache, partial
 
 
@@ -46,6 +47,41 @@ from slips_files.core.structures.evidence import (
 )
 
 
+class DaemonThreadPoolExecutor(ThreadPoolExecutor):
+    """
+    Bounded thread pool executor whose worker threads are daemonized and
+    detached from interpreter exit tracking on shutdown to prevent hangs.
+    """
+
+    def _adjust_thread_count(self) -> None:
+        """
+        Start worker threads with daemon=True so they do not block interpreter
+        exit.
+        """
+        orig_thread = threading.Thread
+
+        def daemon_thread(*args, **kwargs):
+            kwargs["daemon"] = True
+            return orig_thread(*args, **kwargs)
+
+        try:
+            threading.Thread = daemon_thread
+            super()._adjust_thread_count()
+        finally:
+            threading.Thread = orig_thread
+
+    def shutdown(self, wait: bool = False, cancel_futures: bool = True) -> None:
+        """
+        Cancel pending futures and deregister worker threads from atexit.
+
+        :param wait: Whether to wait for worker threads to finish.
+        :param cancel_futures: Whether to cancel pending futures.
+        """
+        super().shutdown(wait=wait, cancel_futures=cancel_futures)
+        for thread in list(self._threads):
+            _cf_thread._threads_queues.pop(thread, None)
+
+
 class IPInfo(IAsyncModule):
     # Name: short name of the module. Do not use spaces
     name = "ip_info"
@@ -56,7 +92,7 @@ class IPInfo(IAsyncModule):
         """This will be called when initializing this module"""
         # 30MBs max size of this queue to avoid growing forever in mem
         self.pending_mac_queries = multiprocessing.Queue(maxsize=30000000)
-        self.lookup_executor = ThreadPoolExecutor(
+        self.lookup_executor = DaemonThreadPoolExecutor(
             max_workers=4, thread_name_prefix="ip-info"
         )
         self.lookup_semaphore = asyncio.Semaphore(4)
@@ -420,7 +456,10 @@ class IPInfo(IAsyncModule):
         if sld_res and hasattr(res, "registrant") and sld_res.registrant:
             self.db.set_info_for_domains(domain, {"Org": sld_res.registrant})
 
-    async def shutdown_gracefully(self):
+    async def shutdown_gracefully(self) -> None:
+        """
+        Clean up open databases, queues, and thread pool on shutdown.
+        """
         if hasattr(self, "asn_db"):
             self.asn_db.close()
         if hasattr(self, "country_db"):
@@ -429,7 +468,7 @@ class IPInfo(IAsyncModule):
             self.pending_mac_queries.close()
             self.pending_mac_queries.join_thread()
         if hasattr(self, "lookup_executor"):
-            self.lookup_executor.shutdown(wait=True, cancel_futures=True)
+            self.lookup_executor.shutdown(wait=False, cancel_futures=True)
         if hasattr(self, "domain_validity_cache"):
             self.domain_validity_cache.clear()
         self._get_ip_family_cached.cache_clear()

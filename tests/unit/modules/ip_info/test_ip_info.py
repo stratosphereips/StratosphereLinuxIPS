@@ -6,6 +6,7 @@ import asyncio
 
 
 from tests.module_factory import ModuleFactory
+from modules.ip_info.ip_info import DaemonThreadPoolExecutor
 import maxminddb
 import pytest
 from unittest.mock import (
@@ -438,20 +439,84 @@ async def tmp_function():
 
 async def test_shutdown_gracefully(
     mocker,
-):
+) -> None:
+    """
+    Graceful shutdown closes databases and terminates executor non-blockingly.
+    """
     ip_info = ModuleFactory().create_ip_info_obj()
     ip_info.reading_mac_db_task = tmp_function()
 
     mock_asn_db = mocker.Mock()
     mock_country_db = mocker.Mock()
+    mock_executor = mocker.Mock()
 
     ip_info.asn_db = mock_asn_db
     ip_info.country_db = mock_country_db
+    ip_info.lookup_executor = mock_executor
 
     await ip_info.shutdown_gracefully()
 
     mock_asn_db.close.assert_called_once()
     mock_country_db.close.assert_called_once()
+    mock_executor.shutdown.assert_called_once_with(
+        wait=False, cancel_futures=True
+    )
+
+
+@pytest.mark.parametrize(
+    "max_workers, num_tasks",
+    [
+        (2, 3),
+        (4, 5),
+    ],
+)
+def test_daemon_thread_pool_executor_lifecycle(
+    max_workers: int, num_tasks: int
+) -> None:
+    """
+    Worker threads are daemonized and detached from atexit queue on shutdown.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    executor = DaemonThreadPoolExecutor(
+        max_workers=max_workers, thread_name_prefix="test-daemon"
+    )
+    futures = [executor.submit(lambda: 42) for _ in range(num_tasks)]
+    assert all(f.result() == 42 for f in futures)
+    assert all(t.daemon is True for t in executor._threads)
+
+    from concurrent.futures import thread as _cf_thread
+
+    executor.shutdown(wait=False, cancel_futures=True)
+    assert not any(t in _cf_thread._threads_queues for t in executor._threads)
+
+
+@pytest.mark.parametrize(
+    "has_executor",
+    [
+        True,
+        False,
+    ],
+)
+async def test_shutdown_gracefully_executor_handling(
+    mocker, has_executor: bool
+) -> None:
+    """
+    Shutdown safely handles present or absent lookup executor.
+    """
+    ip_info = ModuleFactory().create_ip_info_obj()
+    ip_info.reading_mac_db_task = tmp_function()
+    if has_executor:
+        mock_executor = mocker.Mock()
+        ip_info.lookup_executor = mock_executor
+    elif hasattr(ip_info, "lookup_executor"):
+        delattr(ip_info, "lookup_executor")
+
+    await ip_info.shutdown_gracefully()
+
+    if has_executor:
+        mock_executor.shutdown.assert_called_once_with(
+            wait=False, cancel_futures=True
+        )
 
 
 @pytest.mark.parametrize(
