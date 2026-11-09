@@ -6907,8 +6907,7 @@ function flowValue(flow, ...names) {
 
 const PROTOCOL_FIELDS = {
   packet_timing: [["Packet direction: originator", ["is_orig"]], ["Packet kind", ["kind"]],
-    ["Events observed", ["event_count"]], ["Application protocol", ["service"]],
-    ["Packet times (seconds)", ["times"]], ["Payload lengths (bytes)", ["lengths"]]],
+    ["Events observed", ["event_count"]], ["Application protocol", ["service"]]],
   smb_mapping: [["Requested share path", ["path"]], ["Service", ["service"]], ["Share type", ["share_type"]]],
   smb_files: [["Action", ["action"]], ["Share path", ["path"]], ["File name", ["name"]],
     ["Previous name", ["prev_name"]], ["Reported file size", ["size"]], ["File ID", ["fuid"]],
@@ -7081,10 +7080,158 @@ function protocolOutcome(type, flow) {
   return null;
 }
 
+/** Format a packet interval as a duration, never as a calendar timestamp.
+ * @param {number} seconds Nonnegative time between selected packets.
+ * @returns {string} Interval with seconds or millisecond units.
+ */
+function packetGapText(seconds) {
+  if (typeof seconds !== "number" || !Number.isFinite(seconds) || seconds < 0) return "—";
+  if (seconds > 0 && seconds < 0.000001) return "<0.001 ms";
+  const milliseconds = seconds > 0 && seconds < 1;
+  const amount = milliseconds ? seconds * 1000 : seconds;
+  return `${Number(amount.toFixed(3))} ${milliseconds ? "ms" : "s"}`;
+}
+
+/** Read a bounded numeric packet vector without dropping invalid positions.
+ * @param {number[]|string} value JSON array or Zeek comma-separated vector.
+ * @returns {number[]} Finite nonnegative values, or an empty invalid sample.
+ */
+function packetTimingVector(value) {
+  const items = typeof value === "string" ? value.split(",") : value;
+  if (!Array.isArray(items) || !items.length || items.length > 256) return [];
+  if (items.some((item) => !["number", "string"].includes(typeof item) || String(item).trim() === "")) return [];
+  const values = items.map(Number);
+  return values.every((item) => Number.isFinite(item) && item >= 0) ? values : [];
+}
+
+/** Render selected packet gaps and corresponding payloads without a date dump.
+ * @param {object} record Stored packet timing summary, retained intact for JSON.
+ * @returns {HTMLElement} Compact timing metrics and a bounded packet table.
+ */
+function packetTimingFlowCard(record) {
+  const flow = record?.flow && typeof record.flow === "object" ? record.flow : record;
+  const card = document.createElement("section");
+  card.className = "protocol-card protocol-packet_timing";
+  card.append(text("h4", "Packet timing", "packet-timing-title"));
+  const context = document.createElement("div");
+  context.className = "protocol-context";
+  context.append(text("span", `Connection UID: ${flow.uid || "Unknown"}`));
+  const timestamp = flowValue(flow, "starttime", "ts") ?? record.event_time;
+  if (timestamp !== null && timestamp !== undefined) context.append(text("span", "Observed: "), timeValue(timestamp));
+  card.append(context);
+  let times = packetTimingVector(flow.times);
+  if (times.some((value, index) => index && value < times[index - 1])) times = [];
+  const lengths = packetTimingVector(flow.lengths);
+  const gaps = times.slice(1).map((value, index) => value - times[index]);
+  const ordered = [...gaps].sort((a, b) => a - b);
+  const median = ordered.length
+    ? (ordered[Math.floor((ordered.length - 1) / 2)] + ordered[Math.ceil((ordered.length - 1) / 2)]) / 2 : null;
+  const originator = [true, "T", "true", 1].includes(flow.is_orig);
+  const responder = [false, "F", "false", 0].includes(flow.is_orig);
+  const direction = originator ? "Originator → responder" : responder ? "Responder → originator" : "Not supplied";
+  const services = (Array.isArray(flow.service) ? flow.service : String(flow.service || "").split(","))
+    .filter((item) => !["", "-", "(empty)", "none"].includes(String(item).toLowerCase()))
+    .map((item) => String(item).toLowerCase() === "ssl" ? "TLS" : String(item));
+  const metrics = [
+    ["Packet direction", direction],
+    ["Packet kind", {data: "Application data", ack: "TCP ACK", keepalive: "TCP keepalive"}[flow.kind] || flow.kind || "Not supplied"],
+    ["Application protocol", services.length ? services.join(", ") : "Not identified"],
+    ["Packets in this sample", times.length ? String(times.length) : "Unavailable"],
+    ["Median gap", packetGapText(median)],
+    ["Gap range", gaps.length ? `${packetGapText(ordered[0])} – ${packetGapText(ordered.at(-1))}` : "—"],
+  ];
+  const grid = document.createElement("div");
+  grid.className = "protocol-details packet-timing-metrics";
+  metrics.forEach(([label, value]) => {
+    const field = document.createElement("div");
+    field.className = "protocol-field";
+    field.append(text("small", label), text("strong", value));
+    grid.append(field);
+  });
+  card.append(grid);
+  if (!times.length) {
+    card.append(text("p", "No usable ordered packet sample is available; gaps cannot be calculated.", "muted"));
+  } else {
+    const total = Number(flow.event_count);
+    const cumulative = Number.isInteger(total) && total > times.length ? ` · ${total} selected events observed in total` : "";
+    card.append(text("p", `${times.length} selected packets · ${gaps.length} gaps · sample spans ${packetGapText(times.at(-1) - times[0])}${cumulative}.`, "muted packet-timing-caption"));
+    const scroll = document.createElement("div");
+    scroll.className = "packet-gap-scroll";
+    scroll.tabIndex = 0;
+    scroll.setAttribute("role", "region");
+    scroll.setAttribute("aria-label", "Selected packet gaps and payload sizes");
+    const table = document.createElement("table");
+    table.className = "packet-gap-table";
+    const head = document.createElement("thead");
+    const labels = document.createElement("tr");
+    ["#", "Gap from previous", "Payload"].forEach((label) => {
+      const cell = text("th", label); cell.scope = "col"; labels.append(cell);
+    });
+    head.append(labels);
+    const body = document.createElement("tbody");
+    times.forEach((stamp, index) => {
+      const row = document.createElement("tr");
+      const packet = document.createElement("td");
+      packet.append(timeValue(stamp, () => String(index + 1)));
+      const gap = text("td", index ? packetGapText(gaps[index - 1]) : "—");
+      gap.title = index ? `From ${timeTitle(times[index - 1])} to ${timeTitle(stamp)}` : "First selected packet in this sample";
+      const size = lengths.length === times.length ? `${lengths[index]} B` : "—";
+      row.append(packet, gap, text("td", size));
+      body.append(row);
+    });
+    table.append(head, body);
+    scroll.append(table);
+    card.append(scroll, text("p", "Gaps are between selected packets in this direction, not every packet in the connection. Hover a packet number for its full timestamp.", "muted packet-timing-caption"));
+  }
+  card.append(rawBlock(record, "packet timing summary"));
+  return card;
+}
+
+/** Explain the recorded packet decision without refitting or inventing thresholds.
+ * @param {object} record Evidence containing detector statistics from its original run.
+ * @returns {HTMLElement|null} Detection explanation, or null when unavailable.
+ */
+function packetTimingEvidencePanel(record) {
+  if (!["PERIODIC_PACKETS", "SUSPICIOUS_PACKET_HEARTBEAT"].includes(record.evidence_type)) return null;
+  const details = record.detection_details?.packet_timing;
+  if (!details || typeof details.period !== "number" || !Number.isFinite(details.period) || details.period <= 0) return null;
+  const grouped = details.mode === "burst-to-burst";
+  const panel = document.createElement("section");
+  panel.className = "surface packet-timing-decision";
+  panel.append(text("h3", "Why this was flagged"), text("p",
+    record.evidence_type === "SUSPICIOUS_PACKET_HEARTBEAT"
+      ? "Small, similarly sized data packets repeated from the connection originator on an expected TLS port, without an identified application protocol."
+      : grouped ? "Groups of selected packets within one TCP connection followed a repeating schedule."
+        : "Selected packets within one TCP connection followed a repeating schedule."));
+  const facts = [["Fitted interval", packetGapText(details.period)]];
+  const extraFacts = [["Rhythm basis", grouped ? "Between packet groups" : "Between selected packets"]];
+  [["support", "Gaps matching the rhythm"], ["jitter", "Timing variation"],
+    ["uniform_size_fraction", "Packets sharing one payload size"], ["missed", "Gaps spanning multiple cycles"]]
+    .forEach(([key, label]) => {
+      const value = details[key];
+      if (typeof value === "number" && Number.isFinite(value) && value >= 0 && value <= 1) {
+        (key === "support" || key === "jitter" ? facts : extraFacts)
+          .push([label, `${Number((value * 100).toFixed(1))}%`]);
+      }
+    });
+  if (typeof details.sent === "number" && Number.isFinite(details.sent) && details.sent >= 0) extraFacts.push(["Median packet payload", `${details.sent} B`]);
+  panel.append(investigationStats(facts));
+  if (Number.isInteger(details.count) && details.count > 0 && typeof details.span === "number" && Number.isFinite(details.span) && details.span >= 0) {
+    panel.append(text("p", `Decision based on ${details.count} selected packets over ${packetGapText(details.span)}${details.continuation ? "; continuing a previously reported pattern" : ""}.`, "muted"));
+  }
+  const more = document.createElement("details");
+  more.className = "packet-timing-extra";
+  more.append(text("summary", "More detection details"), investigationStats(extraFacts),
+    text("p", `${grouped ? "The rhythm was fitted between packet groups, rather than every adjacent selected packet. " : ""}A matching gap spans one interval or an allowed whole multiple. Timing variation describes matching gaps after accounting for those multiples; it is separate from detection confidence.`, "muted"));
+  panel.append(more);
+  return panel;
+}
+
 /** Render one alternative-flow record as readable protocol activity. */
 function protocolFlowCard(record) {
   const flow = record?.flow && typeof record.flow === "object" ? record.flow : record;
   const type = protocolType(record);
+  if (type === "packet_timing") return packetTimingFlowCard(record);
   const displayType = type === "ssl" ? "TLS" : type.toUpperCase();
   const card = document.createElement("section");
   card.className = "protocol-card protocol-" + type;
@@ -7324,11 +7471,12 @@ function flowCard(group, position = 1, total = 1, title = null) {
   }
   related.forEach((protocol, index) => {
     const type = protocolType(protocol);
-    entries.push([`${arpOnly ? "" : "Related "}${type.toUpperCase()} · ${index + 1}`, () => {
+    entries.push([`${arpOnly ? "" : "Related "}${type === "packet_timing" ? "Packet timing" : type.toUpperCase()} · ${index + 1}`, () => {
       const panel = document.createElement("div");
       const displayed = ["uid", "starttime", "ts", "type", "type_",
         ...(PROTOCOL_FIELDS[type] || []).flatMap(([, names]) => names)];
-      panel.append(protocolFlowCard(protocol), flowFieldList(protocol.flow || protocol, displayed));
+      panel.append(protocolFlowCard(protocol));
+      if (type !== "packet_timing") panel.append(flowFieldList(protocol.flow || protocol, displayed));
       return panel;
     }]);
   });
@@ -7720,6 +7868,8 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   }
   const portScan = ["HORIZONTAL_PORT_SCAN", "VERTICAL_PORT_SCAN"].includes(String(record.evidence_type).toUpperCase());
   if (portScan) flowHeading.querySelector("p").textContent = "Port-scan evidence links at most 20 flows; each includes related protocol records.";
+  const packetDecision = packetTimingEvidencePanel(record);
+  if (packetDecision) flowList.before(packetDecision);
   const arpDecision = record.detection_details?.arp_scan;
   if (arpDecision?.continuation) {
     flowList.before(text("p", `Continuing confirmed ARP scan: approximately ${arpDecision.targets} distinct unfamiliar targets over ${Number(arpDecision.window_seconds).toFixed(1)} seconds. Familiar neighbours are excluded. Only representative requests are linked; repeats do not increase the target estimate.`, "muted"));

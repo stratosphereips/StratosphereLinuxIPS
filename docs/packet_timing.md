@@ -115,6 +115,29 @@ one immediately. Continuing reports use the parent beaconing
 An already reported stronger finding suppresses subsequent informational
 downgrades for that same connection and packet category.
 
+## Inspecting packet timing in the web
+
+The related **Packet timing** tab shows gaps between consecutive selected packets,
+in seconds or milliseconds. The table pairs each gap with that packet's payload
+length. The first selected packet has no previous gap. Hover a packet number to
+see its full timestamp; original timestamps also remain in the expandable JSON.
+The summary shows the direction, application protocol, sample size, median gap
+and gap range. The sample count is separate from the cumulative selected-event
+count when the collector has observed a longer connection.
+
+These are selected data, ACK or keepalive packets in one direction. They are not
+all TCP packets. Invalid or out-of-order samples are not sorted or filtered into
+an artificial rhythm; the web reports that their gaps cannot be calculated.
+
+Packet evidence also has a **Why this was flagged** panel when its saved detector
+statistics are available. It shows the fitted repetition interval, matching-gap
+percentage and timing variation. **More detection details** adds payload-size
+agreement, median payload and whether the rhythm was fitted between packets or
+between packet groups. A gap
+can match an interval or an allowed whole multiple of it; timing variation is
+separate from detection confidence. The panel uses the original recorded result,
+not the current configuration or a new browser-side detection decision.
+
 ## Bounded work and storage
 
 `zeek-scripts/packet-timing.zeek` does constant-size bookkeeping per TCP packet

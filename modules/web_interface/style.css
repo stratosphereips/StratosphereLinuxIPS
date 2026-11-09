@@ -513,6 +513,27 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .protocol-field.important strong { color: var(--accent); font-size: .82rem; }
 .protocol-field > .ip-link { display: block; margin-top: .24rem; }
 .protocol-field.important > .ip-link { color: var(--accent); font-size: .82rem; }
+.packet-timing-title { margin: 0; font-size: .86rem; }
+.protocol-packet_timing { container-type: inline-size; container-name: packet-timing; }
+.packet-timing-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container packet-timing (max-width: 420px) { .packet-timing-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.packet-timing-caption { margin: .65rem 0; font-size: .72rem; line-height: 1.45; }
+.packet-gap-scroll { max-height: 24rem; overflow: auto; border: 1px solid var(--line); border-radius: 6px; }
+.packet-gap-table { width: 100%; min-width: 0; table-layout: fixed; font-size: .73rem; }
+.packet-gap-table th { position: sticky; top: 0; z-index: 1; background: var(--surface-2); color: var(--muted); font-size: .63rem; }
+.packet-gap-table th, .packet-gap-table td { padding: .45rem .6rem; overflow-wrap: anywhere; }
+.packet-gap-table th:first-child { width: 3.25rem; }
+.packet-gap-table td { font-variant-numeric: tabular-nums; }
+.packet-gap-table td:nth-child(2) { color: var(--accent); font-weight: 700; }
+.packet-timing-decision { margin: .65rem 0; padding: .75rem; }
+.packet-timing-decision h3 { margin: 0; font-size: .84rem; }
+.packet-timing-decision p { margin: .55rem 0 0; font-size: .74rem; line-height: 1.45; }
+.packet-timing-decision .investigation-summary { grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr)); gap: .4rem; margin: .65rem 0; }
+.packet-timing-decision .investigation-stat { padding: .5rem .6rem; }
+.packet-timing-decision .investigation-stat small { font-size: .61rem; }
+.packet-timing-decision .investigation-stat strong { font-size: .8rem; }
+.packet-timing-extra { margin-top: .65rem; }
+.packet-timing-extra summary { color: var(--blue); cursor: pointer; font-size: .73rem; }
 .json-details { margin-top: .75rem; border-top: 1px solid var(--line); }
 .json-details > summary { padding: .75rem 0 .15rem; color: var(--blue); font-size: .75rem; cursor: pointer; }
 .json-details > summary:hover { color: var(--accent); }
