@@ -394,7 +394,6 @@ def test_clear_redis_cache_database(mock_db):
             host="localhost",
             port=6379,
             db=1,
-            charset="utf-8",
             decode_responses=True,
             password=ANY,
         )
