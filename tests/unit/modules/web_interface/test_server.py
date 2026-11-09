@@ -9317,15 +9317,17 @@ def test_packet_evidence_resolves_flow_that_arrives_after_detection(tmp_path: Pa
     db.close()
 
 
-@pytest.mark.parametrize("kind,value,normalized,category,attribute", [
-    ("domain", "ICANHAZIP.com.", "icanhazip.com", "domains", "whitelisted_domains"),
-    ("domain", "api.example.com", "api.example.com", "domains", "whitelisted_domains"),
-    ("mac", "AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff", "macs", "whitelisted_mac"),
-    ("organization", "Google", "google", "organizations", "whitelisted_orgs"),
+@pytest.mark.parametrize("kind,value,normalized,category,attribute,scope", [
+    ("domain", "ICANHAZIP.com.", "icanhazip.com", "domains", "whitelisted_domains", ""),
+    ("domain", "api.example.com", "api.example.com", "domains", "whitelisted_domains", ""),
+    ("domain", "ICANHAZIP.com.", "icanhazip.com", "domains", "whitelisted_domains", "HTTP_TRAFFIC"),
+    ("domain", "api.example.com", "api.example.com", "domains", "whitelisted_domains", "ANOMALOUS_FLOW"),
+    ("mac", "AA:BB:CC:DD:EE:FF", "aa:bb:cc:dd:ee:ff", "macs", "whitelisted_mac", ""),
+    ("organization", "Google", "google", "organizations", "whitelisted_orgs", ""),
 ])
 def test_web_named_whitelist_rules_survive_reload_and_removal(
     tmp_path: Path, kind: str, value: str, normalized: str,
-    category: str, attribute: str,
+    category: str, attribute: str, scope: str,
 ) -> None:
     """Round-trip non-IP rules through file, parser, runtime list and deletion.
 
@@ -9336,6 +9338,7 @@ def test_web_named_whitelist_rules_survive_reload_and_removal(
         normalized: Saved canonical value.
         category: Redis whitelist category.
         attribute: Parser rule dictionary.
+        scope: Optional evidence type saved with the rule.
     """
     factory = ModuleFactory()
     metadata = tmp_path / "metadata"
@@ -9351,25 +9354,28 @@ def test_web_named_whitelist_rules_survive_reload_and_removal(
     reader.redis = Mock()
     reader.redis.hexists.return_value = False
     reader.response_metadata = Mock(return_value={"backend_status": {"connected": True}})
-    saved = reader.save_whitelist_rule("add", value, "dst", "alerts", rule_type=kind)
+    saved = reader.save_whitelist_rule("add", value, "dst", "alerts", scope, rule_type=kind)
     assert saved["value"] == normalized
-    assert f"{kind},{normalized},dst,alerts\n" in path.read_text()
+    suffix = f",{scope}" if scope else ""
+    key = f"{normalized}|{scope}" if scope else normalized
+    details = {"from": "dst", "what_to_ignore": "alerts", **({"evidence_type": scope} if scope else {})}
+    assert f"{kind},{normalized},dst,alerts{suffix}\n" in path.read_text()
     whitelist = factory.create_whitelist_obj()
     whitelist.parser.local_whitelist_path = str(path)
     whitelist.parser.parse()
     assert getattr(whitelist.parser, attribute) == {
-        normalized: {"from": "dst", "what_to_ignore": "alerts"}
+        key: details
     }
     serialized = reader.redis.hset.call_args.args[2]
-    reader.redis.hgetall.side_effect = lambda key: (
-        {normalized: serialized} if key == f"whitelist_{category}" else {}
+    reader.redis.hgetall.side_effect = lambda redis_key: (
+        {key: serialized} if redis_key == f"whitelist_{category}" else {}
     )
     rules = reader._runtime_whitelist_rules()
     assert len(rules) == 1
     assert rules[0]["rule_type"] == kind
     assert rules[0]["managed"] is True
-    reader.save_whitelist_rule("remove", normalized, "dst", "alerts", rule_type=kind)
-    reader.redis.hdel.assert_called_once_with(f"whitelist_{category}", normalized)
+    reader.save_whitelist_rule("remove", normalized, "dst", "alerts", scope, rule_type=kind)
+    reader.redis.hdel.assert_called_once_with(f"whitelist_{category}", key)
     assert f"{kind},{normalized}," not in path.read_text()
 
 
@@ -9379,7 +9385,7 @@ def test_web_named_whitelist_rules_survive_reload_and_removal(
     ("domain", "icanhazip.com:80", {}),
     ("domain", "icanhazip.com,src,flows", {}),
     ("domain", "icanhazip.com\nip,192.0.2.1,both,flows", {}),
-    ("domain", "icanhazip.com", {"evidence_type": "HTTP_TRAFFIC"}),
+    ("domain", "icanhazip.com", {"evidence_type": "NOT_A_DETECTION"}),
     ("domain", "icanhazip.com", {"dst_port": 80}),
     ("organization", "cloudflare", {}),
     ("mac", "not-a-mac", {}),

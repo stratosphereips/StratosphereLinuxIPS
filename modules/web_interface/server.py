@@ -1041,8 +1041,10 @@ class RunDataReader:
             or rule_type not in WHITELIST_RULE_TYPES
         ):
             raise ValueError("Choose a supported whitelist rule type")
-        if evidence_type and rule_type != "ip":
-            raise ValueError("Evidence type conditions require an IP rule")
+        if evidence_type and rule_type not in {"ip", "domain"}:
+            raise ValueError(
+                "Evidence type conditions require an IP or domain rule"
+            )
         if dst_port not in (None, "") and rule_type != "ip":
             raise ValueError("Destination-port conditions require an IP rule")
         if rule_type == "uri" and (
@@ -1269,7 +1271,9 @@ class RunDataReader:
                     (role, "IP address", str(value), direction, port)
                 )
             if value and indicator == "DOMAIN":
-                candidates.append((role, "Domain", str(value), "dst", None))
+                candidates.append(
+                    (role, "Domain", str(value), direction, None)
+                )
             for ip in entity.get("DNS_resolution") or []:
                 candidates.append(
                     (role, "IP address", str(ip), direction, None)
@@ -1279,7 +1283,9 @@ class RunDataReader:
             if entity.get("SNI"):
                 domains.append(entity["SNI"])
             for domain in domains:
-                candidates.append((role, "Domain", str(domain), "dst", None))
+                candidates.append(
+                    (role, "Domain", str(domain), direction, None)
+                )
         matches = []
         seen = set()
         for role, type_name, value, direction, port in candidates:

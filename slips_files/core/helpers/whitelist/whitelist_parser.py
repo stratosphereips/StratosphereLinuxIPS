@@ -259,6 +259,11 @@ class WhitelistParser:
         except KeyError:
             return False
         key = entry_to_remove["data"]
+        if entry_to_remove.get("type") == "domain":
+            try:
+                key = normalize_whitelist_domain(key)
+            except ValueError:
+                return False
         if entry_to_remove.get("type") == "ip":
             try:
                 source, port = split_ip_destination_port(key)
@@ -266,8 +271,8 @@ class WhitelistParser:
                 return False
             if port:
                 key = format_ip_destination_port(source, port)
-            if entry_to_remove.get("evidence_type"):
-                key += f"|{entry_to_remove['evidence_type']}"
+        if entry_to_remove.get("evidence_type"):
+            key += f"|{entry_to_remove['evidence_type']}"
         if key not in cache:
             return False
 
@@ -294,7 +299,12 @@ class WhitelistParser:
             domain = normalize_whitelist_domain(domain)
         except ValueError:
             return
-        self.whitelisted_domains[domain] = info
+        key = (
+            f"{domain}|{info['evidence_type']}"
+            if info.get("evidence_type")
+            else domain
+        )
+        self.whitelisted_domains[key] = info
 
     def update_whitelisted_orgs(self, org: str, info: Dict[str, str]):
         if org not in utils.supported_orgs:
@@ -464,7 +474,7 @@ class WhitelistParser:
         evidence_type = parsed_line.get("evidence_type", "")
         if evidence_type:
             if (
-                entry_type != "ip"
+                entry_type not in {"ip", "domain"}
                 or evidence_type not in EvidenceType.__members__
                 or entry_details["what_to_ignore"] != "alerts"
             ):

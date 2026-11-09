@@ -73,7 +73,11 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         return observed or self.get_domains_of_ip(flow.daddr)
 
     def is_whitelisted(
-        self, domain: str, direction: Direction, should_ignore: str
+        self,
+        domain: str,
+        direction: Direction,
+        should_ignore: str,
+        evidence_type: str | None = None,
     ) -> bool:
         """
         Checks the whitelisted domains and tranco whitelisted domains for
@@ -81,6 +85,7 @@ class DomainAnalyzer(IWhitelistAnalyzer):
         :param domain: domain to check if whitelisted
         :param direction: is the given domain src or dst domain?
         :param should_ignore: which whitelist to check? can be flows or alerts
+        :param evidence_type: Optional detection type for alert-only rules.
         """
         # the reason why this function doesnt support the Attacker or
         # Victim as a parameter directly is that we may call it on other
@@ -101,21 +106,32 @@ class DomainAnalyzer(IWhitelistAnalyzer):
             labels = domain.split(".")
             for index in range(len(labels) - 1):
                 candidate = ".".join(labels[index:])
-                if candidate not in self.manager.bloom_filters.domains:
+                types = (
+                    ("TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN")
+                    if evidence_type
+                    in {"TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"}
+                    else (evidence_type,)
+                )
+                keys = [candidate]
+                if evidence_type and should_ignore == "alerts":
+                    keys = [f"{candidate}|{kind}" for kind in types] + keys
+                for key in keys:
+                    if key not in self.manager.bloom_filters.domains:
+                        self.bf_hits += 1
+                        if not evidence_type:
+                            continue
+                    info = self.db.is_whitelisted(key, "domains")
+                    if not info:
+                        self.bf_misses += 1
+                        continue
                     self.bf_hits += 1
-                    continue
-                info = self.db.is_whitelisted(candidate, "domains")
-                if not info:
-                    self.bf_misses += 1
-                    continue
-                self.bf_hits += 1
-                rule = json.loads(info)
-                if self.match.direction(direction, rule["from"]) and (
-                    self.match.what_to_ignore(
-                        should_ignore, rule["what_to_ignore"]
-                    )
-                ):
-                    return True
+                    rule = json.loads(info)
+                    if self.match.direction(direction, rule["from"]) and (
+                        self.match.what_to_ignore(
+                            should_ignore, rule["what_to_ignore"]
+                        )
+                    ):
+                        return True
 
         parent_domain = utils.extract_hostname(domain)
         return bool(

@@ -1202,6 +1202,10 @@ IP:port pairs, and `*:port` rules from the evidence and linked flows. It also
 offers HTTP Host, TLS server name, DNS names and observed MAC addresses.
 For example, click **icanhazip.com** to select **Domain / HTTP host** with
 **Destination** and **Future evidence and alerts**. This keeps the flow visible.
+Switching between IP and domain rules preserves the selected **Evidence type**.
+Quick suggestions reserve space for observed source and destination IPs, so
+domain names cannot push those addresses out of the visible chips. Up to eight
+chips are shown; all observed choices remain available in the value field.
 Domain rules cover the entered name and its subdomains, not its parent or
 siblings; `api.example.com` does not exempt `other.example.com`. Observed HTTP
 hosts remain attached to HTTP traffic evidence even without a captured DNS lookup.
@@ -1214,14 +1218,16 @@ destination side carefully. Rules can suppress future evidence and alerts
 record. All five existing rule kinds are available: **IP or port**,
 **Domain / HTTP host**, **Organization**, **MAC address**, and **Request URI**.
 Organizations are limited to the engine's supported names shown in the editor.
-Evidence-type and destination-port conditions apply only to IP rules; domain,
-organization and MAC rules cover all evidence types. Blocking-only rules require
+Evidence-type conditions apply to IP and domain rules. Destination-port
+conditions apply only to IP rules. Organization and MAC rules cover all
+evidence types. Blocking-only rules require
 an individual IP. New rules become active in running workers within a few seconds;
 worker-local filters refresh at most once every two seconds.
 Web-added rules of every kind appear in the Whitelists table with a **Remove**
 action.
-Choose an **Evidence type** to limit an IP rule to one detection, for example
-`192.168.1.10` as source of `ARP_SCAN` evidence. These scoped rules suppress
+Choose an **Evidence type** to limit an IP or domain rule to one detection, for example
+`192.168.1.10` as source of `ARP_SCAN` evidence, or `ab.chatgpt.com` as the
+destination of `HTTP_TRAFFIC` evidence. These scoped rules suppress
 only that evidence type; they do not hide its flows or other detections.
 
 To combine a source IP, destination port and evidence type, enter the source IP
@@ -1309,8 +1315,9 @@ rule keeps evidence eligible for scoring and alerts. Saving
 changes requires enabled local whitelisting and an active
 Slips run. Remote browser connections must use the password-protected web
 interface; an unprotected web interface accepts these changes only locally.
-The optional fifth column in a local IP whitelist line is the canonical
-evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN`.
+The optional fifth column in a local IP or domain whitelist line is the canonical
+evidence type, for example `ip,192.168.1.10,src,alerts,ARP_SCAN` or
+`domain,ab.chatgpt.com,dst,alerts,HTTP_TRAFFIC`.
 
 The Evidence **Severity** dropdown defaults to **All**, followed by
 **Critical+**, **High+**, **Medium+**,

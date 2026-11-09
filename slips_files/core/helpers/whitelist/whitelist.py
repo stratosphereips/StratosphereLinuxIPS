@@ -350,7 +350,10 @@ class Whitelist:
 
         for domain in self.extract_domains_from_entity(entity):
             if self.domain_analyzer.is_whitelisted(
-                domain, entity.direction, what_to_ignore
+                domain,
+                entity.direction,
+                what_to_ignore,
+                evidence.evidence_type.name,
             ):
                 return True
 

@@ -4544,7 +4544,8 @@ function whitelistSuggestions(record, groups = []) {
     }
     choices.set(key, {
       direction: existing && existing.direction !== direction ? "both" : direction,
-      label: label === "HTTP host" ? label : existing?.label || label,
+      label: label === "HTTP host" || existing?.label.startsWith("Resolved evidence")
+        ? label : existing?.label || label,
       ruleType,
     });
   };
@@ -4588,6 +4589,9 @@ function whitelistSuggestions(record, groups = []) {
     if (String(entity.ioc_type || "").toUpperCase() === "DOMAIN") {
       addDomain(entity.value, direction, "Evidence domain");
     }
+    (Array.isArray(entity.DNS_resolution) ? entity.DNS_resolution : []).forEach((ip) => {
+      if (peerAddress(ip)) addSide(ip, null, direction, "Resolved evidence");
+    });
     [...(entity.queries || []), ...(entity.CNAME || []), entity.SNI, entity.rDNS]
       .forEach((domain) => addDomain(domain, direction, "Observed domain"));
     if (String(entity.ioc_type || "").toUpperCase() !== "IP") continue;
@@ -4652,7 +4656,17 @@ function updateWhitelistSuggestions(editor, record, groups = []) {
             : choice.label.includes("IP and port") ? 5 : 6;
     return rank(leftValue, left) - rank(rightValue, right);
   });
-  ranked.slice(0, 5).forEach(([suggestion]) => {
+  const domains = ranked.filter(([, choice]) => choice.ruleType === "domain");
+  const addresses = ranked.filter(([value, choice]) => choice.ruleType === "ip" && peerAddress(value))
+    .sort(([, left], [, right]) => Number(left.label.startsWith("Resolved evidence"))
+      - Number(right.label.startsWith("Resolved evidence")));
+  const endpoints = ranked.filter(([, choice]) => choice.label.includes("IP and port"));
+  const paths = ranked.filter(([, choice]) => choice.ruleType === "uri");
+  const quickChoices = new Map([
+    ...domains.slice(0, 1), ...addresses.slice(0, 4),
+    ...endpoints.slice(0, 1), ...paths.slice(0, 1), ...ranked,
+  ]);
+  [...quickChoices.keys()].slice(0, 8).forEach((suggestion) => {
     const chip = text("button", suggestion, "whitelist-quick-value");
     chip.type = "button";
     chip.title = choices.get(suggestion).label;
@@ -4775,7 +4789,7 @@ function whitelistEditor(kind, record = null, host = null) {
       evidenceType.value = "";
     }
     direction.disabled = blocking;
-    evidenceType.disabled = blocking || ruleType.value !== "ip";
+    evidenceType.disabled = blocking || !["ip", "domain"].includes(ruleType.value);
     if (ignored.value !== "alerts") dstPort.value = "";
     if (ruleType.value === "ip") {
       value.placeholder = blocking ? "192.168.1.10" : "192.168.1.10:443 or *:443";
@@ -4787,12 +4801,13 @@ function whitelistEditor(kind, record = null, host = null) {
     const type = ruleType.value;
     const uri = type === "uri";
     const ip = type === "ip";
+    const scoped = ip || type === "domain";
     allAddresses.disabled = !ip;
     if (!ip) {
       allAddresses.checked = false;
       value.disabled = false;
       dstPort.value = "";
-      evidenceType.value = "";
+      if (!scoped) evidenceType.value = "";
       if (ignored.value === "blocking") ignored.value = "alerts";
     }
     const labels = {ip: "IP or port", domain: "Domain / HTTP host", organization: "Organization",
@@ -4805,8 +4820,8 @@ function whitelistEditor(kind, record = null, host = null) {
     value.placeholder = placeholders[type];
     directionLabel.hidden = uri;
     ignoreLabel.hidden = uri;
-    typeLabel.hidden = !ip;
-    evidenceType.disabled = !ip;
+    typeLabel.hidden = !scoped;
+    evidenceType.disabled = !scoped;
     ignored.disabled = Boolean(evidenceType.value);
     ignored.querySelector('option[value="blocking"]').disabled = !ip;
     if (uri) {
@@ -4820,7 +4835,7 @@ function whitelistEditor(kind, record = null, host = null) {
     }
     const hints = {
       ip: "",
-      domain: "Matches this host and its subdomains, including HTTP Host, TLS server name and DNS names. Enter a name without a scheme, port or path. Applies to all evidence types.",
+      domain: "Matches this host and its subdomains, including HTTP Host, TLS server name and DNS names. Enter a name without a scheme, port or path. Evidence type limits which findings this rule suppresses.",
       organization: "Supported organizations: " + placeholders.organization + ". Matches known organization IPs and domains, for all evidence types.",
       mac: "Matches this device address on the selected side, for all evidence types.",
       uri: "Exact request path and query, across ALL hosts and ports. Matching future HTTP records and their detections are suppressed. To allow one host, choose Domain / HTTP host.",

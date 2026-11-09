@@ -1626,6 +1626,101 @@ def test_domain_host_rule_does_not_whitelist_parent_or_siblings(
     assert not analyzer.is_whitelisted(domain, Direction.DST, "flows")
 
 
+@pytest.mark.parametrize("domain,direction,kind,ignored,expected", [
+    ("AB.CHATGPT.COM:443", Direction.DST, "HTTP_TRAFFIC", "alerts", True),
+    ("child.ab.chatgpt.com", Direction.DST, "HTTP_TRAFFIC", "alerts", True),
+    ("chatgpt.com", Direction.DST, "HTTP_TRAFFIC", "alerts", False),
+    ("other.chatgpt.com", Direction.DST, "HTTP_TRAFFIC", "alerts", False),
+    ("ab.chatgpt.com.evil.test", Direction.DST, "HTTP_TRAFFIC", "alerts", False),
+    ("ab.chatgpt.com", Direction.SRC, "HTTP_TRAFFIC", "alerts", False),
+    ("ab.chatgpt.com", Direction.DST, "UNKNOWN_PORT", "alerts", False),
+    ("ab.chatgpt.com", Direction.DST, None, "alerts", False),
+    ("ab.chatgpt.com", Direction.DST, "HTTP_TRAFFIC", "flows", False),
+])
+def test_domain_evidence_scope_matches_only_selected_detection(
+    tmp_path: Path, domain: str, direction: Direction, kind: str | None,
+    ignored: str, expected: bool,
+) -> None:
+    """Retain unrelated detections and flows while matching scoped host names.
+
+    Parameters:
+        tmp_path: Isolated local rules.
+        domain: Observed host name, including normalization and boundary cases.
+        direction: Observed side of the evidence.
+        kind: Detection type, absent when checking general flow activity.
+        ignored: Whether this call checks evidence or raw flows.
+        expected: Whether the scoped rule matches.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    path = tmp_path / "whitelist.conf"
+    path.write_text("domain,ab.chatgpt.com,dst,alerts,HTTP_TRAFFIC\n")
+    whitelist.parser.local_whitelist_path = str(path)
+    assert whitelist.parser.parse()
+    rules = whitelist.parser.whitelisted_domains
+    assert set(rules) == {"ab.chatgpt.com|HTTP_TRAFFIC"}
+    whitelist.db.is_whitelisted.side_effect = lambda key, category: (
+        json.dumps(rules[key]) if category == "domains" and key in rules else None
+    )
+    whitelist.bloom_filters.domains = set()
+    analyzer = whitelist.domain_analyzer
+    analyzer.enable_local_whitelist = True
+    analyzer.enable_online_whitelist = False
+    assert analyzer.is_whitelisted(domain, direction, ignored, kind) is expected
+
+
+@pytest.mark.parametrize("kind,expected", [
+    (EvidenceType.HTTP_TRAFFIC, True),
+    (EvidenceType.UNKNOWN_PORT, False),
+])
+def test_evidence_passes_its_detection_type_to_domain_matching(
+    kind: EvidenceType, expected: bool,
+) -> None:
+    """Apply domain scope in the real evidence whitelist decision.
+
+    Parameters:
+        kind: Type of the finding about the same destination.
+        expected: Whether the configured HTTP-only exception applies.
+    """
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist.ip_analyzer.enable_local_whitelist = False
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(return_value=False)
+    whitelist.org_analyzer.is_whitelisted_entity = Mock(return_value=False)
+    analyzer = whitelist.domain_analyzer
+    analyzer.enable_local_whitelist = True
+    analyzer.enable_online_whitelist = False
+    whitelist.bloom_filters.domains = {"ab.chatgpt.com|HTTP_TRAFFIC"}
+    whitelist.db.is_whitelisted.side_effect = lambda key, category: (
+        json.dumps({"from": "dst", "what_to_ignore": "alerts", "evidence_type": "HTTP_TRAFFIC"})
+        if category == "domains" and key == "ab.chatgpt.com|HTTP_TRAFFIC" else None
+    )
+    evidence = Mock(
+        evidence_type=kind,
+        attacker=Attacker(ioc_type=IoCType.IP, value="192.0.2.1", direction=Direction.SRC),
+        victim=Victim(ioc_type=IoCType.DOMAIN, value="ab.chatgpt.com", direction=Direction.DST),
+        src_port=59481, dst_port=443, proto="tcp",
+    )
+    assert whitelist.is_whitelisted_evidence(evidence) is expected
+
+
+def test_domain_comments_remove_only_the_requested_evidence_scope(tmp_path: Path) -> None:
+    """Keep independent detection-specific host rules through a parser reload.
+
+    Parameters:
+        tmp_path: Isolated rule file with a commented scoped exception.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    path = tmp_path / "whitelist.conf"
+    path.write_text(
+        "domain,ab.chatgpt.com,dst,alerts,HTTP_TRAFFIC\n"
+        "domain,ab.chatgpt.com,dst,alerts,UNKNOWN_PORT\n"
+        "#domain,AB.CHATGPT.COM.,dst,alerts,HTTP_TRAFFIC\n"
+    )
+    whitelist.parser.local_whitelist_path = str(path)
+    assert whitelist.parser.parse()
+    assert set(whitelist.parser.whitelisted_domains) == {"ab.chatgpt.com|UNKNOWN_PORT"}
+
+
 @pytest.mark.parametrize("kind,analyzer_name,filter_name,value", [
     ("domains", "domain_analyzer", "domains", "icanhazip.com"),
     ("macs", "mac_analyzer", "mac_addrs", "aa:bb:cc:dd:ee:ff"),

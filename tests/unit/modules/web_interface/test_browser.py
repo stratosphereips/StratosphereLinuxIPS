@@ -5734,8 +5734,10 @@ def test_http_host_and_all_whitelist_kinds_in_chrome(theme: str, width: int) -> 
             window.whitelistChanges = [];
             saveWhitelistRule = async change => {window.whitelistChanges.push(change); return change;};
             const record = {evidence_type:'HTTP_TRAFFIC', profile_ip:'192.168.1.100',
-                attacker:{ioc_type:'IP',value:'192.168.1.100',direction:'SRC'},
-                victim:{ioc_type:'IP',value:'104.16.184.241',direction:'DST'}};
+                attacker:{ioc_type:'IP',value:'192.168.1.100',direction:'SRC',
+                    queries:['chatgpt.com','ab.chatgpt.com','codex-cloud-backend.chatgpt.com']},
+                victim:{ioc_type:'IP',value:'104.16.184.241',direction:'DST',
+                    DNS_resolution:['192.0.2.1','192.0.2.2','192.0.2.3','192.0.2.4','192.0.2.5']}};
             const editor = whitelistEditor('host-test',record); editor.id = 'host-test';
             editor.style.width = '420px'; editor.style.maxWidth = '100%';
             const side = document.createElement('div'); side.className = 'evidence-detail-side';
@@ -5757,8 +5759,26 @@ def test_http_host_and_all_whitelist_kinds_in_chrome(theme: str, width: int) -> 
         assert selects.nth(0).input_value() == "domain"
         assert selects.nth(1).input_value() == "dst"
         assert selects.nth(2).input_value() == "alerts"
-        assert selects.nth(3).input_value() == ""
-        assert not selects.nth(3).is_visible()
+        assert selects.nth(3).input_value() == "HTTP_TRAFFIC"
+        assert selects.nth(3).is_visible()
+        assert not selects.nth(3).is_disabled()
+        for address in ("192.168.1.100", "104.16.184.241"):
+            assert editor.get_by_role("button", name=address, exact=True).is_visible()
+        assert editor.locator(".whitelist-quick-value").count() <= 8
+        editor.get_by_role("button", name="192.168.1.100", exact=True).click()
+        assert selects.nth(0).input_value() == "ip"
+        assert selects.nth(3).input_value() == "HTTP_TRAFFIC"
+        editor.get_by_role("button", name="icanhazip.com", exact=True).click()
+        assert selects.nth(0).input_value() == "domain"
+        assert selects.nth(3).input_value() == "HTTP_TRAFFIC"
+        selects.nth(3).select_option("")
+        assert not selects.nth(2).is_disabled()
+        selects.nth(3).select_option("HTTP_TRAFFIC")
+        assert selects.nth(2).is_disabled()
+        assert page.evaluate("""() => [...whitelistSuggestions({
+            victim:{ioc_type:'DOMAIN',value:'ab.chatgpt.com',direction:'DST',
+                DNS_resolution:['104.18.32.7','2001:db8::7']}
+        }).keys()].filter(value => peerAddress(value))""") == ["104.18.32.7", "2001:db8::7"]
         assert port.input_value() == "" and not port.is_visible()
         assert "subdomains" in editor.locator(".whitelist-rule-hint").inner_text()
         assert editor.evaluate("section => section.scrollWidth <= section.clientWidth")
@@ -5773,7 +5793,7 @@ def test_http_host_and_all_whitelist_kinds_in_chrome(theme: str, width: int) -> 
         page.wait_for_function("() => window.whitelistChanges.length === 1")
         assert page.evaluate("window.whitelistChanges[0]") == {
             "action":"add", "rule_type":"domain", "value":"icanhazip.com",
-            "direction":"dst", "ignore":"alerts", "evidence_type":"",
+            "direction":"dst", "ignore":"alerts", "evidence_type":"HTTP_TRAFFIC",
         }
         for index, (kind, value, label) in enumerate([
             ("organization", "google", "Organization"),
