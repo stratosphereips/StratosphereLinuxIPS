@@ -20,6 +20,43 @@ from tests.module_factory import ModuleFactory
 from slips_files.common.sqlite_flock import SQLiteFlock
 
 
+@pytest.mark.parametrize("interface", ["en0", "wlan0", "default", "", None])
+def test_flow_interfaces_rebuild_once_and_expire_with_flows(
+    tmp_path: Path, interface: str | None,
+) -> None:
+    """Upgrade a populated history in bounded batches and remove stale metadata.
+
+    Parameters:
+        tmp_path: Isolated capture output.
+        interface: Captured interface, including legacy untagged values.
+    """
+    _factory = ModuleFactory()
+    output = tmp_path / "run"
+    history = output / "web_interface" / "history.sqlite"
+    source = output / "databases" / "flows.sqlite"
+    create_flow_database(source)
+    with sqlite3.connect(source) as connection:
+        connection.execute("INSERT INTO flows VALUES ('saved',?,'benign')",
+                           (json.dumps({"starttime": 100, "saddr": "10.0.0.1", "interface": interface}),))
+    collector = HistoryCollector(str(output), history, Mock(), 999999)
+    assert collector.index_new_flows() == 1
+    with connect_history(history) as connection:
+        connection.execute("DROP TABLE flow_interfaces")
+    initialize_history(history)
+    assert collector.index_new_flows() == 1
+    initialize_history(history)
+    assert collector.index_new_flows() == 0
+    with connect_history(history, read_only=True) as connection:
+        assert connection.execute("SELECT interface FROM flow_interfaces").fetchone()[0] == (
+            "" if interface in {None, "default"} else interface
+        )
+    with sqlite3.connect(source) as connection:
+        connection.execute("DELETE FROM flows")
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history, read_only=True) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM flow_interfaces").fetchone()[0] == 0
+
+
 @pytest.mark.parametrize(
     "states,expected",
     [

@@ -189,8 +189,21 @@ def initialize_history(path: Path) -> None:
         "ON runtime_metrics_1m(bucket_ts)",
     )
     with connect_history(path) as connection:
+        indexed_interfaces = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='flow_interfaces'"
+        ).fetchone()
         for statement in statements:
             connection.execute(statement)
+        connection.executescript(
+            "CREATE TABLE IF NOT EXISTS flow_interfaces(uid TEXT PRIMARY KEY,interface TEXT NOT NULL);"
+            "CREATE TRIGGER IF NOT EXISTS flow_interface_cleanup AFTER DELETE ON flow_index "
+            "BEGIN DELETE FROM flow_interfaces WHERE uid=OLD.uid; END;"
+        )
+        if not indexed_interfaces:
+            connection.executemany(
+                "INSERT OR REPLACE INTO metadata(key,value) VALUES (?,?)",
+                [("flow_last_rowid", "0"), ("flow_last_uid", "")],
+            )
         metric_columns = {
             str(row["name"])
             for row in connection.execute(
@@ -425,6 +438,7 @@ class HistoryCollector:
             except sqlite3.Error:
                 return 0
             indexed: List[tuple[Any, ...]] = []
+            interfaces: List[tuple[str, str]] = []
             for row in rows:
                 try:
                     flow = json.loads(row["flow"])
@@ -445,6 +459,16 @@ class HistoryCollector:
                         str(row["label"] or ""),
                     )
                 )
+                interfaces.append(
+                    (
+                        str(row["uid"]),
+                        (
+                            ""
+                            if flow.get("interface") == "default"
+                            else str(flow.get("interface") or "")
+                        ),
+                    )
+                )
             if indexed:
                 history.executemany(
                     "INSERT OR REPLACE INTO flow_index "
@@ -452,6 +476,10 @@ class HistoryCollector:
                     "app_proto, bytes, packets, source_packets, label) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     indexed,
+                )
+                history.executemany(
+                    "INSERT OR REPLACE INTO flow_interfaces(uid,interface) VALUES (?,?)",
+                    interfaces,
                 )
                 origins = {}
                 for _, _, stamp, source_ip, *_ in indexed:

@@ -1678,6 +1678,31 @@ def test_json_response_ignores_client_disconnect(
     handler.send_response.assert_called_once_with(200)
 
 
+def test_api_response_exposes_request_duration(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Expose server latency in JSON response headers and the access log.
+
+    Parameters:
+        monkeypatch: Fix the elapsed clock.
+        capsys: Capture the ordinary access log.
+    """
+    _factory = ModuleFactory()
+    handler = RequestHandler.__new__(RequestHandler)
+    handler._request_started_at = 10.0
+    handler.send_response = Mock()
+    handler.send_header = Mock()
+    handler.end_headers = Mock()
+    handler.wfile = BytesIO()
+    handler.address_string = Mock(return_value="127.0.0.1")
+    handler.log_date_time_string = Mock(return_value="now")
+    monkeypatch.setattr("modules.web_interface.server.time.monotonic", lambda: 10.25)
+    handler._send_json({"items": []})
+    handler.send_header.assert_any_call("Server-Timing", "app;dur=250.0")
+    handler.log_message("%s %s", "GET /api/evidence", "200")
+    assert "GET /api/evidence 200 · 0.250s" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize(
     "value, expected",
     [

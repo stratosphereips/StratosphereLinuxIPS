@@ -3647,7 +3647,15 @@ class RunDataReader:
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            full_total = detection_total(connection, "evidence")
+            full_total = (
+                int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM scope_evidence_ids"
+                    ).fetchone()[0]
+                )
+                if scope
+                else detection_total(connection, "evidence")
+            )
             clauses = ["1 = 1"]
             params: List[Any] = []
             review_status = self._query_value(query, "review", "all")
@@ -6332,12 +6340,23 @@ class RunDataReader:
         Returns:
             SQL activity timestamp for a host_snapshots row aliased as hs.
         """
+        scope = getattr(self, "_active_network_scope", None)
+        if scope:
+            self._attach_run_database(connection)
+            scope.materialize_evidence(connection, "run_db", "scoped_")
         missing = "-1e300"
+        flow_bounds = (
+            f" AND fi.event_time>={float(scope.connection_start)!r}"
+            if scope
+            and getattr(scope, "connection_only", False)
+            and scope.connection_start is not None
+            else ""
+        )
         flow_seen = (
             "MAX(COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-            f"WHERE fi.src_ip=hs.ip), {missing}), "
+            f"WHERE fi.src_ip=hs.ip{flow_bounds}), {missing}), "
             "COALESCE((SELECT MAX(event_time) FROM flow_index fi "
-            f"WHERE fi.dst_ip=hs.ip), {missing}))"
+            f"WHERE fi.dst_ip=hs.ip{flow_bounds}), {missing}))"
         )
         expressions = [flow_seen]
         if current_network:
@@ -6613,19 +6632,25 @@ class RunDataReader:
     def _host_evidence_index_hint(
         connection: sqlite3.Connection,
         bounded: bool = False,
+        schema: str = "",
     ) -> str:
         """Choose existing time or covering indexes for host finding aggregates.
 
         Parameters:
             connection: Read-only run database connection.
             bounded: Whether the request has an earliest evidence timestamp.
+            schema: Main database when querying materialized network membership.
 
         Returns:
             An index hint, or an empty string for older database schemas.
         """
+        if schema not in {"", "main"}:
+            raise ValueError("Unsupported detection schema")
         indexes = {
             str(row[1])
-            for row in connection.execute("PRAGMA index_list(evidence)")
+            for row in connection.execute(
+                f"PRAGMA {schema + '.' if schema else ''}index_list(evidence)"
+            )
         }
         preferred = (
             "evidence_time_cover_idx"
@@ -6657,6 +6682,9 @@ class RunDataReader:
             return result
         try:
             with self._connect_sqlite() as connection:
+                scope_filter = getattr(self, "_active_network_scope", None)
+                if scope_filter:
+                    scope_filter.materialize_evidence(connection)
                 columns = {
                     str(row[1])
                     for row in connection.execute(
@@ -6677,9 +6705,18 @@ class RunDataReader:
                 )
                 start = self._scoped_start(query, start)
                 evidence_hint = self._host_evidence_index_hint(
-                    connection, start is not None
+                    connection,
+                    start is not None,
+                    "main" if scope_filter else "",
                 )
-                scope = ""
+                evidence_source = (
+                    "main.evidence AS evidence" if scope_filter else "evidence"
+                )
+                scope = (
+                    " AND evidence_id IN (SELECT evidence_id FROM scope_evidence_ids)"
+                    if scope_filter
+                    else ""
+                )
                 values = []
                 if "evidence_time" in columns:
                     if start is not None:
@@ -6710,7 +6747,7 @@ class RunDataReader:
                     marks = ",".join("?" for _ in batch)
                     for row in connection.execute(
                         f"SELECT profile_ip, COUNT(*) AS count, MAX({score}) AS peak, MAX({threat}) AS rank "
-                        f"FROM evidence{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
+                        f"FROM {evidence_source}{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
                         (*batch, *values),
                     ):
                         result[str(row[0])] = {
@@ -11537,9 +11574,15 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def log_message(self, format_string: str, *args: object) -> None:
         """Write access records to the module server log."""
+        started = getattr(self, "_request_started_at", None)
+        duration = (
+            f" · {time.monotonic() - started:.3f}s"
+            if started is not None
+            else ""
+        )
         print(
             f"{self.address_string()} [{self.log_date_time_string()}] "
-            f"{format_string % args}",
+            f"{format_string % args}{duration}",
             flush=True,
         )
 
@@ -11552,6 +11595,12 @@ class RequestHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-store")
+        started = getattr(self, "_request_started_at", None)
+        if started is not None:
+            self.send_header(
+                "Server-Timing",
+                f"app;dur={(time.monotonic() - started) * 1000:.1f}",
+            )
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "DENY")
         self.send_header(
@@ -11769,6 +11818,7 @@ class RequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """Serve an allow-listed static asset or API response."""
+        self._request_started_at = time.monotonic()
         parsed = urlparse(self.path)
 
         if parsed.path == "/login":

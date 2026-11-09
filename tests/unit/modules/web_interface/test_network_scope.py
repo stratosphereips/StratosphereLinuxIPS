@@ -9,6 +9,7 @@ import pytest
 from modules.web_interface.history import connect_history
 from modules.web_interface.network_scope import NetworkScope, network_visits, record_network_visits
 from modules.web_interface.server import RunDataReader
+from slips_files.core.database.sqlite_db.detection_history import EVIDENCE_NETWORK_INDEX_SQL
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
 from tests.unit.modules.web_interface.test_server import _network_scope_reader
@@ -176,13 +177,113 @@ def test_group_queries_resolve_membership_once(
         expected = {row[0] for row in connection.execute("SELECT evidence_id FROM evidence")}
         reader._active_network_scope.materialize_evidence(connection)
         plan = [str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN SELECT COUNT(*) FROM evidence")]
-        assert any("SCAN s" in step for step in plan)
-        assert any("SEARCH e USING" in step for step in plan)
+        assert any("s USING PRIMARY KEY" in step for step in plan)
         connection.create_function("json_valid", 1, lambda _: pytest.fail("Membership reparsed"))
         for _ in range(3):
             actual = {row[0] for row in connection.execute("SELECT evidence_id FROM evidence")}
             assert actual == expected
             assert connection.execute("SELECT COUNT(*) FROM evidence").fetchone()[0] == len(expected)
+
+
+@pytest.mark.parametrize("group", ["host", "host_type", "type"])
+def test_connection_groups_use_indexed_network_metadata(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, group: str,
+) -> None:
+    """Keep grouped reads off large JSON payloads and past-network records.
+
+    Parameters:
+        tmp_path: Isolated capture and history databases.
+        monkeypatch: Fix capture time and inspect request-local SQL work.
+        group: Supported evidence grouping.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: 2_000_000_000.0)
+    reader = _network_scope_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("ALTER TABLE evidence ADD COLUMN accumulated_threat_level REAL")
+        connection.execute("DELETE FROM evidence")
+        payload = json.dumps({"interface": "en0", "details": "x" * 4096})
+        connection.executemany(
+            "INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,threat_level,"
+            "source_module,whitelisted,data,accumulated_ratl) VALUES (?,?,?,'SCAN','low','arp',0,?,1)",
+            ((f"record-{index}", 1_999_990_000 if index < 10000 else 1_999_999_900,
+              f"192.168.1.{index % 50 + 1}", payload) for index in range(10500)),
+        )
+        connection.execute(EVIDENCE_NETWORK_INDEX_SQL)
+    original_connect = reader._connect_sqlite
+    parsed = 0
+    instructions = 0
+
+    def json_valid(value: str | None) -> int:
+        """Count payload decoding that should be served from the expression index.
+
+        Parameters:
+            value: Stored JSON.
+
+        Returns:
+            Whether the value contains JSON.
+        """
+        nonlocal parsed
+        parsed += 1
+        try:
+            json.loads(value)
+        except (TypeError, ValueError):
+            return 0
+        return 1
+
+    def progress() -> int:
+        """Interrupt repeated history scans or per-group nested scans.
+
+        Returns:
+            Nonzero after the request's instruction budget.
+        """
+        nonlocal instructions
+        instructions += 1000
+        return int(instructions > 1000000)
+
+    def connect() -> sqlite3.Connection:
+        """Instrument the scoped query without changing its data or planner.
+
+        Returns:
+            Actual network-filtered reader connection.
+        """
+        connection = original_connect()
+        connection.create_function("json_valid", 1, json_valid, deterministic=True)
+        connection.set_progress_handler(progress, 1000)
+        return connection
+
+    scoped = reader._for_network_scope({"network": ["connection"]})
+    original_connect = scoped._connect_sqlite
+    monkeypatch.setattr(scoped, "_connect_sqlite", connect)
+    result = scoped.evidence({"range": ["connection"], "network": ["connection"],
+                              "group": [group], "device": ["1"], "compact": ["1"],
+                              "hide_excluded": ["1"], "sort": ["time"]})
+    assert result["matching_total"] == result["full_total"] == 500
+    assert result["total"] == (1 if group == "type" else 50)
+    assert sum(row["evidence_count"] for row in result["items"]) == 500
+    assert parsed == 0
+    assert instructions < 1000000
+    stats = scoped._host_finding_stats(
+        [f"192.168.1.{index + 1}" for index in range(50)],
+        {"range": ["connection"], "network": ["connection"]},
+    )
+    assert sum(row["evidence"] for row in stats.values()) == 500
+    assert parsed == 0
+
+
+def test_flow_membership_reads_indexed_interface_without_payload(tmp_path: Path) -> None:
+    """Use compact interface metadata without reopening a raw connection record.
+
+    Parameters:
+        tmp_path: Isolated network and flow stores.
+    """
+    _factory = ModuleFactory()
+    reader = _network_scope_reader(tmp_path)._for_network_scope({"network": ["connection"]})
+    with connect_history(reader.history_path) as connection:
+        connection.execute("INSERT INTO flow_interfaces VALUES ('current-v4','en0')")
+    with reader._connect_history() as connection:
+        connection.create_function("json_valid", 1, lambda _: pytest.fail("Raw payload decoded"))
+        assert connection.execute("SELECT uid FROM flow_index WHERE uid='current-v4'").fetchone()[0] == "current-v4"
 
 
 def test_visit_ledger_is_bounded_and_survives_restart(

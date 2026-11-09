@@ -9,6 +9,10 @@ from pathlib import Path
 from typing import Any, Callable
 
 from modules.web_interface.history import network_connection_scope
+from slips_files.core.database.sqlite_db.detection_history import (
+    EVIDENCE_INTERFACE_SQL,
+    EVIDENCE_NETWORK_ID_SQL,
+)
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 
 MAX_NETWORK_VISITS = 4096
@@ -254,8 +258,8 @@ class NetworkScope:
             )
         }
         if "evidence" in tables:
-            recorded = "CASE WHEN json_valid(e.data) THEN COALESCE(json_extract(e.data,'$.detection_provenance.network_id'),'') ELSE '' END"
-            interface = "CASE WHEN json_valid(e.data) THEN COALESCE(NULLIF(json_extract(e.data,'$.interface'),'default'),'') ELSE '' END"
+            recorded = EVIDENCE_NETWORK_ID_SQL.format(alias="e.")
+            interface = EVIDENCE_INTERFACE_SQL.format(alias="e.")
             if "evidence_flows" in tables and tables & {"flows", "altflows"}:
                 sources = [
                     (name, alias)
@@ -293,7 +297,7 @@ class NetworkScope:
             if {"evidence", "alert_evidence"} <= tables:
                 linked = (
                     f"a.alert_id IN (SELECT ae.alert_id FROM {prefix}evidence e "
-                    f"CROSS JOIN {database}.alert_evidence ae "
+                    f"JOIN {database}.alert_evidence ae "
                     "ON ae.evidence_id=e.evidence_id)"
                     if getattr(self, "connection_only", False)
                     else (
@@ -318,22 +322,41 @@ class NetworkScope:
                     "CREATE TEMP VIEW history_state AS SELECT * FROM main.history_state WHERE key<>'summary_complete'"
                 )
 
-    def materialize_evidence(self, connection: sqlite3.Connection) -> None:
+    def materialize_evidence(
+        self,
+        connection: sqlite3.Connection,
+        database: str = "main",
+        prefix: str = "",
+    ) -> None:
         """Resolve network membership once for a grouped request's queries.
 
         Parameters:
             connection: Read-only run connection with network views installed.
+            database: Main detections or run database attached to web history.
+            prefix: Prefix of the installed detection views.
         """
+        if (database, prefix) not in {("main", ""), ("run_db", "scoped_")}:
+            raise ValueError("Unsupported network view")
+        if not connection.execute(
+            "SELECT 1 FROM sqlite_temp_master WHERE type='view' AND name=?",
+            (f"{prefix}evidence",),
+        ).fetchone():
+            return
+        table = f"{prefix}scope_evidence_ids"
+        if connection.execute(
+            "SELECT 1 FROM sqlite_temp_master WHERE name=?", (table,)
+        ).fetchone():
+            return
         connection.execute(
-            "CREATE TEMP TABLE scope_evidence_ids (evidence_id TEXT PRIMARY KEY) WITHOUT ROWID"
+            f"CREATE TEMP TABLE {table} (evidence_id TEXT PRIMARY KEY) WITHOUT ROWID"
         )
         connection.execute(
-            "INSERT INTO scope_evidence_ids SELECT evidence_id FROM evidence"
+            f"INSERT INTO {table} SELECT evidence_id FROM {prefix}evidence"
         )
-        connection.execute("DROP VIEW temp.evidence")
+        connection.execute(f"DROP VIEW temp.{prefix}evidence")
         connection.execute(
-            "CREATE TEMP VIEW evidence AS SELECT e.* FROM scope_evidence_ids s "
-            "CROSS JOIN main.evidence e ON e.evidence_id=s.evidence_id"
+            f"CREATE TEMP VIEW {prefix}evidence AS SELECT e.* FROM {table} s "
+            f"JOIN {database}.evidence e ON e.evidence_id=s.evidence_id"
         )
 
     def install_flows(self, connection: sqlite3.Connection) -> None:
@@ -343,6 +366,13 @@ class NetworkScope:
             connection: History connection with scoped run detections attached.
         """
         interface = "(SELECT CASE WHEN json_valid(rf.flow) THEN COALESCE(NULLIF(json_extract(rf.flow,'$.interface'),'default'),'') ELSE '' END FROM run_db.flows rf WHERE rf.uid=f.uid)"
+        if connection.execute(
+            "SELECT 1 FROM main.sqlite_master WHERE name='flow_interfaces'"
+        ).fetchone():
+            interface = (
+                "COALESCE((SELECT interface FROM main.flow_interfaces WHERE uid=f.uid),"
+                f"{interface},'')"
+            )
         period = self._predicate(
             connection, "f.event_time", interface=f"COALESCE({interface},'')"
         )

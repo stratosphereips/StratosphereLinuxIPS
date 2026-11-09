@@ -43,6 +43,23 @@ SUMMARY_COLUMNS = (
     "record_count,first_time,last_time,max_atl,max_ratl,alert_count"
 )
 NULLABLE_SCORE_SUMMARIES = "nullable_score_summaries_v1"
+EVIDENCE_NETWORK_ID_SQL = (
+    "CASE WHEN json_valid({alias}data) THEN "
+    "COALESCE(json_extract({alias}data,'$.detection_provenance.network_id'),'') ELSE '' END"
+)
+EVIDENCE_INTERFACE_SQL = (
+    "CASE WHEN json_valid({alias}data) THEN "
+    "COALESCE(NULLIF(json_extract({alias}data,'$.interface'),'default'),'') ELSE '' END"
+)
+EVIDENCE_NETWORK_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS evidence_network_time_idx ON evidence("
+    "evidence_time,evidence_id,profile_ip,evidence_type,threat_level,source_module,"
+    "whitelisted,accumulated_threat_level,accumulated_ratl,"
+    + EVIDENCE_NETWORK_ID_SQL.format(alias="")
+    + ","
+    + EVIDENCE_INTERFACE_SQL.format(alias="")
+    + ")"
+)
 
 
 def initialize_detection_history(connection: sqlite3.Connection) -> None:
@@ -74,6 +91,7 @@ def initialize_detection_history(connection: sqlite3.Connection) -> None:
         "profile_ip,evidence_type,threat_level,source_module,whitelisted,accumulated_threat_level,accumulated_ratl);"
         "CREATE INDEX IF NOT EXISTS alert_evidence_lookup_idx ON alert_evidence(evidence_id,alert_id);"
     )
+    connection.execute(EVIDENCE_NETWORK_INDEX_SQL)
     for table, (key, timestamp, child, child_key, _) in ENTITIES.items():
         if (
             connection.execute(

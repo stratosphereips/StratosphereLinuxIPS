@@ -1811,10 +1811,32 @@ Indexing a new flow also adds its observed source IP to the Hosts inventory,
 without waiting for the next identity snapshot or for a detector to emit evidence.
 Existing names and MAC metadata are preserved. Destination addresses alone do not
 create host entries, so an unanswered probe does not invent an observed host.
-Grouped evidence looks up the selected IDs directly instead of scanning the
-entire retained evidence index again for its count and rows.
-Connection-scoped alerts derive linked alert IDs from the current evidence set,
-avoiding repeated network membership checks for every historical alert.
+Network membership uses an expression index containing the recorded network,
+interface, time and list metadata. Grouped lists resolve membership once and
+reuse its IDs for counts, groups and host statistics. Joins preserve SQLite's
+choice of covering and timestamp indexes, including the latest address in a
+device group. Lists do not repeatedly decode full evidence JSON or force a
+lookup of every large record. Existing detection databases receive the index
+once during schema initialization; installing it on a large history can take
+longer than a normal startup.
+
+The web collector stores each parsed flow's interface in a compact companion
+table. Upgrading an existing history resets its indexing checkpoint once and
+rebuilds this metadata in the usual bounded batches. Until indexing catches up,
+queries can recover missing interfaces from the raw record. Interface metadata
+is removed when its flow index entry expires. This work runs in the web history
+collector and does not add detection work to capture or profiling.
+
+Connection-scoped alerts start from alert/evidence links and use indexed
+membership checks, rather than scanning all retained evidence for each host.
+Current-connection host activity seeks also include the connection's earliest
+time boundary. Each interface still retains its own network and reconnection
+boundary.
+
+API access entries in `web_interface/server.log` include request duration in
+seconds. JSON responses also expose `Server-Timing: app;dur=...` in milliseconds
+for the browser's Network tools, so server work can be distinguished from
+transfer or rendering delays.
 
 Overview's **Evidence retained · full run** card reads the maintained run total.
 It does not recount every record's network membership before rendering the page.
