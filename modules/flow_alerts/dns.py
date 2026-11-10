@@ -709,8 +709,6 @@ class DNS(IFlowalertsAnalyzer):
         twid = msg["twid"]
         flow = self.classifier.convert_to_flow_obj(msg["flow"])
 
-        self.check_dns_without_connection(profileid, twid, flow)
-
         self.check_high_entropy_dns_answers(twid, flow)
         self.check_invalid_dns_answers(twid, flow)
         self.detect_dga(profileid, twid, flow)
@@ -720,3 +718,4 @@ class DNS(IFlowalertsAnalyzer):
         #  done adding domain age to the db or not
         self.detect_young_domains(twid, flow)
         self.check_dns_arpa_scan(profileid, twid, flow)
+        self.check_dns_without_connection(profileid, twid, flow)

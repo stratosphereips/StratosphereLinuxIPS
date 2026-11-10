@@ -801,7 +801,6 @@ def test_detect_dga_special_domains(query, expected_result):
 def get_dns_obj():
     dns = ModuleFactory().create_dns_analyzer_obj()
     dns.should_detect_dns_without_conn = Mock()
-    dns.is_interface_timeout_reached = Mock()
     dns.is_any_flow_answer_contacted = Mock()
     dns.pending_dns_without_conn = Mock()
     dns.set_evidence = Mock()
@@ -836,12 +835,15 @@ def test_check_dns_without_connection(
     """Test decision logic of check_dns_without_connection."""
     dns = get_dns_obj()
     dns.should_detect_dns_without_conn.return_value = should_detect
-    dns.is_interface_timeout_reached.return_value = timeout_reached
     dns.is_any_flow_answer_contacted.return_value = answer_contacted
 
-    result = dns.check_dns_without_connection(
-        "profileid", "twid", "flow", waited_for_the_conn=waited
-    )
+    with patch(
+        "modules.flow_alerts.dns.has_interface_timeout_reached",
+        return_value=timeout_reached,
+    ):
+        result = dns.check_dns_without_connection(
+            "profileid", "twid", "flow", waited_for_the_conn=waited
+        )
     assert result is expected_result
     if expected_evidence:
         dns.set_evidence.dns_without_conn.assert_called_once_with("twid", "flow")
@@ -851,12 +853,58 @@ def test_check_dns_without_connection(
         dns.pending_dns_without_conn.put.assert_called_once_with(
             ("profileid", "twid", "flow")
         )
+    else:
+        dns.pending_dns_without_conn.put.assert_not_called()
 
 
 def test_check_dns_without_connection_is_synchronous() -> None:
     """Verify check_dns_without_connection is not a coroutine function."""
     dns = ModuleFactory().create_dns_analyzer_obj()
     assert not inspect.iscoroutinefunction(dns.check_dns_without_connection)
+
+
+async def test_analyze_invokes_check_dns_without_connection_after_all_detectors() -> None:
+    """
+    Ensure check_dns_without_connection is invoked after all detectors so
+    flow.answers is not mutated prematurely.
+    """
+    dns = ModuleFactory().create_dns_analyzer_obj()
+    call_order = []
+    dns.check_dns_arpa_scan = Mock(
+        side_effect=lambda *args: call_order.append("arpa")
+    )
+    dns.check_dns_without_connection = Mock(
+        side_effect=lambda *args: call_order.append("without_conn")
+    )
+    dns.check_high_entropy_dns_answers = Mock()
+    dns.check_invalid_dns_answers = Mock()
+    dns.detect_dga = Mock()
+    dns.detect_young_domains = Mock()
+    dns.check_different_localnet_usage = Mock()
+
+    raw_flow = asdict(
+        DNS(
+            starttime="1726570879.5997488",
+            uid="1234",
+            saddr="192.168.1.1",
+            daddr="1.1.1.1",
+            query="example.com",
+            qclass_name="",
+            dport="53",
+            sport="54321",
+            proto="udp",
+            qtype_name="A",
+            rcode_name="NOERROR",
+            answers=["1.2.3.4"],
+            TTLs="",
+        )
+    )
+    msg_data = json.dumps(
+        {"profileid": "profile_1", "twid": "timewindow1", "flow": raw_flow}
+    )
+    await dns.analyze({"channel": "new_dns", "data": msg_data})
+
+    assert call_order == ["arpa", "without_conn"]
 
 
 def test_check_dns_without_connection_of_all_pending_flows_synchronous() -> None:
