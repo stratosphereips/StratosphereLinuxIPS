@@ -43,14 +43,16 @@ and restoring a page from the back/forward cache request an immediate update. Th
 work runs in the web process and does not scan detection databases or modify
 capture settings.
 
-The browser title identifies the run, for example **Slips · sebas-en0**.
-It does not poll detection totals. Grouped network evidence queries resolve network
+The browser title shows the live alert count and run name, for example
+**Slips (7 alerts) · sebas-en0**. It counts open alerts in the rolling live
+hour and current network scope. The existing heartbeat updates this count
+with an indexed alert-only query; it does not count hosts or evidence or add
+a separate polling timer. Grouped network evidence queries resolve network
 membership once per request in a temporary ID table, then reuse it for counts and
 groups. This work stays in the web process and never writes to the capture database.
 Navigation tabs, including host activity tabs, contain only their names; total
 badges and their update handlers are removed. Counts stay beside the data and its
-active filters. The browser no longer polls `/api/live-counts` just to update
-a title. Overview keeps its run totals.
+active filters. Overview keeps its run totals.
 
 The shared header shows **Loading** or **Searching** while a foreground data
 request is pending. Its reserved space keeps the page width stable as the

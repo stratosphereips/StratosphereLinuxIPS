@@ -21,6 +21,54 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+def test_browser_title_updates_only_alerts_from_existing_heartbeat() -> None:
+    """Keep the browser title live outside Overview without other count requests."""
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    count: int | None = 7
+    requests: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Return only the heartbeat's alert counter alongside real UI assets.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/style.css", "/slips-logo.png"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/app.js":
+            route.fulfill(body=script, content_type="text/javascript")
+        else:
+            requests.append(url.path)
+            assert url.path == "/api/identity"
+            assert parse_qs(url.query)["title_alerts"] == ["1"]
+            route.fulfill(json={"alert_count": count, "network_filter_supported": False,
+                                "review_actions": True, "backend_status": {"connected": True}})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page()
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""() => {
+                state.activeTab='metadata';state.networkOnly=false;
+                byId('run-name').textContent='sebas-en0';
+                loadArchiveCatalog=async()=>{};scheduleBackendStatusPoll=()=>{};
+            }""")
+            for count in [7, 0, 1, None]:
+                page.evaluate("() => pollBackendStatus()")
+                expected = "1 alert" if count in (1, None) else f"{count} alerts"
+                assert page.title() == f"Slips ({expected}) · sebas-en0"
+            assert requests == ["/api/identity"] * 4
+            assert page.locator(".tabs .badge").count() == 0
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("mode,theme,width", [("individual", "light", 1500), ("host", "dark", 1500), ("individual", "dark", 390)])
 def test_quick_evidence_review_and_ignore(mode: str, theme: str, width: int) -> None:
     """Review individual rows without opening them, and recover ignored records.

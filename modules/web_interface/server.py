@@ -3129,10 +3129,19 @@ class RunDataReader:
             return float("inf")
         return max(start or 0.0, network_start)
 
-    def identity(self) -> Dict[str, Any]:
-        """Return a signed identity response for stale-server detection."""
+    def identity(
+        self, query: Optional[Dict[str, List[str]]] = None
+    ) -> Dict[str, Any]:
+        """Return run identity and an optional alert-only title count.
+
+        Parameters:
+            query: Optional title counter request and network scope.
+
+        Returns:
+            Run identity, network state and requested live alert count.
+        """
         header = self._current_header_network(refresh=True)
-        return {
+        payload = {
             "service": "slips-web-interface",
             "pid": os.getpid(),
             "review_actions": True,
@@ -3144,6 +3153,14 @@ class RunDataReader:
             "current_network": header,
             **self.validate_run_identity(),
         }
+        if self._query_value(query or {}, "title_alerts") == "1":
+            try:
+                payload["alert_count"] = self.live_counts(
+                    {**(query or {}), "counts": ["alerts"]}
+                )["alerts"]
+            except (sqlite3.Error, OSError):
+                payload["alert_count"] = None
+        return payload
 
     def _current_header_network(self, refresh: bool = False) -> Dict[str, Any]:
         """Return all monitored networks for the shared header and selectors.
@@ -3275,13 +3292,15 @@ class RunDataReader:
             alerts = int(
                 connection.execute(
                     "SELECT COUNT(*) FROM alerts "
-                    "WHERE CAST(alert_time AS REAL) BETWEEN ? AND ? AND "
+                    "WHERE alert_time BETWEEN ? AND ? AND "
                     + self._review_clause(
                         connection, "alert", "open", "alerts"
                     ),
                     (alert_start, alert_end),
                 ).fetchone()[0]
             )
+        if self._query_value(query or {}, "counts") == "alerts":
+            return {"alerts": alerts}
         with self._connect_history() as history:
             latest_host = (
                 None if wall_clock else self._host_latest_event(history)
@@ -11819,7 +11838,7 @@ class RequestHandler(BaseHTTPRequestHandler):
                     path[len("/api/evidence/") : -len("/flows")]
                 )
         if path == "/api/identity":
-            payload = reader.identity()
+            payload = reader.identity(query)
         elif path == "/api/archives":
             payload = reader.archives()
         elif path == "/api/live-counts":

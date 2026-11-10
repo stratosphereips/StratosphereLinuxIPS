@@ -69,6 +69,7 @@ const state = {
   runIdentity: null,
   viewPreferencesKey: null,
   reviewAvailable: false,
+  titleAlertCount: null,
   evidenceReviewPending: new Set(),
   networkOnly: true,
   deviceView: true,
@@ -1911,10 +1912,13 @@ function setSummaryCards(items, target = "summary-cards") {
   });
 }
 
-/** Use the run name as the browser title without querying detection totals. */
+/** Show only the live alert count beside the run name in the browser title. */
 function updatePageTitle() {
   const name = byId("run-name").textContent.trim();
-  document.title = name && name !== "Current run" ? `Slips · ${name}` : "Slips";
+  const count = state.titleAlertCount;
+  const alerts = Number.isInteger(count) && count >= 0
+    ? ` (${count.toLocaleString()} ${count === 1 ? "alert" : "alerts"})` : "";
+  document.title = `Slips${alerts}${name && name !== "Current run" ? ` · ${name}` : ""}`;
 }
 
 /** Update the network name in the shared header from the latest heartbeat.
@@ -9495,8 +9499,14 @@ function schedulePoll() {
 async function pollBackendStatus() {
   if (document.hidden) return;
   try {
-    const identity = await api("backendStatus", "/api/identity", false, false, 10000);
+    const params = new URLSearchParams({title_alerts: "1"});
+    applyNetworkSelection(params);
+    const identity = await api("backendStatus", `/api/identity?${params}`, false, false, 10000);
     if (identity) {
+      if (Number.isInteger(identity.alert_count) && identity.alert_count >= 0) {
+        state.titleAlertCount = identity.alert_count;
+        updatePageTitle();
+      }
       updateReviewAvailability(identity.review_actions === true);
       updateNetworkFilterAvailability(identity);
       updateDeviceViewAvailability(identity);
