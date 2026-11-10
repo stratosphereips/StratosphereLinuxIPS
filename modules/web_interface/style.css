@@ -1069,7 +1069,7 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-record-filter-popup > button { margin-top: .8rem; }
 .evidence-record-type-sections { display: flex; flex-direction: column; gap: .4rem; flex: 1; min-height: 0; overflow: auto; margin-top: .5rem; }
 .evidence-record-type-section { flex: none; min-width: 0; }
-.evidence-record-type-section.expanded { display: flex; flex-direction: column; flex: 1; min-height: 200px; }
+.evidence-record-type-section.expanded { display: flex; flex-direction: column; flex: 1 0 26rem; min-height: 26rem; }
 .evidence-record-type-toggle { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .5rem; text-align: left; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); }
 .evidence-record-type-toggle[aria-expanded="true"] { border-color: var(--accent); }
 .evidence-record-type-toggle .count-chip { margin-left: auto; white-space: nowrap; }

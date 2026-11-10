@@ -1516,6 +1516,76 @@ def test_group_records_by_type_keeps_parent_filters_and_full_pagination(
             browser.close()
 
 
+def test_many_record_types_keep_table_readable_and_selected_type_in_view(tmp_path: Path) -> None:
+    """Keep an opened record list usable among many collapsed type sections.
+
+    Parameters:
+        tmp_path: Isolated evidence database with more than a dozen types.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    reader = _record_types_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executemany("UPDATE evidence SET evidence_type=? WHERE evidence_id=?", [
+            (f"TEST_TYPE_{index:02}", f"record-{index:03}") for index in range(20, 40) if index % 4])
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve the actual UI with its group queries backed by fixture SQL.
+
+        Parameters:
+            route: Intercepted test request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/style.css", "/slips-logo.png"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/app.js":
+            route.fulfill(body=script, content_type="text/javascript")
+        elif url.path == "/api/evidence":
+            route.fulfill(json=reader.evidence(parse_qs(url.query)))
+        else:
+            route.fulfill(json={})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1800, "height": 1100})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""() => {
+                state.activeTab='evidence'; state.deviceView=false; state.hideExcluded=false;
+                document.body.classList.add('evidence-active');
+                document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='evidence'));
+                byId('evidence-range').value='all'; state.evidenceWorkspace.recordGrouping='type';
+                updateEvidenceViewportHeight();
+                selectEvidenceGroup({id:'host:192.0.2.20',profile_ip:'192.0.2.20',evidence_count:122});
+            }""")
+            page.wait_for_function("state.evidenceWorkspace.recordsLoaded")
+            assert page.locator(".evidence-record-type-toggle").count() == 18
+            table = page.locator(".evidence-record-table-scroll")
+            assert table.bounding_box()["height"] >= 250
+            last = page.locator(".evidence-record-type-toggle").last
+            last.click()
+            page.wait_for_function("state.evidenceWorkspace.recordType === 'UNKNOWN_PORT' && state.evidenceWorkspace.recordsLoaded")
+            assert table.bounding_box()["height"] >= 250
+            sections = page.locator(".evidence-record-type-sections")
+            selected = page.locator(".evidence-record-type-toggle[aria-expanded='true']")
+            assert selected.bounding_box()["y"] >= sections.bounding_box()["y"] - 1
+            assert table.bounding_box()["y"] + table.bounding_box()["height"] <= sections.bounding_box()["y"] + sections.bounding_box()["height"] + 1
+            position = sections.evaluate("element => element.scrollTop")
+            page.evaluate("renderEvidenceGroup()")
+            assert sections.evaluate("element => element.scrollTop") == position
+            page.get_by_role("button", name="Load more · 50 of 65", exact=True).click()
+            page.wait_for_function("state.evidenceWorkspace.records.length === 65")
+            assert abs(sections.evaluate("element => element.scrollTop") - position) <= 8
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, theme: str) -> None:
     """Exercise full-group record controls against real SQLite API responses.

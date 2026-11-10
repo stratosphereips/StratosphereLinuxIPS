@@ -3824,6 +3824,7 @@ function renderEvidenceGroup() {
   const listScroll = right.querySelector(".evidence-record-list")?.scrollTop || 0;
   const tableScroll = right.querySelector(".evidence-record-table-scroll");
   const tablePosition = [tableScroll?.scrollLeft || 0, tableScroll?.scrollTop || 0];
+  const typeScroll = right.querySelector(".evidence-record-type-sections")?.scrollTop || 0;
   const focused = right.contains(document.activeElement) ? document.activeElement : null;
   const focusId = focused?.id;
   const selection = focused?.type === "search" ? [focused.selectionStart, focused.selectionEnd] : null;
@@ -3888,6 +3889,11 @@ function renderEvidenceGroup() {
         if (state.evidenceDetail.inPane) closeEvidenceDetail(false, true);
         workspace.records = [];workspace.recordsLoaded = false;
         renderEvidenceGroup();
+        if (workspace.recordType) {
+          const sections = right.querySelector(".evidence-record-type-sections");
+          const selected = sections.querySelector(".expanded");
+          sections.scrollTop += selected.getBoundingClientRect().top - sections.getBoundingClientRect().top;
+        }
         loadEvidenceGroupRecords(true).catch(() => {});
       });
       section.append(header);typeSections.append(section);
@@ -3999,6 +4005,7 @@ function renderEvidenceGroup() {
   }
   if (!typeSections || selectedTypeSection) (selectedTypeSection || list).append(text("small", `${compact(records.length)} loaded · ${compact(total)} matching records`, "muted evidence-record-count"));
   list.scrollTop = listScroll;
+  if (typeSections) typeSections.scrollTop = typeScroll;
   [tableWrap.scrollLeft, tableWrap.scrollTop] = tablePosition;
   if (filterOpen) {
     const popup = byId("evidence-record-filter-popup");
