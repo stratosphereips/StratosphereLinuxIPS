@@ -275,6 +275,13 @@ third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
 
+Packet timing samples sharing a connection UID are optional context for other
+findings. They remain collapsed under **Packet timing context** and do not replace
+the connection or application protocol details. For **Long Connection**, the finding
+uses duration, not packet timing. Packet-based findings open their linked timing
+sample directly. Missing connection records remain explicitly unavailable; timing
+samples do not reconstruct a missing connection's duration or traffic totals.
+
 In the middle pane, **Filters for this group** controls only the records inside
 the selected evidence group. Its **Group by → Type** option shows collapsible
 type sections with counts covering every matching record, including records

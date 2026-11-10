@@ -140,3 +140,103 @@ def test_packet_gaps_and_saved_decision_render_in_real_investigation(
             assert not errors, errors
         finally:
             browser.close()
+
+
+@pytest.mark.parametrize("mode", ["missing", "connection", "tls"])
+@pytest.mark.parametrize("theme,width", [("light", 360), ("dark", 800)])
+def test_long_connection_keeps_packet_samples_in_collapsed_context(
+    mode: str, theme: str, width: int,
+) -> None:
+    """Keep ACK samples from replacing the actual Long Connection details.
+
+    Parameters:
+        mode: Missing connection, retained connection or TLS protocol context.
+        theme: Color scheme used by the investigation.
+        width: Available flow pane width.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    flow = summary(kind="ack", times=[1000 + i * 20.48 for i in range(12)], lengths=[0] * 12)
+    protocols = [{"uid": f"Cpacket:packet:{index}", "flow_type": "packet_timing",
+                  "flow": {**flow, "record_id": f"Cpacket:packet:{index}", "is_orig": index == 0}}
+                 for index in range(2)]
+    if mode == "tls":
+        protocols.append({"uid": "Cpacket", "flow_type": "ssl", "flow": {"type_": "ssl", "server_name": "example.test"}})
+    group = {"uid": "Cpacket", "network_flow": None if mode == "missing" else {
+        "uid": "Cpacket", "flow": {"saddr": "10.0.0.1", "daddr": "8.8.8.8", "proto": "tcp", "dur": 3300}},
+        "protocol_flows": protocols}
+    record = {"id": "long-connection", "uid": ["Cpacket"], "evidence_type": "LONG_CONNECTION",
+              "module": "conn_analyzer", "description": "Connection took 55 mins", "threat_level": "low"}
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    errors: list[str] = []
+
+    def respond(route: Any) -> None:
+        """Serve the actual UI and retain the unmodified linked flow group.
+
+        Parameters:
+            route: Isolated browser request.
+        """
+        path = urlparse(route.request.url).path
+        if path in {"/", "/style.css", "/slips-logo.png"}:
+            route.fulfill(path=str(assets / ("index.html" if path == "/" else path[1:])))
+        elif path == "/app.js":
+            route.fulfill(body=script, content_type="text/javascript")
+        elif path == "/api/evidence/long-connection/flows":
+            route.fulfill(json={"items": [group], "linked_uid_count": 1})
+        else:
+            route.fulfill(json={})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": 1500, "height": 1300})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""async ({record,theme,width}) => {
+                setTheme(theme);state.activeTab='overview';state.whitelists={evidence_types:[]};
+                await openEvidence(record,[record]);
+                document.querySelector('.evidence-detail-flows').style.width=width+'px';
+            }""", {"record": record, "theme": theme, "width": width})
+            pane = page.locator(".evidence-detail-flows")
+            context = pane.locator(".packet-timing-context")
+            assert not context.evaluate("element => element.open")
+            assert pane.locator(".protocol-packet_timing").count() == 0
+            assert pane.get_by_role("tab", name="Related Packet timing", exact=False).count() == 0
+            assert pane.locator(".packet-timing-decision").count() == 0
+            if mode == "missing":
+                assert "full connection record is unavailable" in pane.inner_text()
+                assert pane.get_by_role("tab").count() == 0
+                assert pane.locator(".flow-related-count").count() == 0
+            else:
+                tab = pane.get_by_role("tab", name="Related SSL · 1" if mode == "tls" else "conn · flow", exact=True)
+                assert tab.get_attribute("aria-selected") == "true"
+                if mode == "tls":
+                    assert pane.locator(".flow-related-count").inner_text() == "1 related protocol record"
+                else:
+                    assert pane.locator(".flow-related-count").count() == 0
+            context.locator(":scope > summary").click()
+            card = context.locator(".protocol-packet_timing")
+            playwright.expect(card).to_be_visible()
+            assert "Long Connection uses the connection duration" in context.inner_text()
+            assert "20.48 s" in card.inner_text()
+            assert "Originator → responder" in card.inner_text()
+            context.get_by_role("combobox", name="Packet timing context sample").select_option("1")
+            assert context.locator(".protocol-packet_timing").count() == 1
+            assert "Responder → originator" in card.inner_text()
+            assert "0 B" in card.inner_text()
+            assert context.get_by_role("combobox").bounding_box()["width"] <= context.bounding_box()["width"]
+            context.locator(":scope > summary").click()
+            playwright.expect(card).to_be_hidden()
+            primary = page.evaluate("""group => {
+                const mixed={...group,protocol_flows:[{flow_type:'ssl',flow:{server_name:'example.test'}},
+                    ...group.protocol_flows.filter(item => item.flow_type==='packet_timing')]};
+                const card=flowCard(mixed,1,1,null,{evidence_type:'PERIODIC_PACKETS'});
+                return {tab:card.querySelector('[role=tab][aria-selected=true]').textContent,
+                    context:card.querySelectorAll('.packet-timing-context').length};
+            }""", group)
+            assert primary == {"tab": "Related Packet timing · 2", "context": 0}
+            assert not errors, errors
+        finally:
+            browser.close()
