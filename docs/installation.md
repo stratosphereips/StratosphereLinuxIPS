@@ -95,6 +95,15 @@ leave an older module consuming traffic after a restart. A malformed DNS
 message is logged by Flow Alerts; the DNS timeout thread continues with the
 next message instead of failing in its error handler.
 
+Choose the interface appropriate to your machine. Daemon startup, instance
+listing and stop have also been verified on Apple Silicon. The daemon's PID
+file uses the configured permanent directory, and startup failures are reported
+to the terminal; see [daemon mode](usage.md#daemonized-vs-interactive-mode).
+Intel Macs and other optional integrations have not been validated by these checks. The Linux
+access-point workflow remains Linux-specific. On macOS, active
+blocking uses the Slips-owned `com.apple/slips` Packet Filter anchor and
+requires running Slips with root privileges.
+
 Alerts are written to `output/macos-test/alerts/`; diagnostic output is in
 `output/macos-test/slips.log` and `output/macos-test/errors.log`. Remote feed
 updates can delay shutdown while downloads finish; that is separate from

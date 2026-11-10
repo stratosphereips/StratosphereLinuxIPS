@@ -13,7 +13,6 @@ from unittest.mock import (
 import shutil
 import os
 import json
-import signal
 import threading
 import time
 
@@ -546,29 +545,33 @@ def test_close_all_handles():
 
 
 @pytest.mark.parametrize(
-    "pids, expected_kills",
-    [([123, 321], 2), ([], 0)],
+    "pids",
+    [[123, 321], []],
 )
-def test_shutdown_zeek_runtime_kills_pids(pids, expected_kills):
-    """Test shutdown_zeek_runtime joins threads and kills Zeek pids."""
+def test_shutdown_zeek_runtime_kills_pids(pids: list[int]) -> None:
+    """Stop registered identities before joining Zeek monitor threads.
+
+    Parameters:
+        pids: Legacy PID list, which must never be used to send signals.
+    """
     input_process = ModuleFactory().create_input_obj(
         "", InputType.ZEEK_LOG_FILE
     )
     mock_thread = MagicMock()
     input_process.zeek_utils.zeek_threads = [mock_thread]
     input_process.zeek_utils.zeek_pids = pids
+    owned = input_process.zeek_utils.zeek_processes = Mock()
+    ordering = Mock()
+    ordering.attach_mock(owned.stop, "stop")
+    ordering.attach_mock(mock_thread.join, "join")
 
     with patch("os.kill") as mock_kill:
         input_process.zeek_utils.shutdown_zeek_runtime()
 
     mock_thread.join.assert_called_once_with(3)
-    if expected_kills:
-        mock_kill.assert_has_calls(
-            [call(pid, signal.SIGKILL) for pid in pids],
-            any_order=True,
-        )
-    else:
-        mock_kill.assert_not_called()
+    assert ordering.mock_calls == [call.stop(grace_seconds=2), call.join(3)]
+    assert input_process.zeek_utils.zeek_shutdown_requested
+    mock_kill.assert_not_called()
 
 
 def test_get_file_handle_non_existing_file():

@@ -63,18 +63,24 @@ def _read_password_from_conf(conf_path: str) -> Optional[str]:
     return None
 
 
-def ensure_redis_password() -> str:
+def ensure_redis_password(conf_path: str | None = None) -> str:
     """
     Returns the persistent redis password, generating and storing it
     (mode 0600) the first time it's needed. Safe to call concurrently from
     multiple slips processes: only one of them wins the creation race, the
     rest just read the file the winner created.
+
+    Parameters:
+        conf_path: Optional source credential file when preparing an isolated run.
+
+    Returns:
+        Password read from or created in the requested credential file.
     """
     global _cached_password
-    if _cached_password:
+    if _cached_password and conf_path is None:
         return _cached_password
 
-    conf_path = get_redis_auth_conf_path()
+    conf_path = conf_path or get_redis_auth_conf_path()
 
     if not os.path.exists(conf_path):
         password = secrets.token_urlsafe(32)

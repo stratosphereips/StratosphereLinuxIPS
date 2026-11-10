@@ -15,7 +15,14 @@ from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from modules.supported_module_names import Modules
 from slips_files.common.ips import LOCALHOST_HOSTNAME
-from slips_files.common.parsers.arg_parser import ArgumentParser
+from slips_files.common.parsers.arg_parser import (
+    ArgumentParser,
+    get_web_port_override,
+)
+from slips_files.common.parsers.analysis_config import (
+    isolated_analysis_config,
+    isolated_analysis_output,
+)
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 
@@ -41,6 +48,18 @@ class ConfigParser(object):
             return
         configfile: str = self.get_config_file()
         self.config = self.read_config_file(configfile)
+        self.source_config = self.config
+        analysis_output = isolated_analysis_output()
+        self.isolated_analysis = analysis_output is not None
+        if self.isolated_analysis:
+            self.config = isolated_analysis_config(
+                self.config, analysis_output
+            )
+        web_port = get_web_port_override()
+        if web_port is not None:
+            web_settings = self.config.get("web_interface") or {}
+            web_settings["port"] = web_port
+            self.config["web_interface"] = web_settings
         self.home_network_ranges = (
             "192.168.0.0/16",
             "172.16.0.0/12",
