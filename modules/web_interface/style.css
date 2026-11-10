@@ -441,6 +441,15 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .investigation-card.threat-high, .investigation-card.threat-critical { border-left-color: var(--danger); color: var(--text); }
 .investigation-card.threat-medium { border-left-color: var(--warn); color: var(--text); }
 .investigation-card.threat-low { border-left-color: var(--accent); color: var(--text); }
+.evidence-card { display: grid; gap: .2rem; }
+.evidence-quick-actions { display: flex; align-items: center; gap: .25rem; margin-top: .3rem; width: max-content; max-width: 100%; }
+.evidence-quick-actions button { padding: .15rem .4rem; min-height: 1.65rem; border: 1px solid var(--line); border-radius: 5px; background: var(--surface); color: var(--muted); font: 650 .72rem system-ui, sans-serif; white-space: nowrap; }
+.evidence-quick-actions .evidence-quick-false_positive { color: var(--warn); }
+.evidence-quick-actions .evidence-quick-true_positive { color: var(--accent); }
+.evidence-quick-actions button:hover, .evidence-quick-actions button:focus-visible { border-color: currentColor; }
+.evidence-quick-actions button[aria-pressed="true"] { border-color: currentColor; background: var(--surface-2); }
+.evidence-quick-actions button:disabled { opacity: .5; cursor: default; }
+.evidence-card > .evidence-quick-actions { justify-self: end; }
 .investigation-card-head { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-bottom: .45rem; }
 .investigation-card-title { min-width: 0; overflow-wrap: anywhere; color: var(--blue); font: 700 .78rem ui-monospace, SFMono-Regular, Menlo, monospace; }
 .investigation-card p { margin: 0; color: #d4e0e8; font-size: .82rem; line-height: 1.42; }

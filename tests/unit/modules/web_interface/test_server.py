@@ -4432,6 +4432,70 @@ def test_evidence_review_filter_keeps_verdicts_visible(
     )
 
 
+@pytest.mark.parametrize("group", ["", "type", "host_type"])
+def test_ignore_is_durable_reversible_and_independent_of_reviews(
+    tmp_path: Path, group: str,
+) -> None:
+    """Hide one record without changing its review, score or relationships.
+
+    Parameters:
+        tmp_path: Isolated run database.
+        group: Individual or grouped evidence mode.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    identifier = "record-006"
+    reader.save_review("evidence", {"id": identifier, "action": "review",
+                                   "status": "false_positive", "note": "Checked router traffic"})
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        original = connection.execute("SELECT * FROM evidence WHERE evidence_id=?", (identifier,)).fetchone()
+        connection.execute("INSERT INTO evidence_flows VALUES (?, 'kept-flow')", (identifier,))
+        connection.execute("INSERT INTO alert_evidence VALUES ('kept-alert', ?)", (identifier,))
+    with patch("modules.web_interface.server.queue_review_event") as feedback:
+        assert reader.save_review("evidence", {"id": identifier, "action": "ignore", "ignored": True}) == {
+            "id": identifier, "ignored": True}
+        feedback.assert_not_called()
+    query = {"range": ["all"], "limit": ["200"], "compact": ["1"]}
+    if group:
+        query["group"] = [group]
+    page = reader.evidence(query)
+    assert page["matching_total" if group else "total"] == 122
+    if not group:
+        assert identifier not in {record["id"] for record in page["items"]}
+    # A new reader must retain visibility independently of browser preferences.
+    reader2 = RunDataReader.__new__(RunDataReader)
+    reader2.__dict__.update(reader.__dict__)
+    ignored = reader2.evidence({**query, "review": ["ignored"]})
+    assert ignored["matching_total" if group else "total"] == 1
+    record = reader2.evidence({"range": ["all"], "review": ["ignored"]})["items"][0]
+    assert record["id"] == identifier and record["ignored"] is True
+    assert record["review_status"] == "false_positive"
+    assert record["review_note"] == "Checked router traffic"
+    reader2.save_review("evidence", {"id": identifier, "action": "review", "status": "true_positive"})
+    reader2.save_review("evidence", {"id": identifier, "action": "ignore", "ignored": False})
+    restored = reader2.evidence({"range": ["all"], "review": ["true_positive"]})["items"][0]
+    assert restored["ignored"] is False and restored["review_note"] == "Checked router traffic"
+    assert reader2.evidence(query)["matching_total" if group else "total"] == 123
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        assert connection.execute("SELECT * FROM evidence WHERE evidence_id=?", (identifier,)).fetchone() == original
+        assert ("kept-flow",) in connection.execute("SELECT uid FROM evidence_flows WHERE evidence_id=?", (identifier,)).fetchall()
+        assert ("kept-alert",) in connection.execute("SELECT alert_id FROM alert_evidence WHERE evidence_id=?", (identifier,)).fetchall()
+
+
+@pytest.mark.parametrize("ignored", [None, "true", 1])
+def test_ignore_requires_an_explicit_boolean(tmp_path: Path, ignored: object) -> None:
+    """Reject ambiguous requests without hiding or deleting anything.
+
+    Parameters:
+        tmp_path: Isolated detection database.
+        ignored: Invalid visibility value.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    with pytest.raises(ValueError, match="whether to ignore"):
+        reader.save_review("evidence", {"id": "record-006", "action": "ignore", "ignored": ignored})
+
+
 def test_host_names_resolves_live_and_historical_identity(
     tmp_path: Path,
 ) -> None:

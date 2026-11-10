@@ -69,6 +69,7 @@ const state = {
   runIdentity: null,
   viewPreferencesKey: null,
   reviewAvailable: false,
+  evidenceReviewPending: new Set(),
   networkOnly: true,
   deviceView: true,
   deviceViewSupported: false,
@@ -3522,9 +3523,11 @@ function renderEvidenceTable(payload) {
       const cell = document.createElement("span");
       cell.append(evidenceTypeCell(row));
       if (row.module) cell.append(text("small", ` ${row.module}`, "muted"));
-      if (mode === "individual" && row.review_status && row.review_status !== "unreviewed") {
+      if (mode === "individual" && row.review_status
+          && !["unreviewed", "false_positive", "true_positive"].includes(row.review_status)) {
         cell.append(text("small", ` · ${row.review_status.replaceAll("_", " ")}`, "review-state"));
       }
+      if (mode === "individual") cell.append(evidenceQuickActions(row));
       return cell;
     },
     (row) => threat(row.threat_level),
@@ -3860,7 +3863,8 @@ function renderEvidenceGroup() {
       const label = document.createElement("div");
       label.append(evidenceTypeCell(record), text("small", record.module || "Module unknown", "muted"));
       if (isPeerReport(record)) { const peer = text("small", evidenceReporter(record), "muted"); peer.title = record.peer_report?.peer_id || peer.textContent; label.append(peer); }
-      if (record.review_status && record.review_status !== "unreviewed") label.append(text("small", record.review_status.replaceAll("_", " "), "review-state"));
+      if (record.review_status && !["unreviewed", "false_positive", "true_positive"].includes(record.review_status)) label.append(text("small", record.review_status.replaceAll("_", " "), "review-state"));
+      label.append(evidenceQuickActions(record));
       return label;
     },
     (record) => threat(record.threat_level),
@@ -4366,6 +4370,96 @@ async function saveReviewChange(entity, change) {
   return payload;
 }
 
+/** Update every visible copy of one record after a quick decision.
+ * @param {string} identifier - Evidence ID.
+ * @param {object} result - Saved visibility or review fields.
+ */
+function syncEvidenceQuickActions(identifier, result = {}) {
+  const changes = result.status ? {review_status: result.status, review_note: result.note} : result;
+  document.querySelectorAll(".evidence-quick-actions").forEach((actions) => {
+    if (actions.dataset.evidenceId !== identifier) return;
+    Object.assign(actions.evidenceRecord, changes);
+    const record = actions.evidenceRecord;
+    actions.querySelectorAll("button").forEach((button) => {
+      button.disabled = !state.reviewAvailable || state.evidenceReviewPending.has(identifier);
+      const ignore = button.dataset.decision === "ignore";
+      const active = ignore ? Boolean(record.ignored) : record.review_status === button.dataset.decision;
+      button.setAttribute("aria-pressed", String(active));
+      if (ignore) {
+        button.textContent = record.ignored ? "Unignore" : "Ignore";
+        button.title = record.ignored ? "Show this evidence again" : "Hide this evidence without deleting it";
+      }
+    });
+    if (record.ignored) actions.closest(".evidence-card")?.setAttribute("hidden", "");
+  });
+  const selected = state.evidenceDetail.record;
+  if (selected?.id === identifier) Object.assign(selected, changes);
+  if (result.ignored) {
+    state.evidenceDetail.records = state.evidenceDetail.records.filter((item) => item.id !== identifier);
+    const position = state.evidenceDetail.records.findIndex((item) => item.id === selected?.id);
+    const count = document.querySelector('.evidence-navigation-count');
+    if (count) count.textContent = `Record ${position + 1} of ${state.evidenceDetail.records.length}`;
+    document.querySelectorAll('[data-evidence-step]').forEach((button) => {
+      const index = position + Number(button.dataset.evidenceStep);
+      button.disabled = position < 0 || index < 0 || index >= state.evidenceDetail.records.length;
+    });
+  }
+  document.querySelectorAll('.review-editor[data-entity="evidence"]').forEach((editor) => {
+    if (editor.dataset.recordId !== identifier || !result.status) return;
+    editor.querySelector("select").value = result.status;
+    editor.querySelector(".review-current").textContent = `Current: ${result.status.replaceAll("_", " ")}`;
+  });
+}
+
+/** Build one-click visibility and verdict controls for an individual record.
+ * @param {object} record - Durable evidence record, never a group.
+ * @returns {HTMLElement} Compact Ignore, FP and TP buttons.
+ */
+function evidenceQuickActions(record) {
+  const actions = document.createElement("div");
+  actions.className = "evidence-quick-actions";
+  actions.dataset.evidenceId = record.id;
+  actions.evidenceRecord = record;
+  actions.setAttribute("role", "group");
+  actions.setAttribute("aria-label", "Quick evidence review");
+  actions.addEventListener("click", (event) => event.stopPropagation());
+  actions.addEventListener("keydown", (event) => event.stopPropagation());
+  [["ignore", record.ignored ? "Unignore" : "Ignore", "Hide this evidence without deleting it"],
+    ["false_positive", "FP", "Mark this evidence as false positive"],
+    ["true_positive", "TP", "Mark this evidence as true positive"]].forEach(([decision, label, title]) => {
+    const button = text("button", label, `evidence-quick-${decision}`);
+    button.type = "button";
+    button.dataset.decision = decision;
+    button.title = !state.reviewAvailable ? "Reviews are unavailable for this run"
+      : decision === "ignore" && record.ignored ? "Show this evidence again" : title;
+    button.disabled = !state.reviewAvailable || state.evidenceReviewPending.has(record.id);
+    button.setAttribute("aria-pressed", String(decision === "ignore"
+      ? Boolean(record.ignored) : record.review_status === decision));
+    button.addEventListener("click", async () => {
+      if (state.evidenceReviewPending.has(record.id)) return;
+      state.evidenceReviewPending.add(record.id);
+      syncEvidenceQuickActions(record.id);
+      try {
+        const result = await saveReviewChange("evidence", decision === "ignore"
+          ? {action: "ignore", id: record.id, ignored: !record.ignored}
+          : {action: "review", id: record.id, status: decision});
+        syncEvidenceQuickActions(record.id, result);
+        if (result.ignored && state.evidenceDetail.record?.id === record.id) closeEvidenceDetail(false, true);
+        toast(result.p2p_feedback_note || (decision === "ignore"
+          ? result.ignored ? "Evidence ignored. Find it under Review → Ignored." : "Evidence visible again."
+          : `${label} saved.`));
+        await refreshAfterReview("evidence", true);
+      } catch (error) { toast(error.message); }
+      finally {
+        state.evidenceReviewPending.delete(record.id);
+        syncEvidenceQuickActions(record.id);
+      }
+    });
+    actions.append(button);
+  });
+  return actions;
+}
+
 /** Refresh the visible investigation after an alert or evidence decision.
  * @param {string} entity Alert or evidence that changed.
  * @param {boolean} keepOpen Whether the reviewed record still exists and stays open.
@@ -4420,13 +4514,15 @@ function reviewEditor(entity, record) {
   const identifier = entity === "alert" ? record.alert_id : record.id;
   const panel = document.createElement("section");
   panel.className = "surface review-editor";
+  panel.dataset.entity = entity;
+  panel.dataset.recordId = identifier;
   panel.append(text("h3", entity === "alert" ? "Review this alert" : "Review this evidence"));
   const availability = text("p", state.archiveSource ? "Detection archives are read-only."
     : "Restart Slips manually to enable review actions in the running web server.", "muted review-availability");
   availability.hidden = state.reviewAvailable;
   panel.append(availability);
   const current = record.review_status || (entity === "alert" ? "active" : "unreviewed");
-  const currentStatus = text("p", `Current: ${current.replaceAll("_", " ")}`, "muted");
+  const currentStatus = text("p", `Current: ${current.replaceAll("_", " ")}`, "muted review-current");
   if (record.review_updated_at) currentStatus.append(" · ", timeValue(record.review_updated_at));
   panel.append(currentStatus);
   const status = document.createElement("select");
@@ -4495,6 +4591,7 @@ function reviewEditor(entity, record) {
         note: note.value });
       Object.assign(record, { review_status: result.status, review_note: result.note,
         review_updated_at: null, ...(entity === "alert" ? { review_verdict: result.verdict } : {}) });
+      if (entity === "evidence") syncEvidenceQuickActions(identifier, result);
       currentStatus.textContent = `Current: ${result.status.replaceAll("_", " ")}`;
       note.value = result.note;
       feedback.hidden = true;
@@ -6888,6 +6985,9 @@ function alertCard(record) {
  * @returns {HTMLElement} Evidence card.
  */
 function evidenceCard(record, contextRecords = null, inAlertPane = false) {
+  const card = document.createElement("div");
+  card.className = "evidence-card";
+  card.hidden = Boolean(record.ignored);
   const button = document.createElement("button");
   const level = String(record.threat_level || "info").toLowerCase();
   button.type = "button";
@@ -6908,7 +7008,8 @@ function evidenceCard(record, contextRecords = null, inAlertPane = false) {
   );
   button.append(metadata);
   button.addEventListener("click", () => openEvidence(record, contextRecords, inAlertPane).catch(() => {}));
-  return button;
+  card.append(button, evidenceQuickActions(record));
+  return card;
 }
 
 /** Read one normalized field from a stored network or protocol record. */
@@ -7679,7 +7780,8 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
       : pageRecords.some((item) => item.id === record.id) ? pageRecords : [record]
   );
   if (state.activeTab === "evidence"
-      && (context === groupRecords || context === pageRecords)) {
+      && (groupRecords.some((item) => item.id === record.id)
+        || pageRecords.some((item) => item.id === record.id))) {
     state.evidenceWorkspace.record = record;
     if (state.evidenceWorkspace.group) {
       document.querySelectorAll("#evidence-right .evidence-record-row").forEach((button) => {
@@ -7690,10 +7792,11 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
       renderEvidenceGroup();
     }
   }
-  detail.records = context;
+  const visibleContext = context.filter((item) => Boolean(item.ignored) === Boolean(record.ignored));
+  detail.records = visibleContext;
   detail.record = record;
   const generation = ++detail.generation;
-  const position = context.findIndex((item) => item.id === record.id);
+  const position = visibleContext.findIndex((item) => item.id === record.id);
   const page = byId("evidence-detail");
   const content = byId("evidence-detail-content");
   const inPane = !inAlertPane && state.activeTab === "evidence" && (detail.inPane || !cameFromDrawer);
@@ -7736,13 +7839,19 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
   breadcrumb.append(back);
   const controls = document.createElement("div");
   controls.className = "evidence-detail-controls";
-  if (context.length > 1 && position >= 0) {
-    controls.append(text("span", `Record ${position + 1} of ${context.length}`, "muted"));
+  if (visibleContext.length > 1 && position >= 0) {
+    controls.append(text("span", `Record ${position + 1} of ${visibleContext.length}`, "muted evidence-navigation-count"));
     [["↑ prev", position - 1], ["next ↓", position + 1]].forEach(([label, index]) => {
       const button = text("button", label, "secondary");
       button.type = "button";
-      button.disabled = index < 0 || index >= context.length;
-      button.addEventListener("click", () => openEvidence(context[index], context, inAlertPane).catch(() => {}));
+      button.dataset.evidenceStep = String(index - position);
+      button.disabled = index < 0 || index >= visibleContext.length;
+      button.addEventListener("click", () => {
+        const records = detail.records;
+        const current = records.findIndex((item) => item.id === detail.record?.id);
+        const next = records[current + Number(button.dataset.evidenceStep)];
+        if (next) openEvidence(next, records, inAlertPane).catch(() => {});
+      });
       controls.append(button);
     });
   }
@@ -7786,6 +7895,7 @@ async function openEvidence(record, contextRecords = null, inAlertPane = false) 
     ["Host score then", slipsScore(record)],
     ["Confidence", `${Math.round(numeric(record.confidence) * 100)}%`],
   ]));
+  bannerStats.append(evidenceQuickActions(record));
   const alertCount = record.alert_ids?.length || 0;
   if (alertCount) bannerStats.append(text("span", `Part of ${compact(alertCount)} alert${alertCount === 1 ? "" : "s"}`, "evidence-detail-alert-count"));
   banner.append(bannerCopy, bannerStats);
@@ -8765,7 +8875,11 @@ async function loadHostEvidence() {
   renderTable("host-evidence-table", groupedRows, [
     (row) => timeValue(row.timestamp, formatTime),
     (row) => threat(row.threat_level),
-    (row) => evidenceTypeCell(row),
+    (row) => {
+      const label = document.createElement("div");
+      label.append(evidenceTypeCell(row), evidenceQuickActions(row));
+      return label;
+    },
     (row) => reportingPeers(row),
     (row) => text("code", row.module || "—"),
     (row) => whitelistHandling(row),

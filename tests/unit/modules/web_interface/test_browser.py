@@ -21,6 +21,154 @@ from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
 
 
+@pytest.mark.parametrize("mode,theme,width", [("individual", "light", 1500), ("host", "dark", 1500), ("individual", "dark", 390)])
+def test_quick_evidence_review_and_ignore(mode: str, theme: str, width: int) -> None:
+    """Review individual rows without opening them, and recover ignored records.
+
+    Parameters:
+        mode: Individual rows or records inside a selected host group.
+        theme: Color theme.
+        width: Available browser width.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    records = [{"id": identifier, "profile_ip": "192.0.2.20", "evidence_type": "UNKNOWN_PORT",
+                "module": "conn_analyzer", "timestamp": 1700000000, "threat_level": "high",
+                "confidence": 1, "flow_count": 0, "alert_ids": [], "description": identifier,
+                "review_status": "unreviewed", "review_note": "Keep this note", "ignored": False}
+               for identifier in ("quick-a", "quick-b")]
+    group = {**records[0], "id": "host:192.0.2.20", "evidence_count": 2}
+    saved: list[dict[str, Any]] = []
+    flow_requests: list[str] = []
+    errors: list[str] = []
+    fail = False
+
+    def respond(route: Any) -> None:
+        """Serve shipped assets and durable per-record decisions in isolation.
+
+        Parameters:
+            route: Intercepted browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/style.css"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else "style.css")))
+        elif url.path == "/app.js":
+            route.fulfill(body=script, content_type="text/javascript")
+        elif url.path == "/api/evidence-review":
+            change = route.request.post_data_json
+            if fail:
+                route.fulfill(status=500, json={"error": "Review write failed"})
+                return
+            saved.append(change)
+            record = next(item for item in records if item["id"] == change["id"])
+            if change["action"] == "ignore":
+                record["ignored"] = change["ignored"]
+                result = {"id": record["id"], "ignored": record["ignored"]}
+            else:
+                record["review_status"] = change["status"]
+                result = {"id": record["id"], "status": record["review_status"], "note": record["review_note"]}
+            route.fulfill(json=result)
+        elif url.path == "/api/evidence":
+            query = parse_qs(url.query)
+            ignored_only = query.get("review") == ["ignored"]
+            items = [item for item in records if item["ignored"] == ignored_only]
+            rows = [{**group, "evidence_count": len(items)}] if query.get("group") and items else items
+            route.fulfill(json={"items": rows, "total": len(rows), "matching_total": len(items),
+                                "page_size": len(rows), "next_cursor": None})
+        elif url.path.endswith("/flows"):
+            flow_requests.append(url.path)
+            route.fulfill(json={"items": [], "total": 0, "linked_uid_count": 0, "next_cursor": None})
+        elif url.path == "/api/host-names":
+            route.fulfill(json={"names": {}})
+        else:
+            route.fulfill(status=503, json={"error": "Isolated quick review fixture"})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""async ({mode,theme,group}) => {
+                setTheme(theme);state.activeTab='evidence';state.reviewAvailable=true;
+                state.networkOnly=false;state.deviceView=false;state.hideExcluded=false;
+                document.querySelectorAll('.panel').forEach(node=>node.classList.toggle('active',node.id==='evidence'));
+                document.body.classList.add('evidence-active');
+                byId('evidence-view').value=mode;byId('evidence-range').value='all';
+                if(mode!=='individual') state.evidenceWorkspace.group=group;
+                await loadEvidence();if(mode!=='individual') await loadEvidenceGroupRecords(true);
+            }""", {"mode": mode, "theme": theme, "group": group})
+            actions = page.locator('.evidence-quick-actions[data-evidence-id="quick-a"]').first
+            assert actions.locator("button").all_text_contents() == ["Ignore", "FP", "TP"]
+            if mode != "individual":
+                assert page.locator("#evidence-table .evidence-quick-actions").count() == 0
+            actions.get_by_role("button", name="FP", exact=True).click()
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert saved[-1] == {"action": "review", "id": "quick-a", "status": "false_positive"}
+            assert actions.get_by_role("button", name="FP", exact=True).get_attribute("aria-pressed") == "true"
+            assert flow_requests == []
+            fail = True
+            actions.get_by_role("button", name="TP", exact=True).click()
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert records[0]["review_status"] == "false_positive"
+            assert actions.get_by_role("button", name="TP", exact=True).is_enabled()
+            assert "Review write failed" in page.locator("#toast").inner_text()
+            fail = False
+            actions.get_by_role("button", name="TP", exact=True).focus()
+            page.keyboard.press("Enter")
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert records[0]["review_status"] == "true_positive"
+            assert flow_requests == []
+            assert records[0]["review_note"] == "Keep this note"
+            actions.locator("xpath=ancestor::tr").locator("td").first.click()
+            page.wait_for_selector(".evidence-detail-banner .evidence-quick-actions")
+            page.locator('.evidence-quick-actions[data-evidence-id="quick-b"]').first.get_by_role("button", name="Ignore", exact=True).click()
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert page.evaluate("state.evidenceDetail.record.id") == "quick-a"
+            assert page.evaluate("state.evidenceDetail.records.map(item=>item.id)") == ["quick-a"]
+            assert page.locator('[data-evidence-step="1"]').is_disabled()
+            page.evaluate("""async () => {
+                await saveReviewChange('evidence',{action:'ignore',id:'quick-b',ignored:false});
+                await refreshAfterReview('evidence',true);
+            }""")
+            page.locator(".evidence-detail-banner .evidence-quick-actions").get_by_role("button", name="Ignore", exact=True).click()
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert page.locator('.evidence-quick-actions[data-evidence-id="quick-a"]').count() == 0
+            assert records[0]["ignored"] and records[0]["review_status"] == "true_positive"
+            if mode != "individual":
+                assert page.evaluate("state.evidenceWorkspace.group.id") == group["id"]
+            page.evaluate("""async () => {byId('evidence-review').value='ignored';await loadEvidence();
+                if(state.evidenceWorkspace.group) await loadEvidenceGroupRecords(true);} """)
+            actions.get_by_role("button", name="Unignore", exact=True).click()
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert records[0]["ignored"] is False
+            assert all(change["action"] != "delete" for change in saved)
+            assert not errors, errors
+            page.evaluate("""async () => {byId('evidence-review').value='all';await loadEvidence();
+                if(state.evidenceWorkspace.group) await loadEvidenceGroupRecords(true);} """)
+            page.screenshot(path=f"output/evidence-quick-{mode}-{theme}-{width}.png")
+            page.evaluate("""record => {
+                const fixture=document.createElement('div');fixture.id='quick-card-fixture';
+                fixture.append(evidenceCard(record,[record],true));byId('evidence').append(fixture);
+            }""", records[1])
+            card = page.locator("#quick-card-fixture")
+            assert card.locator("button button").count() == 0
+            previous_flows = len(flow_requests)
+            card.get_by_role("button", name="FP", exact=True).click()
+            page.wait_for_function("state.evidenceReviewPending.size===0")
+            assert len(flow_requests) == previous_flows
+            assert records[1]["review_status"] == "false_positive"
+            page.evaluate("""record => {
+                state.reviewAvailable=false;byId('quick-card-fixture').replaceChildren(evidenceQuickActions(record));
+            }""", records[1])
+            assert card.locator("button:disabled").count() == 3
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme,width", [("light", 1100), ("dark", 390)])
 def test_legacy_https_new_server_text_is_readable_without_rewriting_evidence(
     theme: str, width: int,
@@ -2074,7 +2222,7 @@ def test_host_evidence_opens_beside_table_in_chrome(theme: str, width: int) -> N
             renderHostCards(host); updateHostViewportHeight(); await loadHostEvidence();
         }""", {"host": host, "theme": theme})
         rows = page.locator("#host-evidence-table tbody tr[data-clickable]")
-        rows.first.click()
+        rows.first.locator("td").first.click()
         page.wait_for_function("() => state.evidenceDetail.record?.id === 'host-evidence-0' && !state.requests.has('evidenceFlows')")
         inspector = page.locator("#host-evidence-pane #evidence-detail")
         assert inspector.is_visible()
@@ -2124,7 +2272,7 @@ def test_host_evidence_opens_beside_table_in_chrome(theme: str, width: int) -> N
         page.wait_for_function("() => state.evidenceDetail.inHostPane")
         inspector.get_by_role("button", name="Close evidence details", exact=True).click()
         assert not page.evaluate("state.evidenceDetail.inHostPane")
-        rows.first.click()
+        rows.first.locator("td").first.click()
         page.wait_for_function("() => state.evidenceDetail.inHostPane")
         page.evaluate("() => closeHost()")
         assert page.locator("#host-evidence-pane").is_hidden()

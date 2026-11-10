@@ -253,6 +253,16 @@ The Evidence Review filter works
 with grouped and individual views. These labels record analyst judgment; they
 do not change Slips scoring, the detector, or the whitelist. Use the
 Whitelist control separately to suppress future matches.
+
+Each individual evidence record has **Ignore**, **FP** and **TP** buttons in
+its row or card and in its detail pane. FP and TP save the review immediately
+without requiring a note, preserving any existing analyst note. Ignore only
+hides that record from normal evidence lists; it keeps the evidence, linked
+flows, alert relationships, score and review verdict. Select **Ignored** in
+the Evidence Review filter to find hidden records, then choose **Unignore**
+to show one again. Ignoring a record does not whitelist future detections or
+send a TP/FP judgment to P2P peers. These controls apply to records, never groups.
+
 The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.

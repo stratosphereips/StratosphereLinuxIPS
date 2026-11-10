@@ -2563,6 +2563,36 @@ class RunDataReader:
             Path(directory) / "p2p_trust_runtime" / "report_validation.sqlite"
         )
 
+    @staticmethod
+    def _evidence_visibility_clause(
+        connection: sqlite3.Connection, ignored_only: bool = False
+    ) -> str:
+        """Filter ignored records without changing reviews, scores or evidence.
+
+        Parameters:
+            connection: Current detection database connection.
+            ignored_only: Show ignored records instead of visible records.
+
+        Returns:
+            SQL predicate compatible with databases predating Ignore.
+        """
+        if not any(
+            row[1] == "ignored"
+            for row in connection.execute(
+                "PRAGMA table_info(evidence_reviews)"
+            )
+        ):
+            return "0 = 1" if ignored_only else "1 = 1"
+        if not connection.execute(
+            "SELECT 1 FROM evidence_reviews WHERE ignored = 1 LIMIT 1"
+        ).fetchone():
+            return "0 = 1" if ignored_only else "1 = 1"
+        operator = "IN" if ignored_only else "NOT IN"
+        return (
+            f"evidence.evidence_id {operator} "
+            "(SELECT evidence_id FROM evidence_reviews WHERE ignored = 1)"
+        )
+
     def _report_agreement_settings(self) -> dict[str, Any]:
         """Read this run's peer-agreement settings for reviews and trust display.
 
@@ -2712,6 +2742,11 @@ class RunDataReader:
                 raise ValueError("Unknown review status")
             if entity == "alert" and status == "resolved" and not note:
                 raise ValueError("Add a note before resolving an alert")
+        elif action == "ignore":
+            if entity != "evidence" or not isinstance(
+                payload.get("ignored"), bool
+            ):
+                raise ValueError("Choose whether to ignore this evidence")
         elif action == "delete":
             depth = payload.get("depth")
             allowed = (
@@ -2746,8 +2781,12 @@ class RunDataReader:
                 f"SELECT 1 FROM {table} WHERE {key} = ?", (identifier,)
             ).fetchone():
                 raise ValueError("Record no longer exists")
-            feedback_records = self._review_feedback_records(
-                connection, entity, identifier
+            feedback_records = (
+                []
+                if action == "ignore"
+                else self._review_feedback_records(
+                    connection, entity, identifier
+                )
             )
             deleted_evidence_ids = []
             connection.execute(
@@ -2770,6 +2809,36 @@ class RunDataReader:
                 "evidence_id TEXT PRIMARY KEY, status TEXT NOT NULL, "
                 "note TEXT NOT NULL DEFAULT '', updated_at REAL NOT NULL)"
             )
+            if not any(
+                row[1] == "ignored"
+                for row in connection.execute(
+                    "PRAGMA table_info(evidence_reviews)"
+                )
+            ):
+                connection.execute(
+                    "ALTER TABLE evidence_reviews ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0"
+                )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS evidence_ignored_idx "
+                "ON evidence_reviews(evidence_id) WHERE ignored = 1"
+            )
+            if action == "ignore":
+                connection.execute(
+                    "INSERT INTO evidence_reviews "
+                    "(evidence_id, status, updated_at, ignored) "
+                    "VALUES (?, 'unreviewed', ?, ?) ON CONFLICT(evidence_id) "
+                    "DO UPDATE SET ignored = excluded.ignored",
+                    (identifier, time.time(), int(payload["ignored"])),
+                )
+                connection.commit()
+                return {"id": identifier, "ignored": payload["ignored"]}
+            if action == "review" and "note" not in payload:
+                existing = connection.execute(
+                    f"SELECT note FROM {entity}_reviews WHERE {key} = ?",
+                    (identifier,),
+                ).fetchone()
+                if existing:
+                    note = existing["note"]
             if action == "review":
                 if entity == "alert":
                     connection.execute(
@@ -3473,8 +3542,7 @@ class RunDataReader:
         )
         if self._table_exists(connection, "evidence_reviews"):
             review = connection.execute(
-                "SELECT status, note, updated_at FROM evidence_reviews "
-                "WHERE evidence_id = ?",
+                "SELECT * FROM evidence_reviews " "WHERE evidence_id = ?",
                 (evidence_id,),
             ).fetchone()
             if review:
@@ -3483,9 +3551,15 @@ class RunDataReader:
                         "review_status": review["status"],
                         "review_note": review["note"],
                         "review_updated_at": review["updated_at"],
+                        "ignored": (
+                            bool(review["ignored"])
+                            if "ignored" in review.keys()
+                            else False
+                        ),
                     }
                 )
         record.setdefault("review_status", "unreviewed")
+        record.setdefault("ignored", False)
         self._clarify_legacy_p2p_report(record)
         self._annotate_peer_detection(record)
         normalize_icmp_evidence(record)
@@ -3659,6 +3733,10 @@ class RunDataReader:
             clauses = ["1 = 1"]
             params: List[Any] = []
             review_status = self._query_value(query, "review", "all")
+            visibility_clause = self._evidence_visibility_clause(
+                connection, review_status == "ignored"
+            )
+            clauses.append(visibility_clause)
             if review_status in {
                 "unreviewed",
                 "in_review",
@@ -3766,6 +3844,7 @@ class RunDataReader:
             summary_source = (
                 hourly_evidence_source(connection, start, end)
                 if covered_groups
+                and visibility_clause == "1 = 1"
                 and self._query_value(query, "scored_only") != "1"
                 else None
             )
@@ -3908,6 +3987,7 @@ class RunDataReader:
                     and not threat
                     and not association
                     and review_status == "all"
+                    and visibility_clause == "1 = 1"
                     and not profile
                     and self._query_value(query, "scored_only") != "1"
                     and connection.execute(
@@ -4184,6 +4264,10 @@ class RunDataReader:
                 clauses = ["1 = 1"]
                 params: List[Any] = []
                 review_status = self._query_value(query, "review", "all")
+                visibility_clause = self._evidence_visibility_clause(
+                    connection, review_status == "ignored"
+                )
+                clauses.append(visibility_clause)
                 if review_status in {
                     "unreviewed",
                     "in_review",
