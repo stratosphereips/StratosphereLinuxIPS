@@ -393,6 +393,23 @@ class DetectionHistory:
                             "CREATE TABLE ", "CREATE TABLE IF NOT EXISTS ", 1
                         )
                     )
+                    if table == "evidence_reviews":
+                        source_columns = {
+                            column[1]
+                            for column in self.connection.execute(
+                                "PRAGMA table_info(evidence_reviews)"
+                            )
+                        }
+                        archive_columns = {
+                            column[1]
+                            for column in archive.execute(
+                                "PRAGMA table_info(evidence_reviews)"
+                            )
+                        }
+                        if "ignored" in source_columns - archive_columns:
+                            archive.execute(
+                                "ALTER TABLE evidence_reviews ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0"
+                            )
             statements = (
                 "CREATE TABLE IF NOT EXISTS archive_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL)",
                 "CREATE INDEX IF NOT EXISTS evidence_time_cover_idx ON evidence(evidence_time,evidence_id,"

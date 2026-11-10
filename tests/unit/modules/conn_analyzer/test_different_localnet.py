@@ -9,9 +9,12 @@ from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 import pytest
+
+from modules.web_interface.server import RunDataReader
 from modules.supported_module_names import Modules
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.input_profilers.zeek import ZeekJSON
+from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.structures.evidence import (
     Direction,
     EvidenceType,
@@ -200,6 +203,101 @@ async def test_recorded_icmp_flow_produces_one_finding_per_host_in_main() -> (
     for evidence in findings:
         assert evidence.uid == ["C6VlUE4fyYvUJHu3ei"]
         assert "both private addresses are outside" in evidence.description
+
+
+def test_recorded_connections_store_one_severity_per_host_and_flow(
+    tmp_path: Path,
+) -> None:
+    """Replay both dataset connections into an isolated evidence database.
+
+    Parameters:
+        tmp_path: Temporary output directory for the regression database.
+    """
+    module_factory = ModuleFactory()
+    conn = module_factory.create_conn_analyzer_obj()
+    dns = module_factory.create_dns_analyzer_obj()
+    dns.db = conn.db
+    dns.set_evidence.db = conn.db
+    conn.db.get_network_state.return_value = None
+    conn.db.get_local_network.return_value = "192.168.0.0/16"
+    conn.db.is_official_dns_server.return_value = False
+    database = SQLiteDB(module_factory.logger, str(tmp_path), os.getpid())
+    conn.db.set_evidence.side_effect = database.add_evidence
+    parser = ZeekJSON(module_factory.logger)
+    try:
+        for line in (
+            Path("dataset/test13-malicious-dhcpscan-zeek-dir/conn.log")
+            .read_text()
+            .splitlines()
+        ):
+            flow, error = parser.process_line(
+                {
+                    "type": "conn.log",
+                    "interface": "default",
+                    "data": json.loads(line),
+                }
+            )
+            assert not error
+            conn.check_different_localnet_usage("timewindow1", flow)
+            dns.check_different_localnet_usage("timewindow1", flow)
+
+        rows = database.conn.execute(
+            "SELECT f.uid,e.profile_ip,e.threat_level,e.data FROM evidence e "
+            "JOIN evidence_flows f ON e.evidence_id=f.evidence_id "
+            "WHERE e.evidence_type='DIFFERENT_LOCALNET' ORDER BY f.uid,e.profile_ip"
+        ).fetchall()
+        assert len(rows) == 4
+        assert {row[:3] for row in rows} == {
+            ("C6VlUE4fyYvUJHu3ei", "10.0.2.2", "high"),
+            ("C6VlUE4fyYvUJHu3ei", "10.0.2.15", "info"),
+            ("C6ce9q3xECAsonga21", "192.168.1.5", "high"),
+            ("C6ce9q3xECAsonga21", "10.0.2.2", "info"),
+        }
+        assert len({row[:2] for row in rows}) == len(rows)
+        for uid, host, level, raw in rows:
+            evidence = json.loads(raw)
+            assert (
+                evidence["profile"]["ip"]
+                == evidence["attacker"]["value"]
+                == host
+            )
+            assert evidence["attacker"]["direction"] == (
+                "SRC" if level == "high" else "DST"
+            )
+            assert evidence["uid"] == [uid]
+
+        client = Mock()
+        client.hgetall.return_value = {}
+        client.hget.return_value = None
+        client.get.return_value = None
+        client.smembers.return_value = set()
+        client.zrange.return_value = []
+        with patch(
+            "modules.web_interface.server.try_connect_with_and_without_password",
+            return_value=client,
+        ):
+            reader = RunDataReader(
+                6379, str(tmp_path), str(tmp_path / "hosts.sqlite")
+            )
+        for host, level, direction in (
+            ("10.0.2.2", "high", "SRC"),
+            ("10.0.2.15", "info", "DST"),
+        ):
+            page = reader.evidence(
+                {
+                    "profile": [host],
+                    "range": ["all"],
+                    "type": ["DIFFERENT_LOCALNET"],
+                    "search": ["C6VlUE4fyYvUJHu3ei"],
+                }
+            )
+            assert page["total"] == 1
+            item = page["items"][0]
+            assert item["profile_ip"] == host
+            assert item["threat_level"] == level
+            assert item["attacker"]["direction"] == direction
+    finally:
+        database.close()
 
 
 @pytest.mark.parametrize("analyzer", ["conn", "dns"])
@@ -424,6 +522,71 @@ def test_roaming_poll_gap_does_not_create_a_different_localnet_finding(
         ]
         assert all("192.168.1.0/24" in item.description for item in findings)
     module.db.get_local_network.assert_not_called()
+
+
+@pytest.mark.parametrize("known_history", [False, True])
+def test_evidence_provenance_uses_capture_network(known_history: bool) -> None:
+    """Attribute delayed evidence without using the processing-time network.
+
+    Parameters:
+        known_history: Whether capture-time settings are still retained.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_conn_analyzer_set_evidence_helper()
+    helper.different_localnet_usage(
+        "timewindow1",
+        SimpleNamespace(
+            saddr="10.0.2.2",
+            daddr="10.0.2.15",
+            proto="tcp",
+            sport=40000,
+            dport=80,
+            interface="en0",
+            starttime=150,
+            uid="queued-subnet-flow",
+        ),
+        "both",
+        "192.168.0.0/16",
+    )
+    evidence = helper.db.set_evidence.call_args_list[0].args[0]
+    manager = SimpleNamespace(
+        rdb=Mock(),
+        sqlite=Mock(),
+        conf=Mock(),
+        trust_db=Mock(),
+        output_dir="output/unit-subnet-provenance",
+        main_pid=os.getpid(),
+        source_module=Modules.CONN_ANALYZER.value,
+        _get_evidence_interface=Mock(return_value="en0"),
+        update_threat_level=Mock(),
+    )
+    manager.conf.disabled_detections.return_value = []
+    manager.sqlite.is_evidence_whitelisted.return_value = False
+    manager.rdb.set_evidence.return_value = True
+    manager.rdb.get_network_state.return_value = {
+        "changed_at": 300,
+        "gateway_mac": "ce:3f:36:4b:ad:64",
+        "history": (
+            [{"changed_at": 100, "gateway_mac": "d8:58:d7:1:ff:e1"}]
+            if known_history
+            else []
+        ),
+    }
+    manager.sqlite.evidence_network_state.side_effect = (
+        lambda state, observed_at, uids: SQLiteDB.evidence_network_state(
+            manager.sqlite, state, observed_at, uids
+        )
+    )
+
+    assert DBManager.set_evidence(manager, evidence) is True
+
+    assert evidence.detection_provenance["network_id"] == (
+        "gateway:d8:58:d7:1:ff:e1"
+        if known_history
+        else f"run:{manager.output_dir}:{manager.main_pid}"
+    )
+    assert evidence.detection_provenance["observed_at"] == 150
+    manager.rdb.get_network_state.assert_called_once_with("en0")
 
 
 def test_roaming_does_not_exempt_connections_outside_the_new_subnet() -> None:

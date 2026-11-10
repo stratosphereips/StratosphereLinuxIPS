@@ -1,13 +1,251 @@
 import json
 import sqlite3
-from unittest.mock import Mock, patch
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, patch
+from types import SimpleNamespace
+
+import psutil
+
+import pytest
 
 from modules.web_interface.history import (
     HistoryCollector,
     connect_history,
     initialize_history,
+    network_connection_scope,
+    NETWORK_SCOPES_KEY,
+    RUNTIME_RESOURCES_KEY,
 )
 from tests.module_factory import ModuleFactory
+from slips_files.common.sqlite_flock import SQLiteFlock
+
+
+@pytest.mark.parametrize("interface", ["en0", "wlan0", "default", "", None])
+def test_flow_interfaces_rebuild_once_and_expire_with_flows(
+    tmp_path: Path, interface: str | None,
+) -> None:
+    """Upgrade a populated history in bounded batches and remove stale metadata.
+
+    Parameters:
+        tmp_path: Isolated capture output.
+        interface: Captured interface, including legacy untagged values.
+    """
+    _factory = ModuleFactory()
+    output = tmp_path / "run"
+    history = output / "web_interface" / "history.sqlite"
+    source = output / "databases" / "flows.sqlite"
+    create_flow_database(source)
+    with sqlite3.connect(source) as connection:
+        connection.execute("INSERT INTO flows VALUES ('saved',?,'benign')",
+                           (json.dumps({"starttime": 100, "saddr": "10.0.0.1", "interface": interface}),))
+    collector = HistoryCollector(str(output), history, Mock(), 999999)
+    assert collector.index_new_flows() == 1
+    with connect_history(history) as connection:
+        connection.execute("DROP TABLE flow_interfaces")
+    initialize_history(history)
+    assert collector.index_new_flows() == 1
+    initialize_history(history)
+    assert collector.index_new_flows() == 0
+    with connect_history(history, read_only=True) as connection:
+        assert connection.execute("SELECT interface FROM flow_interfaces").fetchone()[0] == (
+            "" if interface in {None, "default"} else interface
+        )
+    with sqlite3.connect(source) as connection:
+        connection.execute("DELETE FROM flows")
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history, read_only=True) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM flow_interfaces").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize(
+    "states,expected",
+    [
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "aa", "changed_at": 200, "connected": True},
+            ],
+            100,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "bb", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {"gateway_mac": "aa", "changed_at": 150, "connected": False},
+                {"gateway_mac": "aa", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "aa", "changed_at": 100, "connected": True},
+                {
+                    "gateway_mac": "aa",
+                    "changed_at": 200,
+                    "connected": True,
+                    "history": [
+                        {
+                            "gateway_mac": "bb",
+                            "changed_at": 150,
+                            "connected": True,
+                        }
+                    ],
+                },
+            ],
+            200,
+        ),
+        (
+            [
+                {"gateway_mac": "", "changed_at": 100, "connected": True},
+                {"gateway_mac": "", "changed_at": 200, "connected": True},
+            ],
+            200,
+        ),
+    ],
+)
+def test_network_scope_is_durable_and_does_not_merge_other_connections(
+    tmp_path: Path,
+    states: list[dict],
+    expected: float,
+) -> None:
+    """Keep same-router history across collector restarts, respecting network changes.
+
+    Parameters:
+        tmp_path: Isolated web history.
+        states: Snapshots observed across independent collector lifetimes.
+        expected: Final lower time boundary.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "history.sqlite"
+    client = Mock()
+    for state in states:
+        client.hgetall.return_value = {"eth0": json.dumps(state)}
+        collector = HistoryCollector(str(tmp_path), path, client, 999999)
+        collector.record_backend_heartbeat()
+    with connect_history(path, read_only=True) as connection:
+        saved = json.loads(
+            connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (NETWORK_SCOPES_KEY,)
+            ).fetchone()[0]
+        )
+    assert saved["eth0"]["start"] == expected
+    assert len(saved) == 1
+
+
+@pytest.mark.parametrize(
+    "changed_at", [None, "bad", float("nan"), float("inf")]
+)
+def test_network_scope_rejects_invalid_timestamps(changed_at: object) -> None:
+    """Keep malformed network snapshots from changing a valid boundary.
+
+    Parameters:
+        changed_at: Invalid snapshot timestamp.
+    """
+    _factory = ModuleFactory()
+    assert network_connection_scope({"changed_at": changed_at}) == {}
+
+
+def test_network_scope_survives_bounded_snapshot_history(
+    tmp_path: Path,
+) -> None:
+    """More than ten same-router setting changes do not hide older evidence.
+
+    Parameters:
+        tmp_path: Independent web history file.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999
+    )
+    history = []
+    for changed_at in range(100, 125):
+        state = {
+            "gateway_mac": "aa",
+            "changed_at": changed_at,
+            "connected": True,
+            "history": history[-10:],
+        }
+        client.hgetall.return_value = {"eth0": json.dumps(state)}
+        collector.record_backend_heartbeat()
+        history.append(
+            {key: value for key, value in state.items() if key != "history"}
+        )
+    with connect_history(collector.history_path, read_only=True) as connection:
+        saved = json.loads(
+            connection.execute(
+                "SELECT value FROM metadata WHERE key=?", (NETWORK_SCOPES_KEY,)
+            ).fetchone()[0]
+        )
+    assert saved["eth0"]["start"] == 100
+    assert "history" not in saved["eth0"]
+
+
+def test_rotated_error_log_resets_offset_even_when_larger(
+    tmp_path: Path,
+) -> None:
+    """Read a replacement file from its beginning using inode checkpoints.
+
+    Parameters:
+        tmp_path: Isolated run directory.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "errors.log"
+    path.write_text("2026/10/09 13:54:02 [first] old\n")
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999
+    )
+    assert collector.tail_errors() == 1
+    path.rename(tmp_path / "rotated.log")
+    path.write_text(
+        "2026/10/09 13:54:03 [second] replacement with a longer message\n"
+    )
+    assert collector.tail_errors() == 1
+    with connect_history(collector.history_path) as connection:
+        assert [
+            row[0]
+            for row in connection.execute(
+                "SELECT module FROM error_events ORDER BY id"
+            )
+        ] == ["first", "second"]
+
+
+@pytest.mark.parametrize(
+    "input_type,expected", [("interface", 3), ("pcap", 0)]
+)
+def test_operational_history_retention_leaves_imported_captures_intact(
+    tmp_path: Path, input_type: str, expected: int
+) -> None:
+    """Expire old metrics, errors and transient hosts only in continuous runs.
+
+    Parameters:
+        tmp_path: Isolated history directory.
+        input_type: Source of the analysis.
+        expected: Number of expired records.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.hget.return_value = input_type
+    collector = HistoryCollector(
+        str(tmp_path), tmp_path / "history.sqlite", client, 999999
+    )
+    with connect_history(collector.history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time,module,message,line) VALUES (1,'module','message','line')"
+        )
+        connection.execute(
+            "INSERT INTO host_snapshots VALUES ('192.0.2.1',1,'{}')"
+        )
+        connection.execute(
+            "INSERT INTO runtime_metrics_1m VALUES (1,0,0,0,0,0,0,0,1)"
+        )
+    assert collector.prune_operational_history(2_000_000_000.0) == expected
 
 
 def create_flow_database(path) -> None:
@@ -21,6 +259,277 @@ def create_flow_database(path) -> None:
             "CREATE TABLE alerts (alert_id TEXT PRIMARY KEY, alert_time REAL, "
             "ip_alerted TEXT, timewindow TEXT, tw_start TEXT, tw_end TEXT, label TEXT)"
         )
+
+
+def test_detection_backfill_coordinates_with_capture_writers(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Use the capture's writer lock during legacy detection recovery.
+
+    Parameters:
+        tmp_path: Isolated run output.
+        monkeypatch: Scope the writer lock and recovery probe.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks"))
+    output_dir = tmp_path / "run"
+    create_flow_database(output_dir / "databases" / "flows.sqlite")
+    client = Mock()
+    client.hget.return_value = "other-run"
+    collector = HistoryCollector(str(output_dir), output_dir / "history.sqlite", client, 12345)
+    probe = SQLiteFlock("sqlite_db", 12345)
+
+    def check_writer(connection: sqlite3.Connection) -> int:
+        """Probe the lock while the backfill operation owns its connection.
+
+        Parameters:
+            connection: Protected active database connection.
+
+        Returns:
+            Synthetic recovery record count.
+        """
+        assert isinstance(connection, sqlite3.Connection)
+        with probe.try_acquire() as acquired:
+            assert acquired is False
+        return 1
+
+    monkeypatch.setattr(collector, "_backfill_alert_file", check_writer)
+    assert collector.backfill_detections() == 1
+    with probe.try_acquire() as acquired:
+        assert acquired is True
+
+
+def test_detection_backfill_resumes_after_short_work_budget(tmp_path: Path) -> None:
+    """Commit a bounded import and resume its file offset without duplication.
+
+    Parameters:
+        tmp_path: Isolated legacy capture directory.
+    """
+    _factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    create_flow_database(output_dir / "databases" / "flows.sqlite")
+    alerts_path = output_dir / "alerts" / "alerts.json"
+    alerts_path.parent.mkdir()
+    alerts_path.write_text("".join(json.dumps({
+        "Status": "Event", "ID": f"bounded-{index}",
+        "StartTime": "2026-10-23T10:00:00+00:00", "Confidence": 0.5,
+    }) + "\n" for index in range(5)))
+    client = Mock()
+    client.hget.return_value = "another-run"
+    collector = HistoryCollector(str(output_dir), output_dir / "history.sqlite", client, 999999)
+    with patch("modules.web_interface.history.time.monotonic", side_effect=[0, 0, .01, .06]):
+        assert collector.backfill_detections() == 2
+    with connect_history(collector.history_path, read_only=True) as connection:
+        offset = int(collector._metadata_get(connection, "alerts_json_offset"))
+    assert 0 < offset < alerts_path.stat().st_size
+    assert collector.backfill_detections() == 3
+    assert collector.backfill_detections() == 0
+    with sqlite3.connect(collector.flows_path) as connection:
+        assert connection.execute("SELECT count(*) FROM evidence").fetchone()[0] == 5
+
+
+def test_tail_errors_retains_traceback_across_polls(tmp_path) -> None:
+    """Keep continuation lines with their event when they arrive later."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    first = "2026/10/09 13:54:02.445783 [brute_force_detector] Traceback (most recent call last):"
+    second = "2026/10/09 13:54:03.000000 [other_module] Another error"
+    error_path.write_text(f"{first}\n  File \"detector.py\", line 461\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+
+    assert collector.tail_errors() == 1
+    with error_path.open("a") as handle:
+        handle.write(f"RecursionError: maximum recursion depth exceeded\n{second}\n")
+    assert collector.tail_errors() == 1
+
+    with connect_history(history_path, read_only=True) as connection:
+        rows = connection.execute(
+            "SELECT module, message, line FROM error_events ORDER BY id"
+        ).fetchall()
+    assert len(rows) == 2
+    assert rows[0]["module"] == "brute_force_detector"
+    assert rows[0]["message"] == "Traceback (most recent call last):"
+    assert '  File "detector.py", line 461' in rows[0]["line"]
+    assert "RecursionError: maximum recursion depth exceeded" in rows[0]["line"]
+    assert rows[1]["line"] == second
+
+
+def test_tail_errors_backfills_existing_header_only_events(tmp_path) -> None:
+    """Repair an already imported traceback without duplicating its row."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    header = "2026/10/09 13:54:02.445783 [brute_force_detector] Traceback (most recent call last):"
+    error_path.write_text(f"{header}\n  File \"detector.py\", line 461\nValueError: bad data\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "brute_force_detector", "Traceback (most recent call last):", header),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            ("error_offset:errors.log", str(error_path.stat().st_size)),
+        )
+
+    assert collector.tail_errors() == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = connection.execute("SELECT line FROM error_events").fetchall()
+    assert len(rows) == 1
+    assert '  File "detector.py", line 461' in rows[0]["line"]
+    assert rows[0]["line"].endswith("ValueError: bad data")
+
+
+def test_tail_errors_backfill_preserves_repeated_event_order(tmp_path) -> None:
+    """Match repeated headers to the correct historical occurrence."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    output_dir.mkdir()
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    error_path = output_dir / "errors.log"
+    header = "2026/10/09 13:54:02.445783 [worker] Traceback (most recent call last):"
+    first = f"{header}\nValueError: first"
+    error_path.write_text(f"{first}\n{header}\nValueError: second\n")
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with connect_history(history_path) as connection:
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "worker", "Traceback (most recent call last):", first),
+        )
+        connection.execute(
+            "INSERT INTO error_events(event_time, module, message, line) "
+            "VALUES (?, ?, ?, ?)",
+            (1.0, "worker", "Traceback (most recent call last):", header),
+        )
+        connection.execute(
+            "INSERT INTO metadata(key, value) VALUES (?, ?)",
+            ("error_offset:errors.log", str(error_path.stat().st_size)),
+        )
+
+    assert collector.tail_errors() == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = [row[0] for row in connection.execute(
+            "SELECT line FROM error_events ORDER BY id"
+        )]
+    assert rows == [first, f"{header}\nValueError: second"]
+
+
+@pytest.mark.parametrize("prefix", ["2026/11/04 14:05:04.123456 ", ""])
+@pytest.mark.parametrize("message", [
+    "Total analyzed IPs: 100. IPs sending traffic: 10",
+    "[ 4/32]   [PID 1234] Starts the HTTP analyzer",
+    "[112/32]  [PID 33883] Parses flows in parallel with other profiler workers",
+    "Starting module http_analyzer [PID 1234]",
+    "2026/11/04 14:05:04 IP 192.0.2.1 detected as malicious given the following evidence:",
+    "- Detected an unknown port. Threat level: high.",
+    "Weighted Threat Level: 0.5",
+    "[EvidenceHandler] Exporting evidence id type=UNKNOWN_PORT via export_evidence.",
+])
+def test_slips_log_filters_noise_without_losing_operational_messages(
+    tmp_path: Path, prefix: str, message: str,
+) -> None:
+    """Drop startup/statistics/detection blocks while retaining useful messages.
+
+    Parameters:
+        tmp_path: Isolated run and history database.
+        prefix: Foreground timestamp or timestamp-free daemon format.
+        message: Routine output excluded from the Logs tab.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "slips.log"
+    path.write_text(f"{prefix}[main] Network settings changed on en0\n"
+                    f"{prefix}[worker] {message}\n  ignored continuation\n")
+    collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999)
+    assert collector.tail_slips() == 1
+    with path.open("a") as handle:
+        handle.write("  later ignored continuation\n[worker] Warning: evidence database unavailable\n")
+    assert collector.tail_slips() == 1
+    assert collector.tail_slips() == 0
+    with connect_history(collector.history_path) as connection:
+        rows = connection.execute("SELECT message,line,source FROM error_events ORDER BY id").fetchall()
+    assert [row["message"] for row in rows] == ["Network settings changed on en0", "Warning: evidence database unavailable"]
+    assert all(row["source"] == "slips.log" for row in rows)
+    assert all("ignored continuation" not in row["line"] for row in rows)
+
+
+@pytest.mark.parametrize("rotation", ["rename", "truncate"])
+def test_slips_and_error_log_checkpoints_survive_restart_and_rotation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rotation: str,
+) -> None:
+    """Keep multiline events and timestamps separate across sources and restarts.
+
+    Parameters:
+        tmp_path: Isolated logs and checkpoints.
+        monkeypatch: Bound collector batches and freeze observation time.
+        rotation: Replace the inode or truncate the existing file.
+    """
+    _factory = ModuleFactory()
+    monkeypatch.setattr("modules.web_interface.history.FLOW_INDEX_BATCH_SIZE", 2)
+    monkeypatch.setattr("modules.web_interface.history.time.time", lambda: 2_000_000_000.0)
+    path = tmp_path / "slips.log"
+    path.write_text("[main] Historical network change\n[main] Historical second event\n[main] Historical third event\n")
+    error = tmp_path / "errors.log"
+    error.write_text("2026/11/04 14:05:04.123456 [main] Traceback (most recent call last):\n  File error.py\n")
+    collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", Mock(), 999999)
+    assert collector.tail_errors() == 1
+    assert collector.tail_slips() == 2
+    collector = HistoryCollector(str(tmp_path), collector.history_path, Mock(), 999999)
+    assert collector.tail_slips() == 1
+    with path.open("a") as handle:
+        handle.write("[main] Current network change\n  live detail\n")
+    assert collector.tail_slips() == 1
+    with error.open("a") as handle:
+        handle.write("ValueError: error detail\n")
+    assert collector.tail_errors() == 0
+    if rotation == "rename":
+        path.rename(tmp_path / "slips.log.1")
+    path.write_text("[main] Rotated event\n")
+    assert collector.tail_slips() == 1
+    assert collector.tail_slips() == 0
+    with connect_history(collector.history_path) as connection:
+        rows = [dict(row) for row in connection.execute("SELECT * FROM error_events ORDER BY id")]
+    errors = [row for row in rows if row["source"] == "errors.log"]
+    assert len(errors) == 1
+    assert errors[0]["line"].endswith("ValueError: error detail")
+    slips = [row for row in rows if row["source"] == "slips.log"]
+    assert [row["time_source"] for row in slips] == ["unknown"] * 3 + ["observed"] * 2
+    assert [row["event_time"] for row in slips] == [2_000_000_000.0] * 5
+    assert slips[3]["line"].endswith("  live detail")
+    assert "error detail" not in slips[3]["line"]
+    collector.redis.hget.return_value = "interface"
+    assert collector.prune_operational_history(2_000_000_000.0) == 1
+    with connect_history(collector.history_path) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM error_events WHERE source='slips.log'").fetchone()[0] == 5
+
+
+@pytest.mark.parametrize("legacy_source", ["errors.log", "error.log"])
+def test_runtime_log_schema_upgrade_preserves_old_errors(tmp_path: Path, legacy_source: str) -> None:
+    """Attach source metadata to old rows without recreating or deleting history.
+
+    Parameters:
+        tmp_path: Legacy history database directory.
+        legacy_source: Canonical or compatibility error filename.
+    """
+    _factory = ModuleFactory()
+    path = tmp_path / "history.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.executescript("CREATE TABLE metadata(key TEXT PRIMARY KEY,value TEXT);"
+            "CREATE TABLE error_events(id INTEGER PRIMARY KEY AUTOINCREMENT,event_time REAL,module TEXT,message TEXT,line TEXT);"
+            "INSERT INTO error_events VALUES(5,100,'main','error','raw');")
+        connection.execute("INSERT INTO metadata VALUES ('error_log_name',?)", (legacy_source,))
+    initialize_history(path)
+    initialize_history(path)
+    with connect_history(path) as connection:
+        row = dict(connection.execute("SELECT * FROM error_events").fetchone())
+    assert row == {"id":5,"event_time":100,"module":"main","message":"error","line":"raw",
+                   "source":legacy_source,"time_source":"logged"}
 
 
 def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
@@ -61,7 +570,125 @@ def test_flow_index_is_restart_safe_and_deduplicates_uids(tmp_path) -> None:
     assert len(rows) == 1
     assert rows[0]["bytes"] == 200
     assert rows[0]["source_packets"] == 1
+    with connect_history(history_path, read_only=True) as connection:
+        hosts = connection.execute("SELECT ip,observed_at,data FROM host_snapshots").fetchall()
+    assert [(row["ip"], row["observed_at"]) for row in hosts] == [("10.0.0.1", 10)]
+    assert json.loads(hosts[0]["data"])["scope"] == "local"
     assert checkpoint == "2"
+
+
+def test_flow_index_reconciles_pruned_raw_flows(tmp_path) -> None:
+    """Clear stale host traffic rows after raw retention removes them."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = {
+        "starttime": 10,
+        "saddr": "10.0.0.1",
+        "daddr": "8.8.8.8",
+        "proto": "tcp",
+        "bytes": 100,
+        "pkts": 2,
+    }
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                ("keep", json.dumps(flow), "benign"),
+                ("expire", json.dumps(flow), "benign"),
+            ],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 2
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows WHERE uid = 'expire'")
+
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history_path, read_only=True) as connection:
+        assert [
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        ] == ["keep"]
+
+
+def test_flow_index_restarts_after_sqlite_reuses_rowids(tmp_path) -> None:
+    """Index new traffic even if retention removed the previous tail row."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = {
+        "starttime": 10,
+        "saddr": "10.0.0.1",
+        "daddr": "8.8.8.8",
+        "proto": "tcp",
+        "bytes": 100,
+        "pkts": 2,
+    }
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [
+                (f"old-{index}", json.dumps(flow), "benign")
+                for index in range(3)
+            ],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 3
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows")
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("new", json.dumps(flow), "benign"),
+        )
+
+    assert collector.index_new_flows() == 1
+    assert collector.reconcile_flow_index() == 3
+    with connect_history(history_path, read_only=True) as connection:
+        assert [
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        ] == ["new"]
+
+
+def test_flow_index_detects_same_rowid_reused_for_new_uid(tmp_path) -> None:
+    """A replacement of the checkpoint row must still be indexed."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    flow = json.dumps(
+        {
+            "starttime": 10,
+            "saddr": "10.0.0.1",
+            "daddr": "8.8.8.8",
+            "proto": "tcp",
+            "bytes": 100,
+            "pkts": 2,
+        }
+    )
+    with sqlite3.connect(flows_path) as connection:
+        connection.executemany(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            [("old-1", flow, "benign"), ("old-2", flow, "benign")],
+        )
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    assert collector.index_new_flows() == 2
+    with sqlite3.connect(flows_path) as connection:
+        connection.execute("DELETE FROM flows WHERE uid = 'old-2'")
+        connection.execute(
+            "INSERT INTO flows VALUES (?, ?, ?)",
+            ("new", flow, "benign"),
+        )
+
+    assert collector.index_new_flows() == 2
+    assert collector.reconcile_flow_index() == 1
+    with connect_history(history_path, read_only=True) as connection:
+        assert {
+            row[0] for row in connection.execute("SELECT uid FROM flow_index")
+        } == {"old-1", "new"}
 
 
 def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
@@ -141,6 +768,47 @@ def test_alerts_json_backfill_persists_expired_relationships(tmp_path) -> None:
     assert flow == ("evidence-1", "flow-1")
     assert collector.backfill_detections() == 0
     assert redis_client.scan_iter.call_count == redis_scan_calls
+
+
+def test_detection_backfill_does_not_restore_deleted_records(tmp_path) -> None:
+    """Review tombstones prevent old alerts.json entries from reappearing."""
+    _module_factory = ModuleFactory()
+    output_dir = tmp_path / "run"
+    flows_path = output_dir / "databases" / "flows.sqlite"
+    history_path = output_dir / "web_interface" / "history.sqlite"
+    create_flow_database(flows_path)
+    collector = HistoryCollector(str(output_dir), history_path, Mock(), 999999)
+    with sqlite3.connect(flows_path) as connection:
+        collector._detection_schema(connection)
+        connection.execute(
+            "CREATE TABLE review_deletions(entity TEXT, record_id TEXT)"
+        )
+        connection.executemany(
+            "INSERT INTO review_deletions VALUES (?, ?)",
+            [("evidence", "evidence-1"), ("alert", "alert-1")],
+        )
+        collector._backfill_alert_record(connection, {
+            "Status": "Event", "ID": "evidence-1"
+        })
+        collector._backfill_alert_record(connection, {
+            "Status": "Incident", "ID": "alert-1"
+        })
+        collector._backfill_alert_record(connection, {
+            "Status": "Incident", "ID": "alert-2",
+            "CreateTime": "2026-10-11T00:00:00+00:00",
+            "StartTime": "2026-10-11T00:00:00+00:00",
+            "Source": [{"IP": "10.0.0.1"}],
+            "CorrelID": ["evidence-1"], "Note": "{}",
+        })
+        assert connection.execute(
+            "SELECT COUNT(*) FROM evidence"
+        ).fetchone()[0] == 0
+        assert connection.execute(
+            "SELECT alert_id FROM alerts"
+        ).fetchall() == [("alert-2",)]
+        assert connection.execute(
+            "SELECT COUNT(*) FROM alert_evidence"
+        ).fetchone()[0] == 0
 
 
 def test_backfill_skips_redis_scan_when_evidence_is_already_durable(
@@ -275,6 +943,7 @@ def test_collect_once_snapshots_hosts_before_detection_backfill(
     collector.index_new_flows = Mock()
     collector.sample_metrics = Mock()
     collector.tail_errors = Mock()
+    collector.tail_slips = Mock()
     collector.backfill_detections = Mock()
     collector.rollup_metrics = Mock()
 
@@ -282,6 +951,8 @@ def test_collect_once_snapshots_hosts_before_detection_backfill(
         collector.collect_once()
 
     assert calls == ["hosts"]
+    collector.tail_errors.assert_called_once_with()
+    collector.tail_slips.assert_called_once_with()
     collector.backfill_detections.assert_not_called()
 
 
@@ -410,3 +1081,235 @@ def test_collector_records_heartbeat_and_clean_disconnect(tmp_path) -> None:
         "backend_heartbeat_at": "100.0",
         "backend_disconnected_at": "101.0",
     }
+
+
+def test_score_recovery_preserves_canonical_data_and_existing_scores(tmp_path: Path) -> None:
+    """Fill old missing scores without replacing evidence or erasing real zero.
+
+    Parameters:
+        tmp_path: Isolated older run directory.
+    """
+    factory = ModuleFactory()
+    from slips_files.core.database.sqlite_db.database import SQLiteDB
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    database.execute("INSERT INTO evidence(evidence_id,data) VALUES ('missing','{\"canonical\":true}')")
+    database.execute("INSERT INTO evidence(evidence_id,data,accumulated_threat_level,accumulated_ratl) VALUES ('zero','{}',0,0)")
+    collector = HistoryCollector(str(tmp_path), tmp_path / 'history.sqlite', Mock(), 12345)
+    for identifier in ('missing', 'zero'):
+        record = {'ID': identifier, 'Status': 'Event', 'StartTime': '2026-10-25T10:00:00Z',
+                  'Source': [{'IP': '1.2.3.4'}], 'Note': json.dumps({'accumulated_threat_level':1.28,
+                  'risk_accumulated_threat_level':.4096, 'timewindow':1})}
+        collector._backfill_alert_record(database.conn, record)
+    database.conn.commit()
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl,data FROM evidence WHERE evidence_id='missing'").fetchone() == (1.28,.4096,'{"canonical":true}')
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='zero'").fetchone() == (0,0)
+    database.close()
+
+
+@pytest.mark.parametrize("cores", [1, 8])
+def test_resources_count_only_run_trees_and_normalize_cpu(tmp_path: Path, cores: int) -> None:
+    """Include detached Redis and Zeek once, normalizing against host capacity.
+
+    Parameters:
+        tmp_path: Isolated web history directory.
+        cores: Machine logical CPU count.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.info.return_value = {"process_id": 400}
+    client.get.return_value = 100
+    processes = {}
+    for pid, cpu, rss in [(100, 16, 100), (200, 16, 200), (300, 32, 300),
+                          (400, 8, 50), (500, 8, 25)]:
+        process = MagicMock()
+        process.pid = pid
+        process.is_running.return_value = True
+        process.status.return_value = psutil.STATUS_RUNNING
+        process.cpu_percent.return_value = cpu
+        process.memory_info.return_value = SimpleNamespace(rss=rss * 1024**2)
+        process.children.return_value = []
+        processes[pid] = process
+    processes[100].children.return_value = [processes[200], processes[300], processes[400]]
+    processes[400].children.return_value = [processes[500]]
+    path = tmp_path / "history.sqlite"
+    with patch("modules.web_interface.history.psutil.Process", side_effect=processes.__getitem__) as lookup:
+        collector = HistoryCollector(str(tmp_path), path, client, 100)
+        with (
+            patch("modules.web_interface.history.psutil.cpu_count", return_value=cores),
+            patch("modules.web_interface.history.psutil.virtual_memory", return_value=SimpleNamespace(total=4096 * 1024**2)),
+        ):
+            collector.sample_metrics()
+            collector.sample_metrics()
+        assert [call.args[0] for call in lookup.call_args_list] == [100, 400]
+    client.info.assert_called_once_with("server")
+    with connect_history(path, read_only=True) as connection:
+        sample = connection.execute("SELECT * FROM runtime_metrics_1s ORDER BY ts DESC LIMIT 1").fetchone()
+        resources = json.loads(connection.execute("SELECT value FROM metadata WHERE key=?", (RUNTIME_RESOURCES_KEY,)).fetchone()[0])
+    assert sample["cpu_percent"] == 80 / cores
+    assert sample["memory_mb"] == 675
+    assert resources["cpu_percent"] == sample["cpu_percent"]
+    assert resources["memory_percent"] == pytest.approx(675 / 4096 * 100)
+    assert resources["memory_bytes"] == 675 * 1024**2
+    assert resources["process_count"] == 5
+    assert resources["root_pid"] == 100
+    assert resources["complete"] is True
+    for process in processes.values():
+        assert process.cpu_percent.call_count == 2
+        process.memory_full_info.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["root_exited", "root_denied", "redis_unavailable", "access_denied", "zombie"])
+def test_run_process_selection_handles_exits_and_partial_access(tmp_path: Path, failure: str) -> None:
+    """Keep run boundaries when trees exit or process inspection is restricted.
+
+    Parameters:
+        tmp_path: Isolated web history directory.
+        failure: Process discovery failure to simulate.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.info.return_value = {"process_id": 400}
+    root = Mock(pid=100)
+    root.is_running.return_value = failure != "root_exited"
+    root.status.return_value = psutil.STATUS_RUNNING
+    root.children.return_value = []
+    database = Mock(pid=400)
+    database.is_running.return_value = True
+    database.status.return_value = psutil.STATUS_ZOMBIE if failure == "zombie" else psutil.STATUS_RUNNING
+    database.children.return_value = []
+    if failure == "redis_unavailable":
+        client.info.return_value = {}
+    if failure == "root_denied":
+        root.is_running.side_effect = psutil.AccessDenied(100)
+    if failure == "access_denied":
+        root.children.side_effect = psutil.AccessDenied(100)
+    with patch("modules.web_interface.history.psutil.Process", side_effect={100: root, 400: database}.__getitem__) as lookup:
+        collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", client, 100)
+        selected = collector._live_processes()
+        if failure in {"root_exited", "root_denied"}:
+            assert selected == []
+            client.info.assert_not_called()
+            lookup.assert_called_once_with(100)
+        elif failure in {"redis_unavailable", "zombie"}:
+            assert [process.pid for process in selected] == [100]
+        else:
+            assert [process.pid for process in selected] == [100, 400]
+    assert collector._process_scope_complete is False
+
+
+def test_metric_sampling_replaces_reused_process_identity(tmp_path: Path) -> None:
+    """Discard CPU state belonging to an earlier process with the same PID.
+
+    Parameters:
+        tmp_path: Isolated resource history directory.
+    """
+    _factory = ModuleFactory()
+    client = Mock()
+    client.get.return_value = 0
+    collector = HistoryCollector(str(tmp_path), tmp_path / "history.sqlite", client, 999999)
+    old, current = MagicMock(pid=100), MagicMock(pid=100)
+    old.cpu_percent.return_value = 80
+    current.cpu_percent.return_value = 5
+    old.memory_info.return_value = SimpleNamespace(rss=100 * 1024**2)
+    current.memory_info.return_value = SimpleNamespace(rss=10 * 1024**2)
+    collector._live_processes = Mock(side_effect=[[old], [current]])
+    with patch("modules.web_interface.history.psutil.cpu_count", return_value=1):
+        collector.sample_metrics()
+        collector.sample_metrics()
+    with connect_history(collector.history_path, read_only=True) as connection:
+        sample = connection.execute("SELECT cpu_percent,memory_mb FROM runtime_metrics_1s ORDER BY ts DESC LIMIT 1").fetchone()
+    assert sample["cpu_percent"] == 5
+    assert sample["memory_mb"] == 10
+    assert collector._processes[100] is current
+
+
+@pytest.mark.parametrize("complete", [False, True])
+def test_restore_host_inventory_is_incremental_and_preserves_identity(tmp_path: Path, complete: bool) -> None:
+    """Restore missing hosts from bounded findings without copying false identities.
+
+    Parameters:
+        tmp_path: Isolated findings and web databases.
+        complete: Complete startup recovery or one bounded background batch.
+    """
+    _factory = ModuleFactory()
+    history_path = tmp_path / "history.sqlite"
+    source_path = tmp_path / "flows.sqlite"
+    initialize_history(history_path)
+    with connect_history(history_path) as connection:
+        connection.execute("INSERT INTO host_snapshots VALUES ('192.0.2.1',1,?)", (json.dumps({"ip":"192.0.2.1","hostname":"Known host","mac":"00:11:22:33:44:55"}),))
+    with sqlite3.connect(source_path) as connection:
+        connection.executescript("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL);CREATE TABLE alerts(alert_id TEXT PRIMARY KEY,ip_alerted TEXT,alert_time TEXT);")
+        connection.executemany("INSERT INTO evidence VALUES (?,?,?)", [("known","192.0.2.1",100),("invalid","not-an-ip",101),("new","10.0.0.2",102)])
+        connection.execute("INSERT INTO alerts VALUES ('alert','2001:db8::1','103')")
+    with patch("modules.web_interface.history.FLOW_INDEX_BATCH_SIZE", 2):
+        processed = HistoryCollector.restore_host_inventory(history_path, source_path, complete=complete)
+    assert processed == (4 if complete else 3)
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == (0 if complete else 1)
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == 0
+    with connect_history(history_path, read_only=True) as connection:
+        rows = {row["ip"]:row for row in connection.execute("SELECT * FROM host_snapshots")}
+    assert set(rows) == {"192.0.2.1","10.0.0.2","2001:db8::1"}
+    assert rows["192.0.2.1"]["observed_at"] == 100
+    assert json.loads(rows["192.0.2.1"]["data"])["hostname"] == "Known host"
+    assert rows["10.0.0.2"]["observed_at"] == 102
+    with sqlite3.connect(source_path) as connection:
+        connection.execute("INSERT INTO evidence VALUES ('later','10.0.0.3',104)")
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == 1
+    assert HistoryCollector.restore_host_inventory(history_path, source_path) == 0
+
+
+@pytest.mark.parametrize("change", ["empty_inventory", "reused_rowid", "replaced_database"])
+def test_restore_host_inventory_rebuilds_after_resets(tmp_path: Path, change: str) -> None:
+    """Recover data after a cache reset or a different source reuses row IDs.
+
+    Parameters:
+        tmp_path: Isolated source and derived host inventory.
+        change: Cache or source replacement to simulate.
+    """
+    _factory = ModuleFactory()
+    history_path = tmp_path / "history.sqlite"
+    source_path = tmp_path / "flows.sqlite"
+    initialize_history(history_path)
+    with sqlite3.connect(source_path) as connection:
+        connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+        connection.execute("INSERT INTO evidence VALUES ('one','10.0.0.1',100)")
+    assert HistoryCollector.restore_host_inventory(history_path, source_path, complete=True) == 1
+    if change == "empty_inventory":
+        with connect_history(history_path) as connection:
+            connection.execute("DELETE FROM host_snapshots")
+    else:
+        if change == "replaced_database":
+            old_path = tmp_path / "old.sqlite"
+            source_path.rename(old_path)
+        with sqlite3.connect(source_path) as connection:
+            if change == "replaced_database":
+                connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+            else:
+                connection.execute("DELETE FROM evidence")
+            connection.execute("INSERT INTO evidence VALUES ('two','10.0.0.2',200)")
+    assert HistoryCollector.restore_host_inventory(history_path, source_path, complete=True) == 1
+    with connect_history(history_path, read_only=True) as connection:
+        ips = {row[0] for row in connection.execute("SELECT ip FROM host_snapshots")}
+    assert ("10.0.0.1" if change == "empty_inventory" else "10.0.0.2") in ips
+
+
+@pytest.mark.parametrize("ip", ["2001:db8::1", "2001:0DB8:0:0:0:0:0:1"])
+def test_restored_host_keeps_exact_finding_profile_ip(tmp_path: Path, ip: str) -> None:
+    """Keep SQLite joins valid for alternative textual forms of IPv6 addresses.
+
+    Parameters:
+        tmp_path: Isolated findings and inventory.
+        ip: Exact profile address stored in a finding.
+    """
+    _factory = ModuleFactory()
+    history = tmp_path / "history.sqlite"
+    source = tmp_path / "flows.sqlite"
+    initialize_history(history)
+    with sqlite3.connect(source) as connection:
+        connection.execute("CREATE TABLE evidence(evidence_id TEXT PRIMARY KEY,profile_ip TEXT,evidence_time REAL)")
+        connection.execute("INSERT INTO evidence VALUES ('saved',?,100)", (ip,))
+    assert HistoryCollector.restore_host_inventory(history, source, complete=True) == 1
+    with connect_history(history, read_only=True) as connection:
+        row = connection.execute("SELECT ip,data FROM host_snapshots").fetchone()
+    assert row["ip"] == ip
+    assert json.loads(row["data"])["ip"] == ip
