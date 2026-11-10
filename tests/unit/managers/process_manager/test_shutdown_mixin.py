@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 import signal
+import multiprocessing
+import subprocess
+import sys
+import time
 from unittest.mock import Mock, call, patch
 
 import pytest
@@ -11,6 +15,144 @@ from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("delay", [0, 5.2])
+def test_evidence_shutdown_drains_queued_work_without_five_second_kill(
+    delay: float,
+) -> None:
+    """Retain every queued task when finishing takes longer than five seconds.
+
+    Parameters:
+        delay: Consumer pause before processing accepted evidence.
+    """
+    _manager = ModuleFactory().create_process_manager_obj()
+    script = '''
+import time
+from multiprocessing import get_context
+from managers.process_manager.shutdown_mixin import drain_evidence_workers
+context = get_context("fork")
+queue = context.Queue()
+reader, writer = context.Pipe(duplex=False)
+def consume():
+    time.sleep(DELAY)
+    values = []
+    while True:
+        item = queue.get()
+        if item == "stop":
+            break
+        values.append(item)
+    writer.send(values)
+    writer.close()
+worker = context.Process(target=consume)
+worker.start()
+for number in range(80):
+    queue.put(number)
+drain_evidence_workers([worker], queue)
+assert worker.exitcode == 0
+assert reader.poll(1) and reader.recv() == list(range(80))
+queue.close()
+queue.join_thread()
+reader.close()
+writer.close()
+worker.close()
+'''.replace("DELAY", repr(delay))
+    result = subprocess.run(
+        [sys.executable, "-c", script], capture_output=True, text=True,
+        timeout=25, check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("unread", [False, True])
+def test_shutdown_queue_cleanup_cannot_hold_interpreter_open(unread: bool) -> None:
+    """Exit after workers stop even when IPC feeder pipes still contain unread data.
+
+    Parameters:
+        unread: Whether dead consumers left more data than a pipe can hold.
+    """
+    _manager = ModuleFactory().create_process_manager_obj()
+    script = '''
+from multiprocessing import get_context
+from types import SimpleNamespace
+from managers.process_manager.shutdown_mixin import ShutdownMixin
+manager = ShutdownMixin()
+queues = [get_context("spawn").Queue() for _ in range(5)]
+manager.profiler_queue, manager.aid_queue, manager.evidence_worker_queue, manager.evidence_logger_q, startup = queues
+manager.main = SimpleNamespace(logger=SimpleNamespace(_startup_queue=startup))
+if UNREAD:
+    for queue in queues:
+        queue.put(b"x" * (1024 * 1024))
+manager._close_shutdown_queues()
+assert all(queue._closed and queue._joincancelled for queue in queues)
+print("closed")
+'''.replace("UNREAD", repr(unread))
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True,
+                            text=True, timeout=20, check=False)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "closed"
+
+
+def abandon_event_lock(event: object, ready: object) -> None:
+    """Leave a shared event lock held to reproduce an interrupted worker.
+
+    Parameters:
+        event: Stop event whose condition becomes unusable.
+        ready: Pipe reporting when the lock is held.
+    """
+    event._cond.acquire()
+    ready.send(True)
+    ready.close()
+
+
+def test_shutdown_notification_cannot_hang_on_an_abandoned_lock() -> None:
+    """Reproduce the real semaphore deadlock and enforce the shared deadline."""
+    manager = ModuleFactory().create_process_manager_obj()
+    context = multiprocessing.get_context("spawn")
+    event = context.Event()
+    receiver, sender = context.Pipe(duplex=False)
+    child = context.Process(target=abandon_event_lock, args=(event, sender))
+    try:
+        child.start()
+        assert receiver.poll(20)
+        assert receiver.recv() is True
+        child.join(5)
+        assert child.exitcode == 0
+        before = time.monotonic()
+        assert not manager._notify_shutdown_event(event, before + 0.05)
+        assert time.monotonic() - before < 1
+        manager.main.print.assert_called_with(
+            "Could not deliver the stop signal before the shutdown deadline; "
+            "terminating the remaining workers.", 0, 1,
+        )
+    finally:
+        if child.is_alive():
+            child.kill()
+            child.join(5)
+        event._cond.release()
+        for thread, _ in getattr(manager, "_shutdown_notifications", {}).values():
+            thread.join(2)
+            assert not thread.is_alive()
+        child.close()
+        sender.close()
+        receiver.close()
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_shutdown_notification_reports_failure_and_reuses_one_thread(failed: bool) -> None:
+    """Notify each event once, retaining failures instead of losing thread errors.
+
+    Parameters:
+        failed: Whether signalling raises an exception.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    event = Mock()
+    if failed:
+        event.set.side_effect = RuntimeError("damaged event")
+    for _ in range(2):
+        assert manager._notify_shutdown_event(event, time.monotonic() + 1) is (not failed)
+    assert len(manager._shutdown_notifications) == 1
+    event.set.assert_called_once_with()
 
 
 def test_process_manager_includes_shutdown_mixin() -> None:
@@ -172,6 +314,88 @@ def test_wait_for_processes_to_finish(alive_statuses, expected_alive_count):
         f"{expected_stopped_count} times, "
         f"but it was called {mock_print_stopped.call_count} times"
     )
+
+
+@pytest.mark.parametrize(
+    "interrupted, expected_seconds",
+    [(False, 604800), (True, 30)],
+)
+def test_interrupt_caps_module_shutdown_wait(
+    interrupted: bool, expected_seconds: int
+) -> None:
+    """Keep a long normal wait while bounding Ctrl-C shutdown.
+
+    Parameters:
+        interrupted: Whether Ctrl-C requested shutdown.
+        expected_seconds: Effective module grace period.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.conf.wait_for_modules_to_finish.return_value = 10080
+    process_manager.shutdown_signal_received = interrupted
+
+    assert process_manager._module_shutdown_timeout() == expected_seconds
+
+
+def test_interrupt_wait_uses_remaining_global_deadline() -> None:
+    """Do not wait three seconds for every pending module after Ctrl-C."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    children = [Mock(name="first"), Mock(name="second")]
+    for child in children:
+        child.is_alive.return_value = True
+
+    with patch(
+        "managers.process_manager.shutdown_mixin.time.monotonic",
+        return_value=100.0,
+    ):
+        process_manager.wait_for_processes_to_finish(children, 100.1)
+
+    children[0].join.assert_called_once_with(pytest.approx(0.1))
+    children[1].join.assert_called_once_with(pytest.approx(0.1))
+
+
+def test_forced_child_cleanup_skips_another_grace_wait() -> None:
+    """Start killing children immediately when the grace period expires."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = True
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children(force=True)
+
+    process_manager.kill_process_tree.assert_called_once_with(123)
+    child.join.assert_called_once_with(1)
+
+
+@pytest.mark.parametrize("recorded_stopped", [False, True])
+def test_child_cleanup_does_not_depend_on_redis_metadata(recorded_stopped: bool) -> None:
+    """Reap an owned live child even after Redis or stopped status loses its PID.
+
+    Parameters:
+        recorded_stopped: Whether the module already reported completion.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="flow_alerts")
+    child.name = "flow_alerts"
+    child.is_alive.return_value = True
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.side_effect = RuntimeError("Redis unavailable")
+    process_manager.stopped_modules = {"flow_alerts"} if recorded_stopped else set()
+    process_manager.deferred_stopped_modules = set()
+    process_manager._should_defer_web_interface_stopped_message = Mock(return_value=False)
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children(force=True)
+
+    process_manager.kill_process_tree.assert_called_once_with(123)
+    child.join.assert_called_once_with(1)
+    assert process_manager.print_stopped_module.call_count == (0 if recorded_stopped else 1)
 
 
 @pytest.mark.parametrize(
@@ -741,10 +965,75 @@ def test_shutdown_gracefully_handles_core_module_failure() -> None:
 
     process_manager.shutdown_interactive.assert_not_called()
     assert process_manager.kill_all_children.call_count == 2
+    assert process_manager.profiler_queue._closed
+    assert process_manager.aid_queue._closed
+    assert process_manager.evidence_worker_queue._closed
+    assert process_manager.evidence_logger_q._closed
+    process_manager.main.logger._startup_queue.close.assert_called_once_with()
     process_manager.main.print.assert_any_call(
         "[Process Manager] Slips didn't shutdown gracefully - Core module failure.\n",
         log_to_logfiles_only=True,
     )
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_failed_stop_notification_always_reaps_workers(interrupted: bool) -> None:
+    """Keep failed or interrupted notification out of unbounded child joins.
+
+    Parameters:
+        interrupted: Whether a second Ctrl-C interrupts the event notification.
+    """
+    manager = ModuleFactory().create_process_manager_obj()
+    manager.shutdown_signal_received = True
+    manager.main.conf.wait_for_modules_to_finish.return_value = 1
+    manager.main.conf.export_labeled_flows.return_value = False
+    manager._generate_plots = Mock()
+    manager.get_hitlist_in_order = Mock(return_value=([], []))
+    manager._notify_shutdown_event = Mock(return_value=False)
+    if interrupted:
+        manager._notify_shutdown_event.side_effect = KeyboardInterrupt()
+    manager.shutdown_interactive = Mock()
+    manager.kill_all_children = Mock()
+    manager.get_analysis_time = Mock(return_value=(1.0, "2026/10/24 16:39:54"))
+    manager._handle_firewall_after_analysis = Mock()
+    manager._handle_web_interface_after_analysis = Mock()
+    manager._is_web_interface_enabled = Mock(return_value=False)
+    with patch("managers.process_manager.shutdown_mixin.multiprocessing.active_children", return_value=[]):
+        manager.shutdown_gracefully()
+    manager.shutdown_interactive.assert_not_called()
+    assert manager.kill_all_children.call_count >= 1
+    assert all(item.kwargs.get("force") is True for item in manager.kill_all_children.call_args_list)
+    assert manager.force_shutdown_requested is True
+    assert manager.profiler_queue._closed
+
+
+@pytest.mark.parametrize("still_alive", [False, True])
+def test_kill_all_children_only_kills_running_processes(
+    still_alive: bool,
+) -> None:
+    """Reap exited children and force-kill only children still running.
+
+    Parameters:
+        still_alive: Whether the child survived the initial join.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    child = Mock(pid=123, name="test_module")
+    child.is_alive.return_value = still_alive
+    process_manager.children = [child]
+    process_manager.main.db.get_name_of_module_at.return_value = "test_module"
+    process_manager._should_defer_web_interface_stopped_message = Mock(
+        return_value=False
+    )
+    process_manager.print_stopped_module = Mock()
+    process_manager.kill_process_tree = Mock()
+
+    process_manager.kill_all_children()
+
+    assert child.join.call_count == (2 if still_alive else 1)
+    if still_alive:
+        process_manager.kill_process_tree.assert_called_once_with(123)
+    else:
+        process_manager.kill_process_tree.assert_not_called()
 
 
 def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
@@ -773,27 +1062,36 @@ def test_kill_daemon_children_excludes_thread_pids_from_logging_count():
     ]
 
 
-def test_kill_process_tree_kills_descendants_before_parent():
-    """Kill descendants before their parent can reparent them."""
+def test_kill_process_tree_uses_verified_identities() -> None:
+    """Delegate scoped tree cleanup to the identity-aware process record."""
     process_manager = ModuleFactory().create_process_manager_obj()
-    parent_children = Mock()
-    parent_children.read.return_value = "456\n"
-    child_children = Mock()
-    child_children.read.return_value = ""
-
-    with (
-        patch(
-            "managers.process_manager.shutdown_mixin.os.popen",
-            side_effect=[parent_children, child_children],
-        ),
-        patch("managers.process_manager.shutdown_mixin.os.kill") as mock_kill,
-    ):
+    with patch("managers.process_manager.shutdown_mixin.OwnedProcesses") as owned:
         process_manager.kill_process_tree(123)
+    owned.return_value.remember.assert_called_once_with(123)
+    owned.return_value.stop.assert_called_once_with()
 
-    assert mock_kill.call_args_list == [
-        call(456, signal.SIGKILL),
-        call(123, signal.SIGKILL),
-    ]
+
+def test_shutdown_exception_still_verifies_owned_processes() -> None:
+    """Run final cleanup even when a shutdown operation fails unexpectedly."""
+    manager = ModuleFactory().create_process_manager_obj()
+    manager._generate_plots = Mock(side_effect=RuntimeError("failed plot"))
+    manager._finish_owned_processes = Mock()
+    with patch("managers.process_manager.shutdown_mixin.multiprocessing.active_children", return_value=[]):
+        with pytest.raises(RuntimeError, match="failed plot"):
+            manager.shutdown_gracefully()
+    manager._finish_owned_processes.assert_called_once_with()
+    assert manager.profiler_queue._closed
+
+
+def test_final_process_cleanup_cannot_be_interrupted_by_ctrl_c() -> None:
+    """Restore SIGINT handling only after the verified cleanup completes."""
+    manager = ModuleFactory().create_process_manager_obj()
+    owned = manager._owned_shutdown_processes = Mock()
+    previous = signal.getsignal(signal.SIGINT)
+    owned.stop.side_effect = lambda _: signal.getsignal(signal.SIGINT) == signal.SIG_IGN or pytest.fail("cleanup left interruptible")
+    manager._finish_owned_processes()
+    owned.stop.assert_called_once_with(frozenset())
+    assert signal.getsignal(signal.SIGINT) == previous
 
 
 def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop():
@@ -818,8 +1116,8 @@ def test_shutdown_interactive_signals_evidence_handler_after_other_modules_stop(
 
     assert result == (None, None)
     assert mock_wait.call_args_list == [
-        call([first_process]),
-        call([last_process]),
+        call([first_process], None),
+        call([last_process], None),
     ]
     mock_set.assert_called_once_with()
 
@@ -848,7 +1146,7 @@ def test_shutdown_interactive_does_not_signal_evidence_handler_while_modules_are
         )
 
     assert result == ([pending_process], [last_process])
-    mock_wait.assert_called_once_with([pending_process])
+    mock_wait.assert_called_once_with([pending_process], None)
     mock_warn.assert_called_once_with([pending_process, last_process])
     mock_set.assert_not_called()
 
@@ -958,3 +1256,22 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
+
+
+@pytest.mark.parametrize("finished", [False, True])
+def test_stdin_eof_allows_normal_shutdown(finished: bool) -> None:
+    """Keep stdin live until EOF, then allow normal input/profiler completion.
+
+    Parameters:
+        finished: Whether the input process has signalled end of input.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.input_type = InputType.STDIN
+    process_manager.main.db.is_running_non_stop.return_value = True
+    process_manager.is_input_done_event.is_set = Mock(return_value=finished)
+    process_manager.is_debugger_active = Mock(return_value=False)
+    process_manager.input_process = Mock(exitcode=0)
+    process_manager.profiler_process = Mock(exitcode=0)
+    process_manager.evidence_process = Mock(exitcode=None)
+    assert process_manager.should_run_non_stop() is not finished
+    assert process_manager._did_a_core_module_fail() is not finished

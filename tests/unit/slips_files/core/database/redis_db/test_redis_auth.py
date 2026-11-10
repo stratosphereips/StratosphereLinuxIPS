@@ -5,12 +5,34 @@ import os
 import shlex
 import stat
 import time
+from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
 import redis
 
 from slips_files.core.database.redis_db import redis_auth
+from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("cached", [None, "different-cached-password"])
+def test_explicit_source_credentials_bypass_other_cached_password(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: str | None,
+) -> None:
+    """Read the selected source credentials before copying an analysis login.
+
+    Parameters:
+        tmp_path: Original credential file for the shared Redis cache.
+        monkeypatch: In-memory credential cache isolation.
+        cached: Password cached earlier in the process, if any.
+    """
+    _factory = ModuleFactory()
+    source = tmp_path / "source-auth.conf"
+    source.write_text("requirepass source-test-password\n")
+    monkeypatch.setattr(redis_auth, "_cached_password", cached)
+    assert redis_auth.ensure_redis_password(str(source)) == "source-test-password"
+    assert source.read_text() == "requirepass source-test-password\n"
+    assert source.stat().st_mode & 0o777 == 0o600
 
 
 @pytest.fixture(autouse=True)

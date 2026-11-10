@@ -18,6 +18,7 @@ from slips_files.common.slips_utils import utils
 from modules.supported_module_names import Modules
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
+from managers.process_manager.owned_processes import OwnedProcesses
 
 
 class ZeekInputUtils:
@@ -32,6 +33,7 @@ class ZeekInputUtils:
         self.zeek_files: Dict[str, str] = {}
         self.zeek_threads: List[threading.Thread] = []
         self.zeek_pids: List[int] = []
+        self.zeek_processes = OwnedProcesses()
         # is set by zeek_input_utils if slips is live updating and
         # requesting to stop the zeek proc.
         self.zeek_shutdown_requested = False
@@ -725,6 +727,7 @@ class ZeekInputUtils:
         )
         # you have to get the pid before communicate()
         self.zeek_pids.append(zeek.pid)
+        self.zeek_processes.remember(zeek.pid)
         return zeek
 
     def _did_zeek_stop_bc_slips_asked_it_to(
@@ -805,18 +808,14 @@ class ZeekInputUtils:
         self.input.db.publish_stop()
 
     def shutdown_zeek_runtime(self) -> None:
+        """Flush and stop this input's Zeek processes, then join monitors."""
         self.zeek_shutdown_requested = True
+        self.zeek_processes.stop(grace_seconds=2)
         try:
             for zeek_thread in self.zeek_threads:
                 zeek_thread.join(3)
         except Exception:
             pass
-
-        for pid in self.zeek_pids:
-            try:
-                os.kill(pid, signal.SIGKILL)
-            except Exception:
-                pass
 
     def is_zeek_tabs_file(self, filepath: str) -> bool:
         """
