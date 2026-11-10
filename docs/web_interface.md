@@ -47,7 +47,9 @@ The browser title shows the live alert count and run name, for example
 **Slips (7 alerts) · sebas-en0**. It counts open alerts in the rolling live
 hour and current network scope. The existing heartbeat updates this count
 with an indexed alert-only query; it does not count hosts or evidence or add
-a separate polling timer. Grouped network evidence queries resolve network
+a separate polling timer. While the browser tab is hidden, only this heartbeat
+continues, once per minute, so the title stays current while page data and charts
+remain paused. Grouped network evidence queries resolve network
 membership once per request in a temporary ID table, then reuse it for counts and
 groups. This work stays in the web process and never writes to the capture database.
 Navigation tabs, including host activity tabs, contain only their names; total

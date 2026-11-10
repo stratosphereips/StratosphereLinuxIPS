@@ -63,7 +63,11 @@ def test_browser_title_updates_only_alerts_from_existing_heartbeat() -> None:
                 page.evaluate("() => pollBackendStatus()")
                 expected = "1 alert" if count in (1, None) else f"{count} alerts"
                 assert page.title() == f"Slips ({expected}) · sebas-en0"
-            assert requests == ["/api/identity"] * 4
+            count = 9
+            page.evaluate("Object.defineProperty(document,'hidden',{configurable:true,value:true})")
+            page.evaluate("() => pollBackendStatus()")
+            assert page.title() == "Slips (9 alerts) · sebas-en0"
+            assert requests == ["/api/identity"] * 5
             assert page.locator(".tabs .badge").count() == 0
         finally:
             browser.close()

@@ -9497,7 +9497,6 @@ function schedulePoll() {
 
 /** Poll backend liveness independently from the active tab's data range. */
 async function pollBackendStatus() {
-  if (document.hidden) return;
   try {
     const params = new URLSearchParams({title_alerts: "1"});
     applyNetworkSelection(params);
@@ -9507,6 +9506,7 @@ async function pollBackendStatus() {
         state.titleAlertCount = identity.alert_count;
         updatePageTitle();
       }
+      if (document.hidden) return;
       updateReviewAvailability(identity.review_actions === true);
       updateNetworkFilterAvailability(identity);
       updateDeviceViewAvailability(identity);
@@ -9517,7 +9517,7 @@ async function pollBackendStatus() {
         input_type: identity.input_type,
       }});
     }
-    if (Date.now() - state.archivesCheckedAt > 60000) loadArchiveCatalog().catch(() => {});
+    if (!document.hidden && Date.now() - state.archivesCheckedAt > 60000) loadArchiveCatalog().catch(() => {});
   } catch (_) {
     // renderConnectionState() already exposes the failure persistently.
   } finally {
@@ -9765,8 +9765,7 @@ function updateReviewAvailability(available) {
 /** Schedule the next lightweight backend heartbeat check. */
 function scheduleBackendStatusPoll() {
   window.clearTimeout(state.statusTimer);
-  if (document.hidden) return;
-  state.statusTimer = window.setTimeout(pollBackendStatus, 5000);
+  state.statusTimer = window.setTimeout(pollBackendStatus, document.hidden ? 60000 : 5000);
 }
 
 function switchTab(name) {
@@ -10197,6 +10196,7 @@ document.addEventListener("visibilitychange", () => {
     window.clearTimeout(state.timer);
     window.clearTimeout(state.statusTimer);
     state.requests.forEach((controller) => controller.abort());
+    scheduleBackendStatusPoll();
   } else {
     refreshActive();
     pollBackendStatus();
