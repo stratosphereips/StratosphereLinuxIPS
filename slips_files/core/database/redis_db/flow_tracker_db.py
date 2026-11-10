@@ -33,6 +33,7 @@ class FlowTracker:
         "new_software": 0,
         "new_tunnel": 0,
         "new_login": 0,
+        "new_smb": 0,
         "new_packet_timing": 0,
     }
 

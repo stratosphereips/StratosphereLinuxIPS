@@ -313,6 +313,16 @@ class ProfilerWorker(IModule):
             "tunnel": flow_handler.handle_tunnel,
             "login": flow_handler.handle_login,
             "packet_timing": flow_handler.handle_packet_timing,
+            **{
+                name: flow_handler.handle_smb
+                for name in (
+                    "smb_mapping",
+                    "smb_files",
+                    "smb_cmd",
+                    "ntlm",
+                    "dce_rpc",
+                )
+            },
         }
         try:
             # call the function that handles this flow
@@ -521,6 +531,11 @@ class ProfilerWorker(IModule):
             "tunnel",
             "login",
             "packet_timing",
+            "smb_mapping",
+            "smb_files",
+            "smb_cmd",
+            "ntlm",
+            "dce_rpc",
         )
         return bool(
             flow.starttime is not None and flow.type_ in supported_types
