@@ -401,7 +401,9 @@ class Evidence:
     evidence_signal: EvidenceSignal = field(default=EvidenceSignal.PAMP)
     # Canonical name of the module that submitted this evidence.
     source_module: str = field(default="")
+    detection_provenance: dict = field(default_factory=dict)
     detection_details: dict = field(default_factory=dict)
+    peer_report: dict = field(default_factory=dict)
     icmp_type: Optional[int] = field(default=None)
     icmp_code: Optional[int] = field(default=None)
 
@@ -516,7 +518,9 @@ def dict_to_evidence(evidence: dict) -> Evidence:
         "method": Method[evidence["method"].upper()],
         "evidence_signal": evidence_signal,
         "source_module": str(evidence.get("source_module", "")),
+        "detection_provenance": evidence.get("detection_provenance") or {},
         "detection_details": evidence.get("detection_details") or {},
+        "peer_report": evidence.get("peer_report") or {},
     }
 
     return Evidence(**evidence_attributes)

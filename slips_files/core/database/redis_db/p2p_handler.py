@@ -221,6 +221,58 @@ class P2PHandler:
             self.constants.P2P_ACTIVE_CONNECTION_PREFIX,
         )
 
+    def clear_authenticated_p2p_connections(self) -> None:
+        """Clear connection state left by an earlier P2P module process."""
+        for raw_id in self.r.smembers(self.constants.P2P_ACTIVE_CONNECTIONS):
+            connection_id = (
+                raw_id.decode(errors="replace")
+                if isinstance(raw_id, bytes)
+                else str(raw_id)
+            )
+            self.r.delete(
+                f"{self.constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}"
+            )
+        self.r.delete(self.constants.P2P_ACTIVE_CONNECTIONS)
+        self.r.delete(self.constants.P2P_CONNECTIONS)
+        self.r.delete(self.constants.P2P_CONNECTIONS_LAST_SEEN)
+
+    def refresh_authenticated_p2p_connections(self, ttl: int) -> None:
+        """Refresh live connection records still owned by the Go daemon.
+
+        Parameters:
+            ttl: Seconds before a connection record expires without refresh.
+        """
+        now = time.time()
+        for raw_id in self.r.smembers(self.constants.P2P_ACTIVE_CONNECTIONS):
+            connection_id = (
+                raw_id.decode(errors="replace")
+                if isinstance(raw_id, bytes)
+                else str(raw_id)
+            )
+            key = (
+                f"{self.constants.P2P_ACTIVE_CONNECTION_PREFIX}"
+                f"{connection_id}"
+            )
+            raw = self.r.get(key)
+            if raw is None or not self.r.sismember(
+                self.constants.P2P_CONNECTIONS, connection_id
+            ):
+                self.remove_authenticated_p2p_connection(connection_id)
+                continue
+            try:
+                connection = json.loads(raw)
+            except (TypeError, ValueError):
+                self.remove_authenticated_p2p_connection(connection_id)
+                continue
+            if connection.get("authenticated") is not True:
+                self.remove_authenticated_p2p_connection(connection_id)
+                continue
+            self.r.set(key, json.dumps(connection), ex=max(1, int(ttl)))
+            self.r.zadd(
+                self.constants.P2P_CONNECTIONS_LAST_SEEN,
+                {connection_id: now},
+            )
+
     def is_p2p_related_flow(self, srcip, sport, dstip, dport, proto) -> bool:
         """Check whether a flow's 5-tuple matches a known P2P connection.
 
@@ -351,6 +403,10 @@ class P2PHandler:
             return float(trust)
         return None
 
+    def clear_peer_trust(self) -> None:
+        """Discard trust values calculated by a previous model or run."""
+        self.r.delete(self.constants.PEER_TRUST)
+
     def record_p2p_message(self, direction: str, message: dict) -> None:
         """Record one bounded P2P send or receive event for observability.
 
@@ -366,6 +422,12 @@ class P2PHandler:
             pipe.hincrby(key, field, 1)
             # safety net in case the timewindow-end cleanup is ever missed
             pipe.hexpire(key, self.default_ttl, field, nx=True)
+            if direction == "received" and message_type in ("report", "blame"):
+                peer_id = str(message.get("peer") or "")
+                if peer_id:
+                    peer_key = self._p2p_reports_by_peer_key()
+                    pipe.hincrby(peer_key, peer_id, 1)
+                    pipe.hexpire(peer_key, self.default_ttl, peer_id, nx=True)
             pipe.execute()
         self.r.lpush(self.constants.P2P_MESSAGE_HISTORY, json.dumps(record))
         self.r.ltrim(self.constants.P2P_MESSAGE_HISTORY, 0, 999)
@@ -374,6 +436,15 @@ class P2PHandler:
         """Per-timewindow key so old counters don't accumulate forever."""
         timewindow = self.get_current_timewindow() or 1
         return f"{self.constants.P2P_MESSAGE_COUNTS}_{timewindow}"
+
+    def _p2p_reports_by_peer_key(self) -> str:
+        """Return the bounded peer-report counter for this timewindow.
+
+        Returns:
+            Redis hash key for received reports grouped by peer ID.
+        """
+        timewindow = self.get_current_timewindow() or 1
+        return f"{self.constants.P2P_REPORTS_BY_PEER}_{timewindow}"
 
     def get_p2p_message_telemetry(self) -> dict:
         """Return P2P message counters and newest bounded activity.
@@ -389,5 +460,6 @@ class P2PHandler:
                 continue
         return {
             "counts": self.r.hgetall(self._p2p_message_counts_key()),
+            "reports_by_peer": self.r.hgetall(self._p2p_reports_by_peer_key()),
             "activity": records,
         }

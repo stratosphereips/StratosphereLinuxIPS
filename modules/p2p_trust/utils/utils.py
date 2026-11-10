@@ -7,7 +7,6 @@ import time
 import json
 from typing import Union, Dict, Optional, Tuple
 
-
 # TODO: add outputQueue printing to this file (or remove all prints, they are debug anyway)
 
 
@@ -29,6 +28,27 @@ def validate_ip_address(ip: str) -> bool:
         return False
 
     return True
+
+
+def is_unicast_ip(ip: str) -> bool:
+    """Accept an individual IP address for peer reputation checks.
+
+    Parameters:
+        ip: Address to check.
+
+    Returns:
+        True for a unicast address, including private addresses.
+    """
+    try:
+        address = ipaddress.ip_address(ip)
+    except (TypeError, ValueError):
+        return False
+    return not (
+        address.is_multicast
+        or address.is_unspecified
+        or address.is_loopback
+        or str(address) == "255.255.255.255"
+    )
 
 
 threat_levels = {
@@ -94,20 +114,32 @@ def get_ip_info_from_slips(
     ip_address: str, db
 ) -> Tuple[Optional[float], Optional[float]]:
     """
-    Get score and confidence on IP from Slips.
+    Get Slips's first-hand score and confidence for a peer assessment.
 
     :param ip_address: The IP address to check
-    :return: Tuple with score and confidence. If data is not there, (None, None) is returned instead.
+    :return: Tuple with score and confidence. If no local assessment exists,
+        return (None, None).
     """
 
-    # poll new info from redis
-    # convert it to float
-    # the higher the score, the more malicious this ip
+    # The trust database keeps first-hand observations separately. Redis IP
+    # metadata may also contain a reputation learned from the network.
+    trust_db = getattr(db, "trust_db", None)
+    if trust_db is not None:
+        reputation = trust_db.get_reporter_reputation(ip_address)
+        if isinstance(reputation, tuple) and len(reputation) == 2:
+            return reputation
+
+    # Fall back for integrations that do not initialize local P2P storage.
+    # Higher scores mean greater maliciousness.
     try:
         if threat_level := db.get_ip_info(ip_address, "threat_level"):
+            if threat_level == "info":
+                return None, None
             slips_score: float = threat_levels[threat_level]
         else:
             slips_score = float(db.get_ip_info(ip_address, "score"))
+        if slips_score == 0:
+            return None, None
         slips_confidence = float(db.get_ip_info(ip_address, "confidence"))
     except (KeyError, TypeError, ValueError):
         return None, None
@@ -150,16 +182,22 @@ def build_go_message(
     return message
 
 
-def build_score_confidence(score: float, confidence: float) -> dict:
+def build_score_confidence(
+    score: float, confidence: float, provenance: list | None = None
+) -> dict:
     """
     Build the dictionary with score and confidence
 
     :param score: The score value
     :param confidence: The confidence value
+    :param provenance: Optional bounded detector metadata for report validation.
     :return: The evaluation dictionary
     """
 
-    return {"score": score, "confidence": confidence}
+    result = {"score": score, "confidence": confidence}
+    if provenance:
+        result["provenance"] = provenance
+    return result
 
 
 def send_evaluation_to_go(
@@ -169,6 +207,7 @@ def send_evaluation_to_go(
     recipient: str,
     channel_name: str,
     db,
+    provenance: list | None = None,
 ) -> None:
     """
     Take data and send it to a peer as report.
@@ -177,10 +216,11 @@ def send_evaluation_to_go(
     :param score: The score for that IP
     :param confidence: The confidence for that IP
     :param recipient: The peer that should receive the report. Use "*" wildcard to broadcast to everyone
+    :param provenance: Optional local detector metadata, without analyst notes.
     :return: None
     """
 
-    evaluation_raw = build_score_confidence(score, confidence)
+    evaluation_raw = build_score_confidence(score, confidence, provenance)
     message_raw = build_go_message(
         "report", "ip", ip, "score_confidence", evaluation=evaluation_raw
     )
@@ -207,7 +247,12 @@ def send_message_to_go(
 
 
 def send_blame_to_go(
-    ip: str, score: float, confidence: float, channel_name: str, db
+    ip: str,
+    score: float,
+    confidence: float,
+    channel_name: str,
+    db,
+    provenance: list | None = None,
 ) -> None:
     """
     Take data and send it to a peer as a blame.
@@ -215,11 +260,12 @@ def send_blame_to_go(
     :param ip: The IP that is being blamed
     :param score: The score for that IP
     :param confidence: The confidence for that IP
+    :param provenance: Optional local detector metadata, without analyst notes.
     :return: None
     """
 
     recipient = "*"
-    evaluation_raw = build_score_confidence(score, confidence)
+    evaluation_raw = build_score_confidence(score, confidence, provenance)
     message_raw = build_go_message(
         "blame", "ip", ip, "score_confidence", evaluation=evaluation_raw
     )

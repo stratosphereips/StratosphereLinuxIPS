@@ -75,6 +75,16 @@ Unix timestamp. `connected` is always present in current messages; `ip` and
 `reliability` are included when known. Legacy updates without `connected` are
 treated as connected.
 
+Authenticated TCP connection updates also persist the peer ID and the exact
+remote IP and port in the local P2P trust database. At startup, Slips offers
+recent endpoints from any directly connected local IPv4 subnet to Pigeon as
+bootstrap addresses. Pigeon listens on all local interfaces, since the
+capture interface may differ from the interface that reaches a peer. Pigeon
+still verifies the peer ID during the libp2p connection.
+This lets known peers reconnect when multicast DNS discovery is unavailable,
+and supports peers listening on different configured ports. New peers continue
+to be discovered through mDNS.
+
 Unlike go data, peer updates are expected to be sent separately, therefore a the dictionary type is required instead of
 a list.
 
@@ -105,6 +115,9 @@ on. Nodes advertise the Evaluation type with the type attribute in each message.
 
 At the time of writing this, the only supported type is `score_confidence` and there are two values shared - score and
 confidence.
+On the wire, `score` is maliciousness from 0 (benign) to 1 (malicious),
+and `confidence` is from 0 to 1. The signed -1 to +1 scale in the thesis is
+used locally to assess a reporter, not for these message values.
 
 The nodes always report the key type - currently, only IP addresses are supported, nodes should drop any unknown key
 types. A valid report can look like this:

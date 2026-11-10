@@ -1741,6 +1741,8 @@ global_p2p:
    # running slips on an interface
    use_global_p2p: False
    iris_conf: config/iris_config.yaml
+   # Path relative to the repository root; use a native build on macOS.
+   iris_binary: modules/iris/iris
    bootstrapping_node: False
    bootstrapping_modules: ["fides", "iris"]
 
@@ -1751,7 +1753,62 @@ local_p2p:
    use_p2p : False
    # Dedicated TCP listener. SLIPS does not scan ephemeral ports for P2P.
    listen_port: 6668
+   # How quickly an old local detection loses influence on a peer's trust.
+   # Keep full confidence for the first hour, then halve it every 24 hours.
+   # Larger values keep penalties longer; smaller values allow faster recovery.
+   # This returns trust toward the communication baseline, not a benign verdict.
+   local_reputation_half_life_hours: 24
+   catch_up:
+      # Request missed network warnings automatically after connecting to a peer.
+      # Historical records do not increase current host scores or trigger blocking.
+      enabled: true
+      # A warning is recent when malicious behavior was observed within 15 minutes.
+      # Receiving or forwarding it does not renew this observation time.
+      fresh_minutes: 15
+      # Prefer these recent incidents before older history; expressed in hours.
+      recent_hours: 24
+      # Keep and request at most this many days of incident history.
+      history_days: 7
+      # Compare up to three connected sources; cap simultaneous page requests.
+      max_peers: 3
+      parallel_pages: 2
+      # Stop a page at either limit. Byte limits include signed record contents.
+      page_records: 50
+      page_bytes: 65536
+      # Bound each incident's description, provenance and signature payload.
+      record_bytes: 8192
+      # Total outgoing catch-up budget, shared across peers, in KiB per second.
+      transfer_kib_per_second: 64
+      # Stop automatic history after this many MiB per source; show partial coverage.
+      initial_transfer_mib: 2
+      # Bound the permanent incident journal across all retained networks.
+      max_records: 10000
+      max_store_mib: 64
+      # Brief disconnects must not trigger repeated full catch-up exchanges.
+      reconnect_cooldown_seconds: 60
+      protection:
+         # Only when firewall blocking is already enabled. Never ARP poison from catch-up.
+         # Require a fresh concrete local confirmation, or two enrolled authors
+         # using independent detector families. Old history cannot authorize a block.
+         enabled: true
+         # Optional authenticated peer IDs allowed to support remote-only protection.
+         # Empty means local confirmation is required; discovery alone grants no authority.
+         peer_ids: []
+   report_agreement:
+      # Increase peer trust when our own detection and other peers agree.
+      enabled: true
+      # Distinct peer IDs, INCLUDING the reporter. Our local detection is also required.
+      min_peers: 2
+      # Minimum confidence in both our own detection and each matching report (0-1).
+      min_confidence: 0.8
+      # All matching detections must occur within this many seconds of one another.
+      window_seconds: 3600
+      # Reward per peer ID and target IP, once across runs, networks and detector versions.
+      # The total agreement increase is capped at 0.20 and halves every 30 days.
+      trust_credit: 0.025
    # Authenticated connection records are refreshed by successful activity.
    connection_ttl: 30
    # Briefly hold candidate handshake flows while authentication completes.
    handshake_pending_seconds: 2
+   # Peers discover other nodes using this mDNS group name.
+   rendezvous: slips
