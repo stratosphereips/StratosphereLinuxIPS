@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+from multiprocessing.synchronize import SEM_VALUE_MAX
 import ipaddress
-import multiprocessing
+from queue import Queue
 import os
 import json
 import threading
@@ -18,6 +19,10 @@ from typing import (
 from ipaddress import IPv4Network, IPv6Network, IPv4Address, IPv6Address
 
 from modules.threat_intelligence.circl_lu import Circllu
+from modules.feeds_update_manager.feed_status import (
+    record_feed_load,
+    record_feed_status,
+)
 from modules.threat_intelligence.spamhaus import Spamhaus
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
@@ -63,7 +68,8 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.get_all_blacklisted_ip_ranges()
         self.urlhaus = URLhaus(self.db)
         self.spamhaus = Spamhaus(self.db)
-        self.pending_queries = multiprocessing.Queue(maxsize=30000000)
+        # CIRCL retries are shared only with this module's worker thread.
+        self.pending_queries = Queue(maxsize=min(30000000, SEM_VALUE_MAX))
         self.pending_circllu_calls_thread = threading.Thread(
             target=self.handle_pending_queries,
             daemon=True,
@@ -629,6 +635,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     fp_hashes[hash] = description
 
         self.db.store_known_fp_md5_hashes(fp_hashes)
+        record_feed_load(
+            self.db, os.path.basename(fullpath), {"fp_hashes": len(fp_hashes)}
+        )
 
     def parse_local_ti_file(self, ti_file_path: str) -> bool:
         """Parses a local threat intelligence (TI) file to extract
@@ -752,6 +761,16 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
         self.db.add_domains_to_ioc(malicious_domains)
         self.db.add_ip_range_to_ioc(malicious_ip_ranges)
         self.db.add_asn_to_ioc(malicious_asns)
+        record_feed_load(
+            self.db,
+            os.path.basename(ti_file_path),
+            {
+                "ips": len(malicious_ips),
+                "domains": len(malicious_domains),
+                "ip_ranges": len(malicious_ip_ranges),
+                "asns": len(malicious_asns),
+            },
+        )
         return True
 
     def __delete_old_source_ips(self, file):
@@ -892,6 +911,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                 )
         # Add all loaded JA3 to the database
         self.db.add_ja3_to_ioc(ja3_dict)
+        record_feed_load(
+            self.db, os.path.basename(path), {"ja3": len(ja3_dict)}
+        )
         return True
 
     def parse_jarm_file(self, path):
@@ -956,6 +978,9 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
                     }
                 )
         self.db.add_jarm_to_ioc(jarm_dict)
+        record_feed_load(
+            self.db, os.path.basename(path), {"jarm": len(jarm_dict)}
+        )
         return True
 
     def should_update_local_ti_file(self, path_to_local_ti_file: str) -> bool:
@@ -1757,7 +1782,7 @@ class ThreatIntel(IModule, URLhaus, Spamhaus):
             parsers[filename](fullpath)
             # Store the new etag and time of file in the database
             malicious_file_info = {"hash": filehash}
-            self.db.set_ti_feed_info(filename, malicious_file_info)
+            record_feed_status(self.db, filename, **malicious_file_info)
             return True
 
     def handle_pending_queries(self):

@@ -6,6 +6,8 @@
 import json
 import traceback
 
+from modules.feeds_update_manager.feed_status import record_feed_load
+
 
 class FingerprintFeedParserMixin:
     """Parse JA3 and SSL fingerprint feeds."""
@@ -135,6 +137,7 @@ class FingerprintFeedParserMixin:
                     continue
         # Add all loaded malicious sha1 to the database
         self.db.add_ssl_sha1_to_ioc(malicious_ssl_certs)
+        record_feed_load(self.db, url, {"ssl_sha1": len(malicious_ssl_certs)})
         return True
 
     def parse_ja3_feed(self, url, ja3_feed_path: str) -> bool:
@@ -278,6 +281,7 @@ class FingerprintFeedParserMixin:
 
             # Add all loaded malicious ja3 to the database
             self.db.add_ja3_to_ioc(malicious_ja3_dict)
+            record_feed_load(self.db, url, {"ja3": len(malicious_ja3_dict)})
             return True
 
         except Exception:

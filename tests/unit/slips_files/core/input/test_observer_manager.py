@@ -25,9 +25,7 @@ def test_input_observer_start_schedules_dirs():
     obs_instance.schedule.assert_any_call(
         mock_handler.return_value, "/tmp/zeek", recursive=True
     )
-    obs_instance.schedule.assert_any_call(
-        mock_handler.return_value, "config/", recursive=True
-    )
+    assert obs_instance.schedule.call_count == 1
     obs_instance.start.assert_called_once()
 
 

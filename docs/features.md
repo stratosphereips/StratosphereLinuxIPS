@@ -610,7 +610,30 @@ You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` a
 
 To enable blocking in slips, start slips with the ```-p``` flag.
 
-This feature is only supported in linux using iptables natively and using docker.
+Linux uses iptables, either natively or in a container with the required
+network privileges. Native macOS uses the Slips-owned `com.apple/slips`
+Packet Filter anchor and requires root privileges.
+
+To keep detections while preventing firewall blocking and ARP poisoning, add
+an IP rule to your copied whitelist file (the configured `local_whitelist_path`):
+
+```csv
+ip,192.168.1.138,both,blocking
+```
+
+`blocking` suppresses only enforcement. It preserves flow analysis, evidence,
+scoring and alerts. These rules require an individual IPv4 or IPv6 address,
+`both` directions and no port or evidence type, since enforcement isolates an
+address. Domain, organization, MAC and subnet rules are not supported for this
+mode. Existing `flows`, `alerts` and `both` modes keep their original meaning.
+Other matching suppression rules still apply.
+
+Blocking-only rules are read at startup and checked for file changes at most
+once every two seconds. Adding one also removes existing Slips firewall blocks
+and stops repeated ARP poisoning. Removing one allows future enforcement; it
+does not automatically re-block the host. If replacing an existing rule that
+suppressed flows or alerts by editing the file, restart Slips to refresh those
+existing suppression rules too. The web whitelist editor saves the same syntax.
 
 ### Exporting Alerts Module
 

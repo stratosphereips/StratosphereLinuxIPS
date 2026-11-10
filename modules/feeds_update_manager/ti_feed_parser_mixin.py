@@ -10,6 +10,8 @@ from typing import IO, Optional, Tuple
 
 import ijson
 
+from modules.feeds_update_manager.feed_status import record_feed_load
+
 from slips_files.common.ips import IPV4_ANY
 from slips_files.common.slips_utils import utils
 
@@ -36,6 +38,9 @@ class TIFeedParserMixin:
                 nodes.add(ip)
 
         self.db.store_tor_nodes(nodes)
+        record_feed_load(
+            self.db, self.tor_nodes_feed_link, {"tor_nodes": len(nodes)}
+        )
         return True
 
     def _parse_json_ti_feed(self, link_to_download, ti_file_path: str) -> bool:
@@ -76,6 +81,9 @@ class TIFeedParserMixin:
                     )
 
             self.db.add_ips_to_ioc(malicious_ips_dict)
+            record_feed_load(
+                self.db, link_to_download, {"ips": len(malicious_ips_dict)}
+            )
             return True
 
         if "hole.cert.pl" in link_to_download:
@@ -114,6 +122,11 @@ class TIFeedParserMixin:
                     # not a json file??
                     return False
             self.db.add_domains_to_ioc(malicious_domains_dict)
+            record_feed_load(
+                self.db,
+                link_to_download,
+                {"domains": len(malicious_domains_dict)},
+            )
             return True
 
     def get_description_column_index(self, header):
@@ -504,10 +517,7 @@ class TIFeedParserMixin:
 
         data_type = utils.detect_ioc_type(ioc)
         if data_type is None:
-            self.log(
-                f"The data {ioc} is not valid. It "
-                f"was found in {ti_file_path}."
-            )
+            self.log(f"Skipped invalid feed entry {ioc} in {ti_file_path}.")
             return False
         return True
 
@@ -584,5 +594,14 @@ class TIFeedParserMixin:
         self.db.add_ips_to_ioc(malicious_ips_dict)
         self.db.add_domains_to_ioc(malicious_domains_dict)
         self.db.add_ip_range_to_ioc(malicious_ip_ranges)
+        record_feed_load(
+            self.db,
+            feed_link,
+            {
+                "ips": len(malicious_ips_dict),
+                "domains": len(malicious_domains_dict),
+                "ip_ranges": len(malicious_ip_ranges),
+            },
+        )
         feed.close()
         return True

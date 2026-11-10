@@ -41,6 +41,9 @@ from slips_files.common.style import (
 from slips_files.common.input_type import InputType
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.helpers.bloom_filters_manager import BFManager
+from slips_files.core.helpers.whitelist.whitelist_parser import (
+    ensure_local_whitelist,
+)
 from slips_files.core.helpers.checker import Checker
 
 logging.basicConfig(level=logging.WARNING)
@@ -85,6 +88,9 @@ class Main:
             self.checker.verify_given_flags()
             self.redis_man.reject_active_history_run()
             self.prepare_locks_dir()
+            if self.conf.enable_local_whitelist():
+                whitelist = self.conf.local_whitelist_path()
+                ensure_local_whitelist(whitelist)
             self.input_type: InputType
             (
                 self.input_type,
@@ -743,6 +749,23 @@ class Main:
                 # Sleep some time to do routine checks and give time for
                 # more traffic to come
                 time.sleep(5)
+                if self.conf.enable_local_whitelist():
+                    whitelist_path = self.conf.local_whitelist_path()
+                    if not os.path.isfile(whitelist_path):
+                        try:
+                            ensure_local_whitelist(whitelist_path)
+                            self.print(
+                                "Restored missing local whitelist from its "
+                                f"recovery copy: {whitelist_path}",
+                                1,
+                                0,
+                            )
+                        except (OSError, ValueError) as error:
+                            self.print(
+                                f"Local whitelist is missing: {error}",
+                                1,
+                                1,
+                            )
                 self.proc_man.print_disabled_modules()
 
                 self.print_gw_info()
@@ -758,7 +781,12 @@ class Main:
                     self.metadata_man.update_slips_stats_in_the_db()[1]
                 )
 
-                self.host_ip_man.update_host_ip(host_ips, modified_profiles)
+                host_ips = (
+                    self.host_ip_man.update_host_ip(
+                        host_ips, modified_profiles
+                    )
+                    or {}
+                )
                 if self.update_man.check_for_slips_new_version_every_1_day():
                     self.update_man.update_slips()
 
