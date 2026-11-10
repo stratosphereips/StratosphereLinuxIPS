@@ -1183,6 +1183,41 @@ def test_add_mac_addr_to_profile_no_existing_mac():
     assert result is True
 
 
+@pytest.mark.parametrize("ip", ["147.32.82.228", "8.8.8.8", "2606:4700:4700::1111"])
+def test_public_endpoint_is_not_saved_as_mac_owner(ip: str) -> None:
+    """Reject public ownership even before a worker knows the gateway."""
+    handler = ModuleFactory().create_profile_handler_obj()
+    handler._determine_gw_mac = Mock()
+    handler._is_gw_mac = Mock(return_value=False)
+    handler.get_gateway_ip = Mock(return_value=None)
+    handler.update_mac_of_profile = Mock()
+
+    assert handler.add_mac_addr_to_profile(f"profile_{ip}", "b6:49:9f:96:b2:d4", "eth0") is False
+
+    handler._determine_gw_mac.assert_called_once_with(ip, "b6:49:9f:96:b2:d4", "eth0")
+    handler.r.hset.assert_not_called()
+    handler.update_mac_of_profile.assert_not_called()
+
+
+@pytest.mark.parametrize("ip,mac,expected", [
+    ("192.168.1.8", "00:11:22:33:44:55", True),
+    ("fe80::8", "ca:ef:de:b4:f3:fc", True),
+    ("0.0.0.0", "00:11:22:33:44:55", False),
+    ("::", "00:11:22:33:44:55", False),
+    ("224.0.0.1", "00:11:22:33:44:55", False),
+    ("192.168.1.8", "ff:ff:ff:ff:ff:ff", False),
+    ("192.168.1.8", "00:00:00:00:00:00", False),
+    ("not-an-ip", "00:11:22:33:44:55", False),
+])
+def test_mac_ownership_requires_valid_unicast_endpoints(ip: str, mac: str, expected: bool) -> None:
+    """Accept local endpoints without learning multicast or missing MACs."""
+    handler = ModuleFactory().create_profile_handler_obj()
+    handler._is_gw_mac = Mock(return_value=False)
+    handler.get_gateway_ip = Mock(return_value="192.168.1.1")
+
+    assert handler._should_associate_this_mac_with_this_ip(ip, mac, "eth0") is expected
+
+
 def test_add_mac_addr_to_profile_existing_mac():
     handler = ModuleFactory().create_profile_handler_obj()
 
