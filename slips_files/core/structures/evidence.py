@@ -49,6 +49,7 @@ class EvidenceType(Enum):
     """
 
     ARP_SCAN = auto()
+    ARP_DISCOVERY = auto()
     ARP_OUTSIDE_LOCALNET = auto()
     UNSOLICITED_ARP = auto()
     MITM_ARP_ATTACK = auto()

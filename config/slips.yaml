@@ -733,6 +733,174 @@ brute_force_detector:
   ssh_attempt_threshold: 9
 
 #############################
+arp:
+  # Seconds of ARP requests considered together, using packet timestamps.
+  # Each target expires separately, so old questions cannot inflate a new burst.
+  scan_window_seconds: 30
+
+  # Distinct target IPs needed before examining a burst. Retries count once.
+  # Reaching this count alone does not generate evidence.
+  scan_min_targets: 5
+
+  # Minimum targets without prior successful communication from this device.
+  # An ordered search needs this many unfamiliar targets to suggest a scan.
+  # With no prior source contacts, this many targets must also be unobserved on the network.
+  scan_min_unfamiliar_targets: 10
+
+  # Required share of unfamiliar targets: 0.8 means at least 80%.
+  # This prevents a few new neighbours among many familiar ones causing alerts.
+  scan_min_unfamiliar_ratio: 0.8
+
+  # This many unfamiliar targets can suggest a scan even in random order.
+  # A burst this large without enough scan indicators is informational
+  # ARP_DISCOVERY evidence instead; it adds nothing to the alert score.
+  scan_broad_targets: 32
+
+  # Required share of successive distinct requests to adjacent IPs (either direction).
+  # 0.7 means 70%; this supports smaller ordered sweeps. It is not required for large scans.
+  scan_ordered_ratio: 0.7
+
+  # Brief wait after a burst becomes a candidate, allowing observed replies
+  # and arriving connection records to add context. Missing records are unknown.
+  scan_context_wait_seconds: 3
+
+  # Minimum seconds between findings of the same source device/address/network.
+  # A scan can still be reported during an earlier informational discovery cooldown.
+  # Stronger confidence also bypasses it: 95% needs at least twice the unfamiliar
+  # threshold (minimum 20) and 90% unfamiliar; 100% needs ten times (minimum 100)
+  # and 95% unfamiliar. Novelty/search checks must still pass; heavy normal use
+  # keeps confidence lower. At 100%, replace target records with a 1 KiB counter
+  # and 20 sample IDs, reporting near 1000, 10000, etc. Familiar neighbours never
+  # add to that counter. This value also sets the quiet gap before tracking resets.
+  scan_alert_cooldown_seconds: 300
+
+  # Two successful TCP/UDP contacts must be separated by at least these seconds
+  # before a neighbour is familiar. Both directions must carry application bytes;
+  # ARP requests/replies and empty connection probes never establish familiarity.
+  scan_familiar_min_interval_seconds: 300
+
+  # Expire source-to-neighbour history after this many days without successful use.
+  # Live history survives restarts and is separated by gateway, subnet and source MAC.
+  scan_familiar_retention_days: 30
+
+  # Seconds between private history checkpoints. No disk writes occur per packet.
+  # A clean stop saves immediately; a crash can lose this many seconds of learning.
+  scan_checkpoint_seconds: 120
+
+  # Maximum source device/address/network groups in memory. Oldest-used groups
+  # are discarded at capacity; a warning explains when context has been lost.
+  scan_max_sources: 256
+
+  # Maximum target IPs and representative request UIDs kept per source group.
+  # At capacity, discard oldest-used targets and mark evidence counts as partial.
+  scan_max_targets: 512
+
+  # Maximum successful source-to-neighbour records, and separate sender/UID caches.
+  # Old contacts are discarded at capacity; increasing this preserves more history
+  # on large networks but uses more memory and checkpoint space.
+  scan_max_relationships: 8192
+
+#############################
+network_discovery:
+  # Detect horizontal scans using distinct destination IPs on the same port.
+  # Detection starts immediately; 443 and the first minutes are not exempt.
+  # See docs/horizontal_port_scans.md for packet rules and limitations.
+
+  # Seconds covered by the fast scan check, independent of Slips time windows.
+  # A short period catches bursts without adding unrelated failures all hour.
+  horizontal_fast_window_seconds: 60
+
+  # Distinct new targets needed inside the fast period. Retries count once.
+  # Higher values reduce sensitivity to small scans and reconnection bursts.
+  horizontal_fast_min_targets: 10
+
+  # Seconds covered by the separate slow scan check. This catches attempts
+  # spread over time, including across Slips time-window boundaries.
+  horizontal_slow_window_seconds: 1800
+
+  # Distinct new targets needed inside the slow period. A larger count than
+  # the fast check avoids treating occasional failed connections as a scan.
+  horizontal_slow_min_targets: 25
+
+  # Minimum share of recent distinct targets with failed probes. Successful traffic lowers this share. Does not gate the separate
+  # check for short connections to open services without application data.
+  horizontal_min_failure_ratio: 0.8
+
+  # Remember successful use of a destination on this port for these seconds.
+  # Failed reconnections to it are excluded from NEW-target scan counts until
+  # this expires. This is bounded, in-memory context, not a permanent whitelist.
+  horizontal_success_history_seconds: 3600
+
+  # Minimum seconds between findings of the same probe kind/source/port.
+  # A stronger threat or confidence bypasses this cooldown. Strong scan patterns
+  # reach 95% at 2x the target threshold (at least 20 targets), then 100% at
+  # 10x (at least 100), with at least 90% and 95% failed targets respectively.
+  # At 100%, replace full target records with a fixed 1 KiB distinct-IP counter.
+  # Report continuing growth near 1000, 10000, 100000, etc. as approximate totals.
+  # Check batches of 32 probes, retaining at most 20 sample flows. Reset after
+  # probes pause for this many seconds; no repeated expensive scan checks.
+  # Confidence rates the observed scan pattern; it is not malware probability.
+  horizontal_alert_cooldown_seconds: 300
+
+  # Minimum seconds between full checks of a source/port group. New targets
+  # also trigger a check each minimum target count, so a fast burst need not
+  # wait for a later flow. Set 0 to check every flow, at higher CPU cost.
+  horizontal_evaluation_interval_seconds: 1
+
+  # Maximum network/source/protocol/port groups held in memory. At capacity,
+  # discard the least recently used group; its old context is then forgotten.
+  horizontal_max_groups: 256
+
+  # Maximum destination IPs remembered per group, including successful ones.
+  # Must cover both target thresholds. The oldest used target is discarded
+  # at capacity. More targets improve coverage but use more memory and CPU.
+  horizontal_max_targets: 256
+
+  # Seconds in the vertical scan check: one source trying many ports of one
+  # destination. One hour also catches slow probes. Uses incoming flows only,
+  # with no Redis scan-total searches; shorter periods require a tighter burst.
+  vertical_window_seconds: 3600
+
+  # Distinct failed destination ports needed for the initial finding. Repeated
+  # attempts to the same port count once; increasing this misses smaller scans.
+  vertical_min_ports: 10
+
+  # Seconds between ordinary vertical findings, and the probe-free gap that
+  # ends a continuing scan. Higher confidence bypasses the ordinary cooldown.
+  # Confirmed SYN/UDP scans reach 95% at 2x the threshold (minimum 20 ports),
+  # then 100% at 10x (minimum 100). Replace exact records with a 1 KiB counter
+  # and at most 20 IDs; report growth near 1000 and 10000 distinct ports.
+  # Missing history and ACK/FIN-only traffic retain their lower confidence.
+  vertical_alert_cooldown_seconds: 300
+
+  # Maximum source/destination/protocol/probe-family/network groups in memory.
+  # Allocate a group after a second distinct port. A separate cache remembers
+  # at most four times this many single-port contacts; rotating that cache is
+  # normal during horizontal scans. Oldest-used groups are discarded at capacity.
+  vertical_max_groups: 256
+
+  # Maximum exact failed ports per unconfirmed group. Must cover min_ports;
+  # values below the full-confidence threshold can prevent compact tracking.
+  # Confirmed groups release this list and keep only the small counter.
+  vertical_max_ports: 256
+
+  # Maximum client groups for DHCP requests and, separately, ICMP notice groups.
+  # This bounds memory even when many clients scan. DHCP also separates client
+  # MACs and Slips time windows; ICMP relies on host counts supplied by Zeek.
+  other_scan_max_groups: 256
+
+  # A gap this many seconds long starts fresh DHCP/ICMP tracking. Continuing
+  # confirmed DHCP requests use compact distinct-IP counting and powers-of-ten
+  # reports; duplicate ICMP notices are suppressed until their count grows.
+  other_scan_quiet_seconds: 300
+
+  # Distinct addresses requested by one DHCP client before reporting broad
+  # requests. Renewals of the same address do not add up. Confidence starts at
+  # 80%, rises to 95% at twice this count (minimum 20), and reaches 100% at ten
+  # times (minimum 100). Range 2-100 keeps pre-confirmation memory bounded.
+  dhcp_min_addresses: 4
+
+#############################
 anomaly_detection_https:
   # Number of initial hours used to train the baseline model assuming benign traffic.
   # If set to 0, detection starts immediately and baseline is learned online.
@@ -1034,7 +1202,7 @@ DisabledAlerts:
   # All the following detections are turned on by default
   # Turn them off by adding any of the following detections to the
   # disabled_detections list
-  # ARP_SCAN, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
+  # ARP_SCAN, ARP_DISCOVERY, ARP_OUTSIDE_LOCALNET, UNSOLICITED_ARP, MITM_ARP_ATTACK,
   # YOUNG_DOMAIN, MULTIPLE_SSH_VERSIONS, DIFFERENT_LOCALNET,
   # DEVICE_CHANGING_IP, NON_HTTP_PORT_80_CONNECTION, NON_SSL_PORT_443_CONNECTION
   # WEIRD_HTTP_METHOD, INCOMPATIBLE_CN, DGA_NXDOMAINS, DNS_WITHOUT_CONNECTION,

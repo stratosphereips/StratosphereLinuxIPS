@@ -44,6 +44,19 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+    def create_arp_scan_detector(self, **settings: object) -> object:
+        """Create isolated ARP scan state with optional setting overrides.
+
+        Parameters:
+            settings: ARPScanSettings fields to override.
+
+        Returns:
+            Pure in-memory detector without databases or worker processes.
+        """
+        from modules.arp.scan_detector import ARPScanDetector
+        from modules.arp.scan_settings import ARPScanSettings
+
+        return ARPScanDetector(ARPScanSettings(**settings))
 
     def create_module_process_obj(
         self, module: type | str, *args: object, **kwargs: object
@@ -574,15 +587,12 @@ class ModuleFactory:
     def create_arp_obj(self, mock_db):
         from modules.arp.arp import ARP
 
-        with patch(
-            "modules.arp.arp.ARP.wait_for_arp_scans", return_value=Mock()
-        ):
-            arp = ARP(
+        arp = ARP(
                 logger=self.logger,
                 output_dir="dummy_output_dir",
                 redis_port=6379,
                 termination_event=Mock(),
-                slips_args=Mock(),
+                slips_args=SimpleNamespace(interface=["eth0"], growing=False, blocking=False),
                 conf=Mock(),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
@@ -1178,21 +1188,45 @@ class ModuleFactory:
         return flow_handler
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_horizontal_portscan_obj(self, mock_db):
+    def create_horizontal_portscan_obj(self, mock_db: Mock, **options: object) -> object:
+        """Create scan analysis with a mocked database and real limits.
+
+        Parameters:
+            mock_db: Database supplied by the patch decorator.
+            options: Horizontal scan settings overrides.
+
+        Returns:
+            Detector wrapper without database connections.
+        """
         from modules.network_discovery.horizontal_portscan import (
             HorizontalPortscan,
         )
 
-        horizontal_ps = HorizontalPortscan(mock_db)
+        from modules.network_discovery.scan_settings import ScanSettings
+
+        mock_db.is_p2p_related_flow_batch.side_effect = lambda flows: [False] * len(flows)
+        mock_db.get_port_info.return_value = ""
+        horizontal_ps = HorizontalPortscan(mock_db, ScanSettings(**options))
         return horizontal_ps
 
     @patch(DB_MANAGER, name="mock_db")
-    def create_vertical_portscan_obj(self, mock_db):
+    def create_vertical_portscan_obj(self, mock_db: Mock, **options: object) -> object:
+        """Create bounded vertical analysis with a mocked database.
+
+        Parameters:
+            mock_db: Patched database facade.
+            options: Scan period and memory-limit overrides.
+
+        Returns:
+            Vertical detector wrapper without database connections.
+        """
         from modules.network_discovery.vertical_portscan import (
             VerticalPortscan,
         )
+        from modules.network_discovery.scan_settings import ScanSettings
 
-        vertical_ps = VerticalPortscan(mock_db)
+        mock_db.get_authenticated_p2p_connections.return_value = []
+        vertical_ps = VerticalPortscan(mock_db, ScanSettings(**options))
         return vertical_ps
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
@@ -1322,13 +1356,15 @@ class ModuleFactory:
             NetworkDiscovery,
         )
 
+        conf = Mock()
+        conf.read_configuration.side_effect = lambda section, key, default: default
         network_discovery = NetworkDiscovery(
             logger=self.logger,
             output_dir="dummy_output_dir",
             redis_port=6379,
             termination_event=Mock(),
-            slips_args=Mock(),
-            conf=Mock(),
+            slips_args=SimpleNamespace(interface=[], growing=False),
+            conf=conf,
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )

@@ -686,6 +686,15 @@ public-IP lookups made by running modules use the same socket tracking.
 
 Do not modify the default ```config/whitelist.conf``` in place. Create a copy, update your copy, and set ```whitelists.local_whitelist_path``` in the Slips config file you are using to point to that copy.
 
+These rules exclude detections for connections to port 43 on those servers;
+their flows remain available. They do not whitelist every destination using
+port 43, or other ports on those IPs. The default file has no blanket port-43
+exception. When updating an existing personal whitelist, remove any
+`ip,*:43,both,alerts` entry if you want only the destination-specific rules
+above. Rules apply independently: a narrow rule
+does not cancel an existing broader IP, domain, organization or port rule.
+Adding a rule does not delete historical detections.
+
 Example:
 
 ```bash
