@@ -95,6 +95,14 @@ leave an older module consuming traffic after a restart. A malformed DNS
 message is logged by Flow Alerts; the DNS timeout thread continues with the
 next message instead of failing in its error handler.
 
+Native live capture and file analysis have been verified on Apple Silicon.
+Live interfaces need permission to capture through macOS BPF devices. For
+example, after granting capture access, run from the repository root:
+
+```bash
+python slips.py -i en0 -w -o output/macos-live
+```
+
 Choose the interface appropriate to your machine. Daemon startup, instance
 listing and stop have also been verified on Apple Silicon. The daemon's PID
 file uses the configured permanent directory, and startup failures are reported
@@ -126,6 +134,15 @@ global_p2p:
   iris_conf: config/iris_config.yaml
   iris_binary: output/bin/iris
 ```
+
+Merge these settings into the existing configuration. Paths are relative to
+the repository root. Global P2P still requires an interface (`-i`, optionally
+with `-g` for growing Zeek logs). The verification used two loopback peers
+with external bootstrapping disabled; it does not establish public-network or
+Fides reputation correctness. The separate `local_p2p`/`p2p4slips` backend uses
+the checked-out Pigeon submodule and its pinned Go toolchain. Follow the
+[local P2P build instructions](P2P.md#installation) rather than building
+that backend with an older Go version.
 
 ##### Docker
 

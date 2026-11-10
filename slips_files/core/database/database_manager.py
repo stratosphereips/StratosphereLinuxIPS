@@ -354,6 +354,13 @@ class DBManager:
 
     def record_slips_own_connection(self, *args, **kwargs):
         return self.rdb.record_slips_own_connection(*args, **kwargs)
+
+    def is_slips_own_source_ip(self, *args, **kwargs):
+        return self.rdb.is_slips_own_source_ip(*args, **kwargs)
+
+    def is_slips_own_connection(self, *args, **kwargs):
+        return self.rdb.is_slips_own_connection(*args, **kwargs)
+
     def get_interface(self, *args, **kwargs):
         return self.rdb.get_interface(*args, **kwargs)
 

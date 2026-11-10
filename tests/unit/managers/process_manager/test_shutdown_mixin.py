@@ -1188,8 +1188,15 @@ def test_ask_to_keep_firewall_rules(
     assert result is expected_keep
 
 
-def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
-    """Delete inherited rules and every corresponding Redis record."""
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_delete_removes_rules_and_local_state(
+    system: str,
+) -> None:
+    """Delete inherited rules and every corresponding Redis record.
+
+    Parameters:
+        system: Operating system whose firewall rules are removed.
+    """
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.mode = "interactive"
     process_manager.force_shutdown_requested = False
@@ -1201,6 +1208,10 @@ def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
     }
 
     with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
         patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
@@ -1230,14 +1241,23 @@ def test_firewall_shutdown_delete_removes_rules_and_local_state() -> None:
     ]
 
 
-def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
-    """Retain managed rules when the operator accepts the default choice."""
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_keep_leaves_rules_installed(system: str) -> None:
+    """Retain managed rules when the operator accepts the default choice.
+
+    Parameters:
+        system: Operating system whose firewall rules are retained.
+    """
     process_manager = ModuleFactory().create_process_manager_obj()
     process_manager.main.mode = "interactive"
     process_manager.force_shutdown_requested = False
     process_manager.sigterm_received = False
 
     with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
         patch(
             "managers.process_manager.shutdown_mixin."
             "has_slips_firewall_rules",
@@ -1256,6 +1276,55 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
+
+
+@pytest.mark.parametrize("system", ["Windows"])
+def test_firewall_shutdown_skips_non_linux_systems(system: str) -> None:
+    """Avoid invoking Linux firewall commands on unsupported systems.
+
+    Parameters:
+        system: Non-Linux operating-system name reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
+
+
+@pytest.mark.parametrize("system", ["Linux", "Darwin"])
+def test_firewall_shutdown_skips_runs_without_blocking(system: str) -> None:
+    """Avoid privileged firewall checks when blocking was not enabled.
+
+    Parameters:
+        system: Operating system reported by Python.
+    """
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.args.blocking = False
+
+    with (
+        patch(
+            "managers.process_manager.shutdown_mixin.platform.system",
+            return_value=system,
+        ),
+        patch(
+            "managers.process_manager.shutdown_mixin."
+            "has_slips_firewall_rules"
+        ) as has_rules,
+    ):
+        process_manager._handle_firewall_after_analysis()
+
+    has_rules.assert_not_called()
 
 
 @pytest.mark.parametrize("finished", [False, True])

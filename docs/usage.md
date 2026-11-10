@@ -489,7 +489,48 @@ keeping 30 backup files for every log.
 For a personal live capture targeting **about 4 GiB**, use these overrides in
 the configuration passed with `-c` (applied to the macOS en0 configuration):
 
-The local web interface is intentionally not a multi-instance viewer. Do not enable `-w` on several concurrent runs. It stays connected only to the Redis port and output directory of the Slips process that launched it.
+```yaml
+detection_history:
+  active_days: 30
+  max_active_size_mb: 1024
+  min_active_hours: 24
+  archive_retention_days: 30
+  archive_file_size_mb: 128
+  max_archive_size_mb: 2048
+  log_max_size_mb: 16
+  log_backup_count: 3
+anomaly_detection_https:
+  log_verbosity: 1
+```
+
+Keep the remaining settings in the existing configuration. This allocates
+1 GiB to the active database and 2 GiB to detection archives. Six rotated
+text logs can use about 384 MiB altogether, including their active segments.
+The remaining space covers web history, Zeek logs, Redis snapshots and module
+state. The existing 512 MiB raw-flow target shares the active database; it is
+not an extra 512 MiB allocation. The last day of recent detections stays
+protected, and archives expire after 30 days or earlier under size pressure.
+Lower HTTPS log verbosity reduces diagnostic writes without changing detection.
+
+This is a working storage target, not a hard total-folder quota. Traffic bursts,
+protected records, legacy deletion space and unfinished maintenance can exceed
+it. Restart Slips to load the settings; old oversized database files still need
+offline compaction. Existing rotated log backups are removed gradually under
+the new retention policy. Shared defaults are unchanged.
+
+Zeek cleanup retains each pending rotated-file deadline until it expires and
+processes the oldest first. A newer file cannot cancel or delay an older
+file's scheduled deletion. Checking a future deadline takes constant time;
+there is no scan of pending files for each input read.
+
+The option preserves past detections in the output directory; it does not
+restore active Redis state after a machine reboot. For an archival Redis
+snapshot, use `-s` and inspect the resulting RDB separately with `-d`.
+
+Each web interface stays connected to the Redis port and output directory of
+the Slips process that launched it. Concurrent runs can each use `-w` with
+separate web ports and writable directories, as in the PCAP example above.
+Open each run's own URL; one page does not combine or switch between runs.
 
 Once you're done, you can run slips with ```--killall``` to close all the redis servers using the following command
 
@@ -618,8 +659,10 @@ the saved database will contain all analyzed flows.
 
 ## Whitelisting
 
-Slips allows you to whitelist some pieces of data in order to avoid its processing.
-In particular, you can whitelist an IP address, a domain, a MAC address or a complete organization.
+Slips whitelist rules can suppress flow processing, evidence and alerts, or
+only firewall blocking and ARP poisoning.
+You can whitelist an IP address, a domain, a MAC address, a supported organization,
+or an exact HTTP request path (`uri`).
 You can choose to whitelist what is going __to__ them, what is coming __from__ them, or both directions.
 You can also choose to whitelist the flows, so they are not processed, or alerts, so
 you see the flows but don't receive alerts on them. The idea of whitelisting is to avoid
@@ -656,7 +699,11 @@ Then set ```local_whitelist_path: config/my_whitelist.conf``` in ```config/my_sl
 ./slips.py -c config/my_slips.yaml -f dataset/test7-malicious.pcap
 ```
 
-The attacker and victim of every evidence are checked against the whitelist. In addition to all the related IPs, DNS resolutions, SNI, and CNAMEs of the attacker and teh victim. If any of them are whitelisted, the flow/evidence is discarded.
+Alert suppression checks the attacker and victim of each evidence, including
+their related IPs, DNS resolutions, SNI and CNAMEs. A matching `alerts` or
+`both` rule excludes that evidence from scoring and alerting. Flow suppression
+is separate. A `blocking` rule preserves detections and protects only the
+address targeted by enforcement.
 
 Whitelists now use bloom filters to speed up the process of checking if an IoC is whitelisted or not.
 
@@ -686,6 +733,17 @@ poisoning, put this rule in your copied whitelist file:
 ```csv
 ip,192.168.1.128,both,blocking
 ```
+
+This mode applies to the IP being blocked, not every host communicating with it.
+Use an individual IPv4 or IPv6 address with `both` directions; ports, subnets,
+other IoC types and evidence types are not supported in `blocking` rules.
+Changes take effect within a few seconds in a running version that supports
+this mode, including removal of existing Slips firewall blocks and cancellation
+of repeated poisoning. Existing alert/flow suppression rules remain independent;
+restart Slips when replacing those rules by editing the file.
+After upgrading to code that introduces this mode, restart Slips once to load
+the new enforcement checks. The web editor's **Blocking only (keep alerts)**
+option writes the same rule into the configured whitelist file.
 
 ### Alerts Whitelist
 
@@ -727,6 +785,7 @@ If you whitelist some piece of data not to generate alerts, the process is the f
 - If you whitelisted an organization
     - We check that the ASN of the IP in the alert belongs to that organization.
     - We check that the range of the IP in the alert belongs to that organization.
+    - We match organization domains and their subdomains, such as `captive.apple.com` for `apple.com`.
 
 - If you whitelist a MAC address, then:
   - The source and destination MAC addresses of all flows are checked against the whitelisted mac address.
@@ -861,7 +920,10 @@ with its alert threshold. Detailed evidence remains available in the web interfa
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.yaml```
 
-This feature is supported in Linux and it requires root privileges.
+On Linux, install `notify-send` (the `libnotify-bin` package on Debian/Ubuntu)
+and run with access to a graphical desktop notification session. Notifications
+use the Slips logo and do not require root. If Slips runs as root for capture or prevention, it tries
+to send the notification through the logged-in desktop user's session.
 
 On macOS, Slips prepares a small native **Slips** notification app with its logo
 in `~/Applications/Slips Notifications.app`. This happens in the background,

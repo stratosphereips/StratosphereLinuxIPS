@@ -27,8 +27,6 @@ class InputObserver:
         self.observer = Observer()
         # Schedule the observer with the callback on the file handler
         self.observer.schedule(event_handler, zeek_dir, recursive=True)
-        # monitor changes to whitelist
-        self.observer.schedule(event_handler, "config/", recursive=True)
         # Start the observer
         self.observer.start()
 
