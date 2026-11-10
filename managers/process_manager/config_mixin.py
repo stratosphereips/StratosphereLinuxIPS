@@ -21,6 +21,7 @@ class ConfigMixin:
         (Modules.LLM_PROXY, "llm_enabled"),
         (Modules.ALERT_SUMMARY, "alert_summary_enabled"),
         (Modules.REGEX_GENERATOR, "regex_generator_enabled"),
+        (Modules.ANOMALY_DETECTION_SERVICES, "service_anomaly_enabled"),
         (Modules.BEACONING, "beaconing_enabled"),
         (Modules.SMB_ANALYZER, "smb_analyzer_enabled"),
         (Modules.WEB_INTERFACE, "web_interface_enabled"),
