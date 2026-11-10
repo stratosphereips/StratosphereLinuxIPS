@@ -108,6 +108,11 @@ Slips has 2 modes, interactive and daemonized.
 shutdown. **Daemon mode** (`-D`) detaches Slips so the terminal returns while
 capture continues in the background.
 
+The interactive summary's **Evidence** value counts evidence currently retained
+in the active Redis run. A new finding increases it; removing a whitelisted or
+disabled finding decreases it once. Restarting the evidence handler preserves
+the existing count, and startup repairs negative counters left by older runs.
+
 ```bash
 ./slips.py -i en0 -w -o output/live --keep-history -D
 ./slips.py --list-instances
