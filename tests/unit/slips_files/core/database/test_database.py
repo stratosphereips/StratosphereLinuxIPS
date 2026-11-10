@@ -326,6 +326,7 @@ def _mark_redis_as_owned_by(db: DBManager, output_dir: str) -> None:
         output_dir: Output dir to store.
     """
     db.set_input_metadata({db.constants.ANALYSIS_OUTPUT_DIR: output_dir})
+    db.store_pid("main", db.main_pid)
 
 
 def _sqlite_mock() -> MagicMock:
@@ -1710,3 +1711,56 @@ def test_save_rdb_with_redis_cli_retries_without_a_password(
     assert run.call_count == 2
     assert "env" in run.call_args_list[0].kwargs
     assert "env" not in run.call_args_list[1].kwargs
+
+
+# Tests added by the native Slips work (PR 2141).
+@pytest.fixture(autouse=True)
+def ensure_redis_options(fresh_redis_db_class: None) -> None:
+    """
+    Ensure Redis options exist when ModuleFactory skips config generation.
+
+    Parameters:
+        fresh_redis_db_class: Restores the RedisDB class state afterwards.
+    """
+    RedisDB._options = {}
+
+
+@pytest.mark.parametrize("owner", [None, "output/a-slips-run"])
+def test_factory_refuses_a_redis_run_owner(owner: str | None) -> None:
+    """Refuse an owned database before its constructor can write test values.
+
+    Parameters:
+        owner: Existing Slips run identity or a Redis instance reserved for tests.
+    """
+    factory = ModuleFactory()
+    client = Mock()
+    client.hget.return_value = owner
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", return_value=client), patch("slips_files.core.database.database_manager.DBManager") as constructor:
+        if owner:
+            with pytest.raises(RuntimeError, match="Refusing unit-test writes"):
+                factory.create_db_manager_obj(6379)
+            constructor.assert_not_called()
+        else:
+            factory._assert_redis_has_no_run_owner(6379)
+        client.close.assert_called_once()
+
+
+def test_factory_allows_an_unused_redis_port() -> None:
+    """Allow a new isolated server without treating refused connections as ownership."""
+    factory = ModuleFactory()
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=False), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password") as connect:
+        factory._assert_redis_has_no_run_owner(65000)
+    connect.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", [redis.exceptions.ConnectionError, redis.exceptions.TimeoutError])
+def test_factory_refuses_unverified_redis_ownership(failure: type[Exception]) -> None:
+    """Fail closed if an existing server's run ownership cannot be checked.
+
+    Parameters:
+        failure: Connection loss or timeout while checking the occupied port.
+    """
+    factory = ModuleFactory()
+    with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", side_effect=failure("connection lost")):
+        with pytest.raises(RuntimeError, match="Cannot verify ownership"):
+            factory._assert_redis_has_no_run_owner(65000)

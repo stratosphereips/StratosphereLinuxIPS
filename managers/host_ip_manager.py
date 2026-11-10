@@ -1,16 +1,86 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import netifaces
+import time
 from typing import (
+    Any,
     Set,
     List,
     Dict,
 )
 
+from managers.network_state import collect_network_state
+
 
 class HostIPManager:
-    def __init__(self, main):
+    def __init__(self, main: Any) -> None:
+        """Keep current network settings for a live Slips run.
+
+        Parameters:
+            main: Main Slips process.
+        """
         self.main = main
+
+    def _monitored_interfaces(self) -> List[str]:
+        """Return operating-system interfaces captured by this run.
+
+        Returns:
+            Interface names, or an empty list for file-based input.
+        """
+        if self.main.args.interface:
+            return [self.main.args.interface]
+        if self.main.args.access_point:
+            return [
+                name.strip()
+                for name in self.main.args.access_point.split(",")
+                if name.strip()
+            ]
+        return []
+
+    def refresh_network_state(self) -> Dict[str, str] | None:
+        """Replace changed live network settings and log each change.
+
+        Returns:
+            Current interface-to-host-IP mapping for live capture.
+        """
+        interfaces = self._monitored_interfaces()
+        if not interfaces or not self.main.db.is_running_non_stop():
+            return None
+        host_ips = {}
+        for interface in interfaces:
+            current = collect_network_state(interface, len(interfaces))
+            previous = self.main.db.get_network_state(interface) or {}
+            if current["host_ip"]:
+                host_ips[interface] = current["host_ip"]
+            if all(
+                previous.get(key) == value for key, value in current.items()
+            ):
+                continue
+            current["changed_at"] = time.time()
+            current["version"] = int(previous.get("version", 0)) + 1
+            history = previous.get("history", [])
+            if previous.get("changed_at"):
+                old_state = {
+                    key: value
+                    for key, value in previous.items()
+                    if key != "history"
+                }
+                history = [*history, old_state]
+            current["history"] = history[-10:]
+            self.main.db.replace_network_state(interface, current)
+            self.main.print(
+                f"Network settings changed on {interface}: "
+                f"IP {previous.get('host_ip') or '-'} -> {current['host_ip'] or '-'}, "
+                f"subnet {previous.get('local_network') or '-'} -> "
+                f"{current['local_network'] or '-'}, "
+                f"gateway {previous.get('gateway_ip') or '-'} -> "
+                f"{current['gateway_ip'] or '-'}, "
+                f"gateway MAC {previous.get('gateway_mac') or '-'} -> "
+                f"{current['gateway_mac'] or '-'}, "
+                f"DNS {', '.join(previous.get('dns_servers', [])) or '-'} -> "
+                f"{', '.join(current['dns_servers']) or '-'}"
+            )
+        return host_ips
 
     def _get_host_ips(self) -> Dict[str, str]:
         """
@@ -21,7 +91,11 @@ class HostIPManager:
         interfaces: List[str] = (
             [self.main.args.interface]
             if self.main.args.interface
-            else self.main.args.access_point.split(",")
+            else (
+                self.main.args.access_point.split(",")
+                if self.main.args.access_point
+                else []
+            )
         )
         found_ips = {}
         for iface in interfaces:
@@ -46,48 +120,24 @@ class HostIPManager:
         return found_ips
 
     def store_host_ip(self) -> Dict[str, str] | None:
-        """
-        stores the host ip in the db
-        recursively retries to get the host IP online every 10s if not
-        connected
-        """
-        if not self.main.db.is_running_non_stop():
-            return
+        """Record initial network settings for live interface capture.
 
-        if host_ips := self._get_host_ips():
-            for iface, ip in host_ips.items():
-                self.main.db.set_host_ip(ip, iface)
-            return host_ips
-
-        # uncomment this if in the future we require host ips to start
-        # slips, then it will get stuck in a loop here until it's abl to
-        # get the host ip
-        # self.main.print("Not Connected to the internet. Reconnecting in 10s.")
-        # time.sleep(10)
-        # self.store_host_ip()
+        Returns:
+            Current interface-to-host-IP mapping, if monitoring live traffic.
+        """
+        return self.refresh_network_state()
 
     def update_host_ip(
         self, host_ips: Dict[str, str], modified_profiles: Set[str]
-    ) -> Dict[str, str]:
+    ) -> Dict[str, str] | None:
         """
-        Is called every 5s for slips to update the host ip
-        when running on an interface we keep track of the host IP.
-        If there was no modified TWs in the host IP, we check if the
-        network was changed.
-        :param modified_profiles: modified profiles since slips start time
-        :param host_ips: a dict with {interface: host_ip,..} for each
-        interface slips is monitoring
+        Refresh live network settings every 5 seconds regardless of traffic.
+
+        Parameters:
+            host_ips: Previously known IPs, kept for caller compatibility.
+            modified_profiles: Recently active profiles, unused here.
+
+        Returns:
+            Current interface-to-host-IP mapping.
         """
-        if not self.main.db.is_running_non_stop():
-            return
-
-        if host_ips:
-            res = {}
-            for iface, ip in host_ips.items():
-                if ip in modified_profiles:
-                    res[iface] = ip
-            if res:
-                return res
-
-        # there was no modified TWs in the host IPs, check if network changed
-        return self.store_host_ip()
+        return self.refresh_network_state()

@@ -60,7 +60,11 @@ class Checker:
 
         # -f file/dir/stdin-type
         input_information = self.main.args.filepath
-        if os.path.isfile(input_information) or os.path.isdir(
+        if input_information.lower() in ("zeek", "argus", "suricata"):
+            input_type, line_type = self.main.handle_flows_from_stdin(
+                input_information
+            )
+        elif os.path.isfile(input_information) or os.path.isdir(
             input_information
         ):
             input_type = self.main.get_input_file_type(input_information)

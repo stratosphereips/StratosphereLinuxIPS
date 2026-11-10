@@ -422,13 +422,26 @@ The values for each column are the following:
 
 ## Popup notifications
 
-Slips Support displaying popup notifications whenever there's an alert.
+Slips can display a desktop notification when a host crosses the alert threshold.
+The banner shows the host IP and name, the latest finding, and the host score
+with its alert threshold. Detailed evidence remains available in the web interface.
 
 This feature is disabled by default. You can enable it by changing ```popup_alerts``` to ```yes``` in ```config/slips.yaml```
 
 This feature is supported in Linux and it requires root privileges.
 
-This feature is supported in MaOS without root privileges.
+On macOS, Slips prepares a small native **Slips** notification app with its logo
+in `~/Applications/Slips Notifications.app`. This happens in the background,
+outside alert processing, and requires Apple's command-line developer tools
+(`swiftc`, `sips` and `codesign`). The signed app is reused across runs.
+Allow notifications for **Slips** in **System Settings → Notifications**.
+Check Focus settings if banners are hidden. Notification permission is specific
+to this app and is separate from Script Editor's permission.
+
+If the native app cannot be built, Slips logs a warning and falls back to the
+built-in `osascript` command. That fallback uses Script Editor's notification
+permission and icon. Neither macOS backend requires root. Restart Slips after
+enabling `popup_alerts` or updating the notification code.
 
 This feature is not supported in Docker
 
@@ -437,8 +450,7 @@ This feature is not supported in Docker
 Slips doesn't need root permissions unless you
 
 1. use the blocking modules (Firewall and ARP poisoner) ( with -p )
-2. use slips notifications
-3. are saving the database ( with -d )
+2. are saving the database ( with -d )
 
 If you can't listen to an interface without sudo, you can run the following command to let any user use zeek to listen to an interface not just root.
 

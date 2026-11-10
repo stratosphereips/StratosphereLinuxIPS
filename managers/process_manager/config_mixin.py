@@ -11,7 +11,6 @@ import yaml
 from modules.supported_module_names import Modules
 from slips_files.common.input_type import InputType
 
-
 ModuleDependencyMap = Dict[Modules, Tuple[Modules, ...]]
 
 

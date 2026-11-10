@@ -49,7 +49,13 @@ def test_start_input_process(
     process_manager.main.bloom_filters_man = Mock()
     process_manager.main.db.increment_modules_started_count.return_value = 1
 
-    with patch("managers.process_manager.startup_mixin.Input") as mock_input:
+    with patch(
+        "managers.process_manager.startup_mixin.Input.create_process"
+    ) as mock_input, patch(
+        "managers.process_manager.startup_mixin.DupFd"
+    ) as duplicate_fd, patch(
+        "sys.stdin.fileno", return_value=0
+    ):
         mock_input_process = Mock()
         mock_input.return_value = mock_input_process
         mock_input_process.pid = 54321
@@ -73,6 +79,11 @@ def test_start_input_process(
             cli_packet_filter=cli_packet_filter,
             zeek_or_bro=zeek_or_bro,
             line_type=line_type,
+            stdin_descriptor=(
+                duplicate_fd.return_value
+                if input_type == InputType.STDIN
+                else None
+            ),
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
             is_input_failed_event=process_manager.is_input_failed_event,
@@ -95,7 +106,7 @@ def test_start_profiler_process():
     process_manager.main.bloom_filters_man = Mock()
     process_manager.main.db.increment_modules_started_count.return_value = 1
     with patch(
-        "managers.process_manager.startup_mixin.Profiler"
+        "managers.process_manager.startup_mixin.Profiler.create_process"
     ) as mock_profiler, patch.object(
         process_manager.is_profiler_done_starting_initial_workers_event,
         "wait",
@@ -120,6 +131,7 @@ def test_start_profiler_process():
                 process_manager.is_profiler_done_semaphore
             ),
             profiler_queue=process_manager.profiler_queue,
+            aid_queue=process_manager.aid_queue,
             is_profiler_done_event=process_manager.is_profiler_done_event,
             is_input_done_event=process_manager.is_input_done_event,
             is_input_failed_event=process_manager.is_input_failed_event,
@@ -195,7 +207,7 @@ def test_start_evidence_process(output_dir, redis_port):
     process_manager.main.db.increment_modules_started_count.return_value = 1
 
     with patch(
-        "managers.process_manager.startup_mixin.EvidenceHandler"
+        "managers.process_manager.startup_mixin.EvidenceHandler.create_process"
     ) as mock_evidence:
         mock_evidence_process = Mock()
         mock_evidence.return_value = mock_evidence_process
@@ -213,6 +225,8 @@ def test_start_evidence_process(output_dir, redis_port):
             process_manager.main.conf,
             process_manager.main.pid,
             process_manager.main.bloom_filters_man,
+            evidence_worker_queue=process_manager.evidence_worker_queue,
+            evidence_logger_q=process_manager.evidence_logger_q,
             total_processes_to_start=process_manager.total_processes_to_start,
         )
         mock_evidence_process.start.assert_called_once()

@@ -18,6 +18,35 @@ from slips_files.core.structures.risk_weights import RiskWeight
 from tests.module_factory import ModuleFactory
 
 
+@pytest.mark.parametrize("live,hostname,expected_host,expected_score", [
+    (True, "MacBookAir", "192.168.1.26 (MacBookAir)", "5.12"),
+    (False, None, "192.168.1.26", "16"),
+    (True, "name\nwith   whitespace", "192.168.1.26 (name with whitespace)", "5.12"),
+    (True, "x" * 100, "192.168.1.26 (" + "x" * 59 + "…)", "5.12"),
+])
+def test_notification_summary_distinguishes_host_score_and_latest_finding(
+    live: bool, hostname: str | None, expected_host: str, expected_score: str,
+) -> None:
+    """Keep desktop text short and accurate without changing terminal output.
+
+    Parameters:
+        live: Live risk-adjusted scoring or file-analysis raw scoring.
+        hostname: Saved host name, if any.
+        expected_host: Bounded first line of the banner.
+        expected_score: Score appropriate to the detector mode.
+    """
+    formatter = ModuleFactory().create_evidence_formatter_obj()
+    formatter.db.get_hostname_from_profile.return_value = hostname
+    formatter.db.is_running_non_stop.return_value = live
+    alert = Alert(profile=ProfileID("192.168.1.26"), timewindow=TimeWindow(10),
+                  last_evidence=Mock(timestamp=1794250000, evidence_type=EvidenceType.UNKNOWN_PORT),
+                  accumulated_threat_level=16, accumulated_ratl=5.12, risk_level=RiskWeight.LOW)
+    result = formatter.get_notification_alert(alert, 5)
+    assert result == f"{expected_host}\nLatest finding: Unknown port\nHost score {expected_score} (alert threshold 5)."
+    assert all(token not in result.lower() for token in ("timewindow", "risk weight", "malicious", "start", "stop"))
+    assert result.count("\n") == 2
+
+
 @pytest.mark.parametrize(
     "all_evidence, profileid, twid, expected_output",
     [

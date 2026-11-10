@@ -3,10 +3,50 @@
 """Unit tests for the profiler worker manager mixin."""
 
 from unittest.mock import Mock, call
+from unittest.mock import patch
 
 import pytest
 
 from tests.module_factory import ModuleFactory
+
+
+@pytest.mark.parametrize("elapsed,due", [(14, False), (15, True), (300, True)])
+def test_profiler_burst_checks_run_within_seconds(elapsed: int, due: bool) -> None:
+    """Check burst pressure after 15 seconds while retaining slow scale-down.
+
+    Parameters:
+        elapsed: Seconds since initialization.
+        due: Whether the next throughput check should run.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    with patch("slips_files.core.worker_manager_mixin.time.monotonic", return_value=100):
+        profiler.init_worker_manager()
+    with patch("slips_files.core.worker_manager_mixin.time.monotonic", return_value=100+elapsed):
+        assert profiler._throughput_check_due() is due
+    assert profiler.next_worker_decrease_check_time == 400
+    assert profiler.next_throughput_check_time > 100+elapsed
+
+
+@pytest.mark.parametrize("backlogged", [False, True])
+def test_profiler_scales_for_pending_work_after_input_burst(backlogged: bool) -> None:
+    """Drain pending work even after input has gone idle, without removing workers.
+
+    Parameters:
+        backlogged: Whether queued input remains after the burst.
+    """
+    profiler = ModuleFactory().create_profiler_obj()
+    profiler.profiler_queue = Mock()
+    profiler.profiler_queue.empty.return_value = not backlogged
+    profiler._throughput_check_due = Mock(return_value=True)
+    profiler.start_profiler_worker = Mock()
+    profiler.db.get_core_module_flows_per_second.side_effect = [200, 0]
+    profiler._check_if_high_throughput_and_add_workers()
+    assert profiler.start_profiler_worker.call_count == int(backlogged)
+    profiler.active_profiler_workers = 4
+    profiler.did_5min_pass_since_last_worker_decrease_check = Mock(return_value=True)
+    profiler.db.get_core_module_flows_per_second.side_effect = [200, 0]
+    profiler._check_if_stabled_throughput_and_remove_workers()
+    assert profiler.profiler_queue.put.call_count == int(not backlogged)
 
 
 @pytest.mark.parametrize(
@@ -34,6 +74,7 @@ def test_check_if_stabled_throughput_only_removes_extra_workers(
     profiler.last_worker_id = last_worker_id
     profiler.active_profiler_workers = last_worker_id + 1
     profiler.profiler_queue = Mock()
+    profiler.profiler_queue.empty.return_value = True
     profiler.print = Mock()
     profiler.did_5min_pass_since_last_worker_decrease_check = Mock(
         return_value=True
@@ -82,6 +123,7 @@ def test_check_if_stabled_throughput_compares_rates(
     profiler.last_worker_id = 3
     profiler.active_profiler_workers = 4
     profiler.profiler_queue = Mock()
+    profiler.profiler_queue.empty.return_value = True
     profiler.print = Mock()
     profiler.did_5min_pass_since_last_worker_decrease_check = Mock(
         return_value=True
@@ -114,6 +156,7 @@ def test_check_if_stabled_throughput_waits_for_interval() -> None:
     profiler.last_worker_id = 3
     profiler.active_profiler_workers = 4
     profiler.profiler_queue = Mock()
+    profiler.profiler_queue.empty.return_value = True
     profiler.did_5min_pass_since_last_worker_decrease_check = Mock(
         return_value=False
     )
@@ -138,7 +181,7 @@ def test_worker_scaling_uses_lowercase_input_metric_key() -> None:
     profiler.active_profiler_workers = 3
     profiler.start_profiler_worker = Mock()
     profiler.print = Mock()
-    profiler.did_5min_pass_since_last_throughput_check = Mock(
+    profiler._throughput_check_due = Mock(
         return_value=True
     )
     profiler.db.get_core_module_flows_per_second.side_effect = [10, 100]

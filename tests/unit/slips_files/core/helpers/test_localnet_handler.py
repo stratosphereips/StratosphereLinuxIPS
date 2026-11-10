@@ -5,6 +5,7 @@ import netifaces
 import pytest
 
 from slips_files.core.helpers.localnet_handler import LocalnetHandler
+from tests.module_factory import ModuleFactory
 
 
 def create_profiler(
@@ -101,9 +102,7 @@ def test_get_localnet_of_given_interface_returns_ipv6_networks(
     handler = LocalnetHandler(profiler)
     mock_get_all_interfaces.return_value = ["eth0"]
     mock_ifaddresses.return_value = {
-        netifaces.AF_INET6: [
-            {"addr": "fd00:1::1234%eth0", "prefixlen": "64"}
-        ]
+        netifaces.AF_INET6: [{"addr": "fd00:1::1234%eth0", "prefixlen": "64"}]
     }
 
     localnets = handler._get_localnet_of_given_interfaces_using_netifaces()
@@ -192,6 +191,7 @@ def test_should_set_localnet(
 
 def test_handle_setting_local_net_stores_interface_localnets_in_non_stop_mode():
     profiler = create_profiler(running_non_stop=True)
+    profiler.args.interface = "eth0"
     handler = LocalnetHandler(profiler)
     handler._should_set_localnet = Mock(return_value=True)
     handler._get_localnet_of_given_interfaces_using_netifaces = Mock(
@@ -215,3 +215,18 @@ def test_handle_setting_local_net_stores_interface_localnets_in_non_stop_mode():
         ],
         any_order=False,
     )
+
+
+def test_stdin_guesses_localnet_without_capture_interface() -> None:
+    """Infer the network from piped flows when no capture interface exists."""
+    profiler = ModuleFactory().create_profiler_worker_obj()
+    profiler.args = Mock(interface=None, access_point=None)
+    profiler.client_ips = []
+    profiler.db.is_running_non_stop.return_value = True
+    profiler.db.get_total_recognized_localnets.return_value = 0
+    handler = LocalnetHandler(profiler)
+    flow = Mock(saddr="192.168.1.8", interface="default")
+    with patch("netifaces.ifaddresses") as interface_lookup:
+        handler.handle_setting_local_net(flow)
+    interface_lookup.assert_not_called()
+    assert handler.localnet_cache == {"default": "192.168.0.0/16"}

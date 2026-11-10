@@ -1,14 +1,15 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
-import multiprocessing
 import time
 import threading
 from multiprocessing import Process
 from typing import List, Optional
 
 from slips_files.core.profiler_worker import ProfilerWorker
+from slips_files.core.aid_manager import AIDManager
 
 FIVE_MINS = 300
+THROUGHPUT_CHECK_SECONDS = 15
 NUM_INITIAL_PROFILER_WORKERS = 3
 
 
@@ -31,7 +32,7 @@ class WorkerManagerMixin:
         self.workers: List[ProfilerWorker] = []
         # is set by this module to indicate to the monitor thread that
         # workers stopped.
-        self.did_all_workers_stop = multiprocessing.Event()
+        self.did_all_workers_stop = threading.Event()
         self.last_worker_id = -1
         self.active_profiler_workers = 0
         self.num_of_initial_profiler_workers = NUM_INITIAL_PROFILER_WORKERS
@@ -39,7 +40,7 @@ class WorkerManagerMixin:
         # detected
         self.max_workers = 6
         now = time.monotonic()
-        self.next_throughput_check_time = now + FIVE_MINS
+        self.next_throughput_check_time = now + THROUGHPUT_CHECK_SECONDS
         self.next_worker_decrease_check_time = now + FIVE_MINS
         self.profiler_monitor_thread = threading.Thread(
             target=self._run_profiler_workers_manager_loop,
@@ -70,7 +71,7 @@ class WorkerManagerMixin:
         None.
         """
         worker_name = f"profiler_worker_process_{worker_id}"
-        worker = ProfilerWorker(
+        worker = ProfilerWorker.create_process(
             logger=self.logger,
             output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
@@ -82,9 +83,16 @@ class WorkerManagerMixin:
             # module specific kwargs
             name=worker_name,
             profiler_queue=self.profiler_queue,
-            input_handler=self.input_handler_obj,
+            input_handler=(
+                type(self.input_handler_obj),
+                {
+                    key: value
+                    for key, value in vars(self.input_handler_obj).items()
+                    if key != "db"
+                },
+            ),
             aid_queue=self.aid_queue,
-            aid_manager=self.aid_manager,
+            aid_manager=AIDManager.for_queue(self.aid_queue),
             is_input_done_event=self.is_input_done_event,
             total_processes_to_start=self.total_processes_to_start,
         )
@@ -94,9 +102,9 @@ class WorkerManagerMixin:
         self.active_profiler_workers += 1
         self.db.increment_profiler_workers_started()
 
-    def did_5min_pass_since_last_throughput_check(self) -> bool:
+    def _throughput_check_due(self) -> bool:
         """
-        Return whether 5 minutes passed since the last throughput check.
+        Return whether the short burst-response interval elapsed.
 
         Return:
         True when throughput should be checked.
@@ -106,7 +114,7 @@ class WorkerManagerMixin:
             return False
 
         while self.next_throughput_check_time <= now:
-            self.next_throughput_check_time += FIVE_MINS
+            self.next_throughput_check_time += THROUGHPUT_CHECK_SECONDS
         return True
 
     def did_5min_pass_since_last_worker_decrease_check(self) -> bool:
@@ -168,12 +176,12 @@ class WorkerManagerMixin:
         if self.max_workers_started():
             return
 
-        if not self.did_5min_pass_since_last_throughput_check():
+        if not self._throughput_check_due():
             return
 
         profiler_fps = self._get_flows_per_second(self.name)
         input_fps = self._get_flows_per_second("input")
-        if input_fps > (profiler_fps * 1.1):
+        if input_fps > (profiler_fps * 1.1) or not self.profiler_queue.empty():
             worker_id = self.last_worker_id + 1
             self.start_profiler_worker(worker_id)
             self.last_worker_id = worker_id
@@ -217,6 +225,9 @@ class WorkerManagerMixin:
             return
 
         if not self.did_5min_pass_since_last_worker_decrease_check():
+            return
+
+        if not self.profiler_queue.empty():
             return
 
         profiler_fps = self._get_flows_per_second(self.name)

@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import json
 from datetime import datetime
-from unittest.mock import MagicMock, Mock, patch
+from pathlib import Path
+from unittest.mock import MagicMock, Mock, call, patch
 
 import pytest
 
@@ -605,11 +606,12 @@ def test_show_popup():
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     worker.notify = Mock()
     alert = Mock(spec=Alert)
-    worker.formatter.get_printable_alert = Mock(return_value="alert_time_desc")
+    worker.formatter.get_notification_alert = Mock(return_value="alert_summary")
 
     worker.show_popup(alert)
 
-    worker.notify.show_popup.assert_called_once_with("alert_time_desc")
+    worker.formatter.get_notification_alert.assert_called_once_with(alert, worker.detection_threshold_in_this_width)
+    worker.notify.show_popup.assert_called_once_with("alert_summary")
 
 
 @pytest.mark.parametrize(

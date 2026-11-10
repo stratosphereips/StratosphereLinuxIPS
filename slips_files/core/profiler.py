@@ -70,6 +70,7 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self,
         is_profiler_done_semaphore: Optional[Semaphore] = None,
         profiler_queue=None,
+        aid_queue: Optional[multiprocessing.Queue] = None,
         is_profiler_done_event: Optional[Event] = None,
         is_input_done_event: Optional[Event] = None,
         is_input_failed_event: Optional[Event] = None,
@@ -156,7 +157,11 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             return InputType.ZEEK_TABS
         elif input_type == InputType.STDIN:
             # ok we're reading flows from stdin, but what type of flows?
-            return line["line_type"]
+            return (
+                InputType.BINETFLOW
+                if line["line_type"] == "argus"
+                else InputType.coerce(line["line_type"])
+            )
         else:
             # if it's none of the above cases
             # it's probably one of the following:
@@ -232,7 +237,6 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             # wait for all flows to be processed by the profiler processes.
             self.stop_profiler_workers()
 
-            self.aid_queue.put("stop")
             self.aid_manager.shutdown()
 
             used_queues = [

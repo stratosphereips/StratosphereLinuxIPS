@@ -298,6 +298,8 @@ def start_test_redis_server(
         "dump.rdb",
         "--logfile",
         f"redis-server-port-{redis_port}.log",
+        "--pidfile",
+        str((redis_dir / f"redis-server-port-{redis_port}.pid").resolve()),
     ]
 
     if require_auth:
