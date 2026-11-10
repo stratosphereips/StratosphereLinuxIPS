@@ -60,7 +60,8 @@ class EvidenceType(Enum):
     NON_HTTP_PORT_80_CONNECTION = auto()
     NON_SSL_PORT_443_CONNECTION = auto()
     WEIRD_HTTP_METHOD = auto()
-    INCOMPATIBLE_CN = auto()
+    TLS_PROVIDER_IMPERSONATION = auto()
+    INCOMPATIBLE_CN = TLS_PROVIDER_IMPERSONATION
     CN_URL_MISMATCH = auto()
     DGA_NXDOMAINS = auto()
     DNS_WITHOUT_CONNECTION = auto()
@@ -100,6 +101,7 @@ class EvidenceType(Enum):
     HTTP_TRAFFIC = auto()
     MALICIOUS_JARM = auto()
     NETWORK_GPS_LOCATION_LEAKED = auto()
+    IP_GEOLOCATION_RESPONSE = auto()
     ICMP_TIMESTAMP_SCAN = auto()
     ICMP_ADDRESS_SCAN = auto()
     ICMP_ADDRESS_MASK_SCAN = auto()
@@ -119,6 +121,9 @@ class EvidenceType(Enum):
     TOR_EXIT_NODE = auto()
     PERIODIC_CONNECTION = auto()
     SUSPECTED_C2_CHANNEL = auto()
+    HTTP_IP_HOST = auto()
+    HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE = auto()
+    HTTP_BINARY_RESPONSE_AS_HTML = auto()
 
     SMB_SCAN = auto()
     SMB_SHARE_SWEEP = auto()

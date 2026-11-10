@@ -176,6 +176,94 @@ def test_is_ip_outside_local_network(
 
 
 @pytest.mark.parametrize(
+    "saddr, daddr, subnet, resolver, expected",
+    [
+        ("10.0.2.2", "10.0.2.15", "192.168.0.0/16", "", "both"),
+        ("192.168.1.5", "10.0.2.2", "192.168.0.0/16", "", "dstip"),
+        ("10.0.2.2", "192.168.1.5", "192.168.0.0/16", "", "srcip"),
+        ("192.168.1.5", "192.168.1.6", "192.168.0.0/16", "", ""),
+        ("192.168.1.5", "8.8.8.8", "192.168.0.0/16", "", ""),
+        ("10.0.2.2", "169.254.1.1", "192.168.0.0/16", "", "srcip"),
+        ("10.0.2.2", "10.0.2.53", "192.168.0.0/16", "10.0.2.53", "srcip"),
+        ("192.168.1.5", "10.0.2.53", "192.168.0.0/16", "10.0.2.53", ""),
+        ("10.0.2.2", "10.0.2.15", "", "", ""),
+        ("10.0.2.2", "10.0.2.15", "fd00:1::/64", "", ""),
+    ],
+)
+def test_different_localnet_context(
+    saddr: str, daddr: str, subnet: str, resolver: str, expected: str,
+) -> None:
+    """Compare both ends together, preserving subnet and DNS exemptions.
+
+    Parameters:
+        saddr: Source address.
+        daddr: Destination address.
+        subnet: Known subnet, or empty when not learned yet.
+        resolver: Known DNS server, if any.
+        expected: Outside direction, or empty when neither is reportable.
+    """
+    module_factory = ModuleFactory()
+    flow_alert_utils = module_factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = None
+    db.get_local_network.return_value = subnet
+    db.is_official_dns_server.side_effect = lambda ip: ip == resolver
+    flow = SimpleNamespace(
+        saddr=saddr, daddr=daddr, interface="eth0", proto="tcp",
+        sport=40000, dport=53 if resolver else 80,
+    )
+
+    assert flow_alert_utils.different_localnet_context(db, flow) == (subnet, expected)
+    db.get_local_network.assert_called_once_with("eth0")
+    if not resolver:
+        db.get_network_state.assert_called_once_with("eth0")
+
+
+@pytest.mark.parametrize(
+    "timestamp, expected_outside, expected_old_dns",
+    [
+        (150.0, False, True),
+        (250.0, True, False),
+        (50.0, False, False),
+    ],
+)
+def test_network_checks_use_settings_at_flow_time(
+    timestamp: float, expected_outside: bool, expected_old_dns: bool
+) -> None:
+    """Avoid applying the new Wi-Fi subnet and DNS to delayed old flows.
+
+    Parameters:
+        timestamp: Captured flow time.
+        expected_outside: Whether the old host IP is outside the active subnet.
+        expected_old_dns: Whether the old resolver was active at flow time.
+    """
+    module_factory = ModuleFactory()
+    flow_alert_utils = module_factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = {
+        "changed_at": 200.0, "local_network": "10.0.0.0/24",
+        "dns_servers": ["10.0.0.53"],
+        "history": [{
+            "changed_at": 100.0, "local_network": "192.168.1.0/24",
+            "dns_servers": ["192.168.1.53"],
+        }],
+    }
+    db.is_official_dns_server.return_value = False
+    flow = SimpleNamespace(
+        interface="wlan0", starttime=timestamp,
+        saddr="192.168.1.20", daddr="192.168.1.53",
+        dport=53, sport=40000, proto="udp",
+    )
+
+    assert flow_alert_utils.is_ip_outside_local_network(
+        db, flow, "192.168.1.20"
+    ) is expected_outside
+    assert flow_alert_utils.is_official_dns_server(
+        db, flow, "dstip"
+    ) is expected_old_dns
+
+
+@pytest.mark.parametrize(
     "is_running_non_stop, time_diff, expected_result",
     [
         (False, 0, True),
@@ -204,3 +292,104 @@ def test_is_interface_timeout_reached(
             )
             is expected_result
         )
+
+
+@pytest.mark.parametrize("proto,port,source,expected", [
+    ("tcp", 53, False, True), ("tcp", 53, True, True),
+    ("udp", 53, False, True), ("udp", 53, True, True),
+    ("tcp", 443, False, False), ("tcp", 547, False, False),
+    ("udp", 547, False, True),
+])
+def test_private_ip_exemptions_use_flow_time_resolver(proto: str, port: int, source: bool, expected: bool) -> None:
+    """Exempt both DNS transports using the resolver active when traffic occurred.
+
+    Parameters:
+        proto: Observed transport.
+        port: Resolver-side service port.
+        source: Whether this is the server's reverse flow.
+        expected: Whether private-IP evidence should be skipped.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.is_official_dns_server.return_value = False
+    db.get_network_state.return_value = {
+        "changed_at":200,"dns_servers":["10.0.0.53"],
+        "history":[{"changed_at":100,"dns_servers":["192.168.1.1"]}],
+    }
+    flow = SimpleNamespace(proto=proto,starttime=150,interface="en0",
+        saddr="192.168.1.1" if source else "192.168.1.247",
+        daddr="192.168.1.247" if source else "192.168.1.1",
+        sport=port if source else 62254,dport=62254 if source else port)
+    assert helper.should_ignore_dns_or_dhcpv6_flow(db,flow) is expected
+
+
+@pytest.mark.parametrize("proto,port,expected", [
+    ("udp", 53, True), ("tcp", 53, True), ("TCP", "53", True),
+    ("icmp", 53, False), ("udp", 443, False), ("tcp", 22, False),
+])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_official_resolver_exception_matches_service(
+    proto: str, port: int | str, expected: bool, reverse: bool,
+) -> None:
+    """Match the configured resolver's own port and transport in either direction.
+
+    Parameters:
+        proto: Observed transport.
+        port: Port on the resolver side of the connection.
+        expected: Whether this is the configured DNS service.
+        reverse: Whether the resolver is the source endpoint.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = {"dns_servers": ["fd00::53"]}
+    flow = SimpleNamespace(interface="eth0", proto=proto,
+        saddr="fd00:0000:0000:0000:0000:0000:0000:0053" if reverse else "fd00::10",
+        daddr="fd00::10" if reverse else "fd00:0000:0000:0000:0000:0000:0000:0053",
+        sport=port if reverse else 40000,dport=40000 if reverse else port)
+    assert helper.is_official_dns_server(db, flow, "srcip" if reverse else "dstip") is expected
+    db.is_official_dns_server.assert_not_called()
+
+
+@pytest.mark.parametrize("timestamp,expected", [(150, True), (250, False), (50, False)])
+def test_global_dns_fallback_cannot_override_network_history(timestamp: int, expected: bool) -> None:
+    """Keep another interface or a previous network's resolver out of the match.
+
+    Parameters:
+        timestamp: Flow capture time relative to the network change.
+        expected: Whether the resolver belonged to this flow's network.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = {"changed_at":200,"dns_servers":["10.0.0.53"],
+        "history":[{"changed_at":100,"dns_servers":["192.168.1.1"]}]}
+    db.is_official_dns_server.return_value = True
+    flow = SimpleNamespace(interface="eth0",starttime=timestamp,proto="tcp",
+        saddr="192.168.1.247",daddr="192.168.1.1",sport=62254,dport=53)
+    assert helper.is_official_dns_server(db,flow,"dstip") is expected
+    db.is_official_dns_server.assert_not_called()
+
+
+@pytest.mark.parametrize("proto,application,expected", [
+    ("udp", "", False), ("tcp", "", False),
+    ("udp", "dns", True), ("tcp", "dns", True), ("udp", "http", False),
+])
+def test_private_dns_exception_requires_resolver_or_dns_protocol(
+    proto: str, application: str, expected: bool,
+) -> None:
+    """Avoid treating an arbitrary private service on port 53 as an official DNS server.
+
+    Parameters:
+        proto: Connection transport.
+        application: Zeek's observed application protocol.
+        expected: Whether private-IP evidence is suppressed.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_flow_alert_utils_obj()
+    db = Mock()
+    db.get_network_state.return_value = {"dns_servers":["192.168.1.1"]}
+    flow = SimpleNamespace(interface="eth0",proto=proto,appproto=application,
+        saddr="192.168.1.247",daddr="192.168.1.99",sport=62254,dport=53)
+    assert helper.should_ignore_dns_or_dhcpv6_flow(db,flow) is expected

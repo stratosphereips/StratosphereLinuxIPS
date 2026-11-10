@@ -9,6 +9,8 @@ from unittest.mock import (
 )
 import json
 import pytest
+from types import SimpleNamespace
+from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.flows.zeek import SSL
 from tests.module_factory import ModuleFactory
 from tests.unit.common_test_utils import get_mock_coro
@@ -19,6 +21,73 @@ twid = "timewindow1"
 uid = "CAeDWs37BipkfP21u8"
 timestamp = 1635765895.037696
 daddr = "192.168.1.2"
+
+
+@pytest.mark.parametrize("ip,expected", [("104.244.43.176", False), ("192.0.2.77", True)])
+def test_cn_recognizes_cached_twitter_network(ip: str, expected: bool) -> None:
+    """Use the real cached-network lookup before declaring an incompatible CN.
+
+    Parameters:
+        ip: Captured destination inside or outside Twitter's known network.
+        expected: Whether an incompatible-organization detection is expected.
+    """
+    factory = ModuleFactory()
+    ssl = factory.create_ssl_analyzer_obj()
+    whitelist = factory.create_whitelist_obj()
+    analyzer = whitelist.org_analyzer
+    analyzer.bloom_filters = {"twitter": {"first_octets": ["104", "192"]}}
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.rcache = Mock()
+    db.rcache.hget.return_value = '["104.244.40.0/21"]'
+    whitelist.db.is_ip_in_org_ips.side_effect = db.is_ip_in_org_cidrs
+    ssl.whitelist = whitelist
+    analyzer.is_domain_in_org = Mock(return_value=False)
+    ssl.set_evidence.tls_provider_impersonation = Mock()
+    flow = SimpleNamespace(subject="CN=ads-twitter.com,O=Twitter", daddr=ip,
+                           server_name="static.ads-twitter.com")
+    ssl.detect_tls_provider_impersonation("timewindow1", flow)
+    assert ssl.set_evidence.tls_provider_impersonation.called is expected
+    db.r.hget.assert_not_called()
+
+
+@pytest.mark.parametrize("subject,domain,known_ip,have_data,expected", [
+    ("CN=mem.gfx.ms,O=Microsoft Corporation", "mem.gfx.ms", False, True, False),
+    ("CN=mem.gfx.ms,O=Microsoft Corporation", "MEM.GFX.MS.", False, True, False),
+    ("CN=assets.onestore.ms,O=Microsoft Corporation", "assets.onestore.ms", False, True, False),
+    ("CN=other.example,O=Microsoft Corporation", "other.example", False, True, True),
+    ("CN=gfx.ms.evil.example,O=Microsoft Corporation", "gfx.ms.evil.example", False, True, True),
+    ("CN=notgfx.ms,O=Microsoft Corporation", "notgfx.ms", False, True, True),
+    ("CN=other.example,O=Microsoft Corporation", "other.example", True, True, False),
+    ("CN=other.example,O=Microsoft Corporation", "other.example", False, False, False),
+    ("CN=other.example,O=Microsoft Corporation", "", False, True, False),
+    ("", "other.example", False, True, False),
+    ("CN=microsoft.evil.example,O=Unrelated Company", "other.example", False, True, False),
+    ("CN=other.example,O=NotMicrosoftCompany", "other.example", False, True, False),
+    (r"CN=other.example,O=Company\, OU=Microsoft", "other.example", False, True, False),
+])
+def test_provider_claim_requires_unrelated_server(
+    subject: str, domain: str, known_ip: bool, have_data: bool, expected: bool
+) -> None:
+    """Check real provider domains, lookalikes, missing data and CDN hosting.
+
+    Parameters:
+        subject: Certificate subject, including possible provider claims.
+        domain: Observed TLS server name.
+        known_ip: Whether the destination belongs to the claimed provider.
+        have_data: Whether the bundled provider-domain data is available.
+        expected: Whether a suspected impersonation should be emitted.
+    """
+    ssl = ModuleFactory().create_ssl_analyzer_obj()
+    ssl.whitelist.org_analyzer.is_ip_in_org = Mock(return_value=known_ip)
+    ssl.whitelist.org_analyzer.is_domain_in_org = Mock(return_value=False)
+    ssl.set_evidence.tls_provider_impersonation = Mock()
+    if not have_data:
+        ssl.provider_domains.clear()
+    flow = SimpleNamespace(subject=subject, server_name=domain, daddr="192.0.2.77")
+    result = ssl.detect_tls_provider_impersonation("timewindow1", flow)
+    assert result is expected
+    assert ssl.set_evidence.tls_provider_impersonation.called is expected
 
 
 def is_present_in_calls(mock_object, search_term):
@@ -253,16 +322,14 @@ async def test_check_pastebin_download(
         ),
     ],
 )
-def test_detect_incompatible_cn(mocker, subject, expected_call_count):
+def test_detect_tls_provider_impersonation(mocker, subject, expected_call_count):
     ssl = ModuleFactory().create_ssl_analyzer_obj()
     mock_set_evidence = mocker.patch(
-        "modules.flow_alerts.set_evidence.SetEvidenceHelper.incompatible_cn"
+        "modules.flow_alerts.set_evidence.SetEvidenceHelper.tls_provider_impersonation"
     )
 
-    ssl.db.whitelist.organization_whitelist.is_ip_in_org.return_value = False
-    ssl.db.whitelist.organization_whitelist.is_domain_in_org.return_value = (
-        False
-    )
+    ssl.whitelist.org_analyzer.is_ip_in_org = Mock(return_value=False)
+    ssl.whitelist.org_analyzer.is_domain_in_org = Mock(return_value=False)
     flow = SSL(
         starttime="1726593782.8840969",
         uid="123",
@@ -280,12 +347,12 @@ def test_detect_incompatible_cn(mocker, subject, expected_call_count):
         issuer="",
         validation_status="",
         curve="",
-        server_name="",
+        server_name="unrelated.example",
         ja3="",
         ja3s="",
         is_DoH="",
     )
-    ssl.detect_incompatible_cn(twid, flow)
+    ssl.detect_tls_provider_impersonation(twid, flow)
     assert mock_set_evidence.call_count == expected_call_count
 
 
@@ -386,8 +453,8 @@ async def test_analyze_new_ssl_msg(mocker):
     mock_detect_malicious_ja3 = mocker.patch.object(
         ssl, "detect_malicious_ja3"
     )
-    mock_detect_incompatible_cn = mocker.patch.object(
-        ssl, "detect_incompatible_cn"
+    mock_detect_tls_provider_impersonation = mocker.patch.object(
+        ssl, "detect_tls_provider_impersonation"
     )
     mock_detect_doh = mocker.patch.object(ssl, "detect_doh")
 
@@ -428,7 +495,7 @@ async def test_analyze_new_ssl_msg(mocker):
     await ssl.analyze(msg)
     mock_check_self_signed_certs.assert_called_once_with("timewindow1", flow)
     mock_detect_malicious_ja3.assert_called_once_with("timewindow1", flow)
-    mock_detect_incompatible_cn.assert_called_once_with("timewindow1", flow)
+    mock_detect_tls_provider_impersonation.assert_called_once_with("timewindow1", flow)
 
     mock_detect_doh.assert_called_once_with("timewindow1", flow)
 
@@ -444,8 +511,8 @@ async def test_analyze_no_messages(
     mock_detect_malicious_ja3 = mocker.patch.object(
         ssl, "detect_malicious_ja3"
     )
-    mock_detect_incompatible_cn = mocker.patch.object(
-        ssl, "detect_incompatible_cn"
+    mock_detect_tls_provider_impersonation = mocker.patch.object(
+        ssl, "detect_tls_provider_impersonation"
     )
     mock_detect_doh = mocker.patch.object(ssl, "detect_doh")
 
@@ -453,5 +520,5 @@ async def test_analyze_no_messages(
 
     mock_check_self_signed_certs.assert_not_called()
     mock_detect_malicious_ja3.assert_not_called()
-    mock_detect_incompatible_cn.assert_not_called()
+    mock_detect_tls_provider_impersonation.assert_not_called()
     mock_detect_doh.assert_not_called()

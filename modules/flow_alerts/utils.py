@@ -5,11 +5,47 @@ import ipaddress
 from datetime import datetime
 
 from slips_files.common.ips import SPECIAL_IPV4_ADDRESSES
+from slips_files.common.network_context import network_state_at
 from slips_files.common.slips_utils import utils
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.structures.evidence import (
+    Attacker,
+    Direction,
+    Evidence,
+    EvidenceType,
+    IoCType,
+    ProfileID,
+    ThreatLevel,
+    TimeWindow,
+    Victim,
+)
 
 DHCPV6_PORTS = {"546", "547"}
 SPECIAL_IPV4 = SPECIAL_IPV4_ADDRESSES
+
+
+def network_state_for_flow(
+    db: DBManager, flow: Any, state: dict | None = None
+) -> dict | None:
+    """Select the network settings active when a live flow was recorded.
+
+    Parameters:
+        db: Database manager holding current and recent network settings.
+        flow: Flow with an interface and optional Unix start time.
+        state: Already loaded current settings, if available.
+
+    Returns:
+        Matching settings, or None when the network is unknown.
+    """
+    if state is None:
+        state = db.get_network_state(getattr(flow, "interface", ""))
+    if not isinstance(state, dict):
+        return None
+    try:
+        timestamp = float(flow.starttime)
+    except (AttributeError, TypeError, ValueError):
+        return state
+    return network_state_at(state, timestamp, flow)
 
 
 def get_ip_to_check(flow: Any, what_to_check: str) -> str:
@@ -132,25 +168,43 @@ def should_check_different_localnet(
     )
 
 
+def local_network_for_flow(db: DBManager, flow: Any) -> str:
+    """Read the local subnet that applied when a flow was captured.
+
+    Parameters:
+        db: Database holding live network history or the recording's subnet.
+        flow: Flow with an interface and optional capture time.
+
+    Returns:
+        Local subnet, or an empty string when it is unknown.
+    """
+    state = db.get_network_state(getattr(flow, "interface", ""))
+    if isinstance(state, dict):
+        active = network_state_for_flow(db, flow, state)
+        own_local_network = active.get("local_network", "") if active else ""
+    else:
+        own_local_network = db.get_local_network(
+            getattr(flow, "interface", "")
+        )
+    return own_local_network or ""
+
+
 def is_ip_outside_local_network(
     db: DBManager,
     flow: Any,
     ip_to_check: str,
 ) -> bool:
-    """
-    Check whether an IP is outside the flow interface local network.
+    """Check an address against the subnet active at capture time.
 
     Parameters:
-    db: Database manager used to load the interface local network.
-    flow: Flow-like object containing the interface name.
-    ip_to_check: IP address to compare with the local network.
+        db: Database holding the interface subnet.
+        flow: Flow with an interface and optional capture time.
+        ip_to_check: Address to compare with that subnet.
 
-    Return:
-    bool: True when the IP version matches the local network and the IP is
-    outside that network.
+    Returns:
+        True for an address of the same IP version outside a known subnet.
     """
-    own_local_network = db.get_local_network(getattr(flow, "interface", ""))
-    if not own_local_network:
+    if not (own_local_network := local_network_for_flow(db, flow)):
         return False
 
     ip_obj = ipaddress.ip_address(ip_to_check)
@@ -161,6 +215,116 @@ def is_ip_outside_local_network(
         return False
 
     return ip_obj not in own_local_network_obj
+
+
+def different_localnet_context(db: DBManager, flow: Any) -> tuple[str, str]:
+    """Compare both ends of one flow with the same local subnet.
+
+    Parameters:
+        db: Database holding network settings and detected DNS servers.
+        flow: Eligible private-address connection.
+
+    Returns:
+        Subnet and outside direction (srcip, dstip, both, or empty).
+    """
+    local_network = local_network_for_flow(db, flow)
+    if not local_network:
+        return "", ""
+    network = ipaddress.ip_network(local_network, strict=False)
+    outside = []
+    for direction in ("srcip", "dstip"):
+        ip = get_ip_to_check(flow, direction)
+        ip_obj = ipaddress.ip_address(ip)
+        if (
+            ip_obj.version != network.version
+            or is_ip_allowed_outside_localnet(ip)
+            or ip_obj in network
+            or is_official_dns_server(db, flow, direction)
+        ):
+            continue
+        outside.append(direction)
+    direction = "both" if len(outside) == 2 else next(iter(outside), "")
+    return local_network, direction
+
+
+def different_localnet_findings(
+    twid: str, flow: Any, ip_outside_localnet: str, local_network: str
+) -> tuple[Evidence, ...]:
+    """Build high source and informational destination subnet findings.
+
+    Parameters:
+        twid: Detection time window.
+        flow: Connection with its original addresses and transport fields.
+        ip_outside_localnet: Outside direction: srcip, dstip, or both.
+        local_network: Subnet used by the detector for this flow.
+
+    Returns:
+        One finding per endpoint, or none for a connection to the same IP.
+    """
+    if ipaddress.ip_address(flow.saddr) == ipaddress.ip_address(flow.daddr):
+        return ()
+    outside_description = {
+        "srcip": "the private source address is",
+        "dstip": "the private destination address is",
+        "both": "both private addresses are",
+    }[ip_outside_localnet]
+    proto = flow.proto.lower()
+    context = (
+        f" using {proto.upper()}: "
+        f"{outside_description} outside the local network {local_network}."
+    )
+    if proto in {"tcp", "udp"}:
+        context += f" Destination port: {flow.dport}/{proto.upper()}."
+    elif proto in {"icmp", "icmp6", "icmpv6"}:
+        context += f" ICMP type: {flow.sport}; code: {flow.dport}."
+
+    findings = []
+    for host, direction, other, other_direction, level, description in (
+        (
+            flow.saddr,
+            Direction.SRC,
+            flow.daddr,
+            Direction.DST,
+            ThreatLevel.HIGH,
+            f"{flow.saddr} initiated a connection to {flow.daddr}",
+        ),
+        (
+            flow.daddr,
+            Direction.DST,
+            flow.saddr,
+            Direction.SRC,
+            ThreatLevel.INFO,
+            f"{flow.daddr} received a connection from {flow.saddr}",
+        ),
+    ):
+        findings.append(
+            Evidence(
+                evidence_type=EvidenceType.DIFFERENT_LOCALNET,
+                attacker=Attacker(
+                    direction=direction, ioc_type=IoCType.IP, value=host
+                ),
+                victim=Victim(
+                    direction=other_direction, ioc_type=IoCType.IP, value=other
+                ),
+                threat_level=level,
+                description=description + context,
+                profile=ProfileID(ip=host),
+                timewindow=TimeWindow(
+                    number=int(twid.replace("timewindow", ""))
+                ),
+                uid=[flow.uid],
+                timestamp=flow.starttime,
+                interface=flow.interface,
+                proto=flow.proto,
+                confidence=1.0,
+                src_port=flow.sport,
+                dst_port=flow.dport,
+            )
+        )
+    source, destination = findings
+    source.rel_id = [destination.id]
+    destination.rel_id = [source.id]
+    return source, destination
 
 
 def is_interface_timeout_reached(
@@ -193,9 +357,18 @@ def is_official_dns_server(
     flow: Any,
     what_to_check: str,
 ) -> bool:
+    """Match a resolver's DNS endpoint in the flow's network context.
+
+    Parameters:
+        db: Database holding interface resolver settings and PCAP discoveries.
+        flow: Connection with transport, endpoints and optional capture time.
+        what_to_check: Resolver endpoint, either srcip or dstip.
+
+    Returns:
+        Whether the endpoint is a known resolver on TCP or UDP port 53.
     """
-    returns True when the checked IP is a detected DNS server using port 53.
-    """
+    if str(getattr(flow, "proto", "")).lower() not in {"tcp", "udp"}:
+        return False
     if what_to_check == "dstip":
         dns_server_ip = getattr(flow, "daddr", "")
         dns_server_port = getattr(flow, "dport", "")
@@ -208,7 +381,23 @@ def is_official_dns_server(
     if str(dns_server_port) != "53" or not dns_server_ip:
         return False
 
-    return db.is_official_dns_server(dns_server_ip)
+    try:
+        server = ipaddress.ip_address(dns_server_ip)
+    except ValueError:
+        return False
+    state = db.get_network_state(getattr(flow, "interface", ""))
+    if isinstance(state, dict):
+        active = network_state_for_flow(db, flow, state)
+        if not active:
+            return False
+        for candidate in active.get("dns_servers", []):
+            try:
+                if server == ipaddress.ip_address(candidate):
+                    return True
+            except ValueError:
+                continue
+        return False
+    return db.is_official_dns_server(str(server))
 
 
 def should_ignore_dns_or_dhcpv6_flow(
@@ -223,10 +412,11 @@ def should_ignore_dns_or_dhcpv6_flow(
     flow: Flow-like object being analyzed.
 
     Return:
-    bool: True when the flow is a DNS query to port 53, a DNS reply from a
-    detected DNS server, or DHCPv6 service traffic.
+    bool: True for configured or protocol-identified DNS service traffic on
+    port 53, or DHCPv6 service traffic.
     """
-    if getattr(flow, "proto", "").lower() != "udp":
+    proto = getattr(flow, "proto", "").lower()
+    if proto not in {"udp", "tcp"}:
         return False
 
     daddr = getattr(flow, "daddr", "")
@@ -234,13 +424,24 @@ def should_ignore_dns_or_dhcpv6_flow(
     dport = str(getattr(flow, "dport", ""))
     sport = str(getattr(flow, "sport", ""))
 
-    if dport == "53" and daddr:
+    dns_protocol = "dns" in str(getattr(flow, "appproto", "")).lower().split(
+        ","
+    )
+    if (
+        dport == "53"
+        and daddr
+        and (dns_protocol or is_official_dns_server(db, flow, "dstip"))
+    ):
         return True
 
-    if sport == "53" and saddr and db.is_official_dns_server(saddr):
+    if (
+        sport == "53"
+        and saddr
+        and (dns_protocol or is_official_dns_server(db, flow, "srcip"))
+    ):
         return True
 
-    if sport in DHCPV6_PORTS or dport in DHCPV6_PORTS:
+    if proto == "udp" and (sport in DHCPV6_PORTS or dport in DHCPV6_PORTS):
         return True
 
     return False
