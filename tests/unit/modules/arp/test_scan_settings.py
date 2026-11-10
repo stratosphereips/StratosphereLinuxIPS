@@ -32,3 +32,15 @@ def test_configuration_reads_arp_section_and_defaults() -> None:
     assert settings.scan_window_seconds == 60
     assert settings.scan_min_unfamiliar_targets == 10
     assert all(call.args[0] == "arp" for call in conf.read_configuration.call_args_list)
+
+
+def test_all_arp_options_have_plain_web_explanations() -> None:
+    """Expose the meaning of every detector option in the Configuration tab."""
+    _factory = ModuleFactory()
+    from dataclasses import fields
+    from modules.arp.scan_settings import ARP_SCAN_EXPLANATIONS
+    from modules.web_interface.server import RunDataReader
+    assert set(ARP_SCAN_EXPLANATIONS) == {item.name for item in fields(ARPScanSettings)}
+    assert "alone never" in RunDataReader._setting_explanation("arp", "scan_min_targets")
+    assert "application bytes" in RunDataReader._setting_explanation("arp", "scan_familiar_min_interval_seconds")
+    assert "does not increase scores" in RunDataReader._setting_explanation("arp", "scan_broad_targets")

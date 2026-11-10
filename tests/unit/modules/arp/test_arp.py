@@ -447,3 +447,34 @@ def test_malformed_pubsub_records_do_not_crash_arp_worker(channel: str) -> None:
     arp.get_msg = Mock(side_effect=lambda name: messages.pop(0) if name == channel and messages else None)
     arp.main()
     arp.db.set_evidence.assert_not_called()
+
+
+def test_scan_details_survive_evidence_and_p2p_serialization() -> None:
+    """Keep ARP decision facts through the actual evidence facade's annotation."""
+    arp = ModuleFactory().create_arp_obj()
+    from unittest.mock import Mock
+    from tests.unit.modules.arp.test_scan_detector import burst
+    from slips_files.core.database.database_manager import DBManager
+    from slips_files.core.structures.evidence import dict_to_evidence
+    from slips_files.common.slips_utils import utils
+    findings = burst(arp.scan_detector, list(range(1, 16)))
+    arp.set_evidence_arp_scan(findings[0])
+    evidence = arp.db.set_evidence.call_args.args[0]
+    manager = DBManager.__new__(DBManager)
+    manager.rdb = Mock()
+    manager.rdb.get_network_state.return_value = {"gateway_mac": "02:00:00:00:00:01", "local_network": "192.168.1.0/24"}
+    manager.sqlite = Mock()
+    manager.sqlite.is_evidence_whitelisted.return_value = False
+    manager.conf = Mock()
+    manager.conf.disabled_detections.return_value = []
+    manager.trust_db = Mock()
+    manager.output_dir = "output/arp-scan-context"
+    manager.main_pid = 1234
+    manager.source_module = arp.name
+    manager._get_evidence_interface = Mock(return_value="eth0")
+    manager.update_threat_level = Mock()
+    assert manager.set_evidence(evidence)
+    restored = dict_to_evidence(utils.to_dict(evidence))
+    assert restored.detection_details["arp_scan"]["targets"] == 15
+    assert restored.detection_provenance["module"] == arp.name
+    assert restored.detection_provenance["evidence_type"] == "ARP_SCAN"

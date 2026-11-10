@@ -117,6 +117,12 @@ downgrades for that same connection and packet category.
 
 ## Inspecting packet timing in the web
 
+Packet timing samples appear only in packet periodicity and suspicious packet
+heartbeat findings, alongside the recorded timing decision. They are excluded
+from other evidence views, including **Long Connection**, even when they share
+the connection UID. Long Connection uses duration, not packet timing. Timing
+samples are not counted as application protocol records.
+
 The related **Packet timing** tab shows gaps between consecutive selected packets,
 in seconds or milliseconds. The table pairs each gap with that packet's payload
 length. The first selected packet has no previous gap. Hover a packet number to

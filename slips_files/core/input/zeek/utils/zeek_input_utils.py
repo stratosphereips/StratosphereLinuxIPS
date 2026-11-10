@@ -5,7 +5,6 @@ import datetime
 import json
 import os
 import shlex
-import signal
 import subprocess
 import threading
 import time
