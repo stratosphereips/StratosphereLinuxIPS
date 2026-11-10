@@ -2,12 +2,49 @@
 
 import json
 import time
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
 
 from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.database.redis_db.p2p_handler import P2PHandler
 from tests.module_factory import ModuleFactory
+
+
+def test_clear_peer_trust_drops_stale_model_values() -> None:
+    """Restarting P2P must not reuse trust from the reversed score model."""
+    _module_factory = ModuleFactory()
+    handler = P2PHandler.__new__(P2PHandler)
+    handler.r = Mock()
+    handler.constants = Constants
+
+    handler.clear_peer_trust()
+
+    handler.r.delete.assert_called_once_with(Constants.PEER_TRUST)
+
+
+def test_received_report_counts_by_peer_and_timewindow() -> None:
+    """Keep received report telemetry after raw reports are compacted."""
+    _module_factory = ModuleFactory()
+    handler = P2PHandler.__new__(P2PHandler)
+    handler.r = MagicMock()
+    handler.constants = Constants
+    handler.default_ttl = 7200
+    handler.get_current_timewindow = Mock(return_value=2)
+
+    handler.record_p2p_message(
+        "received",
+        {"message_type": "report", "peer": "QmPeer", "target": "192.0.2.44"},
+    )
+
+    pipe = handler.r.pipeline.return_value.__enter__.return_value
+    assert pipe.hincrby.call_args_list == [
+        call("p2p_message_counts_2", "received:report", 1),
+        call("p2p_reports_by_peer_2", "QmPeer", 1),
+    ]
+    pipe.hexpire.assert_any_call(
+        "p2p_reports_by_peer_2", 7200, "QmPeer", nx=True
+    )
 
 
 class FakePipeline:
@@ -79,9 +116,12 @@ class FakeRedis:
         """Return one stored value."""
         return self.values.get(key)
 
-    def delete(self, key) -> None:
+    def delete(self, *keys) -> None:
         """Delete one stored value."""
-        self.values.pop(key, None)
+        for key in keys:
+            self.values.pop(key, None)
+            self.sets.pop(key, None)
+            self.zsets.pop(key, None)
 
     def zadd(self, key, mapping) -> None:
         """Add {member: score} entries to a sorted set."""
@@ -264,6 +304,55 @@ def test_stored_authenticated_connection_is_readable_by_web_interface() -> (
         handler.r.get(f"{Constants.P2P_ACTIVE_CONNECTION_PREFIX}connection-a")
     )
     assert stored == connection
+
+
+def test_connection_heartbeat_refreshes_live_records() -> None:
+    """Keep an authenticated connection live while Go still tracks it."""
+    handler = make_handler()
+    connection_id = "tcp|192.0.2.10|6668|198.51.100.20|43123"
+    connection = {"authenticated": True, "connected": True}
+    handler.store_authenticated_p2p_connection(
+        connection_id, connection, ttl=300
+    )
+    store_connection(handler)
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "slips_files.core.database.redis_db.p2p_handler.time.time",
+            lambda: 1234,
+        )
+        handler.refresh_authenticated_p2p_connections(ttl=300)
+
+    assert json.loads(
+        handler.r.get(
+            f"{Constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}"
+        )
+    ) == connection
+    assert handler.r.zsets[Constants.P2P_CONNECTIONS_LAST_SEEN][
+        connection_id
+    ] == 1234
+
+
+def test_clearing_connections_removes_state_from_previous_run() -> None:
+    """Do not carry old online or flow-match state into a new run."""
+    handler = make_handler()
+    connection_id = "tcp|192.0.2.10|6668|198.51.100.20|43123"
+    handler.r.sadd(Constants.P2P_ACTIVE_CONNECTIONS, connection_id)
+    handler.r.set(
+        f"{Constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}",
+        json.dumps({"authenticated": True}),
+    )
+    handler.r.sadd(Constants.P2P_CONNECTIONS, connection_id)
+    handler.r.zadd(
+        Constants.P2P_CONNECTIONS_LAST_SEEN, {connection_id: time.time()}
+    )
+
+    handler.clear_authenticated_p2p_connections()
+
+    assert handler.r.smembers(Constants.P2P_ACTIVE_CONNECTIONS) == set()
+    assert handler.r.smembers(Constants.P2P_CONNECTIONS) == set()
+    assert Constants.P2P_CONNECTIONS_LAST_SEEN not in handler.r.zsets
+    assert f"{Constants.P2P_ACTIVE_CONNECTION_PREFIX}{connection_id}" not in handler.r.values
 
 
 def test_removed_authenticated_connection_drops_from_registry() -> None:

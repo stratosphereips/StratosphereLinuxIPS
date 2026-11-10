@@ -603,6 +603,9 @@ class DBManager:
     def get_peer_trust(self, *args, **kwargs):
         return self.rdb.get_peer_trust(*args, **kwargs)
 
+    def clear_peer_trust(self, *args, **kwargs):
+        return self.rdb.clear_peer_trust(*args, **kwargs)
+
     def get_dns_resolution(self, *args, **kwargs):
         return self.rdb.get_dns_resolution(*args, **kwargs)
 
@@ -926,17 +929,51 @@ class DBManager:
 
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
+        if self.trust_db and evidence.evidence_type not in {
+            EvidenceType.P2P_REPORT,
+            EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+        }:
+            from modules.p2p_trust.trust.report_validation import (
+                provenance_for_evidence,
+            )
+            from slips_files.core.database.sqlite_db.host_profiles import (
+                HostProfileStore,
+            )
+
+            metadata = provenance_for_evidence(
+                utils.to_dict(evidence), utils.get_slips_version()
+            )
+            if metadata:
+                state = (
+                    self.rdb.get_network_state(interface) if interface else {}
+                )
+                observed_at = utils.convert_ts_format(
+                    evidence.timestamp, "unixtimestamp"
+                )
+                state = self.sqlite.evidence_network_state(
+                    state, observed_at, evidence.uid
+                )
+                metadata["network_id"] = HostProfileStore.network_id_for_state(
+                    state if isinstance(state, dict) else {},
+                    f"{self.output_dir}:{self.main_pid}",
+                )
+                metadata["observed_at"] = observed_at
+                evidence.detection_provenance = metadata
         evidence_set = self.rdb.set_evidence(evidence, notify=False)
         if evidence_set:
             self.sqlite.add_evidence(evidence)
             self.rdb.publish_evidence_added(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
-            self.update_threat_level(
-                str(evidence.attacker.profile),
-                str(evidence.threat_level),
-                evidence.confidence,
-            )
+            if evidence.evidence_type not in {
+                EvidenceType.P2P_REPORT,
+                EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            }:
+                self.update_threat_level(
+                    str(evidence.attacker.profile),
+                    str(evidence.threat_level),
+                    evidence.confidence,
+                )
         return evidence_set
 
     def set_alert(
@@ -952,7 +989,15 @@ class DBManager:
         # when an alert is generated , we should set the threat level of the
         # attacker's profile to 1(critical) and confidence 1
         # so that it gets reported to other peers with these numbers
-        self.update_threat_level(str(alert.profile), "critical", 1)
+        if all(
+            evidence.evidence_type
+            not in {
+                EvidenceType.P2P_REPORT,
+                EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK,
+            }
+            for evidence in evidence_causing_the_alert.values()
+        ):
+            self.update_threat_level(str(alert.profile), "critical", 1)
 
         for evidence_id in evidence_causing_the_alert.keys():
             uids: List[str] = self.rdb.get_flows_causing_evidence(evidence_id)
@@ -967,6 +1012,9 @@ class DBManager:
 
     def get_evidence_number(self, *args, **kwargs):
         return self.rdb.get_evidence_number(*args, **kwargs)
+
+    def alert_evidence_records(self, *args: Any, **kwargs: Any) -> list[dict]:
+        return self.sqlite.alert_evidence_records(*args, **kwargs)
 
     def mark_evidence_as_processed(self, *args, **kwargs):
         return self.rdb.mark_evidence_as_processed(*args, **kwargs)
@@ -1009,15 +1057,20 @@ class DBManager:
     ):
         """updates the threat level and confidence of an ip in redis and
         trust db for other peers to use it"""
-        if self.trust_db:
+        result = self.rdb.update_threat_level(
+            profileid, threat_level, confidence
+        )
+        if self.trust_db and threat_level != "info":
             ip = profileid.split("_")[-1]
-            float_threat_level = utils.threat_levels[threat_level]
+            stored_score = self.rdb.get_ip_info(ip, "score")
+            try:
+                float_threat_level = float(stored_score)
+            except (TypeError, ValueError):
+                float_threat_level = utils.threat_levels[threat_level]
             self.trust_db.insert_slips_score(
                 ip, float_threat_level, confidence
             )
-        return self.rdb.update_threat_level(
-            profileid, threat_level, confidence
-        )
+        return result
 
     def set_loaded_ti_files(self, *args, **kwargs):
         return self.rdb.set_loaded_ti_files(*args, **kwargs)
@@ -1691,6 +1744,12 @@ class DBManager:
 
     def get_authenticated_p2p_connections(self, *args, **kwargs):
         return self.rdb.get_authenticated_p2p_connections(*args, **kwargs)
+
+    def clear_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.clear_authenticated_p2p_connections(*args, **kwargs)
+
+    def refresh_authenticated_p2p_connections(self, *args, **kwargs):
+        return self.rdb.refresh_authenticated_p2p_connections(*args, **kwargs)
 
     def del_stale_p2p_connections(self, *args, **kwargs):
         return self.rdb.del_stale_p2p_connections(*args, **kwargs)

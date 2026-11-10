@@ -1896,6 +1896,104 @@ def test_set_evidence_publishes_after_sqlite_commit() -> None:
     db.rdb.publish_evidence_added.assert_called_once_with(evidence)
 
 
+@pytest.mark.parametrize(
+    "evidence_type",
+    [EvidenceType.P2P_REPORT, EvidenceType.MALICIOUS_IP_FROM_P2P_NETWORK],
+)
+def test_peer_evidence_does_not_change_local_reputation(
+    evidence_type: EvidenceType,
+) -> None:
+    """A peer's finding cannot become Slips's own score for trust decisions.
+
+    Parameters:
+        evidence_type: Peer-derived evidence category.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
+    db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="en0")
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=evidence_type,
+        source_module="p2p_trust",
+        uid=[],
+        attacker=Mock(profile="profile_192.0.2.10"),
+        threat_level="critical",
+        confidence=1.0,
+    )
+
+    assert db.set_evidence(evidence) is True
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.update_threat_level.assert_not_called()
+
+
+@pytest.mark.parametrize("has_peer_evidence", [False, True])
+def test_alert_promotes_only_local_evidence_to_local_reputation(
+    has_peer_evidence: bool,
+) -> None:
+    """Mixed or peer-only alerts retain the actual first-hand local score.
+
+    Parameters:
+        has_peer_evidence: Whether the alert includes a peer-derived finding.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.sqlite = Mock()
+    db.rdb.set_alert = Mock()
+    db.rdb.get_flows_causing_evidence = Mock(return_value=[])
+    db.set_flow_label = Mock()
+    db.update_threat_level = Mock()
+    alert = Mock(profile="profile_192.0.2.10")
+    evidence_type = (
+        EvidenceType.P2P_REPORT if has_peer_evidence else EvidenceType.ARP_SCAN
+    )
+
+    db.set_alert(alert, {"evidence-1": Mock(evidence_type=evidence_type)})
+
+    if has_peer_evidence:
+        db.update_threat_level.assert_not_called()
+    else:
+        db.update_threat_level.assert_called_once_with(
+            "profile_192.0.2.10", "critical", 1
+        )
+
+
+def test_local_reputation_uses_slips_current_score() -> None:
+    """Share the same accumulated local threat value held by Slips."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.trust_db = Mock()
+    db.rdb.update_threat_level = Mock(return_value=None)
+    db.rdb.get_ip_info = Mock(return_value=0.8)
+
+    db.update_threat_level("profile_192.0.2.10", "low", 0.6)
+
+    db.trust_db.insert_slips_score.assert_called_once_with(
+        "192.0.2.10", 0.8, 0.6
+    )
+
+
+@pytest.mark.parametrize("previous_score", [0, 0.8])
+def test_informational_observation_preserves_peer_assessment(
+    previous_score: float,
+) -> None:
+    """Informational observations cannot assert benignness or alter trust.
+
+    Parameters:
+        previous_score: Redis's historical score before the observation.
+    """
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.trust_db = Mock()
+    db.rdb.update_threat_level = Mock()
+    db.rdb.get_ip_info = Mock(return_value=previous_score)
+
+    db.update_threat_level("profile_192.0.2.10", "info", 1)
+
+    db.rdb.update_threat_level.assert_called_once()
+    db.trust_db.insert_slips_score.assert_not_called()
+
+
 def test_replace_network_state_clears_old_network_settings() -> None:
     """A Wi-Fi switch replaces the subnet, gateway, host IP, and DNS."""
     db = ModuleFactory().create_db_manager_obj(6395, flush_db=True)
@@ -2059,6 +2157,54 @@ def test_load_redis_database_keeps_a_separate_pidfile(
     expected = tmp_path / "redis" / "redis-server-port-32850.pid"
     assert RedisDB._options["pidfile"] == str(expected)
     assert f"pidfile {expected}" in Path(RedisDB._conf_file).read_text().splitlines()
+
+
+def test_backup_db_moves_wal_sidecars(tmp_path: Path) -> None:
+    """Keep the WAL and shared-memory files with a backed-up trust DB.
+
+    Parameters:
+        tmp_path: Temporary directory for SQLite files.
+    """
+    db = ModuleFactory().create_db_manager_obj(6386)
+    db_path = tmp_path / "trustdb.db"
+    for suffix in ("", "-wal", "-shm"):
+        (tmp_path / f"trustdb.db{suffix}").write_bytes(b"old")
+
+    DBManager.backup_db(db, str(db_path))
+
+    assert not db_path.exists()
+    assert not (tmp_path / "trustdb.db-wal").exists()
+    assert not (tmp_path / "trustdb.db-shm").exists()
+    backups = list(tmp_path.glob("trustdb.db.*.bak"))
+    assert len(backups) == 1
+    for suffix in ("", "-wal", "-shm"):
+        assert (tmp_path / f"{backups[0].name}{suffix}").read_bytes() == b"old"
+
+
+def test_init_p2p_trust_db_backs_up_malformed_db_once(
+    tmp_path: Path, monkeypatch: Any
+) -> None:
+    """Skip the write check after a malformed trust DB was moved aside.
+
+    Parameters:
+        tmp_path: Temporary directory for the trust database.
+        monkeypatch: Replaces the permanent directory and database probes.
+    """
+    db = ModuleFactory().create_db_manager_obj(6386)
+    monkeypatch.setattr(
+        "slips_files.core.database.database_manager.get_this_filepath_inside_permanent_dir",
+        lambda filename: str(tmp_path / filename),
+    )
+    db_path = tmp_path / "p2p_trust_runtime" / "trustdb.db"
+    db_path.parent.mkdir()
+    db_path.write_bytes(b"malformed")
+    db.is_db_malformed = Mock(return_value=True)
+    db.has_write_access_to_sqlite = Mock(return_value=False)
+    db.backup_db = Mock(side_effect=lambda path: os.remove(path))
+
+    assert DBManager.init_p2p_trust_db(db) == str(db_path)
+    db.backup_db.assert_called_once_with(str(db_path))
+    db.has_write_access_to_sqlite.assert_not_called()
 
 
 @pytest.mark.parametrize("add_version", [True, False])

@@ -766,6 +766,9 @@ class ModuleFactory:
             patch(
                 "slips_files.common.abstracts.isqlite.ISQLite._acquire_flock"
             ),
+            patch(
+                "modules.p2p_trust.trust.trustdb.TrustDB._ensure_unique_peer_addresses"
+            ),
         ):
             trust_db = TrustDB(
                 logger=self.logger,
@@ -1639,6 +1642,32 @@ class ModuleFactory:
         )
         risk_iq.db = mock_db
         return risk_iq
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_iris_obj(self, mock_db: Mock) -> object:
+        """Create an Iris adapter with mocked database resources.
+
+        Parameters:
+            mock_db: Patched database constructor.
+
+        Returns:
+            Iris adapter ready for isolated protocol tests.
+        """
+        from modules.iris.iris import Iris
+
+        iris = Iris(
+            logger=self.logger,
+            output_dir="dummy_output_dir",
+            redis_port=6379,
+            termination_event=Mock(),
+            slips_args=Mock(),
+            conf=Mock(),
+            ppid=Mock(),
+            bloom_filters_manager=Mock(),
+        )
+        iris.db = mock_db
+        iris.print = Mock()
+        return iris
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_timeline_object(self, mock_db):

@@ -7,6 +7,7 @@ from modules.fides.model.threat_intelligence import (
     SlipsThreatIntelligence,
 )
 from modules.fides.persistence.fides_sqlite_db import FidesSQLiteDB
+from modules.fides.persistence.trust_db import SlipsTrustDatabase
 
 from modules.fides.model.recommendation_history import (
     RecommendationHistoryRecord,
@@ -70,9 +71,7 @@ def test_get_slips_threat_intelligence_by_target(db):
     assert result.target == "192.168.1.1"
     assert result.score == 0.7
     assert result.confidence == 1
-    assert (
-        result.confidentiality is None
-    )  # Should be None since it was not set
+    assert result.confidentiality is None  # Should be None since it was not set
 
 
 def test_get_peer_trust_data(db):
@@ -112,9 +111,7 @@ def test_get_peer_trust_data(db):
             ServiceHistoryRecord(satisfaction=0.5, weight=0.9, timestamp=20.15)
         ],
         recommendation_history=[
-            RecommendationHistoryRecord(
-                satisfaction=0.8, weight=1.0, timestamp=1234.55
-            )
+            RecommendationHistoryRecord(satisfaction=0.8, weight=1.0, timestamp=1234.55)
         ],
     )
 
@@ -172,9 +169,7 @@ def test_store_peer_trust_data_overwrites_existing_history(db):
             integrity_belief=0.5,
             initial_reputation_provided_by_count=2,
             service_history=[
-                ServiceHistoryRecord(
-                    satisfaction=0.5, weight=0.9, timestamp=20.15
-                )
+                ServiceHistoryRecord(satisfaction=0.5, weight=0.9, timestamp=20.15)
             ],
             recommendation_history=[],
         )
@@ -267,6 +262,71 @@ def test_get_peers_by_minimal_recommendation_trust(db):
     assert peers[0].id == "peer2"
 
 
+@pytest.mark.parametrize(
+    "threshold, expected_ids",
+    [(0.0, ["peer1", "peer2"]), (0.8, ["peer2"]), (0.9, [])],
+)
+def test_get_peers_by_minimal_service_trust(
+    db: FidesSQLiteDB, threshold: float, expected_ids: list[str]
+) -> None:
+    """Return stored peers whose service trust meets the threshold.
+
+    Parameters:
+        db: In-memory Fides database.
+        threshold: Lowest accepted service trust.
+        expected_ids: Peer IDs expected in the result.
+    """
+    peers = [
+        PeerTrustData(
+            info=PeerInfo(id=peer_id, organisations=["org"], ip=ip),
+            has_fixed_trust=False,
+            service_trust=service_trust,
+            reputation=0.5,
+            recommendation_trust=0.5,
+            competence_belief=0.5,
+            integrity_belief=0.5,
+            initial_reputation_provided_by_count=1,
+            service_history=[],
+            recommendation_history=[],
+        )
+        for peer_id, service_trust, ip in [
+            ("peer1", 0.4, "10.0.0.1"),
+            ("peer2", 0.8, "10.0.0.2"),
+        ]
+    ]
+    for peer in peers:
+        db.store_peer_trust_data(peer)
+
+    matches = db.get_peers_by_minimal_service_trust(threshold)
+
+    assert [peer.id for peer in matches] == expected_ids
+    assert all(peer.organisations == ["org"] for peer in matches)
+
+
+@pytest.mark.parametrize("live_peers", [True, False])
+def test_slips_trust_db_service_trust_lookup(live_peers: bool) -> None:
+    """Read service trust from live peers or durable storage.
+
+    Parameters:
+        live_peers: Whether the live peer list is populated.
+    """
+    sqlite_db = MagicMock()
+    trust_db = SlipsTrustDatabase(MagicMock(), MagicMock(), sqlite_db)
+    peer = PeerInfo(id="peer1", organisations=[], ip="10.0.0.1")
+    trust_db.get_connected_peers = MagicMock(return_value=[peer] if live_peers else [])
+    if live_peers:
+        trust_db.get_peer_trust_data = MagicMock(
+            return_value=MagicMock(service_trust=0.8)
+        )
+        assert trust_db.get_peers_with_geq_service_trust(0.8) == [peer]
+        assert trust_db.get_peers_with_geq_service_trust(0.9) == []
+        sqlite_db.get_peers_by_minimal_service_trust.assert_not_called()
+    else:
+        sqlite_db.get_peers_by_minimal_service_trust.return_value = [peer]
+        assert trust_db.get_peers_with_geq_service_trust(0.8) == [peer]
+        sqlite_db.get_peers_by_minimal_service_trust.assert_called_once_with(0.8)
+
+
 def test_get_nonexistent_peer_trust_data(db):
     # Attempt to retrieve peer trust data for a non-existent peer
     result = db.get_peer_trust_data("nonexistent_peer")
@@ -321,9 +381,7 @@ def test_store_connected_peers_list(db):
     db.store_connected_peers_list(peers)
 
     # Verify the PeerInfo table
-    peer_results = db._FidesSQLiteDB__execute_query(
-        "SELECT peerID, ip FROM PeerInfo"
-    )
+    peer_results = db._FidesSQLiteDB__execute_query("SELECT peerID, ip FROM PeerInfo")
     assert len(peer_results) == 2
     assert peer_results[0] == ("peer1", "192.168.1.1")
     assert peer_results[1] == ("peer2", "192.168.1.2")
@@ -333,9 +391,7 @@ def test_store_connected_peers_list(db):
         "SELECT organisationID FROM PeerOrganisation WHERE peerID = ?",
         ["peer1"],
     )
-    assert (
-        len(org_results_peer1) == 2
-    )  # peer1 should be connected to 2 organisations
+    assert len(org_results_peer1) == 2  # peer1 should be connected to 2 organisations
     assert org_results_peer1[0][0] == "org1"
     assert org_results_peer1[1][0] == "org2"
 
@@ -343,9 +399,7 @@ def test_store_connected_peers_list(db):
         "SELECT organisationID FROM PeerOrganisation WHERE peerID = ?",
         ["peer2"],
     )
-    assert (
-        len(org_results_peer2) == 1
-    )  # peer2 should be connected to 1 organisation
+    assert len(org_results_peer2) == 1  # peer2 should be connected to 1 organisation
     assert org_results_peer2[0][0] == "org3"
 
 
@@ -408,9 +462,7 @@ def test_get_peer_organisations(db):
 
 def test_private_save_rejects_invalid_table_name(db):
     with pytest.raises(ValueError, match="Invalid Fides table name"):
-        db._FidesSQLiteDB__save(
-            "PeerInfo; DROP TABLE PeerInfo;", {"peerID": "peer"}
-        )
+        db._FidesSQLiteDB__save("PeerInfo; DROP TABLE PeerInfo;", {"peerID": "peer"})
 
 
 def test_private_save_rejects_invalid_column_name(db):
