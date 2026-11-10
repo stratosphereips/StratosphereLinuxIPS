@@ -15,6 +15,7 @@ from re import split
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 from slips_files.common.slips_utils import utils
+from modules.supported_module_names import Modules
 from slips_files.core.input.zeek.utils.dos_protector import DoSProtector
 from slips_files.core.zeek_cmd_builder import ZeekCommandBuilder
 

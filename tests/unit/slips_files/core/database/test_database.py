@@ -14,6 +14,7 @@ Isolation model:
 """
 
 import json
+import os
 import shutil
 import socket
 import subprocess
@@ -1725,6 +1726,75 @@ def ensure_redis_options(fresh_redis_db_class: None) -> None:
     RedisDB._options = {}
 
 
+@pytest.mark.parametrize("cached,expected", [
+    ('["104.244.40.0/21"]', ["104.244.40.0/21"]),
+    ('["2400:6680::/32"]', ["2400:6680::/32"]),
+    (None, None), ("", None), ("not-json", None), ('{"104": []}', None),
+    ('[42]', None), ('[]', []),
+])
+def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | None) -> None:
+    """Read decoded organization networks from cache rather than run DB 0.
+
+    Parameters:
+        cached: Serialized cache result, including missing or malformed values.
+        expected: Network list supplied to organization membership checks.
+    """
+    _factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.rcache = Mock()
+    db.rcache.hget.return_value = cached
+    assert db.is_ip_in_org_cidrs("twitter", "104") == expected
+    db.rcache.hget.assert_called_once_with("twitter_IPs", "104")
+    db.r.hget.assert_not_called()
+
+
+def test_set_evidence_publishes_after_sqlite_commit() -> None:
+    """A fast whitelist consumer must always find the durable evidence row."""
+    db = ModuleFactory().create_db_manager_obj(6379)
+    db.rdb.belongs_to_run = Mock(return_value=True)
+    db.rdb.set_evidence = Mock(return_value=True)
+    db.rdb.publish_evidence_added = Mock()
+    db.sqlite = Mock()
+    db.sqlite.is_evidence_whitelisted = Mock(return_value=False)
+    db._get_evidence_interface = Mock(return_value="en0")
+    db.update_threat_level = Mock()
+    evidence = Mock(
+        evidence_type=EvidenceType.ARP_SCAN,
+        source_module="arp",
+        uid=["arp-flow"],
+        attacker=Mock(profile="profile_192.168.1.185"),
+        threat_level="low",
+        confidence=0.8,
+    )
+    persisted = False
+
+    def persist(_evidence: object) -> None:
+        """Record when the SQLite insert has completed.
+
+        Parameters:
+            _evidence: Evidence being written.
+        """
+        nonlocal persisted
+        persisted = True
+
+    def consume(_evidence: object) -> None:
+        """Simulate a subscriber processing the event immediately.
+
+        Parameters:
+            _evidence: Evidence being consumed.
+        """
+        assert persisted, "evidence was published before its SQLite row"
+
+    db.sqlite.add_evidence.side_effect = persist
+    db.rdb.publish_evidence_added.side_effect = consume
+
+    assert db.set_evidence(evidence) is True
+    db.rdb.set_evidence.assert_called_once_with(evidence, notify=False)
+    db.sqlite.add_evidence.assert_called_once_with(evidence)
+    db.rdb.publish_evidence_added.assert_called_once_with(evidence)
+
+
 @pytest.mark.parametrize("owner", [None, "output/a-slips-run"])
 def test_factory_refuses_a_redis_run_owner(owner: str | None) -> None:
     """Refuse an owned database before its constructor can write test values.
@@ -1764,3 +1834,20 @@ def test_factory_refuses_unverified_redis_ownership(failure: type[Exception]) ->
     with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", side_effect=failure("connection lost")):
         with pytest.raises(RuntimeError, match="Cannot verify ownership"):
             factory._assert_redis_has_no_run_owner(65000)
+
+
+@pytest.mark.parametrize("add_version", [True, False])
+def test_publish_preserves_external_protocol_version(
+    add_version: bool,
+) -> None:
+    """Allow protocol adapters to preserve their external wire version.
+
+    Parameters:
+        add_version: Whether publishing should add Slips's version metadata.
+    """
+    db = ModuleFactory().create_redis_publisher_obj()
+    payload = json.dumps({"type": "tl2nl_alert", "version": 1, "data": {}})
+    db.publish("iris_internal", payload, add_version=add_version)
+    sent = json.loads(db.r.publish.call_args.args[1])
+    expected = Path("VERSION").read_text().strip() if add_version else 1
+    assert sent["version"] == expected

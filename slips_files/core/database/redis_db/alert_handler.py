@@ -123,11 +123,94 @@ class AlertHandler:
             # no previous alerts for this profileid twid
             profileid_twid_alerts = json.dumps(alert_dict)
 
-        self.r.hset(
+        index_key = f"{alert.profile}_{alert.timewindow}:alerted_evidence"
+        ids = list(alert.correl_id)
+        if not self.r.sismember(index_key, "__indexed__"):
+            ids = [
+                evidence_id
+                for values in old_profileid_twid_alerts.values()
+                for evidence_id in json.loads(values)
+            ] + ids
+        pipe = self.r.pipeline()
+        pipe.hset(
             f"{alert.profile}_{alert.timewindow}",
             self.constants.ALERTS,
             profileid_twid_alerts,
         )
+        pipe.sadd(index_key, "__indexed__", *ids)
+        pipe.expire(index_key, self.default_ttl)
+        pipe.execute()
+
+    def _ensure_alert_evidence_index(self, profileid: str, twid: str) -> str:
+        """Index retained alert membership once when upgrading an existing run.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Detection time window.
+
+        Returns:
+            Expiring set containing correlated evidence IDs and its marker.
+        """
+        key = f"{profileid}_{twid}:alerted_evidence"
+        if not self.r.sismember(key, "__indexed__"):
+            alerts = self.get_profileid_twid_alerts(profileid, twid)
+            ids = [
+                identifier
+                for values in alerts.values()
+                for identifier in json.loads(values)
+            ]
+            pipe = self.r.pipeline()
+            pipe.sadd(key, "__indexed__", *ids)
+            pipe.expire(key, self.default_ttl)
+            pipe.execute()
+        return key
+
+    def is_evidence_in_past_alert(
+        self, profileid: str, twid: str, evidence_id: str
+    ) -> bool:
+        """Check past-alert membership without downloading historical alert lists.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Detection time window.
+            evidence_id: Evidence UUID to check.
+
+        Returns:
+            Whether an existing alert already contains this evidence.
+        """
+        key = f"{profileid}_{twid}:alerted_evidence"
+        indexed, member = self.r.smismember(key, ["__indexed__", evidence_id])
+        if indexed:
+            return bool(member)
+        return bool(
+            self.r.sismember(
+                self._ensure_alert_evidence_index(profileid, twid), evidence_id
+            )
+        )
+
+    def get_pending_processed_evidence(
+        self, profileid: str, twid: str
+    ) -> Dict[str, str]:
+        """Fetch processed evidence that has not yet contributed to an alert.
+
+        Parameters:
+            profileid: Source host profile.
+            twid: Detection time window.
+
+        Returns:
+            Evidence UUIDs and their stored JSON records.
+        """
+        correlated = self._ensure_alert_evidence_index(profileid, twid)
+        processed = f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        ids = list(self.r.sdiff(processed, correlated))
+        if not ids:
+            return {}
+        records = self.r.hmget(f"{profileid}_{twid}_evidence", ids)
+        return {
+            identifier: record
+            for identifier, record in zip(ids, records)
+            if record
+        }
 
     def get_number_of_alerts_so_far(self):
         return self.r.get(self.constants.NUMBER_OF_ALERTS)
@@ -299,21 +382,34 @@ class AlertHandler:
                 entity.AS = ip_identification.get("AS")
                 entity.TI = ip_identification.get("TI")
                 entity.rDNS = ip_identification.get("rDNS")
-                entity.SNI = ip_identification.get("SNI")
-                # queries resolved to that ip
-                entity.queries = ip_identification.get("queries")
+                # An observed request host is more specific than cached IP names.
+                if not entity.queries:
+                    entity.SNI = entity.SNI or ip_identification.get("SNI")
+                    entity.queries = ip_identification.get("queries")
 
             elif entity.ioc_type == IoCType.DOMAIN:
-                domain_info: Dict[str, str]
+                domain_info: Any
                 domain_info = self.get_domain_data(entity.value)
+                if isinstance(domain_info, str):
+                    try:
+                        domain_info = json.loads(domain_info)
+                    except (TypeError, ValueError):
+                        continue
+                if not isinstance(domain_info, dict):
+                    continue
                 if not domain_info:
                     continue
 
                 entity.CNAME = domain_info.get("CNAME", [])
                 entity.DNS_resolution = domain_info.get("IPs", [])
-                entity.TI = domain_info.get("threatintelligence", {}).get(
-                    "source"
-                )
+                threat_info = domain_info.get("threatintelligence")
+                if isinstance(threat_info, str):
+                    try:
+                        threat_info = json.loads(threat_info)
+                    except json.JSONDecodeError:
+                        entity.TI = threat_info
+                if isinstance(threat_info, dict):
+                    entity.TI = threat_info.get("source")
                 # if any of the domain's ips have an asn, set it here to
                 # check if it's whitelisted later
                 for ip in entity.DNS_resolution:
@@ -323,12 +419,26 @@ class AlertHandler:
             setattr(evidence, entity_type, entity)
         return evidence
 
-    def set_evidence(self, evidence: Evidence):
+    def publish_evidence_added(self, evidence: Evidence) -> None:
+        """Notify evidence consumers after the durable row is committed.
+
+        Parameters:
+            evidence: Evidence already stored in Redis and SQLite.
+        """
+        self.publish(
+            self.channels.EVIDENCE_ADDED,
+            json.dumps(utils.to_dict(evidence)),
+        )
+
+    def set_evidence(self, evidence: Evidence, notify: bool = True) -> bool:
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
         slips_files/core/structures/evidence.py) with all the
         evidence details,
+        :param notify: Publish immediately only when no later SQLite write
+            is required by the caller.
+        :return: Whether the evidence was newly stored.
         """
         # create the profile if it doesn't exist
         self.add_profile(str(evidence.profile), evidence.timestamp)
@@ -358,7 +468,8 @@ class AlertHandler:
 
         self.r.hset(evidence_hash, evidence.id, evidence_to_send)
         self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-        self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
+        if notify:
+            self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
         return True
 
     def set_alert(self, alert: Alert):
