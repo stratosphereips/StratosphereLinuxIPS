@@ -70,7 +70,7 @@ bgp,179,udp,Border Gateway Protocol
 bgp,179,sctp,BGP
 irc,194,tcp,Internet Relay Chat Protocol
 irc,194,udp,Internet Relay Chat Protocol
-airport discovery,udp,192,Apple AirPort Base Station PPP status or discovery (certain configurations), AirPort Admin Utility, AirPort Express Assistant
+airport-discovery,192,udp,Apple AirPort base station PPP status and discovery
 imap3,220,tcp,Interactive Mail Access Protocol v3
 imap3,220,udp,Interactive Mail Access Protocol v3
 https,443,tcp,http protocol over TLS/SSL
@@ -135,8 +135,8 @@ rdp,3389,tcp,Microsoft Terminal Server (RDP)
 Web Services Discovery (WSD) UPNP,3702,tcp,Web Services Discovery (WSD)
 Web Services Discovery (WSD) UPNP,3702,udp,Web Services Discovery (WSD)
 XMPP Chat. Google Talk. Telegram or Whatsapp,5222,tcp,XMPP Chat. Google Talk, Telegram or Whatsapp
-Apple Notification Protocol or XMPP,5223,tcp,Apple Notification Protocol or XMPP (Jabber)
-Google Playstore or Google Talk or Google Chrome Sync,5228,tcp,Google Playstore or Google Talk or Google Chrome Sync
+apns,5223,tcp,Apple Push Notification service persistent device communication
+Google and Apple services,5228,tcp,Google Play or Talk or Chrome Sync; Apple Spotlight Suggestions and Siri
 http-alt,8080,tcp,HTTP Alternative
 http-alt,8081,tcp,HTTP Alternative
 nat-pmp,5351,udp,Nat Port Mapping Protocol
@@ -160,3 +160,36 @@ spotify-p2p-communication,57621,udp,Spotify
 iphone-sync1,3722,udp,iphone-sync
 iphone-sync2,57484,udp,iphone-sync
 iphone-sync2,58916,udp,iphone-sync
+# Apple documented services: https://support.apple.com/en-hk/103229
+kerberos,88,tcp,Kerberos authentication including Screen Sharing
+ldap,389,tcp,Lightweight Directory Access Protocol
+smtps,465,tcp,Authenticated SMTP over TLS
+isakmp,500,udp,IKE and Apple Wi-Fi Calling
+ipp,631,tcp,Internet Printing Protocol
+ldaps,636,tcp,LDAP over TLS
+kerberos-adm,749,tcp,Kerberos administration
+kerberos-adm,749,udp,Kerberos administration
+apns-provider,2197,tcp,Apple Push Notification service provider connections
+eppc,3031,tcp,Apple Remote Events
+eppc,3031,udp,Apple Remote Events
+net-assistant,3283,tcp,Apple Remote Desktop
+net-assistant,3283,udp,Apple Remote Desktop
+apple-classroom-files,3284,tcp,Apple Classroom file transfer
+apple-classroom,3285,tcp,Apple Classroom
+daap,3689,tcp,Digital Audio Access Protocol and Apple music sharing
+svn,3690,tcp,Subversion including Xcode Server
+svn,3690,udp,Subversion including Xcode Server
+apple-game-center,4398,udp,Apple Game Center
+ipsec-nat-t,4500,udp,IPsec NAT traversal and Apple Wi-Fi Calling
+airplay,5000,tcp,Apple AirPlay
+socalia,5100,tcp,macOS camera and scanner sharing
+apple-messages,5297,tcp,Apple Messages local traffic
+nat-pmp-announcements,5350,udp,NAT Port Mapping Protocol announcements
+rfb-rtp,5901,udp,Apple Remote Desktop and Screen Sharing RTP/RTCP
+rfb-rtp,5902,udp,Apple Remote Desktop and Screen Sharing RTP/RTCP
+airplay,6000,tcp,Apple AirPlay
+airplay,7000,tcp,Apple AirPlay
+printer-raw,9100,tcp,Raw network printing
+git,9418,tcp,Git pack transfer including Xcode Server
+git,9418,udp,Git pack transfer including Xcode Server
+apple-device-sync,62078,tcp,Apple device pairing sync and backup

@@ -34,6 +34,7 @@ dns_fields_to_slips_fields_map = {
     "rcode_name": "rcode_name",
     "answers": "answers",
     "TTLs": "TTLs",
+    "slips_mdns_bindings": "mdns_bindings",
     "label": "ground_truth_label",
     "detailedlabel": "detailed_ground_truth_label",
 }

@@ -39,6 +39,7 @@ import redis
 
 from slips_files.core.database.database_manager import DBManager
 from slips_files.core.database.redis_db.database import RedisDB
+from slips_files.core.flows.zeek import Conn
 from slips_files.core.structures.evidence import (
     Attacker,
     Direction,
@@ -899,7 +900,8 @@ def test_add_mac_addr_to_profile_skips_the_gateway_ip(db: DBManager) -> None:
 def test_mac_seen_with_a_public_ip_becomes_the_gateway_mac(
     db: DBManager,
 ) -> None:
-    assert db.add_mac_addr_to_profile("profile_8.8.8.8", MAC_ADDR, "eth0")
+    # a routed public endpoint reveals the router, it does not own the mac
+    assert not db.add_mac_addr_to_profile("profile_8.8.8.8", MAC_ADDR, "eth0")
 
     assert db.get_gateway_mac("eth0") == MAC_ADDR
     # the gateway mac is never assigned to a local ip afterwards
@@ -1726,6 +1728,31 @@ def ensure_redis_options(fresh_redis_db_class: None) -> None:
     RedisDB._options = {}
 
 
+profileid = "profile_192.168.1.1"
+twid = "timewindow1"
+test_ip = "192.168.1.1"
+flow = Conn(
+    starttime="1601998398.945854",
+    uid="1234",
+    saddr=test_ip,
+    daddr="8.8.8.8",
+    dur=5,
+    proto="TCP",
+    appproto="dhcp",
+    sport=80,
+    dport=88,
+    spkts=20,
+    dpkts=20,
+    sbytes=20,
+    dbytes=20,
+    state="",
+    history="",
+    smac="Established",
+    dmac="",
+    interface="eth0",
+)
+
+
 @pytest.mark.parametrize("cached,expected", [
     ('["104.244.40.0/21"]', ["104.244.40.0/21"]),
     ('["2400:6680::/32"]', ["2400:6680::/32"]),
@@ -1747,6 +1774,35 @@ def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | N
     assert db.is_ip_in_org_cidrs("twitter", "104") == expected
     db.rcache.hget.assert_called_once_with("twitter_IPs", "104")
     db.r.hget.assert_not_called()
+
+
+@pytest.mark.parametrize("method_name", ["add_flow", "add_altflow"])
+def test_flow_writes_do_not_profile_hosts_inline(method_name: str) -> None:
+    """Keep durable host profiling out of the flow ingestion path.
+
+    Parameters:
+        method_name: Flow or alternate-flow write to exercise.
+    """
+    factory = ModuleFactory()
+    db = DBManager.__new__(DBManager)
+    db.sqlite = factory.logger
+    db.rdb = Mock()
+    db.host_profiles = Mock()
+
+    result = getattr(db, method_name)(flow, profileid, twid)
+
+    if method_name == "add_flow":
+        db.sqlite.add_flow.assert_called_once_with(
+            flow, profileid, twid, label="benign"
+        )
+        db.rdb.add_flow.assert_called_once_with(
+            flow, profileid=profileid, twid=twid, label="benign"
+        )
+        assert result is db.rdb.add_flow.return_value
+    else:
+        db.sqlite.add_altflow.assert_called_once_with(flow, profileid, twid)
+        assert result is db.sqlite.add_altflow.return_value
+    db.host_profiles.observe_flow.assert_not_called()
 
 
 def test_set_evidence_publishes_after_sqlite_commit() -> None:
