@@ -1215,7 +1215,8 @@ class ProfileHandler:
             return
 
         to_send = {
-            "new_symbol": new_symbol,
+            "new_symbol": new_symbol[-500:],
+            "sequence_length": len(new_symbol),
             "profileid": profileid,
             "twid": twid,
             "tupleid": str(tupleid),

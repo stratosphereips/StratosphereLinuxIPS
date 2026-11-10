@@ -5,12 +5,18 @@ import sys
 import contextlib
 import warnings
 import json
+import time
+from pathlib import Path
+from collections import OrderedDict
 from typing import Any, Dict
 from uuid import uuid4
 
 import numpy as np
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+from modules.supported_module_names import Modules
+from .preprocessing import encode_letters, connection_count, is_established
+from slips_files.common.input_type import InputType
 from slips_files.common.slips_utils import utils
 from slips_files.common.abstracts.imodule import IModule
 from slips_files.core.structures.evidence import (
@@ -60,11 +66,16 @@ def _silence_native_stderr():
 
 class CCDetection(IModule):
     # Name: short name of the module. Do not use spaces
-    name = "rnn_cc_detection"
+    name = Modules.RNN_CC_DETECTION.value
     description = "Detects C&C channels based on behavioral letters"
     authors = ["Sebastian Garcia", "Kamila Babayeva", "Ondrej Lukas"]
 
-    def init(self):
+    def init(self) -> None:
+        """Prepare export and choose the live or accelerated-offline clock."""
+        self.offline = (
+            self.db.get_input_type() != InputType.INTERFACE
+            and not self.args.growing
+        )
         self.letters_exporter = StratoLettersExporter(self.db)
 
     def subscribe_to_channels(self):
@@ -154,51 +165,22 @@ class CCDetection(IModule):
 
         self.db.set_evidence(evidence)
 
-    def convert_input_for_module(self, pre_behavioral_model):
+    def convert_input_for_module(
+        self, pre_behavioral_model: str
+    ) -> np.ndarray:
+        """Use the same latest-window encoding and padding as training.
+
+        Parameters:
+            pre_behavioral_model: Behavioral letter sequence.
+
+        Returns:
+            Encoded fixed-size model input.
         """
-        Takes the input from the letters and converts them
-        to whatever is needed by the model
-        The pre_behavioral_model is a 1D array of letters in an array
-        """
-        # TODO: set the max_length in the function call
-
-        # Length of behavioral model with which we trained our module
-        max_length = 500
-
-        # Convert each of the stratosphere letters to an integer. There are 50
-        vocabulary = list("abcdefghiABCDEFGHIrstuvwxyzRSTUVWXYZ1234567890,.+*")
-        int_of_letters = {}
-
-        # This is a simple encoding that is not one-hot.
-        for i, letter in enumerate(vocabulary):
-            int_of_letters[letter] = float(i)
-
-        # String to test
-        # pre_behavioral_model = "88*y*y*h*h*h*h*h*h*h*y*y*h*h*h*y*y*"
-
-        # Be sure only max_length chars come. Not sure why we receive more
-        pre_behavioral_model = pre_behavioral_model[:max_length]
-
-        # Add padding to the letters passed
-        # self.print(f'Seq sent: {pre_behavioral_model}')
-        pre_behavioral_model += "0" * (max_length - len(pre_behavioral_model))
-        # self.print(f'Padded Seq sent: {pre_behavioral_model}')
-
-        # Convert to ndarray
-        pre_behavioral_model = np.array(
-            [[int_of_letters[i]] for i in pre_behavioral_model]
-        )
-        # self.print(f'The sequence has shape {pre_behavioral_model.shape}')
-
-        # Reshape into (1, 500, 1) We need the first 1, because this is one sample only, but keras expects a 3d vector
-        pre_behavioral_model = np.reshape(
-            pre_behavioral_model, (1, max_length, 1)
+        return encode_letters(
+            pre_behavioral_model, schema=getattr(self, "encoding_schema", 1)
         )
 
-        # self.print(f'Post Padded Seq sent: {pre_behavioral_model}. Shape: {pre_behavioral_model.shape}')
-        return pre_behavioral_model
-
-    def handle_new_letters(self, msg: Dict):
+    def handle_new_letters(self, msg: Dict[str, Any]) -> None:
         """handles msgs from the tw_closed channel"""
 
         msg = msg["data"]
@@ -210,14 +192,30 @@ class CCDetection(IModule):
         tupleid = msg["tupleid"]
         flow = msg["flow"]
         state = flow["state"]
+        count = connection_count(pre_behavioral_model[-500:])
 
         if "tcp" not in tupleid.lower():
             return
 
-        if "established" not in state.lower():
+        if not is_established(state) or count < 6:
             return
 
-        # to reduce false positives
+        # Keep caches local, bounded and independent of Redis retention.
+        if not hasattr(self, "_predictions"):
+            self._predictions = OrderedDict()
+        key = (profileid, twid, tupleid)
+        now = time.monotonic()
+        if getattr(self, "offline", False):
+            now = float(flow["starttime"])
+        previous = self._predictions.get(key)
+        progress = int(msg.get("sequence_length", len(pre_behavioral_model)))
+        if previous and (progress - previous[0] < 4 or now - previous[1] < 5):
+            return
+        last_alert = previous[2] if previous else -1e30
+        self._predictions[key] = (progress, now, last_alert)
+        self._predictions.move_to_end(key)
+        if len(self._predictions) > 2048:
+            self._predictions.popitem(last=False)
         threshold = 0.99
         # function to convert each letter of behavioral model to ascii
         behavioral_model = self.convert_input_for_module(pre_behavioral_model)
@@ -236,12 +234,9 @@ class CCDetection(IModule):
         )
         # get a float instead of numpy array
         score = score[0][0]
-        if score > threshold:
-            threshold_confidence = 100
-            if len(pre_behavioral_model) >= threshold_confidence:
-                confidence = 1
-            else:
-                confidence = len(pre_behavioral_model) / threshold_confidence
+        if score > threshold and now - last_alert >= 3600:
+            self._predictions[key] = (progress, now, now)
+            confidence = min(1.0, count / 100)
             uid = msg["uid"]
             stime = flow["starttime"]
             self.set_evidence_cc_channel(
@@ -285,7 +280,22 @@ class CCDetection(IModule):
         with _silence_native_stderr():
             from tensorflow.keras.models import load_model
 
-            return load_model("modules/rnn_cc_detection/rnn_model.h5")
+            path = Path("modules/rnn_cc_detection/rnn_model.h5")
+            metadata = path.with_suffix(path.suffix + ".json")
+            self.encoding_schema = (
+                json.loads(metadata.read_text())["encoding_schema"]
+                if metadata.exists()
+                else 1
+            )
+            if self.encoding_schema not in (1, 2):
+                raise ValueError("Unsupported RNN encoding schema")
+            if self.encoding_schema == 1:
+                self.print(
+                    "Legacy C2 model uses ambiguous labels and shares token zero with letter a; retrain with grouped C2 labels before relying on its score.",
+                    0,
+                    1,
+                )
+            return load_model(path)
 
     def pre_main(self):
         utils.drop_root_privs_permanently()

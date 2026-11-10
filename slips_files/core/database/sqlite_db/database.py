@@ -32,6 +32,8 @@ from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
     initialize_detection_history,
 )
+from slips_files.core.database.sqlite_db.packet_flows import find_packet_flow
+
 
 class SQLiteDB(ISQLite):
     """
@@ -549,6 +551,17 @@ class SQLiteDB(ISQLite):
         res = res[0][1] if res else {}
         return {uid: res}
 
+    def get_flow_for_packet(self, packet: dict) -> dict | None:
+        """Resolve a packet to its stored connection in either direction.
+
+        Parameters:
+            packet: Packet endpoints, transport and timestamp.
+
+        Returns:
+            Unambiguous stored connection context, or None.
+        """
+        with self.conn_lock:
+            return find_packet_flow(self.conn, packet)
 
     @staticmethod
     def _flow_event_time(flow) -> float:

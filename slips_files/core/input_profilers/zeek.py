@@ -44,7 +44,30 @@ from slips_files.core.input_profilers.zeek_to_slips_maps import (
     login_fields_to_slips_fields_map,
 )
 
+from slips_files.core.flows.packet_timing import PacketTiming
 LOG_MAP = {
+    "packet_timing.log": {
+        "ts": "starttime",
+        "uid": "uid",
+        "id.orig_h": "saddr",
+        "id.resp_h": "daddr",
+        "id.orig_p": "sport",
+        "id.resp_p": "dport",
+        **{
+            name: name
+            for name in (
+                "is_orig",
+                "kind",
+                "history",
+                "service",
+                "times",
+                "lengths",
+                "event_count",
+                "orig_bytes",
+                "resp_bytes",
+            )
+        },
+    },
     "conn.log": conn_fields_to_slips_fields_map,
     "dns.log": dns_fields_to_slips_fields_map,
     "http.log": http_fields_to_slips_fields_map,
@@ -64,6 +87,7 @@ LOG_MAP = {
 
 # define a mapping of log types to their corresponding classes
 LINE_TYPE_TO_SLIPS_CLASS = {
+    "packet_timing.log": PacketTiming,
     "conn.log": Conn,
     "dns.log": DNS,
     "http.log": HTTP,

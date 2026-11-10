@@ -21,6 +21,7 @@ class ConfigMixin:
         (Modules.LLM_PROXY, "llm_enabled"),
         (Modules.ALERT_SUMMARY, "alert_summary_enabled"),
         (Modules.REGEX_GENERATOR, "regex_generator_enabled"),
+        (Modules.BEACONING, "beaconing_enabled"),
         (Modules.WEB_INTERFACE, "web_interface_enabled"),
     )
 
