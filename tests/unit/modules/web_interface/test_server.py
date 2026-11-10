@@ -2626,7 +2626,7 @@ def test_overview_prioritizes_operational_data() -> None:
     "input_type, offset",
     [("interface", 0), ("file", -5 * 24 * 60 * 60)],
 )
-def test_live_title_counts_match_alert_and_host_ranges(
+def test_legacy_live_counts_match_alert_and_host_ranges(
     tmp_path: Path, input_type: str, offset: int
 ) -> None:
     """Count only alerts and hosts in the live window for each input clock.
@@ -2851,15 +2851,96 @@ def test_identity_can_include_only_the_requested_alert_count(requested: bool) ->
     reader._current_header_network = Mock(return_value={})
     reader._current_network_start = Mock(return_value=None)
     reader.validate_run_identity = Mock(return_value={})
-    reader.live_counts = Mock(return_value={"alerts": 7})
+    reader.alerts = Mock(return_value={"matching_total": 7})
+    reader.live_counts = Mock(side_effect=AssertionError("Title must use the Alerts selection"))
     query = {"title_alerts": ["1"], "network": ["current"]} if requested else {}
     payload = reader.identity(query)
     if requested:
         assert payload["alert_count"] == 7
-        reader.live_counts.assert_called_once_with({**query, "counts": ["alerts"]})
+        reader.alerts.assert_called_once_with({"range": ["connection"], "review": ["open"], **query,
+                                              "group": ["host"], "count_only": ["1"]})
     else:
         assert "alert_count" not in payload
-        reader.live_counts.assert_not_called()
+        reader.alerts.assert_not_called()
+
+
+def test_title_alert_count_uses_selected_archive_without_changing_header() -> None:
+    """Count archived alerts while the heartbeat still describes the live run."""
+    _factory = ModuleFactory()
+    reader = RunDataReader.__new__(RunDataReader)
+    reader._current_header_network = Mock(return_value={"name": "Current Wi-Fi"})
+    reader._current_network_start = Mock(return_value=10)
+    reader.validate_run_identity = Mock(return_value={})
+    archive = Mock()
+    archive.alerts.return_value = {"matching_total": 3}
+    reader.with_archive = Mock(return_value=archive)
+    query = {"title_alerts": ["1"], "alert_archive": ["history-2026-10.sqlite"],
+             "range": ["all"], "network": ["current"], "interface": ["en0"]}
+    payload = reader.identity(query)
+    assert payload["alert_count"] == 3
+    assert payload["current_network"] == {"name": "Current Wi-Fi"}
+    reader.with_archive.assert_called_once_with("history-2026-10.sqlite", context=True)
+    count_query = archive.alerts.call_args.args[0]
+    assert count_query["range"] == ["all"]
+    assert not {"network", "network_id", "interface"} & count_query.keys()
+
+
+@pytest.mark.parametrize("device", [False, True])
+@pytest.mark.parametrize("selection,expected", [
+    ({"range": ["connection"]}, 1), ({"range": ["live"]}, 0),
+    ({"range": ["all"]}, 1), ({"review": ["resolved"]}, 1), ({"review": ["all"]}, 2),
+    ({"search": ["older-open"]}, 1), ({"search": ["missing"]}, 0),
+    ({"search": ["unknown port"]}, 1),
+    ({"threat": ["medium_or_more"]}, 1), ({"threat": ["high_or_more"]}, 0),
+    ({"range": ["custom"], "from": ["1999994500"], "to": ["2000000000"]}, 1),
+    ({"range": ["custom"], "from": ["1999999000"], "to": ["2000000000"]}, 0),
+])
+def test_title_alerts_match_overview_for_older_open_alerts_and_all_filters(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: bool,
+    selection: dict[str, list[str]], expected: int,
+) -> None:
+    """Count older open alerts in this connection without loading host details.
+
+    Parameters:
+        tmp_path: Isolated detection and history databases.
+        monkeypatch: Fixes the live clock.
+        device: Whether Overview groups addresses by device.
+        selection: Alerts time, review, search or severity filters.
+        expected: Matching individual alerts in the selected network.
+    """
+    _factory = ModuleFactory()
+    now = 2_000_000_000.0
+    monkeypatch.setattr("modules.web_interface.server.time.time", lambda: now)
+    reader = _network_scope_reader(tmp_path)
+    current = "gateway:aa:bb:cc:dd:ee:01"
+    reader._active_network_scope = NetworkScope(current, ((now - 7200, current),), now - 7200)
+    reader._connection_only = True
+    reader._current_header_network = Mock(return_value={})
+    reader._current_network_start = Mock(return_value=now - 7200)
+    reader.validate_run_identity = Mock(return_value={})
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.executescript("DELETE FROM alerts; DELETE FROM evidence; DELETE FROM alert_evidence;"
+            "CREATE TABLE alert_reviews(alert_id TEXT PRIMARY KEY, status TEXT);")
+        for identifier, age, network, status in [
+            ("older-open", 5400, current, "active"), ("resolved", 4000, current, "resolved"),
+            ("other-network", 30, "gateway:other", "active"), ("before-session", 9000, current, "active"),
+        ]:
+            connection.execute("INSERT INTO alerts VALUES (?, '192.168.1.2', ?, 'malicious', 5)", (identifier, now - age))
+            connection.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,threat_level,evidence_type,data) "
+                "VALUES (?,?, '192.168.1.2','medium','UNKNOWN_PORT',?)",
+                (identifier, now - age, json.dumps({"detection_provenance": {"network_id": network}})))
+            connection.execute("INSERT INTO alert_evidence VALUES (?,?)", (identifier, identifier))
+            connection.execute("INSERT INTO alert_reviews VALUES (?,?)", (identifier, status))
+    query = {"range": ["connection"], "network": ["connection"], "review": ["open"], "group": ["host"],
+             "device": ["1" if device else "0"], "hide_excluded": ["1"], "limit": ["1"], **selection}
+    overview = reader.alerts(query)
+    assert overview["matching_total"] == expected
+    with patch.object(reader, "_connect_history", side_effect=AssertionError("Count must not load hosts")), \
+         patch.object(reader, "_ip_context_for_ip", side_effect=AssertionError("Count must not enrich hosts")), \
+         patch.object(reader, "_annotate_detection_networks", side_effect=AssertionError("Count must not build rows")):
+        assert reader.identity({**query, "title_alerts": ["1"]})["alert_count"] == expected
+        assert reader.alerts({**query, "count_only": ["1"], "cursor": [reader._encode_cursor(0, "ignored")]})["matching_total"] == expected
+
 
 
 @pytest.mark.parametrize("mode", ["grouped", "type", "host"])

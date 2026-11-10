@@ -71,7 +71,7 @@ const state = {
   runIdentity: null,
   viewPreferencesKey: null,
   reviewAvailable: false,
-  titleAlertCount: null,
+  titleAlertCount: null, titleAlertRequest: 0, titleAlertApplied: 0,
   evidenceReviewPending: new Set(),
   networkOnly: true,
   deviceView: true,
@@ -1352,6 +1352,7 @@ function applyRunIdentity(identity) {
     state.overviewEvidenceLoading = false;
     state.overviewAlertGroups = null;
     state.overviewAlertQuery = "";
+    state.titleAlertCount = null;updatePageTitle();
     state.metadata = null;
     state.p2pGraph = { payload: null, groups: [], selected: null, message: null, signature: "", detailSignature: "", zoom: 1 };
     byId("p2p-report-graph").replaceChildren();
@@ -1917,13 +1918,41 @@ function setSummaryCards(items, target = "summary-cards") {
   });
 }
 
-/** Show only the live alert count beside the run name in the browser title. */
+/** Show matching individual alerts beside the run name in the browser title. */
 function updatePageTitle() {
   const name = byId("run-name").textContent.trim();
   const count = state.titleAlertCount;
   const alerts = Number.isInteger(count) && count >= 0
     ? ` (${count.toLocaleString()} ${count === 1 ? "alert" : "alerts"})` : "";
   document.title = `Slips${alerts}${name && name !== "Current run" ? ` · ${name}` : ""}`;
+}
+
+/** Identify the Alerts selection independently of grouping, sorting and paging.
+ * @returns {string} Stable filter and run identity for incoming alert counts.
+ */
+function titleAlertScope() {
+  const range = byId("alerts-range").value;
+  return JSON.stringify([state.runIdentity, state.archiveSource, range,
+    range === "custom" ? [byId("alerts-from").value, byId("alerts-to").value] : null,
+    byId("alerts-review").value, byId("alerts-search").value.trim(),
+    state.alertsWorkspace.severity, state.hideExcluded,
+    state.networkOnly && state.networkFilterSupported, state.deviceView && state.deviceViewSupported,
+    state.networkSelection, state.interfaceSelection,
+    range === "connection" ? state.currentNetworkStart : null,
+    state.networks.map((item) => [item.interface, item.network_id, item.connected, item.connection_start, item.changed_at])]);
+}
+
+/** Accept matching alert counts without letting older requests overwrite them.
+ * @param {number} count - Number of matching individual alerts.
+ * @param {string} scope - Alerts selection when the request began.
+ * @param {number} request - Monotonically increasing count request number.
+ */
+function acceptTitleAlertCount(count, scope, request) {
+  if (!Number.isInteger(count) || count < 0 || scope !== titleAlertScope()
+      || request < state.titleAlertApplied) return;
+  state.titleAlertApplied = request;
+  state.titleAlertCount = count;
+  updatePageTitle();
 }
 
 /** Update the network name in the shared header from the latest heartbeat.
@@ -2160,7 +2189,7 @@ function renderOverviewStatus(data) {
   }
   byId("overview-status-title").textContent = "Alerts grouped by host";
   byId("overview-status-description").textContent =
-    `${compact(summary.matching_total)} alerts across ${compact(summary.total)} `
+    `${compact(summary.matching_total)} ${summary.matching_total === 1 ? "alert" : "alerts"} across ${compact(summary.total)} `
     + `${numeric(summary.total) === 1 ? "host" : "hosts"} · ${selectedFilters}`;
   (summary.items || []).slice(0, 4).forEach((host) => {
     const row = document.createElement("button");
@@ -2664,10 +2693,12 @@ function overviewAlertGroupsPath() {
 
 /** Refresh Overview's alert groups without changing the Alerts pane. */
 async function loadOverviewAlertGroups(path) {
+  const scope = titleAlertScope();const request = ++state.titleAlertRequest;
   try {
     const payload = await api("overviewAlertGroups", path);
     if (state.overviewAlertQuery !== path) return;
     state.overviewAlertGroups = payload || { error: true };
+    if (payload) acceptTitleAlertCount(payload.matching_total, scope, request);
   } catch (_) {
     if (state.overviewAlertQuery !== path) return;
     state.overviewAlertGroups = { error: true };
@@ -3361,8 +3392,10 @@ function initAlertPaneResize() {
 
 /** Refresh the host list while retaining an open investigation. */
 async function loadAlerts() {
+  const scope = titleAlertScope();const request = ++state.titleAlertRequest;
   const payload = await api("alerts", listPath("alerts"));
   if (!payload) return;
+  acceptTitleAlertCount(payload.matching_total ?? payload.total, scope, request);
   const workspace = state.alertsWorkspace;
   workspace.fullTotal = byId("alerts-review").value === "open"
     ? payload.open_total || 0 : payload.full_total || 0;
@@ -9652,19 +9685,20 @@ function schedulePoll() {
 /** Poll backend liveness independently from the active tab's data range. */
 async function pollBackendStatus() {
   try {
-    const params = new URLSearchParams({title_alerts: "1"});
-    applyNetworkSelection(params);
+    const scope = titleAlertScope();const request = ++state.titleAlertRequest;
+    const params = new URLSearchParams(overviewAlertGroupsPath().split("?", 2)[1]);
+    params.set("title_alerts", "1");
+    if (state.archiveSource) params.set("alert_archive", state.archiveSource);
     const identity = await api("backendStatus", `/api/identity?${params}`, false, false, 10000);
     if (identity) {
-      if (Number.isInteger(identity.alert_count) && identity.alert_count >= 0) {
-        state.titleAlertCount = identity.alert_count;
-        updatePageTitle();
+      if (document.hidden) {
+        acceptTitleAlertCount(identity.alert_count, scope, request);return;
       }
-      if (document.hidden) return;
       updateReviewAvailability(identity.review_actions === true);
       updateNetworkFilterAvailability(identity);
       updateDeviceViewAvailability(identity);
       if (identity.input_type) initializeRanges(identity, identity.run_identity?.saved_view === true);
+      acceptTitleAlertCount(identity.alert_count, scope, request);
       state.headerNetwork = identity.current_network || null;
       renderHeaderNetwork(state.overview || {run: {
         interface: identity.current_network?.interface || identity.interface,

@@ -44,10 +44,13 @@ work runs in the web process and does not scan detection databases or modify
 capture settings.
 
 The browser title shows the live alert count and run name, for example
-**Slips (7 alerts) · sebas-en0**. It counts open alerts in the rolling live
-hour and current network scope. The existing heartbeat updates this count
-with an indexed alert-only query; it does not count hosts or evidence or add
-a separate polling timer. While the browser tab is hidden, only this heartbeat
+**Slips (7 alerts) · sebas-en0**. It counts the individual alerts matching
+the Alerts selection used by Overview, including its time range (by default
+**This connection**), network, interface, review, search and severity filters.
+Changing grouping or pagination does not change this count. Overview and Alerts
+responses update the title immediately; older responses cannot overwrite a newer
+count. The existing heartbeat refreshes it with an alert-only count query;
+it does not count hosts or evidence or add a separate polling timer. While the browser tab is hidden, only this heartbeat
 continues, once per minute, so the title stays current while page data and charts
 remain paused. Grouped network evidence queries resolve network
 membership once per request in a temporary ID table, then reuse it for counts and
@@ -839,7 +842,8 @@ for up to thirty seconds instead of rereading every stored evidence JSON on
 each refresh. The cache holds at most eight network/connection selections,
 separates different databases and recorded network visits, and shares work
 between browser tabs. The Evidence table still queries its selected filters
-directly. Browser titles use the run name and do not request background counts.
+directly. Browser titles show the run name and matching alert count without
+requesting host or evidence totals.
 Backend status and active-tab data
 continue to refresh every five seconds. All this work stays in the web server;
 capture and detection processing require no additional lookups or writes.

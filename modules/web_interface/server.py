@@ -3135,10 +3135,10 @@ class RunDataReader:
         """Return run identity and an optional alert-only title count.
 
         Parameters:
-            query: Optional title counter request and network scope.
+            query: Optional title counter request with the Alerts selection.
 
         Returns:
-            Run identity, network state and requested live alert count.
+            Run identity, network state and requested matching alert count.
         """
         header = self._current_header_network(refresh=True)
         payload = {
@@ -3155,9 +3155,22 @@ class RunDataReader:
         }
         if self._query_value(query or {}, "title_alerts") == "1":
             try:
-                payload["alert_count"] = self.live_counts(
-                    {**(query or {}), "counts": ["alerts"]}
-                )["alerts"]
+                count_query = {
+                    "range": ["connection"],
+                    "review": ["open"],
+                    **(query or {}),
+                    "group": ["host"],
+                    "count_only": ["1"],
+                }
+                count_reader = self
+                archive = self._query_value(count_query, "alert_archive")
+                if archive:
+                    count_reader = self.with_archive(archive, context=True)
+                    for name in ("network", "network_id", "interface"):
+                        count_query.pop(name, None)
+                payload["alert_count"] = count_reader.alerts(count_query)[
+                    "matching_total"
+                ]
             except (sqlite3.Error, OSError):
                 payload["alert_count"] = None
         return payload
@@ -4828,6 +4841,7 @@ class RunDataReader:
         Returns:
             One page of host aggregates and its pagination metadata.
         """
+        count_only = self._query_value(query, "count_only") == "1"
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
         profile = self._query_value(query, "profile")
@@ -4854,16 +4868,6 @@ class RunDataReader:
             latest = self._latest_detection_time(connection, "alerts")
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            full_total = detection_total(connection, "alerts")
-            open_total = full_total - (
-                int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
-                    ).fetchone()[0]
-                )
-                if self._table_exists(connection, "alert_reviews")
-                else 0
-            )
             clauses = ["1 = 1"]
             params: List[Any] = []
             review_status = self._query_value(query, "review", "open")
@@ -4890,13 +4894,32 @@ class RunDataReader:
             if search:
                 clauses.append(
                     "(LOWER(a.alert_id) LIKE ? OR LOWER(a.ip_alerted) "
-                    "LIKE ? OR LOWER(a.label) LIKE ?)"
+                    "LIKE ? OR LOWER(a.label) LIKE ? OR "
+                    "EXISTS (SELECT 1 FROM alert_evidence ae JOIN evidence e "
+                    "ON e.evidence_id = ae.evidence_id WHERE ae.alert_id = a.alert_id AND "
+                    "(LOWER(e.evidence_type) LIKE ? OR "
+                    "LOWER(REPLACE(e.evidence_type, '_', ' ')) LIKE ? OR LOWER(e.description) LIKE ?)))"
                 )
-                params.extend([f"%{search}%"] * 3)
+                params.extend([f"%{search}%"] * 6)
             if profile:
                 clauses.append("a.ip_alerted = ?")
                 params.append(profile)
             where = " AND ".join(clauses)
+            if count_only:
+                total = connection.execute(
+                    f"SELECT COUNT(*) FROM alerts a WHERE {where}", params
+                ).fetchone()[0]
+                return {"matching_total": int(total), "range": range_name}
+            full_total = detection_total(connection, "alerts")
+            open_total = full_total - (
+                int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
+                    ).fetchone()[0]
+                )
+                if self._table_exists(connection, "alert_reviews")
+                else 0
+            )
             rows = [
                 dict(row)
                 for row in connection.execute(
@@ -5075,6 +5098,7 @@ class RunDataReader:
             "info_or_more",
         }:
             return self._grouped_alerts_fast(query)
+        count_only = self._query_value(query, "count_only") == "1"
         limit = self._limit(query)
         search = self._query_value(query, "search").lower()
         threat = self._query_value(query, "threat").lower()
@@ -5094,7 +5118,9 @@ class RunDataReader:
         )
         with self._connect_sqlite() as connection:
             connection.execute("BEGIN")
-            self._register_device_key(connection, device_view)
+            self._register_device_key(
+                connection, device_view and (not count_only or bool(profile))
+            )
             score_expression = self._detector_score_expression(
                 connection, "alerts"
             )
@@ -5104,16 +5130,6 @@ class RunDataReader:
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
-            full_total = detection_total(connection, "alerts")
-            open_total = full_total - (
-                int(
-                    connection.execute(
-                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
-                    ).fetchone()[0]
-                )
-                if self._table_exists(connection, "alert_reviews")
-                else 0
-            )
             clauses = ["1 = 1"]
             params: List[Any] = []
             review_status = self._query_value(query, "review", "open")
@@ -5170,6 +5186,22 @@ class RunDataReader:
                     operator = ">=" if threat.endswith("_or_more") else "="
                     clauses.append(f"{threat_expression} {operator} ?")
                     params.append(threat_rank)
+            if count_only:
+                total = connection.execute(
+                    f"SELECT COUNT(*) FROM alerts WHERE {' AND '.join(clauses)}",
+                    params,
+                ).fetchone()[0]
+                return {"matching_total": int(total), "range": range_name}
+            full_total = detection_total(connection, "alerts")
+            open_total = full_total - (
+                int(
+                    connection.execute(
+                        "SELECT COUNT(*) FROM alert_reviews WHERE status = 'resolved'"
+                    ).fetchone()[0]
+                )
+                if self._table_exists(connection, "alert_reviews")
+                else 0
+            )
             host_group = (
                 "device_key(ip_alerted)" if device_view else "ip_alerted"
             )

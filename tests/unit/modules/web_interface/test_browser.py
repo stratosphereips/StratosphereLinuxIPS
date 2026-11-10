@@ -73,6 +73,105 @@ def test_browser_title_updates_only_alerts_from_existing_heartbeat() -> None:
             browser.close()
 
 
+@pytest.mark.parametrize("change_filter", [False, True])
+def test_title_uses_overview_selection_and_rejects_stale_heartbeat(change_filter: bool) -> None:
+    """Keep a connection's older open alert visible despite a late heartbeat.
+
+    Parameters:
+        change_filter: Also switch time range while a response is pending.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    connection_count = 1
+    pending: list[Any] = []
+    errors: list[str] = []
+    queries: list[dict[str, list[str]]] = []
+
+    def respond(route: Any) -> None:
+        """Emulate an older open alert and hold one heartbeat for a race.
+
+        Parameters:
+            route: Isolated browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/style.css", "/slips-logo.png"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/app.js":
+            route.fulfill(body=script, content_type="text/javascript")
+        else:
+            query = parse_qs(url.query)
+            queries.append(query)
+            if url.path == "/api/identity":
+                pending.append(route)
+            else:
+                assert url.path == "/api/alerts"
+                count = connection_count if query["range"] == ["connection"] else 0
+                payload = {"items": [], "total": count, "full_total": connection_count, "open_total": connection_count}
+                if query.get("group") == ["host"]:
+                    payload.update(total=int(count > 0), matching_total=count)
+                route.fulfill(json=payload)
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page()
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""() => {
+                state.activeTab='overview';state.networkOnly=false;state.networkScopeVersion=3;
+                byId('run-name').textContent='sebas-en0';byId('alerts-range').value='connection';
+                loadArchiveCatalog=async()=>{};scheduleBackendStatusPoll=()=>{};
+            }""")
+            page.evaluate("void pollBackendStatus()")
+            page.wait_for_function("state.requests.has('backendStatus')")
+            if change_filter:
+                page.locator("#alerts-range").evaluate("element => element.value='live'")
+            page.evaluate("""async () => {
+                state.overviewAlertQuery=overviewAlertGroupsPath();
+                await loadOverviewAlertGroups(state.overviewAlertQuery);
+                renderOverviewStatus({counts:{alerts:1}});
+            }""")
+            expected = 0 if change_filter else 1
+            assert page.title() == f"Slips ({expected} {'alert' if expected == 1 else 'alerts'}) · sebas-en0"
+            assert ("1 alert across 1 host" if expected else "No alerts match") in page.locator("#overview-status").inner_text()
+            assert len(pending) == 1
+            assert queries[0]["range"] == ["connection"]
+            assert queries[0]["network"] == ["connection"]
+            assert queries[0]["review"] == ["open"]
+            pending.pop().fulfill(json={"alert_count": 1 if change_filter else 0,
+                "network_filter_supported": False, "review_actions": True})
+            page.wait_for_function("!state.requests.has('backendStatus')")
+            assert page.title() == f"Slips ({expected} {'alert' if expected == 1 else 'alerts'}) · sebas-en0"
+            page.evaluate("""() => {
+                byId('alerts-range').value='connection';byId('alerts-search').value='known host';
+                state.alertsWorkspace.severity='medium_or_more';byId('alerts-review').value='in_review';
+                state.interfaceSelection='wlan0';state.networkFilterSupported=true;
+                void pollBackendStatus();
+            }""")
+            page.wait_for_function("state.requests.has('backendStatus')")
+            page.wait_for_timeout(20)
+            assert len(pending) == 1
+            assert queries[-1]["search"] == ["known host"]
+            assert queries[-1]["review"] == ["in_review"]
+            assert queries[-1]["threat"] == ["medium_or_more"]
+            assert queries[-1]["interface"] == ["wlan0"]
+            pending.pop().fulfill(json={"alert_count": None})
+            page.wait_for_function("!state.requests.has('backendStatus')")
+            connection_count = 3
+            for grouping in ("host", "individual"):
+                page.evaluate("""async grouping => {
+                    byId('alerts-range').value='connection';state.networkScopeVersion=3;state.alertsWorkspace.grouping=grouping;
+                    await loadAlerts();
+                }""", grouping)
+                assert page.title() == "Slips (3 alerts) · sebas-en0"
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("mode,theme,width", [("individual", "light", 1500), ("host", "dark", 1500), ("individual", "dark", 390)])
 def test_quick_evidence_review_and_ignore(mode: str, theme: str, width: int) -> None:
     """Review individual rows without opening them, and recover ignored records.
