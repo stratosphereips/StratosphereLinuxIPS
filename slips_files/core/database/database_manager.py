@@ -117,10 +117,12 @@ class DBManager:
             self.print(f"Database error during integrity_check: {e}")
             return True
 
-    def backup_db(self, db_path: str):
+    def backup_db(self, db_path: str) -> None:
         """
-        Backs up the database file to a new file with a timestamp. and
-        deleted the file at db_path if successfully backed up.
+        Back up a SQLite database and its WAL sidecars before replacement.
+
+        Parameters:
+            db_path: Path to the SQLite database file.
         """
         try:
             # backup the DB aside (optional safety)
@@ -129,6 +131,10 @@ class DBManager:
             )
             backup_path = f"{db_path}.{date_time}.bak"
             shutil.move(db_path, backup_path)
+            for suffix in ("-wal", "-shm"):
+                sidecar_path = f"{db_path}{suffix}"
+                if os.path.exists(sidecar_path):
+                    shutil.move(sidecar_path, f"{backup_path}{suffix}")
 
             db_short = Path(db_path).parent.name + "/" + Path(db_path).name
             backup_short = (
@@ -167,14 +173,12 @@ class DBManager:
                     "trustdb.db is malformed. Backing it up and creating another one..."
                 )
                 self.backup_db(db_path)
-            if not self.has_write_access_to_sqlite(db_path):
+            elif not self.has_write_access_to_sqlite(db_path):
                 self.print(
                     "trustdb.db is not writable. Backing it up and "
                     "creating another one..."
                 )
                 self.backup_db(db_path)
-                # TODO LAST THING HERE IS WE'RE NOT CREATING A NEW DB AFTER
-                #  BACKING UP THE OLDONE??
 
         return db_path
 
@@ -846,6 +850,14 @@ class DBManager:
     def get_evidence_causing_alert(self, *args, **kwargs):
         return self.rdb.get_evidence_causing_alert(*args, **kwargs)
 
+    def is_evidence_in_past_alert(self, *args: Any, **kwargs: Any) -> bool:
+        return self.rdb.is_evidence_in_past_alert(*args, **kwargs)
+
+    def get_pending_processed_evidence(
+        self, *args: Any, **kwargs: Any
+    ) -> Dict[str, str]:
+        return self.rdb.get_pending_processed_evidence(*args, **kwargs)
+
     def get_evidence_by_id(self, *args, **kwargs):
         return self.rdb.get_evidence_by_id(*args, **kwargs)
 
@@ -912,9 +924,10 @@ class DBManager:
 
         interface: str | None = self._get_evidence_interface(evidence)
         setattr(evidence, "interface", interface)
-        evidence_set = self.rdb.set_evidence(evidence)
+        evidence_set = self.rdb.set_evidence(evidence, notify=False)
         if evidence_set:
             self.sqlite.add_evidence(evidence)
+            self.rdb.publish_evidence_added(evidence)
             # an evidence is generated for this profile
             # update the threat level of this profile
             self.update_threat_level(
@@ -955,6 +968,9 @@ class DBManager:
 
     def mark_evidence_as_processed(self, *args, **kwargs):
         return self.rdb.mark_evidence_as_processed(*args, **kwargs)
+
+    def set_evidence_score(self, *args: Any, **kwargs: Any) -> None:
+        return self.sqlite.set_evidence_score(*args, **kwargs)
 
     def is_evidence_processed(self, *args, **kwargs):
         return self.rdb.is_evidence_processed(*args, **kwargs)
@@ -1517,6 +1533,9 @@ class DBManager:
         """returns the raw flow as read from the log file"""
         return self.sqlite.get_flow(*args, **kwargs)
 
+    def get_flow_for_packet(self, *args, **kwargs):
+        return self.sqlite.get_flow_for_packet(*args, **kwargs)
+
     def add_flow(self, flow, profileid: str, twid: str, label="benign"):
         # stores it in the db
         self.sqlite.add_flow(flow, profileid, twid, label=label)
@@ -1524,6 +1543,10 @@ class DBManager:
         return self.rdb.add_flow(
             flow, profileid=profileid, twid=twid, label=label
         )
+
+    def add_flows(self, *args: Any, **kwargs: Any) -> None:
+        for task in self.sqlite.add_flows(*args, **kwargs):
+            self.rdb.add_flow(**task)
 
     def get_slips_start_time(self):
         return self.rdb.get_slips_start_time()
@@ -1533,6 +1556,15 @@ class DBManager:
 
     def add_altflow(self, *args, **kwargs):
         return self.sqlite.add_altflow(*args, **kwargs)
+
+    def maintain_flow_retention(self, *args, **kwargs):
+        return self.sqlite.maintain_flow_retention(*args, **kwargs)
+
+    def remove_flow_index_uids(self, *args, **kwargs):
+        return self.sqlite.remove_flow_index_uids(*args, **kwargs)
+
+    def maintain_detection_history(self, *args, **kwargs):
+        return self.sqlite.maintain_detection_history(*args, **kwargs)
 
     def insert(self, *args, **kwargs):
         return self.sqlite.insert(*args, **kwargs)

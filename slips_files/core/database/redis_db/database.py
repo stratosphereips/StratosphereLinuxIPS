@@ -141,12 +141,14 @@ class RedisDB(
     _gateway_MAC_found = False
     _conf_file_template = "config/redis.conf.template"
     _conf_file = "config/redis.conf"
-    our_ips: List[str] = utils.get_own_ips(ret="List")
+    # Importing the database must not launch an untracked public-IP request.
+    # Assigned interface addresses still cover direct public-IP interfaces.
+    our_ips: List[str] = utils.get_own_ips(ret="List", include_public=False)
     # to make sure we only detect and store the user's localnet once
     is_localnet_set = False
     # in case of redis ConnectionErrors, this is how long we'll wait in
     # seconds before retrying.
-    # this will increase exponentially each retry
+    # this increases between retries, capped at two seconds
     backoff = 0.1
     # try to reconnect to redis this amount of times in case of connection
     # errors before terminating
@@ -206,8 +208,8 @@ class RedisDB(
 
             # By default the slips internal time is
             # 0 until we receive something
-            cls.set_slips_internal_time(0)
             if not cls.get_slips_start_time():
+                cls.set_slips_internal_time(0)
                 cls._set_slips_start_time()
 
         return cls.instances[cls.redis_port]
@@ -606,11 +608,14 @@ class RedisDB(
             msg.update({"version": VERSION})
         return msg
 
-    def publish(self, channel, msg, pipeline=None):
+    def publish(self, channel, msg, pipeline=None, add_version: bool = True):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
-        the pipeline"""
-        msg = self._add_version_to_msg(msg)
+        the pipeline. Set add_version=False only for external protocols
+        whose version field is not Slips's software version."""
+        # External protocols such as Iris carry their own version field.
+        if add_version:
+            msg = self._add_version_to_msg(msg)
 
         # keeps track of how many msgs were published in the given channel
         if pipeline is not None:
@@ -660,44 +665,36 @@ class RedisDB(
 
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
-        Wrapper for redis' get_message() to be able to handle
-        redis.exceptions.ConnectionError
-        notice: there has to be a timeout or the channel will wait forever
-        and never receive a new msg
-        :param channel_obj: PubSub obj of the channel
+        Read a PubSub message and retry briefly when Redis disconnects.
+
+        Parameters:
+            channel_obj: PubSub channel to poll.
+            timeout: Maximum wait for one message.
+
+        Returns:
+            Message or None when no message is ready or Redis is recovering.
         """
         try:
             msg = channel_obj.get_message(timeout=timeout)
+            self.connection_retry = 0
+            self.backoff = 0.1
             if msg:
                 self._track_flow_processing_rate(msg)
             return msg
         except redis.exceptions.ConnectionError as ex:
-            # make sure we log the error only once
-            if not self.is_connection_error_logged():
-                self.mark_connection_error_as_logged()
-
+            # Redis cannot be used to record a Redis outage. Keep retry state
+            # local to this process and avoid recursive calls or huge backoffs.
+            self.connection_retry += 1
+            if self.connection_retry == 1:
+                self.print(f"Redis connection lost; retrying: {ex}", 0, 1)
             if self.connection_retry >= self.max_retries:
-                self.publish_stop()
-                self.print(
-                    f"Stopping slips due to redis.exceptions.ConnectionError: {ex}",
-                    1,
-                    1,
-                )
-            else:
-                # don't log this each retry
-                if self.connection_retry % 10 == 0:
-                    # retry to connect after backing off for a while
-                    self.print(
-                        f"redis.exceptions.ConnectionError: "
-                        f"retrying to connect in {self.backoff}s. "
-                        f"Retries to far: {self.connection_retry}",
-                        0,
-                        1,
-                    )
-                time.sleep(self.backoff)
-                self.backoff = self.backoff * 2
-                self.connection_retry += 1
-                self.get_message(channel_obj, timeout)
+                raise RuntimeError(
+                    f"Redis unavailable after {self.max_retries} retries"
+                ) from None
+            delay = min(self.backoff, 2.0)
+            time.sleep(delay)
+            self.backoff = min(delay * 2, 2.0)
+            return None
 
     def print(self, *args, **kwargs):
         return self.printer.print(*args, **kwargs)
@@ -1461,18 +1458,23 @@ class RedisDB(
         )
 
     def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
-        """
-        Detects the MAC of the gateway if 1 mac is seen
-        assigned to 1 public destination IP
-        :param ip: dst ip that should be associated with the given MAC info
+        """Check the gateway stored by any worker for this interface.
+
+        Parameters:
+            mac_addr: Candidate Ethernet address.
+            interface: Capture interface.
+
+        Returns:
+            Whether this interface's known gateway has that address.
         """
 
         if not validators.mac_address(mac_addr):
             return False
 
-        if self._gateway_MAC_found:
-            # gateway MAC already set using this function
-            return self.get_gateway_mac(interface) == mac_addr
+        return (
+            str(self.get_gateway_mac(interface) or "").lower()
+            == mac_addr.lower()
+        )
 
     def _determine_gw_mac(self, ip: str, mac: str, interface: str) -> bool:
         """Infer a missing gateway from an Ethernet hop to a public IP.
@@ -1779,9 +1781,13 @@ class RedisDB(
                 and not self.get_gateway_mac_vendor(interface)
             )
         ):
-            gw_info = json.dumps({address_type: address})
-
-            self.r.hset(self.constants.DEFAULT_GATEWAY, interface, gw_info)
+            gw_info = self._get_gw_info(interface) or {}
+            gw_info[address_type] = address
+            self.r.hset(
+                self.constants.DEFAULT_GATEWAY,
+                interface,
+                json.dumps(gw_info),
+            )
 
     def get_domain_resolution(self, domain) -> List[str]:
         """
@@ -2093,14 +2099,28 @@ class RedisDB(
         self, org: str, first_octet: str
     ) -> List[str] | None:
         """
-        checks if the given first octet in the org's octets
-        :param org: supported orgs are ('google', 'microsoft', 'apple',
-         'facebook', 'twitter')
-        :param ip: ip to check
-        :return: a list of cidrs the given ip may belong to, None otherwise
+        Read organization ranges from the shared cache where they are stored.
+
+        Parameters:
+            org: Supported organization name.
+            first_octet: IPv4 first octet or IPv6 first segment.
+
+        Returns:
+            Decoded network ranges, or None for absent or invalid cache data.
         """
         key = f"{org}_IPs"
-        return self.r.hget(key, first_octet)
+        cached = self.rcache.hget(key, first_octet)
+        if not cached:
+            return None
+        try:
+            ranges = json.loads(cached)
+        except (TypeError, ValueError):
+            return None
+        if not isinstance(ranges, list) or not all(
+            isinstance(network, str) for network in ranges
+        ):
+            return None
+        return ranges
 
     def get_org_ips(self, org: str) -> Dict[str, str]:
         """

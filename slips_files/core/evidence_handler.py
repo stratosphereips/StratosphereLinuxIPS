@@ -30,6 +30,7 @@ from typing import List
 from multiprocessing import Process
 from multiprocessing.queues import Queue as MultiprocessingQueue
 
+from managers.process_manager.shutdown_mixin import drain_evidence_workers
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
@@ -45,7 +46,6 @@ from slips_files.core.text_formatters.evidence_formatter import (
     EvidenceFormatter,
 )
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
-
 
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
@@ -273,7 +273,7 @@ class EvidenceHandler(ICore):
         self.logger_stop_signal.set()
         self.print("Stopping the logger thread.", log_to_logfiles_only=True)
         try:
-            self.logger_thread.join(timeout=5)
+            self.logger_thread.join()
         except Exception:
             pass
 
@@ -288,25 +288,11 @@ class EvidenceHandler(ICore):
             q.close()
         self.print("Done shutting down gracefully.")
 
-    def stop_evidence_workers(self):
-        for _ in self.evidence_worker_child_processes:
-            self.evidence_worker_queue.put("stop")
-
-        for process in self.evidence_worker_child_processes:
-            try:
-                process.join(timeout=5)
-                if process.is_alive():
-                    self.print(
-                        f"Evidence worker {process.pid} did not stop in time. "
-                        "Killing it.",
-                        0,
-                        1,
-                        log_to_logfiles_only=True,
-                    )
-                    process.kill()
-                    process.join(timeout=1)
-            except (OSError, ChildProcessError):
-                pass
+    def stop_evidence_workers(self) -> None:
+        """Drain queued evidence using the process manager's shutdown policy."""
+        drain_evidence_workers(
+            self.evidence_worker_child_processes, self.evidence_worker_queue
+        )
 
     def start_evidence_worker(self, worker_id: int = None):
         worker_name = f"evidence_handler_worker_process_{worker_id}"
