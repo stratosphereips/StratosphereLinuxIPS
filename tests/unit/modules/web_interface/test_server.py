@@ -4527,6 +4527,116 @@ def test_ignore_requires_an_explicit_boolean(tmp_path: Path, ignored: object) ->
         reader.save_review("evidence", {"id": "record-006", "action": "ignore", "ignored": ignored})
 
 
+@pytest.mark.parametrize("filters", [{}, {"origin": ["local"]}, {"origin": ["p2p"]},
+    {"threat": ["low_or_more"], "record_threat": ["critical"]},
+    {"search": ["connection"], "record_search": ["needle"]}, {"review": ["unreviewed"]},
+    {"type": ["UNKNOWN_PORT"]}])
+def test_nested_record_types_count_all_matching_records_and_preserve_parent_scope(
+    tmp_path: Path, filters: dict[str, list[str]],
+) -> None:
+    """Count types across the full parent group with all record filters applied.
+
+    Parameters:
+        tmp_path: Isolated detection database.
+        filters: Parent and local record filters to intersect.
+    """
+    _factory = ModuleFactory()
+    reader = _record_types_reader(tmp_path)
+    query = {"range": ["all"], "profile": ["192.0.2.20"], "include_full_total": ["0"], **filters}
+    individual = reader.evidence(query)
+    groups = reader.evidence({**query, "record_group": ["type"], "limit": ["1"]})
+    assert groups["matching_total"] == individual["total"]
+    assert "full_total" not in groups
+    seen = []
+    while True:
+        for group in groups["items"]:
+            records = reader.evidence({**query, "record_type": [group["evidence_type"]]})
+            assert group["evidence_count"] == records["total"]
+            assert all(record["evidence_type"] == group["evidence_type"] for record in records["items"])
+            seen.append(group)
+        if not groups["next_cursor"]:
+            break
+        groups = reader.evidence({**query, "record_group": ["type"], "limit": ["1"], "cursor": [groups["next_cursor"]]})
+        assert groups["matching_total"] == individual["total"]
+    assert sum(group["evidence_count"] for group in seen) == individual["total"]
+    assert len(seen) == groups["total"]
+    if not filters:
+        assert next(group["evidence_count"] for group in seen if group["evidence_type"] == "UNKNOWN_PORT") == 80
+    if filters.get("type"):
+        assert reader.evidence({**query, "record_type": ["ANOMALOUS_FLOW"]})["total"] == 0
+
+
+
+@pytest.mark.parametrize("filters", [{}, {"origin": ["p2p"]}, {"origin": ["local"]},
+    {"hide_excluded": ["1"], "scored_only": ["1"]}, {"threat": ["low_or_more"]},
+    {"record_threat": ["high"]}, {"search": ["connection"]}, {"association": ["linked"]},
+    {"review": ["unreviewed"]}, {"review": ["ignored"]}])
+def test_record_type_counts_exclude_ignored_without_scanning_full_records(
+    tmp_path: Path, filters: dict[str, list[str]],
+) -> None:
+    """Keep exact visibility counts while using covered aggregates when possible.
+
+    Parameters:
+        tmp_path: Isolated detection database.
+        filters: Indexed filters or filters requiring record-level checks.
+    """
+    _factory = ModuleFactory()
+    reader = _record_types_reader(tmp_path)
+    for index in [0, 80, *range(110, 122)]:
+        reader.save_review("evidence", {"id": f"record-{index:03}", "action": "ignore", "ignored": True})
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("CREATE INDEX evidence_group_cover_idx ON evidence("
+            "profile_ip,evidence_type,evidence_time,threat_level,source_module,whitelisted,accumulated_ratl)")
+    statements: list[str] = []
+    original = reader._connect_sqlite
+
+    def traced_connection() -> sqlite3.Connection:
+        """Return a read-only connection that records the aggregate plan.
+
+        Returns:
+            A SQLite connection recording executed SQL.
+        """
+        connection = original()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    reader._connect_sqlite = traced_connection
+    query = {"range": ["all"], "profile": ["192.0.2.20"], "include_full_total": ["0"], **filters}
+    records = reader.evidence(query)
+    grouped = reader.evidence({**query, "record_group": ["type"]})
+    assert grouped["matching_total"] == records["total"]
+    assert sum(group["evidence_count"] for group in grouped["items"]) == records["total"]
+    for group in grouped["items"]:
+        assert group["evidence_count"] == reader.evidence({**query, "record_type": [group["evidence_type"]]})["total"]
+    if not filters:
+        assert {group["evidence_type"]: group["evidence_count"] for group in grouped["items"]} == {
+            "UNKNOWN_PORT": 79, "ANOMALOUS_FLOW": 29,
+        }
+        aggregate = next(statement for statement in statements if statement.startswith("WITH types AS"))
+        with original() as connection:
+            plan = [row[3] for row in connection.execute("EXPLAIN QUERY PLAN " + aggregate)]
+        assert any("USING COVERING INDEX evidence_group_cover_idx" in detail for detail in plan)
+        assert any("SEARCH evidence USING INDEX sqlite_autoindex_evidence_1" in detail for detail in plan)
+
+
+def test_nested_record_type_unknown_and_empty_match_saved_records(tmp_path: Path) -> None:
+    """Keep legacy records with missing types together and accessible.
+
+    Parameters:
+        tmp_path: Isolated evidence database.
+    """
+    _factory = ModuleFactory()
+    reader = _group_records_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute("UPDATE evidence SET evidence_type=NULL WHERE evidence_id='record-001'")
+        connection.execute("UPDATE evidence SET evidence_type='' WHERE evidence_id='record-002'")
+    query = {"range": ["all"], "profile": ["192.0.2.20"]}
+    groups = reader.evidence({**query, "record_group": ["type"]})
+    unknown = next(group for group in groups["items"] if group["evidence_type"] == "unknown")
+    assert unknown["evidence_count"] == 2
+    assert reader.evidence({**query, "record_type": ["unknown"]})["total"] == 2
+
+
 def test_host_names_resolves_live_and_historical_identity(
     tmp_path: Path,
 ) -> None:
@@ -6322,6 +6432,28 @@ def _group_records_reader(tmp_path: Path) -> RunDataReader:
                 connection.execute("INSERT INTO evidence_flows VALUES (?,?)", (identifier, f"flow-{index}-{flow}"))
             if index % 6 == 0:
                 connection.execute("INSERT INTO alert_evidence VALUES (?,?)", (f"alert-{index}", identifier))
+    return reader
+
+
+def _record_types_reader(tmp_path: Path) -> RunDataReader:
+    """Create three record types and a record outside the selected host.
+
+    Parameters:
+        tmp_path: Isolated detection database directory.
+
+    Returns:
+        Reader with consistent local and P2P types spanning several pages.
+    """
+    reader = _group_records_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        for index in range(123):
+            identifier = f"record-{index:03}"
+            evidence_type = "UNKNOWN_PORT" if index < 80 else "ANOMALOUS_FLOW" if index < 110 else "LONG_CONNECTION"
+            data = json.loads(connection.execute("SELECT data FROM evidence WHERE evidence_id=?", (identifier,)).fetchone()[0])
+            if "peer_report" in data:
+                data["peer_report"]["provenance"][0]["evidence_type"] = evidence_type
+            connection.execute("UPDATE evidence SET evidence_type=?, data=? WHERE evidence_id=?", (evidence_type, json.dumps(data), identifier))
+        connection.execute("UPDATE evidence SET profile_ip='198.51.100.50' WHERE evidence_id='record-122'")
     return reader
 
 

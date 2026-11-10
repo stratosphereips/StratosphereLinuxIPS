@@ -4150,6 +4150,88 @@ class RunDataReader:
             return "evidence INDEXED BY evidence_time_cover_idx"
         return "evidence"
 
+    def _record_type_groups(
+        self,
+        connection: sqlite3.Connection,
+        source: str,
+        where: str,
+        params: List[Any],
+        limit: int,
+        cursor: Optional[tuple[Any, str]],
+        exclude_ignored: bool = False,
+    ) -> Dict[str, Any]:
+        """Group all matching records inside a selected evidence group by type.
+
+        Parameters:
+            connection: Current request's read-only detection connection.
+            source: Trusted evidence source with any network scope installed.
+            where: Parent and record filter predicates with bound values.
+            params: Filter values corresponding to where.
+            limit: Maximum type groups returned on this page.
+            cursor: Last lowercase type and exact type from the previous page.
+            exclude_ignored: Subtract matching ignored records after counting.
+
+        Returns:
+            Paged type counts and the total matching individual record count.
+        """
+        type_key = "COALESCE(NULLIF(evidence_type, ''), 'unknown')"
+        page_where = ""
+        page_params = list(params)
+        visible = "types"
+        correction = ""
+        if exclude_ignored:
+            correction = (
+                ", ignored AS (SELECT "
+                + type_key
+                + " AS evidence_type, COUNT(*) AS ignored_count "
+                "FROM evidence_reviews CROSS JOIN evidence ON evidence.evidence_id = evidence_reviews.evidence_id "
+                f"WHERE evidence_reviews.ignored = 1 AND {where} GROUP BY {type_key}), "
+                "visible AS (SELECT types.evidence_type, evidence_count - COALESCE(ignored_count, 0) AS evidence_count "
+                "FROM types LEFT JOIN ignored USING (evidence_type) "
+                "WHERE evidence_count > COALESCE(ignored_count, 0))"
+            )
+            page_params.extend(params)
+            visible = "visible"
+        if cursor:
+            page_where = " WHERE LOWER(evidence_type) > ? OR (LOWER(evidence_type) = ? AND evidence_type > ?)"
+            page_params.extend([cursor[0], cursor[0], cursor[1]])
+        rows = connection.execute(
+            "WITH types AS ("
+            f"SELECT {type_key} AS evidence_type, COUNT(*) AS evidence_count "
+            f"FROM {source} WHERE {where} GROUP BY {type_key})"
+            + correction
+            + ", "
+            "totals AS (SELECT *, COUNT(*) OVER() AS type_total, "
+            f"SUM(evidence_count) OVER() AS record_total FROM {visible}) "
+            f"SELECT * FROM totals{page_where} "
+            "ORDER BY LOWER(evidence_type), evidence_type LIMIT ?",
+            (*page_params, limit + 1),
+        ).fetchall()
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        return {
+            "items": [
+                {
+                    "id": row["evidence_type"],
+                    "evidence_type": row["evidence_type"],
+                    "evidence_count": row["evidence_count"],
+                }
+                for row in rows
+            ],
+            "total": int(rows[0]["type_total"]) if rows else 0,
+            "matching_total": int(rows[0]["record_total"]) if rows else 0,
+            "page_size": len(rows),
+            "next_cursor": (
+                self._encode_cursor(
+                    str(rows[-1]["evidence_type"]).lower(),
+                    rows[-1]["evidence_type"],
+                )
+                if has_more
+                else None
+            ),
+            "group": "type",
+        }
+
     @network_filtered
     def evidence(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
         """Return one filtered, cursor-bounded evidence page."""
@@ -4384,6 +4466,12 @@ class RunDataReader:
                 if evidence_type:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
+                record_type = self._query_value(query, "record_type")
+                if record_type:
+                    clauses.append(
+                        "COALESCE(NULLIF(evidence_type, ''), 'unknown') = ?"
+                    )
+                    params.append(record_type)
                 for threat in threats:
                     minimum = threat.removesuffix("_or_more")
                     if (
@@ -4409,6 +4497,44 @@ class RunDataReader:
                     clauses.append(f"COALESCE({score_expression}, 0) > 0")
                 count_where = " AND ".join(clauses)
                 count_params = list(params)
+                if self._query_value(query, "record_group") == "type":
+                    covered = (
+                        not searches
+                        and not association
+                        and review_status == "all"
+                    )
+                    exclude_ignored = covered and visibility_clause != "1 = 1"
+                    if covered:
+                        count_where = (
+                            " AND ".join(
+                                clause
+                                for clause in clauses
+                                if clause != visibility_clause
+                            )
+                            or "1 = 1"
+                        )
+                        if not connection.execute(
+                            "SELECT 1 FROM sqlite_temp_master WHERE name='evidence'"
+                        ).fetchone():
+                            source = (
+                                "evidence"
+                                + self._host_evidence_index_hint(
+                                    connection, start is not None
+                                )
+                            )
+                    payload = self._record_type_groups(
+                        connection,
+                        source,
+                        count_where,
+                        count_params,
+                        limit,
+                        cursor,
+                        exclude_ignored=exclude_ignored,
+                    )
+                    payload["range"] = range_name
+                    if include_full_total:
+                        payload["full_total"] = full_total
+                    return payload
                 if cursor:
                     clauses.append(
                         self._cursor_clause(

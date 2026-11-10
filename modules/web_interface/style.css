@@ -1064,6 +1064,16 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-record-filters { display: flex; flex: none; flex-wrap: wrap; gap: .4rem; margin: .5rem 0; }
 .evidence-record-filters input { flex: 1 1 12rem; min-width: 0; }
 .evidence-record-filters input, .evidence-record-filters select { padding: .35rem .5rem; font-size: .75rem; }
+.evidence-record-filter-trigger { font-size: .75rem; white-space: nowrap; }
+.evidence-record-filter-popup > p { margin: .7rem 0; font-size: .8rem; }
+.evidence-record-filter-popup > button { margin-top: .8rem; }
+.evidence-record-type-sections { display: flex; flex-direction: column; gap: .4rem; flex: 1; min-height: 0; overflow: auto; margin-top: .5rem; }
+.evidence-record-type-section { flex: none; min-width: 0; }
+.evidence-record-type-section.expanded { display: flex; flex-direction: column; flex: 1; min-height: 200px; }
+.evidence-record-type-toggle { display: flex; align-items: center; gap: .5rem; width: 100%; padding: .5rem; text-align: left; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); }
+.evidence-record-type-toggle[aria-expanded="true"] { border-color: var(--accent); }
+.evidence-record-type-toggle .count-chip { margin-left: auto; white-space: nowrap; }
+.evidence-record-type-section > .evidence-record-actions, .evidence-record-type-section > .evidence-record-count { flex: none; margin-top: .35rem; }
 .evidence-record-table-scroll { overflow: auto; min-height: 0; flex: 1; margin-top: .2rem; }
 #evidence-records-table { min-width: 62rem; font-size: .73rem; }
 #evidence-records-table th, #evidence-records-table td { padding: .4rem .45rem; }

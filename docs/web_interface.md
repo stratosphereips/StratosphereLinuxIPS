@@ -271,6 +271,16 @@ The Evidence view has a resizable table, a full-height record list, and a
 third pane for the selected record. The third pane retains triggering flows,
 the complete record, review, whitelist, JSON, and previous/next navigation.
 Closing a record returns to the selected group and scroll position.
+
+In the middle pane, **Filters for this group** controls only the records inside
+the selected evidence group. Its **Group by → Type** option shows collapsible
+type sections with counts covering every matching record, including records
+not loaded yet. Open a type to inspect its records and use **Load more** inside
+that section. The same menu contains the group's source and threat filters;
+search stays beside it. These controls intersect the main Evidence filters
+without changing them, and grouping leaves record sorting unchanged. **Reset
+group filters** resets only this group's controls.
+
 The **Alerts**, **Evidence**, and **Hosts** tabs keep search and result counts
 visible, with a funnel icon opening the other filtering options in a popup.
 Filters apply immediately; no Apply step is needed. The icon shows the number

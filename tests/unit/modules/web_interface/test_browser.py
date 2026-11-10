@@ -15,7 +15,7 @@ from modules.web_interface.server import RunDataReader
 from slips_files.common.mac import classify_mac
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from tests.module_factory import ModuleFactory
-from tests.unit.modules.web_interface.test_server import _network_scope_reader, _group_records_reader
+from tests.unit.modules.web_interface.test_server import _network_scope_reader, _group_records_reader, _record_types_reader
 from modules.web_interface.history import connect_history, HistoryCollector
 from modules.supported_module_names import Modules
 from slips_files.common.slips_utils import utils
@@ -1397,6 +1397,125 @@ def test_saved_filters_belong_to_analysis(input_type: str) -> None:
             browser.close()
 
 
+@pytest.mark.parametrize("theme,width", [("light", 1900), ("dark", 1100)])
+def test_group_records_by_type_keeps_parent_filters_and_full_pagination(
+    tmp_path: Path, theme: str, width: int,
+) -> None:
+    """Group the selected host's records without changing the Evidence view.
+
+    Parameters:
+        tmp_path: Independent database with mixed record types.
+        theme: Color scheme used for the real assets.
+        width: Wide or narrower desktop viewport.
+    """
+    _factory = ModuleFactory()
+    playwright = pytest.importorskip("playwright.sync_api")
+    reader = _record_types_reader(tmp_path)
+    assets = Path("modules/web_interface")
+    script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
+    errors: list[str] = []
+    queries: list[dict[str, list[str]]] = []
+
+    def respond(route: Any) -> None:
+        """Serve shipped assets and actual SQL-backed group record responses.
+
+        Parameters:
+            route: Isolated browser request.
+        """
+        url = urlparse(route.request.url)
+        if url.path in {"/", "/style.css", "/slips-logo.png"}:
+            route.fulfill(path=str(assets / ("index.html" if url.path == "/" else url.path[1:])))
+        elif url.path == "/app.js":
+            route.fulfill(body=script, content_type="text/javascript")
+        elif url.path == "/api/evidence":
+            query = parse_qs(url.query)
+            queries.append(query)
+            route.fulfill(json=reader.evidence(query))
+        elif url.path.endswith("/flows"):
+            route.fulfill(json={"items": [], "total": 0})
+        else:
+            route.fulfill(json={})
+
+    with playwright.sync_playwright() as engine:
+        browser = engine.chromium.launch(channel="chrome", headless=True)
+        try:
+            page = browser.new_page(viewport={"width": width, "height": 1000})
+            page.on("pageerror", lambda error: errors.append(str(error)))
+            page.route("**/*", respond)
+            page.goto("http://slips.test/")
+            page.evaluate("""theme => {
+                setTheme(theme); state.activeTab='evidence'; state.deviceView=false; state.hideExcluded=false;
+                document.body.classList.add('evidence-active');
+                document.querySelectorAll('.panel').forEach(panel => panel.classList.toggle('active', panel.id==='evidence'));
+                byId('evidence-range').value='all'; byId('evidence-threat').value='low_or_more';
+                state.evidenceWorkspace.recordSort='time'; state.evidenceWorkspace.recordOrder='desc';
+                initFilterPopups(); updateEvidenceViewportHeight();
+                selectEvidenceGroup({id:'host:192.0.2.20',profile_ip:'192.0.2.20',evidence_count:122,
+                    module:'conn_analyzer,p2p_trust',threat_level:'high',alert_score:0.122,alert_threshold:5});
+            }""", theme)
+            page.wait_for_function("state.evidenceWorkspace.recordsLoaded")
+            page.get_by_role("button", name="Filters for records in this evidence group", exact=True).click()
+            popup = page.locator("#evidence-record-filter-popup")
+            assert "only records inside the selected evidence group" in popup.inner_text()
+            page.locator("#evidence-record-grouping").select_option("type")
+            page.wait_for_function("state.evidenceWorkspace.recordTypesMatching === 97 && !state.requests.has('evidenceGroupPane')")
+            assert popup.is_visible()
+            assert page.locator("#evidence-threat").input_value() == "low_or_more"
+            assert page.evaluate("state.evidenceWorkspace.recordSort") == "time"
+            assert page.locator(".evidence-record-type-toggle").count() == 3
+            assert page.locator('.evidence-record-type-toggle[data-evidence-type="UNKNOWN_PORT"]').inner_text().endswith("64 records")
+            assert page.locator('.evidence-record-type-toggle[data-evidence-type="ANOMALOUS_FLOW"]').inner_text().endswith("24 records")
+            popup.get_by_role("button", name="Close group record filters").click()
+            unknown = page.locator('.evidence-record-type-toggle[data-evidence-type="UNKNOWN_PORT"]')
+            unknown.click()
+            page.wait_for_function("state.evidenceWorkspace.recordType === 'UNKNOWN_PORT' && state.evidenceWorkspace.records.length === 50")
+            assert queries[-1]["record_type"] == ["UNKNOWN_PORT"]
+            assert queries[-1]["profile"] == ["192.0.2.20"]
+            assert queries[-1]["threat"] == ["low_or_more"]
+            assert queries[-1]["sort"] == ["time"]
+            page.get_by_role("button", name="Load more · 50 of 64", exact=True).click()
+            page.wait_for_function("state.evidenceWorkspace.records.length === 64")
+            assert page.locator("#evidence-records-table tbody tr[data-clickable]").count() == 64
+            assert page.locator(".evidence-record-type-toggle .evidence-quick-actions").count() == 0
+            page.locator("#evidence-records-table tbody tr[data-clickable] td").first.click()
+            page.wait_for_function("state.evidenceDetail.inPane && !state.requests.has('evidenceFlows')")
+            assert page.locator("#evidence-detail").is_visible()
+            page.evaluate("closeEvidenceDetail(false, true)")
+            unknown.click()
+            page.wait_for_function("state.evidenceWorkspace.recordType === '' && state.evidenceWorkspace.recordsLoaded")
+            assert page.locator('.evidence-record-type-toggle[aria-expanded="true"]').count() == 0
+            assert page.locator("#evidence-records-table").count() == 1
+            unknown.click()
+            page.wait_for_function("state.evidenceWorkspace.records.length === 50")
+            page.get_by_role("button", name="Filters for records in this evidence group", exact=True).click()
+            page.locator("#evidence-record-origin").select_option("p2p")
+            page.wait_for_function("state.evidenceWorkspace.recordTypesMatching === 24 && !state.requests.has('evidenceGroupPane')")
+            page.locator("#evidence-record-threat").select_option("high")
+            page.wait_for_function("state.evidenceWorkspace.recordTypesMatching === 6 && !state.requests.has('evidenceGroupPane')")
+            assert page.locator(".evidence-record-type-toggle").count() == 2
+            assert page.locator("#evidence-records-table tbody tr[data-clickable]").count() == 4
+            assert page.locator("#evidence-threat").input_value() == "low_or_more"
+            page.locator("#evidence-record-grouping").select_option("")
+            page.wait_for_function("state.evidenceWorkspace.total === 6 && !state.requests.has('evidenceGroupPane')")
+            assert page.locator("#evidence-record-origin").input_value() == "p2p"
+            assert page.locator("#evidence-record-threat").input_value() == "high"
+            assert page.locator("#evidence-threat").input_value() == "low_or_more"
+            page.get_by_role("button", name="Reset group filters", exact=True).click()
+            page.wait_for_function("state.evidenceWorkspace.total === 97 && !state.requests.has('evidenceGroupPane')")
+            assert page.locator("#evidence-threat").input_value() == "low_or_more"
+            assert page.locator("#evidence-record-origin").input_value() == ""
+            page.locator("#evidence-record-grouping").select_option("type")
+            page.wait_for_function("state.evidenceWorkspace.recordTypesMatching === 97 && !state.requests.has('evidenceGroupPane')")
+            artifacts = Path("output/evidence-record-types-check")
+            artifacts.mkdir(parents=True, exist_ok=True)
+            page.screenshot(path=str(artifacts / f"types-{theme}.png"))
+            popup.get_by_role("button", name="Close group record filters").click()
+            page.screenshot(path=str(artifacts / f"groups-{theme}.png"))
+            assert not errors, errors
+        finally:
+            browser.close()
+
+
 @pytest.mark.parametrize("theme", ["light", "dark"])
 def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, theme: str) -> None:
     """Exercise full-group record controls against real SQLite API responses.
@@ -1489,9 +1608,10 @@ def test_group_record_table_sorts_filters_and_opens_details(tmp_path: Path, them
         search.press("Enter")
         page.wait_for_function("state.evidenceWorkspace.total === 0 && !state.requests.has('evidenceGroupPane')")
         assert "No matching records" in table.inner_text()
-        assert page.locator(".evidence-record-list h3").inner_text() == "Records · 0"
+        assert page.locator(".evidence-record-list > .evidence-right-head h3").inner_text() == "Records · 0"
         page.evaluate("byId('evidence-search').value=''")
         search.fill("")
+        page.get_by_role("button", name="Filters for records in this evidence group", exact=True).click()
         origin = page.locator("#evidence-record-origin")
         origin.select_option("p2p")
         page.wait_for_function("state.evidenceWorkspace.total === 31 && !state.requests.has('evidenceGroupPane')")

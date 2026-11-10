@@ -43,6 +43,8 @@ const state = {
     group: null, record: null, records: [], next: null, total: 0, typeFilter: "",
     generation: 0, listLoadedAt: 0, listSignature: "",
     recordSearch: "", recordOrigin: "", recordThreat: "", recordSort: "time", recordOrder: "desc", recordsLoaded: false,
+    recordGrouping: "", recordType: null, recordTypes: [], recordTypesNext: null,
+    recordTypesTotal: 0, recordTypesMatching: 0, recordTypesSignature: "", recordTypesLoadedAt: 0,
   },
   hostNames: new Map(),
   pendingHostNames: new Set(),
@@ -172,6 +174,7 @@ function positionFilterPopup(popup) {
 function syncFilterPopups() {
   mountNetworkFilters();
   document.querySelectorAll(".filter-popup").forEach((popup) => {
+    if (popup.dataset.recordFilters) { positionFilterPopup(popup); return; }
     const tab = popup.dataset.filterTab;
     const criteria = popup.dataset.filterControls.split(" ").filter(Boolean);
     let count = criteria.filter((id) => {
@@ -336,6 +339,7 @@ function saveViewPreferences() {
     evidenceType: state.evidenceWorkspace.typeFilter,
     evidenceRecordSort: state.evidenceWorkspace.recordSort,
     evidenceRecordOrder: state.evidenceWorkspace.recordOrder,
+    evidenceRecordGrouping: state.evidenceWorkspace.recordGrouping,
     hostActivity: state.hostActivity,
     hostActivityPreferred: state.hostActivityPreferred,
     hostActivityGroups: state.hostActivityGroups,
@@ -410,6 +414,7 @@ function restoreViewPreferences(key = VIEW_PREFERENCES_KEY) {
   state.alertsWorkspace.itemOrder = saved.alertItemOrder === "asc" ? "asc" : "desc";
   ["alerts-host-sort", "alerts-item-sort"].forEach((id) => { if (!byId(id).value) byId(id).value = "time"; });
   state.evidenceWorkspace.typeFilter = String(saved.evidenceType || "");
+  state.evidenceWorkspace.recordGrouping = saved.evidenceRecordGrouping === "type" ? "type" : "";
   if (["time", "type", "threat", "score", "confidence", "flows", "alert", "description"].includes(saved.evidenceRecordSort)) {
     state.evidenceWorkspace.recordSort = saved.evidenceRecordSort;
     state.evidenceWorkspace.recordOrder = saved.evidenceRecordOrder === "asc" ? "asc" : "desc";
@@ -3671,6 +3676,11 @@ function selectEvidenceGroup(group) {
   workspace.recordSearch = "";
   workspace.recordOrigin = "";
   workspace.recordThreat = "";
+  workspace.recordType = null;
+  workspace.recordTypes = [];
+  workspace.recordTypesSignature = "";
+  workspace.recordTypesNext = null;
+  workspace.recordTypesTotal = 0;workspace.recordTypesMatching = 0;workspace.recordTypesLoadedAt = 0;
   workspace.recordsLoaded = false;
   byId("evidence-right").replaceChildren();
   highlightEvidenceSelection();
@@ -3696,6 +3706,7 @@ function evidenceGroupQuery() {
   if (workspace.recordSearch) params.set("record_search", workspace.recordSearch);
   if (workspace.recordOrigin) params.set("origin", workspace.recordOrigin);
   if (workspace.recordThreat) params.set("record_threat", workspace.recordThreat);
+  if (workspace.recordGrouping === "type" && workspace.recordType) params.set("record_type", workspace.recordType);
   const level = byId("evidence-threat").value;
   const association = byId("evidence-link").value;
   const search = byId("evidence-search").value.trim();
@@ -3708,6 +3719,41 @@ function evidenceGroupQuery() {
   return params;
 }
 
+/** Fetch type counts across all matching records inside the selected group.
+ * @param {boolean} reset - Replace type groups or append their next page.
+ * @returns {Promise<boolean>} Whether this group's type counts are current.
+ */
+async function loadEvidenceRecordTypes(reset = true) {
+  const workspace = state.evidenceWorkspace;
+  const groupId = workspace.group?.id;
+  if (!groupId) return false;
+  const params = evidenceGroupQuery();
+  params.delete("record_type");
+  params.set("record_group", "type");
+  params.set("sort", "type"); params.set("order", "asc"); params.set("limit", "100");
+  const signature = params.toString();
+  if (signature !== workspace.recordTypesSignature) reset = true;
+  if (reset && signature === workspace.recordTypesSignature
+      && Date.now() - workspace.recordTypesLoadedAt < 15000) return true;
+  if (!reset && workspace.recordTypesNext) params.set("cursor", workspace.recordTypesNext);
+  const payload = await api("evidenceRecordTypes", `/api/evidence?${params}`);
+  const current = evidenceGroupQuery();current.delete("record_type");
+  current.set("record_group", "type");current.set("sort", "type");current.set("order", "asc");current.set("limit", "100");
+  if (!payload || workspace.group?.id !== groupId || workspace.recordGrouping !== "type"
+      || current.toString() !== signature) return false;
+  workspace.recordTypes = reset ? payload.items : [...workspace.recordTypes, ...payload.items];
+  workspace.recordTypesNext = payload.next_cursor;
+  workspace.recordTypesTotal = payload.total;
+  workspace.recordTypesMatching = payload.matching_total;
+  workspace.recordTypesSignature = signature;
+  workspace.recordTypesLoadedAt = Date.now();
+  if (workspace.recordType === null || (workspace.recordType
+      && !workspace.recordTypes.some((item) => item.evidence_type === workspace.recordType))) {
+    workspace.recordType = workspace.recordTypes[0]?.evidence_type || "";
+  }
+  return true;
+}
+
 /** Load one page of individual evidence inside a selected group.
  * @param {boolean} reset Whether to replace the currently loaded records.
  * @returns {Promise<void>} Completes when the bounded page has rendered.
@@ -3718,6 +3764,14 @@ async function loadEvidenceGroupRecords(reset = true) {
   if (workspace.listSignature !== evidenceGroupQuery().toString()) reset = true;
   const groupId = workspace.group.id;
   const generation = ++workspace.generation;
+  if (workspace.recordGrouping === "type") {
+    if (!await loadEvidenceRecordTypes(true) || generation !== workspace.generation) return;
+    if (!workspace.recordType) {
+      workspace.records = [];workspace.next = null;workspace.total = 0;workspace.recordsLoaded = true;
+      workspace.listLoadedAt = Date.now();workspace.listSignature = evidenceGroupQuery().toString();
+      renderEvidenceGroup();return;
+    }
+  }
   const params = evidenceGroupQuery();
   const signature = params.toString();
   if (!reset && workspace.next) params.set("cursor", workspace.next);
@@ -3773,6 +3827,7 @@ function renderEvidenceGroup() {
   const focused = right.contains(document.activeElement) ? document.activeElement : null;
   const focusId = focused?.id;
   const selection = focused?.type === "search" ? [focused.selectionStart, focused.selectionEnd] : null;
+  const filterOpen = right.querySelector("#evidence-record-filter-popup")?.matches(":popover-open");
   right.replaceChildren();
   if (group) {
     const summary = document.createElement("div");
@@ -3806,10 +3861,41 @@ function renderEvidenceGroup() {
   list.className = "evidence-right-panel evidence-record-list";
   const listHead = document.createElement("div");
   listHead.className = "evidence-right-head";
-  listHead.append(text("h3", `Records · ${compact(loaded ? total : group.evidence_count)}`),
+  listHead.append(text("h3", workspace.recordGrouping === "type"
+    ? `Records in this group · ${compact(workspace.recordTypesSignature ? workspace.recordTypesMatching : group.evidence_count)}`
+    : `Records · ${compact(loaded ? total : group.evidence_count)}`),
     text("small", individual ? "Current page · use the filters above" : "Filters and sorting cover this group", "muted"));
   list.append(listHead);
   if (!individual) list.append(evidenceRecordFilters());
+  let typeSections = null;
+  let selectedTypeSection = null;
+  if (workspace.recordGrouping === "type") {
+    typeSections = document.createElement("div");
+    typeSections.className = "evidence-record-type-sections";
+    workspace.recordTypes.forEach((type) => {
+      const section = document.createElement("section");
+      section.className = "evidence-record-type-section";
+      const header = text("button", "", "evidence-record-type-toggle");
+      header.type = "button";
+      header.dataset.evidenceType = type.evidence_type;
+      const expanded = workspace.recordType === type.evidence_type;
+      section.classList.toggle("expanded", expanded);
+      header.setAttribute("aria-expanded", String(expanded));
+      header.append(text("span", expanded ? "▾" : "▸", "muted"), evidenceTypeCell(type),
+        text("span", `${compact(type.evidence_count)} records`, "count-chip"));
+      header.addEventListener("click", () => {
+        workspace.recordType = expanded ? "" : type.evidence_type;
+        if (state.evidenceDetail.inPane) closeEvidenceDetail(false, true);
+        workspace.records = [];workspace.recordsLoaded = false;
+        renderEvidenceGroup();
+        loadEvidenceGroupRecords(true).catch(() => {});
+      });
+      section.append(header);typeSections.append(section);
+      if (expanded) selectedTypeSection = section;
+    });
+    if (!workspace.recordTypes.length) typeSections.append(text("p", loaded ? "No matching records in this group." : "Loading types in this group…", "muted"));
+    list.append(text("small", `${compact(workspace.recordTypesTotal)} types · ${compact(workspace.recordTypesMatching)} matching records in this group`, "muted"), typeSections);
+  }
   const tableWrap = document.createElement("div");
   tableWrap.className = "evidence-record-table-scroll";
   const table = document.createElement("table");
@@ -3859,7 +3945,10 @@ function renderEvidenceGroup() {
   tableHead.append(headRow);
   table.append(tableHead, document.createElement("tbody"));
   tableWrap.append(table);
-  list.append(tableWrap);
+  if (typeSections) {
+    if (selectedTypeSection) selectedTypeSection.append(tableWrap);
+    else { tableWrap.hidden = true;list.append(tableWrap); }
+  } else list.append(tableWrap);
   right.append(list);
   renderTable(table.id, records, [
     (record) => { return timeValue(record.timestamp, evidenceClock); },
@@ -3898,11 +3987,23 @@ function renderEvidenceGroup() {
     more.type = "button";
     more.addEventListener("click", () => loadEvidenceGroupRecords(false).catch(() => {}));
     actions.append(more);
-    list.append(actions);
+    (selectedTypeSection || list).append(actions);
   }
-  list.append(text("small", `${compact(records.length)} loaded · ${compact(total)} matching records`, "muted evidence-record-count"));
+  if (workspace.recordGrouping === "type" && workspace.recordTypesNext) {
+    const moreTypes = text("button", `Load more types · ${workspace.recordTypes.length} of ${workspace.recordTypesTotal}`, "secondary");
+    moreTypes.type = "button";
+    moreTypes.addEventListener("click", async () => {
+      if (await loadEvidenceRecordTypes(false)) renderEvidenceGroup();
+    });
+    list.append(moreTypes);
+  }
+  if (!typeSections || selectedTypeSection) (selectedTypeSection || list).append(text("small", `${compact(records.length)} loaded · ${compact(total)} matching records`, "muted evidence-record-count"));
   list.scrollTop = listScroll;
   [tableWrap.scrollLeft, tableWrap.scrollTop] = tablePosition;
+  if (filterOpen) {
+    const popup = byId("evidence-record-filter-popup");
+    popup.showPopover();positionFilterPopup(popup);
+  }
   if (focusId) {
     const control = byId(focusId);
     control?.focus({ preventScroll: true });
@@ -3950,7 +4051,52 @@ function evidenceRecordFilters() {
   });
   level.value = workspace.recordThreat;
   level.addEventListener("change", () => { workspace.recordThreat = level.value; run(); });
-  controls.append(search, origin, level);
+  const grouping = document.createElement("select");
+  grouping.id = "evidence-record-grouping";
+  grouping.setAttribute("aria-label", "Group records within this evidence group");
+  grouping.append(new Option("None", ""), new Option("Type", "type"));
+  grouping.value = workspace.recordGrouping;
+  grouping.addEventListener("change", () => {
+    workspace.recordGrouping = grouping.value;workspace.recordType = null;
+    workspace.recordsLoaded = false;saveViewPreferences();run();
+  });
+  const button = text("button", "", "filter-popup-trigger secondary evidence-record-filter-trigger");
+  button.id = "evidence-record-filter-button";button.type = "button";
+  button.setAttribute("aria-label", "Filters for records in this evidence group");
+  button.setAttribute("popovertarget", "evidence-record-filter-popup");
+  button.setAttribute("aria-expanded", "false");
+  button.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4 2v-8z"/></svg>';
+  button.append(text("span", "Filters for this group"));
+  const active = [workspace.recordSearch, workspace.recordOrigin, workspace.recordThreat, workspace.recordGrouping].filter(Boolean).length;
+  button.dataset.active = String(active > 0);
+  if (active) button.append(text("span", String(active), "filter-count"));
+  const popup = document.createElement("div");
+  popup.id = "evidence-record-filter-popup";popup.className = "filter-popup evidence-record-filter-popup";
+  popup.dataset.recordFilters = "true";popup.dataset.filterTab = "evidence-record";
+  popup.setAttribute("popover", "auto");popup.setAttribute("role", "dialog");
+  popup.setAttribute("aria-label", "Filters for records in this evidence group");
+  const heading = text("div", "", "filter-popup-heading");
+  const close = text("button", "×", "text-button");close.type = "button";
+  close.setAttribute("aria-label", "Close group record filters");
+  close.addEventListener("click", () => popup.hidePopover());
+  heading.append(text("h3", "Records in this group"), close);
+  popup.append(heading, text("p", "These controls affect only records inside the selected evidence group.", "muted"));
+  const fields = text("div", "", "filter-popup-fields");
+  [["Group by", grouping], ["Source", origin], ["Threat", level]].forEach(([label, control]) => {
+    const field = text("label", label);field.append(control);fields.append(field);
+  });
+  const reset = text("button", "Reset group filters", "secondary");reset.type = "button";
+  reset.id = "evidence-record-reset";
+  reset.addEventListener("click", () => {
+    workspace.recordSearch = "";workspace.recordOrigin = "";workspace.recordThreat = "";
+    workspace.recordGrouping = "";workspace.recordType = null;saveViewPreferences();run();
+  });
+  popup.append(fields, reset);
+  popup.addEventListener("toggle", () => {
+    const open = popup.matches(":popover-open");button.setAttribute("aria-expanded", String(open));
+    if (open) positionFilterPopup(popup);
+  });
+  controls.append(search, button, popup);
   return controls;
 }
 
@@ -4379,6 +4525,7 @@ async function saveReviewChange(entity, change) {
  * @param {object} result - Saved visibility or review fields.
  */
 function syncEvidenceQuickActions(identifier, result = {}) {
+  if (result.status || typeof result.ignored === "boolean") state.evidenceWorkspace.recordTypesSignature = "";
   const changes = result.status ? {review_status: result.status, review_note: result.note} : result;
   document.querySelectorAll(".evidence-quick-actions").forEach((actions) => {
     if (actions.dataset.evidenceId !== identifier) return;
