@@ -168,6 +168,54 @@ tr:nth-child(even) {
 
 </table>
 
+## Connections outside the local subnet
+
+`conn_analyzer` checks whether a connection involves private IP addresses outside
+the monitored subnet. DNS queries on UDP port 53 are checked by `flow_alerts`
+instead, so the same connection is not reported by both analyzers. Known DNS
+servers and special addresses such as multicast, loopback, and link-local
+addresses keep their existing exemptions.
+
+When a flow from A to B involves a private address outside the monitored subnet,
+Slips creates two related `DIFFERENT_LOCALNET` findings, one for each host:
+
+- **A, the source: high severity.** A initiated the connection.
+- **B, the destination: info severity.** B received the connection; receiving
+  it alone does not add threat points to B's score.
+
+Each finding belongs to its own host profile, and both reference the original
+flow ID. A host gets one severity for this flow, never both. Connections from
+an IP to itself are ignored. Severity follows the host's role regardless of
+whether the source, destination, or both addresses are outside the subnet.
+
+For example, with local subnet `192.168.0.0/16`, an ICMP flow from `10.0.2.2`
+to `10.0.2.15` produces a high-severity finding for `10.0.2.2` and an informational
+finding for `10.0.2.15`. Both descriptions explain that both private addresses
+are outside the selected subnet. ICMP
+type and code are identified as such, rather than being called TCP/UDP ports.
+Descriptions distinguish initiating a connection from receiving it. The stored
+source and destination directions are also preserved for scoring and exports.
+
+For live capture, the comparison and its description use the subnet that was
+active at the flow's capture time. Settings are polled, so the first packets
+after a network change can precede its recorded settings by a few seconds.
+Within a maximum 10-second gap, Slips accepts the following settings only when
+the packet's IP/MAC pairs match the interface's assigned address or the new
+gateway (with its other endpoint inside the new subnet). Matching private
+address ranges alone does not bypass the detection. A packet matching the
+previous interface settings stays on that network. The same selection applies
+to device-IP changes and persistent host observations. Delayed evidence uses
+its observation time for network attribution, rather than processing time.
+This work runs in module workers with at most ten recent snapshots; it adds no
+capture/profiling lookups, network polling, or Redis keys.
+
+For recorded input, Slips uses a private
+network from `parameters.client_ips`, when configured; otherwise it learns a
+private range from the first eligible source address. A recording can contain
+traffic from more than one private network, so this finding alone does not
+prove an attack. The fix applies to newly analyzed flows; rerun a recording
+into a new output directory to replace previously generated duplicate results.
+
 ## Long connections
 
 `conn_analyzer` checks non-ICMP unicast flows against `long_connection_threshold`.
@@ -185,6 +233,29 @@ outgoing reputation reports. Subnet-specific broadcast classification stays
 with the capturing peer, which knows the original subnet and Ethernet data.
 Catch-up storage and bootstrap also exclude explicit ICMP duration findings.
 These checks run in module workers and add no core capture/profiling work.
+
+## Device IP changes across networks
+
+During live interface capture, `conn_analyzer` learns the first valid private
+IPv4 source for each MAC separately on each network visit. Router identity,
+configured IPv4 subnets and reconnect history determine the visit. Moving from
+Home Wi-Fi to a hotspot, or returning to Home Wi-Fi, starts a new baseline when
+the new address fits that interface's configured subnets. The global MAC cache
+from other networks and previous runs is not used as evidence of a live change.
+A new detector process also learns fresh live baselines.
+
+A different IPv4 source for the same MAC later on the same visit still produces
+`DEVICE_CHANGING_IP` at medium threat and 80% confidence. DNS-only updates do not
+reset the baseline. Multiple IPv4 addresses explicitly assigned by the OS to the
+monitored interface's own MAC are accepted. Queued flows use their capture-time
+network settings, so an earlier visit cannot overwrite the current baseline.
+
+Addresses outside the new subnets and flows without usable network settings
+retain the existing check. Recorded analyses keep their existing behavior.
+All new bookkeeping stays in the connection-analyzer worker: at most 4096 MAC
+baselines, 8192 seen source associations and 64 network boundaries, evicting
+least recently used entries. No capture/profiling work or Redis keys are added.
+The change applies to future detections; existing evidence is retained.
 
 ## Bruteforcing Module
 
@@ -860,6 +931,11 @@ Available keywords for Microsoft: ('microsoft', 'windows', 'nt')
 
 Available keywords for Android: ('android', 'google')
 
+OS keywords must match complete words: `nt` inside `Macintosh` is not Windows
+NT. The evidence preserves the OS and browser names' capitalization, including
+`OS X`. Compatible macOS Chrome and HeadlessChrome observations do not generate
+an incompatibility solely because their OS family is `Macintosh`.
+
 ### Multiple user agents
 
 Slips stores the MAC address and vendor of every IP it sees
@@ -893,14 +969,98 @@ an evidence with threat_level low
 
 ### Non-HTTP connections on port 80
 
-Slips detects established connections on port 80 that are not using HTTP
-using zeek's conn.log flows
+Slips checks established TCP connections to destination port 80 that exchanged
+data. An `http` label in `conn.log`'s `service` field, including combined labels
+such as `http,ssl`, identifies HTTP and prevents this finding.
 
-if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', if means zeek didnt recognize that flow as http.
-Slips makes sure no matching flows were detected as HTTP by zeek
-within 5 mins before or after the given flow. if not, slips sets an evidence saying
-"non http established conn on port 80"
+A missing service label does not prove that traffic is non-HTTP. Slips also
+checks the stored HTTP record with the **same Zeek connection UID**, both before
+waiting and again before generating evidence. For example, Zeek can log an HTTP
+request with the unusual method `Get` while leaving the connection service
+empty. That is still HTTP: it can produce `WEIRD_HTTP_METHOD`, but should not
+produce `NON_HTTP_PORT_80_CONNECTION` for that connection. HTTP records are
+stored before their processing notifications are published so other detectors
+can look them up immediately.
+
+The existing check for recognized HTTP between the same source and destination
+within five minutes before or after the connection also remains in place.
+Slips waits up to five minutes for incoming flows, or until input processing
+finishes, before the final check. These checks use indexed connection lookups;
+they do not scan all stored flows. Existing evidence from an older analysis is
+retained; rerun the capture with the fixed version to generate corrected results.
+
+
+### Executable HTTP downloads
+
+`EXECUTABLE_MIME_TYPE` has **medium threat** and **100% confidence** for both
+the downloading host and the server supplying the file. It matches Zeek's
+response MIME signatures against the HTTP analyzer's executable-type list,
+including `application/x-dosexec` and `application/x-msdownload`. At medium
+threat and confidence 1, each host's evidence contributes 0.5 to its score
+before any live risk multiplier. This replaces the previous low-threat value
+for new detections; saved evidence keeps its original severity until the
+capture is analyzed again.
+
+### HTTP Host and binary content checks
+
+The HTTP analyzer checks each HTTP transaction separately. These are three
+independent findings; one transaction can produce more than one:
+
+| Evidence type | What it checks and why | Threat | Host receiving the finding |
+| --- | --- | --- | --- |
+| `HTTP_IP_HOST` | The `Host` header contains a literal IPv4 or bracketed IPv6 address, with an optional port, instead of a domain. This helps find direct-IP communication. Routers, monitoring tools and other legitimate clients also do this, so this finding alone does not claim an attack. | Info | Request sender |
+| `HTTP_BINARY_POST_WITHOUT_CONTENT_TYPE` | The method is POST, the request has a nonempty body, the captured headers have no Content-Type value, and Zeek positively identifies a binary file type in the request. This records an upload whose binary content is not described by the sender. | Medium | Request sender |
+| `HTTP_BINARY_RESPONSE_AS_HTML` | The captured response header declares `text/html`, but Zeek identifies a binary file type in the nonempty response body. This can reveal a binary download presented as a web page. | Medium | Response sender, the HTTP server |
+
+The checks use **only Zeek HTTP records**, including Zeek's existing file-type
+signatures (`orig_mime_types` for requests and `resp_mime_types` for responses).
+Supported binary signatures include executables, common archives, PDF, common
+binary image formats, MP3 and MP4. Unknown types, plain text, SVG and other
+unlisted types do not establish binary content. No extracted file, payload
+sample, entropy calculation or additional packet inspection is used by Slips.
+
+Slips loads `zeek-scripts/http-content-metadata.zeek` when it starts Zeek. The
+script adds the following fields to `http.log`:
+
+| Zeek field | Meaning |
+| --- | --- |
+| `slips_request_content_type` / `slips_response_content_type` | The Content-Type value actually sent in the top-level request or final response. An empty value means no usable type was supplied. These are declared headers, unlike Zeek's file-type signatures. |
+| `slips_request_headers_complete` / `slips_response_headers_complete` | Zeek reached the end of that message's headers. Only a true value lets Slips interpret an empty captured Content-Type as missing. Missing metadata in older logs is not evidence of a missing header. |
+| `slips_request_content_encoding` / `slips_response_content_encoding` | The declared Content-Encoding. The binary checks skip encodings other than absent or `identity`, so compressed HTML is not mistaken for disguised binary content. |
+
+Only the first top-level headers of each request or final response are kept;
+multipart attachment headers and interim replies such as `100 Continue` do not
+replace them. Each value is limited to 256 bytes. The metadata is attached to
+Zeek's existing bounded HTTP transaction state; there is no extra growing table,
+body buffer or per-flow database query. The Python checks use the fields in the
+incoming record. The web's HTTP flow details show both the declared headers and
+the observed MIME types. Evidence also records the transaction number, because
+several HTTP requests can share a connection UID.
+
+**Limits of existing logs:** ordinary Zeek logs do not include these declared
+Content-Type headers. Reread the capture with the updated Slips Zeek scripts to
+collect them; reloading a saved output folder cannot recover omitted fields.
+An opaque binary body that Zeek cannot identify still cannot trigger the two
+binary findings. For example, the POSTs to `195.219.57.34:8080` in
+`training-capture-015` have IP Host headers, but their saved HTTP/file records
+do not identify the opaque bodies' types. Those saved records support the IP
+Host finding only. Missing MIME fields or file hashes do not prove binary
+content or missing Content-Type headers.
+
+All three checks are enabled by default. To disable one, add its evidence type
+from the table to `DisabledAlerts.disabled_detections` in `config/slips.yaml`.
+The server receives the response-mismatch finding; the downloading client is
+listed as the other endpoint, rather than being blamed for the server's header.
+
+
+## SMB Analyzer Module
+
+The new `smb_analyzer` detects scanning, broad share access, repeated mismatched
+share paths, suspected propagation, external SMB, large sessions/files,
+correlated suspicious transfers, executable-write/service-request sequences,
+authentication failures and rapid file changes. All checks use Zeek metadata.
+See [SMB behavior detection](smb_detection.md) for rules, confidence, configuration,
+resource limits and visibility limitations.
 
 
 ## Leak Detector Module

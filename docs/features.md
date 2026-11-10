@@ -188,15 +188,14 @@ Here's how it works
 
 ## Non-HTTP connections on port 80.
 
-Slips detects established connections on port 80 that are not using SSL
-using zeek's conn.log flows.
-
-if slips finds a flow using destination port 80 and the 'service' field
-in conn.log isn't set to 'http', it sets and evidence.
-
-If a flow without http as a service is found, slips first checks past and future flows from the
-same src ip + dst ip + port to see if there's a flow with http as a service, if there is, slips ignores the alert.
-This is done to avoid FPs coming from zeek.
+Slips checks established TCP connections to destination port 80 that exchanged
+data but have no recognized HTTP service. A parsed HTTP record linked by the
+same Zeek connection UID also prevents the finding, even if `conn.log` has no
+service label. Unusual HTTP methods can still produce their own evidence.
+Slips checks again after waiting for incoming records and also considers
+recognized HTTP between the same source and destination within five minutes.
+See [Non-HTTP connections on port 80](detection_modules.md#non-http-connections-on-port-80)
+for the matching and waiting rules.
 
 
 ### Connections without DNS resolution
@@ -213,6 +212,12 @@ This detection will ignore certain IP addresses for which a connection without D
 - Multicast IPs
 - Broadcast IPs only if they are private
 - Well known organizations
+- Working DNS servers on UDP or TCP port 53, including connections without
+  Zeek's DNS application label. Configured resolvers and servers observed
+  returning `NOERROR` or `NXDOMAIN` replies are recognized. Other services on
+  the same IP remain subject to this rule. See the
+  [connection-without-DNS exceptions](flow_alerts.md#connections-without-dns-resolution)
+  for timing and memory limits.
 
 
 DNS resolutions of well known orgs might be done using DoH, in this case, slips
@@ -287,7 +292,39 @@ Slips considers an IP belongs to an org if:
 
 Otherwise, Slips triggers and "unknown port" evidence.
 
-For example, even though 5223/TCP isn't a well known port, Apple uses it in Apple Push Notification Service (APNS).
+After a host is detected scanning, Slips suppresses repeated Unknown Port
+findings for its failed connection attempts. Established connections still
+receive the normal known-service checks, even while the scanner flag is
+active. For example, a host scanning TCP 445 and then establishing a TLS
+connection to an unknown TCP 9001 produces separate scan and Unknown Port
+evidence. A scan must not hide other services used by the same host.
+
+
+For live local monitoring, high-numbered UDP traffic from the monitored
+computer to a peer on its current subnet is exempt from this evidence only
+when Zeek records distinct source and destination MACs, neither destination
+MAC is the gateway, and the offline MAC database identifies both vendors as
+Apple. The organization-specific port check also requires both endpoint MAC
+vendors to match when MAC vendor is its only evidence. These checks do not
+establish that devices belong to the same person. Private Wi-Fi addresses can
+prevent vendor identification; when the required MAC evidence is missing,
+Slips keeps the unknown-port detection.
+
+Apple services follow [Apple's documented TCP/UDP ports](https://support.apple.com/en-hk/103229).
+Fixed services include APNs on TCP 5223 and 2197, Remote Desktop and
+Classroom, AirPlay, Bonjour, printing, and device pairing on TCP 62078.
+TCP and UDP are separate entries; knowing TCP 5223 does not exempt UDP 5223.
+
+Broad application ranges (TCP 8000–8999 and 42000–42999, UDP 3478–3497 and
+16384–16472, and TCP/UDP 49152–65535) remain in the organization-specific
+file. They count as known only when the existing Apple identity checks
+match. This keeps arbitrary high ports on other hosts eligible for
+Unknown Port detection. These entries do not whitelist traffic; other
+behavioral and threat-intelligence detections still run.
+
+The feed updater imports changed port files into the shared cache at
+startup. Restart Slips after updating the files to load the new entries.
+Existing evidence is retained.
 
 The threat level of this evidence depends on the state of hte flow. established connections have higher threat levels.
 
@@ -335,11 +372,11 @@ Check  []() section for more info #todo
 
 When the DNS server fails to resolve a domain, it responds back with NXDOMAIN code.
 
-To detect DGA, Slips will count the amount of NXDOMAINs met in the DNS traffic of each source IP.
-
-Then we alert when there is 10 or more NXDOMAINs.
-
-Every 10,15,20 ..etc slips generates an evidence.
+Slips counts distinct failed DNS names per source IP and time window. Repeated
+lookups and `.lan` search-suffix variants of the same public name count once;
+local service-discovery, reverse, `.local`, and reserved `.invalid` lookups are
+excluded. Evidence starts at 10 distinct failed names and recurs at 15, 20,
+and each additional five distinct names.
 
 ### Connection to multiple ports
 

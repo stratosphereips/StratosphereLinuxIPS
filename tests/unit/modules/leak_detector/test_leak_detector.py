@@ -36,6 +36,7 @@ def test_is_yara_installed(
 @patch("shutil.rmtree")
 def test_delete_compiled_rules(mock_rmtree, mock_mkdir, mock_db):
     leak_detector = ModuleFactory().create_leak_detector_obj()
+    mock_mkdir.reset_mock()
     leak_detector.delete_compiled_rules()
     mock_rmtree.assert_called_once_with(leak_detector.compiled_yara_rules_path)
     mock_mkdir.assert_called_once_with(leak_detector.compiled_yara_rules_path)
@@ -322,3 +323,89 @@ def test_set_evidence_yara_match(
     )
 
     assert mock_set_evidence.call_count == expected_call_count
+
+
+@pytest.mark.parametrize("variant", ["valid", "request", "wrong_host", "wrong_path", "bad_json", "bad_lat", "bad_ip", "unsuccessful"])
+def test_ip_geolocation_response_requires_http_lookup_context(variant: str) -> None:
+    """Recognize only a validated IP-geolocation reply, never coordinate uploads.
+
+    Parameters:
+        variant: Valid response or a failed context/payload check.
+    """
+    module = ModuleFactory().create_leak_detector_obj()
+    payload = {"status":"success","query":"147.32.80.44","lat":50.0802,"lon":14.4652}
+    http = {"http.response":"1", "http.response_for.uri":"http://ip-api.com/json"}
+    if variant == "request":
+        http["http.response"] = "0"
+    elif variant == "wrong_host":
+        http["http.response_for.uri"] = "http://ip-api.com.evil.test/json"
+    elif variant == "wrong_path":
+        http["http.response_for.uri"] = "http://ip-api.com/upload"
+    elif variant == "bad_lat":
+        payload["lat"] = 95
+    elif variant == "bad_ip":
+        payload["query"] = "not an IP"
+    elif variant == "unsuccessful":
+        payload["status"] = "fail"
+    http["http.file_data"] = "garbage" if variant == "bad_json" else json.dumps(payload).encode().hex(":")
+    result = module.ip_geolocation_response({"http":http})
+    if variant == "valid":
+        assert result == {"host":"ip-api.com","query_ip":"147.32.80.44","latitude":50.0802,"longitude":14.4652}
+    else:
+        assert result is None
+
+
+@pytest.mark.parametrize("resolved", [False, True])
+@pytest.mark.parametrize("response", [False, True])
+def test_packet_evidence_uses_real_uid_and_classifies_lookup(response: bool, resolved: bool) -> None:
+    """Link real connections and deduplicate latitude/longitude GeoIP matches.
+
+    Parameters:
+        response: A confirmed GeoIP response instead of a generic GPS match.
+        resolved: Whether profiling has already stored the connection.
+    """
+    module = ModuleFactory().create_leak_detector_obj()
+    module.get_packet_info = MagicMock(return_value=("208.95.112.1","147.32.80.44","tcp","80","53400",1769172999.880398))
+    module.packet_details = {"frame_number":514,"geolocation":{
+        "host":"ip-api.com","query_ip":"147.32.80.44","latitude":50.0802,"longitude":14.4652} if response else None}
+    module.db.get_flow_for_packet.return_value = {"uid":"real-zeek-uid","flow":{"interface":"capture.pcap"}} if resolved else None
+    module.db.get_tw_of_ts.return_value = ["timewindow1"]
+    info = {"rule":"NETWORK_gps_location_leaked","offset":100,"strings_matched":"lat 50.0802"}
+    module.set_evidence_yara_match(info)
+    if response:
+        module.set_evidence_yara_match({**info,"strings_matched":"lon 14.4652","offset":110})
+    calls = module.db.set_evidence.call_args_list
+    assert len(calls) == (1 if response else 2)
+    for call in calls:
+        evidence = call.args[0]
+        assert evidence.uid == (["real-zeek-uid"] if resolved else [])
+        assert evidence.detection_details["packet"]["sport"] == 80
+        assert evidence.detection_details["frame_number"] == 514
+        if response:
+            assert evidence.evidence_type.name == "IP_GEOLOCATION_RESPONSE"
+            assert evidence.threat_level.name == "INFO"
+            assert evidence.evidence_signal.name == "DAMP"
+            assert evidence.profile.ip == "147.32.80.44"
+            assert evidence.src_port == 53400 and evidence.dst_port == 80
+            assert "IP geolocation response" in evidence.description
+        else:
+            assert evidence.evidence_type.name == "NETWORK_GPS_LOCATION_LEAKED"
+            assert evidence.src_port == 80 and evidence.dst_port == 53400
+
+
+@pytest.mark.parametrize("delayed, stopping", [(False, False), (True, False), (True, True)])
+def test_packet_timewindow_waits_only_for_missing_profile(delayed: bool, stopping: bool) -> None:
+    """Wait in the detector worker without delaying packets whose profile exists.
+
+    Parameters:
+        delayed: Profiling creates the time window on the second lookup.
+        stopping: Shutdown cancels that wait.
+    """
+    module = ModuleFactory().create_leak_detector_obj()
+    module.db.get_tw_of_ts.side_effect = [None, ("timewindow2", 100)] if delayed else [("timewindow2", 100)]
+    module.termination_event.wait.return_value = stopping
+    result = module.packet_timewindow("192.0.2.1",100.5)
+    assert (result is None) == (delayed and stopping)
+    if result is not None:
+        assert result.number == 2
+    assert module.db.get_tw_of_ts.call_args.args == ("profile_192.0.2.1",100.5)
