@@ -1,8 +1,11 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, mock_open, Mock
+import sqlite3
 import pytest
+from managers.redis_manager import RedisManager
 from tests.module_factory import ModuleFactory
 from datetime import datetime, timedelta
 import sys
@@ -354,12 +357,45 @@ def test_store_zeek_dir_copy_reads_zeek_dir_from_db():
 
     with (
         patch.object(main, "was_running_zeek", return_value=True),
-        patch(f"{main.__class__.__module__}.copy_tree") as mock_copy_tree,
+        patch("shutil.copytree") as mock_copy_tree,
         patch("builtins.print"),
     ):
         main.store_zeek_dir_copy()
 
-    mock_copy_tree.assert_called_once_with("zeek_dir", "output/zeek_files")
+    mock_copy_tree.assert_called_once_with(
+        "zeek_dir", "output/zeek_files", dirs_exist_ok=True
+    )
+
+
+@pytest.mark.parametrize("source_kind", ["direct", "relative", "symlink"])
+def test_store_zeek_dir_copy_preserves_logs_already_in_output(
+    tmp_path: Path, source_kind: str
+) -> None:
+    """Skip copying an output directory onto itself, including aliases.
+
+    Parameters:
+        tmp_path: Isolated run directory containing existing Zeek logs.
+        source_kind: Direct, normalized relative, or symbolic source alias.
+    """
+    main = ModuleFactory().create_main_obj()
+    destination = tmp_path / "run" / "zeek_files"
+    destination.mkdir(parents=True)
+    (destination / "conn.log").write_text("retained Zeek records\n")
+    source = str(destination)
+    if source_kind == "relative":
+        source = os.path.join(os.path.relpath(destination), ".")
+    elif source_kind == "symlink":
+        alias = tmp_path / "zeek-alias"
+        alias.symlink_to(destination, target_is_directory=True)
+        source = str(alias)
+    main.conf = MagicMock()
+    main.db = MagicMock()
+    main.conf.store_a_copy_of_zeek_files.return_value = True
+    main.db.get_zeek_output_dir.return_value = source
+    main.args.output = str(destination.parent)
+    with patch.object(main, "was_running_zeek", return_value=True):
+        main.store_zeek_dir_copy()
+    assert (destination / "conn.log").read_text() == "retained Zeek records\n"
 
 
 # TODO should be moved to utils unit tests after the PR is merged
@@ -484,6 +520,76 @@ def test_prepare_output_dir_with_o_flag_deletes_files_preserve_slips(
     remaining = list(os.listdir(test_dir))
     assert "slips_output.txt" in remaining
     assert len(remaining) == 1
+
+
+@pytest.mark.parametrize(
+    "initial_state", ["missing", "empty", "logs_only", "stale_metadata"]
+)
+def test_keep_history_supports_first_start_and_later_restart(
+    tmp_path: Path, initial_state: str
+) -> None:
+    """Use one command to initialize an output and later retain its history.
+
+    Parameters:
+        tmp_path: Isolated output directory.
+        initial_state: Files present before the first startup.
+    """
+    main = ModuleFactory().create_main_obj()
+    output = tmp_path / "run"
+    main.args = SimpleNamespace(
+        interface="eth0", output=str(output), keep_history=True,
+        multiinstance=False, db=None, port=None, testing=False,
+        is_slips_started_by_an_update=False,
+    )
+    main.redis_man = RedisManager(main)
+    if initial_state != "missing":
+        output.mkdir()
+    if initial_state in {"logs_only", "stale_metadata"}:
+        (output / "errors.log").write_text("previous incomplete startup")
+    if initial_state == "stale_metadata":
+        (output / "metadata").mkdir()
+        (output / "metadata" / "info.txt").write_text("File: different-interface\n")
+    with patch("managers.redis_manager.psutil.process_iter", return_value=[]):
+        main.prepare_output_dir()
+        assert output.is_dir()
+        assert list(output.iterdir()) == []
+        assert main.args.keep_history is True
+        database = output / "databases" / "flows.sqlite"
+        database.parent.mkdir()
+        with sqlite3.connect(database) as connection:
+            connection.execute("CREATE TABLE saved(value TEXT)")
+            connection.execute("INSERT INTO saved VALUES ('previous evidence')")
+        (output / "metadata").mkdir()
+        (output / "metadata" / "info.txt").write_text("File: eth0\n")
+        (output / "errors.log").write_text("preserved log")
+        main.prepare_output_dir()
+    with sqlite3.connect(database) as connection:
+        saved = connection.execute("SELECT value FROM saved").fetchone()
+        assert saved[0] == "previous evidence"
+    assert (output / "errors.log").read_text() == "preserved log"
+
+
+def test_prepare_output_dir_keeps_history(tmp_path: Path) -> None:
+    """Keep previous SQLite data when history mode is requested.
+
+    Parameters:
+        tmp_path: Temporary path provided by pytest.
+    """
+    main = ModuleFactory().create_main_obj()
+    main.args = MagicMock()
+    main.args.output = str(tmp_path / "previous_run")
+    main.args.is_slips_started_by_an_update = False
+    output_dir = Path(main.args.output)
+    (output_dir / "databases").mkdir(parents=True)
+    old_detection_db = output_dir / "databases" / "flows.sqlite"
+    old_detection_db.write_text("previous run")
+    main.args.keep_history = True
+    main.redis_man.validate_keep_history = Mock(return_value=True)
+
+    main.prepare_output_dir()
+
+    assert old_detection_db.read_text() == "previous run"
+    main.redis_man.validate_keep_history.assert_called_once_with()
 
 
 def test_prepare_output_dir_with_o_flag_creates_dir(

@@ -78,6 +78,7 @@ def test_start_zeek_process_stores_pid(
     """Test starting Zeek records its PID and uses the validated directory."""
     input_process = ModuleFactory().create_input_obj("", InputType.PCAP)
     zeek_process = Mock(pid=4321)
+    owned = input_process.zeek_utils.zeek_processes = Mock()
     popen = Mock(return_value=zeek_process)
     monkeypatch.setattr(
         "slips_files.core.input.zeek.utils.zeek_input_utils.subprocess.Popen",
@@ -90,6 +91,7 @@ def test_start_zeek_process_stores_pid(
 
     assert result is zeek_process
     assert input_process.zeek_utils.zeek_pids == [4321]
+    owned.remember.assert_called_once_with(4321)
     popen.assert_called_once_with(
         ["zeek", "-r", "capture.pcap"],
         stdout=-1,

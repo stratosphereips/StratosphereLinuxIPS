@@ -37,23 +37,6 @@ class Output(IObserver):
     """
 
     name = "output"
-    # Output is instantiated once in the main process and handed to every
-    # child process. These multiprocessing locks are sent along with it
-    # (see __getstate__) so they actually serialize writes to the shared
-    # stdout/logfiles across processes. threading.Lock() would not do
-    # that, since each process gets its own independent copy of it,
-    # letting concurrent prints from different processes interleave
-    # and corrupt each other's output (e.g. a partial in-place \r update
-    # from one process landing in the middle of another process' line).
-    slips_logfile_lock = multiprocessing.Lock()
-    errors_logfile_lock = multiprocessing.Lock()
-    cli_lock = multiprocessing.Lock()
-    # set while a single-line, in-place-refreshing status line (e.g. the
-    # "Total analyzed IPs" summary) is left on screen without a trailing
-    # newline. shared across all processes so that any of them
-    # printing a normal line first closes it out with a newline instead
-    # of overwriting/merging with it.
-    _cli_has_dangling_line = multiprocessing.Value("b", False)
     _SHARED_STATE = (
         "slips_logfile_lock",
         "errors_logfile_lock",
@@ -65,21 +48,6 @@ class Output(IObserver):
         "_startup_queue_lock",
         "_startup_deadline",
     )
-
-    def __getstate__(self) -> dict:
-        """
-        Carry the shared locks to a spawned child.
-        Class attributes are not pickled, so without this, the child would
-        create its own locks and theyd be useless :D
-        """
-        state = self.__dict__.copy()
-        for name in self._SHARED_STATE:
-            state[name] = getattr(self, name)
-        return state
-
-    def __setstate__(self, state: dict) -> None:
-        self.__dict__.update(state)
-
     # While slips' processes/modules are still announcing their startup
     # (see begin_startup_announcements()), every OTHER printed message
     # is held here instead of going straight to the cli/logfiles, so it
@@ -97,7 +65,22 @@ class Output(IObserver):
     # announcing itself, which would otherwise stall all cli/logfile
     # output for the rest of the run
     _startup_deadline = multiprocessing.Value("d", 0.0)
+    # Each run explicitly shares its logger locks and startup queue with children.
     STARTUP_QUEUE_TIMEOUT_SECS = 120
+
+    def __getstate__(self) -> dict:
+        """
+        Carry the shared locks to a spawned child.
+        Class attributes are not pickled, so without this, the child would
+        create its own locks and theyd be useless :D
+        """
+        state = self.__dict__.copy()
+        for name in self._SHARED_STATE:
+            state[name] = getattr(self, name)
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
 
     def __init__(
         self,
@@ -111,6 +94,31 @@ class Output(IObserver):
         slips_args=None,
     ):
         super().__init__()
+        # Instance attributes travel with the logger under spawn/forkserver.
+        # Class attributes alone would be recreated independently in children.
+        
+        
+        # Output is instantiated once in the main process and handed to every
+        # child process. These multiprocessing locks are sent along with it
+        # (see __getstate__) so they actually serialize writes to the shared
+        # stdout/logfiles across processes. threading.Lock() would not do
+        # that, since each process gets its own independent copy of it,
+        # letting concurrent prints from different processes interleave
+        # and corrupt each other's output (e.g. a partial in-place \r update
+        # from one process landing in the middle of another process' line).
+        self.slips_logfile_lock = multiprocessing.Lock()
+        self.errors_logfile_lock = multiprocessing.Lock()
+        self.cli_lock = multiprocessing.Lock()
+        # set while a single-line, in-place-refreshing status line (e.g. the
+        # "Total analyzed IPs" summary) is left on screen without a trailing
+        # newline. shared across all processes so that any of them
+        # printing a normal line first closes it out with a newline instead
+        # of overwriting/merging with it.
+        self._cli_has_dangling_line = multiprocessing.Value("b", False)
+        self._startup_queue = multiprocessing.Queue()
+        self._startup_in_progress = multiprocessing.Value("b", False)
+        self._startup_queue_lock = multiprocessing.Lock()
+        self._startup_deadline = multiprocessing.Value("d", 0.0)
         # a fresh Output() means a fresh run for whichever process
         # constructed it - no startup announcements are in progress yet
         self._startup_in_progress.value = False
