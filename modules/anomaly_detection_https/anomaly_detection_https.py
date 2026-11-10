@@ -5,10 +5,16 @@ import math
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Dict, Optional, Set, List, Any
 
 from slips_files.common.abstracts.imodule import IModule
+from slips_files.common.anomaly_detection import (
+    quantile,
+    robust_location_scale,
+)
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.common.log_rotation import RotatingTextLog
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.evidence import (
@@ -108,28 +114,23 @@ class EWMAStats:
 
     @staticmethod
     def _quantile(values: List[float], q: float) -> float:
-        if not values:
-            return 0.0
-        q = min(1.0, max(0.0, float(q)))
-        xs = sorted(values)
-        if len(xs) == 1:
-            return xs[0]
-        pos = q * (len(xs) - 1)
-        lo = int(math.floor(pos))
-        hi = int(math.ceil(pos))
-        if lo == hi:
-            return xs[lo]
-        frac = pos - lo
-        return xs[lo] * (1.0 - frac) + xs[hi] * frac
+        """Calculate an interpolated quantile using shared statistics.
 
-    def update_min_std_floor(self):
+        Parameters:
+            values: Empirical sample.
+            q: Percentile fraction.
+
+        Returns:
+            Interpolated sample quantile.
+        """
+        return quantile(values, q)
+
+    def update_min_std_floor(self) -> None:
+        """Update the bounded, smoothed scale floor from recent residuals."""
         if len(self.residuals) < 5:
             return
         q10 = self._quantile(self.residuals, 0.10)
-        med = self._quantile(self.residuals, 0.50)
-        abs_dev = [abs(x - med) for x in self.residuals]
-        mad = self._quantile(abs_dev, 0.50)
-        sigma_mad = 1.4826 * mad
+        _, sigma_mad = robust_location_scale(self.residuals, min_scale=0.0)
         candidate = self.floor_scale * max(q10, sigma_mad, self.floor_min)
         candidate = min(self.floor_max, max(self.floor_min, candidate))
         beta = min(1.0, max(0.0, self.floor_update_beta))
@@ -146,31 +147,37 @@ class EWMAStats:
         if len(self.value_window) > self.value_window_size:
             self.value_window.pop(0)
 
-    @staticmethod
-    def _median(values: List[float]) -> float:
-        return EWMAStats._quantile(values, 0.50)
-
     def robust_zscore(self, value: float) -> float:
+        """Score a value against recent robust statistics or early moments.
+
+        Parameters:
+            value: Transformed feature value.
+
+        Returns:
+            Absolute deviation in estimated standard deviations.
+        """
         values = self.value_window
         if len(values) < 7:
             return self.zscore(value)
-        med = self._median(values)
-        abs_dev = [abs(x - med) for x in values]
-        mad = self._median(abs_dev)
-        robust_sigma = max(1.4826 * mad, self.min_std_floor)
+        med, robust_sigma = robust_location_scale(values, self.min_std_floor)
         return abs(float(value) - med) / robust_sigma
 
     def calibrate_empirical_threshold(
         self, default_threshold: float, quantile: float = 0.995
-    ):
+    ) -> None:
+        """Calibrate a bounded threshold from benign training deviations.
+
+        Parameters:
+            default_threshold: Fallback when training support is insufficient.
+            quantile: Training-score percentile used for calibration.
+        """
         if len(self.training_values) < 10:
             self.empirical_threshold = float(default_threshold)
             return
 
-        med = self._median(self.training_values)
-        abs_dev = [abs(x - med) for x in self.training_values]
-        mad = self._median(abs_dev)
-        robust_sigma = max(1.4826 * mad, self.min_std_floor)
+        med, robust_sigma = robust_location_scale(
+            self.training_values, self.min_std_floor
+        )
         if robust_sigma <= 0:
             self.empirical_threshold = float(default_threshold)
             return
@@ -227,6 +234,9 @@ class AnomalyDetectionHTTPS(IModule):
         self.operational_log_path = self.get_module_specific_output_path(
             "anomaly_detection_https.log"
         )
+        self.operational_log = RotatingTextLog(
+            Path(self.operational_log_path), self.log_rotation_policy
+        )
         self.host_states: Dict[str, HostState] = {}
 
     def subscribe_to_channels(self):
@@ -262,6 +272,7 @@ class AnomalyDetectionHTTPS(IModule):
             conf.https_anomaly_empirical_threshold_quantile()
         )
         self.log_verbosity = conf.https_anomaly_log_verbosity()
+        self.log_rotation_policy = conf.detection_history_policy()
         # Operational logs always use emojis and colors.
         self.log_emojis = True
         self.log_colors = True
@@ -401,10 +412,7 @@ class AnomalyDetectionHTTPS(IModule):
         )
         if color:
             line = f"{color}{line}{reset}"
-        with open(
-            self.operational_log_path, "a", encoding="utf-8"
-        ) as log_file:
-            log_file.write(f"{line}\n")
+        self.operational_log.write(f"{line}\n")
 
     @staticmethod
     def get_hour_start(ts: float) -> int:
@@ -672,6 +680,116 @@ class AnomalyDetectionHTTPS(IModule):
             )
         return None
 
+    @staticmethod
+    def _display_measurement(
+        value: object, *, byte_count: bool = False, baseline: bool = False
+    ) -> str:
+        """Format an observation without statistical notation or false precision.
+
+        Parameters:
+            value: Observed quantity or learned reference level.
+            byte_count: Render data volume using binary byte units.
+            baseline: Preserve rare count baselines as less than one.
+
+        Returns:
+            Readable quantity, or an unavailable marker for invalid values.
+        """
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return "unavailable"
+        if not math.isfinite(number):
+            return "unavailable"
+        if byte_count:
+            for unit in ("B", "KiB", "MiB", "GiB", "TiB"):
+                if abs(number) < 1024 or unit == "TiB":
+                    amount = f"{number:,.1f}".rstrip("0").rstrip(".")
+                    return f"{amount} {unit}"
+                number /= 1024
+        if baseline and 0 < number < 1:
+            return "<1"
+        return f"{number:,.1f}".rstrip("0").rstrip(".")
+
+    def _describe_anomaly_reason(self, reason: dict) -> str:
+        """Explain one observed HTTPS change using everyday terms and units.
+
+        Parameters:
+            reason: Feature, observed value and optional learned reference.
+
+        Returns:
+            Short factual explanation without z-scores or confidence metadata.
+        """
+        feature = str(reason.get("feature", "HTTPS activity"))
+        value = reason.get("value")
+        if feature == "new_server":
+            return f"Server {value} was not previously seen for this host"
+        if feature == "new_ja3s":
+            return "The server used a previously unseen encryption handshake pattern"
+        byte_count = feature in {
+            "bytes_to_known_server",
+            "known_server_avg_bytes",
+        }
+        observed = self._display_measurement(value, byte_count=byte_count)
+        counts = {
+            "ssl_flows": ("encrypted connection", "encrypted connections"),
+            "unique_servers": ("different server", "different servers"),
+            "new_servers": (
+                "previously unseen server",
+                "previously unseen servers",
+            ),
+            "ja3_changes": (
+                "new client encryption pattern across servers",
+                "new client encryption patterns across servers",
+            ),
+        }
+        if feature in counts:
+            singular, plural = counts[feature]
+            text = f"{observed} {singular if value == 1 else plural}"
+        elif feature == "bytes_to_known_server":
+            text = f"{observed} transferred, counting sent and received data"
+        elif feature == "known_server_avg_bytes":
+            text = (
+                f"Average data per connection to familiar servers: {observed}"
+            )
+        else:
+            text = f"{feature.replace('_', ' ')}: {observed}"
+        mean = reason.get("mean")
+        if mean is not None:
+            usual = self._display_measurement(
+                mean, byte_count=byte_count, baseline=True
+            )
+            if usual != "unavailable":
+                text += f" (usual: {usual})"
+        return text
+
+    def anomaly_description(
+        self, srcip: str, kind: str, reasons: List[dict], server: str = ""
+    ) -> str:
+        """Separate a short HTTPS anomaly headline from its observed changes.
+
+        Parameters:
+            srcip: Host whose activity was evaluated.
+            kind: Hourly aggregate or individual flow.
+            reasons: Measurements or novelty checks triggering the detection.
+            server: Destination identity for a flow, when known.
+
+        Returns:
+            Plain-language evidence text shared by logs, peers and the web.
+        """
+        if kind == "hourly":
+            headline = f"Unusual hourly HTTPS activity from {srcip}."
+        else:
+            destination = (
+                f" to {server}"
+                if server and server != "<unknown_server>"
+                else ""
+            )
+            headline = f"Unusual HTTPS connection from {srcip}{destination}."
+        observations = "; ".join(
+            self._describe_anomaly_reason(reason) for reason in reasons
+        )
+        return f"{headline} {observations}." if observations else headline
+
     def emit_anomaly_evidence(
         self,
         profileid: str,
@@ -702,59 +820,18 @@ class AnomalyDetectionHTTPS(IModule):
         threat_level = self.threat_level_from_confidence_level(
             str(confidence.get("level", "low"))
         )
-        reason_parts = []
-        for reason in reasons:
-            feature = str(reason.get("feature", "unknown"))
-            value = reason.get("value", "")
-            mean = reason.get("mean")
-            zscore = reason.get("zscore")
-            threshold = reason.get(
-                "threshold",
-                (
-                    self.flow_zscore_threshold
-                    if feature == "bytes_to_known_server"
-                    else self.hourly_zscore_threshold
-                ),
-            )
-
-            if feature == "new_server":
-                reason_name = "New Server"
-                why = "not seen before in this host baseline"
-            elif feature == "new_ja3s":
-                reason_name = "New JA3S"
-                why = "not seen before in this host baseline"
-            elif feature == "bytes_to_known_server":
-                reason_name = "Bytes to Known Server"
-                why = (
-                    f"bytes above normal (z-score={zscore}; threshold={threshold:.2f})"
-                    if zscore is not None
-                    else "bytes deviates from learned baseline"
-                )
-            else:
-                reason_name = feature.replace("_", " ").title()
-                if zscore is not None and mean is not None:
-                    why = (
-                        "value above baseline "
-                        f"(mean={mean}; z-score={zscore}; threshold={threshold:.2f})"
-                    )
-                elif zscore is not None:
-                    why = f"value above baseline (z-score={zscore}; threshold={threshold:.2f})"
-                else:
-                    why = "value deviates from learned baseline"
-
-            reason_parts.append(
-                f"reason={reason_name}; value={value}; why={why}"
-            )
-
-        reasons_text = (
-            " | ".join(reason_parts)
-            if reason_parts
-            else "reason=Unknown; value=; why=not provided"
+        description = self.anomaly_description(
+            srcip, kind, reasons, sni or server or daddr
         )
-        description = (
-            f"HTTPS anomaly: type={kind}; confidence={confidence.get('level')} "
-            f"({confidence_score:.3f}); {reasons_text}."
-        )
+        details = {
+            "version": 1,
+            "kind": kind,
+            "reasons": [dict(reason) for reason in reasons],
+            "confidence": dict(confidence),
+        }
+        if kind == "hourly":
+            details["window_start"] = traffic_ts
+            details["window_end"] = traffic_ts + 3600
 
         uid_list = [uid] if uid else []
         if kind == "hourly" and extra and "uids" in extra:
@@ -793,6 +870,7 @@ class AnomalyDetectionHTTPS(IModule):
             src_port=src_port,
             method=Method.STATISTICAL,
             confidence=confidence_score,
+            detection_details={"https_anomaly": details},
         )
         self.db.set_evidence(evidence)
         self.log_event(

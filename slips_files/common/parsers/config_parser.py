@@ -699,6 +699,20 @@ class ConfigParser(object):
             self.read_configuration(Modules.BEACONING.value, "enabled", True)
             is True
         )
+
+    def service_anomaly_enabled(self) -> bool:
+        """Check the service anomaly feature flag.
+
+        Returns:
+            Whether the module is enabled unless explicitly disabled.
+        """
+        return (
+            self.read_configuration(
+                Modules.ANOMALY_DETECTION_SERVICES.value, "enabled", True
+            )
+            is True
+        )
+
     def use_local_p2p(self):
         return self.read_configuration("local_p2p", "use_p2p", False)
 

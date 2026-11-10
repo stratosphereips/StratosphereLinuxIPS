@@ -503,7 +503,7 @@ tr:nth-child(even) {
   </tr>
   <tr>
     <td>https</td>
-    <td>training&test of RandomForest to detect malicious https flows</td>
+    <td>Learns hourly TLS behavior and per-server flow deviations.</td>
     <td>⏳</td>
   </tr>
   <tr>
@@ -605,6 +605,18 @@ The path of the file can be modified by changing the ```RiskIQ_credentials_path`
 This module on runs on pcaps, it uses YARA rules to detect leaks.
 
 You can add your own YARA rule in ```modules/leak_detector/yara_rules/rules``` and it will be automatically compiled and stored in ```modules/leak_detector/yara_rules/compiled``` and matched against every pcap.
+
+### Service anomaly detection
+
+The optional `anomaly_detection_services` module learns which computers
+normally connect to a service, at what hours, and for how long. It then reports
+newly answering local ports after a host-wide training window, unfamiliar
+clients (including failed attempts), unusual connection hours, and
+unusually short or long completed TCP connections. Slips saves what it learns
+so it can remember normal behavior after a restart, even if old flow records
+have been removed. Settings limit how much it remembers. See
+[Service anomaly detection](service_anomaly_detection.md) for every setting's
+purpose, training requirements, examples, and limits of these checks.
 
 ### Blocking Module
 
