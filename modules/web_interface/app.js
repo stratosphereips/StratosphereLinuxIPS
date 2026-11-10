@@ -7668,41 +7668,6 @@ function flowFieldList(flow, displayedFields = []) {
   return container;
 }
 
-/** Keep optional packet samples separate from the records used by a detector.
- * @param {Array<object>} records - Timing summaries sharing the connection UID.
- * @param {object|null} evidence - Finding being inspected, if any.
- * @returns {HTMLDetailsElement} Collapsed context with one lazily rendered sample.
- */
-function packetTimingContext(records, evidence = null) {
-  const context = document.createElement("details");
-  context.className = "packet-timing-context";
-  context.append(text("summary", `Packet timing context · ${records.length} ${records.length === 1 ? "sample" : "samples"}`));
-  let rendered = false;
-  context.addEventListener("toggle", () => {
-    if (!context.open || rendered) return;
-    rendered = true;
-    context.append(text("p", evidence?.evidence_type === "LONG_CONNECTION"
-      ? "Long Connection uses the connection duration; these timing samples were not used to trigger it."
-      : evidence ? "Additional samples from the same connection UID, not inputs to this finding."
-        : "Additional packet timing samples from this connection, recorded separately from its application protocols.", "muted"));
-    const sample = document.createElement("select");
-    sample.setAttribute("aria-label", "Packet timing context sample");
-    records.forEach((record, index) => {
-      const flow = record.flow || record;
-      const originator = [true, "T", "true", 1].includes(flow.is_orig);
-      const responder = [false, "F", "false", 0].includes(flow.is_orig);
-      const direction = originator ? "originator → responder" : responder ? "responder → originator" : "direction unavailable";
-      const kind = {data: "data", ack: "ACK", keepalive: "keepalive"}[flow.kind] || "packets";
-      sample.append(new Option(`Sample ${index + 1} · ${kind} · ${direction}`, String(index)));
-    });
-    const body = document.createElement("div");
-    const show = () => body.replaceChildren(packetTimingFlowCard(records[sample.selectedIndex]));
-    sample.addEventListener("change", show);
-    context.append(sample, body);show();
-  });
-  return context;
-}
-
 /** Create one primary network-flow card with selectable protocol records.
  * @param {object} group Connection and related protocol records sharing a UID.
  * @param {number} position Position of this flow in the evidence.
@@ -7720,7 +7685,6 @@ function flowCard(group, position = 1, total = 1, title = null, evidence = null)
   const record = group.network_flow;
   const allRelated = Array.isArray(group.protocol_flows) ? group.protocol_flows : [];
   const timingEvidence = ["PERIODIC_PACKETS", "SUSPICIOUS_PACKET_HEARTBEAT"].includes(evidence?.evidence_type);
-  const timingContext = timingEvidence ? [] : allRelated.filter((item) => protocolType(item) === "packet_timing");
   const related = allRelated.filter((item) => timingEvidence || protocolType(item) !== "packet_timing");
   const arpOnly = !record && related.length > 0
     && related.every((protocol) => protocolType(protocol) === "arp");
@@ -7798,8 +7762,8 @@ function flowCard(group, position = 1, total = 1, title = null, evidence = null)
       "p",
       arpOnly
         ? "ARP packets are recorded separately. Zeek does not create a conn.log connection record for ARP."
-        : !related.length && timingContext.length
-          ? "The full connection record is unavailable. Optional packet timing context is available below."
+        : !related.length
+          ? "The full connection record is unavailable."
           : "No connection record is available for this UID. The available protocol records are shown below.",
       arpOnly ? "muted" : "flow-missing",
     ));
@@ -7866,7 +7830,6 @@ function flowCard(group, position = 1, total = 1, title = null, evidence = null)
     panels.append(panel);
   });
   if (entries.length) card.append(tabs, panels);
-  if (timingContext.length) card.append(packetTimingContext(timingContext, evidence));
   return card;
 }
 

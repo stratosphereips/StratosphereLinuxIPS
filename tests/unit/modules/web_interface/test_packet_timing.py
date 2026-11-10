@@ -142,14 +142,16 @@ def test_packet_gaps_and_saved_decision_render_in_real_investigation(
             browser.close()
 
 
+@pytest.mark.parametrize("evidence_type", ["LONG_CONNECTION", "UNKNOWN_PORT"])
 @pytest.mark.parametrize("mode", ["missing", "connection", "tls"])
 @pytest.mark.parametrize("theme,width", [("light", 360), ("dark", 800)])
-def test_long_connection_keeps_packet_samples_in_collapsed_context(
-    mode: str, theme: str, width: int,
+def test_unrelated_evidence_excludes_packet_samples(
+    evidence_type: str, mode: str, theme: str, width: int,
 ) -> None:
-    """Keep ACK samples from replacing the actual Long Connection details.
+    """Exclude packet samples entirely from findings that do not use timing.
 
     Parameters:
+        evidence_type: Finding that does not use packet timing.
         mode: Missing connection, retained connection or TLS protocol context.
         theme: Color scheme used by the investigation.
         width: Available flow pane width.
@@ -165,7 +167,7 @@ def test_long_connection_keeps_packet_samples_in_collapsed_context(
     group = {"uid": "Cpacket", "network_flow": None if mode == "missing" else {
         "uid": "Cpacket", "flow": {"saddr": "10.0.0.1", "daddr": "8.8.8.8", "proto": "tcp", "dur": 3300}},
         "protocol_flows": protocols}
-    record = {"id": "long-connection", "uid": ["Cpacket"], "evidence_type": "LONG_CONNECTION",
+    record = {"id": "long-connection", "uid": ["Cpacket"], "evidence_type": evidence_type,
               "module": "conn_analyzer", "description": "Connection took 55 mins", "threat_level": "low"}
     assets = Path("modules/web_interface")
     script = (assets / "app.js").read_text().split("let viewPreferencesTimer = null;", 1)[0]
@@ -200,8 +202,9 @@ def test_long_connection_keeps_packet_samples_in_collapsed_context(
                 document.querySelector('.evidence-detail-flows').style.width=width+'px';
             }""", {"record": record, "theme": theme, "width": width})
             pane = page.locator(".evidence-detail-flows")
-            context = pane.locator(".packet-timing-context")
-            assert not context.evaluate("element => element.open")
+            assert pane.locator(".packet-timing-context").count() == 0
+            assert "Packet timing" not in pane.inner_text()
+            assert "20.48 s" not in pane.inner_text()
             assert pane.locator(".protocol-packet_timing").count() == 0
             assert pane.get_by_role("tab", name="Related Packet timing", exact=False).count() == 0
             assert pane.locator(".packet-timing-decision").count() == 0
@@ -216,19 +219,6 @@ def test_long_connection_keeps_packet_samples_in_collapsed_context(
                     assert pane.locator(".flow-related-count").inner_text() == "1 related protocol record"
                 else:
                     assert pane.locator(".flow-related-count").count() == 0
-            context.locator(":scope > summary").click()
-            card = context.locator(".protocol-packet_timing")
-            playwright.expect(card).to_be_visible()
-            assert "Long Connection uses the connection duration" in context.inner_text()
-            assert "20.48 s" in card.inner_text()
-            assert "Originator → responder" in card.inner_text()
-            context.get_by_role("combobox", name="Packet timing context sample").select_option("1")
-            assert context.locator(".protocol-packet_timing").count() == 1
-            assert "Responder → originator" in card.inner_text()
-            assert "0 B" in card.inner_text()
-            assert context.get_by_role("combobox").bounding_box()["width"] <= context.bounding_box()["width"]
-            context.locator(":scope > summary").click()
-            playwright.expect(card).to_be_hidden()
             primary = page.evaluate("""group => {
                 const mixed={...group,protocol_flows:[{flow_type:'ssl',flow:{server_name:'example.test'}},
                     ...group.protocol_flows.filter(item => item.flow_type==='packet_timing')]};

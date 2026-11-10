@@ -522,10 +522,6 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .protocol-field.important strong { color: var(--accent); font-size: .82rem; }
 .protocol-field > .ip-link { display: block; margin-top: .24rem; }
 .protocol-field.important > .ip-link { color: var(--accent); font-size: .82rem; }
-.packet-timing-context { margin-top: .75rem; border-top: 1px solid var(--line); padding-top: .65rem; }
-.packet-timing-context > summary { cursor: pointer; color: var(--muted); font-size: .75rem; }
-.packet-timing-context > p { font-size: .73rem; line-height: 1.4; }
-.packet-timing-context > select { width: 100%; min-width: 0; margin: .5rem 0; }
 .packet-timing-title { margin: 0; font-size: .86rem; }
 .protocol-packet_timing { container-type: inline-size; container-name: packet-timing; }
 .packet-timing-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }

@@ -117,15 +117,11 @@ downgrades for that same connection and packet category.
 
 ## Inspecting packet timing in the web
 
-Packet timing samples describe selected packets in a connection; collecting them
-is not a tunneling classification. When inspecting another evidence type, such
-as **Long Connection**, the samples stay collapsed under **Packet timing context**.
-They share the connection UID but were not inputs to that finding. Long Connection
-uses the connection duration. Timing samples are not counted as application
-protocol records. The context renders one selected sample at a time.
-
-For packet periodicity and suspicious packet heartbeat findings, the linked timing
-sample remains visible by default, alongside the recorded timing decision.
+Packet timing samples appear only in packet periodicity and suspicious packet
+heartbeat findings, alongside the recorded timing decision. They are excluded
+from other evidence views, including **Long Connection**, even when they share
+the connection UID. Long Connection uses duration, not packet timing. Timing
+samples are not counted as application protocol records.
 
 The related **Packet timing** tab shows gaps between consecutive selected packets,
 in seconds or milliseconds. The table pairs each gap with that packet's payload
