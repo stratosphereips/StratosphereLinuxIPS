@@ -30,6 +30,7 @@ from slips_files.core.structures.evidence import (
 BACKGROUND = "Background"
 BENIGN = "Benign"
 MALICIOUS = "Malicious"
+INFERENCE_BATCH_SIZE = 32
 
 
 class MLBaseDetection(IModule, ABC):
@@ -697,6 +698,69 @@ class MLBaseDetection(IModule, ABC):
             predicted_label,
         )
 
+    def _test_flow_batch(
+        self, records: list[tuple[dict[str, Any], str, str]]
+    ) -> None:
+        """Predict queued flows together without changing per-flow attribution.
+
+        Parameters:
+            records: Raw flow, time-window and profile tuples in delivery order.
+        """
+        if not records:
+            return
+        processed = self.process_features(
+            pd.DataFrame([row[0] for row in records])
+        )
+        if processed.empty:
+            return
+        predictions = self.detect(self.drop_labels(processed))
+        if predictions is None or len(predictions) != len(processed):
+            return
+        for index, prediction in zip(processed.index, predictions):
+            self.flow, self.twid, self.profileid = records[int(index)]
+            original = self._normalize_binary_label(
+                processed.loc[index].get(
+                    "ground_truth_label", self.ground_truth_config_label
+                )
+            )
+            predicted = self._normalize_binary_label(prediction)
+            if predicted == MALICIOUS:
+                self.set_evidence_malicious_flow(self.flow, self.twid)
+            self.store_testing_results(original, predicted)
+
+    def _test_queued_flows(self) -> None:
+        """Drain only ready test messages, bounding work without delaying sparse traffic."""
+        records = []
+        for _ in range(INFERENCE_BATCH_SIZE):
+            msg = self.get_msg("new_flow")
+            if not msg:
+                break
+            message = json.loads(msg["data"])
+            flow = message["flow"]
+            if self.db.is_p2p_related_flow(
+                flow.get("saddr"),
+                flow.get("sport"),
+                flow.get("daddr"),
+                flow.get("dport"),
+                flow.get("proto"),
+            ):
+                continue
+            flow.update(
+                {
+                    "state": message["interpreted_state"],
+                    "label": message["label"],
+                    "module_labels": message["module_labels"],
+                }
+            )
+            flow["ground_truth_label"] = self._normalize_binary_label(
+                flow.get("ground_truth_label")
+                or self.ground_truth_config_label
+            )
+            if flow["ground_truth_label"] == BACKGROUND:
+                continue
+            records.append((flow, message["twid"], message["profileid"]))
+        self._test_flow_batch(records)
+
     def process_training_flows(self):
         """Build and preprocess one training batch from buffered labeled flows."""
         try:
@@ -973,6 +1037,9 @@ class MLBaseDetection(IModule, ABC):
 
     def main(self):
         """Consume incoming flows, route to train/test path, and maintain buffers."""
+        if self.mode == "test":
+            self._test_queued_flows()
+            return
         if msg := self.get_msg("new_flow"):
             msg = json.loads(msg["data"])
             self.twid = msg["twid"]

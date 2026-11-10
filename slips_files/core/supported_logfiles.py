@@ -14,4 +14,5 @@ SUPPORTED_LOGFILES = (
     "software",
     "weird",
     "login",
+    "packet_timing",
 )

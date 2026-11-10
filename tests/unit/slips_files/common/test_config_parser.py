@@ -352,3 +352,19 @@ def test_flow_retention_policy_bounds_settings(
         )
         == expected
     )
+
+
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("true", False), (None, False)])
+def test_beaconing_feature_flag_is_boolean(value: object, expected: bool) -> None:
+    """Require a real boolean when enabling the numeric detector.
+
+    Parameters:
+        value: Feature flag to evaluate.
+        expected: Whether the detector is enabled.
+    """
+    factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    with patch.object(parser, "read_configuration", return_value=value) as read:
+        assert parser.beaconing_enabled() is expected
+        assert read.call_args.args == ("beaconing", "enabled", True)
+    assert factory is not None

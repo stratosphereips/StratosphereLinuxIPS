@@ -1,0 +1,1 @@
+"""Beaconing detector tests."""

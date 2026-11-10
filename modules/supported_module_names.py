@@ -11,6 +11,7 @@ class Modules(str, Enum):
 
     ALERT_SUMMARY = "alert_summary"
     ANOMALY_DETECTION_HTTPS = "anomaly_detection_https"
+    BEACONING = "beaconing"
     ARP = "arp"
     ARP_POISONER = "arp_poisoner"
     BLOCKING = "blocking"

@@ -26,7 +26,7 @@ warnings.warn = warn
 
 class MLLinearModel(ml_base.MLBaseDetection):
     name = "ml_linear_model"
-    description = "Standalone linear sklearn-based ML flow detector"
+    description = "Machine learning flow detector using a linear classifier"
     authors = ["Jan Svoboda, Sebastian Garcia"]
     module_key = "ml_linear_model"
     module_config_section = "ml_linear_model"
@@ -34,7 +34,7 @@ class MLLinearModel(ml_base.MLBaseDetection):
         ml_base.EvidenceType.ML_LINEAR_MALICIOUS_FLOW
     )
     malicious_flow_description_template = (
-        "Flow with malicious characteristics detected by ml_linear_model. "
+        "Machine learning flagged a suspicious flow using the linear model. "
         "Src IP {src_ip}:{sport} to {dst_ip}:{dport}"
     )
 
