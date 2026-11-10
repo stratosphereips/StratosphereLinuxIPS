@@ -594,6 +594,15 @@ class ZeekInputUtils:
                     packet_settings.zeek_overrides(),
                 ]
             )
+        smb_enabled = self.input.conf.read_configuration(
+            Modules.SMB_ANALYZER.value, "enabled", True
+        )
+        for option in ("log_file_operations", "log_authentication_failures"):
+            enabled = self.input.conf.read_configuration(
+                Modules.SMB_ANALYZER.value, option, True
+            )
+            if smb_enabled is False or enabled is False:
+                cmd.extend(["-e", f"redef SMB::slips_{option}=F;"])
         return cmd
 
     def run_zeek(

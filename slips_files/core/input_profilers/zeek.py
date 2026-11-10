@@ -44,7 +44,18 @@ from slips_files.core.input_profilers.zeek_to_slips_maps import (
     login_fields_to_slips_fields_map,
 )
 
+from slips_files.core.flows.smb import (
+    SMBMapping,
+    SMBFile,
+    SMBCommand,
+    NTLM,
+    DCERPC,
+)
 from slips_files.core.flows.packet_timing import PacketTiming
+from slips_files.core.input_profilers.zeek_to_slips_maps import (
+    smb_fields_to_slips_fields_map,
+)
+
 LOG_MAP = {
     "packet_timing.log": {
         "ts": "starttime",
@@ -68,6 +79,10 @@ LOG_MAP = {
             )
         },
     },
+    **{
+        name + ".log": smb_fields_to_slips_fields_map
+        for name in ("smb_mapping", "smb_files", "smb_cmd", "ntlm", "dce_rpc")
+    },
     "conn.log": conn_fields_to_slips_fields_map,
     "dns.log": dns_fields_to_slips_fields_map,
     "http.log": http_fields_to_slips_fields_map,
@@ -88,6 +103,11 @@ LOG_MAP = {
 # define a mapping of log types to their corresponding classes
 LINE_TYPE_TO_SLIPS_CLASS = {
     "packet_timing.log": PacketTiming,
+    "smb_mapping.log": SMBMapping,
+    "smb_files.log": SMBFile,
+    "smb_cmd.log": SMBCommand,
+    "ntlm.log": NTLM,
+    "dce_rpc.log": DCERPC,
     "conn.log": Conn,
     "dns.log": DNS,
     "http.log": HTTP,

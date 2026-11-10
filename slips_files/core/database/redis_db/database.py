@@ -111,6 +111,7 @@ class RedisDB(
         "new_software",
         "new_tunnel",
         "new_login",
+        "new_smb",
         "new_packet_timing",
         "p2p_data_request",
         "remove_old_files",
