@@ -37,7 +37,7 @@ class ScanDetectionsHandler:
 
     Entries managed by this class:
 
-    .. vertical portscans detections ..
+    .. vertical scan indexes (read compatibility; no longer populated) ..
     zset: profile_tw:[tcp|udp]:not_estab:ips:first_seen <ip> first_seen
     zset: profile_tw:[tcp|udp]:not_estab:ips:last_seen <ip> last_seen
     hash profile_tw:[tcp|udp]:not_estab:<ip>:dstports <port> <tot_pkts>
@@ -45,7 +45,7 @@ class ScanDetectionsHandler:
     <tot_pkts_sent_to_all_ports>
 
 
-    ..horizontal portscans detections ..
+    ..legacy horizontal indexes (read compatibility; no longer populated) ..
     hash: profile_tw:[tcp|udp]:not_estab:dstports:total_packets <port>
     <tot_pkts>
     zset profile_tw:[tcp|udp]:not_estab:dport:[port]:dstips:timestamps  [ip, ip, .. ]
@@ -430,8 +430,7 @@ class ScanDetectionsHandler:
         """
         that detection in done in detect_connection_to_multiple_ports()
         """
-        if not proto:
-            # sometimes zeek has "unknown_transport" as the proto
+        if state != State.EST or proto != Protocol.TCP:
             return False
 
         dport_name = flow.appproto
@@ -442,7 +441,7 @@ class ScanDetectionsHandler:
             # dport is known, we are considering only unknown services
             return False
 
-        return state == State.EST and proto == Protocol.TCP
+        return True
 
     def _store_vertical_portscan_info(
         self, pipe, profileid, twid, proto, target_ip, flow
@@ -557,17 +556,6 @@ class ScanDetectionsHandler:
         )
         state: State = self.convert_str_to_state(summary_state)
         proto: Protocol = self._convert_str_to_proto(flow.proto)
-
-        if self._is_info_needed_by_the_portscan_detector_modules(
-            role, proto, state
-        ):
-            pipe = self._store_vertical_portscan_info(
-                pipe, profileid, twid, proto, target_ip, flow
-            )
-
-            pipe = self._store_horizontal_portscan_info(
-                pipe, profileid, twid, proto, flow
-            )
 
         if self._is_info_needed_by_the_conn_to_multiple_ports_detector(
             flow, proto, state

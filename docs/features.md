@@ -900,8 +900,14 @@ The detection techniques are:
 
 #### ARP Scans
 
-Slips considers an IP performing an ARP scan if it sends 5
-or more non-gratuitous ARP to different destination addresses in 30 seconds or less.
+Slips examines bursts of distinct ARP targets using a rolling 30-second window.
+Five targets make a candidate, not an automatic scan. It considers prior
+successful communication by the requesting device and the pattern and size of
+the search. Familiar-neighbour refreshes do not produce scan evidence merely
+because there are many requests. Large ambiguous searches are informational
+`ARP_DISCOVERY` findings, which do not contribute to alerts.
+See [ARP scan detection](arp_scans.md) for the decision rules, persistent history,
+configuration, examples and visibility limitations.
 
 #### ARP to a destination IP outside of local network
 
@@ -1086,15 +1092,12 @@ This avoids generating one port scan alert per flow in a long scan.
 
 #### Horizontal port scans
 
-Slips checks both TCP and UDP connections for horizontal port scans.
-
-Slips considers an IP performing a horizontal port scan if it contacted more than 3
-destination IPs on a specific port with not established connections.
-
-
-Slips reports evidence of a horizontal portscan based on a log scale.
-meaning every 10, 100, 1000 ports scanned will generate an evidence.
-This avoids generating one port scan alert per flow in a long scan.
+Slips checks TCP and UDP probing in bounded fast and slow rolling periods.
+New SYN attempts, short empty connections to open services, small ACK/FIN probes
+and unanswered UDP traffic have separate rules. Closing old connections does not
+count as a new SYN scan. Recent successful use provides temporary reconnection
+context, and ambiguous failures have lower confidence.
+See [Horizontal port scans](horizontal_port_scans.md) for settings and limitations.
 
 
 #### PING Sweeps
