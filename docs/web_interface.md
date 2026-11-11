@@ -285,10 +285,12 @@ In the middle pane, **Filters for this group** controls only the records inside
 the selected evidence group. Its **Group by → Type** option shows collapsible
 type sections with counts covering every matching record, including records
 not loaded yet. Open a type to inspect its records and use **Load more** inside
-that section. The same menu contains the group's source and threat filters;
-search stays beside it. These controls intersect the main Evidence filters
-without changing them, and grouping leaves record sorting unchanged. **Reset
-group filters** resets only this group's controls.
+that section. **Threat**, **Module**, and **Score handling** group the records
+loaded so far, with counts labeled accordingly. The same menu contains the
+group's source and exact or inclusive threat filters;
+search stays beside it. These controls remain selected when you inspect another
+group, intersect the main Evidence filters without changing them, and leave
+record sorting unchanged. **Reset group filters** clears the record controls.
 
 The **Alerts**, **Evidence**, and **Hosts** tabs keep search and result counts
 visible, with a funnel icon opening the other filtering options in a popup.
@@ -300,8 +302,12 @@ and scope use **All** without a result count. **From** and **To** labels and the
 date fields appear together only when **Custom** is selected. Controls share the
 same font and height.
 Close the popup with its close button, Escape, or a click outside it. Changing
-tabs closes it too. Closing it preserves selections; existing saved browser
-preferences still apply. Table sorting and column controls stay beside the tables.
+tabs closes it too. The browser remembers filter selections, searches, grouping,
+range choices, network and interface selection, and layout when you switch
+tabs, reload the page, or restart Slips. A run you revisit keeps its own saved
+view; a new run starts with your latest browser preferences. Preferences are
+stored in that browser's local storage. Table sorting and column controls stay
+beside the tables.
 The group summary shows its type once, one host identity, the description and
 a compact row for threat, score and network. Record headers keep additional
 description details without repeating their opening sentence. Identifiers stay
@@ -1663,7 +1669,7 @@ The selected host workspace includes:
 - total and inbound/outbound flow and byte counts, plus packet, evidence, and alert totals;
 - inbound/outbound flow and byte plots;
 - protocol/application distribution and top peers;
-- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs;
+- compact related alerts and a full-width, sortable evidence table showing time, threat, type, module, confidence, triggering-flow count, alert links, and description; its search box matches every stored evidence field, including raw evidence attributes, triggering flow UIDs, and linked alert IDs. **Filters for this host** beside the search groups matching records by detection type across the entire selected host and range, with collapsible sections and exact counts. The same menu filters by local or P2P source and threat. Other grouping choices organize the current page only;
 - newest historical flows with cursor navigation into older traffic.
 
 Every related-evidence and flow-table heading is sortable across the selected host and time range. The flow sort uses indexed fields where available and reads stored protocol details when sorting ports, connection state, or duration. The Whitelists table also sorts by every displayed column, including whether a rule can be removed.
