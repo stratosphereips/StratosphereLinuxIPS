@@ -50,7 +50,7 @@ def test_start_input_process(
     process_manager.main.db.increment_modules_started_count.return_value = 1
 
     with patch(
-        "managers.process_manager.startup_mixin.Input.create_process"
+        "managers.process_manager.startup_mixin.Input"
     ) as mock_input, patch(
         "managers.process_manager.startup_mixin.DupFd"
     ) as duplicate_fd, patch(
@@ -106,7 +106,7 @@ def test_start_profiler_process():
     process_manager.main.bloom_filters_man = Mock()
     process_manager.main.db.increment_modules_started_count.return_value = 1
     with patch(
-        "managers.process_manager.startup_mixin.Profiler.create_process"
+        "managers.process_manager.startup_mixin.Profiler"
     ) as mock_profiler, patch.object(
         process_manager.is_profiler_done_starting_initial_workers_event,
         "wait",
@@ -207,7 +207,7 @@ def test_start_evidence_process(output_dir, redis_port):
     process_manager.main.db.increment_modules_started_count.return_value = 1
 
     with patch(
-        "managers.process_manager.startup_mixin.EvidenceHandler.create_process"
+        "managers.process_manager.startup_mixin.EvidenceHandler"
     ) as mock_evidence:
         mock_evidence_process = Mock()
         mock_evidence.return_value = mock_evidence_process

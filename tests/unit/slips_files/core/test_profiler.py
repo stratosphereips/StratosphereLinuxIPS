@@ -240,7 +240,7 @@ def test_notify_observers_with_correct_message():
     observer_mock.update.assert_called_once_with(test_msg)
 
 
-@patch("slips_files.core.worker_manager_mixin.ProfilerWorker.create_process")
+@patch("slips_files.core.worker_manager_mixin.ProfilerWorker")
 def test_start_profiler_worker_uses_parent_output_dir(mock_worker_cls):
     profiler = ModuleFactory().create_profiler_obj()
     worker = mock_worker_cls.return_value

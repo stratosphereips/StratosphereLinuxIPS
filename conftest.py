@@ -9,8 +9,14 @@ import pytest
 import os
 import sys
 import inspect
-from multiprocessing import Queue
-from unittest.mock import patch
+import multiprocessing
+
+# Slips uses spawn on every OS, tests must exercise the same boundary. Set it
+# before importing Slips code, which creates multiprocessing locks at import.
+multiprocessing.set_start_method("spawn", force=True)
+
+from multiprocessing import Queue  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 from slips_files.core.flows.zeek import Conn
 from slips_files.common.parsers.config_parser import ConfigParser
 import logging

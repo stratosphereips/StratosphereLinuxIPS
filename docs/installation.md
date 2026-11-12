@@ -84,9 +84,11 @@ the leak detector; extracting details from a matching packet additionally
 requires Wireshark's `tshark` command. Building `netifaces` requires Apple's
 command-line developer tools if they are not already installed.
 
-The native process implementation uses macOS's default `spawn` method.
-Do not force `fork` or disable Apple's fork-safety checks. Modules, database
-connections, and background threads are initialized in their child processes.
+Slips starts its processes with the `spawn` method on every operating system
+(`slips.py` sets it explicitly). Do not force `fork` or disable Apple's
+fork-safety checks. A module only stores picklable configuration in the main
+process; its database connections and background threads are created in its
+own child process.
 
 On shutdown, the process manager reaps every owned child that is still alive,
 even if it already reported completion or its Redis PID entry was lost. It

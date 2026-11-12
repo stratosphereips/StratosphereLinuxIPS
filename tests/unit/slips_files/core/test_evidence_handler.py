@@ -65,6 +65,7 @@ def test_init_creates_notify_obj_only_when_popups_are_enabled(
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        handler._setup()
 
     if expect_notify_obj:
         mock_notify_cls.assert_called_once()
@@ -117,7 +118,7 @@ def test_stop_evidence_workers():
 
 
 @patch(
-    "slips_files.core.evidence_handler.EvidenceHandlerWorker.create_process"
+    "slips_files.core.evidence_handler.EvidenceHandlerWorker"
 )
 def test_start_evidence_worker(mock_worker_cls):
     handler = ModuleFactory().create_evidence_handler_obj()
