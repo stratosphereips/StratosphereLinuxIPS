@@ -37,12 +37,12 @@ class Output(IObserver):
     """
 
     name = "output"
-    # Output is instantiated once in the main process before any of
-    # slips' child processes are forked, so these multiprocessing locks
-    # are inherited by every child and actually serialize writes to the
-    # shared stdout/logfiles across processes. threading.Lock() would not
-    # do that, since each forked process gets its own independent copy of
-    # it, letting concurrent prints from different processes interleave
+    # Output is instantiated once in the main process and handed to every
+    # child process. These multiprocessing locks are sent along with it
+    # (see __getstate__) so they actually serialize writes to the shared
+    # stdout/logfiles across processes. threading.Lock() would not do
+    # that, since each process gets its own independent copy of it,
+    # letting concurrent prints from different processes interleave
     # and corrupt each other's output (e.g. a partial in-place \r update
     # from one process landing in the middle of another process' line).
     slips_logfile_lock = multiprocessing.Lock()
@@ -50,10 +50,35 @@ class Output(IObserver):
     cli_lock = multiprocessing.Lock()
     # set while a single-line, in-place-refreshing status line (e.g. the
     # "Total analyzed IPs" summary) is left on screen without a trailing
-    # newline. shared across all forked processes so that any of them
+    # newline. shared across all processes so that any of them
     # printing a normal line first closes it out with a newline instead
     # of overwriting/merging with it.
     _cli_has_dangling_line = multiprocessing.Value("b", False)
+    _SHARED_STATE = (
+        "slips_logfile_lock",
+        "errors_logfile_lock",
+        "cli_lock",
+        "_cli_has_dangling_line",
+        # defined below, see begin_startup_announcements()
+        "_startup_queue",
+        "_startup_in_progress",
+        "_startup_queue_lock",
+        "_startup_deadline",
+    )
+
+    def __getstate__(self) -> dict:
+        """
+        Carry the shared locks to a spawned child.
+        Class attributes are not pickled, so without this, the child would
+        create its own locks and theyd be useless :D
+        """
+        state = self.__dict__.copy()
+        for name in self._SHARED_STATE:
+            state[name] = getattr(self, name)
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
 
     # While slips' processes/modules are still announcing their startup
     # (see begin_startup_announcements()), every OTHER printed message
@@ -301,7 +326,7 @@ class Output(IObserver):
         """
         Marks the start of slips' startup progress report. Called once,
         as soon as the total number of processes/modules to start is
-        known, and before any of them are forked. Until the last one
+        known, and before any of them are started. Until the last one
         announces itself (or the safety-net timeout below elapses),
         every other printed message is queued instead of interleaving
         with the startup progress lines.
