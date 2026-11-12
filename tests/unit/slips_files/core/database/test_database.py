@@ -37,6 +37,7 @@ import pytest
 import redis
 
 from slips_files.core.database.database_manager import DBManager
+from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.database.redis_db.database import RedisDB
 from slips_files.core.structures.evidence import (
     Attacker,
@@ -1764,3 +1765,29 @@ def test_factory_refuses_unverified_redis_ownership(failure: type[Exception]) ->
     with patch("slips_files.common.slips_utils.utils.is_port_in_use", return_value=True), patch("slips_files.core.database.redis_db.redis_auth.try_connect_with_and_without_password", side_effect=failure("connection lost")):
         with pytest.raises(RuntimeError, match="Cannot verify ownership"):
             factory._assert_redis_has_no_run_owner(65000)
+
+
+def test_slips_own_connection_registry_uses_exact_tuple_and_ttl() -> None:
+    """Bound self-generated flow marks and separate retained Redis runs."""
+    _module_factory = ModuleFactory()
+    db = object.__new__(RedisDB)
+    db.r = Mock()
+    db.constants = Constants()
+
+    db.record_slips_own_connection(123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43)
+
+    key = "slips:own_connection:123:" "tcp|192.0.2.10|51234|198.51.100.43|43"
+    source_key = "slips:own_sources:123"
+    pipe = db.r.pipeline.return_value
+    pipe.set.assert_called_once_with(key, "1", ex=3600)
+    pipe.sadd.assert_called_once_with(source_key, "192.0.2.10")
+    pipe.expire.assert_called_once_with(source_key, 3600)
+    pipe.execute.assert_called_once()
+
+    db.r.sismember.return_value = 1
+    db.r.exists.return_value = 1
+    assert db.is_slips_own_source_ip(123, "192.0.2.10")
+    assert db.is_slips_own_connection(
+        123, "TCP", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+    db.r.exists.assert_called_once_with(key)

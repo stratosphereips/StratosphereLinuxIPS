@@ -3,6 +3,7 @@
 from tests.module_factory import ModuleFactory
 import pytest
 import json
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch, Mock, mock_open
 from slips_files.core.structures.evidence import (
     Direction,
@@ -715,3 +716,88 @@ def test_is_ip_asn_in_org_asn(
 
     result = whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org)
     assert result == expected_result
+
+
+@pytest.mark.parametrize(
+    "same_connection,expected",
+    [(True, True), (False, False)],
+)
+def test_live_flow_whitelist_requires_exact_slips_socket(
+    same_connection: bool, expected: bool
+) -> None:
+    """Keep unrelated browser traffic even when it shares the device IP.
+
+    Parameters:
+        same_connection: Whether Slips registered the full socket tuple.
+        expected: Whether this flow should be excluded from profiling.
+    """
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist._filter_slips_own_traffic = True
+    whitelist.db.main_pid = 123
+    whitelist.db.is_slips_own_source_ip.return_value = True
+    whitelist.db.is_slips_own_connection.return_value = same_connection
+    whitelist._check_if_whitelisted_domains_of_flow = Mock(return_value=False)
+    whitelist._flow_contains_whitelisted_ip = Mock(return_value=False)
+    whitelist._flow_contains_whitelisted_mac = Mock(return_value=False)
+    whitelist.org_analyzer.is_whitelisted = Mock(return_value=False)
+    flow = SimpleNamespace(
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=43,
+        proto="tcp",
+        type_="conn",
+    )
+
+    assert whitelist.is_whitelisted_flow(flow) is expected
+    whitelist.db.is_slips_own_connection.assert_called_once_with(
+        123, "tcp", "192.0.2.10", 51234, "198.51.100.43", 43
+    )
+
+
+def test_offline_flow_ignores_live_slips_socket_registry() -> None:
+    """Keep captured files independent of current machine sockets."""
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist._filter_slips_own_traffic = False
+    flow = SimpleNamespace(
+        saddr="192.0.2.10",
+        sport=51234,
+        daddr="198.51.100.43",
+        dport=43,
+        proto="tcp",
+    )
+
+    assert whitelist._is_slips_own_flow(flow) is False
+    whitelist.db.is_slips_own_source_ip.assert_not_called()
+
+
+@pytest.mark.parametrize("source_port,registered_port,expected", [
+    (51234, 51234, True),
+    (51235, 51234, False),
+])
+def test_slips_own_flow_requires_the_exact_source_port(
+    source_port: int, registered_port: int, expected: bool,
+) -> None:
+    """Do not exempt another application's concurrent request to the same server.
+
+    Parameters:
+        source_port: Port of the captured connection.
+        registered_port: Port of the socket actually opened by Slips.
+        expected: Whether the exact connection belongs to Slips.
+    """
+    factory = ModuleFactory()
+    whitelist = factory.create_whitelist_obj()
+    whitelist._filter_slips_own_traffic = True
+    whitelist.db.main_pid = 123
+    whitelist.db.is_slips_own_source_ip.return_value = True
+    whitelist.db.is_slips_own_connection.side_effect = (
+        lambda run, proto, src, sport, dst, dport: sport == registered_port
+    )
+    flow = SimpleNamespace(
+        saddr="192.0.2.10", sport=source_port,
+        daddr="198.51.100.43", dport=43, proto="tcp",
+    )
+
+    assert whitelist._is_slips_own_flow(flow) is expected

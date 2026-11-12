@@ -35,6 +35,17 @@ from slips_files.core.structures.flow_attributes import Role
 class ProfilerWorker(IModule):
     name = "profiler_worker"
 
+    def __init__(self, *args, **kwargs) -> None:
+        """Create the consumed-line counter before the process starts.
+
+        “Under spawn, the child gets the process object as pickled bytes.
+        The shared counter must therefore exist before start(),
+        so it is created here in the parent.”
+        """
+        # Q" is the C type code for an unsigned 64-bit integer
+        self._received_lines = multiprocessing.Value("Q", 0)
+        super().__init__(*args, **kwargs)
+
     def init(
         self,
         name,
@@ -99,8 +110,6 @@ class ProfilerWorker(IModule):
         Parameters:
             count: Number of consumed lines.
         """
-        if not hasattr(self, "_received_lines"):
-            self._received_lines = multiprocessing.Value("Q", 0)
         self._received_lines.value = count
 
     def subscribe_to_channels(self):
