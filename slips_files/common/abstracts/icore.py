@@ -66,9 +66,9 @@ class ICore(IModule, Process):
         self.next_fps_check_time = now + ONE_MIN
         self.last_flows_count = flows_now
 
-    def run(self):
+    def _execute(self):
         """
-        must be called run because this is what multiprocessing runs
+        runs once, called by IModule.run() inside the child process
         """
         try:
             self._pre_main()

@@ -269,10 +269,10 @@ class FeedsUpdateManager(
         Build the instance used by the startup update.
 
         Returns:
-            A FeedsUpdateManager with a dummy termination event, since it
-            doesn't run as a process here.
+            A set up FeedsUpdateManager with a dummy termination event. It
+            is used in this process, so nothing else would call _setup().
         """
-        return cls(
+        update_manager = cls(
             logger,
             output_dir,
             redis_port,
@@ -282,6 +282,8 @@ class FeedsUpdateManager(
             pid,
             bloom_filters_man,
         )
+        update_manager._setup()
+        return update_manager
 
     @staticmethod
     def _update_ports_info_in_background(

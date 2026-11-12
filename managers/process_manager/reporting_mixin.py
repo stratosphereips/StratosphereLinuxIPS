@@ -100,7 +100,7 @@ class ReportingMixin:
             db: DB connection to increment the shared counter through.
                 Must be a connection local to the calling process -
                 each detection module has its own, since it runs in
-                its own forked process.
+                its own spawned process.
         """
         started_count = db.increment_modules_started_count()
         self.print_started_module(

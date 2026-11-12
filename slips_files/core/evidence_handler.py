@@ -310,7 +310,7 @@ class EvidenceHandler(ICore):
 
     def start_evidence_worker(self, worker_id: int = None):
         worker_name = f"evidence_handler_worker_process_{worker_id}"
-        worker = EvidenceHandlerWorker.create_process(
+        worker = EvidenceHandlerWorker(
             logger=self.logger,
             output_dir=self.parent_output_dir,
             redis_port=self.redis_port,

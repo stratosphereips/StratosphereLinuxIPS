@@ -3,14 +3,17 @@
 import json
 import os
 import re
+import signal
 import sys
 import traceback
 import warnings
 from abc import ABC, abstractmethod
 from argparse import Namespace
-from multiprocessing import Process, Event
+from contextlib import contextmanager
+from multiprocessing import Process, Event, parent_process
 from typing import (
     Dict,
+    Iterator,
     Optional,
 )
 from slips_files.common.printer import Printer
@@ -34,21 +37,6 @@ class IModule(ABC, Process):
     authors = ["Template Author"]
     # should be filled with the channels each module subscribes to
     channels = {}
-
-    @classmethod
-    def create_process(cls, *args: object, **kwargs: object) -> Process:
-        """Return a process that initializes this module in its child.
-
-        Parameters:
-            args: Positional constructor arguments.
-            kwargs: Keyword constructor arguments.
-
-        Returns:
-            Unstarted process with no parent-owned module resources.
-        """
-        from slips_files.core.module_process import ModuleProcess
-
-        return ModuleProcess(cls, *args, **kwargs)
 
     def __init_subclass__(cls, **kwargs: object) -> None:
         """
@@ -103,8 +91,22 @@ class IModule(ABC, Process):
         conf,
         ppid: int,
         bloom_filters_manager: BFManager,
+        startup_total: int = 0,
         **kwargs,
     ):
+        """
+        Store picklable configs only.
+
+        The printer, database connection and the module's init() are not
+        built here. They are built by _setup(), reached through
+        run() -> _prepare_child() -> _setup() in the child process.
+        The parent-watchdog thread is started by _prepare_child().
+
+        Parameters:
+            startup_total: When above zero, the child announces its startup
+                against this run-wide total.
+            kwargs: Module-specific arguments passed on to init().
+        """
         Process.__init__(self)
         if not self._is_module_name_registered(self.name):
             raise RuntimeError(
@@ -125,6 +127,50 @@ class IModule(ABC, Process):
         self.termination_event: Event = termination_event
         self.logger = logger
         self.bloom_filters: BFManager = bloom_filters_manager
+        self.startup_total = startup_total
+        self._init_kwargs = kwargs
+
+    @contextmanager
+    def _prepare_child(self) -> Iterator[None]:
+        """
+        Prepare a spawned child: ignore SIGINT (the main process controls
+        shutdown), track Slips' own sockets, build the module's resources,
+        and exit if the parent dies. Does nothing when not running in a
+        child process.
+        """
+        if parent_process() is None:
+            yield
+            return
+
+        from slips_files.common.slips_own_traffic import SlipsTrafficTracker
+
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        tracker = SlipsTrafficTracker()
+        tracker.install()
+        watchdog = None
+        try:
+            self._setup()
+            from managers.process_manager.worker_lifecycle import (
+                start_parent_watchdog,
+            )
+
+            watchdog = start_parent_watchdog(self.db)
+            tracker.attach(self.db)
+            if self.startup_total:
+                self._announce_startup()
+            yield
+        finally:
+            if watchdog is not None:
+                watchdog.set()
+            tracker.stop()
+
+    def _setup(self) -> None:
+        """
+        Build everything that can't cross a process boundary (non-picklable objs):
+        the printer:
+         - database conn, the module's own init().
+         Runs once in the module's process.
+        """
         self.printer = Printer(self.logger, self.name)
         self.db = DBManager(
             self.logger,
@@ -138,7 +184,7 @@ class IModule(ABC, Process):
         self.keyboard_int_ctr = 0
         self.slips_version: str = utils.get_slips_version()
         self.unversioned_channels: frozenset[str] = frozenset()
-        self.init(**kwargs)
+        self.init(**self._init_kwargs)
         # should after the module's init() so the module has a chance to
         # set its own channels
         # tracks whether or not in the last iteration there was a msg
@@ -196,6 +242,26 @@ class IModule(ABC, Process):
         this init will have access to all keyword args passes when
         initializing the module
         """
+
+    def _announce_startup(self) -> None:
+        """Print this module's startup line against the run-wide total."""
+        from slips_files.common.startup_report import format_started_line
+
+        count = self.db.increment_modules_started_count()
+        self.print(
+            format_started_line(
+                self.name,
+                count,
+                self.startup_total,
+                os.getpid(),
+                self.description,
+                category="module",
+            ),
+            1,
+            0,
+            suppress_sender=True,
+            is_final_startup_announcement=count >= self.startup_total,
+        )
 
     @abstractmethod
     def subscribe_to_channels(self):
@@ -338,6 +404,13 @@ class IModule(ABC, Process):
         self.print(traceback.format_exc(), 0, 1)
 
     def run(self):
+        """
+        Entry point of the child process: prepare the child, then execute.
+        """
+        with self._prepare_child():
+            self._execute()
+
+    def _execute(self):
         """
         some modules use async functions like flow_alerts,
         the goals of this function is to make sure that async and normal

@@ -21,13 +21,21 @@
 
 from __future__ import print_function
 
+import multiprocessing
 import os
 import sys
 import time
 import warnings
 
-from slips.main import Main
-from slips.daemon import Daemon
+# Must be set before importing anything from Slips: class-level locks and
+# shared values (e.g. in Output) are created at import time, and only
+# spawn-style ones can be reopened by a spawned child. Children get only
+# picklable config and build their own resources, so every OS uses the same
+# start method.
+multiprocessing.set_start_method("spawn", force=True)
+
+from slips.main import Main  # noqa: E402
+from slips.daemon import Daemon  # noqa: E402
 
 
 # Ignore warnings on CPU from tensorflow

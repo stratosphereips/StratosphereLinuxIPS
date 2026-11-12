@@ -77,7 +77,7 @@ class StartupMixin:
         Returns:
             Started profiler process.
         """
-        profiler_process = Profiler.create_process(
+        profiler_process = Profiler(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -120,7 +120,7 @@ class StartupMixin:
         Returns:
             Started evidence handler process.
         """
-        evidence_process = EvidenceHandler.create_process(
+        evidence_process = EvidenceHandler(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,
@@ -151,7 +151,7 @@ class StartupMixin:
         Returns:
             Started input process.
         """
-        input_process = Input.create_process(
+        input_process = Input(
             self.main.logger,
             self.main.args.output,
             self.main.redis_port,

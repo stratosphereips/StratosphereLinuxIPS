@@ -156,7 +156,7 @@ class IAsyncModule(IModule):
         else:
             self.print(f"Unhandled loop error: {context.get('message')}")
 
-    def run(self):
+    def _execute(self):
         try:
             asyncio.run(self._run_pre_main_and_main())
         except (KeyboardInterrupt, asyncio.CancelledError):

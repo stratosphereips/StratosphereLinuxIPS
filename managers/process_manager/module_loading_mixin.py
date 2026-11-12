@@ -12,7 +12,6 @@ from typing import List, Any, Dict, Iterator, Optional
 import modules
 from modules.supported_module_names import Modules
 from slips_files.common.abstracts.imodule import IModule
-from slips_files.core.module_process import ModuleProcess
 from slips_files.core.evidence_handler import DEFAULT_EVIDENCE_HANDLER_WORKERS
 from slips_files.core.worker_manager_mixin import (
     NUM_INITIAL_PROFILER_WORKERS,
@@ -275,8 +274,13 @@ class ModuleLoadingMixin:
         enabled_module_names = self.get_enabled_module_names()
         for module_name in enabled_module_names:
             short_name = self._short_name(module_name)
-            process = ModuleProcess(
-                module_name,
+            imported_module = self._import_module(module_name)
+            if imported_module is None:
+                continue
+            module_class = self._find_module_class(imported_module)
+            if module_class is None:
+                continue
+            process = module_class(
                 self.main.logger,
                 self.main.args.output,
                 self.main.redis_port,

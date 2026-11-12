@@ -71,7 +71,7 @@ class WorkerManagerMixin:
         None.
         """
         worker_name = f"profiler_worker_process_{worker_id}"
-        worker = ProfilerWorker.create_process(
+        worker = ProfilerWorker(
             logger=self.logger,
             output_dir=self.parent_output_dir,
             redis_port=self.redis_port,
