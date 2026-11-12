@@ -1,5 +1,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
-"""Mark network connections opened by Slips modules for live capture filtering."""
+"""Let Slips recognise its own network traffic in a live capture.
+
+Slips sniffs the interface its own modules (TI feeds, Redis, P2P, etc.) talk
+over, so without this it would profile and alert on itself. Each module
+process swaps in `TrackedSocket`, which reports the exact 5-tuple of every
+connection to Redis so the profiler can skip those flows.
+"""
 
 import ipaddress
 import socket
@@ -11,24 +17,29 @@ _PENDING_LIMIT = 256
 
 
 class SlipsTrafficTracker:
-    """Record exact socket tuples without changing the caller's network API."""
+    """Collect the 5-tuples of this process's sockets and save them to Redis.
+
+    Hooks `socket.socket` instead of patching callers, so third-party libraries
+    (requests, redis-py, ...) are covered without code changes. One tracker lives
+    per module process, because sockets and patches don't cross processes.
+    """
 
     def __init__(self) -> None:
-        """Start with a bounded queue for connections opened during module init."""
+        """Prepare a buffer, since sockets open before the module has a DB handle."""
         self.db: Any = None
         self.pending: set[tuple[str, str, int, str, int]] = set()
         self.warned = False
 
     def install(self) -> None:
-        """Track sockets created in this Slips module process."""
+        """Replace `socket.socket` so every socket made from now on is tracked."""
         TrackedSocket.tracker = self
         socket.socket = TrackedSocket
 
     def attach(self, db: Any) -> None:
-        """Flush constructor-time connections to the module's run database.
+        """Give the tracker its DB and save connections buffered before it existed.
 
         Parameters:
-            db: Database manager owned by this module process.
+            db: This process's database manager (needed to reach Redis).
         """
         self.db = db
         for connection in self.pending:
@@ -36,16 +47,20 @@ class SlipsTrafficTracker:
         self.pending.clear()
 
     def stop(self) -> None:
-        """Restore the process socket constructor after its module stops."""
+        """Undo `install` so sockets made during shutdown/teardown aren't tracked."""
         if socket.socket is TrackedSocket:
             socket.socket = _ORIGINAL_SOCKET
         TrackedSocket.tracker = None
 
     def _save(self, connection: tuple[str, str, int, str, int]) -> None:
-        """Store an exact tuple with a TTL, or queue it until DB setup.
+        """Write a tuple to Redis, or buffer it if the DB isn't attached yet.
+
+        The buffer is capped so a module that never attaches can't leak memory.
+        Redis errors must never break the module's real network call, so only
+        the first failure is reported, to avoid flooding the logs.
 
         Parameters:
-            connection: Protocol, local IP and port, remote IP and port.
+            connection: (protocol, local IP, local port, remote IP, remote port).
         """
         if self.db is None:
             if len(self.pending) < _PENDING_LIMIT:
@@ -64,13 +79,17 @@ class SlipsTrafficTracker:
 
     @staticmethod
     def _normalized_ip(value: Any) -> str:
-        """Normalize an IP literal, omitting any IPv6 interface suffix.
+        """Return a canonical IP string so it matches the profiler's flow IPs.
+
+        The IPv6 zone suffix (`fe80::1%eth0`) is dropped because capture
+        files never contain it, and `::ffff:`-style or zero-padded forms are
+        unified so lookups compare equal.
 
         Parameters:
-            value: Socket endpoint address.
+            value: Address part of a socket endpoint.
 
         Returns:
-            Canonical IP literal, or an empty string for other values.
+            Canonical IP, or "" if the value isn't an IP (e.g. a hostname).
         """
         try:
             return str(ipaddress.ip_address(str(value).split("%", 1)[0]))
@@ -80,14 +99,21 @@ class SlipsTrafficTracker:
     def _connection(
         self, sock: socket.socket, address: Any
     ) -> tuple[str, str, int, str, int] | None:
-        """Read a connected TCP or sent UDP socket's exact flow tuple.
+        """Build the flow 5-tuple the profiler will see on the wire.
+
+        Needs the local port, which the OS only picks at connect/send time,
+        so this runs after that call. TCP asks the socket for its peer
+        (`address` may be a hostname); UDP has no peer, so `address` is used.
+        A wildcard local IP (0.0.0.0/::) would never match a captured flow,
+        so a throwaway UDP connect asks the OS which interface IP routes there.
 
         Parameters:
-            sock: Socket that performed the network operation.
-            address: Destination supplied to connect or sendto.
+            sock: Socket that just connected or sent.
+            address: Destination passed to connect/sendto.
 
         Returns:
-            Normalized tuple, or None for loopback and non-IP sockets.
+            The tuple, or None when it can't appear in a capture: non-IP or
+            non-TCP/UDP sockets, loopback, or unresolvable endpoints.
         """
         if sock.family not in (socket.AF_INET, socket.AF_INET6):
             return None
@@ -130,11 +156,15 @@ class SlipsTrafficTracker:
         return proto, local_ip, local_port, remote_ip, remote_port
 
     def record(self, sock: socket.socket, address: Any) -> None:
-        """Persist a socket tuple once after it gets a local port.
+        """Save a socket's tuple, skipping repeats.
+
+        A UDP socket calls sendto thousands of times; remembering what each
+        socket already saved (on the socket itself, so it dies with it)
+        avoids a Redis write per packet. A new destination is a new tuple.
 
         Parameters:
-            sock: Socket that made the request.
-            address: Destination supplied to connect or sendto.
+            sock: Socket that just connected or sent.
+            address: Destination passed to connect/sendto.
         """
         connection = self._connection(sock, address)
         if connection is None:
@@ -148,7 +178,11 @@ class SlipsTrafficTracker:
             self._save(connection)
 
     def renew(self, sock: socket.socket) -> None:
-        """Keep a completed long-lived connection visible to the profiler.
+        """Re-save a socket's tuples on close to restart their Redis TTL.
+
+        Saved tuples expire, but a long connection's flow is only finalised
+        by the capture after it ends. Refreshing at close keeps the entry
+        alive long enough for the profiler to still match it.
 
         Parameters:
             sock: Socket about to close.
@@ -158,12 +192,20 @@ class SlipsTrafficTracker:
 
 
 class TrackedSocket(_ORIGINAL_SOCKET):
-    """Socket variant that reports successful Slips-originated IP traffic."""
+    """Drop-in `socket.socket` that reports each connection it makes.
+
+    The tracker is a class attribute because `install` swaps the class
+    itself, so instances can't be given one at construction.
+    """
 
     tracker: SlipsTrafficTracker | None = None
 
     def connect(self, address: Any) -> None:
-        """Record a TCP or connected UDP endpoint after connecting.
+        """Connect, then record, even on failure.
+
+        `finally` is deliberate: a non-blocking connect raises while the
+        handshake is still in flight, yet the packets (and local port)
+        already exist and would otherwise look like foreign traffic.
 
         Parameters:
             address: Destination socket address.
@@ -175,13 +217,16 @@ class TrackedSocket(_ORIGINAL_SOCKET):
                 self.tracker.record(self, address)
 
     def connect_ex(self, address: Any) -> int:
-        """Record a successful non-raising connection attempt.
+        """Like `connect`, but errors come back as a code instead of raising.
+
+        Recorded unconditionally for the same reason as `connect`: an
+        in-progress attempt (EINPROGRESS) has already sent its SYN.
 
         Parameters:
             address: Destination socket address.
 
         Returns:
-            Socket error number, zero on success.
+            0 on success, otherwise the errno.
         """
         result = super().connect_ex(address)
         if self.tracker is not None:
@@ -189,14 +234,18 @@ class TrackedSocket(_ORIGINAL_SOCKET):
         return result
 
     def sendto(self, data: bytes, *args: Any) -> int:
-        """Record a datagram's tuple after the system assigns its port.
+        """Send a datagram, then record it (UDP never calls connect).
+
+        The OS assigns the local port only on first send, so recording must
+        come after. The destination is always the last positional argument,
+        whether or not flags were passed.
 
         Parameters:
             data: Datagram payload.
-            args: Optional flags and destination address.
+            args: `(address)` or `(flags, address)`.
 
         Returns:
-            Number of payload bytes sent.
+            Number of bytes sent.
         """
         result = super().sendto(data, *args)
         if self.tracker is not None and args:
@@ -204,7 +253,7 @@ class TrackedSocket(_ORIGINAL_SOCKET):
         return result
 
     def close(self) -> None:
-        """Refresh a tracked tuple before the socket closes."""
+        """Refresh the TTL of this socket's tuples, then close (see `renew`)."""
         if self.tracker is not None:
             self.tracker.renew(self)
         super().close()

@@ -1102,6 +1102,51 @@ class RedisDB(
         pipe.sadd(sources, src_ip)
         pipe.expire(sources, ttl)
         pipe.execute()
+
+    def is_slips_own_source_ip(self, run_id: int, ip: str) -> bool:
+        """Check whether a Slips module recently opened a socket from an IP.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            ip: Flow source address.
+
+        Returns:
+            True when a tracked socket used this source IP.
+        """
+        return bool(
+            self.r.sismember(
+                f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}", ip
+            )
+        )
+
+    def is_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int | str,
+        dst_ip: str,
+        dst_port: int | str,
+    ) -> bool:
+        """Match a captured flow to one exact Slips-owned socket tuple.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            src_ip: Flow source IP.
+            src_port: Flow source port.
+            dst_ip: Flow destination IP.
+            dst_port: Flow destination port.
+
+        Returns:
+            True when the full tuple was registered by a Slips process.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{str(proto).lower()}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        return bool(self.r.exists(key))
+
     def get_interface(self) -> str:
         return self.r.hget(
             self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE
