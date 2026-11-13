@@ -7,7 +7,7 @@ import dns.resolver
 import netifaces
 import pytest
 
-from managers import network_state
+from managers import network_state_manager as network_state
 from tests.module_factory import ModuleFactory
 
 

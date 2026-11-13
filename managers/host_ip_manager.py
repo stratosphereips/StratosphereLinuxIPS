@@ -9,7 +9,7 @@ from typing import (
     Dict,
 )
 
-from managers.network_state import collect_network_state
+from managers.network_state_manager import collect_network_state
 
 
 class HostIPManager:
