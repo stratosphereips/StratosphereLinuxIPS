@@ -14,7 +14,6 @@ Isolation model:
 """
 
 import json
-import os
 import shutil
 import socket
 import subprocess

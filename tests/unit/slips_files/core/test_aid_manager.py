@@ -6,7 +6,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from slips_files.core.aid_manager import AIDManager
-
+from tests.module_factory import ModuleFactory
+from multiprocessing import Queue
 
 def make_task(flow=None, profileid="profile_1.1.1.1", twid="timewindow1"):
     return {
