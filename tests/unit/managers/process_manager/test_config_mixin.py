@@ -114,6 +114,7 @@ def test_get_runtime_disabled_modules_recomputes_from_current_settings() -> None
                 Modules.BLOCKING,
                 Modules.ARP_POISONER,
                 Modules.CYST,
+                Modules.VIRUSTOTAL,
             },
         ),
         (
@@ -129,6 +130,7 @@ def test_get_runtime_disabled_modules_recomputes_from_current_settings() -> None
                 Modules.ARP_POISONER,
                 Modules.LEAK_DETECTOR,
                 Modules.CYST,
+                Modules.VIRUSTOTAL,
             },
         ),
     ],
@@ -225,6 +227,7 @@ def test_get_runtime_disabled_modules_uses_runtime_rules() -> None:
         Modules.ARP_POISONER,
         Modules.LEAK_DETECTOR,
         Modules.CYST,
+        Modules.VIRUSTOTAL,
     }
 
 
@@ -426,3 +429,41 @@ def test_web_interface_feature_toggle(
     disabled = process_manager._get_feature_toggled_disabled_modules()
 
     assert (Modules.WEB_INTERFACE in disabled) is expected_disabled
+
+@pytest.mark.parametrize(
+    "api_key, key_file_exists, should_disable_vt",
+    [
+        ("valid_64_character_api_key_sample_1234567890abcdef1234567890abcdef12", True, False),
+        ("", True, True),
+        (None, False, True),
+    ],
+)
+def test_virustotal_disabled_without_api_key(
+    tmp_path, api_key: str, key_file_exists: bool, should_disable_vt: bool
+) -> None:
+    """Test virustotal is disabled at runtime when API key is missing or empty."""
+    process_manager = ModuleFactory().create_process_manager_obj()
+    process_manager.main.db.is_running_non_stop.return_value = False
+    process_manager.main.conf.export_to.return_value = []
+    process_manager.main.conf.use_local_p2p.return_value = False
+    process_manager.main.conf.use_global_p2p.return_value = False
+    process_manager.main.conf.send_to_warden.return_value = False
+    process_manager.main.conf.receive_from_warden.return_value = False
+    process_manager.main.args.clearblocking = False
+    process_manager.main.args.blocking = False
+    process_manager.main.input_type = InputType.ZEEK
+    process_manager.main.args.input_module = ""
+    process_manager.slips_disabled_modules = set()
+
+    if key_file_exists:
+        key_file = tmp_path / "vt_key"
+        key_file.write_text(api_key or "")
+        process_manager.main.conf.vt_api_key_file.return_value = str(key_file)
+    else:
+        process_manager.main.conf.vt_api_key_file.return_value = None
+
+    disabled = process_manager.get_runtime_disabled_modules()
+    if should_disable_vt:
+        assert Modules.VIRUSTOTAL in disabled
+    else:
+        assert Modules.VIRUSTOTAL not in disabled
