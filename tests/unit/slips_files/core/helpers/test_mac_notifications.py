@@ -7,7 +7,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from slips_files.core.helpers import mac_notifications
+from slips_files.core.helpers.macos_notifications import mac_notifications
 from tests.module_factory import ModuleFactory
 
 

@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from slips_files.common.slips_utils import utils
-from slips_files.core.helpers.mac_notifications import (
+from slips_files.core.helpers.macos_notifications.mac_notifications import (
     prepare_notification_app,
     notification_app_path,
 )

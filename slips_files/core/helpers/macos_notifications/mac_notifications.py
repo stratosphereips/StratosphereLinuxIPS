@@ -11,7 +11,9 @@ import tempfile
 from pathlib import Path
 
 BUNDLE_ID = "org.stratosphereips.slips.notifications"
-SOURCE = Path("slips_files/core/helpers/slips_notification.swift")
+SOURCE = Path(
+    "slips_files/core/helpers/macos_notifications/slips_notification.swift"
+)
 LOGO = Path("modules/web_interface/slips-logo.png")
 
 
