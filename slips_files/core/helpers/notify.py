@@ -28,11 +28,7 @@ class Notify:
         if IS_IN_A_DOCKER_CONTAINER:
             return
         if platform.system() == "Darwin":
-            self.enabled = shutil.which("osascript") is not None
-            if not self.enabled:
-                logging.getLogger(__name__).warning(
-                    "Desktop notifications disabled: osascript is unavailable"
-                )
+            self.enabled = self._is_osascript_installed()
         elif platform.system() == "Linux" and self._is_notify_send_installed():
             self.enabled = True
             self._setup_notifications_if_root()
@@ -51,6 +47,18 @@ class Notify:
             name="slips_notification_prepare",
         )
         utils.start_thread(thread, db)
+
+    def _is_osascript_installed(self) -> bool:
+        """
+        Checks if the osascript bin is installed (macOS), and logs a warning
+        if it isn't
+        """
+        if shutil.which("osascript"):
+            return True
+        logging.getLogger(__name__).warning(
+            "Desktop notifications disabled: osascript is unavailable"
+        )
+        return False
 
     def _is_notify_send_installed(self) -> bool:
         """
