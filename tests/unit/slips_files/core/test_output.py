@@ -1,7 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
+import multiprocessing
 from unittest.mock import MagicMock, mock_open, patch, call as mockedcall
 import pytest
+from slips_files.core.output import Output
 from tests.module_factory import ModuleFactory
 from pathlib import Path
 
@@ -52,6 +54,20 @@ def test_print():
         output.print(sender, txt)
 
     (mock_print.assert_called_once_with(f"[{sender}] {txt}", end="\n"))
+
+
+def test_print_skips_stuck_terminal_lock() -> None:
+    """Do not block monitoring when another process holds the CLI lock."""
+    output = ModuleFactory().create_output_obj()
+    output.cli_lock = MagicMock()
+    output.cli_lock.acquire.return_value = False
+
+    with patch("builtins.print") as mock_print:
+        output.print("main", "status")
+
+    output.cli_lock.acquire.assert_called_once_with(timeout=2)
+    output.cli_lock.release.assert_not_called()
+    mock_print.assert_not_called()
 
 
 @pytest.mark.parametrize(
@@ -270,3 +286,67 @@ def test_create_logfile_disk_full():
     with patch("builtins.open", side_effect=IOError):
         with pytest.raises(IOError):
             output.create_logfile(path)
+
+
+def _hold_lock_in_child(output: Output, result_queue) -> None:
+    """Report whether the child sees the parent's lock and flag state."""
+    result_queue.put(
+        (
+            output.cli_lock.acquire(False),
+            output._cli_has_dangling_line.value,
+        )
+    )
+
+
+def test_output_locks_are_shared_with_spawned_child() -> None:
+    """A spawned child must use the parent's locks, not create its own."""
+    output = Output.__new__(Output)
+    output.cli_lock.acquire()
+    output._cli_has_dangling_line.value = True
+    try:
+        context = multiprocessing.get_context("spawn")
+        result_queue = context.Queue()
+        child = context.Process(
+            target=_hold_lock_in_child, args=(output, result_queue)
+        )
+        child.start()
+        lock_acquired, dangling_line = result_queue.get(timeout=30)
+        child.join()
+    finally:
+        output.cli_lock.release()
+        output._cli_has_dangling_line.value = False
+
+    assert lock_acquired is False
+    assert bool(dangling_line) is True
+
+
+def _flip_shared_state_in_child(output):
+    output._startup_in_progress.value = True
+    output._startup_deadline.value = 42.0
+    output._startup_queue.put({"txt": "from child"})
+    output._cli_has_dangling_line.value = True
+
+
+def test_shared_state_reaches_spawned_child():
+    """
+    every name in _SHARED_STATE must be the parent's object in a spawned
+    child, otherwise the child silently works on its own copy
+    """
+    output = ModuleFactory().create_output_obj()
+    output._startup_in_progress.value = False
+    output._cli_has_dangling_line.value = False
+
+    proc = multiprocessing.get_context("spawn").Process(
+        target=_flip_shared_state_in_child, args=(output,)
+    )
+    proc.start()
+    proc.join(timeout=30)
+
+    assert proc.exitcode == 0
+    assert output._startup_in_progress.value
+    assert output._startup_deadline.value == 42.0
+    assert output._cli_has_dangling_line.value
+    assert output._startup_queue.get(timeout=5) == {"txt": "from child"}
+
+    output._startup_in_progress.value = False
+    output._cli_has_dangling_line.value = False

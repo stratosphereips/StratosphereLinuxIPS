@@ -58,6 +58,7 @@ def test_https_anomaly_module_is_instantiable_and_subscribes_to_new_ssl(
             ppid=12345,
             bloom_filters_manager=Mock(),
         )
+        module._setup()
 
     assert isinstance(module, AnomalyDetectionHTTPS)
     assert module.output_dir == str(tmp_path / "anomaly_detection_https")
@@ -122,6 +123,7 @@ def _create_https_anomaly_module(tmp_path):
             ppid=12345,
             bloom_filters_manager=Mock(),
         )
+        module._setup()
     module.print = Mock()
     return module, db
 

@@ -30,7 +30,6 @@ from enum import Enum
 from slips_files.common.ips import IPV4_BROADCAST, LOCALHOST_HOSTNAME
 from slips_files.core.supported_logfiles import SUPPORTED_LOGFILES
 
-
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 BROADCAST_ADDR = IPV4_BROADCAST
 
@@ -448,11 +447,21 @@ class Utils(object):
                     return interface
 
     def get_gateway_for_iface(self, iface: str) -> Optional[str]:
-        """returns the default gateway for the given interface"""
+        """Find the gateway assigned to an interface, including secondary routes.
+
+        Parameters:
+            iface: Monitored network interface.
+
+        Returns:
+            IPv4 or IPv6 gateway for that interface, if one exists.
+        """
         gws = netifaces.gateways()
         for family in (netifaces.AF_INET, netifaces.AF_INET6):
             if "default" in gws and family in gws["default"]:
-                gw, gw_iface = gws["default"][family]
+                gw, gw_iface = gws["default"][family][:2]
+                if gw_iface == iface:
+                    return gw
+            for gw, gw_iface, *_ in gws.get(family, ()):
                 if gw_iface == iface:
                     return gw
         return None

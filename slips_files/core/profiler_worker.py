@@ -35,6 +35,17 @@ from slips_files.core.structures.flow_attributes import Role
 class ProfilerWorker(IModule):
     name = "profiler_worker"
 
+    def __init__(self, *args, **kwargs) -> None:
+        """Create the consumed-line counter before the process starts.
+
+        “Under spawn, the child gets the process object as pickled bytes.
+        The shared counter must therefore exist before start(),
+        so it is created here in the parent.”
+        """
+        # Q" is the C type code for an unsigned 64-bit integer
+        self._received_lines = multiprocessing.Value("Q", 0)
+        super().__init__(*args, **kwargs)
+
     def init(
         self,
         name,
@@ -59,6 +70,10 @@ class ProfilerWorker(IModule):
         # this is an instance of
         # ZeekTabs | ZeekJSON | Argus | Suricata | ZeekTabs | Nfdump
         self.input_handler = input_handler
+        if isinstance(input_handler, tuple):
+            handler_class, handler_state = input_handler
+            self.input_handler = handler_class(self.db)
+            self.input_handler.__dict__.update(handler_state)
         self.read_configuration()
         self.received_lines = 0
         self.localnet_handler = LocalnetHandler(self)
@@ -82,6 +97,20 @@ class ProfilerWorker(IModule):
         self._modified_tws = {}
         self._time_to_update_modified_tws = time.time()
         self._modified_timewindows_update_period = 3  # in seconds
+
+    @property
+    def received_lines(self) -> int:
+        """Return the consumed-line count shared with the profiler parent."""
+        return self._received_lines.value
+
+    @received_lines.setter
+    def received_lines(self, count: int) -> None:
+        """Set the shared consumed-line count.
+
+        Parameters:
+            count: Number of consumed lines.
+        """
+        self._received_lines.value = count
 
     def subscribe_to_channels(self):
         self.c1 = self.db.subscribe("new_zeek_fields_line")

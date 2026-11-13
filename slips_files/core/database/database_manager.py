@@ -313,6 +313,12 @@ class DBManager:
     def get_local_network(self, *args, **kwargs):
         return self.rdb.get_local_network(*args, **kwargs)
 
+    def get_network_state(self, *args, **kwargs):
+        return self.rdb.get_network_state(*args, **kwargs)
+
+    def replace_network_state(self, *args, **kwargs):
+        return self.rdb.replace_network_state(*args, **kwargs)
+
     def get_total_recognized_localnets(self, *args, **kwargs):
         return self.rdb.get_total_recognized_localnets(*args, **kwargs)
 
@@ -339,6 +345,15 @@ class DBManager:
 
     def get_input_type(self, *args, **kwargs):
         return self.rdb.get_input_type(*args, **kwargs)
+
+    def record_slips_own_connection(self, *args, **kwargs):
+        return self.rdb.record_slips_own_connection(*args, **kwargs)
+
+    def is_slips_own_source_ip(self, *args, **kwargs):
+        return self.rdb.is_slips_own_source_ip(*args, **kwargs)
+
+    def is_slips_own_connection(self, *args, **kwargs):
+        return self.rdb.is_slips_own_connection(*args, **kwargs)
 
     def get_interface(self, *args, **kwargs):
         return self.rdb.get_interface(*args, **kwargs)
@@ -875,7 +890,7 @@ class DBManager:
             return "default" if not flow else flow["interface"]
 
     def set_evidence(self, evidence: Evidence):
-        if not self.rdb.belongs_to_run(self.output_dir):
+        if not self.rdb.belongs_to_run(self.output_dir, self.main_pid):
             return False
 
         if evidence.evidence_type in self.conf.disabled_detections():

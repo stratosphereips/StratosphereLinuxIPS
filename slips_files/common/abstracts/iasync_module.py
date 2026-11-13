@@ -156,7 +156,7 @@ class IAsyncModule(IModule):
         else:
             self.print(f"Unhandled loop error: {context.get('message')}")
 
-    def run(self):
+    def _execute(self):
         try:
             asyncio.run(self._run_pre_main_and_main())
         except (KeyboardInterrupt, asyncio.CancelledError):
@@ -198,6 +198,9 @@ class IAsyncModule(IModule):
                     await self.gather_tasks_and_shutdown_gracefully()
 
                     return
+
+                # main() may only schedule tasks, so explicitly let them run.
+                await asyncio.sleep(0)
 
             except (KeyboardInterrupt, asyncio.CancelledError):
                 self.keyboard_int_ctr += 1

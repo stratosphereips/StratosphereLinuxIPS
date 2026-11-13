@@ -320,6 +320,8 @@ class Notice(BaseFlow):
     def __post_init__(self) -> None:
         # portscan notices don't have id.orig_h or id.resp_h
         # fields, instead they have src and dst
+        if not self.uid:
+            self.uid = utils.generate_uid()
         if not self.saddr:
             self.saddr = self.scanning_ip
 

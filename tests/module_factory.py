@@ -50,6 +50,50 @@ class ModuleFactory:
     def mocked_init_flock(self):
         self.lockfile_path = "/tmp/fake.lock"
 
+    def _assert_redis_has_no_run_owner(self, port: int) -> None:
+        """Refuse to write unit-test data into an existing Slips run.
+
+        Parameters:
+            port: Redis port requested by the test.
+        """
+        import redis
+        from slips_files.common.slips_utils import utils
+        from slips_files.core.database.redis_db.redis_auth import (
+            try_connect_with_and_without_password,
+        )
+
+        if not utils.is_port_in_use(port):
+            return
+        client = None
+        try:
+            client = try_connect_with_and_without_password(
+                redis.Redis,
+                host="127.0.0.1",
+                port=port,
+                db=0,
+                decode_responses=True,
+                socket_connect_timeout=0.5,
+                socket_timeout=0.5,
+            )
+            owner = client.hget("analysis", "output_dir")
+            if owner:
+                raise RuntimeError(
+                    f"Refusing unit-test writes to Redis port {port}: "
+                    f"it belongs to Slips run {owner}. "
+                    "Use a separate Redis instance for tests."
+                )
+        except (
+            redis.exceptions.ConnectionError,
+            redis.exceptions.TimeoutError,
+        ) as error:
+            raise RuntimeError(
+                f"Cannot verify ownership of Redis port {port}; "
+                "refusing unit-test writes."
+            ) from error
+        finally:
+            if client is not None:
+                client.close()
+
     def create_db_manager_obj(
         self,
         port,
@@ -58,12 +102,25 @@ class ModuleFactory:
         start_redis_server=True,
         disabled_detections: list[str] | None = None,
     ):
-        from slips_files.core.database.database_manager import DBManager
+        """Create a database manager for tests without flushing by default.
 
+        Parameters:
+            port: Redis port used by the test database.
+            output_dir: Directory for test output.
+            flush_db: Whether to clear Redis during initialization.
+            start_redis_server: Whether the test may start Redis.
+            disabled_detections: Detection names disabled in the test.
+
+        Returns:
+            Configured test database manager.
         """
-        flush_db is False by default  because we use this function to check
-        the db after integration tests to make sure everything's going fine
-        """
+        self._assert_redis_has_no_run_owner(port)
+        from slips_files.core.database.database_manager import DBManager
+        from slips_files.common.parsers.config_parser import ConfigParser
+
+        # Redis authentication reads the real persistent path while the
+        # constructor below temporarily mocks builtins.open.
+        ConfigParser()
 
         mock_ctx = MagicMock()
         mock_ctx.__enter__.return_value = None
@@ -179,6 +236,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        http_analyzer._setup()
         http_analyzer.print = Mock()
         return http_analyzer
 
@@ -212,6 +270,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        llm._setup()
         llm.db.channels.LLM_REQUEST = "llm_request"
         llm.db.channels.LLM_RESPONSE = "llm_response"
         llm.channels = {"llm_request": llm.c1}
@@ -279,6 +338,7 @@ class ModuleFactory:
             ppid=12345,
             bloom_filters_manager=Mock(),
         )
+        regex_generator._setup()
         regex_generator.db.channels.LLM_REQUEST = "llm_request"
         regex_generator.db.channels.LLM_RESPONSE = "llm_response"
         regex_generator.channels = {
@@ -319,6 +379,7 @@ class ModuleFactory:
             ppid=12345,
             bloom_filters_manager=Mock(),
         )
+        alert_summary._setup()
         alert_summary.db.channels.LLM_REQUEST = "llm_request"
         alert_summary.db.channels.LLM_RESPONSE = "llm_response"
         alert_summary.subscribe_to_channels()
@@ -419,6 +480,7 @@ class ModuleFactory:
             ppid=12345,
             bloom_filters_manager=Mock(),
         )
+        t_cell._setup()
         t_cell.db.get_generated_regexes.return_value = []
         t_cell.db.get_generated_regexes_count.return_value = 0
         t_cell.db.get_enabled_modules.return_value = [
@@ -460,6 +522,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        fm._setup()
         fm.print = Mock()
         return fm
 
@@ -477,6 +540,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        virustotal._setup()
         virustotal.print = Mock()
         virustotal.__read_configuration = Mock()
         return virustotal
@@ -498,6 +562,7 @@ class ModuleFactory:
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
             )
+            arp._setup()
         arp.print = Mock()
         arp.evidence_filter.is_slips_peer = Mock(return_value=False)
         return arp
@@ -645,6 +710,10 @@ class ModuleFactory:
 
         with (
             patch(
+                "modules.blocking.blocking.platform.system",
+                return_value="Linux",
+            ),
+            patch(
                 "modules.blocking.blocking.utils.get_sudo_according_to_env",
                 return_value="",
             ),
@@ -662,10 +731,11 @@ class ModuleFactory:
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
-                conf=Mock(),
+                conf=Mock(enable_local_whitelist=Mock(return_value=False)),
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
             )
+            blocking._setup()
         # override the print function to avoid broken pipes
         blocking.print = Mock()
         blocking.blocking_log_path = Mock()
@@ -703,6 +773,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        flowalerts._setup()
         flowalerts.print = Mock()
         return flowalerts
 
@@ -722,6 +793,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        brute_force_detector._setup()
         brute_force_detector.print = Mock()
         return brute_force_detector
 
@@ -788,6 +860,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        conn_analyzer._setup()
         conn_analyzer.print = Mock()
         return conn_analyzer
 
@@ -820,6 +893,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        ip_info._setup()
         ip_info.print = Mock()
         return ip_info
 
@@ -849,6 +923,7 @@ class ModuleFactory:
             is_profiler_done_event=Mock(),
             is_input_failed_event=Mock(),
         )
+        input._setup()
         input.db = mock_db
         input.mark_self_as_done_processing = Mock()
         input.bro_timeout = 1
@@ -882,6 +957,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        leak_detector._setup()
         leak_detector.print = Mock()
         # this is the path containing 1 yara rule for testing,
         # it matches every pcap
@@ -891,7 +967,8 @@ class ModuleFactory:
         return leak_detector
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
-    def create_profiler_obj(self, mock_db):
+    @patch("slips_files.core.profiler.AIDManager")
+    def create_profiler_obj(self, mock_aid: Mock, mock_db: Mock) -> object:
         from slips_files.core.profiler import Profiler
 
         slips_args = Mock()
@@ -916,6 +993,7 @@ class ModuleFactory:
             is_input_failed_event=is_input_failed_event,
             is_profiler_done_starting_initial_workers_event=Mock(),
         )
+        profiler._setup()
         profiler.print = Mock()
         profiler.local_whitelist_path = "tests/unit/test_whitelist.conf"
         profiler.db = mock_db
@@ -941,6 +1019,7 @@ class ModuleFactory:
             aid_manager=Mock(),
             is_input_done_event=Mock(),
         )
+        profiler._setup()
         profiler.print = Mock()
         profiler.db = mock_db
         return profiler
@@ -1002,6 +1081,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        threatintel._setup()
         threatintel.print = Mock()
         return threatintel
 
@@ -1027,6 +1107,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        update_manager._setup()
         update_manager.print = Mock()
         return update_manager
 
@@ -1213,6 +1294,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        network_discovery._setup()
         return network_discovery
 
     def create_markov_chain_obj(self):
@@ -1230,10 +1312,11 @@ class ModuleFactory:
             redis_port=6379,
             termination_event=Mock(),
             slips_args=Mock(),
-            conf=Mock(),
+            conf=Mock(enable_local_whitelist=Mock(return_value=False)),
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        poisoner._setup()
         return poisoner
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
@@ -1246,7 +1329,7 @@ class ModuleFactory:
         ):
             handler = EvidenceHandler(
                 logger=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1254,6 +1337,7 @@ class ModuleFactory:
                 ppid=Mock(),
                 bloom_filters_manager=Mock(),
             )
+            handler._setup()
         handler.db = mock_db
         return handler
 
@@ -1292,7 +1376,7 @@ class ModuleFactory:
         ):
             worker = EvidenceHandlerWorker(
                 logger=self.logger,
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
                 redis_port=6379,
                 termination_event=Mock(),
                 slips_args=Mock(),
@@ -1304,6 +1388,7 @@ class ModuleFactory:
                 evidence_logger_q=Mock(),
                 notify=None,
             )
+            worker._setup()
 
         worker.db = mock_db
         worker.print = Mock()
@@ -1340,7 +1425,7 @@ class ModuleFactory:
             handler = EvidenceLogger(
                 logger_stop_signal=Mock(),
                 evidence_logger_q=Mock(),
-                output_dir="/tmp",
+                output_dir=os.path.join("output", f"unit_tests_{os.getpid()}"),
             )
         return handler
 
@@ -1400,6 +1485,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        risk_iq._setup()
         risk_iq.db = mock_db
         return risk_iq
 
@@ -1420,6 +1506,7 @@ class ModuleFactory:
             ppid=Mock(),
             bloom_filters_manager=Mock(),
         )
+        tl._setup()
         tl.db = mock_db
         return tl
 
@@ -1598,5 +1685,6 @@ class ModuleFactory:
             ppid=12345,
             bloom_filters_manager=Mock(),
         )
+        module._setup()
         module.print = Mock()
         return module

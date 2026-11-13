@@ -158,6 +158,24 @@ tr:nth-child(even) {
 
 </table>
 
+## Long connections
+
+`conn_analyzer` checks non-ICMP unicast flows against `long_connection_threshold`.
+ICMP and ICMPv6 records are excluded regardless of their aggregated duration.
+It excludes limited IPv4 broadcast (`255.255.255.255`), directed broadcast
+under the subnet recorded at capture time, multicast IPs, and broadcast or
+multicast destination MACs. An address ending in `.255` is not automatically
+a broadcast: its subnet determines that. Short flows do not need the broadcast
+subnet lookup.
+
+P2P receivers discard explicit Long Connection reports identifying ICMP,
+ICMPv6, limited broadcast or multicast endpoints. Other detections in a mixed report remain available.
+Saved local observations with the same explicit endpoints are excluded from
+outgoing reputation reports. Subnet-specific broadcast classification stays
+with the capturing peer, which knows the original subnet and Ethernet data.
+Catch-up storage and bootstrap also exclude explicit ICMP duration findings.
+These checks run in module workers and add no core capture/profiling work.
+
 ## Bruteforcing Module
 
 The `Bruteforcing` module is responsible for SSH bruteforcing detection.
@@ -895,6 +913,22 @@ This module works by
   3. Running the compiled rules on the given PCAP
   4. Once we find a match, we get the packet containing this match and set evidence.
 
+Packet findings carry their source and destination IPs, ports, transport, timestamp
+and capture offset. The detector links a finding to the real Zeek connection by
+matching both directions of that five-tuple and checking its time interval. It
+never invents a flow UID. When profiling has not stored the connection yet, the
+web resolves the saved packet metadata after that flow becomes available;
+ambiguous matches remain unlinked.
+
+A validated JSON reply to an `ip-api.com/json` or `pro.ip-api.com/json` lookup is
+recorded as **IP Geolocation Response**, with informational severity. This records
+IP-derived coordinates returned by the service. Latitude and longitude matches
+in the same response produce one observation. Coordinate uploads, unrelated HTTP
+responses and unverified payloads retain the normal coordinate-pattern detection.
+Matching and enrichment run in the leak detector and web workers; the capture and
+profiler paths perform no packet lookup for this feature.
+
+
 
 ### Extending
 
@@ -968,6 +1002,8 @@ twimewindow (1 hour by default)
 # Connections Made By Slips
 
 Slips uses online databases to query information about many different things, for example (user agents, mac vendors etc.)
+
+During live capture, only connections attributed to Slips sockets are automatically excluded, using their full IP/port tuple and transport for the current run. The default whitelist does not exempt these services for all applications or imported PCAPs. Unattributed external command traffic remains eligible for detection. See [Connections Made By Slips](features.md#connections-made-by-slips) for details.
 
 The list below contains all connections made by Slips
 

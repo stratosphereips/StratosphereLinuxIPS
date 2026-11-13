@@ -8,6 +8,7 @@ from dataclasses import fields, MISSING
 from slips_files.common.abstracts.iinput_type import IInputType
 from slips_files.common.slips_utils import utils
 from slips_files.core.flows.zeek import (
+    BaseFlow,
     Conn,
     DNS,
     HTTP,
@@ -120,7 +121,9 @@ class Zeek:
         file_type: str = self.get_file_type(new_line)
         return LOG_MAP[file_type]
 
-    def fill_empty_class_fields(self, flow_values: dict, slips_class):
+    def fill_empty_class_fields(
+        self, flow_values: dict, slips_class: type[BaseFlow]
+    ) -> dict:
         """
         - Fill missing dataclass fields with their default value
         (or empty string if no default exists).
@@ -137,6 +140,13 @@ class Zeek:
             name = f.name
             # `type_` is enforced later
             if name == "type_":
+                continue
+
+            # Logs such as notice.log can omit a connection UID. Empty UIDs
+            # overwrite each other in the durable flow table and cannot link
+            # back to evidence, so give each such record its own identifier.
+            if name == "uid" and not flow_values.get("uid"):
+                flow_values["uid"] = utils.generate_uid()
                 continue
 
             if name in flow_values:

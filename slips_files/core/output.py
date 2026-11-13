@@ -37,12 +37,12 @@ class Output(IObserver):
     """
 
     name = "output"
-    # Output is instantiated once in the main process before any of
-    # slips' child processes are forked, so these multiprocessing locks
-    # are inherited by every child and actually serialize writes to the
-    # shared stdout/logfiles across processes. threading.Lock() would not
-    # do that, since each forked process gets its own independent copy of
-    # it, letting concurrent prints from different processes interleave
+    # Output is instantiated once in the main process and handed to every
+    # child process. These multiprocessing locks are sent along with it
+    # (see __getstate__) so they actually serialize writes to the shared
+    # stdout/logfiles across processes. threading.Lock() would not do
+    # that, since each process gets its own independent copy of it,
+    # letting concurrent prints from different processes interleave
     # and corrupt each other's output (e.g. a partial in-place \r update
     # from one process landing in the middle of another process' line).
     slips_logfile_lock = multiprocessing.Lock()
@@ -50,10 +50,35 @@ class Output(IObserver):
     cli_lock = multiprocessing.Lock()
     # set while a single-line, in-place-refreshing status line (e.g. the
     # "Total analyzed IPs" summary) is left on screen without a trailing
-    # newline. shared across all forked processes so that any of them
+    # newline. shared across all processes so that any of them
     # printing a normal line first closes it out with a newline instead
     # of overwriting/merging with it.
     _cli_has_dangling_line = multiprocessing.Value("b", False)
+    _SHARED_STATE = (
+        "slips_logfile_lock",
+        "errors_logfile_lock",
+        "cli_lock",
+        "_cli_has_dangling_line",
+        # defined below, see begin_startup_announcements()
+        "_startup_queue",
+        "_startup_in_progress",
+        "_startup_queue_lock",
+        "_startup_deadline",
+    )
+
+    def __getstate__(self) -> dict:
+        """
+        Carry the shared locks to a spawned child.
+        Class attributes are not pickled, so without this, the child would
+        create its own locks and theyd be useless :D
+        """
+        state = self.__dict__.copy()
+        for name in self._SHARED_STATE:
+            state[name] = getattr(self, name)
+        return state
+
+    def __setstate__(self, state: dict) -> None:
+        self.__dict__.update(state)
 
     # While slips' processes/modules are still announcing their startup
     # (see begin_startup_announcements()), every OTHER printed message
@@ -186,11 +211,14 @@ class Output(IObserver):
             slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
         self.slips_logfile_lock.release()
 
-    def print(self, sender: str, txt: str, end="\n"):
+    def print(self, sender: str, txt: str, end: str = "\n") -> None:
         """
         prints the given txt whether using tqdm or using print()
         """
-        self.cli_lock.acquire()
+        # A process can die or stop writing while holding this shared lock.
+        # Do not let terminal output halt the main monitoring loop.
+        if not self.cli_lock.acquire(timeout=2):
+            return
         try:
             if sender:
                 to_print = f"[{sender}] {txt}"
@@ -216,10 +244,23 @@ class Output(IObserver):
             # with the next process' output
             sys.stdout.flush()
 
+        except (BrokenPipeError, ValueError):
+            # Shutdown can close a child process' inherited stdout before
+            # its final queued messages are drained. A failed terminal
+            # write must not turn that late message into a module failure.
+            return
         except Exception as e:
-            print(f"Problem printing {txt}. {e}")
+            # Shutdown can close a child process' inherited stdout before
+            # its final queued messages are drained. Preserve diagnostics
+            # for unexpected terminal errors when stderr is still usable.
+            try:
+                if sys.__stderr__ and not sys.__stderr__.closed:
+                    sys.__stderr__.write(f"Problem printing {txt}. {e}\n")
+            except Exception:
+                pass
 
-        self.cli_lock.release()
+        finally:
+            self.cli_lock.release()
 
     def log_error(self, msg: dict):
         """
@@ -285,7 +326,7 @@ class Output(IObserver):
         """
         Marks the start of slips' startup progress report. Called once,
         as soon as the total number of processes/modules to start is
-        known, and before any of them are forked. Until the last one
+        known, and before any of them are started. Until the last one
         announces itself (or the safety-net timeout below elapses),
         every other printed message is queued instead of interleaving
         with the startup progress lines.

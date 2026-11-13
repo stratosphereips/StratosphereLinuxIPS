@@ -59,6 +59,10 @@ def test_pre_main_starts_server_for_current_run() -> None:
 
     with (
         patch.object(module, "_replace_stale_server", return_value=True),
+        patch(
+            "modules.web_interface.web_interface.redis_auth_kwargs",
+            return_value={},
+        ),
         patch.object(
             module,
             "get_module_specific_output_path",

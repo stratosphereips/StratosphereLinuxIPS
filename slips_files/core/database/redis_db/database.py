@@ -54,6 +54,7 @@ from typing import (
 )
 
 from slips_files.common.ips import IPV4_ANY, IPV4_LOCALHOST, LOCALHOST_HOSTNAME
+from slips_files.common.mac import classify_mac
 from slips_files.core.structures.risk_weights import RiskWeight
 
 RUNNING_IN_DOCKER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
@@ -772,6 +773,88 @@ class RedisDB(
     def get_local_network(self, interface):
         return self.r.hget(self.constants.LOCAL_NETWORK, interface)
 
+    def get_network_state(self, interface: str) -> dict | None:
+        """Read current live network settings for one interface.
+
+        Parameters:
+            interface: Monitored interface name.
+
+        Returns:
+            Current settings, or None before first collection.
+        """
+        value = self.r.hget(self.constants.NETWORK_STATES, interface)
+        return json.loads(value) if value else None
+
+    def replace_network_state(self, interface: str, state: dict) -> None:
+        """Replace current live addressing and service data together.
+
+        Parameters:
+            interface: Monitored interface name.
+            state: Collected settings, including its change version.
+        """
+        states = {
+            name: json.loads(value)
+            for name, value in self.r.hgetall(
+                self.constants.NETWORK_STATES
+            ).items()
+        }
+        previous = states.get(interface, {})
+        states[interface] = state
+        configured_dns = {
+            address
+            for item in states.values()
+            for address in item.get("dns_servers", [])
+        }
+        with self.r.pipeline(transaction=True) as pipe:
+            pipe.hset(
+                self.constants.NETWORK_STATES, interface, json.dumps(state)
+            )
+            if state.get("local_network"):
+                pipe.hset(
+                    self.constants.LOCAL_NETWORK,
+                    interface,
+                    state["local_network"],
+                )
+            else:
+                pipe.hdel(self.constants.LOCAL_NETWORK, interface)
+            gateway = {
+                key: value
+                for key, value in (
+                    ("IP", state.get("gateway_ip")),
+                    ("MAC", state.get("gateway_mac")),
+                )
+                if value
+            }
+            if gateway:
+                pipe.hset(
+                    self.constants.DEFAULT_GATEWAY,
+                    interface,
+                    json.dumps(gateway),
+                )
+            else:
+                pipe.hdel(self.constants.DEFAULT_GATEWAY, interface)
+            host_key = f"host_ip_{interface}"
+            pipe.delete(host_key)
+            if state.get("host_ip"):
+                pipe.zadd(host_key, {state["host_ip"]: state["version"]})
+            # Traffic-observed resolvers belong to the old network. They can
+            # be learned again; configured resolvers of all live links stay.
+            network_changed = any(
+                previous.get(key) != state.get(key)
+                for key in (
+                    "host_ip",
+                    "local_network",
+                    "gateway_ip",
+                    "gateway_mac",
+                    "dns_servers",
+                )
+            )
+            if network_changed:
+                pipe.delete(self.constants.OFFICIAL_DNS_SERVERS)
+            if configured_dns:
+                pipe.sadd(self.constants.OFFICIAL_DNS_SERVERS, *configured_dns)
+            pipe.execute()
+
     def get_total_recognized_localnets(self):
         """
         when slips is running using 2 interfaces, Slips recognizes 2 diff
@@ -989,6 +1072,81 @@ class RedisDB(
         )
         return InputType.coerce(input)
 
+    def record_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int,
+        dst_ip: str,
+        dst_port: int,
+    ) -> None:
+        """Keep one module-owned socket tuple for a bounded live interval.
+
+        Parameters:
+            run_id: Main Slips process ID, separating retained Redis runs.
+            proto: TCP or UDP transport.
+            src_ip: Local socket address.
+            src_port: Local socket port.
+            dst_ip: Remote socket address.
+            dst_port: Remote socket port.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{proto}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        sources = f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}"
+        ttl = self.constants.SLIPS_OWN_CONNECTION_TTL
+        pipe = self.r.pipeline(transaction=False)
+        pipe.set(key, "1", ex=ttl)
+        pipe.sadd(sources, src_ip)
+        pipe.expire(sources, ttl)
+        pipe.execute()
+
+    def is_slips_own_source_ip(self, run_id: int, ip: str) -> bool:
+        """Check whether a Slips module recently opened a socket from an IP.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            ip: Flow source address.
+
+        Returns:
+            True when a tracked socket used this source IP.
+        """
+        return bool(
+            self.r.sismember(
+                f"{self.constants.SLIPS_OWN_SOURCE_PREFIX}{run_id}", ip
+            )
+        )
+
+    def is_slips_own_connection(
+        self,
+        run_id: int,
+        proto: str,
+        src_ip: str,
+        src_port: int | str,
+        dst_ip: str,
+        dst_port: int | str,
+    ) -> bool:
+        """Match a captured flow to one exact Slips-owned socket tuple.
+
+        Parameters:
+            run_id: Main Slips process ID.
+            proto: TCP or UDP transport.
+            src_ip: Flow source IP.
+            src_port: Flow source port.
+            dst_ip: Flow destination IP.
+            dst_port: Flow destination port.
+
+        Returns:
+            True when the full tuple was registered by a Slips process.
+        """
+        key = (
+            f"{self.constants.SLIPS_OWN_CONNECTION_PREFIX}{run_id}:"
+            f"{str(proto).lower()}|{src_ip}|{src_port}|{dst_ip}|{dst_port}"
+        )
+        return bool(self.r.exists(key))
+
     def get_interface(self) -> str:
         return self.r.hget(
             self.constants.ANALYSIS, self.constants.ANALYSIS_INTERFACE
@@ -1002,23 +1160,31 @@ class RedisDB(
             self.constants.ANALYSIS, self.constants.ANALYSIS_OUTPUT_DIR
         )
 
-    def belongs_to_run(self, output_dir: str) -> bool:
+    def belongs_to_run(
+        self, output_dir: str, main_pid: int | None = None
+    ) -> bool:
         """
         Check whether Redis belongs to the requested Slips run.
         # A process from a completed/replaced run must never publish evidence
         # into the Redis database now owned by another run.
         Parameters:
             output_dir: Output directory owned by the caller.
+            main_pid: Original coordinator PID; reused output paths alone
+                cannot authorize a worker from an earlier run.
 
         Returns:
-            True only when Redis advertises the same output directory.
+            True when the output directory and supplied coordinator agree.
         """
         redis_output_dir = self.get_output_dir()
         if not redis_output_dir:
             return False
-        return os.path.normpath(str(redis_output_dir)) == os.path.normpath(
-            os.fspath(output_dir)
-        )
+        same_output = os.path.normpath(
+            str(redis_output_dir)
+        ) == os.path.normpath(os.fspath(output_dir))
+        if not same_output or main_pid is None:
+            return same_output
+        owner = self.r.hget(self.constants.PIDS, "main")
+        return owner is not None and str(owner) == str(main_pid)
 
     def set_ip_info(self, ip: str, to_store: Dict[str, Any]):
         """
@@ -1308,26 +1474,32 @@ class RedisDB(
             # gateway MAC already set using this function
             return self.get_gateway_mac(interface) == mac_addr
 
-    def _determine_gw_mac(self, ip, mac, interface: str):
-        """
-        sets the gw mac if the given ip is public and is assigned a mc
-        """
-        if self._gateway_MAC_found:
-            return False
-        # since we don't have a mac gw in the db, see if
-        # this given mac is the gw mac
-        ip_obj = ipaddress.ip_address(ip)
-        if not utils.is_private_ip(ip_obj):
-            # now we're given a public ip and a MAC that's supposedly
-            # belongs to it
-            # we are sure this is the gw mac
-            # set it if we don't already have it in the db
-            self.set_default_gateway(self.constants.MAC, mac, interface)
+    def _determine_gw_mac(self, ip: str, mac: str, interface: str) -> bool:
+        """Infer a missing gateway from an Ethernet hop to a public IP.
 
-            # mark the gw mac as found so we don't look for it again
-            self._gateway_MAC_found = True
-            return True
-        return False
+        Parameters:
+            ip: Endpoint address observed through the hop.
+            mac: Observed unicast Ethernet address.
+            interface: Capture interface receiving the gateway information.
+
+        Returns:
+            Whether a previously unknown gateway MAC was stored.
+        """
+        try:
+            ip_obj = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        if (
+            not ip_obj.is_global
+            or ip_obj.is_multicast
+            or classify_mac(mac)
+            not in {"locally_administered", "universally_administered"}
+            or self.get_gateway_mac(interface)
+        ):
+            return False
+        self.set_default_gateway(self.constants.MAC, mac, interface)
+        self._gateway_MAC_found = True
+        return True
 
     def get_ip_of_mac(self, mac_addr: str):
         """

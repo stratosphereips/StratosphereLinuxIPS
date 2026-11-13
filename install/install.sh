@@ -248,8 +248,9 @@ python3 -m slips_files.core.database.redis_db.redis_auth
 exit_on_cmd_failure
 
 # running slips for the first time
-print_green "Executing 'redis-server --daemonize yes'"
-redis-server permanent/redis_auth.conf --port 6379 --daemonize yes
+print_green "Starting the authenticated Redis cache on port 6379"
+redis-server permanent/redis_auth.conf --port 6379 --daemonize yes \
+    --pidfile "$PWD/permanent/redis-server-port-6379.pid"
 
 exit_on_cmd_failure
 

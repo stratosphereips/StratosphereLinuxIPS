@@ -2,33 +2,70 @@
 # SPDX-License-Identifier: GPL-2.0-only
 import os
 import platform
+import logging
 import psutil
 import pwd
 import shlex
+import shutil
+import subprocess
+import threading
+from pathlib import Path
+from typing import Any
+
+from slips_files.common.slips_utils import utils
+from slips_files.core.helpers.macos_notifications.mac_notifications import (
+    prepare_notification_app,
+    notification_app_path,
+)
 
 IS_IN_A_DOCKER_CONTAINER = os.environ.get("IS_IN_A_DOCKER_CONTAINER", False)
 
 
 class Notify:
-    def __init__(self):
+    def __init__(self) -> None:
         self.enabled = False
         self.notify_cmd = "notify-send -t 5000 "
         if IS_IN_A_DOCKER_CONTAINER:
             return
-        if self._is_notify_send_installed():
+        if platform.system() == "Darwin":
+            self.enabled = self._is_osascript_installed()
+        elif platform.system() == "Linux" and self._is_notify_send_installed():
             self.enabled = True
             self._setup_notifications_if_root()
+
+    def prepare(self, db: Any) -> None:
+        """Build macOS branding in the background without delaying detection.
+
+        Parameters:
+            db: Run database used to track the preparation thread.
+        """
+        if not self.enabled or platform.system() != "Darwin":
+            return
+        thread = threading.Thread(
+            target=prepare_notification_app,
+            daemon=True,
+            name="slips_notification_prepare",
+        )
+        utils.start_thread(thread, db)
+
+    def _is_osascript_installed(self) -> bool:
+        """
+        Checks if the osascript bin is installed (macOS), and logs a warning
+        if it isn't
+        """
+        if shutil.which("osascript"):
+            return True
+        logging.getLogger(__name__).warning(
+            "Desktop notifications disabled: osascript is unavailable"
+        )
+        return False
 
     def _is_notify_send_installed(self) -> bool:
         """
         Checks if notify-send bin is installed
         """
-        cmd = "notify-send > /dev/null 2>&1"
-        returncode = os.system(cmd)
-        if returncode == 256:
-            # it is installed
+        if shutil.which("notify-send"):
             return True
-        # elif returncode == 32512:
         print(
             "notify-send is not installed. install it using:\n"
             "sudo apt-get install libnotify-bin"
@@ -78,18 +115,44 @@ class Notify:
             "notify-send -t 5000 "
         )
 
-    def show_popup(self, alert_to_log: str):
+    def show_popup(self, alert_to_log: str) -> None:
+        """Display an alert through the current desktop notification backend.
+
+        Parameters:
+            alert_to_log: Alert description passed as literal notification text.
         """
-        Function to display a popup with the alert depending on the OS
-        """
-        if IS_IN_A_DOCKER_CONTAINER:
+        if not self.enabled or IS_IN_A_DOCKER_CONTAINER:
             return
         if platform.system() == "Linux":
-            #  is notify_cmd is set in
-            #  setup_notifications function depending on the user
-            os.system(f'{self.notify_cmd} "Slips" "{alert_to_log}"')
+            command = [
+                *shlex.split(self.notify_cmd),
+                "--app-name=Slips",
+                "--icon",
+                str(Path("modules/web_interface/slips-logo.png").resolve()),
+                "Slips alert",
+                alert_to_log,
+            ]
         elif platform.system() == "Darwin":
-            os.system(
-                f"osascript -e 'display notification"
-                f' "{alert_to_log}" with title "Slips"\' '
+            binary = (
+                notification_app_path() / "Contents/MacOS/SlipsNotification"
+            )
+            if binary.is_file():
+                command = [str(binary), "Security alert", alert_to_log]
+            else:
+                script = (
+                    "on run argv\n"
+                    'display notification (item 1 of argv) with title "Slips alert"\n'
+                    "end run"
+                )
+                command = ["osascript", "-e", script, "--", alert_to_log]
+        else:
+            return
+        try:
+            subprocess.run(
+                command, capture_output=True, text=True, check=True, timeout=5
+            )
+        except (OSError, subprocess.SubprocessError) as error:
+            detail = getattr(error, "stderr", None) or str(error)
+            logging.getLogger(__name__).warning(
+                "Unable to display Slips notification: %s", detail.strip()
             )

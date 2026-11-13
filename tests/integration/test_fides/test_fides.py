@@ -20,7 +20,6 @@ from tests.common_test_utils import (
     modify_yaml_config,
     read_file_if_small,
 )
-from tests.module_factory import ModuleFactory
 import pytest
 import os
 import subprocess
@@ -179,6 +178,53 @@ def stop_process_group(process, process_name, timeout_seconds=15):
     print(f"SIGKILL sent to {process_name} process group {process_group_id}.")
 
 
+def open_slips_redis(redis_port: int) -> redis.Redis:
+    """
+    Open a read-only client to the Redis of a running Slips instance.
+
+    Parameters:
+        redis_port: Redis port used by the running Slips instance.
+
+    Returns:
+        Authenticated Redis client with decoded responses.
+    """
+    from slips_files.core.database.redis_db.redis_auth import (
+        try_connect_with_and_without_password,
+    )
+
+    return try_connect_with_and_without_password(
+        redis.Redis,
+        host="127.0.0.1",
+        port=redis_port,
+        db=0,
+        decode_responses=True,
+    )
+
+
+def get_cached_opinion(redis_port: int, target: str) -> dict | None:
+    """
+    Read a Fides cached network opinion without modifying Redis.
+
+    Parameters:
+        redis_port: Redis port used by the running Slips instance.
+        target: Target the opinion was cached for.
+
+    Returns:
+        The cached opinion without its creation timestamp, or None.
+    """
+    from slips_files.core.database.redis_db.constants import Constants
+
+    client = open_slips_redis(redis_port)
+    try:
+        data = client.hgetall(f"{Constants.FIDES_CACHE_KEY}:{target}")
+    finally:
+        client.close()
+    if not data:
+        return None
+    data.pop(Constants.FIDES_CACHE_CREATED_SECONDS, None)
+    return data
+
+
 def wait_for_runtime_message_count(
     redis_port: int,
     output_dir: Path,
@@ -205,18 +251,16 @@ def wait_for_runtime_message_count(
     latest_counters: dict[str, Any] = {}
 
     while time.time() < deadline:
-        db = ModuleFactory().create_db_manager_obj(
-            redis_port, output_dir=output_dir, start_redis_server=False
-        )
+        client = open_slips_redis(redis_port)
         try:
             latest_counters = (
-                db.get_msgs_received_at_runtime(module_name) or {}
+                client.hgetall(f"{module_name}_msgs_received_at_runtime") or {}
             )
             current_count = int(latest_counters.get(channel, 0))
             if current_count >= expected_count:
                 return latest_counters
         finally:
-            db.close_all_dbs()
+            client.close()
         time.sleep(1)
 
     raise AssertionError(
@@ -518,13 +562,9 @@ def test_trust_recommendation_response(
 
             # these 30s are the time we give slips to process the msg
             countdown(30, "sigterm")
-            db = ModuleFactory().create_db_manager_obj(
-                redis_port, output_dir=output_dir, start_redis_server=False
+            cached_network_opinion = get_cached_opinion(
+                redis_port, "stratosphere.org"
             )
-            cached_network_opinion = db.get_cached_network_opinion(
-                "stratosphere.org", 200000000000, 200000000000
-            )
-            db.close_all_dbs()
             stop_process_group(process, "fides slips")
 
         print(f"Slips with PID {process.pid} was killed.")

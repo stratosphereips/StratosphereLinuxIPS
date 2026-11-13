@@ -83,11 +83,16 @@ the entropy threshold can be changed in slips.yaml by changing the value of ```e
 
 ### Devices changing IPs
 
-Slips stores the MAC of each new IP it sees in conn.log.
+For a private IPv4 source first seen in conn.log, Slips checks whether its
+unicast MAC was previously associated with a different private IPv4 address.
+If so, it reports "Device changing IPs". Link-local and special addresses are
+excluded.
 
-Then for every source address in conn.log, slips checks if the MAC of it was used by another IP.
-
-If so, it alerts "Device changing IPs".
+Public IPs and the capture interface's gateway are excluded from this check.
+For routed traffic, the Ethernet MAC belongs to the local router, not the
+remote IP. Slips must not treat that MAC as proof that a remote host changed
+its address. Public IPs are not saved as device MAC owners; old public entries
+are also ignored by this detector.
 
 
 ## GRE tunnels
@@ -276,7 +281,7 @@ These are the cases where Slips marks the port as known and doesn't trigger an a
 Slips considers an IP belongs to an org if:
 
 1. Both `saddr` and `daddr` have the organization's name in their MAC vendor (e.g. Apple.)
-2. Both `saddr` and `daddr` belong to the range specified in the`ports_used_by_specific_orgs.csv` for that organization.
+2. `daddr` belongs to the range specified in `ports_used_by_specific_orgs.csv` for that organization.
 3. If the SNI, hostname, rDNS, ASN of this IP belong to this organization.
 4. If the IP is hardcoded in any of the organizations IPs in `slips_files/organizations_info/`.
 
@@ -1094,14 +1099,14 @@ The list below contains all connections made by Slips
 useragentstring.com -> For getting user agent info if no info was found in Zeek
 macvendorlookup.com -> For getting MAC vendor info if no info was found in the local maxmind db
 ip-api.com/json/ -> For getting ASN info about IPs if no info was found in our Redis DB
-ipinfo.io/json -> For getting your public IP
+ipinfo.io/json -> For getting your public IP only when the local interface addresses, default route, or gateway MAC change. Slips uses local interface addresses for its own-host checks, so a normal live run does not need to query this service.
 virustotal.com -> For getting scores about downloaded files, domains, IPs and URLs
 cymru.com -> For getting the range of a specific IP to cache the ASN of this range. TXT DNS queries are made to this domain.
 
 
-By default, slips whitelists alerts from or to any of the above domains, witch means that if an alert was detected
-to one of the above alerts, slips does not detect it assuming it's a false positive and the connection was made
-internally by slips.
+During live interface capture, Slips excludes its own Python module connections using the exact source IP, source port, destination IP, destination port, and transport recorded when it opens each socket. It also samples active sockets belonging to its P2P child process, so those connections are excluded in either capture direction. The match lasts for one hour in Redis and is scoped to the current run. This covers IPinfo and other HTTP lookups made by those modules without excluding unrelated applications that happen to contact the same service. The default whitelist does not exempt entire enrichment service domains or IP addresses. Another application contacting the same service remains eligible for detections, even on the Slips computer. Unattributed traffic, including external WHOIS command sockets, stays eligible rather than receiving a host-wide service-port exemption. Imported PCAPs never use the live socket exemption: their service requests remain visible. Explicit organization and other user whitelist rules still apply.
+
+Per-IP ASN enrichment does not use IPinfo: it checks the local GeoLite database first, then RDAP and ip-api.com if needed. Successful ASN data is reused for 30 days; failed remote lookups are retried after five minutes. IPinfo's datasets are generally updated daily, but the public-IP endpoint reports the current network address, so Slips refreshes it on a detected network change instead of on a data-update timer.
 
 
 You can change this behaviour by copying ```config/whitelist.conf```, updating the copy, and pointing ```whitelists.local_whitelist_path``` in your copied ```slips.yaml``` file to that copied whitelist.

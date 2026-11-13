@@ -4,6 +4,7 @@
 import json
 import os
 import sys
+from typing import TextIO
 
 from slips_files.common.abstracts.iinput_handler import IInputHandler
 
@@ -13,18 +14,19 @@ class StdinInput(IInputHandler):
         super().__init__(input_process)
         self.db = self.input.db
 
-    def _stdin(self):
-        """opens the stdin in read mode"""
-        sys.stdin.close()
-        sys.stdin = os.fdopen(0, "r")
-        return sys.stdin
+    def _stdin(self) -> TextIO:
+        """Return the parent's transferred input stream in the child."""
+        descriptor = self.input.stdin_descriptor
+        if descriptor is None:
+            return sys.stdin
+        return os.fdopen(descriptor.detach(), "r")
 
     def run(self) -> bool:
         self.input.print("Receiving flows from stdin.")
         for line in self._stdin():
             if line == "\n":
                 continue
-            if line == "done":
+            if line.strip() == "done":
                 break
             # slips supports reading zeek json conn.log only using stdin,
             # tabs aren't supported
@@ -38,6 +40,7 @@ class StdinInput(IInputHandler):
             line_info = {
                 "type": "stdin",
                 "line_type": self.input.line_type,
+                "interface": "default",
                 "data": line,
             }
             self.input.print(f"\t> Sent Line: {line_info}", 0, 3)
