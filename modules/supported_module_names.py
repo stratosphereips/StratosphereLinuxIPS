@@ -24,6 +24,7 @@ class Modules(str, Enum):
     FIDES = "fides"
     FLOW_ALERTS = "flow_alerts"
     HTTP_ANALYZER = "http_analyzer"
+    HOST_PROFILE = "host_profile"
     INPUT = "input"
     IP_INFO = "ip_info"
     IRIS = "iris"

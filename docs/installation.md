@@ -476,6 +476,27 @@ The controller is also required for a native systemd service's `MemoryMax`
 setting. Without it, `MemoryMax` cannot protect the Pi, even if the unit
 accepts the setting. A native service can use `CPUQuota` immediately.
 
+### Resource limits and updates
+
+Use a hard CPU limit such as `--cpus=2`; CPU shares only change scheduling
+priority under contention. Reserve memory for the operating system and other
+applications. For an 8 GiB Pi, `--memory=6g --memory-swap=6g` caps Slips at
+6 GiB and prevents container swap. A 16 GiB Pi can use a 10 GiB cap. Check
+the running container's `/sys/fs/cgroup/memory.max` and
+`/sys/fs/cgroup/cpu.max` to verify enforcement.
+
+Before replacing a container, stop it gracefully and back up its configuration
+and `permanent/` directory, including the whitelist, peer private key, trust
+database and authentication files. Bind mount these directories and `output/`
+into the replacement container. Keep each Pi's state separate so peer keys
+are never shared between devices. Retain the stopped container for rollback.
+
+For an existing live interface output, use `--keep-history` with the same
+interface and output directory to retain its SQLite history. Verify the new
+image on Linux/ARM before replacing the running container; in particular,
+host names, notes and reviews must resolve with the installed SQLite version
+(including SQLite 3.37 on Ubuntu 22.04 images).
+
 ## Running Slips' Docker in the Pi
 
 This command
