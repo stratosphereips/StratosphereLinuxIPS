@@ -115,6 +115,21 @@ def test_stop_evidence_workers():
     handler.print.assert_not_called()
 
 
+def test_stop_evidence_workers_ignores_join_errors():
+    handler = ModuleFactory().create_evidence_handler_obj()
+    process_1 = Mock()
+    process_1.join.side_effect = OSError
+    process_2 = Mock()
+    process_2.join.side_effect = ChildProcessError
+    handler.evidence_worker_child_processes = [process_1, process_2]
+    handler.evidence_worker_queue = Mock()
+
+    handler.stop_evidence_workers()
+
+    process_1.join.assert_called_once_with()
+    process_2.join.assert_called_once_with()
+
+
 @patch(
     "slips_files.core.evidence_handler.EvidenceHandlerWorker"
 )

@@ -30,7 +30,6 @@ from typing import List
 from multiprocessing import Process
 from multiprocessing.queues import Queue as MultiprocessingQueue
 
-from managers.process_manager.shutdown_mixin import drain_evidence_workers
 from slips_files.common.idmefv2 import IDMEFv2
 from slips_files.common.abstracts.icore import ICore
 from slips_files.common.output_paths import get_alerts_path_inside_output_dir
@@ -289,10 +288,18 @@ class EvidenceHandler(ICore):
         self.print("Done shutting down gracefully.")
 
     def stop_evidence_workers(self) -> None:
-        """Drain queued evidence using the process manager's shutdown policy."""
-        drain_evidence_workers(
-            self.evidence_worker_child_processes, self.evidence_worker_queue
-        )
+        """Drain accepted evidence, then wait for the workers to exit.
+
+        The queue is FIFO, so each worker finishes the accepted tasks
+        before reaching its stop marker.
+        """
+        for _ in self.evidence_worker_child_processes:
+            self.evidence_worker_queue.put("stop")
+        for worker in self.evidence_worker_child_processes:
+            try:
+                worker.join()
+            except (OSError, ChildProcessError):
+                pass
 
     def start_evidence_worker(self, worker_id: int = None):
         worker_name = f"evidence_handler_worker_process_{worker_id}"
