@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from typing import Dict
+from types import SimpleNamespace
 
 import pytest
 from unittest.mock import MagicMock, Mock
@@ -23,6 +24,81 @@ from slips_files.core.structures.evidence import (
 from tests.module_factory import ModuleFactory
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.risk_weights import RiskWeight
+
+
+@pytest.mark.parametrize("member", [False, True])
+def test_alert_membership_does_not_read_historical_lists(member: bool) -> None:
+    """Use one indexed lookup regardless of the number of old alerts.
+
+    Parameters:
+        member: Whether the indexed evidence was already correlated.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.r = MagicMock()
+    handler.r.smismember.return_value = [1, int(member)]
+    handler.get_profileid_twid_alerts = Mock(side_effect=AssertionError("Historical scan"))
+    assert handler.is_evidence_in_past_alert("profile_1", "timewindow1", "evidence") is member
+    handler.r.smismember.assert_called_once_with(
+        "profile_1_timewindow1:alerted_evidence", ["__indexed__", "evidence"])
+    handler.r.hget.assert_not_called()
+
+
+def test_alert_membership_upgrades_retained_alerts_with_expiry() -> None:
+    """Build a complete expiring index when a retained run predates the new index."""
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.r = MagicMock()
+    handler.r.smismember.return_value = [0, 0]
+    handler.r.sismember.side_effect = [False, True]
+    handler.get_profileid_twid_alerts = Mock(return_value={"old-alert": '["old-1","old-2"]'})
+    handler.default_ttl = 600
+    assert handler.is_evidence_in_past_alert("profile_1", "timewindow1", "old-2") is True
+    pipeline = handler.r.pipeline.return_value
+    pipeline.sadd.assert_called_once_with("profile_1_timewindow1:alerted_evidence", "__indexed__", "old-1", "old-2")
+    pipeline.expire.assert_called_once_with("profile_1_timewindow1:alerted_evidence", 600)
+    pipeline.execute.assert_called_once_with()
+
+
+def test_pending_processed_evidence_fetches_only_uncorrelated_records() -> None:
+    """Exclude past alerts, unprocessed findings and deleted records before decoding."""
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.r = MagicMock()
+    handler.r.sismember.return_value = True
+    handler.r.sdiff.return_value = ["pending", "deleted"]
+    handler.r.hmget.return_value = ['{"id":"pending"}', None]
+    assert handler.get_pending_processed_evidence("profile_1", "timewindow1") == {"pending": '{"id":"pending"}'}
+    handler.r.sdiff.assert_called_once_with(
+        f"{handler.constants.PROCESSED_EVIDENCE}_profile_1_timewindow1",
+        "profile_1_timewindow1:alerted_evidence")
+    handler.r.hgetall.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "threat_info, expected",
+    [
+        ({"source": "feed-one"}, "feed-one"),
+        ('{"source": "feed-two"}', "feed-two"),
+        ("legacy-feed", "legacy-feed"),
+    ],
+)
+def test_domain_evidence_accepts_legacy_threat_intelligence_values(
+    threat_info: object, expected: str
+) -> None:
+    """Malformed cached TI must not crash evidence generation.
+
+    Parameters:
+        threat_info: Cached domain intelligence in a legacy representation.
+        expected: Source shown on the evidence entity.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.get_domain_data = Mock(
+        return_value={"threatintelligence": threat_info}
+    )
+    attacker = SimpleNamespace(ioc_type=IoCType.DOMAIN, value="example.test")
+    evidence = SimpleNamespace(attacker=attacker, victim=None)
+
+    result = handler._get_more_info_about_evidence(evidence)
+
+    assert result.attacker.TI == expected
 
 
 @pytest.mark.parametrize(
@@ -137,10 +213,16 @@ def test_set_evidence_causing_alert(
     alert_handler.set_evidence_causing_alert(alert)
 
     alert_handler.r.incr.assert_not_called()
-    alert_handler.r.hset.assert_called_once_with(
+    pipeline = alert_handler.r.pipeline.return_value
+    pipeline.hset.assert_called_once_with(
         f"profile_{profile_ip}_timewindow{twid}", "alerts", ANY
     )
-    called_args, _ = alert_handler.r.hset.call_args
+    called_args, _ = pipeline.hset.call_args
+    pipeline.sadd.assert_called_once()
+    assert pipeline.sadd.call_args.args[:2] == (
+        f"profile_{profile_ip}_timewindow{twid}:alerted_evidence", "__indexed__")
+    assert set(pipeline.sadd.call_args.args[2:]) == set(evidence_ids)
+    pipeline.execute.assert_called_once_with()
     alerts_added: Dict[str, str] = json.loads(called_args[2])
     for alert_id, expected_evidence_list in expected_new_alerts.items():
         assert alert_id in alerts_added
@@ -320,11 +402,13 @@ def test_init_evidence_number(initial_value, expected_value):
         (EvidenceType.MALICIOUS_FLOW, EvidenceSignal.DAMP),
     ],
 )
+@pytest.mark.parametrize("notify", [True, False])
 def test_set_evidence(
     evidence_exists,
     expected,
     evidence_type,
     expected_signal,
+    notify,
 ):
     db = ModuleFactory().create_alert_handler_obj()
 
@@ -371,7 +455,7 @@ def test_set_evidence(
         timestamp="1233242354.3",
     )
 
-    result = db.set_evidence(evidence)
+    result = db.set_evidence(evidence, notify=notify)
 
     assert result is expected
     assert evidence.evidence_signal == expected_signal
@@ -379,11 +463,19 @@ def test_set_evidence(
     if expected:
         db.r.hset.assert_called_once()
         db.r.incr.assert_called_once_with(db.constants.NUMBER_OF_EVIDENCE)
-        db.publish.assert_called_once()
+        if notify:
+            db.publish.assert_called_once()
+        else:
+            db.publish.assert_not_called()
         stored_evidence = json.loads(db.r.hset.call_args.args[2])
-        published_evidence = json.loads(db.publish.call_args.args[1])
         assert stored_evidence["evidence_signal"] == expected_signal.name
-        assert published_evidence["evidence_signal"] == expected_signal.name
+        if notify:
+            published_evidence = json.loads(db.publish.call_args.args[1])
+            assert published_evidence == stored_evidence
+        else:
+            db.publish_evidence_added(evidence)
+            published_evidence = json.loads(db.publish.call_args.args[1])
+            assert published_evidence == stored_evidence
     else:
         db.r.hset.assert_not_called()
         db.publish.assert_not_called()
@@ -779,3 +871,22 @@ def test_get_tw_limits_recovers_when_redis_anchor_is_missing(
 
     assert start == expected_start
     assert end == expected_start + alert_handler.width
+
+
+@pytest.mark.parametrize("cached", [[], ["icanhazip.com", "shared.example.com"]])
+@pytest.mark.parametrize("observed", ["icanhazip.com", "unrelated.example.com"])
+def test_enrichment_preserves_observed_http_host(cached: list[str], observed: str) -> None:
+    """Retain the actual request host when DNS enrichment is absent or shared.
+
+    Parameters:
+        cached: Names previously resolved to this destination IP.
+        observed: Actual HTTP Host, independent of other CDN names.
+    """
+    handler = ModuleFactory().create_alert_handler_obj()
+    handler.get_ip_identification = Mock(return_value={"queries": cached, "SNI": "icanhazip.com"})
+    victim = Victim(direction=Direction.DST, ioc_type=IoCType.IP,
+                    value="104.16.184.241", queries=[observed])
+    evidence = SimpleNamespace(attacker=None, victim=victim)
+    result = handler._get_more_info_about_evidence(evidence)
+    assert result.victim.queries == [observed]
+    assert result.victim.SNI is None

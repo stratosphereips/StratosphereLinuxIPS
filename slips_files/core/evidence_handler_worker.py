@@ -6,6 +6,7 @@
 import json
 import os
 import queue
+import sqlite3
 import sys
 from multiprocessing import Queue
 from typing import Dict, List, Optional, Tuple
@@ -257,21 +258,18 @@ class EvidenceHandlerWorker(IModule):
     def get_evidence_for_tw(
         self, profileid: str, twid: str
     ) -> Optional[Dict[str, Evidence]]:
-        tw_evidence: Dict[str, dict] = self.db.get_twid_evidence(
+        tw_evidence: Dict[str, str] = self.db.get_pending_processed_evidence(
             profileid, twid
         )
         if not tw_evidence:
             return None
 
-        past_evidence_ids = self.get_evidence_that_were_part_of_a_past_alert(
-            profileid, twid
-        )
         filtered_evidence = {}
 
         for evidence_id, raw_evidence in tw_evidence.items():
             evidence = dict_to_evidence(json.loads(raw_evidence))
 
-            if self.is_filtered_evidence(evidence, past_evidence_ids):
+            if self.is_filtered_evidence(evidence, []):
                 continue
 
             if self.db.is_whitelisted_evidence(evidence_id):
@@ -349,7 +347,7 @@ class EvidenceHandlerWorker(IModule):
 
     def is_blocking_modules_supported(self) -> bool:
         custom_flows = "-im" in sys.argv or "--input-module" in sys.argv
-        blocking_module_enabled = "-p" in sys.argv
+        blocking_module_enabled = "-p" in sys.argv or "--blocking" in sys.argv
         return (
             self.is_running_non_stop or custom_flows
         ) and blocking_module_enabled
@@ -460,10 +458,9 @@ class EvidenceHandlerWorker(IModule):
         if evidence.threat_level == ThreatLevel.INFO:
             return self.db.get_accumulated_threat_level(profileid, twid)
 
-        past_evidence_ids = self.get_evidence_that_were_part_of_a_past_alert(
-            profileid, twid
-        )
-        if not self.is_filtered_evidence(evidence, past_evidence_ids):
+        if self.db.is_evidence_in_past_alert(
+            profileid, twid, evidence.id
+        ) is not True and not self.is_filtered_evidence(evidence, []):
             return self.update_accumulated_threat_level(evidence)
 
         return self.db.get_accumulated_threat_level(profileid, twid)
@@ -505,19 +502,18 @@ class EvidenceHandlerWorker(IModule):
 
     def shutdown_gracefully(self):
         """
-        Release queue handles so the worker does not hang during process
-        finalization while waiting on queue feeder threads.
+        Flush produced log records before releasing queue handles.
         """
-        for q in (self.evidence_queue, self.evidence_logger_q):
-            try:
-                q.cancel_join_thread()
-            except (AttributeError, OSError, ValueError):
-                pass
-
-            try:
-                q.close()
-            except (AttributeError, OSError, ValueError):
-                pass
+        try:
+            self.evidence_queue.cancel_join_thread()
+            self.evidence_queue.close()
+        except (AttributeError, OSError, ValueError):
+            pass
+        try:
+            self.evidence_logger_q.close()
+            self.evidence_logger_q.join_thread()
+        except (AttributeError, OSError, ValueError):
+            pass
 
     def handle_evidence_added_message(self, msg: dict):
         evidence = json.loads(msg["data"])
@@ -622,6 +618,19 @@ class EvidenceHandlerWorker(IModule):
             risk_accumulated_threat_level,
             current_risk_weight,
         )
+        # Persist the captured values, even if alert generation reset Redis.
+        try:
+            self.db.set_evidence_score(
+                evidence.id,
+                accumulated_threat_level,
+                risk_accumulated_threat_level,
+            )
+        except (sqlite3.Error, OSError) as error:
+            self.print(
+                f"Unable to persist evidence score {evidence.id}: {error}",
+                0,
+                1,
+            )
         return accumulated_threat_level, risk_accumulated_threat_level
 
     def _score_evidence(
