@@ -10,6 +10,14 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+# Internal tuning values, intentionally not user-configurable.
+# Detections processed per maintenance pass.
+MAINTENANCE_BATCH_SIZE = 200
+# Seconds between maintenance passes.
+MAINTENANCE_INTERVAL_SECONDS = 10
+# Maximum milliseconds one maintenance pass may run.
+MAINTENANCE_WORK_BUDGET_MS = 250
+
 ENTITIES = {
     "evidence": (
         "evidence_id",
@@ -735,8 +743,8 @@ class DetectionHistory:
             Persistent maintenance health and progress statistics.
         """
         started = time.monotonic()
-        deadline = started + int(policy["work_budget_ms"]) / 1000
-        batch = int(policy["batch_size"])
+        deadline = started + MAINTENANCE_WORK_BUDGET_MS / 1000
+        batch = MAINTENANCE_BATCH_SIZE
         status: dict[str, Any] = {
             "last_run": now,
             "units": 0,

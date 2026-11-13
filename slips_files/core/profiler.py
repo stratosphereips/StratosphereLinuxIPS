@@ -44,6 +44,9 @@ from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.worker_manager_mixin import WorkerManagerMixin
 from slips_files.common.log_rotation import expire_rotated_logs
+from slips_files.core.database.sqlite_db.detection_history import (
+    MAINTENANCE_INTERVAL_SECONDS,
+)
 from pathlib import Path
 
 SUPPORTED_INPUT_TYPES = {
@@ -62,6 +65,13 @@ SEPARATORS = {
     InputType.ZEEK_TABS: "\t",
     InputType.BINETFLOW_TABS: "\t",
 }
+
+
+# Internal tuning values, intentionally not user-configurable.
+# Flows deleted per cleanup pass.
+FLOW_RETENTION_BATCH_SIZE = 500
+# Seconds between flow cleanup passes.
+FLOW_RETENTION_INTERVAL_SECONDS = 60
 
 
 class Profiler(WorkerManagerMixin, ICore, IObservable):
@@ -152,16 +162,14 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         if not self.args.interface:
             return
         policy = self.flow_retention_policy
-        interval = int(policy["interval_seconds"])
+        interval = FLOW_RETENTION_INTERVAL_SECONDS
         ordinary_age = int(policy["ordinary_hours"]) * 3600
         size_min_age = int(policy.get("size_min_age_minutes", 60)) * 60
         linked_age = int(policy["linked_days"]) * 86400
-        batch_size = int(policy["batch_size"])
+        batch_size = FLOW_RETENTION_BATCH_SIZE
         max_size_bytes = int(policy["max_size_mb"]) * 1024 * 1024
         history_policy = getattr(self, "detection_history_policy", {})
-        history_interval = int(
-            history_policy.get("interval_seconds", interval)
-        )
+        history_interval = MAINTENANCE_INTERVAL_SECONDS
         last_flow_pass = 0.0
         last_log_pass = 0.0
         history_deferred_since: float | None = None

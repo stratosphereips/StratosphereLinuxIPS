@@ -483,8 +483,6 @@ class ConfigParser(object):
             "ordinary_hours": 24,
             "size_min_age_minutes": 60,
             "linked_days": 30,
-            "batch_size": 500,
-            "interval_seconds": 60,
             "max_size_mb": 512,
         }
         policy: dict[str, int | bool] = {
@@ -497,8 +495,6 @@ class ConfigParser(object):
             "ordinary_hours": (1, 24 * 365),
             "size_min_age_minutes": (1, 24 * 60),
             "linked_days": (1, 3650),
-            "batch_size": (1, 800),
-            "interval_seconds": (10, 3600),
             "max_size_mb": (0, 1024 * 1024),
         }
         for key, default in defaults.items():
@@ -541,9 +537,6 @@ class ConfigParser(object):
             "archive_retention_days": (30, 1, 3650),
             "archive_file_size_mb": (256, 1, 65536),
             "max_archive_size_mb": (4096, 0, 1024 * 1024),
-            "batch_size": (200, 1, 500),
-            "interval_seconds": (10, 5, 3600),
-            "work_budget_ms": (250, 50, 5000),
             "min_free_disk_mb": (1024, 0, 1024 * 1024),
             "log_max_size_mb": (64, 1, 4096),
             "log_backup_count": (30, 1, 1000),
