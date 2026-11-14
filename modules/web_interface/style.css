@@ -575,7 +575,8 @@ body.drawer-resizing { cursor: ew-resize; user-select: none; }
 .host-evidence-panel .table-heading input { width: min(340px, 100%); }
 .host-evidence-wrap { max-height: 480px; }
 #host-evidence-table { min-width: 1120px; }
-.host-evidence-description { display: block; max-width: 430px; color: #c7d5de; overflow-wrap: anywhere; }
+#host-evidence-table th:last-child, #host-evidence-table td:last-child { min-width: 430px; width: 430px; white-space: normal; }
+.host-evidence-description { display: block; width: 100%; color: var(--text); overflow-wrap: anywhere; white-space: normal; }
 .status.whitelisted, .slips-score.whitelisted { border-color: #ad8cff55; background: #ad8cff18; color: #c8b4ff; }
 body.configuration-active main { max-width: none; padding: .75rem 1rem 2rem; }
 .config-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: .65rem; }
@@ -935,6 +936,7 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-activity-tabs input { width: 180px; min-width: 100px; margin-left: auto; padding: .3rem .4rem; font-size: .69rem; }
 .host-activity-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .65rem; padding: .4rem .2rem; border-bottom: 1px solid var(--line); }
 .host-activity-controls label { display: flex; align-items: center; gap: .3rem; color: var(--muted); font-size: .69rem; white-space: nowrap; }
+.host-activity-controls label[hidden], .host-activity-controls > button[hidden] { display: none; }
 .host-activity-controls select { min-width: 135px; padding: .25rem .4rem; font-size: .69rem; }
 .host-activity-controls input { width: min(280px, 100%); min-width: 130px; margin-left: auto; padding: .28rem .45rem; font-size: .69rem; }
 .host-activity-controls input[hidden], .host-activity-controls span[hidden] { display: none; }
@@ -946,6 +948,12 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-activity-content { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .host-activity-content[hidden] { display: none; }
 .host-activity-content .table-wrap { min-height: 0; max-height: none; flex: 1; overflow: auto; }
+.host-activity-content .table-wrap[hidden], .host-activity-foot[hidden] { display: none; }
+.host-evidence-type-sections { display: flex; flex: 1; min-height: 0; flex-direction: column; gap: .4rem; overflow: auto; padding: .45rem 0; }
+.host-evidence-type-sections[hidden] { display: none; }
+.host-evidence-type-section { display: flex; min-height: 0; flex: none; flex-direction: column; }
+.host-evidence-type-section.expanded { flex: 1 0 18rem; min-height: 18rem; }
+.host-evidence-type-section .host-evidence-wrap { margin-top: .4rem; }
 .host-activity-content table { font-size: .68rem; }
 .host-activity-content th, .host-activity-content td { padding: .33rem .4rem; font-size: .67rem; white-space: nowrap; }
 .host-activity-foot { display: flex; min-height: 27px; align-items: center; justify-content: space-between; color: var(--muted); font-size: .65rem; }
@@ -1051,6 +1059,7 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-group-summary { max-height: 45%; overflow: auto; flex: none; border-left: 3px solid var(--accent); }
 .evidence-group-summary .type-chip { margin-right: .4rem; }
 .evidence-group-summary .evidence-group-host { margin: .5rem 0 .25rem; font-size: .85rem; font-weight: 600; }
+.evidence-group-host > .ip-link, .evidence-group-description .ip-link { font-size: inherit; }
 :is(#evidence, #evidence-detail) .host-label > :is(code, .host-name) { font-size: 1em; }
 .evidence-group-description { display: block; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 :is(#evidence, #evidence-detail) .host-label > .host-name { font-family: inherit; font-weight: 500; text-transform: none; }
@@ -1085,6 +1094,7 @@ body.evidence-active main { max-width: none; padding: 0; }
 #evidence-records-table td:nth-child(4) { white-space: nowrap; }
 #evidence-records-table td:nth-child(n+5):nth-child(-n+7) { text-align: right; }
 #evidence-records-table td:last-child { min-width: 15rem; max-width: 30rem; white-space: normal; overflow-wrap: anywhere; }
+.evidence-record-group-row th { position: static; border-left: 3px solid var(--accent); background: var(--surface-2); color: var(--text); text-align: left; }
 .evidence-record-count { flex: none; margin-top: .4rem; font-size: .7rem; }
 .evidence-record-actions { display: flex; justify-content: flex-end; margin-top: .4rem; }
 .evidence-record-actions button { padding: .3rem .45rem; font-size: .69rem; }
