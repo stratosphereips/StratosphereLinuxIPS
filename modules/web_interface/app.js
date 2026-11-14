@@ -810,8 +810,13 @@ function readableEvidenceDescription(record) {
   return `Unusual HTTPS connection from ${source} to ${server}. Server ${server} was not previously seen for this host.`;
 }
 
-/** Add host names and compact MAC markers to detection descriptions. */
-function hostDescription(record, className = "") {
+/** Add host names and compact MAC markers to detection descriptions.
+ * @param {object} record Evidence whose description is displayed.
+ * @param {string} className Optional styling class.
+ * @param {boolean} linkHosts Whether addresses open their host workspaces.
+ * @returns {HTMLElement} Description with named indicators.
+ */
+function hostDescription(record, className = "", linkHosts = false) {
   const description = readableEvidenceDescription(record) || "—";
   const addresses = new Set(description.match(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g) || []);
   const macs = new Set(description.match(/(?<![\w:])(?:[0-9a-f]{1,2}:){5}[0-9a-f]{1,2}(?![\w:])/gi) || []);
@@ -830,7 +835,7 @@ function hostDescription(record, className = "") {
   const matcher = new RegExp(`(${escaped.join("|")})`, "g");
   description.split(matcher).forEach((part) => {
     if (macs.has(part)) element.append(macIdentity(part));
-    else if (addresses.has(part)) element.append(hostIdentity(part));
+    else if (addresses.has(part)) element.append(linkHosts ? hostLink(part) : hostIdentity(part));
     else element.append(part);
   });
   return element;
@@ -3902,10 +3907,10 @@ function renderEvidenceGroup() {
     summary.append(head);
     const p2pReports = isPeerReport(group) || group.module === "p2p_trust";
     const host = text("h3", "", "evidence-group-host");
-    host.append(group.profile_ip ? deviceIdentity(group, "profile_ip") : text("span", "All hosts"));
+    host.append(group.profile_ip ? hostLink(group.profile_ip, deviceIdentity(group, "profile_ip")) : text("span", "All hosts"));
     summary.append(host);
     if (p2pReports) summary.append(text("p", "These detections were reported by other Slips. Select a record to see what the peer detected and who sent it. Received reports do not increase the local host score."));
-    else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description"));
+    else if (workspace.records[0]?.description) summary.append(hostDescription(workspace.records[0], "evidence-group-description", true));
     summary.append(investigationStats([
       ["Threat", threat(group.threat_level)],
       ["Local score", slipsScore(group)],
@@ -6949,12 +6954,16 @@ async function inspectHost(ip) {
   }
 }
 
-/** Render an IP as a host-workspace navigation control. */
-function hostLink(ip) {
+/** Render an IP as a host-workspace navigation control.
+ * @param {string} ip Address to inspect.
+ * @param {HTMLElement|null} label Optional existing host identity.
+ * @returns {HTMLButtonElement} Navigation button.
+ */
+function hostLink(ip, label = null) {
   const button = document.createElement("button");
   button.className = "ip-link";
   button.type = "button";
-  button.append(hostIdentity(ip));
+  button.append(label || hostIdentity(ip));
   button.title = ip ? `Open host workspace for ${ip}` : "No host address available";
   button.disabled = !ip;
   button.addEventListener("click", (event) => {

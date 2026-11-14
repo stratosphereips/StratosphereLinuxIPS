@@ -313,6 +313,8 @@ a compact row for threat, score and network. Record headers keep additional
 description details without repeating their opening sentence. Identifiers stay
 in the collapsed **Evidence record** section. Device names appear in a muted
 color as **[name]**, at the address's font size and with their original case.
+Host addresses in the group summary and its description open that address in
+the Hosts workspace.
 With evidence grouping set to **None**, the middle record-list pane is hidden.
 Select evidence directly in the left table to open its details on the right;
 the divider resizes these two panes. Closing the details gives the table the

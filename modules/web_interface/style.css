@@ -1059,6 +1059,7 @@ body.evidence-active main { max-width: none; padding: 0; }
 .evidence-group-summary { max-height: 45%; overflow: auto; flex: none; border-left: 3px solid var(--accent); }
 .evidence-group-summary .type-chip { margin-right: .4rem; }
 .evidence-group-summary .evidence-group-host { margin: .5rem 0 .25rem; font-size: .85rem; font-weight: 600; }
+.evidence-group-host > .ip-link, .evidence-group-description .ip-link { font-size: inherit; }
 :is(#evidence, #evidence-detail) .host-label > :is(code, .host-name) { font-size: 1em; }
 .evidence-group-description { display: block; color: var(--muted); font-size: .8rem; line-height: 1.45; }
 :is(#evidence, #evidence-detail) .host-label > .host-name { font-family: inherit; font-weight: 500; text-transform: none; }
