@@ -8,6 +8,7 @@ from pathlib import Path
 from modules.supported_module_names import Modules
 
 
+# todo alya review this later
 def rotate_log(
     path: Path, policy: dict[str, int | bool], now: float | None = None
 ) -> bool:

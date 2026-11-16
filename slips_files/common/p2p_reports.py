@@ -7,7 +7,7 @@ from slips_files.core.structures.evidence import (
     normalize_icmp_evidence,
 )
 
-MAX_DETECTIONS_PER_PEER_REPORT = 16
+MAX_EVIDENCE_PER_PEER_REPORT = 16
 
 # evidence types that only describe "a peer told us something", not a real
 # finding, so they are never shown as the peer's reported detection
@@ -31,8 +31,10 @@ def is_known_evidence_type(evidence_type_name: Any) -> bool:
     )
 
 
-def extract_reported_detections(peer_report: Any) -> list[dict[str, Any]]:
-    """Extract bounded detection details from a saved peer report.
+def extract_all_evidence_from_peer_report(
+    peer_report: Any,
+) -> list[dict[str, Any]]:
+    """Extract evidence from the given peer report.
 
     Parameters:
         peer_report: Saved peer metadata, possibly absent in older records.
@@ -43,37 +45,34 @@ def extract_reported_detections(peer_report: Any) -> list[dict[str, Any]]:
     if not isinstance(peer_report, dict):
         return []
 
-    reported_items = peer_report.get("provenance")
-    if not isinstance(reported_items, list):
+    reported_evidence = peer_report.get("provenance")
+    if not isinstance(reported_evidence, list):
         return []
 
-    detections = []
-    for reported_item in reported_items[:MAX_DETECTIONS_PER_PEER_REPORT]:
-        if not isinstance(reported_item, dict):
+    extracted_evidence = []
+    for evidence in reported_evidence[:MAX_EVIDENCE_PER_PEER_REPORT]:
+        if not isinstance(evidence, dict):
             continue
 
-        evidence_type: EvidenceType = reported_item.get("evidence_type")
+        evidence_type: EvidenceType = evidence.get("evidence_type")
 
-        is_known_type = (
-            isinstance(evidence_type, str)
-            and evidence_type in EvidenceType.__members__
-        )
-        if not is_known_type:
+        if not is_known_evidence_type(evidence_type):
             continue
 
         if evidence_type in PEER_WRAPPER_EVIDENCE_TYPES:
             continue
 
-        detection = {**reported_item, "evidence_type": evidence_type}
+        detection = evidence.copy()
         normalize_icmp_evidence(detection)
-        detections.append(detection)
-    return detections
+        extracted_evidence.append(detection)
+    return extracted_evidence
 
 
-def resolve_evidence_display_type(
+def get_first_evidence_in_peer_report(
     original_evidence_type: str, peer_report: Any
 ) -> str:
-    """Classify a peer report by its finding without changing its raw record.
+    """returns the first evidence from the provenvance of the given
+    peer_report
 
     Parameters:
         original_evidence_type: Canonical type of the original evidence record.
@@ -85,7 +84,11 @@ def resolve_evidence_display_type(
     if original_evidence_type != "P2P_REPORT":
         return original_evidence_type
 
-    reported_detections = extract_reported_detections(peer_report)
-    if reported_detections:
-        return reported_detections[0]["evidence_type"]
+    evidence = extract_all_evidence_from_peer_report(peer_report)
+    if evidence:
+        # return the first one only, why? because the db and the web
+        # interface are expecting 1 type per evidence.
+        # so instead of putting "P2P_REPORT" as the type we choose the
+        # first one because its more meaning
+        return evidence[0]["evidence_type"]
     return original_evidence_type
