@@ -233,6 +233,25 @@ class ISQLite(ABC):
     ) -> sqlite3.Cursor | None:
         """Execute and commit one statement, retrying SQLite failures.
 
+        Wrapper around sqlite's execute(). It avoids the "Recursive use
+        of cursors not allowed" error by using a new cursor per call under
+        a thread lock, and it adds a cross-process file lock because sqlite
+        is poor at multi-process use. Use it for normal reads and writes
+        instead of calling execute() and commit() directly.
+
+        Writes run inside a manual transaction (BEGIN, statement, commit),
+        and are rolled back on failure. We commit manually because
+        sqlite3's autocommit option needs Python 3.12+, and Slips may run
+        on older versions. Other connections won't see this connection's
+        changes until they are committed.
+
+        Plain SELECT statements skip the transaction and the file lock
+        when no transaction is open.
+
+        Failures are retried up to 5 times, sleeping 5 seconds first when
+        the database is locked. A malformed or closed database closes the
+        connection and returns None right away.
+
         Parameters:
             query: SQL statement to execute under the shared locks.
             params: Optional positional or named query parameters.

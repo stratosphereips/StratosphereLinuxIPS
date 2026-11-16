@@ -176,7 +176,7 @@ def migrate_peer_report_types(connection: sqlite3.Connection) -> int:
     Returns:
         Number of indexed report types updated for display and search.
     """
-    from slips_files.common.p2p_reports import evidence_display_type
+    from slips_files.common.p2p_reports import resolve_evidence_display_type
     from modules.supported_module_names import Modules
 
     marker = "peer_report_display_types_v1"
@@ -205,11 +205,13 @@ def migrate_peer_report_types(connection: sqlite3.Connection) -> int:
                     continue
                 if not isinstance(record, dict):
                     continue
-                kind = evidence_display_type(
+                evidence_type = resolve_evidence_display_type(
                     "P2P_REPORT", record.get("peer_report")
                 )
-                if kind != "P2P_REPORT":
-                    updates.append((kind, Modules.P2P_TRUST.value, identifier))
+                if evidence_type != "P2P_REPORT":
+                    updates.append(
+                        (evidence_type, Modules.P2P_TRUST.value, identifier)
+                    )
             connection.executemany(
                 "UPDATE evidence SET evidence_type=?,source_module=? WHERE evidence_id=?",
                 updates,

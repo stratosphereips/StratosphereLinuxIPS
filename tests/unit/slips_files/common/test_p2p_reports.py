@@ -3,8 +3,8 @@
 import pytest
 
 from slips_files.common.p2p_reports import (
-    evidence_display_type,
-    reported_detections,
+    resolve_evidence_display_type,
+    extract_reported_detections,
 )
 from tests.module_factory import ModuleFactory
 
@@ -19,8 +19,8 @@ def test_legacy_reports_keep_their_transport_type(metadata: object) -> None:
         metadata: Missing or malformed historical peer metadata.
     """
     _factory = ModuleFactory()
-    assert reported_detections(metadata) == []
-    assert evidence_display_type("P2P_REPORT", metadata) == "P2P_REPORT"
+    assert extract_reported_detections(metadata) == []
+    assert resolve_evidence_display_type("P2P_REPORT", metadata) == "P2P_REPORT"
 
 
 def test_report_types_are_known_bounded_and_leave_local_evidence_unchanged() -> (
@@ -40,12 +40,12 @@ def test_report_types_are_known_bounded_and_leave_local_evidence_unchanged() -> 
             *[{"evidence_type": "ARP_SCAN"}] * 20,
         ]
     }
-    detections = reported_detections(metadata)
+    detections = extract_reported_detections(metadata)
     assert len(detections) == 13
     assert detections[0]["evidence_type"] == "UNKNOWN_PORT"
-    assert evidence_display_type("P2P_REPORT", metadata) == "UNKNOWN_PORT"
+    assert resolve_evidence_display_type("P2P_REPORT", metadata) == "UNKNOWN_PORT"
     assert (
-        evidence_display_type("DNS_WITHOUT_CONNECTION", metadata)
+        resolve_evidence_display_type("DNS_WITHOUT_CONNECTION", metadata)
         == "DNS_WITHOUT_CONNECTION"
     )
 
@@ -56,7 +56,7 @@ def test_saved_peer_icmp_details_keep_type_and_code_without_ports() -> None:
     original = {"evidence_type": "DIFFERENT_LOCALNET", "proto": "icmp",
                 "description": "A connection on port 0/icmp outside the network",
                 "src_port": 11, "dst_port": 0}
-    detection = reported_detections({"provenance": [original]})[0]
+    detection = extract_reported_detections({"provenance": [original]})[0]
     assert detection["icmp_type"] == 11 and detection["icmp_code"] == 0
     assert detection["src_port"] is None and detection["dst_port"] is None
     assert "port" not in detection["description"]

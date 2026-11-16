@@ -14,7 +14,7 @@ from modules.supported_module_names import Modules
 from slips_files.common.abstracts.isqlite import ISQLite
 from slips_files.common.output_paths import get_this_db_path_inside_output_dir
 from slips_files.common.printer import Printer
-from slips_files.common.p2p_reports import evidence_display_type
+from slips_files.common.p2p_reports import resolve_evidence_display_type
 from slips_files.common.slips_utils import utils
 from slips_files.core.structures.alerts import Alert
 from slips_files.core.structures.evidence import Evidence
@@ -32,6 +32,7 @@ from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
     initialize_detection_history,
 )
+
 
 class SQLiteDB(ISQLite):
     """
@@ -548,7 +549,6 @@ class SQLiteDB(ISQLite):
         res = self.select("flows", condition=condition, params=tuple(params))
         res = res[0][1] if res else {}
         return {uid: res}
-
 
     @staticmethod
     def _flow_event_time(flow) -> float:
@@ -1127,7 +1127,7 @@ class SQLiteDB(ISQLite):
                     evidence.profile.ip,
                     str(evidence.timewindow),
                     str(evidence.threat_level),
-                    evidence_display_type(
+                    resolve_evidence_display_type(
                         str(evidence.evidence_type),
                         getattr(evidence, "peer_report", {}),
                     ),

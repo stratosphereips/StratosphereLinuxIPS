@@ -7,8 +7,31 @@ from slips_files.core.structures.evidence import (
     normalize_icmp_evidence,
 )
 
+MAX_DETECTIONS_PER_PEER_REPORT = 16
 
-def reported_detections(peer_report: Any) -> list[dict[str, Any]]:
+# evidence types that only describe "a peer told us something", not a real
+# finding, so they are never shown as the peer's reported detection
+PEER_WRAPPER_EVIDENCE_TYPES = frozenset(
+    {"P2P_REPORT", "MALICIOUS_IP_FROM_P2P_NETWORK"}
+)
+
+
+def is_known_evidence_type(evidence_type_name: Any) -> bool:
+    """Tell whether a reported type name is a real evidence type.
+
+    Parameters:
+        evidence_type_name: Value read from a peer's reported item.
+
+    Returns:
+        True only for strings naming a member of `EvidenceType`.
+    """
+    return (
+        isinstance(evidence_type_name, str)
+        and evidence_type_name in EvidenceType.__members__
+    )
+
+
+def extract_reported_detections(peer_report: Any) -> list[dict[str, Any]]:
     """Extract bounded detection details from a saved peer report.
 
     Parameters:
@@ -19,36 +42,50 @@ def reported_detections(peer_report: Any) -> list[dict[str, Any]]:
     """
     if not isinstance(peer_report, dict):
         return []
-    provenance = peer_report.get("provenance")
-    if not isinstance(provenance, list):
+
+    reported_items = peer_report.get("provenance")
+    if not isinstance(reported_items, list):
         return []
-    result = []
-    for item in provenance[:16]:
-        if not isinstance(item, dict):
+
+    detections = []
+    for reported_item in reported_items[:MAX_DETECTIONS_PER_PEER_REPORT]:
+        if not isinstance(reported_item, dict):
             continue
-        kind = item.get("evidence_type")
-        if not isinstance(kind, str) or kind not in EvidenceType.__members__:
+
+        evidence_type: EvidenceType = reported_item.get("evidence_type")
+
+        is_known_type = (
+            isinstance(evidence_type, str)
+            and evidence_type in EvidenceType.__members__
+        )
+        if not is_known_type:
             continue
-        if kind in {"P2P_REPORT", "MALICIOUS_IP_FROM_P2P_NETWORK"}:
+
+        if evidence_type in PEER_WRAPPER_EVIDENCE_TYPES:
             continue
-        detection = {**item, "evidence_type": kind}
+
+        detection = {**reported_item, "evidence_type": evidence_type}
         normalize_icmp_evidence(detection)
-        result.append(detection)
-    return result
+        detections.append(detection)
+    return detections
 
 
-def evidence_display_type(evidence_type: str, peer_report: Any) -> str:
+def resolve_evidence_display_type(
+    original_evidence_type: str, peer_report: Any
+) -> str:
     """Classify a peer report by its finding without changing its raw record.
 
     Parameters:
-        evidence_type: Canonical type of the original evidence record.
+        original_evidence_type: Canonical type of the original evidence record.
         peer_report: Optional peer metadata containing reported detections.
 
     Returns:
         First reported detection type, or the original type when unavailable.
     """
-    if evidence_type == "P2P_REPORT":
-        detections = reported_detections(peer_report)
-        if detections:
-            return detections[0]["evidence_type"]
-    return evidence_type
+    if original_evidence_type != "P2P_REPORT":
+        return original_evidence_type
+
+    reported_detections = extract_reported_detections(peer_report)
+    if reported_detections:
+        return reported_detections[0]["evidence_type"]
+    return original_evidence_type
