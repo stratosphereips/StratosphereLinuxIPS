@@ -3,8 +3,9 @@
 ## Overview
 Federated learning module for Slips with model sharing across peers. The
 default model (`random_projection_mlp`) is a frozen random projection + a
-trainable fc1 + a head; `simple_mlp` and `random_projection_two_layer` are the
-other registry models. All trainable layers start from the same weights on
+trainable fc1 + a head; `simple_mlp`, `random_projection_two_layer` and
+`random_projection_relu_mlp` (a ReLU on the projection) are the other registry
+models. All trainable layers start from the same weights on
 every peer (`shared_init_seed`). README.md is the full reference.
 
 ## Core Workflow

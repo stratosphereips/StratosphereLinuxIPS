@@ -851,16 +851,19 @@ def test_merge_rule_runs_through_the_live_merge_path(net, rule, far, expected):
     assert b.lines("local_test.log") == []
 
 
+@pytest.mark.parametrize("model_class", sorted(fnm.MODEL_REGISTRY))
 @pytest.mark.parametrize("fc_layers", [False, True])
-def test_peers_exchange_local_models_and_merge_the_latest_one(net, fc_layers):
+def test_peers_exchange_local_models_and_merge_the_latest_one(
+    net, fc_layers, model_class
+):
     """Two peers, three windows, models routed both ways after each close:
     every publish carries the sender's fresh local model as its local
     training left it (never its merged one, nor - with finetune_fc_layers -
     the fine-tuned one), a newer model from a peer replaces the older one,
     and each merge averages the receiver's own fresh local model with that
-    latest model."""
-    a = net.peer("slips-a", k=0)
-    b = net.peer("slips-b", k=0)
+    latest model. For every model class."""
+    a = net.peer("slips-a", k=0, model_class=model_class)
+    b = net.peer("slips-b", k=0, model_class=model_class)
     after_local = {}
     for p in (a, b):
         p.m.finetune_fc_layers = fc_layers

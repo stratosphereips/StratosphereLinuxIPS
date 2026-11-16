@@ -579,6 +579,32 @@ class RandomProjectionTwoLayerNet(SimpleFederatedNet):
                 param.requires_grad = not frozen
 
 
+class RandomProjectionReLUNet(SimpleFederatedNet):
+    """Model 4: R -> ReLU -> L -> ReLU -> H, the default model with a ReLU on
+    the scaled projection.
+
+        input(18) -> RP(18->256, frozen) -> /sqrt(256) -> ReLU
+        -> fc1(256->16) -> ReLU -> head(16->2)
+
+    Without it the projection and fc1 compose into one linear map; the ReLU
+    gives fc1 nonlinear random features. All else is the default model's:
+    projection, init, federated fc1, local head, class weighting.
+    """
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        """Logits of x.
+
+        :param x: scaled features, shape (n, 18)
+        :return: logits, shape (n, 2)
+        """
+        x = self.random_projection(x)
+        x = x / self.projection_scale
+        x = self.relu(x)
+        x = self.fc1(x)
+        x = self.relu(x)
+        return self.head(x)
+
+
 def _build_random_projection_mlp(module):
     """Builder for the default model (registry entry)."""
     module.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
@@ -603,6 +629,18 @@ def _build_random_projection_two_layer(module):
     )
 
 
+def _build_random_projection_relu_mlp(module) -> RandomProjectionReLUNet:
+    """Builder for the default model with a ReLU on the projection.
+
+    :param module: the module (rp_path, seed; sets input_dim)
+    :return: the network
+    """
+    module.input_dim = SimpleFederatedNet.FIXED_INPUT_DIM
+    return RandomProjectionReLUNet(
+        module.input_dim, rp_path=module.rp_path, seed=module.seed
+    )
+
+
 # Model registry: yaml `federated_network_module.model_class` selects the
 # network instance this module trains/merges/serializes. To add your own:
 #   1. write your class above (see ExampleNewNet scaffold),
@@ -614,6 +652,7 @@ MODEL_REGISTRY = {
     "random_projection_mlp": _build_random_projection_mlp,
     "simple_mlp": _build_simple_mlp,
     "random_projection_two_layer": _build_random_projection_two_layer,
+    "random_projection_relu_mlp": _build_random_projection_relu_mlp,
     # "my_new_net": _build_my_new_net,
 }
 

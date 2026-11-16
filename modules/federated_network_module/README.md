@@ -243,7 +243,8 @@ Shipped classes (MODEL_REGISTRY):
 
 | `model_class` | architecture | federated | class-weighted (default) |
 |---|---|---|---|
-| `random_projection_mlp` (default) | RP(18→256, frozen) → /16 → fc1 256→16 → head 16→2 | fc1 | yes |
+| `random_projection_mlp` (default) | RP(18→256, frozen) → /16 → fc1 256→16 → ReLU → head 16→2 (the only ReLU is after fc1: RP and fc1 compose into one linear map) | fc1 | yes |
+| `random_projection_relu_mlp` | RP(18→256, frozen) → /16 → ReLU → fc1 256→16 → ReLU → head 16→2 (the default model with a ReLU on the projection, so fc1 sees nonlinear random features; same init, federated fc1) | fc1 | yes |
 | `simple_mlp` | Linear 18→256 → Linear 256→16 → head 16→2 (ReLU after each; trainable twin of the RP net, nothing frozen) | fc1 + fc2 | no |
 | `random_projection_two_layer` | RP1(18→256, frozen, `seed`) → /16 → fc1 256→64 → RP2(64→256, frozen, `seed XOR 0x9E3779B1`) → /16 → lin2 256→32 → head 32→2 (ReLU after fc1 and lin2) | fc1 + lin2 (sent as `fc2_*`) | no |
 
@@ -415,7 +416,7 @@ federated_network_module:
 | `train_from_scratch` | `false` | `false` | true = no `latest_local_*` warm start |
 | `seed` | `1111` | `1111` | see Seeds and shared initialization |
 | `run_seed` | unset | – | int; re-seeds window offset, undersampling, mini-batches |
-| `model_class` | `random_projection_mlp` | – | `simple_mlp`, `random_projection_two_layer`; unknown → error when the model is built |
+| `model_class` | `random_projection_mlp` | – | `simple_mlp`, `random_projection_two_layer`, `random_projection_relu_mlp`; unknown → error when the model is built |
 | `merge_rule` | `average` | – | `trust_weighted`, `mean_with_closest`, `proximity`, `distance_weighted`; unknown → the module does not start |
 | `time_window_width` | `1200` | `1200` | module window, seconds |
 | `label_finalize_delay_windows` | `1` | – | K ≥ 0; 0 = finalize a window at its own close |
