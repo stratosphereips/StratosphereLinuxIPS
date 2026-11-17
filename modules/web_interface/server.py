@@ -42,12 +42,12 @@ from managers.network_state import collect_network_state
 from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 from slips_files.core.database.redis_db.constants import Constants
 from slips_files.core.database.sqlite_db.detection_queries import (
-    detection_total,
-    hourly_evidence_source,
+    count_active_detection_records,
+    build_hourly_evidence_source_sql,
 )
 from slips_files.core.database.sqlite_db.detection_history import (
-    ARCHIVE_GLOB,
-    ARCHIVE_NAME,
+    ARCHIVE_FILENAME_GLOB,
+    ARCHIVE_FILENAME_PATTERN,
 )
 from slips_files.core.structures.evidence import (
     EvidenceType,
@@ -2241,8 +2241,8 @@ class RunDataReader:
                         path
                         for path in (
                             self.output_dir / "databases" / "archives"
-                        ).glob(ARCHIVE_GLOB)
-                        if ARCHIVE_NAME.fullmatch(path.name)
+                        ).glob(ARCHIVE_FILENAME_GLOB)
+                        if ARCHIVE_FILENAME_PATTERN.fullmatch(path.name)
                         and not path.is_symlink()
                     ),
                     key=lambda path: abs(
@@ -2339,8 +2339,13 @@ class RunDataReader:
         """
         directory = self.output_dir / "databases" / "archives"
         items = []
-        for path in sorted(directory.glob(ARCHIVE_GLOB), reverse=True):
-            if not ARCHIVE_NAME.fullmatch(path.name) or path.is_symlink():
+        for path in sorted(
+            directory.glob(ARCHIVE_FILENAME_GLOB), reverse=True
+        ):
+            if (
+                not ARCHIVE_FILENAME_PATTERN.fullmatch(path.name)
+                or path.is_symlink()
+            ):
                 continue
             try:
                 with sqlite3.connect(
@@ -2421,7 +2426,7 @@ class RunDataReader:
         Returns:
             Request-local reader using the selected read-only archive.
         """
-        if not ARCHIVE_NAME.fullmatch(filename):
+        if not ARCHIVE_FILENAME_PATTERN.fullmatch(filename):
             raise KeyError("Unknown archive")
         path = self.output_dir / "databases" / "archives" / filename
         if not path.is_file() or path.is_symlink():
@@ -3760,7 +3765,7 @@ class RunDataReader:
                     ).fetchone()[0]
                 )
                 if scope
-                else detection_total(connection, "evidence")
+                else count_active_detection_records(connection, "evidence")
             )
             clauses = ["1 = 1"]
             params: List[Any] = []
@@ -3874,7 +3879,7 @@ class RunDataReader:
             if covered_groups and time_cover:
                 group_source = "evidence INDEXED BY evidence_time_cover_idx"
             summary_source = (
-                hourly_evidence_source(connection, start, end)
+                build_hourly_evidence_source_sql(connection, start, end)
                 if covered_groups
                 and visibility_clause == "1 = 1"
                 and self._query_value(query, "scored_only") != "1"
@@ -4336,7 +4341,7 @@ class RunDataReader:
                     )
                 }
                 full_total = (
-                    detection_total(connection, "evidence")
+                    count_active_detection_records(connection, "evidence")
                     if include_full_total
                     else None
                 )
@@ -4772,9 +4777,9 @@ class RunDataReader:
         paths.extend(
             path
             for path in (self.output_dir / "databases" / "archives").glob(
-                ARCHIVE_GLOB
+                ARCHIVE_FILENAME_GLOB
             )
-            if ARCHIVE_NAME.fullmatch(path.name)
+            if ARCHIVE_FILENAME_PATTERN.fullmatch(path.name)
             and path != self.sqlite_path
             and not path.is_symlink()
         )
@@ -4910,7 +4915,7 @@ class RunDataReader:
                     f"SELECT COUNT(*) FROM alerts a WHERE {where}", params
                 ).fetchone()[0]
                 return {"matching_total": int(total), "range": range_name}
-            full_total = detection_total(connection, "alerts")
+            full_total = count_active_detection_records(connection, "alerts")
             open_total = full_total - (
                 int(
                     connection.execute(
@@ -5192,7 +5197,7 @@ class RunDataReader:
                     params,
                 ).fetchone()[0]
                 return {"matching_total": int(total), "range": range_name}
-            full_total = detection_total(connection, "alerts")
+            full_total = count_active_detection_records(connection, "alerts")
             open_total = full_total - (
                 int(
                     connection.execute(
@@ -5374,7 +5379,7 @@ class RunDataReader:
             latest_row = {
                 "latest": self._latest_detection_time(connection, "alerts")
             }
-            full_total = detection_total(connection, "alerts")
+            full_total = count_active_detection_records(connection, "alerts")
             open_total = full_total - (
                 int(
                     connection.execute(
@@ -9956,7 +9961,7 @@ class RunDataReader:
             return 0
         scope = getattr(self, "_active_network_scope", None)
         if scope is None and start is None:
-            return detection_total(connection, "evidence")
+            return count_active_detection_records(connection, "evidence")
         stat = self.sqlite_path.stat()
         key = (str(self.sqlite_path), stat.st_dev, stat.st_ino, scope, start)
         cache = self.__dict__.setdefault("_overview_counts_cache", {})
@@ -10029,7 +10034,7 @@ class RunDataReader:
                         ),
                     ).fetchone()["count"]
                 )
-                durable_evidence = detection_total(
+                durable_evidence = count_active_detection_records(
                     connection, "evidence", "main"
                 )
         except sqlite3.Error:

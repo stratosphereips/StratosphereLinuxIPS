@@ -193,7 +193,7 @@ def test_hourly_detection_pages_match_direct_queries(
     expected = reader.evidence(query)
     maintenance = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(100):
-        if not maintenance.summary_step(2):
+        if not maintenance.update_hourly_summaries_batch(2):
             break
     result = reader.evidence(query)
     assert result == expected
@@ -222,11 +222,11 @@ def test_archive_context_resolves_other_segments_and_active_evidence(
     )
     maintenance = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(5):
-        maintenance.archive_step("evidence", 100, 10, 1700000000)
+        maintenance.archive_next_batch("evidence", 100, 10, 1700000000)
     for _ in range(5):
-        maintenance.archive_step("alerts", 100, 10, 1703000000)
+        maintenance.archive_next_batch("alerts", 100, 10, 1703000000)
     for index in range(extra_segments):
-        archive = maintenance._open_archive(
+        archive = maintenance._open_archive_db(
             f"detections-2023-12-{index+10:04d}.sqlite"
         )
         archive.close()
@@ -6560,8 +6560,8 @@ def test_evidence_group_page_can_skip_network_full_total(
     expected = reader.evidence(query)
     if include_full_total is not None:
         query["include_full_total"] = [include_full_total]
-    from modules.web_interface.server import detection_total
-    with patch("modules.web_interface.server.detection_total", wraps=detection_total) as count:
+    from modules.web_interface.server import count_active_detection_records
+    with patch("modules.web_interface.server.count_active_detection_records", wraps=count_active_detection_records) as count:
         result = reader.evidence(query)
     if include_full_total == "0":
         count.assert_not_called()
@@ -6592,7 +6592,7 @@ def test_evidence_group_page_without_full_total_keeps_filtered_pagination(
     for _ in range(2):
         expected = reader.evidence(query)
         expected.pop("full_total")
-        with patch("modules.web_interface.server.detection_total", side_effect=AssertionError("Unneeded full-network count")):
+        with patch("modules.web_interface.server.count_active_detection_records", side_effect=AssertionError("Unneeded full-network count")):
             actual = reader.evidence({**query, "include_full_total":["0"]})
         assert actual == expected
         assert actual["next_cursor"]
