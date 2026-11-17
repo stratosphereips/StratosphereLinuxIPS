@@ -247,6 +247,8 @@ class AlertHandler:
         processed_key = (
             f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
         )
+        # returns IDs that are in the processed set but not in the alerted
+        # set.
         unalerted_ids = list(self.r.sdiff(processed_key, alerted_key))
         if not unalerted_ids:
             return {}

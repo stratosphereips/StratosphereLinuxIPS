@@ -275,10 +275,6 @@ class EvidenceHandlerWorker(IModule):
             if self.db.is_whitelisted_evidence(evidence_id):
                 continue
 
-            profileid = str(evidence.profile)
-            if not self.db.is_evidence_processed(evidence_id, profileid, twid):
-                continue
-
             filtered_evidence[evidence.id] = evidence
 
         return filtered_evidence

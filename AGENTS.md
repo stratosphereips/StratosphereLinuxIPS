@@ -72,7 +72,7 @@ These rules MUST be followed:
 - be brief and avoid being verbose with comments in the code, .yml files, Dockerfiles etc. unless absolutely necessary.
 - Evidence descriptions must state observed facts and detection reasons. Omit recurring disclaimers about benign explanations, proof of attack or unconfirmed exploitation; document detector limitations in docs/.
 - any comments added to describe parameters in slips.yaml should be user friendly and not so technical.
-
+- use type hinting.
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.
