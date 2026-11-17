@@ -247,7 +247,10 @@ function initFilterPopups() {
   ];
   definitions.push(
     ["overview", "Overview", "#overview-status .overview-card-head", "", []],
-    ["host", "Host", "#host-detail-view .compact-toolbar", "", []],
+    ["host", "Host", "#host-detail-view .compact-toolbar", "", [
+      [".excluded-visibility-toggle"], ["#host-range", "Range"],
+      ["#host-from", "From"], ["#host-to", "To"],
+    ]],
     ["firewall", "Firewall", "#firewall .toolbar", "", []],
     ["arp-poisoning", "ARP poisoning", "#arp-poisoning .toolbar", "", []],
     ["p2p", "P2P", ".p2p-network-actions", "", []],

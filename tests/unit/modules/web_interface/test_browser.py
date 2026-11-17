@@ -6632,7 +6632,16 @@ def test_compact_history_and_shared_network_scope_in_tab_filters(theme: str, wid
                 byId('hosts-list-view').hidden=true; syncFilterPopups();
             }""")
             page.locator("#host-filter-button").click()
-            assert page.locator("#host-filter-popup #network-filter").is_visible()
+            host_filters = page.locator("#host-filter-popup")
+            assert host_filters.locator("#network-filter").is_visible()
+            assert host_filters.locator("#host-range").is_visible()
+            assert host_filters.locator(".excluded-visibility-toggle").is_visible()
+            assert page.locator("#host-detail-view .compact-toolbar > #host-range").count() == 0
+            assert page.locator("#host-detail-view .compact-toolbar > .excluded-visibility-toggle").count() == 0
+            host_filters.locator("#host-range").select_option("7d")
+            assert page.locator("#host-filter-summary").inner_text().startswith("7 days")
+            host_filters.locator(".excluded-visibility-toggle").click()
+            assert page.evaluate("state.hideExcluded") is False
             page.keyboard.press("Escape")
             page.evaluate("() => {closeHost(); switchTab('overview');}")
             page.locator("#overview-filter-button").click()
