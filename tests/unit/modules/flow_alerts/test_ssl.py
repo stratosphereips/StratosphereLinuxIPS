@@ -40,7 +40,7 @@ def test_cn_recognizes_cached_twitter_network(ip: str, expected: bool) -> None:
     db.r = Mock()
     db.rcache = Mock()
     db.rcache.hget.return_value = '["104.244.40.0/21"]'
-    whitelist.db.is_ip_in_org_ips.side_effect = db.is_ip_in_org_cidrs
+    whitelist.db.is_ip_in_org_ips.side_effect = db.get_org_cidrs_by_first_octet
     ssl.whitelist = whitelist
     analyzer.is_domain_in_org = Mock(return_value=False)
     ssl.set_evidence.tls_provider_impersonation = Mock()
