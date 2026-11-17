@@ -262,7 +262,7 @@ class EvidenceHandlerWorker(IModule):
     def get_evidence_for_tw(
         self, profileid: str, twid: str
     ) -> Optional[Dict[str, Evidence]]:
-        tw_evidence: Dict[str, str] = self.db.get_pending_processed_evidence(
+        tw_evidence: Dict[str, str] = self.db.get_unalerted_processed_evidence(
             profileid, twid
         )
         if not tw_evidence:

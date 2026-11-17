@@ -58,14 +58,14 @@ def test_alert_membership_upgrades_retained_alerts_with_expiry() -> None:
     pipeline.execute.assert_called_once_with()
 
 
-def test_pending_processed_evidence_fetches_only_uncorrelated_records() -> None:
+def test_unalerted_processed_evidence_fetches_only_uncorrelated_records() -> None:
     """Exclude past alerts, unprocessed findings and deleted records before decoding."""
     handler = ModuleFactory().create_alert_handler_obj()
     handler.r = MagicMock()
     handler.r.sismember.return_value = True
     handler.r.sdiff.return_value = ["pending", "deleted"]
     handler.r.hmget.return_value = ['{"id":"pending"}', None]
-    assert handler.get_pending_processed_evidence("profile_1", "timewindow1") == {"pending": '{"id":"pending"}'}
+    assert handler.get_unalerted_processed_evidence("profile_1", "timewindow1") == {"pending": '{"id":"pending"}'}
     handler.r.sdiff.assert_called_once_with(
         f"{handler.constants.PROCESSED_EVIDENCE}_profile_1_timewindow1",
         "profile_1_timewindow1:alerted_evidence")
