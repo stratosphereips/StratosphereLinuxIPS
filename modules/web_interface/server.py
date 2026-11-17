@@ -92,6 +92,10 @@ from modules.web_interface.history import (
     initialize_history,
     network_connection_scope,
 )
+from slips_files.core.database.sqlite_db.detection_history import (
+    EVIDENCE_INTERFACE_SQL,
+    EVIDENCE_NETWORK_ID_SQL,
+)
 from modules.p2p_trust.catchup import CatchupStore, network_scope
 from slips_files.core.database.redis_db.redis_auth import (
     ensure_web_password_matches_redis_password,
@@ -6907,7 +6911,7 @@ class RunDataReader:
         bounded: bool = False,
         schema: str = "",
     ) -> str:
-        """Choose an IP-first index for bounded host finding aggregates.
+        """Choose an IP-first covering index for host finding aggregates.
 
         Parameters:
             connection: Read-only run database connection.
@@ -6926,9 +6930,9 @@ class RunDataReader:
             )
         }
         preferred = (
-            "evidence_profile_time_idx"
-            if bounded and "evidence_profile_time_idx" in indexes
-            else "evidence_group_cover_idx"
+            "evidence_group_cover_idx"
+            if "evidence_group_cover_idx" in indexes
+            else "evidence_profile_time_idx"
         )
         return f" INDEXED BY {preferred}" if preferred in indexes else ""
 
@@ -7006,9 +7010,82 @@ class RunDataReader:
                     if "threat_level" in columns
                     else "-1"
                 )
+                network_index = (
+                    scope_filter
+                    and "evidence_network_time_idx"
+                    in {
+                        str(row[1])
+                        for row in connection.execute(
+                            "PRAGMA main.index_list(evidence)"
+                        )
+                    }
+                )
+
+                def accumulate(row: sqlite3.Row) -> None:
+                    """Add one network-matched record to its host totals.
+
+                    Parameters:
+                        row: Indexed evidence record with score and threat rank.
+                    """
+                    entry = result[str(row["profile_ip"])]
+                    entry["evidence"] += 1
+                    if row["score"] is not None:
+                        value = float(row["score"])
+                        entry["peak"] = max(entry["peak"] or value, value)
+                    entry["threat_rank"] = max(
+                        entry["threat_rank"], int(row["rank"])
+                    )
+
                 for offset in range(0, len(ips), 300):
                     batch = ips[offset : offset + 300]
                     marks = ",".join("?" for _ in batch)
+                    if network_index:
+                        network_id = EVIDENCE_NETWORK_ID_SQL.format(alias="")
+                        interface = EVIDENCE_INTERFACE_SQL.format(alias="")
+                        rows = connection.execute(
+                            "SELECT evidence_id,profile_ip,evidence_time,"
+                            f"{score} AS score,{threat} AS rank,"
+                            f"{network_id} AS network_id,{interface} AS interface "
+                            "FROM main.evidence INDEXED BY evidence_network_time_idx "
+                            f"WHERE profile_ip IN ({marks}){scope}",
+                            (*batch, *values),
+                        )
+                        missing: Dict[str, sqlite3.Row] = {}
+                        for row in rows:
+                            if row["evidence_time"] is None:
+                                continue
+                            if row["interface"]:
+                                if scope_filter.matches(
+                                    float(row["evidence_time"]),
+                                    str(row["network_id"] or ""),
+                                    str(row["interface"]),
+                                ):
+                                    accumulate(row)
+                                continue
+                            missing[str(row["evidence_id"])] = row
+                            if len(missing) < 300:
+                                continue
+                            ids = list(missing)
+                            selected = connection.execute(
+                                "SELECT evidence_id FROM evidence WHERE evidence_id IN ("
+                                + ",".join("?" for _ in ids)
+                                + ")",
+                                ids,
+                            )
+                            for match in selected:
+                                accumulate(missing[str(match[0])])
+                            missing.clear()
+                        if missing:
+                            ids = list(missing)
+                            selected = connection.execute(
+                                "SELECT evidence_id FROM evidence WHERE evidence_id IN ("
+                                + ",".join("?" for _ in ids)
+                                + ")",
+                                ids,
+                            )
+                            for match in selected:
+                                accumulate(missing[str(match[0])])
+                        continue
                     for row in connection.execute(
                         f"SELECT profile_ip, COUNT(*) AS count, MAX({score}) AS peak, MAX({threat}) AS rank "
                         f"FROM evidence{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
@@ -7103,7 +7180,11 @@ class RunDataReader:
         )
         findings_before_page = bool(threat) or self._query_value(
             query, "sort"
-        ) in {"threat", "evidence", "peak_score"}
+        ) in {
+            "threat",
+            "evidence",
+            "peak_score",
+        }
         cursor = self._decode_cursor(self._query_value(query, "cursor"))
         with self._connect_history() as connection:
             connection.execute("BEGIN")
@@ -7608,15 +7689,36 @@ class RunDataReader:
         keys = self._device_key_map()
         network_start = self._scoped_start(query, None)
         annotation_networks = self._annotation_networks(query)
+        scope = self._query_value(query, "scope")
         with self._connect_history() as connection:
+            inventory = connection.execute(
+                "SELECT ip,json_extract(data,'$.scope') AS scope FROM host_snapshots"
+            ).fetchall()
             full_total = len(
-                {
-                    keys.get(str(row[0]), str(row[0]))
-                    for row in connection.execute(
-                        "SELECT ip FROM host_snapshots"
-                    )
-                }
+                {keys.get(str(row[0]), str(row[0])) for row in inventory}
             )
+            candidate_scope = ""
+            if scope:
+                scope_keys = {
+                    keys.get(str(row["ip"]), str(row["ip"]))
+                    for row in inventory
+                    if row["scope"] == scope
+                }
+                candidate_ips = [
+                    str(row["ip"])
+                    for row in inventory
+                    if keys.get(str(row["ip"]), str(row["ip"])) in scope_keys
+                ]
+                connection.execute(
+                    "CREATE TEMP TABLE scope_device_ips(ip TEXT PRIMARY KEY) WITHOUT ROWID"
+                )
+                connection.executemany(
+                    "INSERT INTO scope_device_ips VALUES (?)",
+                    ((ip,) for ip in candidate_ips),
+                )
+                candidate_scope = (
+                    " AND hs.ip IN (SELECT ip FROM scope_device_ips)"
+                )
             latest = self._host_latest_event(connection)
             start, _, _ = self._time_bounds(query, latest)
             candidate_start = self._scoped_start(query, start)
@@ -7628,17 +7730,17 @@ class RunDataReader:
                 candidates = self._live_host_candidates(connection, scoped)
                 snapshots = connection.execute(
                     f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs "
-                    f"WHERE hs.ip IN ({candidates}) AND {seen} >= :live_start",
+                    f"WHERE hs.ip IN ({candidates}){candidate_scope} AND {seen} >= :live_start",
                     {"live_start": candidate_start, "live_end": 1e300},
                 ).fetchall()
             else:
                 snapshots = connection.execute(
-                    f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs"
+                    f"SELECT hs.ip, {seen} AS observed_at, hs.data FROM host_snapshots hs "
+                    f"WHERE 1=1{candidate_scope}"
                 ).fetchall()
 
         ips = [str(row["ip"]) for row in snapshots]
         search = self._query_value(query, "search").lower()
-        scope = self._query_value(query, "scope")
         profile_path = getattr(
             self,
             "host_profiles_path",

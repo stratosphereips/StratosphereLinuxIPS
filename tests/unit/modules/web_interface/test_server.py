@@ -42,6 +42,7 @@ from redis.exceptions import ConnectionError as RedisConnectionError
 from slips_files.core.database.sqlite_db.database import SQLiteDB
 from slips_files.core.database.sqlite_db.detection_history import (
     DetectionHistory,
+    EVIDENCE_NETWORK_INDEX_SQL,
 )
 
 
@@ -836,6 +837,15 @@ def test_scoped_host_reads_do_not_materialize_all_network_evidence(
         "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
     )
     reader = _network_scope_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "ALTER TABLE evidence ADD COLUMN accumulated_threat_level REAL"
+        )
+        connection.execute(EVIDENCE_NETWORK_INDEX_SQL)
+        connection.execute(
+            "UPDATE evidence SET data=? WHERE evidence_id='new'",
+            (json.dumps({"interface": "en0"}),),
+        )
     scoped = reader._for_network_scope({"network": ["current"]})
     with patch.object(
         NetworkSelection,
@@ -6114,16 +6124,12 @@ def test_host_finding_queries_choose_indexes_without_changing_filters(
     with original() as connection:
         for sql in aggregates:
             if indexed:
-                expected = (
-                    "evidence_profile_time_idx"
-                    if bounded else "evidence_group_cover_idx"
-                )
+                expected = "evidence_group_cover_idx"
                 assert f"INDEXED BY {expected}" in sql
                 plan = " ".join(str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN "+sql))
                 assert expected in plan
                 assert "SEARCH" in plan
-                if not bounded:
-                    assert "COVERING INDEX" in plan
+                assert "COVERING INDEX" in plan
             else:
                 assert "INDEXED BY" not in sql
 
