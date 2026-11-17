@@ -917,6 +917,7 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-score-panel { flex: none; }
 .host-score-panel figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2rem .5rem; margin: 0 0 .3rem; font-size: .75rem; }
 .host-score-panel figcaption small { margin: 0; font-size: .66rem; }
+#host-score-source { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .host-score-panel .score-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .6rem; }
 .host-score-panel .score-chart-legend > span { white-space: nowrap; }
 .host-score-panel .line-chart { height: 105px; min-height: 105px; border: 0; background: transparent; }

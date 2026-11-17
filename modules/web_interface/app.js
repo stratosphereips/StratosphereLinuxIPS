@@ -719,6 +719,11 @@ function rememberHostRecord(record) {
   else if (record.hostname) rememberHostName(record.ip, record.hostname, record.hostname_source || "Hostname");
   else if (record.dns_name) rememberHostName(record.ip, record.dns_name, record.dns_name_source || "DNS");
   else if (record.mac_vendor) rememberHostName(record.ip, `${record.mac_vendor} device`, "MAC vendor");
+  const preferredIp = preferredHostIp(record);
+  if (preferredIp !== record.ip) {
+    const identity = state.hostNames.get(record.ip);
+    if (identity?.name) rememberHostName(preferredIp, identity.name, identity.source);
+  }
 }
 
 /** Fetch names for visible addresses in bounded batches. */
@@ -784,6 +789,17 @@ function hostIdentity(ip) {
     }
   }
   return element;
+}
+
+/** Use an IPv4 address as the representative of a grouped host when present.
+ * @param {object} row Host or device record with known addresses.
+ * @returns {string} Preferred profile address.
+ */
+function preferredHostIp(row) {
+  const ip = String(row?.ip || "");
+  if (!state.deviceView || (ip && !ip.includes(":"))) return ip;
+  return row?.device_ips?.find((address) => typeof address === "string"
+    && address.includes(".") && !address.includes(":")) || ip;
 }
 
 /** Show the representative host and the addresses merged into a device. */
@@ -6705,7 +6721,7 @@ function maybeLoadMoreHosts() {
 function renderHostsPage() {
   const page = state.pages.hosts;
   renderTable("hosts-table", page.items, [
-    (row) => hostIdentity(row.ip),
+    (row) => hostIdentity(preferredHostIp(row)),
     (row) => {
       const value = document.createElement("span");
       value.className = "hosts-mac-vendor";
@@ -6729,7 +6745,7 @@ function renderHostsPage() {
     (row) => slipsScore(row),
     (row) => HOST_REVIEW_LABELS[row.user_status] || "Unmarked",
     (row) => (row.user_labels || []).join(", ") || "—",
-  ], (row) => openHost(row.ip, row));
+  ], (row) => openHost(preferredHostIp(row), row));
   document.querySelectorAll("#hosts-table tbody tr").forEach((row) => {
     ["hostname", "ti", "score"].forEach((key, index) => {
       const td = row.cells[9 + index];
@@ -8809,7 +8825,7 @@ function renderHostScope(host) {
 const HOST_REVIEW_LABELS = { to_analyze: "To analyze", in_review: "Under review", reviewed: "Reviewed" };
 
 function renderHostCards(host) {
-  byId("host-title").replaceChildren(deviceIdentity(host));
+  byId("host-title").replaceChildren(deviceIdentity({ ...host, ip: preferredHostIp(host) }));
   renderHostScope(host);
   const scopedProfiles = hostVisibleProfiles(host);
   const networkScoped = usesNetworkScope("host");
@@ -9612,6 +9628,7 @@ async function loadHostSummary() {
 
 /** Render score history and explain how much evidence has a persisted score. */
 function renderHostScoreHistory(payload) {
+  byId("host-score-source").textContent = payload.score_profile_ip || state.host?.ip || "";
   let points = Array.isArray(payload.timeline) ? payload.timeline : [];
   if (points.length === 1 && !points[0].current) {
     points = [{ ...points[0], ts: numeric(points[0].ts) - 1 }, points[0]];
@@ -9705,6 +9722,7 @@ async function loadLegacyScoreHistory(params) {
   timeline.forEach((point) => { point.threshold = threshold; });
   return {
     timeline,
+    score_profile_ip: state.host.ip,
     threshold,
     mode: state.host.alert_score_mode || "Slips",
     peak_score: Math.max(...timeline.map((point) => point.score), 0),
@@ -9724,6 +9742,7 @@ async function loadHostScoreHistory() {
   const generation = state.hostOpenGeneration;
   const params = hostRangeParams();
   params.set("max_points", "600");
+  if (state.deviceView) params.set("device", "1");
   if (state.archiveSource) params.set("archive", state.archiveSource);
   const path = `/api/hosts/${escapePath(ip)}/score-history?${params}`;
   try {
@@ -9792,6 +9811,7 @@ async function showUnprofiledHost(ip, generation = state.hostOpenGeneration) {
  */
 async function openHost(ip, summary = null, previous = null) {
   const generation = ++state.hostOpenGeneration;
+  if (summary) ip = preferredHostIp(summary) || ip;
   if (summary) state.hostHistory = [];
   if (!previous && !state.hostFiltersInitialized) resetHostActivityFilters();
   state.hostFiltersInitialized = true;
@@ -9826,12 +9846,20 @@ async function openHost(ip, summary = null, previous = null) {
   const detailParams = hostRangeParams();
   applyNetworkSelection(detailParams);
   if (state.deviceView) detailParams.set("device", "1");
-  const detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
+  let detail = await api("host", `/api/hosts/${escapePath(ip)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
   if (!detail || generation !== state.hostOpenGeneration) return;
   if (detail.not_found) {
     await showUnprofiledHost(ip, generation);
     return;
   }
+  const preferred = preferredHostIp(detail);
+  if (preferred && preferred !== detail.ip) {
+    rememberHostRecord(detail);
+    const candidate = await api("host", `/api/hosts/${escapePath(preferred)}${detailParams.size ? `?${detailParams}` : ""}`, true, true);
+    if (generation !== state.hostOpenGeneration) return;
+    if (candidate && !candidate.not_found) detail = candidate;
+  }
+  ip = detail.ip || ip;
   const detailHasScore = detail.alert_score !== null
     && detail.alert_score !== undefined
     && Number.isFinite(Number(detail.alert_score))

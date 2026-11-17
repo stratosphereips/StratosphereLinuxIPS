@@ -1380,6 +1380,10 @@ includes the configured alert threshold, the last score and peak score in each
 bounded server-side interval, and detected drops.
 The dotted orange vertical markers identify a new score time window or a score
 drop; hover over a marker to see its time and reason.
+When a device has several addresses, its heading prefers IPv4. The score plot
+shows one IP-specific score series with its source address beside the title;
+it chooses an address with saved score samples in the selected range when the
+highlighted address has none.
 Score lines break across periods without stored samples, and the caption gives
 the longest gap. A gap alone does not establish whether the host was silent or
 the capture missed traffic; inspect retained flows and capture statistics.

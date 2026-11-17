@@ -3383,6 +3383,7 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
         "alert_count": 0, "evidence_count": 0, "permanent_profiles": [],
         "capture_network": {"name": "Home-Wifi6"}, "seen_on_current_network": True}
     errors: list[str] = []
+    score_requests: list[str] = []
 
     def route_request(route: Any) -> None:
         """Serve host refreshes and assets without accessing a running capture.
@@ -3399,9 +3400,16 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
             elif path.endswith("/traffic-summary"):
                 route.fulfill(json={"timeline": [], "protocols": [], "peers": []})
             elif path.endswith("/score-history"):
-                route.fulfill(json={"timeline": []})
+                score_ip = unquote(path.removeprefix("/api/hosts/").removesuffix("/score-history"))
+                score_requests.append(score_ip)
+                route.fulfill(json={"timeline": [
+                    {"ts": 100, "score": 0.5, "peak_score": 0.5, "threshold": 5},
+                    {"ts": 101, "score": 1.2, "peak_score": 1.2, "threshold": 5},
+                ] if score_ip == addresses[1] else [], "score_profile_ip": score_ip,
+                    "evidence_total": 2, "scored_evidence": 2, "peak_score": 1.2,
+                    "threshold": 5, "reset_count": 0})
             else:
-                route.fulfill(json=host)
+                route.fulfill(json={**host, "ip": unquote(path.removeprefix("/api/hosts/"))})
         elif path == "/api/host-names":
             route.fulfill(json={"names": {}})
         else:
@@ -3432,6 +3440,7 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
         address_list = heading.locator(".device-addresses")
         assert address_list.text_content() == f"{len(addresses)} addresses · " + " · ".join(addresses)
         assert "android_aehweocc.local" in heading.inner_text()
+        assert heading.locator(".host-label code").first.inner_text() == addresses[1]
         assert "Home-Wifi6" in heading.inner_text()
         assert "Example device manufacturer" in heading.inner_text()
         assert "b8:7b:d4:97:ce:be" in heading.inner_text()
@@ -3456,7 +3465,8 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
                     identity:[...header.querySelectorAll('.host-label,.host-name,#host-subtitle,#host-score-pill')]
                         .every(node => fits(node.getBoundingClientRect())),
                     controls:[...header.querySelectorAll('button,select,input')]
-                        .filter(node => !node.hidden).every(node => fits(node.getBoundingClientRect()))};
+                        .filter(node => !node.hidden && node.getClientRects().length)
+                        .every(node => fits(node.getBoundingClientRect()))};
             }""", addresses)
             assert all(geometry.values()), (width, geometry)
             assert address_list.bounding_box()["width"] > 400
@@ -3487,6 +3497,16 @@ def test_host_header_shows_full_device_addresses_in_chrome(theme: str) -> None:
         assert heading.locator(".device-addresses").count() == 0
         assert addresses[0] in heading.inner_text()
         assert "android_aehweocc.local" in heading.inner_text()
+        page.evaluate("""async ip => {
+            state.deviceView=true; state.pages.hosts.items=[{...state.host}];
+            state.pages.hosts.total=1; renderHostsPage(); await openHost(ip);
+        }""", addresses[0])
+        assert page.locator("#hosts-table tbody .host-label code").first.inner_text() == addresses[1]
+        assert page.evaluate("state.host.ip") == addresses[1]
+        assert heading.locator(".host-label code").first.inner_text() == addresses[1]
+        assert page.locator("#host-score-source").inner_text() == addresses[1]
+        assert page.locator("#host-score-chart .chart-line").count() == 3
+        assert score_requests[-1] == addresses[1]
         assert errors == []
         browser.close()
 

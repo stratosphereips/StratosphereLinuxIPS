@@ -343,6 +343,13 @@ def test_host_inventory_findings_match_opened_evidence(
              **({"network": ["current"]} if network else {}), **({"device": ["1"]} if device else {})}
     inventory = reader.hosts(query)
     row = next(item for item in inventory["items"] if ip in item.get("device_ips", [item["ip"]]))
+    if device:
+        assert row["ip"] == ip
+        assert reader.host(alias, query)["ip"] == ip
+        if expected_count:
+            history = reader.score_history(ip, query)
+            assert history["scored_evidence"] > 0
+            assert history["score_profile_ip"] == (alias if recent else ip)
     assert row["peak_alert_score"] == expected_peak
     assert row["max_threat_level"] == expected_threat
     assert row["evidence_count"] == expected_count
@@ -6357,6 +6364,7 @@ def test_device_view_combines_local_addresses_before_paging(
     assert reader._host_ips("8.8.8.8", query) == ["8.8.8.8"]
     assert inventory["total"] == 2
     grouped = next(item for item in inventory["items"] if item["device_id"] == device_id)
+    assert grouped["ip"] == "10.0.0.1"
     assert set(grouped["device_ips"]) == {"10.0.0.1", "fe80::1"}
     assert alert_groups["total"] == 1
     assert alert_groups["items"][0]["alert_count"] == 2

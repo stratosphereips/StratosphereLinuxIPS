@@ -7983,7 +7983,10 @@ class RunDataReader:
             Returns:
                 Comparable text or numeric value.
             """
-            representative = max(group["members"], key=lambda item: item[2])
+            representative = max(
+                group["members"],
+                key=lambda item: (":" not in item[0], item[2]),
+            )
             data = representative[1]
             values = {
                 "ip": representative[0],
@@ -8047,7 +8050,9 @@ class RunDataReader:
         items: List[Dict[str, Any]] = []
         for group in page:
             members = sorted(
-                group["members"], key=lambda item: item[2], reverse=True
+                group["members"],
+                key=lambda item: (":" not in item[0], item[2]),
+                reverse=True,
             )
             ip, snapshot, observed = members[0]
             host = dict(snapshot)
@@ -8601,11 +8606,18 @@ class RunDataReader:
     ) -> Dict[str, Any]:
         """Return complete bounded context for one current or historical host."""
         network_start = self._scoped_start(query or {}, None)
+        host_ips = self._host_ips(ip, query)
+        if self._query_value(query or {}, "device") == "1":
+            ip = next(
+                (address for address in host_ips if ":" not in address), ip
+            )
+            host_ips.sort(
+                key=lambda address: (":" in address, address != ip, address)
+            )
         host = self._live_host(ip)
         if not host.get("observed_at") and not host.get("live"):
             raise KeyError(ip)
         self._attach_current_host_scores([host])
-        host_ips = self._host_ips(ip, query)
         host["all_ips"] = host_ips
         if self._query_value(query or {}, "device") == "1":
             host["device_id"] = self._device_key_map().get(ip, ip)
@@ -9165,11 +9177,13 @@ class RunDataReader:
         except ValueError:
             max_points = 600
         max_points = max(10, min(max_points, MAX_CHART_POINTS))
-        # Slips accumulators are profile/IP-specific. MAC-derived aliases can
-        # include unrelated public IPs that share a gateway MAC, so combining
-        # their scores would fabricate a value that Slips never calculated.
-        ips = [ip]
-        placeholders = ",".join("?" for _ in ips)
+        # Slips accumulators are profile/IP-specific. Select one scored alias
+        # for a device; never add scores from different profiles together.
+        candidates = (
+            self._host_ips(ip, query)
+            if self._query_value(query, "device") == "1"
+            else [ip]
+        )
         score_column = (
             "accumulated_ratl"
             if getattr(self, "score_mode", "ratl") == "ratl"
@@ -9188,6 +9202,42 @@ class RunDataReader:
             latest = float(latest_row["latest"] or 0)
             start, end, range_name = self._time_bounds(query, latest)
             start = self._scoped_start(query, start)
+            if score_column in columns and len(candidates) > 1:
+                ordered = sorted(
+                    candidates,
+                    key=lambda address: (
+                        ":" in address,
+                        address != ip,
+                        address,
+                    ),
+                )
+                for address in ordered:
+                    source_clauses = [
+                        "profile_ip = ?",
+                        f"{score_column} IS NOT NULL",
+                    ]
+                    source_params: List[Any] = [address]
+                    if (
+                        self._query_value(query, "hide_excluded") == "1"
+                        and "whitelisted" in columns
+                    ):
+                        source_clauses.append("COALESCE(whitelisted,0)=0")
+                    if start is not None:
+                        source_clauses.append("evidence_time >= ?")
+                        source_params.append(start)
+                    if end is not None:
+                        source_clauses.append("evidence_time <= ?")
+                        source_params.append(end)
+                    if connection.execute(
+                        "SELECT 1 FROM evidence WHERE "
+                        + " AND ".join(source_clauses)
+                        + " LIMIT 1",
+                        source_params,
+                    ).fetchone():
+                        ip = address
+                        break
+            ips = [ip]
+            placeholders = ",".join("?" for _ in ips)
             clauses = [f"profile_ip IN ({placeholders})"]
             params: List[Any] = list(ips)
             if (
@@ -9319,6 +9369,7 @@ class RunDataReader:
             "range": range_name,
             "bucket_seconds": bucket,
             "host_ips": ips,
+            "score_profile_ip": ip,
         }
 
     def metrics(self, query: Dict[str, List[str]]) -> Dict[str, Any]:
