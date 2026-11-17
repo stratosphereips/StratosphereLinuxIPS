@@ -1744,7 +1744,7 @@ def test_org_ranges_use_shared_cache(cached: str | None, expected: list[str] | N
     db.r = Mock()
     db.rcache = Mock()
     db.rcache.hget.return_value = cached
-    assert db.is_ip_in_org_cidrs("twitter", "104") == expected
+    assert db.get_org_cidrs_by_first_octet("twitter", "104") == expected
     db.rcache.hget.assert_called_once_with("twitter_IPs", "104")
     db.r.hget.assert_not_called()
 

@@ -101,6 +101,7 @@ class AIDManager:
                         stopping = True
                         break
                     tasks.append(pending)
+
                 for task in tasks:
                     task["flow"].aid = utils.get_aid(task["flow"])
                 db.add_flows(tasks)
