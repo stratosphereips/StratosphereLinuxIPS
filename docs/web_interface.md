@@ -1622,6 +1622,8 @@ Selecting a host opens a three-column workspace. The left column holds identity 
 
 The host header keeps the score and **Whitelist** action visible. Its filter menu contains the time range, custom dates, current network and interface scope, and the option to show whitelisted evidence. The menu badge and summary show which filters are active.
 
+Once a host is open, its selected range and activity filters carry to other hosts while browsing. Opening the first host clears searches and threat filters left over from a previous run. **Back** restores each earlier host's own view.
+
 The host activity tabs provide **Group by** and **Threat** controls. Alerts can be grouped by linked evidence type, threat, module, or review state. Evidence can be grouped by type, threat, module, or score handling. Flows can be grouped by protocol, direction, peer, label, state, or linked evidence threat. Group headings and counts describe the loaded page; pagination remains available for the rest of the selected range. Threat filters, including **High+**, **Low+**, and **Info+**, apply to all records in the selected range before paging. For flows, threat means the highest threat of evidence linked to that flow; an unlinked flow has no linked threat and does not match a threat filter. The flow table displays this linked threat. Evidence search matches its displayed type, module, threat, confidence, handling, flow and alert counts, description, and reporting information, including type names entered with spaces instead of underscores.
 
 Alerts, Evidence, and Flows tabs use stable names without total badges.

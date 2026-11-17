@@ -4315,11 +4315,13 @@ def test_host_findings_range_and_saved_filters_in_chrome(
         assert page.locator("#host-evidence-grouping").input_value() == "module"
         assert page.evaluate("state.pages['host-evidence'].sort") == "type"
         assert page.locator("#host-evidence-search").input_value() == ""
-        page.locator("#host-range").select_option("live")
+        page.locator("#host-filter-button").click()
+        page.locator("#host-filter-popup #host-range").select_option("live")
         page.wait_for_function("state.host.evidence_count === 0 && state.pages['host-evidence'].total === 0")
         assert page.evaluate("state.host.peak_alert_score") is None
-        page.locator("#host-range").select_option("all")
+        page.locator("#host-filter-popup #host-range").select_option("all")
         page.wait_for_function("state.host.evidence_count === 1 && state.pages['host-evidence'].total === 1")
+        page.keyboard.press("Escape")
         page.locator('[data-host-activity="alerts"]').click()
         page.wait_for_function("document.querySelector('#host-alert-count').textContent.includes('0 alerts')")
         assert page.evaluate("state.host.alert_count") == 0
@@ -4861,10 +4863,10 @@ def test_large_grouped_record_loads_bounded_flows_in_chrome(tmp_path: Path, lega
 
 
 @pytest.mark.parametrize("theme", ["light", "dark"])
-def test_pcap_host_evidence_does_not_inherit_other_host_filters(
+def test_host_filters_follow_next_host_without_old_run_filters(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, theme: str,
 ) -> None:
-    """Show all 93 low ARP findings despite saved or previously selected filters.
+    """Clear stale filters once, then carry chosen filters across hosts.
 
     Parameters:
         tmp_path: Isolated evidence and history databases.
@@ -4971,15 +4973,26 @@ def test_pcap_host_evidence_does_not_inherit_other_host_filters(
         assert page.locator("#host-evidence-threat").input_value() == "medium"
         assert page.locator("#host-evidence-tab-count").count() == 0
         page.evaluate("async ip => await openHost(ip)", first)
-        assert page.locator("#host-evidence-threat").input_value() == ""
-        assert page.evaluate("state.pages['host-evidence'].total") == 93
-        page.locator("#host-evidence-threat").evaluate("node => { node.value='medium'; node.dispatchEvent(new Event('change')); }")
-        page.wait_for_function("state.pages['host-evidence'].total === 0")
-        page.locator("#host-evidence-search").fill("not in the next host")
-        page.evaluate("async ip => await openHost(ip)", second)
-        assert page.locator("#host-evidence-threat").input_value() == ""
-        assert page.locator("#host-evidence-search").input_value() == ""
+        assert page.locator("#host-evidence-threat").input_value() == "medium"
+        assert page.evaluate("state.pages['host-evidence'].total") == 0
+        page.locator("#host-evidence-filter-button").click()
+        page.locator("#host-evidence-threat").select_option("low")
+        page.wait_for_function("state.pages['host-evidence'].total === 93")
+        page.keyboard.press("Escape")
+        page.locator("#host-evidence-search").fill("ARP scan")
+        page.wait_for_function("!state.requests.has('hostEvidence')")
+        page.locator("#host-filter-button").click()
+        page.locator("#host-filter-popup #host-range").select_option("7d")
+        page.wait_for_function("!state.requests.has('hostEvidence')")
+        page.keyboard.press("Escape")
+        page.evaluate("async ip => { closeHost(); await openHost(ip, {ip}); }", second)
+        assert page.locator("#host-range").input_value() == "7d"
+        assert page.locator("#host-evidence-threat").input_value() == "low"
+        assert page.locator("#host-evidence-search").input_value() == "ARP scan"
         assert page.evaluate("state.pages['host-evidence'].total") == 1
+        assert any(query.get("range") == ["7d"] and query.get("profile") == [second]
+                   and query.get("threat") == ["low"] and query.get("search") == ["ARP scan"]
+                   for query in requests)
         page.evaluate("async ip => await openHost(ip)", first)
         assert page.evaluate("state.pages['host-evidence'].total") == 93
         page.evaluate("""async () => {

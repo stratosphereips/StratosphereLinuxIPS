@@ -27,6 +27,7 @@ const state = {
   configurationSort: { key: null, order: "asc" },
   host: null,
   hostHistory: [],
+  hostFiltersInitialized: false,
   hostOpenGeneration: 0,
   hostActivity: "alerts",
   hostActivityPreferred: false,
@@ -1365,6 +1366,7 @@ function applyRunIdentity(identity) {
     closeDrawer();
     closeHost();
     resetHostActivityFilters();
+    state.hostFiltersInitialized = false;
     Object.keys(state.pages).forEach((name) => resetPage(name));
     Object.assign(state.evidenceWorkspace, {
       group: null, record: null, records: [], next: null, total: 0,
@@ -1418,6 +1420,7 @@ function applyRunIdentity(identity) {
     state.viewPreferencesKey = preferencesKey;
     restoreViewPreferences();
     restoreViewPreferences(preferencesKey);
+    if (!state.hostFiltersInitialized) resetHostActivityFilters();
   }
   state.runIdentity = token;
 }
@@ -9790,6 +9793,8 @@ async function showUnprofiledHost(ip, generation = state.hostOpenGeneration) {
 async function openHost(ip, summary = null, previous = null) {
   const generation = ++state.hostOpenGeneration;
   if (summary) state.hostHistory = [];
+  if (!previous && !state.hostFiltersInitialized) resetHostActivityFilters();
+  state.hostFiltersInitialized = true;
   if (previous) {
     state.hostActivity = previous.activity;
     state.hostActivityPreferred = previous.preferred;
@@ -9800,12 +9805,17 @@ async function openHost(ip, summary = null, previous = null) {
       types: [], next: null, total: 0, matching: 0, signature: "", loadedAt: 0 };
     Object.entries(previous.controls).forEach(([id, value]) => { byId(id).value = value; });
     byId("host-from").hidden = byId("host-to").hidden = byId("host-range").value !== "custom";
-  } else resetHostActivityFilters();
+  } else {
+    state.hostEvidence = { origin: state.hostEvidence.origin,
+      selectedType: state.hostEvidence.selectedType, types: [], next: null,
+      total: 0, matching: 0, signature: "", loadedAt: 0 };
+    byId("host-activity-filter-notice").hidden = true;
+  }
   updateHostBackButton();
   ["hostAlerts", "hostEvidence", "hostEvidenceTypes", "hostFlows", "hostSummary", "hostScore"].forEach((key) =>
     state.requests.get(key)?.abort());
   if (state.evidenceDetail.inHostPane && state.host?.ip !== ip) closeEvidenceDetail(false, true);
-  if (summary) {
+  if (summary && !state.rangeChoices.has("host-range")) {
     ["range", "from", "to"].forEach((name) => {
       byId(`host-${name}`).value = byId(`hosts-${name}`).value;
     });
