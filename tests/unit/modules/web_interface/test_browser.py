@@ -5054,9 +5054,16 @@ def test_score_missing_zero_and_historical_crossing_are_distinct(theme: str) -> 
         assert all('Missing does not mean zero' in v['title'] for v in values[:4])
         page.evaluate("""() => renderHostScoreHistory({timeline:[
             {ts:100,score:1.28,peak_score:1.28,threshold:1.2},
-            {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true}],
+            {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true,
+                reset_reason:'score decreased (possible reset)'}],
             evidence_total:82,scored_evidence:82,mode:'ATL',peak_score:1.28,threshold:1.2,reset_count:1})""")
         assert 'peak 1.280 / 1.200' in page.locator('#host-score-history-status').inner_text()
+        legend = page.locator('.score-chart-legend')
+        assert 'new time window or score drop' in legend.text_content()
+        assert legend.locator('.chart-key.reset').evaluate(
+            'node => getComputedStyle(node).borderLeftStyle') == 'dotted'
+        assert page.locator('#host-score-chart .chart-reset-line').count() == 1
+        assert 'possible reset' in page.locator('#host-score-chart .chart-reset-line title').text_content()
         page.evaluate("""() => renderHostScoreHistory({timeline:[
             {ts:1794700000,score:1.28,peak_score:1.28,threshold:1.2},
             {ts:1794700060,score:.32,peak_score:.32,threshold:1.2},

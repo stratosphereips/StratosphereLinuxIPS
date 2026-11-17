@@ -45,7 +45,7 @@ figcaption small { display: block; margin-top: .2rem; font-size: .7rem; }
 .chart-key:first-child { margin-left: 0; }
 .chart-key.peak { border-color: var(--blue); }
 .chart-key.threshold { border-color: var(--danger); border-top-style: dashed; }
-.chart-key.reset { border-color: var(--warn); border-top-style: dotted; }
+.chart-key.reset { width: 0; height: .7rem; border: 0; border-left: 2px dotted var(--warn); margin-bottom: 0; }
 .eyebrow { margin-bottom: .35rem; color: var(--accent); font-size: .68rem; font-weight: 750; letter-spacing: .15em; }
 .muted, .section-heading p, .table-heading p { margin-bottom: 0; color: var(--muted); font-size: .82rem; }
 #evidence-summary { margin-top: .4rem; }
@@ -915,8 +915,10 @@ body.hosts-active main { max-width: none; padding: 0; }
 .host-left-column .host-profile-facts li { padding: .3rem .45rem; font-size: .7rem; }
 .host-left-column .profile-network-name-action { padding: .2rem .4rem; }
 .host-score-panel { flex: none; }
-.host-score-panel figcaption { display: flex; justify-content: space-between; margin: 0 0 .3rem; font-size: .75rem; }
+.host-score-panel figcaption { display: flex; flex-wrap: wrap; justify-content: space-between; gap: .2rem .5rem; margin: 0 0 .3rem; font-size: .75rem; }
 .host-score-panel figcaption small { margin: 0; font-size: .66rem; }
+.host-score-panel .score-chart-legend { display: flex; flex-wrap: wrap; align-items: center; gap: .2rem .6rem; }
+.host-score-panel .score-chart-legend > span { white-space: nowrap; }
 .host-score-panel .line-chart { height: 105px; min-height: 105px; border: 0; background: transparent; }
 .host-workspace-grid .grid-line { stroke: #263a49; stroke-width: 1; }
 .host-workspace-grid .chart-line { fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke; }

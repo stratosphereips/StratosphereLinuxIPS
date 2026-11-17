@@ -1378,6 +1378,8 @@ MAC-derived host aliases because Slips accumulators are IP-specific. Interface,
 standard-input, and CYST runs plot RATL; finite input runs plot ATL. The chart
 includes the configured alert threshold, the last score and peak score in each
 bounded server-side interval, and detected drops.
+The dotted orange vertical markers identify a new score time window or a score
+drop; hover over a marker to see its time and reason.
 Score lines break across periods without stored samples, and the caption gives
 the longest gap. A gap alone does not establish whether the host was silent or
 the capture missed traffic; inspect retained flows and capture statistics.
