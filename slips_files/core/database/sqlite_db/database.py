@@ -167,7 +167,14 @@ class SQLiteDB(ISQLite):
                 self.conn.execute("VACUUM")
 
     def _ensure_retention_schema(self) -> None:
-        """Add indexed flow age and retention class to old and new runs."""
+        """
+        Adds these 2 new columns to each row in flows and altflows tables.
+        - retention_class
+            0 = ordinary flow,
+            1 = linked flow (part of some evidence)
+        - retention_priority
+            The time the cleanup uses to judge the flow’s age
+        """
         for table in ("flows", "altflows"):
             columns = set(self.get_columns(table))
             if "event_time" not in columns:
@@ -812,23 +819,36 @@ class SQLiteDB(ISQLite):
         linked_cutoff: float,
         batch_size: int,
     ) -> list[str]:
-        """Classify old flows by evidence and delete expired rows.
+        """Delete the oldest expired flows from one table, one small
+        batch per retention class.
+
+        Flows that are part of an evidence (linked flows) are kept longer
+        than ordinary ones, so an analyst can still see the traffic behind
+        an alert. That's why each class is checked against its own cutoff.
+        The batch limit keeps each pass short, so cleanup never holds the
+        db long enough to slow down flow writes.
 
         Parameters:
-            cursor: Cursor in the retention transaction.
-            table: The flows or altflows table.
-            ordinary_cutoff: Oldest age allowed for ordinary flow rows.
-            linked_cutoff: Oldest age allowed for evidence-linked rows.
-            batch_size: Maximum rows per retention class to inspect.
+            cursor: Cursor inside the open retention transaction.
+            table: "flows" or "altflows".
+            ordinary_cutoff: Unix time; ordinary flows older than this
+                are deleted.
+            linked_cutoff: Unix time; linked flows older than this
+                are deleted.
+            batch_size: Maximum flows to delete per class in this pass.
 
         Returns:
-            UIDs deleted from this table.
+            UIDs of the flows deleted from this table.
         """
         deleted: list[str] = []
+        # 0 = ordinary flows, 1 = flows linked to non-whitelisted evidence
         for retention_class, cutoff in (
             (0, ordinary_cutoff),
             (1, linked_cutoff),
         ):
+            # retention_priority is the newest of the flow time and its
+            # linked evidence times, so a fresh evidence keeps an old
+            # flow alive. oldest first, to delete what expired first.
             candidates = [
                 row[0]
                 for row in cursor.execute(
@@ -905,6 +925,7 @@ class SQLiteDB(ISQLite):
                             cursor.execute("BEGIN IMMEDIATE")
                         if not progress:
                             break
+
                     for table in ("flows", "altflows"):
                         deleted = self._prune_flow_table(
                             cursor,
@@ -918,6 +939,7 @@ class SQLiteDB(ISQLite):
                         if table == "flows":
                             removed.extend(deleted)
                         cursor.execute("BEGIN IMMEDIATE")
+
                     if (
                         max_size_bytes
                         and self._logical_size_bytes(cursor) > max_size_bytes

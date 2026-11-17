@@ -473,11 +473,12 @@ class ConfigParser(object):
         )
 
     def flow_retention_policy(self) -> dict[str, int | bool]:
-        """Read bounded live-flow retention settings.
+        """Read the flow retention settings, falling back to the defaults
+        for missing or out-of-range values.
 
         Returns:
-            Enable flag, ordinary, linked, and minimum size-pruning ages,
-            batch size, and cadence.
+            The enabled flag, ordinary_hours, linked_days, max_size_mb and
+            size_min_age_minutes.
         """
         defaults = {
             "ordinary_hours": 24,
