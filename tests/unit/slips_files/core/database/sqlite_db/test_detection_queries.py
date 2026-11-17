@@ -6,13 +6,13 @@ import pytest
 
 from tests.module_factory import ModuleFactory
 from slips_files.core.database.sqlite_db.detection_queries import (
-    detection_total,
-    hourly_evidence_source,
+    build_hourly_evidence_source_sql,
+    count_active_detection_records,
 )
 
 
 @pytest.mark.parametrize("counted", [False, True])
-def test_detection_total_supports_legacy_and_counted_databases(
+def test_count_active_detection_records_supports_legacy_and_counted_databases(
     counted: bool,
 ) -> None:
     """Count a legacy table or read its maintained exact total.
@@ -31,9 +31,9 @@ def test_detection_total_supports_legacy_and_counted_databases(
             connection.execute(
                 "INSERT INTO history_totals VALUES ('evidence',2)"
             )
-        assert detection_total(connection, "evidence") == 2
+        assert count_active_detection_records(connection, "evidence") == 2
         with pytest.raises(ValueError):
-            detection_total(connection, "untrusted_table")
+            count_active_detection_records(connection, "untrusted_table")
 
 
 @pytest.mark.parametrize(
@@ -51,7 +51,7 @@ def test_summary_falls_back_for_legacy_or_invalid_ranges(
     """
     _factory = ModuleFactory()
     with sqlite3.connect(":memory:") as connection:
-        assert hourly_evidence_source(connection, start, end) is None
+        assert build_hourly_evidence_source_sql(connection, start, end) is None
 
 
 @pytest.mark.parametrize("counted", [False, True])
@@ -66,11 +66,23 @@ def test_run_totals_bypass_scoped_views(counted: bool) -> None:
         connection.execute("CREATE TABLE evidence(evidence_id TEXT)")
         connection.execute("INSERT INTO evidence VALUES ('one'),('two')")
         if counted:
-            connection.execute("CREATE TABLE history_totals(entity TEXT,count INTEGER)")
-            connection.execute("INSERT INTO history_totals VALUES ('evidence',2)")
-            connection.execute("CREATE TEMP VIEW history_totals AS SELECT * FROM main.history_totals WHERE 0")
-        connection.execute("CREATE TEMP VIEW evidence AS SELECT * FROM main.evidence WHERE 0")
-        assert detection_total(connection, "evidence") == 0
-        assert detection_total(connection, "evidence", "main") == 2
+            connection.execute(
+                "CREATE TABLE history_totals(entity TEXT,count INTEGER)"
+            )
+            connection.execute(
+                "INSERT INTO history_totals VALUES ('evidence',2)"
+            )
+            connection.execute(
+                "CREATE TEMP VIEW history_totals AS SELECT * FROM main.history_totals WHERE 0"
+            )
+        connection.execute(
+            "CREATE TEMP VIEW evidence AS SELECT * FROM main.evidence WHERE 0"
+        )
+        assert count_active_detection_records(connection, "evidence") == 0
+        assert (
+            count_active_detection_records(connection, "evidence", "main") == 2
+        )
         with pytest.raises(ValueError):
-            detection_total(connection, "evidence", "untrusted.schema")
+            count_active_detection_records(
+                connection, "evidence", "untrusted.schema"
+            )

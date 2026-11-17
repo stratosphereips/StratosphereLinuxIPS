@@ -611,7 +611,8 @@ class RedisDB(
     def publish(self, channel, msg, pipeline=None, add_version: bool = True):
         """Publish a msg in the given channel.
         adds the instructions to the given pipeline if given and returns
-        the pipeline. Set add_version=False only for external protocols
+        the pipeline.
+        Set add_version=False only for external protocols
         whose version field is not Slips's software version."""
         # External protocols such as Iris carry their own version field.
         if add_version:

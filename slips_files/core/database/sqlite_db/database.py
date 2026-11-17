@@ -85,6 +85,9 @@ class SQLiteDB(ISQLite):
         self, policy: dict[str, int | bool], now: float | None = None
     ) -> dict:
         """Maintain detection summaries and rotated archives under writer locks.
+        this func is background cleanup. It should never make the real
+        db wait, so it gives up the moment the database is busy instead of
+        waiting up to 20 seconds.
 
         Parameters:
             policy: Validated detection history configuration.
@@ -103,19 +106,24 @@ class SQLiteDB(ISQLite):
         }
         if not self.conn_lock.acquire(blocking=False):
             return deferred
+
         try:
             with self.sqlite_flock.try_acquire() as acquired:
                 if not acquired:
                     deferred["phase"] = "writer_lock"
                     return deferred
+
                 previous_timeout = self.conn.execute(
                     "PRAGMA busy_timeout"
                 ).fetchone()[0]
+
+                # How many milliseconds to wait for a lock before failing with “database is locked"
+                # so this means dont wait, if it's locked, fail imediately
                 self.conn.execute("PRAGMA busy_timeout=0")
                 try:
                     return DetectionHistory(
                         self.conn, self.output_dir
-                    ).maintain(policy, now)
+                    ).run_maintenance_pass(policy, now)
                 finally:
                     self.conn.set_progress_handler(None, 0)
                     self.conn.rollback()

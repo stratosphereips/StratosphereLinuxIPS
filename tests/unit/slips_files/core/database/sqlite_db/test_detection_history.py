@@ -1,5 +1,6 @@
 """Exercise durable, restartable detection rotation and exact hourly summaries."""
 
+import json
 import os
 import sqlite3
 import time
@@ -11,12 +12,17 @@ import pytest
 from tests.module_factory import ModuleFactory
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.core.database.sqlite_db.database import SQLiteDB
+from modules.supported_module_names import Modules
 from slips_files.core.database.sqlite_db.detection_history import (
+    PEER_REPORT_MIGRATION_BATCH_SIZE,
+    PEER_REPORT_MIGRATION_DONE_KEY,
     DetectionHistory,
+    _find_peer_report_type,
+    migrate_peer_report_types,
 )
 from slips_files.core.database.sqlite_db.detection_queries import (
-    detection_total,
-    hourly_evidence_source,
+    build_hourly_evidence_source_sql,
+    count_active_detection_records,
 )
 
 
@@ -28,12 +34,15 @@ def isolated_writer_locks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
         tmp_path: Per-test storage root.
         monkeypatch: Scope the lock directory override to one test.
     """
-    monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks"))
+    monkeypatch.setattr(
+        "slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks")
+    )
 
 
 @pytest.mark.parametrize("timeout_ms", [17, 20000])
 def test_maintenance_writer_contention_leaves_connection_reusable(
-    tmp_path: Path, timeout_ms: int,
+    tmp_path: Path,
+    timeout_ms: int,
 ) -> None:
     """Yield immediately to a writer and resume from a clean connection.
 
@@ -79,11 +88,11 @@ def test_busy_archive_keeps_uncommitted_evidence_active(tmp_path: Path) -> None:
     db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('protected',1)")
     history = DetectionHistory(db.conn, str(tmp_path))
     filename = "detections-2033-05-0001.sqlite"
-    archive = history._open_archive(filename)
+    archive = history._open_archive_db(filename)
     archive.execute("INSERT INTO archive_metadata VALUES ('updated_at','2000000000')")
     archive.commit()
     archive.close()
-    competing_writer = sqlite3.connect(history.directory / filename)
+    competing_writer = sqlite3.connect(history.archives_dir / filename)
     competing_writer.execute("BEGIN IMMEDIATE")
     policy = ConfigParser().detection_history_policy()
     try:
@@ -92,14 +101,18 @@ def test_busy_archive_keeps_uncommitted_evidence_active(tmp_path: Path) -> None:
         assert time.monotonic() - started < 0.1
         assert status["deferred"] is True
         assert status["phase"] == "archive_evidence"
-        assert db.conn.execute("SELECT evidence_id FROM evidence").fetchall() == [("protected",)]
+        assert db.conn.execute("SELECT evidence_id FROM evidence").fetchall() == [
+            ("protected",)
+        ]
         assert not db.conn.in_transaction
     finally:
         competing_writer.rollback()
         competing_writer.close()
     assert not db.maintain_detection_history(policy, 2_000_000_000.0)["deferred"]
-    with sqlite3.connect(history.directory / filename) as archive:
-        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [("protected",)]
+    with sqlite3.connect(history.archives_dir / filename) as archive:
+        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [
+            ("protected",)
+        ]
     db.close()
 
 
@@ -116,15 +129,15 @@ def test_archive_schema_failure_rolls_back_new_tables(
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
     history = DetectionHistory(db.conn, str(tmp_path))
-    history.directory.mkdir()
+    history.archives_dir.mkdir()
     filename = "detections-2033-05-0001.sqlite"
-    with sqlite3.connect(history.directory / filename) as archive:
+    with sqlite3.connect(history.archives_dir / filename) as archive:
         archive.execute(f"CREATE TABLE {incomplete_table}(saved TEXT)")
         archive.execute(f"INSERT INTO {incomplete_table} VALUES ('retained')")
     try:
         with pytest.raises(sqlite3.OperationalError, match="no such column"):
-            history._open_archive(filename)
-        with sqlite3.connect(history.directory / filename) as archive:
+            history._open_archive_db(filename)
+        with sqlite3.connect(history.archives_dir / filename) as archive:
             tables = archive.execute(
                 "SELECT name FROM sqlite_master WHERE type='table'"
             ).fetchall()
@@ -137,9 +150,7 @@ def test_archive_schema_failure_rolls_back_new_tables(
 
 
 @pytest.mark.parametrize("phase", ["summary", "archive_evidence", "checkpoint"])
-def test_maintenance_defers_busy_phases_and_resumes(
-    tmp_path: Path, phase: str
-) -> None:
+def test_maintenance_defers_busy_phases_and_resumes(tmp_path: Path, phase: str) -> None:
     """Recover real writer collisions at each transaction boundary.
 
     Parameters:
@@ -151,7 +162,11 @@ def test_maintenance_defers_busy_phases_and_resumes(
     db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('retained',1)")
     policy = ConfigParser().detection_history_policy()
     competing_writer = sqlite3.connect(db._flows_db)
-    method = {"summary": "summary_step", "archive_evidence": "archive_step", "checkpoint": "_set_state"}[phase]
+    method = {
+        "summary": "update_hourly_summaries_batch",
+        "archive_evidence": "archive_next_batch",
+        "checkpoint": "_set_checkpoint",
+    }[phase]
     original = getattr(DetectionHistory, method)
 
     def collide(history: DetectionHistory, *args: object, **kwargs: object) -> object:
@@ -183,12 +198,16 @@ def test_maintenance_defers_busy_phases_and_resumes(
         competing_writer.close()
     for _ in range(20):
         status = db.maintain_detection_history(policy, 2_000_000_000.0)
-        if detection_total(db.conn, "evidence") == 0:
+        if count_active_detection_records(db.conn, "evidence") == 0:
             break
     assert not status["deferred"]
-    assert detection_total(db.conn, "evidence") == 0
-    with sqlite3.connect(next((tmp_path / "databases" / "archives").glob("*.sqlite"))) as archive:
-        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [("retained",)]
+    assert count_active_detection_records(db.conn, "evidence") == 0
+    with sqlite3.connect(
+        next((tmp_path / "databases" / "archives").glob("*.sqlite"))
+    ) as archive:
+        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [
+            ("retained",)
+        ]
     db.close()
 
 
@@ -211,9 +230,10 @@ def test_maintenance_never_queues_behind_capture_locks(
     else:
         lock = open(db.lockfile_path, "w")
         import fcntl
+
         fcntl.flock(lock, fcntl.LOCK_EX)
     try:
-        with patch.object(DetectionHistory, "maintain") as maintenance:
+        with patch.object(DetectionHistory, "run_maintenance_pass") as maintenance:
             started = time.monotonic()
             status = db.maintain_detection_history(policy)
             assert time.monotonic() - started < 0.1
@@ -232,10 +252,17 @@ def test_maintenance_never_queues_behind_capture_locks(
 
 @pytest.mark.parametrize(
     "code,deferred,raises",
-    [(5, True, False), (517, True, False),
-     (9, False, False), (6, False, True), (1, False, True)],
+    [
+        (5, True, False),
+        (517, True, False),
+        (9, False, False),
+        (6, False, True),
+        (1, False, True),
+    ],
 )
-def test_maintenance_interruption_classification(code: int, deferred: bool, raises: bool) -> None:
+def test_maintenance_interruption_classification(
+    code: int, deferred: bool, raises: bool
+) -> None:
     """Preserve genuine errors while recognizing extended busy codes.
 
     Parameters:
@@ -249,10 +276,10 @@ def test_maintenance_interruption_classification(code: int, deferred: bool, rais
     status = {"phase": "checkpoint"}
     if raises:
         with pytest.raises(sqlite3.OperationalError):
-            DetectionHistory._record_interruption(error, status)
+            DetectionHistory._handle_maintenance_sqlite_error(error, status)
         assert error.history_phase == "checkpoint"
     else:
-        DetectionHistory._record_interruption(error, status)
+        DetectionHistory._handle_maintenance_sqlite_error(error, status)
         assert status["deferred"] is deferred
         assert status["interrupted"] is True
 
@@ -289,7 +316,8 @@ def test_maintenance_respects_disk_pressure_and_rotates_by_size(
     status = db.maintain_detection_history(policy, now)
     assert status["size_pressure"] is True
     assert status["disk_pressure"] is disk_pressure
-    assert detection_total(db.conn, "evidence") == (2 if disk_pressure else 1)
+    expected_count = 2 if disk_pressure else 1
+    assert count_active_detection_records(db.conn, "evidence") == expected_count
     assert db.conn.execute(
         "SELECT 1 FROM evidence WHERE evidence_id='recent'"
     ).fetchone()
@@ -312,13 +340,17 @@ def test_archive_size_rotation_and_cap(tmp_path: Path) -> None:
         )
     history = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(20):
-        if not history.archive_step("evidence", 100, 1, now, file_size_mb=1):
+        if not history.archive_next_batch(
+            "evidence", 100, 1, now, max_archive_file_size_mb=1
+        ):
             break
-    files = sorted(history.directory.glob("*.sqlite"))
+    files = sorted(history.archives_dir.glob("*.sqlite"))
     assert len(files) == 2
-    assert history.expire_archives(now, 30, max_size_mb=3) == 1
-    assert len(list(history.directory.glob("*.sqlite"))) == 1
-    assert detection_total(db.conn, "evidence") == 0
+    assert (
+        history.delete_one_expired_archive(now, 30, max_total_archives_size_mb=3) == 1
+    )
+    assert len(list(history.archives_dir.glob("*.sqlite"))) == 1
+    assert count_active_detection_records(db.conn, "evidence") == 0
     db.close()
 
 
@@ -335,7 +367,7 @@ def test_nullable_summary_keys_are_aggregated(tmp_path: Path) -> None:
     )
     history = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(20):
-        if not history.summary_step(1):
+        if not history.update_hourly_summaries_batch(1):
             break
     assert db.conn.execute(
         "SELECT profile_ip,record_count FROM evidence_hourly"
@@ -353,21 +385,17 @@ def test_active_alert_protects_older_supporting_evidence(
     """
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
-    db.execute(
-        "INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1)"
-    )
-    db.execute(
-        "INSERT INTO alerts(alert_id,alert_time) VALUES ('recent',1000)"
-    )
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1)")
+    db.execute("INSERT INTO alerts(alert_id,alert_time) VALUES ('recent',1000)")
     db.execute("INSERT INTO alert_evidence VALUES ('recent','old')")
     history = DetectionHistory(db.conn, str(tmp_path))
-    assert history.archive_step("evidence", 100, 10, 2000) == 0
-    assert detection_total(db.conn, "evidence") == 1
+    assert history.archive_next_batch("evidence", 100, 10, 2000) == 0
+    assert count_active_detection_records(db.conn, "evidence") == 1
     for _ in range(5):
-        history.archive_step("alerts", 1100, 10, 2000)
+        history.archive_next_batch("alerts", 1100, 10, 2000)
     for _ in range(5):
-        history.archive_step("evidence", 1100, 10, 2000)
-    assert detection_total(db.conn, "evidence") == 0
+        history.archive_next_batch("evidence", 1100, 10, 2000)
+    assert count_active_detection_records(db.conn, "evidence") == 0
     db.close()
 
 
@@ -393,9 +421,7 @@ def test_rotation_preserves_records_reviews_and_every_relationship(
         "INSERT INTO evidence(evidence_id,evidence_time) VALUES ('recent',?)",
         (now,),
     )
-    db.execute(
-        "INSERT INTO alerts(alert_id,alert_time) VALUES ('alert',?)", (old,)
-    )
+    db.execute("INSERT INTO alerts(alert_id,alert_time) VALUES ('alert',?)", (old,))
     db.execute("INSERT INTO alert_evidence VALUES ('alert','old')")
     db.execute(
         "INSERT INTO evidence_reviews VALUES ('old','true_positive','verified',1)"
@@ -404,9 +430,7 @@ def test_rotation_preserves_records_reviews_and_every_relationship(
         "INSERT INTO alert_reviews VALUES ('alert','resolved','done',1,'true_positive')"
     )
     for index in range(7):
-        db.execute(
-            "INSERT INTO evidence_flows VALUES ('old',?)", (f"uid-{index}",)
-        )
+        db.execute("INSERT INTO evidence_flows VALUES ('old',?)", (f"uid-{index}",))
     db.execute(
         "INSERT INTO flows(uid,flow,event_time) VALUES ('uid-0','{}',?)",
         (old,),
@@ -414,7 +438,7 @@ def test_rotation_preserves_records_reviews_and_every_relationship(
     history = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(50):
         progress = sum(
-            history.archive_step(entity, now - 90 * 86400, batch, now)
+            history.archive_next_batch(entity, now - 90 * 86400, batch, now)
             for entity in ("evidence", "alerts")
         )
         if not progress:
@@ -424,21 +448,14 @@ def test_rotation_preserves_records_reviews_and_every_relationship(
     ]
     assert db.conn.execute("SELECT * FROM evidence_flows").fetchall() == []
     assert db.conn.execute("SELECT * FROM alert_evidence").fetchall() == []
-    assert (
-        db.conn.execute("SELECT * FROM history_archive_queue").fetchall() == []
-    )
+    assert db.conn.execute("SELECT * FROM history_archive_queue").fetchall() == []
     assert db.conn.execute("SELECT uid FROM flows").fetchall() == [("uid-0",)]
-    assert detection_total(db.conn, "evidence") == 1
-    with sqlite3.connect(next(history.directory.glob("*.sqlite"))) as archive:
-        assert archive.execute(
-            "SELECT evidence_id FROM evidence"
-        ).fetchall() == [("old",)]
-        assert (
-            archive.execute("SELECT COUNT(*) FROM evidence_flows").fetchone()[
-                0
-            ]
-            == 7
-        )
+    assert count_active_detection_records(db.conn, "evidence") == 1
+    with sqlite3.connect(next(history.archives_dir.glob("*.sqlite"))) as archive:
+        assert archive.execute("SELECT evidence_id FROM evidence").fetchall() == [
+            ("old",)
+        ]
+        assert archive.execute("SELECT COUNT(*) FROM evidence_flows").fetchone()[0] == 7
         assert archive.execute("SELECT * FROM alert_evidence").fetchall() == [
             ("alert", "old")
         ]
@@ -464,22 +481,18 @@ def test_copy_failure_keeps_active_detection_and_links(
     """
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
-    db.execute(
-        "INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1)"
-    )
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1)")
     db.execute("INSERT INTO evidence_flows VALUES ('old','flow')")
     history = DetectionHistory(db.conn, str(tmp_path))
     monkeypatch.setattr(
         history,
-        "_copy_row",
+        "_copy_row_to_archive",
         Mock(side_effect=sqlite3.OperationalError("disk full")),
     )
     with pytest.raises(sqlite3.OperationalError, match="disk full"):
-        history.archive_step("evidence", 100, 10, 200)
+        history.archive_next_batch("evidence", 100, 10, 200)
     db.conn.rollback()
-    assert db.conn.execute("SELECT evidence_id FROM evidence").fetchall() == [
-        ("old",)
-    ]
+    assert db.conn.execute("SELECT evidence_id FROM evidence").fetchall() == [("old",)]
     assert db.conn.execute("SELECT * FROM evidence_flows").fetchall() == [
         ("old", "flow")
     ]
@@ -494,18 +507,16 @@ def test_links_added_behind_copy_cursor_are_preserved(tmp_path: Path) -> None:
     """
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
-    db.execute(
-        "INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1)"
-    )
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old',1)")
     for uid in ("b", "c", "d"):
         db.execute("INSERT INTO evidence_flows VALUES ('old',?)", (uid,))
     history = DetectionHistory(db.conn, str(tmp_path))
-    history.archive_step("evidence", 100, 1, 200)
+    history.archive_next_batch("evidence", 100, 1, 200)
     db.execute("INSERT INTO evidence_flows VALUES ('old','a')")
     for _ in range(30):
-        if not history.archive_step("evidence", 100, 1, 200):
+        if not history.archive_next_batch("evidence", 100, 1, 200):
             break
-    with sqlite3.connect(next(history.directory.glob("*.sqlite"))) as archive:
+    with sqlite3.connect(next(history.archives_dir.glob("*.sqlite"))) as archive:
         assert archive.execute(
             "SELECT uid FROM evidence_flows ORDER BY uid"
         ).fetchall() == [("a",), ("b",), ("c",), ("d",)]
@@ -532,8 +543,8 @@ def test_archive_expiration_respects_age_and_incomplete_copies(
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
     history = DetectionHistory(db.conn, str(tmp_path))
-    history.directory.mkdir()
-    path = history.directory / "detections-2020-01.sqlite"
+    history.archives_dir.mkdir()
+    path = history.archives_dir / "detections-2020-01.sqlite"
     path.touch()
     now = 2_000_000_000.0
     os.utime(path, (now - age_days * 86400, now - age_days * 86400))
@@ -542,7 +553,7 @@ def test_archive_expiration_respects_age_and_incomplete_copies(
             "INSERT INTO history_archive_queue(entity,record_id,filename) VALUES ('evidence','old',?)",
             (path.name,),
         )
-    assert history.expire_archives(now, 30) == expected
+    assert history.delete_one_expired_archive(now, 30) == expected
     assert path.exists() is (expected == 0)
     db.close()
 
@@ -570,31 +581,33 @@ def test_hourly_summary_handles_partial_hours_and_invalidates_updates(
     db.execute("INSERT INTO alert_evidence VALUES ('alert','inside')")
     history = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(50):
-        if not history.summary_step(1):
+        if not history.update_hourly_summaries_batch(1):
             break
-    source = hourly_evidence_source(db.conn, 3550, 7350)
+    source = build_hourly_evidence_source_sql(db.conn, 3550, 7350)
     assert source is not None
     assert db.conn.execute(
         f"SELECT SUM(weight),SUM(summarized_alerts) FROM {source}"
     ).fetchone() == (2, 1)
     db.execute("UPDATE evidence SET whitelisted=1 WHERE evidence_id='inside'")
-    assert hourly_evidence_source(db.conn, 3550, 7350) is None
+    assert build_hourly_evidence_source_sql(db.conn, 3550, 7350) is None
     for _ in range(50):
-        if not history.summary_step(1):
+        if not history.update_hourly_summaries_batch(1):
             break
-    source = hourly_evidence_source(db.conn, 3550, 7350)
+    source = build_hourly_evidence_source_sql(db.conn, 3550, 7350)
     assert (
         db.conn.execute(
             f"SELECT SUM(weight) FROM {source} WHERE COALESCE(whitelisted,0)=0"
         ).fetchone()[0]
         == 1
     )
-    assert detection_total(db.conn, "evidence") == 3
+    assert count_active_detection_records(db.conn, "evidence") == 3
     db.close()
 
 
-@pytest.mark.parametrize('score', [None, 0., 1.28])
-def test_hourly_scores_preserve_missing_and_real_zero(tmp_path: Path, score: float | None) -> None:
+@pytest.mark.parametrize("score", [None, 0.0, 1.28])
+def test_hourly_scores_preserve_missing_and_real_zero(
+    tmp_path: Path, score: float | None
+) -> None:
     """Keep null snapshots distinct from genuine zero in materialized summaries.
 
     Parameters:
@@ -604,39 +617,218 @@ def test_hourly_scores_preserve_missing_and_real_zero(tmp_path: Path, score: flo
     factory = ModuleFactory()
     db = SQLiteDB(factory.logger, str(tmp_path), 12345)
     for index in range(2):
-        db.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,source_module,threat_level,accumulated_threat_level,accumulated_ratl) VALUES (?,3700,'1.2.3.4','ARP_SCAN','arp','low',?,?)",(str(index),score,score))
-    history = DetectionHistory(db.conn,str(tmp_path))
+        db.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,source_module,threat_level,accumulated_threat_level,accumulated_ratl) VALUES (?,3700,'1.2.3.4','ARP_SCAN','arp','low',?,?)",
+            (str(index), score, score),
+        )
+    history = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(20):
-        if not history.summary_step(10):
+        if not history.update_hourly_summaries_batch(10):
             break
-    assert db.conn.execute('SELECT max_atl,max_ratl FROM evidence_hourly').fetchone() == (score,score)
-    assert hourly_evidence_source(db.conn,3600,7200) is not None
+    assert db.conn.execute(
+        "SELECT max_atl,max_ratl FROM evidence_hourly"
+    ).fetchone() == (score, score)
+    assert build_hourly_evidence_source_sql(db.conn, 3600, 7200) is not None
     db.close()
 
 
-def test_legacy_zero_summaries_are_rebuilt_from_nullable_snapshots(tmp_path: Path) -> None:
+def test_legacy_zero_summaries_are_rebuilt_from_nullable_snapshots(
+    tmp_path: Path,
+) -> None:
     """Invalidate old fabricated zeros once, then rebuild under the work budget.
 
     Parameters:
         tmp_path: Isolated older database.
     """
     factory = ModuleFactory()
-    from slips_files.core.database.sqlite_db.detection_history import NULLABLE_SCORE_SUMMARIES, initialize_detection_history
-    db = SQLiteDB(factory.logger,str(tmp_path),12345)
+    from slips_files.core.database.sqlite_db.detection_history import (
+        NULLABLE_SCORE_SUMMARIES_MIGRATION_KEY,
+        initialize_detection_history,
+    )
+
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
     for index in range(2):
-        db.execute("INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,source_module,threat_level) VALUES (?,3700,'1.2.3.4','ARP_SCAN','arp','low')",(str(index),))
-    history = DetectionHistory(db.conn,str(tmp_path))
+        db.execute(
+            "INSERT INTO evidence(evidence_id,evidence_time,profile_ip,evidence_type,source_module,threat_level) VALUES (?,3700,'1.2.3.4','ARP_SCAN','arp','low')",
+            (str(index),),
+        )
+    history = DetectionHistory(db.conn, str(tmp_path))
     for _ in range(20):
-        if not history.summary_step(10):
+        if not history.update_hourly_summaries_batch(10):
             break
-    db.execute('UPDATE evidence_hourly SET max_atl=0,max_ratl=0')
-    db.execute('DELETE FROM history_state WHERE key=?',(NULLABLE_SCORE_SUMMARIES,))
-    assert hourly_evidence_source(db.conn,3600,7200) is None
+    db.execute("UPDATE evidence_hourly SET max_atl=0,max_ratl=0")
+    db.execute(
+        "DELETE FROM history_state WHERE key=?",
+        (NULLABLE_SCORE_SUMMARIES_MIGRATION_KEY,),
+    )
+    assert build_hourly_evidence_source_sql(db.conn, 3600, 7200) is None
     initialize_detection_history(db.conn)
-    assert hourly_evidence_source(db.conn,3600,7200) is None
+    assert build_hourly_evidence_source_sql(db.conn, 3600, 7200) is None
     for _ in range(20):
-        if not history.summary_step(10):
+        if not history.update_hourly_summaries_batch(10):
             break
-    assert db.conn.execute('SELECT max_atl,max_ratl FROM evidence_hourly').fetchone() == (None,None)
-    assert hourly_evidence_source(db.conn,3600,7200) is not None
+    assert db.conn.execute(
+        "SELECT max_atl,max_ratl FROM evidence_hourly"
+    ).fetchone() == (None, None)
+    assert build_hourly_evidence_source_sql(db.conn, 3600, 7200) is not None
+    db.close()
+
+
+def peer_report_json(*evidence_types: str) -> str:
+    """Build a stored evidence data column holding one peer report.
+
+    Parameters:
+        evidence_types: Detection types listed in the report's provenance.
+
+    Returns:
+        JSON text as older Slips versions stored it.
+    """
+    return json.dumps(
+        {
+            "peer_report": {
+                "provenance": [
+                    {"evidence_type": evidence_type} for evidence_type in evidence_types
+                ]
+            }
+        }
+    )
+
+
+@pytest.mark.parametrize(
+    "evidence_json, expected_type",
+    [
+        (peer_report_json("ARP_SCAN", "HORIZONTAL_PORT_SCAN"), "ARP_SCAN"),
+        (peer_report_json(), None),
+        (json.dumps({"peer_report": {}}), None),
+        (json.dumps(["not", "a", "dict"]), None),
+        ("{broken json", None),
+        (None, None),
+    ],
+)
+def test_find_peer_report_type(
+    evidence_json: str | None, expected_type: str | None
+) -> None:
+    """Return the first reported type, or None when the row keeps its type.
+
+    Parameters:
+        evidence_json: Stored evidence data column.
+        expected_type: Type the migration should store, if any.
+    """
+    assert _find_peer_report_type(evidence_json) == expected_type
+
+
+def test_migrate_peer_report_types_rewrites_old_reports_once(
+    tmp_path: Path,
+) -> None:
+    """Rewrite old peer reports in batches, leave others alone, run once.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    # SQLiteDB already ran the migration on the empty db, so forget it
+    db.execute(
+        "DELETE FROM history_state WHERE key=?",
+        (PEER_REPORT_MIGRATION_DONE_KEY,),
+    )
+    insert = (
+        "INSERT INTO evidence(evidence_id,evidence_time,evidence_type,"
+        "source_module,data) VALUES (?,?,?,?,?)"
+    )
+    db.execute(insert, ("good", 10, "P2P_REPORT", "old", peer_report_json("ARP_SCAN")))
+    db.execute(insert, ("broken", 10, "P2P_REPORT", "old", "{broken json"))
+    db.execute(insert, ("empty", 10, "P2P_REPORT", "old", peer_report_json()))
+    db.execute(
+        insert, ("local", 10, "ARP_SCAN", "arp", peer_report_json("VERTICAL_PORT_SCAN"))
+    )
+    # more rows than one batch, so the loop must run several times
+    bulk_count = PEER_REPORT_MIGRATION_BATCH_SIZE * 2 + 1
+    for index in range(bulk_count):
+        db.execute(
+            insert,
+            (
+                f"bulk{index:04d}",
+                10,
+                "P2P_REPORT",
+                "old",
+                peer_report_json("VERTICAL_PORT_SCAN"),
+            ),
+        )
+    db.conn.commit()
+
+    assert migrate_peer_report_types(db.conn) == bulk_count + 1
+    db.conn.commit()
+
+    rows = dict(
+        (evidence_id, (evidence_type, source_module))
+        for evidence_id, evidence_type, source_module in db.conn.execute(
+            "SELECT evidence_id,evidence_type,source_module FROM evidence"
+        )
+    )
+    assert rows["good"] == ("ARP_SCAN", Modules.P2P_TRUST.value)
+    assert rows["broken"] == ("P2P_REPORT", "old")
+    assert rows["empty"] == ("P2P_REPORT", "old")
+    assert rows["local"] == ("ARP_SCAN", "arp")
+    assert all(
+        rows[f"bulk{index:04d}"] == ("VERTICAL_PORT_SCAN", Modules.P2P_TRUST.value)
+        for index in range(bulk_count)
+    )
+    # the data column is never touched
+    assert db.conn.execute(
+        "SELECT data FROM evidence WHERE evidence_id='good'"
+    ).fetchone() == (peer_report_json("ARP_SCAN"),)
+    # the temp to-do table is dropped
+    assert not db.conn.execute(
+        "SELECT 1 FROM sqlite_temp_master WHERE name='peer_type_upgrade'"
+    ).fetchone()
+
+    # a second run does nothing, even for rows that look old again
+    db.execute(
+        "UPDATE evidence SET evidence_type='P2P_REPORT' WHERE evidence_id='good'"
+    )
+    assert migrate_peer_report_types(db.conn) == 0
+    db.close()
+
+
+def test_migrate_peer_report_types_retries_after_failure(
+    tmp_path: Path,
+) -> None:
+    """Skip the done marker when a batch fails, and let a retry succeed.
+
+    Parameters:
+        tmp_path: Isolated database directory.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    db.execute(
+        "DELETE FROM history_state WHERE key=?",
+        (PEER_REPORT_MIGRATION_DONE_KEY,),
+    )
+    db.execute(
+        "INSERT INTO evidence(evidence_id,evidence_time,evidence_type,data) "
+        "VALUES ('good',10,'P2P_REPORT',?)",
+        (peer_report_json("ARP_SCAN"),),
+    )
+    db.conn.commit()
+    with patch(
+        "slips_files.core.database.sqlite_db.detection_history."
+        "_migrate_peer_reports_batch",
+        side_effect=sqlite3.OperationalError("disk full"),
+    ):
+        with pytest.raises(sqlite3.OperationalError, match="disk full"):
+            migrate_peer_report_types(db.conn)
+    # the caller rolls back on failure, which also undoes the DROP of the
+    # to-do table, so the table may still exist here
+    db.conn.rollback()
+    assert not db.conn.execute(
+        "SELECT 1 FROM history_state WHERE key=?",
+        (PEER_REPORT_MIGRATION_DONE_KEY,),
+    ).fetchone()
+    # a retry on the same connection must still work
+    assert migrate_peer_report_types(db.conn) == 1
+    db.conn.commit()
+    assert db.conn.execute(
+        "SELECT evidence_type FROM evidence WHERE evidence_id='good'"
+    ).fetchone() == ("ARP_SCAN",)
     db.close()
