@@ -5045,6 +5045,17 @@ def test_score_missing_zero_and_historical_crossing_are_distinct(theme: str) -> 
             evidence_total:82,scored_evidence:82,mode:'ATL',peak_score:1.28,threshold:1.2,reset_count:1})""")
         assert 'peak 1.280 / 1.200' in page.locator('#host-score-history-status').inner_text()
         page.evaluate("""() => renderHostScoreHistory({timeline:[
+            {ts:1794700000,score:1.28,peak_score:1.28,threshold:1.2},
+            {ts:1794700060,score:.32,peak_score:.32,threshold:1.2},
+            {ts:1794772060,score:.56,peak_score:.56,threshold:1.2}],
+            bucket_seconds:60,evidence_total:82,scored_evidence:82,
+            mode:'ATL',peak_score:1.28,threshold:1.2,reset_count:1})""")
+        score_lines = page.locator('#host-score-chart .chart-line')
+        assert score_lines.nth(0).get_attribute('d').count('M') == 2
+        assert score_lines.nth(1).get_attribute('d').count('M') == 2
+        assert score_lines.nth(2).get_attribute('d').count('M') == 1
+        assert 'longest 20:00:00' in page.locator('#host-score-history-status').inner_text()
+        page.evaluate("""() => renderHostScoreHistory({timeline:[
             {ts:101,score:.32,peak_score:.32,threshold:1.2,current:true}],
             evidence_total:82,scored_evidence:0,mode:'ATL',peak_score:0,threshold:1.2,reset_count:0})""")
         assert page.locator('#host-score-chart .chart-point').count() == 3

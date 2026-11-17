@@ -1769,7 +1769,7 @@ function bindChartHover(svg, target, points, series, formatValue, maximum, left,
 /** Render a chart with numeric axes and optional shared time bounds.
  * @param {string} id - Target SVG ID.
  * @param {Array<object>} points - Timestamped metric values.
- * @param {Array<object>} series - Metric keys, colors and labels.
+ * @param {Array<object>} series - Metric keys, colors, labels and optional gap limits.
  * @param {Function} formatValue - Numeric axis and tooltip formatter.
  * @param {number} minimumValue - Lower numeric axis bound.
  * @param {number} maximumValue - Minimum upper numeric axis bound.
@@ -1862,10 +1862,12 @@ function renderLineChart(id, points, series, formatValue = formatChartValue, min
     const seriesPoints = points.filter((point) => hasValue(point, item.key));
     if (!seriesPoints.length) continue;
     const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    const gapLimit = numeric(item.maxGapSeconds);
     const d = seriesPoints.map((point, index) => {
       const x = left + ((numeric(point.ts) - minimumTime) / span) * plotWidth;
       const y = height - bottom - ((numeric(point[item.key]) - minimumValue) / valueSpan) * plotHeight;
-      return `${index ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
+      const gap = index ? numeric(point.ts) - numeric(seriesPoints[index - 1].ts) : 0;
+      return `${index && (!gapLimit || gap <= gapLimit) ? "L" : "M"}${x.toFixed(2)} ${y.toFixed(2)}`;
     }).join(" ");
     path.setAttribute("d", d);
     path.setAttribute("class", `chart-line ${item.className || ""}`);
@@ -9608,9 +9610,12 @@ function renderHostScoreHistory(payload) {
   if (points.length === 1 && !points[0].current) {
     points = [{ ...points[0], ts: numeric(points[0].ts) - 1 }, points[0]];
   }
+  const gapLimit = Math.max(900, numeric(payload.bucket_seconds) * 3);
+  const gaps = points.slice(1).map((point, index) =>
+    numeric(point.ts) - numeric(points[index].ts)).filter((gap) => gap > gapLimit);
   renderLineChart("host-score-chart", points, [
-    { key: "score" },
-    { key: "peak_score", className: "secondary-line" },
+    { key: "score", maxGapSeconds: gapLimit },
+    { key: "peak_score", className: "secondary-line", maxGapSeconds: gapLimit },
     { key: "threshold", className: "threshold-line" },
   ]);
   const total = numeric(payload.evidence_total);
@@ -9635,6 +9640,9 @@ function renderHostScoreHistory(payload) {
     status.textContent = `${compact(scored)} of ${compact(total)} evidence records have real ${payload.mode} samples · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets.`;
   } else {
     status.textContent = `${compact(scored)} processed score samples · peak ${numeric(payload.peak_score).toFixed(3)} / ${numeric(payload.threshold).toFixed(3)} · ${compact(payload.reset_count)} detected resets.`;
+  }
+  if (gaps.length) {
+    status.textContent += ` ${compact(gaps.length)} period${gaps.length === 1 ? "" : "s"} without saved score samples (longest ${formatDuration(Math.max(...gaps))}); score lines stop across these gaps.`;
   }
 }
 
