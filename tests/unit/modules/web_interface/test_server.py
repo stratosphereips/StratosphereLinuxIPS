@@ -22,7 +22,7 @@ import psutil
 from pytest_mock import MockerFixture
 
 from modules.web_interface.history import connect_history, initialize_history, RUNTIME_RESOURCES_KEY, HistoryCollector
-from modules.web_interface.network_scope import NetworkScope
+from modules.web_interface.network_scope import NetworkScope, NetworkSelection
 from modules.supported_module_names import Modules
 from modules.web_interface.server import (
     RequestHandler,
@@ -820,6 +820,86 @@ def test_host_traffic_and_score_endpoints_share_current_network_boundary(
         }
     )
     assert reader.score_history("192.168.12.1", query)["timeline"] == []
+
+
+def test_scoped_host_reads_do_not_materialize_all_network_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep one host's scoped reads indexed without building a global ID table.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fix the active capture clock.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    scoped = reader._for_network_scope({"network": ["current"]})
+    with patch.object(
+        NetworkSelection,
+        "materialize_evidence",
+        side_effect=AssertionError("global evidence scan"),
+    ):
+        stats = scoped._host_finding_stats(
+            ["192.168.1.22", "192.168.12.1"],
+            {"network": ["current"], "range": ["7d"]},
+        )
+        activity = scoped._host_activity_times(["192.168.1.22"])
+    assert stats["192.168.1.22"]["evidence"] == 1
+    assert stats["192.168.12.1"]["evidence"] == 0
+    assert activity["192.168.1.22"] > 0
+
+
+def test_device_evidence_uses_member_profiles_before_network_filter(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Keep device evidence restricted to its indexed member addresses.
+
+    Parameters:
+        tmp_path: Isolated run databases.
+        monkeypatch: Fix the active capture clock.
+    """
+    _module_factory = ModuleFactory()
+    monkeypatch.setattr(
+        "modules.web_interface.server.time.time", lambda: 2_000_000_000.0
+    )
+    reader = _network_scope_reader(tmp_path)
+    with sqlite3.connect(reader.sqlite_path) as connection:
+        connection.execute(
+            "CREATE INDEX evidence_profile_time_idx ON evidence(profile_ip,evidence_time)"
+        )
+        connection.executemany(
+            "INSERT INTO evidence VALUES (?, ?, ?, 'timewindow1','low','ARP_SCAN','arp','scan',0.8,'{}',1,0)",
+            [
+                ("current-v4-evidence", 2_000_000_000 - 30, "192.168.1.20"),
+                ("current-v6-evidence", 2_000_000_000 - 30, "fe80::20"),
+            ],
+        )
+    statements: list[str] = []
+    original = reader._connect_sqlite
+
+    def traced_connection() -> sqlite3.Connection:
+        """Record evidence SQL to verify the profile restriction.
+
+        Returns:
+            A scoped read connection with query tracing enabled.
+        """
+        connection = original()
+        connection.set_trace_callback(statements.append)
+        return connection
+
+    reader._connect_sqlite = traced_connection
+    page = reader.evidence({
+        "range": ["7d"], "network": ["connection"],
+        "device_id": ["mac:02:00:00:00:00:20"],
+        "include_full_total": ["0"],
+    })
+    assert {item["id"] for item in page["items"]} == {
+        "current-v4-evidence", "current-v6-evidence"
+    }
+    assert any("profile_ip IN" in sql for sql in statements)
 
 
 @pytest.mark.parametrize("device", [False, True])
@@ -6034,11 +6114,16 @@ def test_host_finding_queries_choose_indexes_without_changing_filters(
     with original() as connection:
         for sql in aggregates:
             if indexed:
-                expected = "evidence_group_cover_idx"
+                expected = (
+                    "evidence_profile_time_idx"
+                    if bounded else "evidence_group_cover_idx"
+                )
                 assert f"INDEXED BY {expected}" in sql
                 plan = " ".join(str(row[3]) for row in connection.execute("EXPLAIN QUERY PLAN "+sql))
                 assert expected in plan
-                assert "COVERING INDEX" in plan
+                assert "SEARCH" in plan
+                if not bounded:
+                    assert "COVERING INDEX" in plan
             else:
                 assert "INDEXED BY" not in sql
 

@@ -4474,8 +4474,20 @@ class RunDataReader:
                     clauses.append(f"profile_ip IN ({placeholders})")
                     params.extend(profiles)
                 if device_id:
-                    clauses.append("device_key(profile_ip) = ?")
-                    params.append(device_id)
+                    keys = self._device_key_map()
+                    device_ips = [
+                        address
+                        for address, key in keys.items()
+                        if key == device_id
+                    ]
+                    if device_id not in keys:
+                        device_ips.append(device_id)
+                    if device_ips:
+                        marks = ",".join("?" for _ in device_ips)
+                        clauses.append(f"profile_ip IN ({marks})")
+                        params.extend(device_ips)
+                    else:
+                        clauses.append("0 = 1")
                 if evidence_type:
                     clauses.append("evidence_type = ?")
                     params.append(evidence_type)
@@ -6604,7 +6616,6 @@ class RunDataReader:
         scope = getattr(self, "_active_network_scope", None)
         if scope:
             self._attach_run_database(connection)
-            scope.materialize_evidence(connection, "run_db", "scoped_")
         missing = "-1e300"
         flow_bounds = (
             f" AND fi.event_time>={float(scope.connection_start)!r}"
@@ -6866,6 +6877,7 @@ class RunDataReader:
                             connection, start is not None
                         )
                         if table == "evidence"
+                        and not getattr(self, "_active_network_scope", None)
                         else ""
                     )
                     reviews = (
@@ -6895,7 +6907,7 @@ class RunDataReader:
         bounded: bool = False,
         schema: str = "",
     ) -> str:
-        """Choose existing time or covering indexes for host finding aggregates.
+        """Choose an IP-first index for bounded host finding aggregates.
 
         Parameters:
             connection: Read-only run database connection.
@@ -6914,12 +6926,10 @@ class RunDataReader:
             )
         }
         preferred = (
-            "evidence_time_cover_idx"
-            if bounded and "evidence_time_cover_idx" in indexes
+            "evidence_profile_time_idx"
+            if bounded and "evidence_profile_time_idx" in indexes
             else "evidence_group_cover_idx"
         )
-        if preferred not in indexes and bounded:
-            preferred = "evidence_profile_time_idx"
         return f" INDEXED BY {preferred}" if preferred in indexes else ""
 
     def _host_finding_stats(
@@ -6944,8 +6954,6 @@ class RunDataReader:
         try:
             with self._connect_sqlite() as connection:
                 scope_filter = getattr(self, "_active_network_scope", None)
-                if scope_filter:
-                    scope_filter.materialize_evidence(connection)
                 columns = {
                     str(row[1])
                     for row in connection.execute(
@@ -6965,19 +6973,14 @@ class RunDataReader:
                     {"range": ["all"], **query}, latest
                 )
                 start = self._scoped_start(query, start)
-                evidence_hint = self._host_evidence_index_hint(
-                    connection,
-                    start is not None,
-                    "main" if scope_filter else "",
-                )
-                evidence_source = (
-                    "main.evidence AS evidence" if scope_filter else "evidence"
-                )
-                scope = (
-                    " AND evidence_id IN (SELECT evidence_id FROM scope_evidence_ids)"
+                evidence_hint = (
+                    ""
                     if scope_filter
-                    else ""
+                    else self._host_evidence_index_hint(
+                        connection, start is not None
+                    )
                 )
+                scope = ""
                 values = []
                 if "evidence_time" in columns:
                     if start is not None:
@@ -7008,7 +7011,7 @@ class RunDataReader:
                     marks = ",".join("?" for _ in batch)
                     for row in connection.execute(
                         f"SELECT profile_ip, COUNT(*) AS count, MAX({score}) AS peak, MAX({threat}) AS rank "
-                        f"FROM {evidence_source}{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
+                        f"FROM evidence{evidence_hint} WHERE profile_ip IN ({marks}){scope} GROUP BY profile_ip",
                         (*batch, *values),
                     ):
                         result[str(row[0])] = {
