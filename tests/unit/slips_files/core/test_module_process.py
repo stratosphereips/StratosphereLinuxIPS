@@ -62,6 +62,40 @@ class StopProbe:
         self.results.send(("saved", self.stop.is_set()))
 
 
+@pytest.mark.parametrize("method", ["spawn", "forkserver"])
+def test_ctrl_c_does_not_interrupt_shared_stop_locks_in_workers(method: str) -> None:
+    """Let main own Ctrl-C while workers complete their coordinated cleanup.
+
+    Parameters:
+        method: Portable worker start method.
+    """
+    factory = ModuleFactory()
+    previous = multiprocessing.get_start_method()
+    multiprocessing.set_start_method(method, force=True)
+    receiver, sender = multiprocessing.Pipe(duplex=False)
+    stop = multiprocessing.Event()
+    process = factory.create_module_process_obj(StopProbe, stop, sender)
+    try:
+        process.start()
+        assert receiver.poll(20)
+        assert receiver.recv() == ("ready", True)
+        os.kill(process.pid, signal.SIGINT)
+        manager = factory.create_process_manager_obj()
+        assert manager._notify_shutdown_event(stop, time.monotonic() + 2)
+        assert receiver.poll(5)
+        assert receiver.recv() == ("saved", True)
+        process.join(5)
+        assert process.exitcode == 0
+    finally:
+        if process.is_alive():
+            process.kill()
+            process.join(5)
+        process.close()
+        receiver.close()
+        sender.close()
+        multiprocessing.set_start_method(previous, force=True)
+
+
 def wait_for_cleanup(ready: object) -> None:
     """Keep an isolated child alive until the process manager reaps it.
 

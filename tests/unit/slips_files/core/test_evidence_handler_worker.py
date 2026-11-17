@@ -555,18 +555,33 @@ def test_disabled_evidence_message_is_deleted_without_processing() -> None:
     worker.db.mark_evidence_as_processed.assert_not_called()
 
 
-def test_info_evidence_cannot_open_alert_from_existing_score() -> None:
-    """Verify zero-weight evidence never becomes an alert threshold trigger."""
+@pytest.mark.parametrize(
+    "evidence_type, threat_level",
+    [
+        (EvidenceType.HTTP_TRAFFIC, ThreatLevel.INFO),
+        (EvidenceType.ARP_DISCOVERY, ThreatLevel.INFO),
+        (EvidenceType.P2P_REPORT, ThreatLevel.CRITICAL),
+    ],
+)
+def test_non_scoring_evidence_cannot_open_alert_from_existing_score(
+    evidence_type: EvidenceType, threat_level: ThreatLevel
+) -> None:
+    """Prevent informational and raw P2P reports from opening alerts.
+
+    Parameters:
+        evidence_type: Signal being processed.
+        threat_level: Stored severity of the signal.
+    """
     worker = ModuleFactory().create_evidence_handler_worker_obj()
     evidence = Evidence(
-        evidence_type=EvidenceType.HTTP_TRAFFIC,
+        evidence_type=evidence_type,
         description="Unencrypted HTTP traffic",
         attacker=Attacker(
             direction=Direction.SRC,
             ioc_type=IoCType.IP,
             value="10.0.66.100",
         ),
-        threat_level=ThreatLevel.INFO,
+        threat_level=threat_level,
         confidence=1.0,
         profile=ProfileID("10.0.66.100"),
         timewindow=TimeWindow(1),

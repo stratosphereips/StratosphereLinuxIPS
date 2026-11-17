@@ -70,8 +70,10 @@ class WebInterfaceShutdownMixin:
             )
             return True
 
+        prompt = "Slips analysis has stopped. Stop the web interface? [y/N] "
+        self.main.print(prompt.strip(), log_to_logfiles_only=True)
         print(
-            "Slips analysis has stopped. Stop the web interface? [y/N] ",
+            prompt,
             end="",
             flush=True,
         )

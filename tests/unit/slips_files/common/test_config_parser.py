@@ -1,6 +1,9 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 from unittest.mock import Mock, patch
+import sys
+from pathlib import Path
+
 
 import pytest
 
@@ -8,6 +11,51 @@ from modules.supported_module_names import Modules
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.input_type import InputType
 from tests.module_factory import ModuleFactory
+from slips_files.common.parsers.arg_parser import (ArgumentParser, get_web_port_override)
+
+
+@pytest.mark.parametrize("port", [None, 1, 55002, 65535])
+def test_cli_web_port_overrides_configuration_without_editing_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, port: int | None,
+) -> None:
+    """Share one configuration while each run selects its own web listener.
+
+    Parameters:
+        tmp_path: Isolated configuration directory.
+        monkeypatch: Process arguments and config singleton isolation.
+        port: Requested CLI override, or None to keep the configured port.
+    """
+    _factory = ModuleFactory()
+    config = tmp_path / "slips.yaml"
+    original = "web_interface:\n  enabled: true\n  port: 55000\n"
+    config.write_text(original)
+    arguments = ["slips.py", "-c", str(config), "-m", "-w"]
+    if port is not None:
+        arguments.extend(["--web-port", str(port)])
+    monkeypatch.setattr(sys, "argv", arguments)
+    monkeypatch.setattr(ConfigParser, "_instance", None)
+    parser = ConfigParser()
+    assert parser.web_interface_port == (55000 if port is None else port)
+    assert parser.get_args().web_port == port
+    assert parser.web_interface_enabled()
+    assert config.read_text() == original
+
+
+@pytest.mark.parametrize("port", ["0", "-1", "65536", "abc", "55002.5"])
+def test_invalid_cli_web_port_fails_before_startup(port: str) -> None:
+    """Reject unusable ports in the lightweight and complete argument parsers.
+
+    Parameters:
+        port: Invalid command-line value.
+    """
+    _factory = ModuleFactory()
+    with pytest.raises(SystemExit) as error:
+        get_web_port_override(["--web-port", port])
+    assert error.value.code == 2
+    with patch.object(sys, "argv", ["slips.py", "-w", "--web-port", port]):
+        with pytest.raises(SystemExit) as error:
+            ArgumentParser().parse_arguments()
+    assert error.value.code == 2
 
 
 @pytest.mark.parametrize(
@@ -352,6 +400,18 @@ def test_flow_retention_policy_bounds_settings(
         )
         == expected
     )
+@pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("false", False), (None, False)])
+def test_service_anomaly_feature_flag_is_boolean(value: object, expected: bool) -> None:
+    """Respect explicit boolean settings for the service anomaly detector.
+
+    Parameters:
+        value: Configured feature value or missing-section default.
+        expected: Whether the optional module should start.
+    """
+    _factory = ModuleFactory()
+    parser = object.__new__(ConfigParser)
+    with patch.object(parser, "read_configuration", return_value=value):
+        assert parser.service_anomaly_enabled() is expected
 
 
 @pytest.mark.parametrize("value,expected", [(True, True), (False, False), ("true", False), (None, False)])
@@ -368,3 +428,22 @@ def test_beaconing_feature_flag_is_boolean(value: object, expected: bool) -> Non
         assert parser.beaconing_enabled() is expected
         assert read.call_args.args == ("beaconing", "enabled", True)
     assert factory is not None
+
+
+@pytest.mark.parametrize("enabled", [None, True, False])
+def test_packet_and_service_anomaly_defaults(enabled: bool | None) -> None:
+    """Enable both detectors by default while respecting an explicit opt-out.
+
+    Parameters:
+        enabled: Explicit configuration, or None for a missing section.
+    """
+    _factory = ModuleFactory()
+    from modules.beaconing.settings import PacketTimingSettings
+
+    parser = object.__new__(ConfigParser)
+    parser.config = {} if enabled is None else {
+        "beaconing": {"packet_timing": {"enabled": enabled}},
+        Modules.ANOMALY_DETECTION_SERVICES.value: {"enabled": enabled},
+    }
+    assert parser.service_anomaly_enabled() is (enabled is not False)
+    assert PacketTimingSettings.from_config(parser).enabled is (enabled is not False)

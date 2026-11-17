@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from datetime import datetime
-from distutils.dir_util import copy_tree
 from typing import Set
 import logging
 
@@ -90,6 +89,10 @@ class Main:
             self.prepare_locks_dir()
             if self.conf.enable_local_whitelist():
                 whitelist = self.conf.local_whitelist_path()
+                if self.conf.isolated_analysis:
+                    whitelist = (
+                        self.conf.source_config.get("whitelists") or {}
+                    ).get("local_whitelist_path", "config/whitelist.conf")
                 ensure_local_whitelist(whitelist)
             self.input_type: InputType
             (

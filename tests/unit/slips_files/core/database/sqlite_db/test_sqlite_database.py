@@ -692,6 +692,43 @@ def test_retention_removes_only_deleted_uids_from_web_index(db) -> None:
         ]
 
 
+def test_retention_schema_migrates_existing_run_without_vacuum(
+    tmp_path,
+) -> None:
+    """Upgrade an old flows DB without copying its potentially large file."""
+    _module_factory = ModuleFactory()
+    database_dir = tmp_path / "databases"
+    database_dir.mkdir()
+    path = database_dir / "flows.sqlite"
+    with sqlite3.connect(path) as connection:
+        connection.execute(
+            "CREATE TABLE flows (uid TEXT PRIMARY KEY, flow TEXT, label TEXT, "
+            "profileid TEXT, twid TEXT, aid TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE altflows (uid TEXT PRIMARY KEY, flow TEXT, "
+            "label TEXT, profileid TEXT, twid TEXT, flow_type TEXT)"
+        )
+        connection.execute(
+            "CREATE TABLE alerts (alert_id TEXT PRIMARY KEY, "
+            "alert_time REAL, ip_alerted TEXT)"
+        )
+    migrated = SQLiteDB(MagicMock(), str(tmp_path), 12345)
+
+    assert {"event_time", "retention_class"}.issubset(
+        migrated.get_columns("flows")
+    )
+    assert {"event_time", "retention_class"}.issubset(
+        migrated.get_columns("altflows")
+    )
+    assert migrated.conn.execute("PRAGMA auto_vacuum").fetchone()[0] == 0
+    assert migrated.conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'index' "
+        "AND name = 'evidence_group_cover_idx'"
+    ).fetchone() == (1,)
+    migrated.close()
+
+
 def test_new_run_enables_incremental_vacuum(db) -> None:
     """Return freed pages gradually without blocking active profiling."""
     _module_factory = ModuleFactory()

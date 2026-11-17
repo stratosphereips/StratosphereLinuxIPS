@@ -31,6 +31,26 @@ def isolated_writer_locks(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr("slips_files.common.sqlite_flock.SLIPS_LOCKS_DIR", str(tmp_path / "locks"))
 
 
+def test_existing_archive_preserves_new_ignore_flag(tmp_path: Path) -> None:
+    """Upgrade an existing archive before copying ignored evidence reviews.
+
+    Parameters:
+        tmp_path: Isolated run and archive files.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    history = DetectionHistory(db.conn, str(tmp_path))
+    filename = "detections-2033-05-0001.sqlite"
+    history._open_archive(filename).close()
+    db.execute("ALTER TABLE evidence_reviews ADD COLUMN ignored INTEGER NOT NULL DEFAULT 0")
+    db.execute("INSERT INTO evidence_reviews VALUES ('kept','false_positive','checked',1,1)")
+    with history._open_archive(filename) as archive:
+        assert history._copy_row(archive, "evidence_reviews", "evidence_id", "kept")
+        assert archive.execute("SELECT status,note,ignored FROM evidence_reviews WHERE evidence_id='kept'").fetchone() == (
+            "false_positive", "checked", 1)
+    db.close()
+
+
 @pytest.mark.parametrize("timeout_ms", [17, 20000])
 def test_maintenance_writer_contention_leaves_connection_reusable(
     tmp_path: Path, timeout_ms: int,

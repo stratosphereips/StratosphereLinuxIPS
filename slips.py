@@ -44,6 +44,12 @@ if __name__ == "__main__":
     if status is not None:
         sys.exit(status)
 
+    from managers.process_manager.saved_run_viewer import handle_view_command
+
+    status = handle_view_command(sys.argv[1:])
+    if status is not None:
+        sys.exit(status)
+
     from slips.main import Main
     from slips.daemon import Daemon
 

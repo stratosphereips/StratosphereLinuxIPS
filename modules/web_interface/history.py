@@ -3,25 +3,119 @@
 
 import ipaddress
 import json
+import math
 import re
 import sqlite3
 import time
+from collections import defaultdict, deque
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import psutil
 import redis
+from modules.supported_module_names import Modules
+from slips_files.common.parsers.config_parser import ConfigParser
+from slips_files.common.sqlite_flock import SQLiteFlock
+from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
 
 ERROR_LINE = re.compile(
-    r"^(?P<date>\S+)\s+(?P<clock>\S+)\s+"
+    r"^(?P<date>\d{4}[/-]\d{2}[/-]\d{2})\s+"
+    r"(?P<clock>\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})?)\s+"
     r"\[(?P<module>[^]]+)]\s+(?P<message>.*)$"
 )
+MODULE_LINE = re.compile(r"^\[(?P<module>[^]]+)]\s+(?P<message>.*)$")
+ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+SLIPS_LOG_NOISE = re.compile(
+    r"^(?:Total\s+)?analyzed IPs\b|\[\s*\d+/\d+]\s*\[PID\s+\d+]"
+    r"|^Starting (?:the\s+)?(?:modules?|process(?:es)?)\b"
+    r"|detected as malicious.*following evidence"
+    r"|^\s*- Detected\b|^\s*Weighted Threat Level:"
+    r"|^\[EvidenceHandler] Export(?:ing evidence| streaming)\b",
+    re.IGNORECASE,
+)
+MAX_ERROR_EVENT_CHARS = 256 * 1024
 RAW_METRIC_RETENTION_SECONDS = 24 * 60 * 60
 FLOW_INDEX_BATCH_SIZE = 5000
+FLOW_RECONCILE_BATCH_SIZE = 500
 HOST_SNAPSHOT_INTERVAL_SECONDS = 60
 BACKEND_HEARTBEAT_KEY = "backend_heartbeat_at"
 BACKEND_DISCONNECTED_KEY = "backend_disconnected_at"
+NETWORK_SCOPES_KEY = "current_network_scopes"
+RUNTIME_RESOURCES_KEY = "runtime_resources"
+REDIS_PROCESS_CHECK_SECONDS = 30
+
+
+def network_connection_scope(
+    state: Dict[str, Any],
+    saved: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Find a connection boundary, joining restarts on the same router.
+
+    Parameters:
+        state: Current interface snapshot, including recent changes.
+        saved: Last connection boundary retained in this output folder.
+
+    Returns:
+        Bounded connection checkpoint with an optional start timestamp.
+    """
+    try:
+        changed_at = float(state["changed_at"])
+    except (KeyError, TypeError, ValueError):
+        return {}
+    if not math.isfinite(changed_at):
+        return {}
+    gateway = str(state.get("gateway_mac") or "").lower()
+    result = {
+        "connected": bool(state.get("connected")),
+        "gateway_mac": gateway,
+        "changed_at": changed_at,
+        "start": None,
+    }
+    if not result["connected"]:
+        return result
+    start = changed_at
+    barrier = False
+    history = state.get("history", [])
+    for previous in reversed(
+        history[-10:] if isinstance(history, list) and gateway else []
+    ):
+        if (
+            not isinstance(previous, dict)
+            or not previous.get("connected")
+            or str(previous.get("gateway_mac") or "").lower() != gateway
+        ):
+            barrier = True
+            break
+        try:
+            previous_start = float(previous["changed_at"])
+        except (KeyError, TypeError, ValueError):
+            barrier = True
+            break
+        if not math.isfinite(previous_start) or previous_start > start:
+            barrier = True
+            break
+        start = previous_start
+    if (
+        gateway
+        and isinstance(saved, dict)
+        and saved.get("connected")
+        and saved.get("gateway_mac") == gateway
+    ):
+        try:
+            saved_start = float(saved["start"])
+            saved_change = float(saved["changed_at"])
+            if (
+                math.isfinite(saved_start)
+                and math.isfinite(saved_change)
+                and saved_start <= saved_change <= changed_at
+                and (not barrier or saved_change >= start)
+            ):
+                start = min(start, saved_start)
+        except (KeyError, TypeError, ValueError):
+            pass
+    result["start"] = start
+    return result
 
 
 def connect_history(path: Path, read_only: bool = False) -> sqlite3.Connection:
@@ -95,8 +189,21 @@ def initialize_history(path: Path) -> None:
         "ON runtime_metrics_1m(bucket_ts)",
     )
     with connect_history(path) as connection:
+        indexed_interfaces = connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE name='flow_interfaces'"
+        ).fetchone()
         for statement in statements:
             connection.execute(statement)
+        connection.executescript(
+            "CREATE TABLE IF NOT EXISTS flow_interfaces(uid TEXT PRIMARY KEY,interface TEXT NOT NULL);"
+            "CREATE TRIGGER IF NOT EXISTS flow_interface_cleanup AFTER DELETE ON flow_index "
+            "BEGIN DELETE FROM flow_interfaces WHERE uid=OLD.uid; END;"
+        )
+        if not indexed_interfaces:
+            connection.executemany(
+                "INSERT OR REPLACE INTO metadata(key,value) VALUES (?,?)",
+                [("flow_last_rowid", "0"), ("flow_last_uid", "")],
+            )
         metric_columns = {
             str(row["name"])
             for row in connection.execute(
@@ -122,6 +229,22 @@ def initialize_history(path: Path) -> None:
             connection.execute(
                 "UPDATE flow_index SET source_packets = packets"
             )
+        log_columns = {
+            str(row["name"])
+            for row in connection.execute("PRAGMA table_info(error_events)")
+        }
+        if "source" not in log_columns:
+            connection.execute(
+                "ALTER TABLE error_events ADD COLUMN source TEXT NOT NULL DEFAULT 'errors.log'"
+            )
+            connection.execute(
+                "UPDATE error_events SET source='error.log' WHERE EXISTS "
+                "(SELECT 1 FROM metadata WHERE key='error_log_name' AND value='error.log')"
+            )
+        if "time_source" not in log_columns:
+            connection.execute(
+                "ALTER TABLE error_events ADD COLUMN time_source TEXT NOT NULL DEFAULT 'logged'"
+            )
         connection.execute(
             "INSERT OR REPLACE INTO metadata(key, value) VALUES (?, ?)",
             ("schema_version", "3"),
@@ -137,6 +260,7 @@ class HistoryCollector:
         history_path: Path,
         redis_client: redis.Redis,
         root_pid: int,
+        host_profiles_path: Optional[Path] = None,
     ) -> None:
         """
         Initialize collector state.
@@ -146,16 +270,31 @@ class HistoryCollector:
             history_path: Module-specific history database.
             redis_client: Current run Redis client.
             root_pid: Main Slips process identifier.
+            host_profiles_path: Shared permanent identity store.
         """
         self.output_dir = Path(output_dir)
         self.flows_path = self.output_dir / "databases" / "flows.sqlite"
         self.history_path = history_path
         self.redis = redis_client
         self.root_pid = root_pid
+        self.host_profiles_path = (
+            host_profiles_path
+            or Path(ConfigParser().permanent_dir())
+            / "host_profiles"
+            / "hosts.sqlite"
+        )
         self._processes: Dict[int, psutil.Process] = {}
+        try:
+            self._root_process = psutil.Process(root_pid)
+        except psutil.Error:
+            self._root_process = None
+        self._redis_process: Optional[psutil.Process] = None
+        self._last_redis_process_check = -float("inf")
+        self._process_scope_complete = False
         self._last_flow_count: Optional[int] = None
         self._last_flow_check = time.monotonic()
         self._last_rollup = 0.0
+        self._last_flow_reconcile = 0.0
         self._last_host_snapshot = 0.0
         self._detection_schema_ready = False
         self._redis_detection_backfill_complete = False
@@ -192,9 +331,49 @@ class HistoryCollector:
             The heartbeat timestamp written to history.
         """
         heartbeat = time.time() if now is None else float(now)
+        try:
+            states = self.redis.hgetall("network_states")
+        except redis.RedisError:
+            states = None
+        visits_changed = not getattr(
+            self, "_network_visits_initialized", False
+        )
         with connect_history(self.history_path) as connection:
             self._metadata_set(connection, BACKEND_HEARTBEAT_KEY, heartbeat)
             self._metadata_set(connection, BACKEND_DISCONNECTED_KEY, 0)
+            if isinstance(states, dict) and states:
+                old = self._metadata_get(connection, NETWORK_SCOPES_KEY, "{}")
+                saved = self._json_value(old, {})
+                saved = saved if isinstance(saved, dict) else {}
+                scopes = {}
+                for interface, raw in states.items():
+                    state = self._json_value(raw, {})
+                    if isinstance(state, dict):
+                        scopes[interface] = network_connection_scope(
+                            state, saved.get(interface)
+                        )
+                serialized = json.dumps(scopes, sort_keys=True)
+                if serialized != old:
+                    visits_changed = True
+                    self._metadata_set(
+                        connection, NETWORK_SCOPES_KEY, serialized
+                    )
+        if visits_changed and isinstance(states, dict) and states:
+            from modules.web_interface.network_scope import (
+                record_network_visits,
+            )
+
+            for interface, raw in states.items():
+                state = self._json_value(raw, {})
+                if isinstance(state, dict):
+                    record_network_visits(
+                        self.history_path,
+                        interface,
+                        state,
+                        f"{self.output_dir}:{self.root_pid}",
+                        saved.get(interface),
+                    )
+            self._network_visits_initialized = True
         return heartbeat
 
     def mark_backend_disconnected(self, now: Optional[float] = None) -> float:
@@ -227,6 +406,7 @@ class HistoryCollector:
             last_rowid = int(
                 self._metadata_get(history, "flow_last_rowid", "0")
             )
+            last_uid = self._metadata_get(history, "flow_last_uid", "")
             try:
                 source = sqlite3.connect(
                     f"file:{self.flows_path}?mode=ro",
@@ -234,6 +414,21 @@ class HistoryCollector:
                     timeout=5,
                 )
                 source.row_factory = sqlite3.Row
+                if last_rowid:
+                    checkpoint = source.execute(
+                        "SELECT uid FROM flows WHERE rowid = ?",
+                        (last_rowid,),
+                    ).fetchone()
+                    if checkpoint is None:
+                        # Deleting the tail permits SQLite to reuse rowids.
+                        last_rowid = 0
+                    elif not last_uid:
+                        # Upgrade a pre-retention checkpoint in place.
+                        self._metadata_set(
+                            history, "flow_last_uid", checkpoint["uid"]
+                        )
+                    elif checkpoint["uid"] != last_uid:
+                        last_rowid = 0
                 rows = source.execute(
                     "SELECT rowid, uid, flow, label FROM flows "
                     "WHERE rowid > ? ORDER BY rowid LIMIT ?",
@@ -243,6 +438,7 @@ class HistoryCollector:
             except sqlite3.Error:
                 return 0
             indexed: List[tuple[Any, ...]] = []
+            interfaces: List[tuple[str, str]] = []
             for row in rows:
                 try:
                     flow = json.loads(row["flow"])
@@ -263,6 +459,16 @@ class HistoryCollector:
                         str(row["label"] or ""),
                     )
                 )
+                interfaces.append(
+                    (
+                        str(row["uid"]),
+                        (
+                            ""
+                            if flow.get("interface") == "default"
+                            else str(flow.get("interface") or "")
+                        ),
+                    )
+                )
             if indexed:
                 history.executemany(
                     "INSERT OR REPLACE INTO flow_index "
@@ -271,35 +477,162 @@ class HistoryCollector:
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     indexed,
                 )
+                history.executemany(
+                    "INSERT OR REPLACE INTO flow_interfaces(uid,interface) VALUES (?,?)",
+                    interfaces,
+                )
+                origins = {}
+                for _, _, stamp, source_ip, *_ in indexed:
+                    try:
+                        address = ipaddress.ip_address(source_ip)
+                    except ValueError:
+                        continue
+                    if (
+                        not math.isfinite(stamp)
+                        or address.is_unspecified
+                        or address.is_multicast
+                    ):
+                        continue
+                    origins[source_ip] = max(
+                        stamp, origins.get(source_ip, stamp)
+                    )
+                history.executemany(
+                    "INSERT OR IGNORE INTO host_snapshots(ip,observed_at,data) VALUES (?,?,?)",
+                    [
+                        (
+                            ip,
+                            stamp,
+                            json.dumps(
+                                {
+                                    "ip": ip,
+                                    "scope": (
+                                        "local"
+                                        if ipaddress.ip_address(ip).is_private
+                                        else "public"
+                                    ),
+                                }
+                            ),
+                        )
+                        for ip, stamp in origins.items()
+                    ],
+                )
             if rows:
                 self._metadata_set(
                     history, "flow_last_rowid", rows[-1]["rowid"]
                 )
+                self._metadata_set(history, "flow_last_uid", rows[-1]["uid"])
             self._metadata_set(history, "flow_index_updated_at", time.time())
             return len(indexed)
 
-    def _live_processes(self) -> List[psutil.Process]:
-        """
-        Resolve the current Slips process tree.
+    def reconcile_flow_index(self) -> int:
+        """Remove a bounded batch of indexes whose raw flows expired.
 
         Returns:
-            Unique live processes rooted at the main Slips PID.
+            Number of orphaned index rows removed in this pass.
         """
+        if not self.flows_path.exists():
+            return 0
+        with connect_history(self.history_path) as history:
+            last_uid = self._metadata_get(
+                history, "flow_reconcile_last_uid", ""
+            )
+            rows = history.execute(
+                "SELECT uid FROM flow_index WHERE uid > ? "
+                "ORDER BY uid LIMIT ?",
+                (last_uid, FLOW_RECONCILE_BATCH_SIZE),
+            ).fetchall()
+            if not rows:
+                self._metadata_set(history, "flow_reconcile_last_uid", "")
+                return 0
+            uids = [str(row["uid"]) for row in rows]
+            placeholders = ",".join("?" for _ in uids)
+            try:
+                with sqlite3.connect(
+                    f"file:{self.flows_path}?mode=ro",
+                    uri=True,
+                    timeout=5,
+                ) as source:
+                    present = {
+                        str(row[0])
+                        for row in source.execute(
+                            f"SELECT uid FROM flows WHERE uid IN "
+                            f"({placeholders})",
+                            uids,
+                        ).fetchall()
+                    }
+            except sqlite3.Error:
+                return 0
+            missing = [uid for uid in uids if uid not in present]
+            if missing:
+                missing_placeholders = ",".join("?" for _ in missing)
+                history.execute(
+                    f"DELETE FROM flow_index WHERE uid IN "
+                    f"({missing_placeholders})",
+                    missing,
+                )
+            self._metadata_set(history, "flow_reconcile_last_uid", uids[-1])
+            return len(missing)
+
+    def _live_processes(self) -> List[psutil.Process]:
+        """Resolve this run's Slips and Redis process trees, including Zeek.
+
+        Returns:
+            Unique live processes; inaccessible trees mark the sample partial.
+        """
+        self._process_scope_complete = True
+        root = self._root_process
         try:
-            root = psutil.Process(self.root_pid)
-            candidates = [root, *root.children(recursive=True)]
+            running = root is not None and root.is_running()
         except psutil.Error:
-            candidates = []
+            running = False
+        if not running:
+            self._process_scope_complete = False
+            return []
+        now = time.monotonic()
+        if now - self._last_redis_process_check >= REDIS_PROCESS_CHECK_SECONDS:
+            self._last_redis_process_check = now
+            try:
+                server = self.redis.info("server")
+                pid = int(server["process_id"])
+                self._redis_process = psutil.Process(pid) if pid > 0 else None
+            except (
+                redis.RedisError,
+                psutil.Error,
+                KeyError,
+                TypeError,
+                ValueError,
+            ):
+                self._redis_process = None
+        roots = [root]
+        if self._redis_process is not None:
+            roots.append(self._redis_process)
+        else:
+            self._process_scope_complete = False
         unique: Dict[int, psutil.Process] = {}
-        for process in candidates:
+        for owner in roots:
             try:
                 if (
-                    process.is_running()
-                    and process.status() != psutil.STATUS_ZOMBIE
+                    not owner.is_running()
+                    or owner.status() == psutil.STATUS_ZOMBIE
                 ):
-                    unique[process.pid] = process
+                    self._process_scope_complete = False
+                    continue
+                unique[owner.pid] = owner
+                descendants = owner.children(recursive=True)
             except psutil.Error:
+                self._process_scope_complete = False
                 continue
+            for process in descendants:
+                try:
+                    if (
+                        process.is_running()
+                        and process.status() != psutil.STATUS_ZOMBIE
+                    ):
+                        unique[process.pid] = process
+                except psutil.AccessDenied:
+                    self._process_scope_complete = False
+                except psutil.Error:
+                    continue
         return list(unique.values())
 
     def sample_metrics(self) -> None:
@@ -309,10 +642,16 @@ class HistoryCollector:
         live_pids = set()
         for process in self._live_processes():
             live_pids.add(process.pid)
-            cached = self._processes.setdefault(process.pid, process)
+            cached = self._processes.get(process.pid)
+            if cached is None or cached != process:
+                cached = process
+                self._processes[process.pid] = process
             try:
-                cpu_total += cached.cpu_percent(interval=None)
-                memory_bytes += cached.memory_info().rss
+                with cached.oneshot():
+                    cpu_total += cached.cpu_percent(interval=None)
+                    memory_bytes += cached.memory_info().rss
+            except psutil.AccessDenied:
+                self._process_scope_complete = False
             except psutil.Error:
                 continue
         self._processes = {
@@ -320,7 +659,9 @@ class HistoryCollector:
             for pid, process in self._processes.items()
             if pid in live_pids
         }
-        cpu_percent = cpu_total / max(psutil.cpu_count() or 1, 1)
+        cpu_count = max(psutil.cpu_count() or 1, 1)
+        cpu_percent = cpu_total / cpu_count
+        total_memory = max(psutil.virtual_memory().total, 1)
         try:
             current_count = int(
                 self.redis.get("processed_flows_by_profiler_so_far") or 0
@@ -337,6 +678,23 @@ class HistoryCollector:
         self._last_flow_count = current_count
         self._last_flow_check = now_monotonic
         with connect_history(self.history_path) as connection:
+            self._metadata_set(
+                connection,
+                RUNTIME_RESOURCES_KEY,
+                json.dumps(
+                    {
+                        "sampled_at": time.time(),
+                        "root_pid": self.root_pid,
+                        "cpu_percent": cpu_percent,
+                        "memory_percent": memory_bytes / total_memory * 100,
+                        "memory_bytes": memory_bytes,
+                        "total_memory_bytes": total_memory,
+                        "cpu_count": cpu_count,
+                        "process_count": len(live_pids),
+                        "complete": self._process_scope_complete,
+                    }
+                ),
+            )
             connection.execute(
                 "INSERT OR REPLACE INTO runtime_metrics_1s "
                 "(ts, cpu_percent, memory_mb, flows_per_second, flow_delta) "
@@ -354,11 +712,116 @@ class HistoryCollector:
     def _error_timestamp(date: str, clock: str) -> float:
         """Convert a Slips log timestamp to Unix time."""
         try:
-            return datetime.strptime(
-                f"{date} {clock}", "%Y/%m/%d %H:%M:%S.%f"
+            return datetime.fromisoformat(
+                f"{date.replace('/', '-')} {clock}"
             ).timestamp()
         except ValueError:
-            return time.time()
+            return 0.0
+
+    @staticmethod
+    def _store_error_event(
+        connection: sqlite3.Connection,
+        event_id: Optional[int],
+        event_time: float,
+        module: str,
+        message: str,
+        raw_text: str,
+        source: str = "errors.log",
+        time_source: str = "logged",
+    ) -> int:
+        """Insert a log event or extend its raw multiline source.
+
+        Parameters:
+            connection: Writable history database connection.
+            event_id: Existing event ID when extending an earlier block.
+            event_time: Timestamp from the event header.
+            module: Module in the event header.
+            message: Summary from the event header.
+            raw_text: Header and retained continuation lines.
+            source: Original log filename.
+            time_source: Logged, observed, or unavailable timestamp.
+
+        Returns:
+            Stored event ID.
+        """
+        if event_id is not None:
+            connection.execute(
+                "UPDATE error_events SET line = ? WHERE id = ?",
+                (raw_text, event_id),
+            )
+            return event_id
+        cursor = connection.execute(
+            "INSERT INTO error_events "
+            "(event_time, module, message, line, source, time_source) VALUES (?, ?, ?, ?, ?, ?)",
+            (event_time, module, message, raw_text, source, time_source),
+        )
+        return int(cursor.lastrowid)
+
+    @staticmethod
+    def _backfill_error_continuations(
+        connection: sqlite3.Connection, error_path: Path
+    ) -> int:
+        """Attach existing traceback lines to imported header-only events.
+
+        Parameters:
+            connection: Writable history database connection.
+            error_path: Current Slips error log.
+
+        Returns:
+            Number of existing events repaired.
+        """
+        matching_ids: dict[str, deque[Optional[int]]] = defaultdict(deque)
+        for row in connection.execute(
+            "SELECT id, line FROM error_events WHERE source=? ORDER BY id",
+            (error_path.name,),
+        ):
+            raw_text = str(row["line"])
+            header = raw_text.split("\n", 1)[0]
+            matching_ids[header].append(
+                int(row["id"]) if "\n" not in raw_text else None
+            )
+        if not matching_ids:
+            return 0
+
+        repaired = 0
+        current_id: Optional[int] = None
+        current_lines: list[str] = []
+        current_size = 0
+        try:
+            with error_path.open(
+                "r", encoding="utf-8", errors="replace"
+            ) as handle:
+                for line in handle:
+                    header = line.rstrip()
+                    if ERROR_LINE.match(header):
+                        if current_id is not None and len(current_lines) > 1:
+                            connection.execute(
+                                "UPDATE error_events SET line = ? WHERE id = ?",
+                                ("\n".join(current_lines), current_id),
+                            )
+                            repaired += 1
+                        ids = matching_ids.get(header)
+                        current_id = ids.popleft() if ids else None
+                        current_lines = (
+                            [header] if current_id is not None else []
+                        )
+                        current_size = len(header)
+                    elif (
+                        current_id is not None
+                        and current_size < MAX_ERROR_EVENT_CHARS
+                    ):
+                        continuation = line.rstrip("\r\n")
+                        current_lines.append(continuation)
+                        current_size += len(continuation) + 1
+        except OSError:
+            return repaired
+        if current_id is not None and len(current_lines) > 1:
+            connection.execute(
+                "UPDATE error_events SET line = ? WHERE id = ?",
+                ("\n".join(current_lines), current_id),
+            )
+            repaired += 1
+        return repaired
 
     def tail_errors(self) -> int:
         """
@@ -370,24 +833,100 @@ class HistoryCollector:
         canonical = self.output_dir / "errors.log"
         legacy = self.output_dir / "error.log"
         error_path = canonical if canonical.exists() else legacy
+        return self._tail_log(error_path)
+
+    def tail_slips(self) -> int:
+        """Archive useful slips.log messages without detection or startup noise.
+
+        Returns:
+            Number of newly archived events.
+        """
+        return self._tail_log(self.output_dir / "slips.log")
+
+    def _tail_log(self, error_path: Path) -> int:
+        """Read one bounded log batch with independent rotation checkpoints.
+
+        Parameters:
+            error_path: Runtime or error log in this run's output directory.
+
+        Returns:
+            Number of newly archived events.
+        """
         if not error_path.exists():
             return 0
+        runtime = error_path.name == "slips.log"
         offset_key = f"error_offset:{error_path.name}"
+        last_event_key = f"error_last_event_id:{error_path.name}"
         with connect_history(self.history_path) as connection:
+            backfill_key = f"error_multiline_backfilled:{error_path.name}"
+            if (
+                not runtime
+                and self._metadata_get(connection, backfill_key, "0") != "1"
+            ):
+                self._backfill_error_continuations(connection, error_path)
+                self._metadata_set(connection, backfill_key, 1)
             offset = int(self._metadata_get(connection, offset_key, "0"))
             try:
-                if error_path.stat().st_size < offset:
+                stat = error_path.stat()
+                inode_key = f"error_inode:{error_path.name}"
+                inode = f"{stat.st_dev}:{stat.st_ino}"
+                if (
+                    stat.st_size < offset
+                    or self._metadata_get(connection, inode_key, inode)
+                    != inode
+                ):
                     offset = 0
+                    self._metadata_set(
+                        connection, f"log_initial_size:{error_path.name}", 0
+                    )
+                self._metadata_set(connection, inode_key, inode)
+                initial_size_key = f"log_initial_size:{error_path.name}"
+                initial_size = int(
+                    self._metadata_get(
+                        connection, initial_size_key, str(stat.st_size)
+                    )
+                )
+                self._metadata_set(connection, initial_size_key, initial_size)
             except OSError:
                 return 0
-            events: List[tuple[Any, ...]] = []
+            active_id: Optional[int] = None
+            active_event: Optional[tuple[float, str, str]] = None
+            active_lines: list[str] = []
+            active_size = 0
+            active_time_source = "logged"
+            dirty = False
+            if offset:
+                checkpoint = self._metadata_get(connection, last_event_key, "")
+                previous_id = int(checkpoint or 0)
+                if not checkpoint:
+                    latest = connection.execute(
+                        "SELECT id FROM error_events WHERE source=? ORDER BY id DESC LIMIT 1",
+                        (error_path.name,),
+                    ).fetchone()
+                    previous_id = int(latest["id"]) if latest else 0
+                previous = connection.execute(
+                    "SELECT id, event_time, module, message, line, time_source "
+                    "FROM error_events WHERE id = ? AND source = ?",
+                    (previous_id, error_path.name),
+                ).fetchone()
+                if previous is not None:
+                    active_id = int(previous["id"])
+                    active_event = (
+                        float(previous["event_time"]),
+                        str(previous["module"]),
+                        str(previous["message"]),
+                    )
+                    active_lines = str(previous["line"]).split("\n")
+                    active_size = len(str(previous["line"]))
+                    active_time_source = str(previous["time_source"])
+            event_count = 0
             new_offset = offset
             try:
                 with error_path.open(
                     "r", encoding="utf-8", errors="replace"
                 ) as handle:
                     handle.seek(offset)
-                    while True:
+                    for _ in range(FLOW_INDEX_BATCH_SIZE):
                         line_start = handle.tell()
                         line = handle.readline()
                         if not line:
@@ -396,31 +935,101 @@ class HistoryCollector:
                             new_offset = line_start
                             break
                         new_offset = handle.tell()
-                        match = ERROR_LINE.match(line.rstrip())
-                        if not match:
-                            continue
-                        events.append(
-                            (
-                                self._error_timestamp(
-                                    match.group("date"),
-                                    match.group("clock"),
-                                ),
-                                match.group("module"),
-                                match.group("message"),
-                                line.rstrip(),
-                            )
+                        header = (
+                            ANSI_ESCAPE.sub("", line.rstrip())
+                            if runtime
+                            else line.rstrip()
                         )
+                        match = ERROR_LINE.match(header)
+                        daemon_match = (
+                            MODULE_LINE.match(header)
+                            if runtime and not match
+                            else None
+                        )
+                        if (
+                            runtime
+                            and not match
+                            and not daemon_match
+                            and re.match(
+                                r"^(?:Warning|Error|Traceback)\b", header
+                            )
+                        ):
+                            daemon_match = MODULE_LINE.match(
+                                f"[{Modules.MAIN.value}] {header}"
+                            )
+                        if match or daemon_match:
+                            if active_event is not None and dirty:
+                                active_id = self._store_error_event(
+                                    connection,
+                                    active_id,
+                                    *active_event,
+                                    "\n".join(active_lines),
+                                    error_path.name,
+                                    active_time_source,
+                                )
+                            parsed = match or daemon_match
+                            if runtime and SLIPS_LOG_NOISE.search(
+                                parsed.group("message")
+                            ):
+                                active_id = None
+                                active_event = None
+                                active_lines = []
+                                dirty = False
+                                continue
+                            if match:
+                                event_time = self._error_timestamp(
+                                    match.group("date"), match.group("clock")
+                                )
+                                active_time_source = (
+                                    "logged" if event_time else "unknown"
+                                )
+                                event_time = event_time or time.time()
+                            else:
+                                event_time = time.time()
+                                active_time_source = (
+                                    "unknown"
+                                    if line_start < initial_size
+                                    else "observed"
+                                )
+                            active_event = (
+                                event_time,
+                                parsed.group("module"),
+                                parsed.group("message"),
+                            )
+                            active_id = None
+                            active_lines = [line.rstrip()]
+                            active_size = len(header)
+                            dirty = True
+                            event_count += 1
+                        elif (
+                            active_event is not None
+                            and active_size < MAX_ERROR_EVENT_CHARS
+                            and not (
+                                runtime and SLIPS_LOG_NOISE.search(header)
+                            )
+                        ):
+                            continuation = line.rstrip("\r\n")
+                            active_lines.append(continuation)
+                            active_size += len(continuation) + 1
+                            dirty = True
             except OSError:
                 return 0
-            if events:
-                connection.executemany(
-                    "INSERT INTO error_events "
-                    "(event_time, module, message, line) VALUES (?, ?, ?, ?)",
-                    events,
+            if active_event is not None and dirty:
+                active_id = self._store_error_event(
+                    connection,
+                    active_id,
+                    *active_event,
+                    "\n".join(active_lines),
+                    error_path.name,
+                    active_time_source,
                 )
+            self._metadata_set(connection, last_event_key, active_id or 0)
             self._metadata_set(connection, offset_key, new_offset)
-            self._metadata_set(connection, "error_log_name", error_path.name)
-            return len(events)
+            if not runtime:
+                self._metadata_set(
+                    connection, "error_log_name", error_path.name
+                )
+            return event_count
 
     def snapshot_hosts(self) -> int:
         """
@@ -474,6 +1083,34 @@ class HistoryCollector:
         except (redis.RedisError, TypeError, ValueError):
             pass
 
+        try:
+            raw_states = self.redis.hgetall("network_states")
+        except redis.RedisError:
+            raw_states = {}
+        states = []
+        for raw in raw_states.values() if isinstance(raw_states, dict) else []:
+            state = self._json_value(raw, {})
+            if isinstance(state, dict):
+                states.append(state)
+        run_name = f"{self.output_dir}:{self.root_pid}"
+        networks = [
+            HostProfileStore.network_id_for_state(state, run_name)
+            for state in states
+        ]
+        networks.append(f"run:{run_name}")
+        try:
+            durable = HostProfileStore.identities_for_ips(
+                self.host_profiles_path,
+                [ip for ip, _, _, _ in profile_data],
+                networks,
+                {
+                    ip: fields.get("MAC", "")
+                    for ip, fields, _, _ in profile_data
+                },
+            )
+        except (OSError, sqlite3.Error):
+            durable = {}
+
         rows: List[tuple[Any, ...]] = []
         observed_at = time.time()
         for ip, fields, dns, twid in profile_data:
@@ -488,8 +1125,14 @@ class HistoryCollector:
             data = {
                 "ip": ip,
                 "scope": scope,
-                "hostname": fields.get("host_name", ""),
-                "mac": fields.get("MAC", ""),
+                "hostname": durable.get(ip, {}).get("name")
+                or (
+                    ""
+                    if durable.get(ip, {}).get("identity_changed")
+                    else fields.get("host_name", "")
+                ),
+                "hostname_source": durable.get(ip, {}).get("source", ""),
+                "mac": durable.get(ip, {}).get("mac") or fields.get("MAC", ""),
                 "mac_vendor": fields.get("MAC_vendor", ""),
                 "threat_level": fields.get("threat_level", "info"),
                 "max_threat_level": fields.get("max_threat_level", "info"),
@@ -512,8 +1155,133 @@ class HistoryCollector:
                     "(ip, observed_at, data) VALUES (?, ?, ?)",
                     rows,
                 )
+        self.restore_host_inventory(self.history_path, self.flows_path)
         self._last_host_snapshot = observed_at
         return len(rows)
+
+    @classmethod
+    def restore_host_inventory(
+        cls, history_path: Path, sqlite_path: Path, complete: bool = False
+    ) -> int:
+        """Recover host identities from retained findings using bounded checkpoints.
+
+        Parameters:
+            history_path: Run-specific web history database.
+            sqlite_path: Read-only run database containing evidence and alerts.
+            complete: Process all records present at startup instead of one batch.
+
+        Returns:
+            Number of source records examined, including already known hosts.
+        """
+        if not sqlite_path.exists():
+            return 0
+        stat = sqlite_path.stat()
+        source_id = f"{stat.st_dev}:{stat.st_ino}"
+        processed = 0
+        with (
+            sqlite3.connect(
+                f"file:{sqlite_path}?mode=ro", uri=True, timeout=5
+            ) as source,
+            connect_history(history_path) as history,
+        ):
+            source.row_factory = sqlite3.Row
+            empty = not history.execute(
+                "SELECT 1 FROM host_snapshots LIMIT 1"
+            ).fetchone()
+            for table, id_column, ip_column, time_column in (
+                ("evidence", "evidence_id", "profile_ip", "evidence_time"),
+                ("alerts", "alert_id", "ip_alerted", "alert_time"),
+            ):
+                columns = {
+                    str(row[1])
+                    for row in source.execute(f"PRAGMA table_info({table})")
+                }
+                if not {id_column, ip_column, time_column} <= columns:
+                    continue
+                key = f"host_inventory_checkpoint:{table}"
+                checkpoint = cls._json_value(
+                    cls._metadata_get(history, key, "{}"), {}
+                )
+                checkpoint = checkpoint if isinstance(checkpoint, dict) else {}
+                last = int(checkpoint.get("rowid", 0))
+                upper = int(
+                    source.execute(
+                        f"SELECT MAX(rowid) FROM {table}"
+                    ).fetchone()[0]
+                    or 0
+                )
+                if (
+                    (empty and complete)
+                    or checkpoint.get("source") != source_id
+                    or upper < last
+                ):
+                    last = 0
+                if last:
+                    row = source.execute(
+                        f"SELECT {id_column} FROM {table} WHERE rowid=?",
+                        (last,),
+                    ).fetchone()
+                    if row and str(row[0]) != checkpoint.get("id"):
+                        last = 0
+                while last < upper:
+                    rows = source.execute(
+                        f"SELECT rowid AS source_rowid,{id_column} AS record_id,"
+                        f"{ip_column} AS ip,{time_column} AS observed_at FROM {table} "
+                        "WHERE rowid>? AND rowid<=? ORDER BY rowid LIMIT ?",
+                        (last, upper, FLOW_INDEX_BATCH_SIZE),
+                    ).fetchall()
+                    if not rows:
+                        break
+                    recovered: Dict[str, tuple[float, str]] = {}
+                    for row in rows:
+                        try:
+                            address = ipaddress.ip_address(str(row["ip"]))
+                        except ValueError:
+                            continue
+                        stamp = cls._event_timestamp(row["observed_at"])
+                        if not math.isfinite(stamp):
+                            continue
+                        ip = str(row["ip"])
+                        if ip in recovered and recovered[ip][0] >= stamp:
+                            continue
+                        recovered[ip] = (
+                            stamp,
+                            json.dumps(
+                                {
+                                    "ip": ip,
+                                    "scope": (
+                                        "local"
+                                        if address.is_private
+                                        else "public"
+                                    ),
+                                }
+                            ),
+                        )
+                    history.executemany(
+                        "INSERT INTO host_snapshots(ip,observed_at,data) VALUES (?,?,?) "
+                        "ON CONFLICT(ip) DO UPDATE SET observed_at=MAX(host_snapshots.observed_at,excluded.observed_at)",
+                        [
+                            (ip, stamp, data)
+                            for ip, (stamp, data) in recovered.items()
+                        ],
+                    )
+                    last = int(rows[-1]["source_rowid"])
+                    cls._metadata_set(
+                        history,
+                        key,
+                        json.dumps(
+                            {
+                                "source": source_id,
+                                "rowid": last,
+                                "id": str(rows[-1]["record_id"]),
+                            }
+                        ),
+                    )
+                    history.commit()
+                    processed += len(rows)
+                    if not complete:
+                        break
+        return processed
 
     @staticmethod
     def _json_value(value: Any, default: Any) -> Any:
@@ -677,6 +1445,7 @@ class HistoryCollector:
             Number of evidence records observed.
         """
         count = 0
+        deleted = self._deleted_record_ids(connection)
         try:
             evidence_keys = list(
                 self.redis.scan_iter(match="profile_*_timewindow*_evidence")
@@ -699,6 +1468,23 @@ class HistoryCollector:
                 if not isinstance(evidence, dict):
                     continue
                 canonical_id = str(evidence.get("id") or evidence_id)
+                if (
+                    getattr(self, "_archive_tombstones_available", False)
+                    and connection.execute(
+                        "SELECT 1 FROM history_archived_ids WHERE entity='evidence' AND record_id=?",
+                        (canonical_id,),
+                    ).fetchone()
+                ):
+                    continue
+                cutoff = getattr(self, "_active_history_cutoff", None)
+                if (
+                    cutoff is not None
+                    and self._event_timestamp(evidence.get("timestamp"))
+                    < cutoff
+                ):
+                    continue
+                if ("evidence", canonical_id) in deleted:
+                    continue
                 profile = evidence.get("profile", {})
                 profile_ip = (
                     str(profile.get("ip", ""))
@@ -751,20 +1537,50 @@ class HistoryCollector:
                 if not isinstance(alerts, dict):
                     continue
                 for alert_id, evidence_ids in alerts.items():
+                    if ("alert", str(alert_id)) in deleted:
+                        continue
                     connection.executemany(
                         "INSERT OR IGNORE INTO alert_evidence "
                         "(alert_id, evidence_id) VALUES (?, ?)",
                         [
                             (str(alert_id), evidence_id)
                             for evidence_id in self._list_value(evidence_ids)
+                            if ("evidence", evidence_id) not in deleted
                         ],
                     )
         except redis.RedisError:
             pass
         return count
 
+    @staticmethod
+    def _deleted_record_ids(
+        connection: sqlite3.Connection,
+    ) -> set[tuple[str, str]]:
+        """Read deletion tombstones before importing older detection sources.
+
+        Parameters:
+            connection: Current run flow database.
+
+        Returns:
+            Deleted entity and record ID pairs.
+        """
+        if not connection.execute(
+            "SELECT 1 FROM sqlite_master WHERE type = 'table' "
+            "AND name = 'review_deletions'"
+        ).fetchone():
+            return set()
+        return {
+            (str(row[0]), str(row[1]))
+            for row in connection.execute(
+                "SELECT entity, record_id FROM review_deletions"
+            ).fetchall()
+        }
+
     def _backfill_alert_record(
-        self, connection: sqlite3.Connection, record: Dict[str, Any]
+        self,
+        connection: sqlite3.Connection,
+        record: Dict[str, Any],
+        deleted: Optional[set[tuple[str, str]]] = None,
     ) -> None:
         """
         Copy one IDMEF event or incident into durable detection tables.
@@ -772,9 +1588,29 @@ class HistoryCollector:
         Parameters:
             connection: Writable flows.sqlite connection.
             record: Parsed alerts.json line.
+            deleted: Tombstones already loaded for this backfill batch.
         """
         record_id = str(record.get("ID", ""))
         if not record_id:
+            return
+        if deleted is None:
+            deleted = self._deleted_record_ids(connection)
+        entity = "alert" if record.get("Status") == "Incident" else "evidence"
+        if (
+            getattr(self, "_archive_tombstones_available", False)
+            and connection.execute(
+                "SELECT 1 FROM history_archived_ids WHERE entity=? AND record_id=?",
+                ("alerts" if entity == "alert" else "evidence", record_id),
+            ).fetchone()
+        ):
+            return
+        cutoff = getattr(self, "_active_history_cutoff", None)
+        if (
+            cutoff is not None
+            and self._event_timestamp(record.get("CreateTime")) < cutoff
+        ):
+            return
+        if (entity, record_id) in deleted:
             return
         note = self._json_value(record.get("Note"), {})
         source = record.get("Source") or [{}]
@@ -797,9 +1633,10 @@ class HistoryCollector:
                 "accumulated_ratl, risk_weight) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
                 "ON CONFLICT(alert_id) DO UPDATE SET "
-                "accumulated_threat_level = excluded.accumulated_threat_level, "
-                "accumulated_ratl = excluded.accumulated_ratl, "
-                "risk_weight = excluded.risk_weight",
+                "accumulated_threat_level = COALESCE(alerts.accumulated_threat_level, "
+                "excluded.accumulated_threat_level), "
+                "accumulated_ratl = COALESCE(alerts.accumulated_ratl, excluded.accumulated_ratl), "
+                "risk_weight = COALESCE(alerts.risk_weight, excluded.risk_weight)",
                 (
                     record_id,
                     self._event_timestamp(record.get("CreateTime")),
@@ -819,6 +1656,7 @@ class HistoryCollector:
                 [
                     (record_id, evidence_id)
                     for evidence_id in self._list_value(record.get("CorrelID"))
+                    if ("evidence", evidence_id) not in deleted
                 ],
             )
             return
@@ -835,11 +1673,11 @@ class HistoryCollector:
             "source_module, accumulated_threat_level, accumulated_ratl) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) "
             "ON CONFLICT(evidence_id) DO UPDATE SET "
-            "data = excluded.data, "
             "source_module = COALESCE(NULLIF(excluded.source_module, ''), "
             "evidence.source_module), "
-            "accumulated_threat_level = excluded.accumulated_threat_level, "
-            "accumulated_ratl = excluded.accumulated_ratl",
+            "accumulated_threat_level = COALESCE(evidence.accumulated_threat_level, "
+            "excluded.accumulated_threat_level), "
+            "accumulated_ratl = COALESCE(evidence.accumulated_ratl, excluded.accumulated_ratl)",
             (
                 record_id,
                 self._event_timestamp(record.get("StartTime")),
@@ -883,6 +1721,15 @@ class HistoryCollector:
             offset = int(
                 self._metadata_get(history, "alerts_json_offset", "0")
             )
+            stat = alerts_path.stat()
+            inode = f"{stat.st_dev}:{stat.st_ino}"
+            if (
+                self._metadata_get(history, "alerts_json_inode", inode)
+                != inode
+            ):
+                offset = 0
+            self._metadata_set(history, "alerts_json_inode", inode)
+        deleted = self._deleted_record_ids(connection)
         try:
             if alerts_path.stat().st_size < offset:
                 offset = 0
@@ -890,12 +1737,13 @@ class HistoryCollector:
             return 0
         count = 0
         new_offset = offset
+        deadline = time.monotonic() + 0.05
         try:
             with alerts_path.open(
                 "r", encoding="utf-8", errors="replace"
             ) as handle:
                 handle.seek(offset)
-                while count < maximum:
+                while count < maximum and time.monotonic() < deadline:
                     line_start = handle.tell()
                     line = handle.readline()
                     if not line:
@@ -909,7 +1757,9 @@ class HistoryCollector:
                     except ValueError:
                         continue
                     if isinstance(record, dict):
-                        self._backfill_alert_record(connection, record)
+                        self._backfill_alert_record(
+                            connection, record, deleted
+                        )
                         count += 1
         except OSError:
             return 0
@@ -927,8 +1777,27 @@ class HistoryCollector:
         """
         if not self.flows_path.exists():
             return 0
+        policy = ConfigParser().detection_history_policy()
+        live = self.redis.hget("analysis", "input_type") in {
+            "interface",
+            "stdin",
+            "cyst",
+        }
+        self._active_history_cutoff = (
+            time.time() - int(policy["active_days"]) * 86400
+            if live and policy["enabled"]
+            else None
+        )
         try:
-            with sqlite3.connect(self.flows_path, timeout=20) as connection:
+            with (
+                SQLiteFlock("sqlite_db", self.root_pid).acquire(),
+                sqlite3.connect(self.flows_path, timeout=0) as connection,
+            ):
+                self._archive_tombstones_available = bool(
+                    connection.execute(
+                        "SELECT 1 FROM sqlite_master WHERE name='history_archived_ids'"
+                    ).fetchone()
+                )
                 schema_upgraded = False
                 if not self._detection_schema_ready:
                     schema_upgraded = self._detection_schema(connection)
@@ -949,7 +1818,7 @@ class HistoryCollector:
                     else:
                         durable_evidence = int(
                             connection.execute(
-                                "SELECT COUNT(*) FROM evidence"
+                                "SELECT EXISTS(SELECT 1 FROM evidence LIMIT 1)"
                             ).fetchone()[0]
                         )
                         redis_available = self._redis_belongs_to_run()
@@ -1024,6 +1893,35 @@ class HistoryCollector:
 
         return len(rows)
 
+    def prune_operational_history(self, now: float) -> int:
+        """Expire bounded batches of old live-run operational records.
+
+        Parameters:
+            now: Current Unix timestamp.
+
+        Returns:
+            Number of deleted records.
+        """
+        policy = ConfigParser().detection_history_policy()
+        if not policy["enabled"] or self.redis.hget(
+            "analysis", "input_type"
+        ) not in {"interface", "stdin", "cyst"}:
+            return 0
+        cutoff = now - int(policy["active_days"]) * 86400
+        count = 0
+        with connect_history(self.history_path) as connection:
+            for table, timestamp in (
+                ("error_events", "event_time"),
+                ("runtime_metrics_1m", "bucket_ts"),
+                ("host_snapshots", "observed_at"),
+            ):
+                count += connection.execute(
+                    f"DELETE FROM {table} WHERE rowid IN (SELECT rowid FROM {table} "
+                    f"WHERE {timestamp}<? ORDER BY {timestamp} LIMIT ?)",
+                    (cutoff, FLOW_INDEX_BATCH_SIZE),
+                ).rowcount
+        return count
+
     def collect_once(self) -> None:
         """Run one bounded collector iteration."""
         now = time.time()
@@ -1033,8 +1931,13 @@ class HistoryCollector:
             self.sample_storage()
             self._last_host_snapshot = now
         self.index_new_flows()
+        if now - self._last_flow_reconcile >= 60:
+            self.reconcile_flow_index()
+            self._last_flow_reconcile = now
         self.sample_metrics()
         self.tail_errors()
+        self.tail_slips()
         if now - self._last_rollup >= 60:
             self.rollup_metrics()
+            self.prune_operational_history(now)
             self._last_rollup = now

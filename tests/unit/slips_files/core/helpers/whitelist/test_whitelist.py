@@ -271,6 +271,32 @@ def test_alert_type_scoped_ip_rule(
     )
 
 
+@pytest.mark.parametrize("rule_type", ["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"])
+@pytest.mark.parametrize("reported_type", ["TLS_PROVIDER_IMPERSONATION", "INCOMPATIBLE_CN"])
+def test_provider_impersonation_whitelist_alias(rule_type: str, reported_type: str) -> None:
+    """Keep existing scoped whitelist rules working after the detector rename.
+
+    Parameters:
+        rule_type: Current or legacy evidence name in the whitelist file.
+        reported_type: Evidence name received from a detector or peer.
+    """
+    whitelist = ModuleFactory().create_whitelist_obj()
+    whitelist.parser.call_handler(whitelist.parser.parse_line(
+        f"ip,192.0.2.10,dst,alerts,{rule_type}"
+    ))
+    rules = whitelist.parser.whitelisted_ips
+    whitelist.bloom_filters.ips = rules
+    whitelist.db.is_whitelisted.side_effect = lambda key, type_: (
+        json.dumps(rules[key]) if key in rules else None
+    )
+    assert whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", Direction.DST, "alerts", evidence_type=reported_type
+    )
+    assert not whitelist.ip_analyzer.is_whitelisted(
+        "192.0.2.10", Direction.DST, "alerts", evidence_type="ARP_SCAN"
+    )
+
+
 def test_new_scoped_rule_matches_before_bloom_refresh() -> None:
     """Use the current Redis rule while a worker's filter is still stale."""
     whitelist = ModuleFactory().create_whitelist_obj()
@@ -1538,6 +1564,30 @@ def test_is_ip_asn_in_org_asn(
 
     result = whitelist.org_analyzer.is_ip_asn_in_org_asn(ip, org)
     assert result == expected_result
+
+
+@pytest.mark.parametrize("whitelisted", [True, False])
+def test_large_upload_destination_organization_is_whitelisted(whitelisted: bool) -> None:
+    """Match Google's upload destination even without DNS or ASN enrichment.
+
+    Parameters:
+        whitelisted: Whether the user enabled the organization whitelist rule.
+    """
+    factory = ModuleFactory()
+    helper = factory.create_conn_analyzer_set_evidence_helper()
+    helper.data_exfiltration("142.250.82.212",149.94737,"profile_192.168.1.247","timewindow1",["upload-uid"],1726249372.312124)
+    evidence = helper.db.set_evidence.call_args_list[0].args[0]
+    whitelist = factory.create_whitelist_obj()
+    whitelist.ip_analyzer.is_whitelisted = Mock(return_value=False)
+    whitelist.mac_analyzer.profile_has_whitelisted_mac = Mock(return_value=False)
+    whitelist.domain_analyzer.is_whitelisted = Mock(return_value=False)
+    analyzer = whitelist.org_analyzer
+    analyzer.whitelisted_orgs = {"google":json.dumps({"from":"both","what_to_ignore":"alerts"})} if whitelisted else {}
+    analyzer.bloom_filters = {"google":{"first_octets":["142"],"asns":[],"domains":[]}}
+    whitelist.db.get_asn_info.return_value = None
+    whitelist.db.is_ip_in_org_ips.return_value = ["142.250.0.0/15"]
+    assert evidence.victim.value == "142.250.82.212"
+    assert whitelist.is_whitelisted_evidence(evidence) is whitelisted
 
 
 @pytest.mark.parametrize("domain,expected", [

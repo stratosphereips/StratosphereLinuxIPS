@@ -6,12 +6,14 @@ from typing import Set, Tuple
 
 from flask import (
     Flask,
+    Response,
     abort,
     jsonify,
     make_response,
     redirect,
     render_template,
     request,
+    send_file,
 )
 from werkzeug.datastructures import FileStorage
 from werkzeug.exceptions import RequestEntityTooLarge
@@ -24,14 +26,14 @@ from slips_files.core.database.redis_db.redis_auth import (
     verify_web_password,
 )
 from slips_files.common.web_auth import (
-    SESSION_COOKIE_NAME,
     SESSION_TTL_SECONDS,
     is_locked_out,
     issue_token,
     login_page_html,
     record_failed_login,
     record_successful_login,
-    validate_token,
+    session_cookie_name,
+    validate_session_cookies,
 )
 from .database.database import db, db_obj
 from .database.signals import message_sent
@@ -44,7 +46,7 @@ from .utils import (
     is_redis_rdb_file,
 )
 
-UNAUTHENTICATED_PATHS = {"/login", "/favicon.ico"}
+UNAUTHENTICATED_PATHS = {"/login", "/favicon.ico", "/slips-logo.png"}
 
 MAX_RDB_UPLOAD_SIZE = 512 * 1024 * 1024
 RDB_UPLOAD_DIR = "webinterface/uploaded_rdb"
@@ -84,7 +86,7 @@ def _require_login():
         return None
     if _is_unauthenticated_path(request.path):
         return None
-    if validate_token(request.cookies.get(SESSION_COOKIE_NAME)):
+    if validate_session_cookies(request.cookies):
         return None
     if request.path.startswith(
         ("/redis", "/db/", "/info", "/analysis/", "/general/")
@@ -116,7 +118,7 @@ def login():
     record_successful_login(client_ip)
     resp = make_response(redirect("/"))
     resp.set_cookie(
-        SESSION_COOKIE_NAME,
+        session_cookie_name(),
         issue_token(),
         httponly=True,
         samesite="Strict",
@@ -277,14 +279,18 @@ def index() -> str:
 
 
 @app.route("/favicon.ico")
-def favicon() -> Tuple[str, int]:
+@app.route("/slips-logo.png")
+def favicon() -> Response:
     """
-    Return an empty favicon response to avoid browser 404 noise.
+    Serve the shared Slips logo for the tab icon and login page.
 
     Return:
-    Empty response body and HTTP 204 status code.
+    The logo PNG response.
     """
-    return "", 204
+    return send_file(
+        Path("../modules/web_interface/slips-logo.png"),
+        mimetype="image/png",
+    )
 
 
 @app.route("/db/<int:new_port>", methods=["POST"])

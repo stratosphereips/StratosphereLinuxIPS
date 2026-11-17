@@ -6,7 +6,11 @@ from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+
+from modules.web_interface.server import RunDataReader
 from slips_files.common.flow_classifier import FlowClassifier
+from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.core.flows.smb import SMBFile, SMBMapping
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from tests.module_factory import ModuleFactory
 
@@ -70,6 +74,97 @@ def test_smb_protocols_survive_parser_and_channel_roundtrip(
     assert handler.db.publish.call_args.args[0] == "new_smb"
     assert payload["flow"]["record_id"] == flow.record_id
     assert handler.db.add_altflow.called
+
+
+def test_distinct_operations_are_retained_and_linked_to_connection(
+    tmp_path: Path,
+) -> None:
+    """A later SMB operation cannot overwrite a share or another file operation.
+
+    :param tmp_path: Isolated run storage.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    common = dict(
+        starttime=1700000000.0,
+        uid="Csmb",
+        saddr="192.168.1.120",
+        daddr="8.8.8.8",
+        sport=50000,
+        dport=445,
+    )
+    mapping = SMBMapping(**common, path=r"\\server\data")
+    written = SMBFile(
+        **common,
+        action="SMB::FILE_WRITE",
+        name="document.txt",
+        path=r"\\server\data",
+    )
+    renamed = SMBFile(
+        **common,
+        action="SMB::FILE_RENAME",
+        name="document.enc",
+        path=r"\\server\data",
+    )
+    for flow in (mapping, written, renamed, written):
+        database.add_altflow(flow, "profile_192.168.1.120", "timewindow1")
+    assert (
+        database.conn.execute("SELECT count(*) FROM altflows").fetchone()[0]
+        == 3
+    )
+    database.execute(
+        "INSERT INTO flows(uid,flow,profileid,twid) VALUES(?,?,?,?)",
+        (
+            "Csmb",
+            json.dumps(
+                {
+                    "uid": "Csmb",
+                    "saddr": "192.168.1.120",
+                    "daddr": "8.8.8.8",
+                    "type_": "conn",
+                }
+            ),
+            "profile_192.168.1.120",
+            "timewindow1",
+        ),
+    )
+    reader = object.__new__(RunDataReader)
+    reader.sqlite_path = Path(database._flows_db)
+    reader.output_dir = tmp_path
+    reader._columns_cache = {}
+    reader._tables_cache = {}
+    # Match the small setup used by the saved-run flow detail reader.
+    reader._connect_sqlite = lambda: connection(reader.sqlite_path)
+    group = reader.flow_details("Csmb", {})
+    assert group["network_flow"]["uid"] == "Csmb"
+    assert group["protocol_flow_total"] == 3
+    assert len(group["protocol_flows"]) == 3
+    assert {r["flow"]["type_"] for r in group["protocol_flows"]} == {
+        "smb_mapping",
+        "smb_files",
+    }
+    plan = database.conn.execute(
+        "EXPLAIN QUERY PLAN SELECT * FROM altflows WHERE uid=? OR (uid>=? AND uid<?)",
+        ("Csmb", "Csmb:smb:", "Csmb:smb;"),
+    ).fetchall()
+    assert not any("SCAN altflows" in row[3] for row in plan)
+    for uid in (
+        "Csmb",
+        mapping.record_id,
+        written.record_id,
+        renamed.record_id,
+    ):
+        database.execute(
+            "INSERT INTO evidence_flows(evidence_id,uid) VALUES(?,?)",
+            ("E_smb", uid),
+        )
+    details = reader.flows_for_evidence("E_smb", {})
+    assert len(details["items"]) == 1
+    assert details["items"][0]["uid"] == "Csmb"
+    assert details["network_flow_total"] == 1
+    assert details["protocol_flow_total"] == 3
+    assert details["unavailable_flow_count"] == 0
+    database.close()
 
 
 def connection(path: Path) -> object:

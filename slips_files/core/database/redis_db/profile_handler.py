@@ -24,9 +24,6 @@ from slips_files.common.mac import classify_mac
 from slips_files.core.structures.flow_attributes import Role
 
 
-from slips_files.common.ips import IPV4_ANY
-
-
 class ProfileHandler:
     """
     Helper class for the Redis class in database.py

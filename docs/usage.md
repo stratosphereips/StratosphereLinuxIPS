@@ -614,6 +614,9 @@ Enable the run-specific local interface with `-w`:
 ```
 
 Then open `http://localhost:55000/`. You can also enable it with `web_interface.enabled: true` in `config/slips.yaml` and change `web_interface.port`.
+Use `-w --web-port 55002` to select a different port for one run without
+changing that file. The flag accepts 1–65535 and overrides the configured port.
+It does not enable the page by itself: use `-w` or `web_interface.enabled: true`.
 
 The interface is read-only, binds only to `127.0.0.1`, and shows exactly the run that launched it. It is not a receiver for remote Slips systems and is not a multi-instance database selector. It reads this run's Redis database, `output/<run>/databases/flows.sqlite`, `output/<run>/error.log`, and current process metrics. Its own operational log is `output/<run>/web_interface/server.log`.
 
@@ -633,28 +636,69 @@ Your .rdb saved database will be stored in the default output dir.
 
 Note: If you try to save the same file twice using ```-s``` the old backup will be overwritten.
 
-You can load it again using ```-d```, For example:
+To reopen the modern webpage, keep the saved database inside its output
+folder and use `--view` as shown below. The legacy `-d` loader does not
+start this webpage.
 
-```sudo ./slips.py -d redis_backups/hide-and-seek-short.rdb```
+### Reopen a saved run's webpage
 
-The local interface does not upload, browse, or switch saved Redis databases; loading an `.rdb` remains a separate Slips operation.
+Use `--view` with the original output folder:
 
-Note: saving and loading the database requires **root privileges** and is only supported in linux.
+```bash
+python3 slips.py --view output/pcap-case-18
+```
 
-This feature isn't supported in docker due to problems with redis in docker.
+Slips restores a temporary copy of `databases/dump.rdb`, reads the saved
+`databases/flows.sqlite` and web history, and opens the webpage. It does not
+read the capture again or start Zeek, detection modules, P2P or blocking.
+The original PCAP is not needed. Keep the whole output folder together;
+the Redis snapshot alone does not contain the SQLite flow and evidence data.
 
+The viewer works on macOS and Linux, including native installations inside
+Docker, using the same Python environment as Slips. It needs `redis-server`
+and permission to read and write the output folder; root is not required.
+It starts its own loopback-only Redis instance on an available port,
+including a private cache, so another Slips capture can keep running.
+It refuses to open a folder that is still being analyzed.
 
-_DISCLAIMER_: When saving the database you will see the following
-warning
+The webpage always listens on `127.0.0.1`. Slips prints its URL and viewer
+PID after startup. It reuses the original analysis's web port from its saved
+metadata, including an original `--web-port` override. If that port is occupied,
+the viewer reports an error without replacing its owner or switching ports.
+Use `--web-port` to open the saved results on a different port:
 
-    stop-writes-on-bgsave-error is set to no, information may be lost in the redis backup file
+```bash
+python3 slips.py --view output/pcap-case-18 --web-port 55001
+```
 
-This configuration is set by slips so that redis will continue working even if redis
-can't write to dump.rdb.
+`-w`, `-f`, `-i` and `--keep-history` are not needed. `-c config/custom.yaml`
+can select your installation's web password and fallback web port. Only when
+no valid original port was saved does the viewer try that fallback and nearby
+free ports. An explicit `--web-port` always takes precedence. The
+Configuration tab and detection thresholds still come from the saved run's
+metadata. Saved host identities are used when available. A copied or moved
+output folder can be reopened without editing its Redis snapshot.
 
-Your information will be lost only if you're out of space and redis can't write to dump.rdb or if you
-don't have permissions to write to /var/lib/redis/dump.rdb, otherwise you're fine and
-the saved database will contain all analyzed flows.
+The header says **Viewing saved results**. Time filters for an old live
+capture use its saved event times rather than today's clock. The viewer
+shows only data retained in that folder; it cannot recover flows already
+deleted by retention. Reviews and other edits in the webpage still update
+the saved SQLite data. The restored Redis copy is discarded when the viewer
+closes.
+
+Ctrl-C stops the foreground viewer and its Redis child. To keep it in the
+background, use the usual `-D` option:
+
+```bash
+python3 slips.py --view output/pcap-case-18 --web-port 55001 -D
+python3 slips.py --list-instances
+python3 slips.py --stop PID
+```
+
+Replace `PID` with the printed viewer PID. `--restart PID` also works for a
+background viewer. The viewer removes its temporary snapshot directory on
+shutdown and records diagnostics in `web_interface/viewer.log`. Remote
+viewing uses your normal SSH tunnel to the printed port.
 
 
 ## Whitelisting
@@ -1311,6 +1355,8 @@ this file can be used for training Slips RNN module.
 - ```--keep-history``` Keep the previous live run's SQLite detections and web history in the same `-o` directory, or start fresh if no database exists; start with a clean Redis database 0.
 - ```-g``` or  ```--growing``` Treat the given zeek directory as growing. eg. zeek dirs generated when running onan interface
 - ```-w``` or  ```--webinterface``` Enable the local web interface for this Slips run
+- `--web-port PORT` Override `web_interface.port` for this run; use `-w` or enable the web interface in the configuration.
+- `--view OUTPUT_FOLDER` Reopen saved results in the webpage without analyzing traffic again. Supports `--web-port`, `-c` and `-D`.
 - ```-V``` or  ```--version``` Used for checking your running Slips version flags.
 - ```-im``` or  ```--input-module``` Used for reading flows from a module other than input process.
 - ```-ap``` or  ```--access-point``` Used for reading packets from two interfaces when Slips is running as an access point.

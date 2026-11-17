@@ -44,6 +44,29 @@ def test_metadata_records_automatic_analysis_paths(tmp_path: Path) -> None:
     assert yaml.safe_load(source.read_text()) == original
 
 
+def test_metadata_records_cli_web_port_without_changing_configuration(tmp_path: Path) -> None:
+    """Show the effective web port in the run snapshot while reusing its source.
+
+    Parameters:
+        tmp_path: Isolated config and analysis output.
+    """
+    manager = ModuleFactory().create_metadata_manager_obj()
+    source = tmp_path / "slips.yaml"
+    original = "web_interface:\n  enabled: true\n  port: 55000\n"
+    source.write_text(original)
+    output = tmp_path / "analysis"
+    output.mkdir()
+    manager.main.args.config = str(source)
+    manager.main.args.output = str(output)
+    manager.main.args.web_port = 55002
+    manager.main.conf.web_interface_port = 55002
+    manager.main.conf.local_whitelist_path.return_value = str(tmp_path / "missing.conf")
+    manager._add_metadata()
+    captured = yaml.safe_load((output / "metadata" / "slips.yaml").read_text())
+    assert captured["web_interface"]["port"] == 55002
+    assert source.read_text() == original
+
+
 @pytest.mark.parametrize(
     "enable_metadata, expected_open_calls, expected_end_date",
     [
@@ -257,3 +280,24 @@ def test_update_slips_stats_in_the_db(
         metadata_manager.main.db.set_slips_internal_time.call_args_list
         == expected_set_slips_internal_time_call_args
     )
+
+
+@pytest.mark.parametrize("interface,access_point,expected", [
+    ("en0", False, "en0"),
+    (False, "wlan_ap0,eth0", "wlan_ap0,eth0"),
+])
+def test_input_metadata_records_every_capture_interface(interface: str | bool, access_point: str | bool, expected: str) -> None:
+    """Expose both AP interfaces without parsing the output display name.
+
+    Parameters:
+        interface: Single-interface CLI value.
+        access_point: AP-mode CLI value.
+        expected: Comma-separated metadata for web readers.
+    """
+    manager = ModuleFactory().create_metadata_manager_obj()
+    manager.main.proc_man.get_disabled_modules = Mock(return_value=(set(), set()))
+    manager.main.args.interface = interface
+    manager.main.args.access_point = access_point
+    manager.main.args.filepath = False
+    manager.set_input_metadata()
+    assert manager.main.db.set_input_metadata.call_args.args[0]["interface"] == expected

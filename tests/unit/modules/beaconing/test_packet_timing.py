@@ -2,15 +2,21 @@
 
 import json
 from dataclasses import asdict
+from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pytest
+
+from modules.web_interface.server import RunDataReader
 from slips_files.common.flow_classifier import FlowClassifier
 from slips_files.common.slips_utils import utils
 from slips_files.common.input_type import InputType
+from slips_files.core.database.sqlite_db.database import SQLiteDB
+from slips_files.core.flows.packet_timing import PacketTiming
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from tests.module_factory import ModuleFactory
 from modules.supported_module_names import Modules
+from tests.unit.modules.smb_analyzer.test_ingestion import connection
 
 
 def summary(**changes: object) -> dict:
@@ -155,6 +161,36 @@ def test_packet_summary_parser_and_channel_roundtrip(format_: str) -> None:
     handler.handle_packet_timing()
     assert handler.db.publish.call_args.args[0] == "new_packet_timing"
     assert handler.db.add_altflow.call_count == 1
+
+
+def test_packet_summaries_are_distinct_and_linked_in_web(tmp_path: Path) -> None:
+    """Retain successive windows without overwriting each other or the conn row.
+
+    Parameters:
+        tmp_path: Isolated run database.
+    """
+    factory = ModuleFactory()
+    database = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    first = PacketTiming(**summary(record_id=""))
+    second = PacketTiming(**summary(record_id="",starttime=4600,event_count=20))
+    for flow in (first,second):
+        database.add_altflow(flow,"profile_10.0.0.1","timewindow1")
+    database.execute("INSERT INTO flows(uid,flow,profileid,twid) VALUES(?,?,?,?)", ("Cpacket",json.dumps({"uid":"Cpacket","saddr":"10.0.0.1","daddr":"8.8.8.8","type_":"conn"}),"profile_10.0.0.1","timewindow1"))
+    reader = object.__new__(RunDataReader)
+    reader.sqlite_path = Path(database._flows_db)
+    reader.output_dir = tmp_path
+    reader._columns_cache, reader._tables_cache = {}, {}
+    reader._connect_sqlite = lambda: connection(reader.sqlite_path)
+    group = reader.flow_details("Cpacket",{})
+    assert group["network_flow"]["uid"] == "Cpacket"
+    assert group["protocol_flow_total"] == 2
+    assert {row["uid"] for row in group["protocol_flows"]} == {first.record_id,second.record_id}
+    database.execute("INSERT INTO evidence_flows(evidence_id,uid) VALUES(?,?)",("Epacket", first.record_id))
+    linked = reader.flows_for_evidence("Epacket",{})
+    assert len(linked["items"]) == 1
+    assert linked["items"][0]["network_flow"]["uid"] == "Cpacket"
+    assert linked["items"][0]["protocol_flows"][0]["uid"] == first.record_id
+    database.conn.close()
 
 
 @pytest.mark.parametrize("packet_enabled,beacon_enabled,module_disabled", [(False,True,False),(True,True,False),(True,False,False),(True,True,True)])
