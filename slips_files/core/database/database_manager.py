@@ -796,7 +796,7 @@ class DBManager:
         return self.rdb.is_asn_in_org_asn(*args, **kwargs)
 
     def is_ip_in_org_ips(self, *args, **kwargs):
-        return self.rdb.is_ip_in_org_cidrs(*args, **kwargs)
+        return self.rdb.get_org_cidrs_by_first_octet(*args, **kwargs)
 
     def has_cached_whitelist(self, *args, **kwargs):
         return self.rdb.has_cached_whitelist(*args, **kwargs)
@@ -858,10 +858,10 @@ class DBManager:
     def is_evidence_in_past_alert(self, *args: Any, **kwargs: Any) -> bool:
         return self.rdb.is_evidence_in_past_alert(*args, **kwargs)
 
-    def get_pending_processed_evidence(
+    def get_unalerted_processed_evidence(
         self, *args: Any, **kwargs: Any
     ) -> Dict[str, str]:
-        return self.rdb.get_pending_processed_evidence(*args, **kwargs)
+        return self.rdb.get_unalerted_processed_evidence(*args, **kwargs)
 
     def get_evidence_by_id(self, *args, **kwargs):
         return self.rdb.get_evidence_by_id(*args, **kwargs)

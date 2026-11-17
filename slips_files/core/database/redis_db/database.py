@@ -630,11 +630,17 @@ class RedisDB(
         return msg
 
     def publish(self, channel, msg, pipeline=None, add_version: bool = True):
-        """Publish a msg in the given channel.
-        adds the instructions to the given pipeline if given and returns
-        the pipeline. Set add_version=False only for external protocols
-        whose version field is not Slips's software version."""
-        # External protocols such as Iris carry their own version field.
+        """
+        Publish a msg in the given channel.
+
+        :param channel: name of the channel to publish to
+        :param msg: str or dict to publish
+        :param pipeline: if given, the publish is added to this pipeline
+            instead of being sent right away, and the pipeline is returned
+        :param add_version: if True, slips' version is added to the msg.
+            Pass False for msgs of external protocols (e.g. Iris) that have
+            their own "version" field, so it's not overwritten.
+        """
         if add_version:
             msg = self._add_version_to_msg(msg)
 
@@ -686,25 +692,32 @@ class RedisDB(
 
     def get_message(self, channel_obj: redis.client.PubSub, timeout=0.0000001):
         """
-        Read a PubSub message and retry briefly when Redis disconnects.
+        Wrapper for redis' get_message() that handles
+        redis.exceptions.ConnectionError.
 
-        Parameters:
-            channel_obj: PubSub channel to poll.
-            timeout: Maximum wait for one message.
+        On each connection error it sleeps for a while (doubling each
+        time, max 2s) and returns None, so the caller simply polls again.
+        notice: there has to be a timeout or the channel will wait forever
+        and never receive a new msg.
 
-        Returns:
-            Message or None when no message is ready or Redis is recovering.
+        :param channel_obj: PubSub obj of the channel
+        :param timeout: max seconds to wait for a msg
+        :return: the msg, or None if there's no msg yet or redis is
+            unreachable
+        :raises RuntimeError: when redis is still unreachable after
+            max_retries consecutive retries
         """
         try:
             msg = channel_obj.get_message(timeout=timeout)
+            # redis is reachable again, reset the retry state
             self.connection_retry = 0
             self.backoff = 0.1
             if msg:
                 self._track_flow_processing_rate(msg)
             return msg
         except redis.exceptions.ConnectionError as ex:
-            # Redis cannot be used to record a Redis outage. Keep retry state
-            # local to this process and avoid recursive calls or huge backoffs.
+            # the retry state is kept in this process, not in redis,
+            # because redis is the thing that's down.
             self.connection_retry += 1
             if self.connection_retry == 1:
                 self.print(f"Redis connection lost; retrying: {ex}", 0, 1)
@@ -1479,16 +1492,16 @@ class RedisDB(
         )
 
     def _is_gw_mac(self, mac_addr: str, interface: str) -> bool:
-        """Check the gateway stored by any worker for this interface.
-
-        Parameters:
-            mac_addr: Candidate Ethernet address.
-            interface: Capture interface.
-
-        Returns:
-            Whether this interface's known gateway has that address.
         """
+        Check if the given MAC is the gateway MAC of the given interface.
 
+        Compares against the gateway MAC stored in the db (by any process),
+        ignoring the letter case.
+
+        :param mac_addr: MAC to check
+        :param interface: interface whose gateway MAC is compared
+        :return: True if mac_addr is the stored gateway MAC
+        """
         if not validators.mac_address(mac_addr):
             return False
 
@@ -1802,6 +1815,8 @@ class RedisDB(
                 and not self.get_gateway_mac_vendor(interface)
             )
         ):
+            # merge with the stored info so setting one field (e.g. the
+            # MAC) doesn't delete the others (e.g. the IP)
             gw_info = self._get_gw_info(interface) or {}
             gw_info[address_type] = address
             self.r.hset(
@@ -2116,18 +2131,21 @@ class RedisDB(
         key = f"{org}_asn"
         return True if self.rcache.sismember(key, asn) else False
 
-    def is_ip_in_org_cidrs(
+    def get_org_cidrs_by_first_octet(
         self, org: str, first_octet: str
     ) -> List[str] | None:
         """
-        Read organization ranges from the shared cache where they are stored.
+        Get the cidrs of the given org that start with the given octet.
 
-        Parameters:
-            org: Supported organization name.
-            first_octet: IPv4 first octet or IPv6 first segment.
+        The cidrs are read from the cache db, where the org ranges
+        are stored.
 
-        Returns:
-            Decoded network ranges, or None for absent or invalid cache data.
+        :param org: supported orgs are ('google', 'microsoft', 'apple',
+            'facebook', 'twitter')
+        :param first_octet: first octet of an IPv4, or first segment of
+            an IPv6
+        :return: list of cidrs, or None if there are none or the cached
+            value is invalid
         """
         key = f"{org}_IPs"
         cached = self.rcache.hget(key, first_octet)
