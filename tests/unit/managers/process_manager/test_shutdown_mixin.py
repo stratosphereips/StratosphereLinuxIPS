@@ -958,37 +958,3 @@ def test_firewall_shutdown_keep_leaves_rules_installed() -> None:
         process_manager._handle_firewall_after_analysis()
 
     delete_chain.assert_not_called()
-
-
-@pytest.mark.parametrize("is_manager_started", [True, False])
-def test_stop_flow_cleanup_manager(is_manager_started: bool) -> None:
-    """Shut the manager down only when this run started one.
-
-    Parameters:
-        is_manager_started: Whether the flow cleanup manager was started.
-    """
-    process_manager = ModuleFactory().create_process_manager_obj()
-    flow_cleanup_man = Mock()
-    if is_manager_started:
-        process_manager.flow_cleanup_man = flow_cleanup_man
-
-    process_manager.stop_flow_cleanup_manager()
-
-    assert flow_cleanup_man.shutdown.call_count == int(is_manager_started)
-
-
-@pytest.mark.parametrize("is_manager_started", [True, False])
-def test_stop_log_rotation_manager(is_manager_started: bool) -> None:
-    """Shut the manager down only when this run started one.
-
-    Parameters:
-        is_manager_started: Whether the log rotation manager was started.
-    """
-    process_manager = ModuleFactory().create_process_manager_obj()
-    log_rotation_man = Mock()
-    if is_manager_started:
-        process_manager.log_rotation_man = log_rotation_man
-
-    process_manager.stop_log_rotation_manager()
-
-    assert log_rotation_man.shutdown.call_count == int(is_manager_started)

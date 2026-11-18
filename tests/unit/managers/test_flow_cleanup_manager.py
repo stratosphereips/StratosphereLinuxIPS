@@ -3,26 +3,24 @@
 """Unit tests for the flow cleanup manager."""
 
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import patch
 
 import pytest
 
+from managers.flow_cleanup_manager import CLEANUP_PASS_INTERVAL_SECONDS
 from tests.module_factory import ModuleFactory
 
 MANAGER = "managers.flow_cleanup_manager"
 
 
 def test_init_reads_the_cleanup_policies() -> None:
-    """Read both policies and prepare a thread that is not started yet."""
+    """Read both policies and stay idle until start() is called."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
 
     assert manager.flow_retention_policy["enabled"] is True
     assert manager.detection_history_policy == {"enabled": False}
-    assert manager.cleanup_thread.daemon is True
-    # the daemon stop path kills every stored PID without "thread" in its name
-    assert "thread" in manager.cleanup_thread.name
-    assert not manager.cleanup_thread.is_alive()
-    assert not manager.stop_event.is_set()
+    assert manager.is_running is False
+    assert manager.last_cleanup_pass_time == 0.0
 
 
 @pytest.mark.parametrize(
@@ -36,76 +34,81 @@ def test_init_reads_the_cleanup_policies() -> None:
         (None, True, True, False),
     ],
 )
-def test_start_only_starts_the_thread_when_cleanup_is_needed(
+def test_start_only_enables_cleanup_when_it_is_needed(
     interface: str | bool | None,
     flow_retention_enabled: bool,
     history_enabled: bool,
     expected: bool,
 ) -> None:
-    """Start the thread on interfaces with at least one enabled policy.
+    """Enable the passes on interfaces with at least one enabled policy.
 
     Parameters:
         interface: Interface given to Slips, if any.
         flow_retention_enabled: Whether flow retention is enabled.
         history_enabled: Whether detection history is enabled.
-        expected: Whether the thread should start.
+        expected: Whether the cleanup passes should be enabled.
     """
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
     manager.main.args.interface = interface
     manager.flow_retention_policy["enabled"] = flow_retention_enabled
     manager.detection_history_policy["enabled"] = history_enabled
 
-    with patch(f"{MANAGER}.utils.start_thread") as start_thread:
-        assert manager.start() is expected
-
-    if expected:
-        start_thread.assert_called_once_with(
-            manager.cleanup_thread, manager.main.db
-        )
-    else:
-        start_thread.assert_not_called()
+    assert manager.start() is expected
+    assert manager.is_running is expected
 
 
-@pytest.mark.parametrize("is_thread_alive", [True, False])
-def test_shutdown_stops_the_cleanup_thread(is_thread_alive: bool) -> None:
-    """Signal the thread to stop and only wait for it when it is running.
-
-    Parameters:
-        is_thread_alive: Whether the cleanup thread is running.
-    """
+def test_shutdown_stops_the_cleanup_passes() -> None:
+    """Never touch the database after shutdown."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
-    manager.cleanup_thread = Mock()
-    manager.cleanup_thread.is_alive.return_value = is_thread_alive
+    manager.start()
 
     manager.shutdown()
 
-    assert manager.stop_event.is_set()
-    assert manager.cleanup_thread.join.call_count == int(is_thread_alive)
-
-
-def test_started_thread_exits_on_shutdown() -> None:
-    """Make sure a real cleanup thread never outlives shutdown."""
-    manager = ModuleFactory().create_flow_cleanup_manager_obj()
-
-    assert manager.start() is True
-    assert manager.cleanup_thread.is_alive()
-    manager.shutdown()
-
-    assert not manager.cleanup_thread.is_alive()
+    assert manager.run_cleanup_if_due(10000000) is False
     manager.main.db.maintain_flow_retention.assert_not_called()
 
 
-def test_flow_cleanup_runs_in_bounded_background_pass() -> None:
+@pytest.mark.parametrize(
+    "seconds_since_last_pass, is_pass_expected",
+    [
+        (CLEANUP_PASS_INTERVAL_SECONDS - 1, False),
+        (CLEANUP_PASS_INTERVAL_SECONDS, True),
+        (CLEANUP_PASS_INTERVAL_SECONDS + 1, True),
+    ],
+)
+def test_run_cleanup_if_due_respects_the_interval(
+    seconds_since_last_pass: int, is_pass_expected: bool
+) -> None:
+    """Run a pass only once every CLEANUP_PASS_INTERVAL_SECONDS.
+
+    Parameters:
+        seconds_since_last_pass: Seconds since the previous pass.
+        is_pass_expected: Whether a pass should run now.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.start()
+    now = 10000000.0
+    manager.last_cleanup_pass_time = now - seconds_since_last_pass
+
+    with patch.object(manager, "_run_cleanup_pass") as run_cleanup_pass:
+        assert manager.run_cleanup_if_due(now) is is_pass_expected
+
+    if is_pass_expected:
+        run_cleanup_pass.assert_called_once_with(now)
+        assert manager.last_cleanup_pass_time == now
+    else:
+        run_cleanup_pass.assert_not_called()
+
+
+def test_flow_cleanup_runs_in_bounded_pass() -> None:
     """Delete old flows in small batches and clean the web flow index."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
-    manager.stop_event = Mock()
-    manager.stop_event.wait.side_effect = [False, True]
+    manager.start()
     manager.main.db.maintain_flow_retention.return_value = ["old-flow"]
 
     with patch(f"{MANAGER}.time.time", return_value=10000000):
-        manager._run_cleanup_loop()
+        assert manager.run_cleanup_if_due() is True
 
-    manager.stop_event.wait.assert_called_with(10)
     manager.main.db.maintain_flow_retention.assert_called_once_with(
         9913600,
         7408000,
@@ -120,11 +123,12 @@ def test_flow_cleanup_runs_in_bounded_background_pass() -> None:
 
 
 def test_offline_analysis_never_runs_cleanup_work() -> None:
-    """Preserve old PCAP flows even if the loop is invoked directly."""
+    """Preserve old PCAP flows even if the main loop asks for a pass."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
     manager.main.args.interface = False
+    manager.start()
 
-    manager._run_cleanup_loop()
+    assert manager.run_cleanup_if_due(10000000) is False
 
     manager.main.db.maintain_flow_retention.assert_not_called()
     manager.main.db.maintain_detection_history.assert_not_called()
@@ -209,8 +213,7 @@ def test_deferred_history_does_not_interrupt_flow_cleanup(
     """
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
     manager.detection_history_policy = {"enabled": True}
-    manager.stop_event = Mock()
-    manager.stop_event.wait.side_effect = [False] * 9 + [True]
+    manager.start()
     manager.main.db.maintain_detection_history.side_effect = [
         {
             "deferred": persistent or index == 0,
@@ -221,14 +224,9 @@ def test_deferred_history_does_not_interrupt_flow_cleanup(
     ]
     manager.main.db.maintain_flow_retention.return_value = []
 
-    with (
-        patch(
-            f"{MANAGER}.time.time",
-            side_effect=[1000 + index * 10 for index in range(9)],
-        ),
-        patch(f"{MANAGER}.expire_rotated_logs"),
-    ):
-        manager._run_cleanup_loop()
+    with patch(f"{MANAGER}.expire_rotated_logs"):
+        for index in range(9):
+            manager.run_cleanup_if_due(1000 + index * 10)
 
     # flows are only cleaned once a minute: at 1000 and at 1060
     assert manager.main.db.maintain_flow_retention.call_count == 2
@@ -277,7 +275,7 @@ def test_failed_history_pass_is_reported_and_flows_still_cleaned() -> None:
     manager.main.db.maintain_flow_retention.assert_called_once()
 
 
-def test_failed_flow_cleanup_never_kills_the_cleanup_thread() -> None:
+def test_failed_flow_cleanup_never_reaches_the_main_loop() -> None:
     """Report a flow cleanup failure instead of raising it."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
     manager.main.db.maintain_flow_retention.side_effect = RuntimeError("boom")
