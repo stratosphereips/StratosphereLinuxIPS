@@ -1089,6 +1089,27 @@ class ModuleFactory:
         return FlowCleanupManager(main)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_log_rotation_manager_obj(self, mock_db):
+        from managers.log_rotation_manager import LogRotationManager
+
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.print = Mock()
+        main.mode = "interactive"
+        main.args.output = "output"
+        main.logger = Mock()
+        main.logger.slips_logfile = os.path.join("output", "slips.log")
+        main.logger.errors_logfile = os.path.join("output", "errors.log")
+        main.conf = Mock()
+        main.conf.detection_history_policy.return_value = {
+            "enabled": True,
+            "log_max_size_mb": 1,
+            "log_backup_count": 30,
+            "archive_retention_days": 30,
+        }
+        return LogRotationManager(main)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_host_ip_manager_obj(self, mock_db):
         from managers.host_ip_manager import HostIPManager
 

@@ -114,3 +114,70 @@ def test_run_logger_thread(msg, expected_method):
 
     # assert shutdown was called once
     logger.shutdown_gracefully.assert_called_once()
+
+
+@pytest.mark.parametrize("is_rotated", [True, False])
+def test_reopen_logfile_if_rotated(tmp_path, is_rotated):
+    logger = ModuleFactory().create_evidence_loggr_obj()
+    path = tmp_path / "alerts.log"
+    logfile = open(path, "a")
+    if is_rotated:
+        path.rename(tmp_path / "alerts.log.rotated")
+        path.touch()
+
+    reopened = logger._reopen_logfile_if_rotated(logfile)
+    reopened.write("new line\n")
+    reopened.close()
+
+    assert (reopened is logfile) is not is_rotated
+    assert logfile.closed
+    assert path.read_text() == "new line\n"
+
+
+def test_reopen_logfile_if_rotated_recreates_a_missing_log(tmp_path):
+    logger = ModuleFactory().create_evidence_loggr_obj()
+    path = tmp_path / "alerts.log"
+    logfile = open(path, "a")
+    path.rename(tmp_path / "alerts.log.rotated")
+
+    reopened = logger._reopen_logfile_if_rotated(logfile)
+    reopened.close()
+
+    assert reopened is not logfile
+    assert path.exists()
+
+
+@pytest.mark.parametrize(
+    "is_rotation_enabled, seconds_since_last_check, expected_checks",
+    [
+        (True, 5, 2),
+        (True, 0, 0),
+        (False, 5, 0),
+    ],
+)
+def test_reopen_rotated_logfiles_if_due(
+    is_rotation_enabled, seconds_since_last_check, expected_checks
+):
+    logger = ModuleFactory().create_evidence_loggr_obj()
+    logger.is_log_rotation_enabled = is_rotation_enabled
+    logger._reopen_logfile_if_rotated = Mock(side_effect=lambda file: file)
+
+    with patch("slips_files.core.evidence_logger.time.monotonic") as now:
+        now.return_value = 100.0
+        logger.last_rotated_logfiles_check_time = (
+            100.0 - seconds_since_last_check
+        )
+        logger.reopen_rotated_logfiles_if_due()
+
+    assert logger._reopen_logfile_if_rotated.call_count == expected_checks
+
+
+def test_reopen_rotated_logfiles_if_due_keeps_handles_on_os_error():
+    logger = ModuleFactory().create_evidence_loggr_obj()
+    logger.is_log_rotation_enabled = True
+    logfile = logger.logfile
+    logger._reopen_logfile_if_rotated = Mock(side_effect=OSError("disk"))
+
+    logger.reopen_rotated_logfiles_if_due()
+
+    assert logger.logfile is logfile
