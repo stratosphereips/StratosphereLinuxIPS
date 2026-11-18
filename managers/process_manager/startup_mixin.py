@@ -9,6 +9,7 @@ from multiprocessing.reduction import DupFd
 from typing import Optional
 
 from managers.flow_cleanup_manager import FlowCleanupManager
+from managers.log_rotation_manager import LogRotationManager
 from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
@@ -55,6 +56,18 @@ class StartupMixin:
         self.flow_cleanup_man = FlowCleanupManager(self.main)
         self.flow_cleanup_man.start()
         return self.flow_cleanup_man
+
+    def start_log_rotation_manager(self) -> LogRotationManager:
+        """
+        Create the log rotation manager and enable its rotation passes.
+        It has no thread, the main loop calls rotate_logs_if_due().
+
+        Returns:
+            Log rotation manager instance.
+        """
+        self.log_rotation_man = LogRotationManager(self.main)
+        self.log_rotation_man.start()
+        return self.log_rotation_man
 
     def start_output_process(
         self, stderr: str, slips_logfile: str, stdout: str = ""

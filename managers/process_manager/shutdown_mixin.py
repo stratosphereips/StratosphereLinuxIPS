@@ -653,6 +653,15 @@ class ShutdownMixin:
         if flow_cleanup_man is not None:
             flow_cleanup_man.shutdown()
 
+    def stop_log_rotation_manager(self) -> None:
+        """
+        Stop rotating the logs, if this run started the manager, before
+        the processes writing to them are stopped.
+        """
+        log_rotation_man = getattr(self, "log_rotation_man", None)
+        if log_rotation_man is not None:
+            log_rotation_man.shutdown()
+
     def shutdown_gracefully(self) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
@@ -672,6 +681,7 @@ class ShutdownMixin:
             print("Stopping Slips")
 
             self.stop_flow_cleanup_manager()
+            self.stop_log_rotation_manager()
 
             self.children: List[BaseProcess] = (
                 multiprocessing.active_children()

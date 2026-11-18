@@ -22,7 +22,6 @@ from pathlib import Path
 from datetime import datetime
 from queue import Empty
 import os
-from slips_files.common.log_rotation import rotate_log
 
 from slips_files.common.abstracts.iobserver import IObserver
 from slips_files.common.parsers.config_parser import ConfigParser
@@ -151,7 +150,6 @@ class Output(IObserver):
 
     def _read_configuration(self):
         conf = ConfigParser()
-        self.history_policy = conf.detection_history_policy()
         self.printable_twid_width = conf.get_tw_width()
         self.GID = conf.get_GID()
         self.UID = conf.get_UID()
@@ -209,8 +207,6 @@ class Output(IObserver):
         date_time = utils.get_human_readable_datetime()
 
         with self.slips_logfile_lock:
-            if isinstance(getattr(self, "history_policy", None), dict):
-                rotate_log(Path(self.slips_logfile), self.history_policy)
             with open(self.slips_logfile, "a") as slips_logfile:
                 slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
 
@@ -272,8 +268,6 @@ class Output(IObserver):
         date_time = utils.get_human_readable_datetime()
 
         with self.errors_logfile_lock:
-            if isinstance(getattr(self, "history_policy", None), dict):
-                rotate_log(Path(self.errors_logfile), self.history_policy)
             with open(self.errors_logfile, "a") as errors_logfile:
                 errors_logfile.write(
                     f'{date_time} [{msg["from"]}] {msg["txt"]}\n'

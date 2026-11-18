@@ -675,6 +675,7 @@ class Main:
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
             self.flow_cleanup_man = self.proc_man.start_flow_cleanup_manager()
+            self.log_rotation_man = self.proc_man.start_log_rotation_manager()
             if not (
                 self.proc_man.is_profiler_done_starting_initial_workers_event.is_set()
             ):
@@ -729,6 +730,7 @@ class Main:
                 self.db.check_tw_to_close()
                 self.db.ping()
                 self.proc_man.health_check_modules()
+                self.log_rotation_man.rotate_logs_if_due()
 
                 modified_profiles: Set[str] = (
                     self.metadata_man.update_slips_stats_in_the_db()[1]

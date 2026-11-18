@@ -3,14 +3,18 @@ import json
 import os
 import queue
 import threading
+import time
 import traceback
 import multiprocessing
-from pathlib import Path
-from slips_files.common.log_rotation import rotate_log
+from typing import TextIO
 
 from slips_files.common.parsers.config_parser import ConfigParser
 from slips_files.common.performance_paths import get_performance_csv_path
 from slips_files.common.slips_utils import utils
+
+
+# Seconds between checks for logs rotated by the log rotation manager.
+ROTATED_LOGFILES_CHECK_INTERVAL_SECONDS = 1
 
 
 class EvidenceLogger:
@@ -33,6 +37,7 @@ class EvidenceLogger:
         # clear output/alerts.json
         self.jsonfile = self.clean_file(self.output_dir, "alerts.json")
         utils.change_logfiles_ownership(self.jsonfile.name, self.UID, self.GID)
+        self.last_rotated_logfiles_check_time = 0.0
         self.latency_file = None
         self.latency_writer = None
         if self.generate_performance_plots:
@@ -40,7 +45,11 @@ class EvidenceLogger:
 
     def read_configuration(self):
         conf = ConfigParser()
-        self.history_policy = conf.detection_history_policy()
+        history_policy = conf.detection_history_policy()
+        self.is_log_rotation_enabled = (
+            isinstance(history_policy, dict)
+            and history_policy.get("enabled") is True
+        )
         self.GID = conf.get_GID()
         self.UID = conf.get_UID()
         self.generate_performance_plots = (
@@ -80,18 +89,55 @@ class EvidenceLogger:
             )
         return open(logfile_path, "a")
 
+    def _reopen_logfile_if_rotated(self, logfile: TextIO) -> TextIO:
+        """
+        The log rotation manager renames a full log from the main process,
+        which leaves this process writing to the archived file. This
+        detects that and switches to the new active file.
+
+        Parameters:
+            logfile: Open handle of an active log.
+
+        Returns:
+            The same handle, or a new one opened on the active log.
+        """
+        try:
+            active_inode = os.stat(logfile.name).st_ino
+            if os.fstat(logfile.fileno()).st_ino == active_inode:
+                return logfile
+        except FileNotFoundError:
+            # the rotation is between its rename and re-creating the log
+            pass
+        logfile.close()
+        return open(logfile.name, "a")
+
+    def reopen_rotated_logfiles_if_due(self) -> None:
+        """
+        Checks alerts.log and alerts.json for a rotation once every
+        ROTATED_LOGFILES_CHECK_INTERVAL_SECONDS instead of on every write.
+        """
+        if not self.is_log_rotation_enabled:
+            return
+        now = time.monotonic()
+        if (
+            now - self.last_rotated_logfiles_check_time
+            < ROTATED_LOGFILES_CHECK_INTERVAL_SECONDS
+        ):
+            return
+        self.last_rotated_logfiles_check_time = now
+        try:
+            self.logfile = self._reopen_logfile_if_rotated(self.logfile)
+            self.jsonfile = self._reopen_logfile_if_rotated(self.jsonfile)
+        except OSError:
+            # keep writing to the current handles and retry next check
+            return
+
     def print_to_alerts_logfile(self, data: str):
         """
         Add a new evidence line to the alerts.log
         """
         try:
             # write to alerts.log
-            if isinstance(
-                getattr(self, "history_policy", None), dict
-            ) and rotate_log(Path(self.logfile.name), self.history_policy):
-                name = self.logfile.name
-                self.logfile.close()
-                self.logfile = open(name, "a")
             self.logfile.write(data)
             if not data.endswith("\n"):
                 self.logfile.write("\n")
@@ -104,12 +150,6 @@ class EvidenceLogger:
 
     def print_to_alerts_json(self, idmef_evidence: dict):
         try:
-            if isinstance(
-                getattr(self, "history_policy", None), dict
-            ) and rotate_log(Path(self.jsonfile.name), self.history_policy):
-                name = self.jsonfile.name
-                self.jsonfile.close()
-                self.jsonfile = open(name, "a")
             json.dump(idmef_evidence, self.jsonfile)
             self.jsonfile.write("\n")
             self.jsonfile.flush()  # flush Python buffer
@@ -154,6 +194,7 @@ class EvidenceLogger:
                     break
                 continue
 
+            self.reopen_rotated_logfiles_if_due()
             destination = msg["where"]
 
             if destination == "alerts.log":
