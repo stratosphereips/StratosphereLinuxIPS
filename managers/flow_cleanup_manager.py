@@ -2,13 +2,11 @@
 # SPDX-License-Identifier: GPL-2.0-only
 """Keep the disk usage of long live captures bounded."""
 
-import threading
 import time
 from pathlib import Path
 from typing import Any, Optional
 
 from slips_files.common.log_rotation import expire_rotated_logs
-from slips_files.common.slips_utils import utils
 from slips_files.core.database.sqlite_db.detection_history import (
     MAINTENANCE_INTERVAL_SECONDS,
 )
@@ -20,16 +18,20 @@ FLOW_RETENTION_BATCH_SIZE = 500
 FLOW_RETENTION_INTERVAL_SECONDS = 60
 # Seconds between passes that delete expired rotated logs.
 ROTATED_LOGS_EXPIRY_INTERVAL_SECONDS = 60
-# Seconds to wait for a running cleanup pass to finish on shutdown.
-CLEANUP_THREAD_JOIN_TIMEOUT_SECONDS = 5
+# Seconds between cleanup passes.
+CLEANUP_PASS_INTERVAL_SECONDS = min(
+    FLOW_RETENTION_INTERVAL_SECONDS, MAINTENANCE_INTERVAL_SECONDS
+)
 
 
 class FlowCleanupManager:
     """
-    Owns the background thread that deletes old flows, maintains the
-    detection history and expires rotated logs.
+    Deletes old flows, maintains the detection history and expires
+    rotated logs.
     Why here and not in the profiler? so the flow processing path never
     waits for cleanup work.
+    Why no thread? every pass is small and bounded, so the main loop of
+    Slips calls run_cleanup_if_due() itself.
     """
 
     def __init__(self, main: Any) -> None:
@@ -38,13 +40,8 @@ class FlowCleanupManager:
         """
         self.main = main
         self.read_configuration()
-        # is set on shutdown to stop the cleanup thread
-        self.stop_event = threading.Event()
-        self.cleanup_thread = threading.Thread(
-            target=self._run_cleanup_loop,
-            name="flow_cleanup_thread",
-            daemon=True,
-        )
+        self.is_running = False
+        self.last_cleanup_pass_time = 0.0
         self.last_flow_cleanup_time = 0.0
         self.last_rotated_logs_expiry_time = 0.0
         self.history_deferred_since: Optional[float] = None
@@ -81,26 +78,20 @@ class FlowCleanupManager:
 
     def start(self) -> bool:
         """
-        Starts the cleanup thread if this run needs it.
+        Enables the cleanup passes if this run needs them.
 
         Returns:
-            True when the thread was started.
+            True when this run will be cleaned up.
         """
-        if not self._is_cleanup_needed():
-            return False
-        utils.start_thread(self.cleanup_thread, self.main.db)
-        return True
+        self.is_running = self._is_cleanup_needed()
+        return self.is_running
 
     def shutdown(self) -> None:
         """
-        Stops the cleanup thread and waits for its running pass to finish,
-        so no pass is using the database when Slips closes it.
+        Stops the cleanup passes, so none uses the database while Slips
+        is closing it.
         """
-        self.stop_event.set()
-        if self.cleanup_thread.is_alive():
-            self.cleanup_thread.join(
-                timeout=CLEANUP_THREAD_JOIN_TIMEOUT_SECONDS
-            )
+        self.is_running = False
 
     def _expire_rotated_logs_if_due(self, now: float) -> None:
         """
@@ -237,13 +228,22 @@ class FlowCleanupManager:
                 1,
             )
 
-    def _run_cleanup_loop(self) -> None:
-        """runs in a thread
-        Runs cleanup passes until Slips starts shutting down."""
-        if not self.main.args.interface:
-            return
-        seconds_between_passes = min(
-            FLOW_RETENTION_INTERVAL_SECONDS, MAINTENANCE_INTERVAL_SECONDS
-        )
-        while not self.stop_event.wait(seconds_between_passes):
-            self._run_cleanup_pass(time.time())
+    def run_cleanup_if_due(self, now: Optional[float] = None) -> bool:
+        """
+        Runs one cleanup pass once every CLEANUP_PASS_INTERVAL_SECONDS.
+        Is called by the main loop of Slips.
+
+        Parameters:
+            now: Optional Unix time of the current pass.
+
+        Returns:
+            True when a cleanup pass ran.
+        """
+        if not self.is_running:
+            return False
+        now = time.time() if now is None else now
+        if now - self.last_cleanup_pass_time < CLEANUP_PASS_INTERVAL_SECONDS:
+            return False
+        self.last_cleanup_pass_time = now
+        self._run_cleanup_pass(now)
+        return True

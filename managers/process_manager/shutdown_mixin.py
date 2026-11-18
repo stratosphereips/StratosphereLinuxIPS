@@ -644,24 +644,6 @@ class ShutdownMixin:
             self.plotter.write_throughput_metrics()
             self.plotter.plot_flows_from_conn_log()
 
-    def stop_flow_cleanup_manager(self) -> None:
-        """
-        Stop the flow cleanup thread, if this run started one, before the
-        databases it uses are closed.
-        """
-        flow_cleanup_man = getattr(self, "flow_cleanup_man", None)
-        if flow_cleanup_man is not None:
-            flow_cleanup_man.shutdown()
-
-    def stop_log_rotation_manager(self) -> None:
-        """
-        Stop rotating the logs, if this run started the manager, before
-        the processes writing to them are stopped.
-        """
-        log_rotation_man = getattr(self, "log_rotation_man", None)
-        if log_rotation_man is not None:
-            log_rotation_man.shutdown()
-
     def shutdown_gracefully(self) -> Optional[bool]:
         """
         Wait for modules to finish or kill them after the timeout.
@@ -680,8 +662,8 @@ class ShutdownMixin:
 
             print("Stopping Slips")
 
-            self.stop_flow_cleanup_manager()
-            self.stop_log_rotation_manager()
+            self.main.flow_cleanup_man.shutdown()
+            self.main.log_rotation_man.shutdown()
 
             self.children: List[BaseProcess] = (
                 multiprocessing.active_children()

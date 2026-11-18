@@ -73,6 +73,10 @@ These rules MUST be followed:
 - Evidence descriptions must state observed facts and detection reasons. Omit recurring disclaimers about benign explanations, proof of attack or unconfirmed exploitation; document detector limitations in docs/.
 - any comments added to describe parameters in slips.yaml should be user friendly and not so technical.
 - use type hinting.
+- Each class, module, and function must have a single, clearly defined responsibility.
+- Avoid mixing unrelated concerns or introducing methods that do not directly support the component's primary responsibility.
+- If a component has multiple reasons to change, split its responsibilities into cohesive, loosely coupled components. Avoid overengineering.
+- Manager classes should be created in Main.__init__
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.

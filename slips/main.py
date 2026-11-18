@@ -13,7 +13,9 @@ from distutils.dir_util import copy_tree
 from typing import Set
 import logging
 
+from managers.flow_cleanup_manager import FlowCleanupManager
 from managers.host_ip_manager import HostIPManager
+from managers.log_rotation_manager import LogRotationManager
 from managers.ap_manager import APManager
 from managers.metadata_manager import MetadataManager
 from managers.process_manager.process_manager import ProcessManager
@@ -57,6 +59,8 @@ class Main:
         self.metadata_man = MetadataManager(self)
         self.timewindow_man = TimewindowManager(self)
         self.ui_man = UIManager(self)
+        self.flow_cleanup_man = FlowCleanupManager(self)
+        self.log_rotation_man = LogRotationManager(self)
         self.version = utils.get_slips_version()
         # will be filled later
         self.commit = "None"
@@ -674,8 +678,8 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
-            self.flow_cleanup_man = self.proc_man.start_flow_cleanup_manager()
-            self.log_rotation_man = self.proc_man.start_log_rotation_manager()
+            self.flow_cleanup_man.start()
+            self.log_rotation_man.start()
             if not (
                 self.proc_man.is_profiler_done_starting_initial_workers_event.is_set()
             ):
@@ -730,6 +734,7 @@ class Main:
                 self.db.check_tw_to_close()
                 self.db.ping()
                 self.proc_man.health_check_modules()
+                self.flow_cleanup_man.run_cleanup_if_due()
                 self.log_rotation_man.rotate_logs_if_due()
 
                 modified_profiles: Set[str] = (
