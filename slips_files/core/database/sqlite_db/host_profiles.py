@@ -1503,10 +1503,10 @@ class HostProfileStore:
             observed_traffic=True,
             capture_state=state,
         )
-        arp_request = (
-            kind == "arp"
-            and str(getattr(flow, "operation", "") or "").lower() != "reply"
-        )
+        operation = str(getattr(flow, "operation", "") or "").lower()
+        arp_request = kind == "arp" and operation != "reply"
+        if kind == "arp" and operation == "request" and source:
+            target_facts.append(("arp_requested_by", source))
         self._save(
             target,
             interface,

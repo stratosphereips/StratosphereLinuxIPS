@@ -1601,6 +1601,8 @@ are kept separately in `permanent/host_profiles/hosts.sqlite`; older runs can
 still establish activity through retained flows, detections, and saved sightings
 from earlier sessions on the same network.
 An ARP request confirms its sender, not that its unanswered target is present.
+Slips saves the requested target and requester as a fact on that capture network
+without counting the target as an observed host.
 An IP sighting without a matching network-scoped MAC or name must not inherit a
 device identity learned on another network. Older raw flows may have expired
 under flow retention even while a saved sighting remains. Refreshing the

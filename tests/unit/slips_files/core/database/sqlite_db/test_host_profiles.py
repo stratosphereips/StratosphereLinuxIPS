@@ -41,6 +41,12 @@ def test_arp_request_does_not_confirm_target_presence(
     )
     assert seen["192.168.1.20"] == 100
     assert ("192.168.1.248" in seen) is expected_target
+    facts = HostProfileStore.read(path, "192.168.1.248")[0]["facts"]
+    assert any(
+        fact["kind"] == "arp_requested_by"
+        and fact["value"] == "192.168.1.20"
+        for fact in facts
+    ) is (operation == "request")
 
 
 @pytest.mark.parametrize("delayed", [False, True])
