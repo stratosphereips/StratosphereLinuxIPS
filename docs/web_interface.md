@@ -1598,7 +1598,12 @@ With **Current network only**, inventory membership and Last seen use actual
 flow, detection, or discovery observations. Refreshing cached metadata or
 learning a hostname cannot make an old host current. New packet observations
 are kept separately in `permanent/host_profiles/hosts.sqlite`; older runs can
-still establish activity through retained flows and detections. Refreshing the
+still establish activity through retained flows, detections, and saved sightings
+from earlier sessions on the same network.
+An ARP request confirms its sender, not that its unanswered target is present.
+An IP sighting without a matching network-scoped MAC or name must not inherit a
+device identity learned on another network. Older raw flows may have expired
+under flow retention even while a saved sighting remains. Refreshing the
 inventory replaces every loaded page, so an old row beyond the first page does
 not survive a filter or network change. Device grouping includes only addresses
 observed on the selected network and within the selected time range.

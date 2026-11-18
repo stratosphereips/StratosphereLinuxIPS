@@ -4878,6 +4878,54 @@ def test_host_names_resolves_live_and_historical_identity(
     )
 
 
+def test_current_network_does_not_reuse_another_networks_host_identity(
+    tmp_path: Path,
+) -> None:
+    """A local IP-only sighting cannot inherit an older device's name or MAC.
+
+    Parameters:
+        tmp_path: Isolated history and permanent host databases.
+    """
+    _module_factory = ModuleFactory()
+    ip = "192.168.1.248"
+    old_mac = "d8:3a:dd:bb:1d:6d"
+    profile_path = tmp_path / "hosts.sqlite"
+    state = {"local_network": "192.168.1.0/24",
+             "gateway_mac": "aa:bb:cc:dd:ee:01"}
+    store = HostProfileStore(profile_path, "run", lambda _: state, ["en0"])
+    store.observe_flow(SimpleNamespace(type_="conn", interface="en0",
+        starttime=100, saddr=ip, daddr="8.8.8.8", smac=old_mac))
+    state["gateway_mac"] = "aa:bb:cc:dd:ee:02"
+    store.observe_flow(SimpleNamespace(type_="arp", operation="request",
+        interface="en0", starttime=200, saddr="192.168.1.20",
+        daddr=ip, src_hw="02:00:00:00:00:20",
+        dst_hw="00:00:00:00:00:00"))
+    reader = RunDataReader.__new__(RunDataReader)
+    reader.host_profiles_path = profile_path
+    reader.history_path = tmp_path / "history.sqlite"
+    reader._annotation_networks = Mock(
+        return_value=["gateway:aa:bb:cc:dd:ee:02"]
+    )
+    initialize_history(reader.history_path)
+    snapshot = {"ip": ip, "scope": "local", "hostname": "rpi5-1.local",
+                "hostname_source": "mDNS", "mac": old_mac,
+                "mac_vendor": "Raspberry Pi"}
+    with sqlite3.connect(reader.history_path) as connection:
+        connection.execute("INSERT INTO host_snapshots VALUES (?, ?, ?)",
+                           (ip, 100, json.dumps(snapshot)))
+    host = dict(snapshot)
+    reader._restore_host_identities([host], {"network": ["current"]})
+    assert host["hostname"] == host["mac"] == host["mac_vendor"] == ""
+    reader.redis = Mock()
+    reader.redis.pipeline.return_value.execute.return_value = [
+        "rpi5-1.local", None, "Raspberry Pi", old_mac,
+    ]
+    reader.cache = Mock()
+    assert reader.host_names({"network": ["current"], "ip": [ip]})[
+        "names"
+    ][ip] == {"name": "", "source": ""}
+
+
 def test_host_names_prefers_saved_name_then_vendor(tmp_path: Path) -> None:
     """Show a manual name or vendor beside IPs in alert labels.
 

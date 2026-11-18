@@ -6089,6 +6089,7 @@ class RunDataReader:
             query: Selected capture network and view filters.
             live_identity: Optional freshly read profile fields to verify MACs.
         """
+        network_ids = self._annotation_networks(query)
         stored = HostProfileStore.identities_for_ips(
             getattr(
                 self,
@@ -6096,25 +6097,49 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             [host["ip"] for host in hosts],
-            self._annotation_networks(query),
-            {
-                ip: (record.get("fields") or {}).get("MAC", "")
-                for ip, record in (live_identity or {}).items()
-            },
+            network_ids,
+            (
+                {}
+                if network_ids
+                else {
+                    ip: (record.get("fields") or {}).get("MAC", "")
+                    for ip, record in (live_identity or {}).items()
+                }
+            ),
         )
         for host in hosts:
             identity = stored.get(host["ip"], {})
             fields = (live_identity or {}).get(host["ip"], {}).get(
                 "fields"
             ) or {}
+            scoped_local = bool(network_ids) and host.get("scope") == "local"
+            trusted_snapshot = bool(
+                identity.get("mac")
+                and identity["mac"]
+                == HostProfileStore._usable_mac(host.get("mac", ""))
+            )
+            if scoped_local and not trusted_snapshot:
+                host["hostname"] = ""
+                host["hostname_source"] = ""
+                host["dns_name"] = ""
+                host["dns_name_source"] = ""
+                host["mac"] = ""
+                host["mac_vendor"] = ""
             if identity.get("identity_changed") or (
                 identity.get("mac")
                 and host.get("mac")
                 and identity["mac"]
                 != HostProfileStore._usable_mac(host["mac"])
             ):
-                host["hostname"] = fields.get("host_name", "")
+                host["hostname"] = (
+                    fields.get("host_name", "")
+                    if not scoped_local
+                    or HostProfileStore._usable_mac(fields.get("MAC", ""))
+                    == identity.get("mac")
+                    else ""
+                )
                 host["dns_name"] = ""
+                host["mac_vendor"] = ""
                 host["dns_name_source"] = ""
             if identity.get("name"):
                 host["hostname"] = identity["name"]
@@ -6236,6 +6261,7 @@ class RunDataReader:
         ips = list(dict.fromkeys(requested.values()))
         if not ips:
             return {"names": {}}
+        network_ids = self._annotation_networks(query)
         annotations = HostProfileStore.annotations_for_ips(
             getattr(
                 self,
@@ -6243,7 +6269,7 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             ips,
-            self._annotation_networks(query),
+            network_ids,
         )
 
         snapshots: Dict[str, Dict[str, Any]] = {}
@@ -6281,23 +6307,37 @@ class RunDataReader:
                 Path("permanent/host_profiles/hosts.sqlite"),
             ),
             ips,
-            self._annotation_networks(query),
-            {
-                ip: live_identity[index * 4 + 3]
-                for index, ip in enumerate(ips)
-                if index * 4 + 3 < len(live_identity)
-            },
+            network_ids,
+            (
+                {}
+                if network_ids
+                else {
+                    ip: live_identity[index * 4 + 3]
+                    for index, ip in enumerate(ips)
+                    if index * 4 + 3 < len(live_identity)
+                }
+            ),
         )
         names: Dict[str, Dict[str, str]] = {}
         for index, ip in enumerate(ips):
             snapshot = snapshots.get(ip, {})
-            identity_changed = bool(
-                stored.get(ip, {}).get("identity_changed")
-            ) or bool(
+            scoped_local = (
+                bool(network_ids) and not ipaddress.ip_address(ip).is_global
+            )
+            trusted_snapshot = bool(
                 stored.get(ip, {}).get("mac")
-                and snapshot.get("mac")
                 and stored[ip]["mac"]
-                != HostProfileStore._usable_mac(snapshot["mac"])
+                == HostProfileStore._usable_mac(snapshot.get("mac", ""))
+            )
+            identity_changed = (
+                bool(stored.get(ip, {}).get("identity_changed"))
+                or bool(
+                    stored.get(ip, {}).get("mac")
+                    and snapshot.get("mac")
+                    and stored[ip]["mac"]
+                    != HostProfileStore._usable_mac(snapshot["mac"])
+                )
+                or (scoped_local and not trusted_snapshot)
             )
             if identity_changed:
                 snapshot = {}
@@ -6361,7 +6401,7 @@ class RunDataReader:
                 }:
                     name = str(asn["org"])
                     source = "ASN organization"
-            if not name:
+            if not name and not identity_changed:
                 vendor = (
                     live_identity[index * 4 + 2]
                     if index * 4 + 2 < len(live_identity)
