@@ -198,8 +198,9 @@ def test_rotate_logs_if_due_reports_a_failure_and_continues() -> None:
     ):
         assert manager.rotate_logs_if_due(1000.0) == 1
 
-    manager.main.print.assert_called_once()
-    assert "a.log" in manager.main.print.call_args.args[0]
+    failure, success = manager.main.print.call_args_list
+    assert "Failed to rotate a.log" in failure.args[0]
+    assert "Rotated b.log" in success.args[0]
 
 
 def test_rotate_logs_if_due_rotates_a_full_log(tmp_path: Path) -> None:

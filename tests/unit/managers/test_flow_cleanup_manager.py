@@ -13,6 +13,22 @@ from tests.module_factory import ModuleFactory
 MANAGER = "managers.flow_cleanup_manager"
 
 
+def full_history_policy() -> dict:
+    """Return an enabled detection history policy with every limit set."""
+    return {
+        "enabled": True,
+        "active_days": 90,
+        "max_active_size_mb": 2048,
+        "min_active_hours": 24,
+        "archive_retention_days": 30,
+        "archive_file_size_mb": 256,
+        "max_archive_size_mb": 4096,
+        "min_free_disk_mb": 1024,
+        "log_max_size_mb": 64,
+        "log_backup_count": 30,
+    }
+
+
 def test_init_reads_the_cleanup_policies() -> None:
     """Read both policies and stay idle until start() is called."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
@@ -192,7 +208,7 @@ def test_expire_rotated_logs_if_due(
     manager.last_rotated_logs_expiry_time = 1000
     now = 1000 + seconds_since_last_expiry
 
-    with patch(f"{MANAGER}.expire_rotated_logs") as expire_rotated_logs:
+    with patch(f"{MANAGER}.expire_rotated_logs", return_value=0) as expire_rotated_logs:
         manager._expire_rotated_logs_if_due(now)
 
     assert expire_rotated_logs.call_count == expected_calls
@@ -212,7 +228,7 @@ def test_deferred_history_does_not_interrupt_flow_cleanup(
         persistent: Whether every pass remains busy beyond a minute.
     """
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
-    manager.detection_history_policy = {"enabled": True}
+    manager.detection_history_policy = full_history_policy()
     manager.start()
     manager.main.db.maintain_detection_history.side_effect = [
         {
@@ -224,7 +240,7 @@ def test_deferred_history_does_not_interrupt_flow_cleanup(
     ]
     manager.main.db.maintain_flow_retention.return_value = []
 
-    with patch(f"{MANAGER}.expire_rotated_logs"):
+    with patch(f"{MANAGER}.expire_rotated_logs", return_value=0):
         for index in range(9):
             manager.run_cleanup_if_due(1000 + index * 10)
 
@@ -243,6 +259,7 @@ def test_deferred_history_does_not_interrupt_flow_cleanup(
 def test_successful_history_pass_resets_the_deferral_state() -> None:
     """Forget earlier deferrals once a maintenance pass completes."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
     manager.history_deferrals = 4
     manager.history_deferred_since = 900.0
     manager.main.db.maintain_detection_history.return_value = {
@@ -260,13 +277,13 @@ def test_successful_history_pass_resets_the_deferral_state() -> None:
 def test_failed_history_pass_is_reported_and_flows_still_cleaned() -> None:
     """Report a history failure without skipping the flow cleanup."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
-    manager.detection_history_policy = {"enabled": True}
+    manager.detection_history_policy = full_history_policy()
     manager.main.db.maintain_detection_history.side_effect = RuntimeError(
         "boom"
     )
     manager.main.db.maintain_flow_retention.return_value = []
 
-    with patch(f"{MANAGER}.expire_rotated_logs"):
+    with patch(f"{MANAGER}.expire_rotated_logs", return_value=0):
         manager._run_cleanup_pass(10000000)
 
     message, verbosity, debug = manager.main.print.call_args.args
@@ -285,3 +302,42 @@ def test_failed_flow_cleanup_never_reaches_the_main_loop() -> None:
     manager.main.print.assert_called_once_with(
         "Flow retention maintenance failed: boom", 0, 1
     )
+
+
+def test_expired_rotated_logs_are_reported_with_the_reason() -> None:
+    """Tell the user how many rotated logs were deleted and why."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+    manager.last_rotated_logs_expiry_time = 0
+
+    with patch(f"{MANAGER}.expire_rotated_logs", return_value=2):
+        manager._expire_rotated_logs_if_due(1000)
+
+    message, verbosity, debug = manager.main.print.call_args.args
+    assert "Deleted 2 expired rotated log file(s)" in message
+    assert "archive_retention_days=30" in message
+    assert (verbosity, debug) == (0, 1)
+
+
+def test_history_maintenance_result_is_reported_with_the_reason() -> None:
+    """Tell the user which history work ran and which limit triggered it."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+
+    manager._print_history_maintenance_result(
+        {"units": 3, "size_pressure": True, "active_size_bytes": 3 * 1024**3}
+    )
+
+    message = manager.main.print.call_args.args[0]
+    assert "did 3 step(s)" in message
+    assert "max_active_size_mb=2048" in message
+
+
+def test_history_maintenance_result_stays_silent_without_work() -> None:
+    """Print nothing when the history pass archived or deleted nothing."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+
+    manager._print_history_maintenance_result({"deferred": False})
+
+    manager.main.print.assert_not_called()
