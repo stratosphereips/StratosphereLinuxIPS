@@ -1279,3 +1279,162 @@ def test_live_merged_predictions_equal_the_end_of_window_scores(
     for r in served:
         assert r["matched"] == r["compared"] and r["MISMATCH"] == 0
         assert r["gen_race"] == 0 and r["no_live"] == 0
+
+
+# --------------------------------------------------------------------------
+# gt_baseline: a model trained on the side on ground-truth labels
+# --------------------------------------------------------------------------
+SHIPPED_GLOBAL_SCALER = os.path.join(
+    os.path.dirname(fnm.__file__), "artifacts", "global_scaler.json"
+)
+TPFPTNFN_RE = re.compile(r"TP/FP/TN/FN: (\d+)/(\d+)/(\d+)/(\d+)")
+WALL_TS_RE = re.compile(r"\d{4}-\d\d-\d\d \d\d:\d\d:\d\d(\.\d+)?")
+
+
+def _global_scaler(p):
+    """The runs' setting: the shipped scaler, fixed (never fit)."""
+    p.m.global_scaler = True
+    p.m.scaler = fnm.load_global_scaler(
+        SHIPPED_GLOBAL_SCALER, p.m._get_feature_order()
+    )
+    p.m.is_preprocessor_fitted = True
+
+
+def _gt_on(p):
+    """What init() sets up with gt_baseline: true."""
+    p.m.gt_baseline = True
+    p.m.gt_model = None
+    p.m._gt_adam = {}
+    p.m._gt_buffer_x, p.m._gt_buffer_y = [], []
+    p.m.logger.add_files(["gt_train", "gt_test", "gt_test_conn"])
+
+
+def _confusion(p, log):
+    """TP, FP, TN, FN summed over a test log's window lines."""
+    rows = [
+        tuple(map(int, m.groups()))
+        for m in (TPFPTNFN_RE.search(x) for x in p.lines(log))
+        if m
+    ]
+    return tuple(sum(r[i] for r in rows) for i in range(4))
+
+
+@pytest.mark.parametrize("model_class", sorted(fnm.MODEL_REGISTRY))
+@pytest.mark.parametrize("balancing", ["undersample", "weighting"])
+def test_gt_model_is_the_local_model_when_alerts_are_the_ground_truth(
+    net, model_class, balancing
+):
+    """K = 0 and alerts citing exactly the attacker's flows: the local model
+    then trains on the ground truth at every close, so the gt model (same
+    class, initial weights, scaler, balancing and training) must equal it
+    weight for weight after every close, and its test streams must equal
+    the local ones line for line."""
+    p = net.peer("slips-a", k=0, balancing=balancing, model_class=model_class)
+    _global_scaler(p)
+    _gt_on(p)
+    for w in range(1, 7):
+        attack = _atk(w, 2 + w) + _scan(w, 4)
+        p.close(flows=_ben(w, 9) + attack, alerts=[(f"A{w}", attack)])
+        local, gt = p.m.model.state_dict(), p.m.gt_model.state_dict()
+        assert local.keys() == gt.keys()
+        assert all(torch.equal(local[k], gt[k]) for k in local), w
+    assert p.lines("gt_test.log") == p.lines("local_test.log") != []
+    assert p.lines("gt_test_conn.log") == p.lines("local_test_conn.log")
+    assert p.lines("module_errors.log") == []
+
+
+def _two_peer_run(root, monkeypatch, gt, fc_layers):
+    """Two peers, four windows, models routed both ways; alerts cite only
+    part of the attack, so alert labels differ from the ground truth."""
+    n = Net(root)
+    monkeypatch.setattr(fnm.time, "time", lambda: n.clock.now)
+    a, b = n.peer("slips-a", k=1), n.peer("slips-b", k=1)
+    for p in (a, b):
+        _global_scaler(p)
+        p.m.finetune_fc_layers = fc_layers
+        if gt:
+            _gt_on(p)
+    for w in range(1, 5):
+        for p in (a, b):
+            attack = _atk(w, 4) + _scan(w, 3)
+            p.close(
+                flows=_ben(w, 8) + attack,
+                alerts=[(f"{p.name}-{w}", attack[:2])],
+            )
+        for src, dst in ((a, b), (b, a)):
+            if src.m.db.published:  # K = 1: nothing is sent before window 2
+                n.route(src, dst)
+    out = {}
+    for p in (a, b):
+        for dirpath, _, files in os.walk(p.m.output_dir):
+            for f in files:
+                if f.startswith("gt_"):
+                    continue
+                path = os.path.join(dirpath, f)
+                key = (p.name, os.path.relpath(path, p.m.output_dir))
+                if f.endswith(".npz"):
+                    with np.load(path) as z:
+                        out[key] = {k: z[k].tolist() for k in z.files}
+                else:
+                    with open(path) as fh:  # wall-clock stamps differ
+                        out[key] = WALL_TS_RE.sub("<ts>", fh.read())
+        out[(p.name, "published")] = list(p.m.db.published)
+        out[(p.name, "local")] = {
+            k: v.tolist() for k, v in p.m.model.state_dict().items()
+        }
+        merged = p.m.merged_model
+        out[(p.name, "merged")] = (
+            None
+            if merged is None
+            else {k: v.tolist() for k, v in merged.state_dict().items()}
+        )
+    models = [(p.m.model, getattr(p.m, "gt_model", None)) for p in (a, b)]
+    errors = [p.lines("module_errors.log") for p in (a, b)]
+    for p in (a, b):
+        p.shutdown()
+    return out, models, errors
+
+
+@pytest.mark.parametrize("fc_layers", [False, True])
+def test_gt_baseline_changes_no_other_output(tmp_path, monkeypatch, fc_layers):
+    """The same two-peer run with and without gt_baseline: every log, label
+    file, weight snapshot, sent payload and the final local and merged
+    models are identical; the gt model exists and is a different model."""
+    attackers = tmp_path / "simulated_attackers.txt"
+    attackers.write_text(ATTACKER + "\n")
+    monkeypatch.setenv("FL_SIM_ATTACKERS", str(attackers))
+    off, _, _ = _two_peer_run(tmp_path / "off", monkeypatch, False, fc_layers)
+    on, models, errors = _two_peer_run(
+        tmp_path / "on", monkeypatch, True, fc_layers
+    )
+    assert off.keys() == on.keys()
+    for key in off:
+        assert off[key] == on[key], key
+    assert errors == [[], []]
+    for local, gt in models:
+        assert gt is not None and gt is not local
+        assert any(
+            not torch.equal(t, gt.state_dict()[k])
+            for k, t in local.state_dict().items()
+        )
+    assert not any(
+        os.path.exists(tmp_path / "off" / peer / "logs" / "gt_test.log")
+        for peer in ("slips-a", "slips-b")
+    )
+
+
+def test_gt_model_detects_an_attack_the_alerts_never_label(net):
+    """No alert ever fires: the local model only sees benign labels and
+    never flags a flow, while the gt model learns the attacker's flows from
+    the ground truth."""
+    p = net.peer("slips-a", k=1)
+    _global_scaler(p)
+    _gt_on(p)
+    p.m.learning_rate = 0.05
+    for w in range(1, 9):
+        p.close(flows=_ben(w, 10) + _atk(w, 8))
+    local_tp, local_fp, _, _ = _confusion(p, "local_test.log")
+    gt_tp, gt_fp, _, gt_fn = _confusion(p, "gt_test.log")
+    assert local_tp == 0 and local_fp == 0
+    assert gt_tp > gt_fn and gt_tp > 0
+    assert p.lines("module_errors.log") == []

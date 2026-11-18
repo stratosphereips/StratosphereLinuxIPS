@@ -251,6 +251,7 @@ def test_network_key_defaults(tmp_path, monkeypatch):
     assert m.merge_rule == "average" and m.balancing == ""
     assert m.run_seed is None
     assert m.min_training_samples == 30
+    assert m.gt_baseline is False and m.gt_model is None
 
 
 @pytest.mark.parametrize(
@@ -276,6 +277,7 @@ def test_network_key_defaults(tmp_path, monkeypatch):
         ("balancing", "none", "balancing", "none"),
         ("run_seed", "3", "run_seed", 3),
         ("min_training_samples", "50", "min_training_samples", 50),
+        ("gt_baseline", "true", "gt_baseline", True),
     ],
 )
 def test_each_network_key_reaches_the_module(

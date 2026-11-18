@@ -287,6 +287,7 @@ Testing vs ground truth (prequential: one line per scored window and stream,
 | `local_test.log` | the local model, as left by the last training close (after its fine-tune): the serving model in windows without a merged model; in merge-served windows the shadow score of the same flows (dual testing) |
 | `merged_test.log` | the merged model, in the windows it served (from the first merge on) |
 | `local_test_conn.log` / `merged_test_conn.log` | the same two streams counting **conn flows only** (same spans and line format). Every flow (conn + ARP) counts in the files above; ARP records dominate them under a scanning attacker, so score both scopes |
+| `gt_test.log` / `gt_test_conn.log` | with `gt_baseline`: the ground-truth baseline model, every window from its first training on (same spans and line format) |
 | `sofar_test.jsonl` | **all traffic so far** (not prequential): at every training close, the models of that close scored on every flow read since start, **including the flows they trained on** — optimistic, report it as such. Format below |
 
 > All traffic so far (`sofar_test.jsonl`): every conn flow and ARP record the
@@ -433,6 +434,7 @@ federated_network_module:
 | `class_weighting` | per model class | – | used only when `balancing` is unset |
 | `merge_head` | `false` | – | |
 | `merge_scaler` | `false` | – | |
+| `gt_baseline` | `false` | – | true = also train a ground-truth baseline on the side: same model class, initial weights, scaler, balancing and training as the local model, trained at every close on that window's flows labeled with the simulated ground truth (no label delay), scored before it trains (`gt_test.log`, `gt_test_conn.log`, `gt_train.log`); never sent, merged or used for labels, so the local and merged models are unchanged |
 | `global_scaler` | `true` | `true` | |
 | `test_log_batch_size` | `training_batch_size` | `1` | test mode only |
 | `model_load_path`, `preprocess_load_path` | required | `artifacts/model.bin`, `artifacts/scaler.bin` | see Final merged model |

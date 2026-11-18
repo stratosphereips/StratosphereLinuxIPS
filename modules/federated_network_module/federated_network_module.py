@@ -45,7 +45,9 @@ the own + peers' scalers pooled with the merge rule's weights (its fine-tune
 and scoring use it, the local model keeps its own); global_scaler (default
 on) makes every model scale with the pretrained scaler in
 artifacts/global_scaler.json, never fit; minibatch_size splits every training
-pass into class-stratified mini-batches (one Adam step each).
+pass into class-stratified mini-batches (one Adam step each); gt_baseline
+also trains a ground-truth baseline on the side (gt_test*.log), never sent
+or merged.
 merging_data.log records per merge how much of the merge the fine-tunes undo
 ("finetune | ... | undone="). The module emits no SLIPS evidence
 (set_evidence_malicious_flow is a no-op).
@@ -1074,6 +1076,7 @@ class ModuleLogger:
     def __init__(self, output_dir: str, enable: bool):
         self.enable = enable
         self._files = {}
+        self._dir = output_dir
         if enable:
             os.makedirs(output_dir, exist_ok=True)
             filenames = {
@@ -1111,6 +1114,18 @@ class ModuleLogger:
                     output_dir, filenames.get(name, f"{name}.log")
                 )
                 self._files[name] = open(path, "w")
+
+    def add_files(self, names: list) -> None:
+        """Open `<name>.log` for each name (optional streams).
+
+        :param names: stream names
+        """
+        if self.enable:
+            for name in names:
+                if name not in self._files:
+                    self._files[name] = open(
+                        os.path.join(self._dir, f"{name}.log"), "w"
+                    )
 
     def _write(self, name: str, msg: str) -> None:
         if self.enable:
@@ -1498,6 +1513,21 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             "minibatch_size", default=0
         )
         self.print(f"minibatch_size: {self.minibatch_size}", 0, 2)
+        # Optional ground-truth baseline: a model of the same class and
+        # training, kept on the side, trained at every close on that
+        # window's flows with their simulated ground truth (no label delay)
+        # and scored before (gt_test*.log). Never sent, merged or used to
+        # label; the local and merged models are unchanged. Unset = off.
+        self.gt_baseline = self._read_module_config_bool(
+            "gt_baseline", default=False
+        )
+        self.print(f"gt_baseline: {self.gt_baseline}", 0, 2)
+        self.gt_model = None
+        self._gt_adam: Dict[str, dict] = {}
+        self._gt_buffer_x: list = []
+        self._gt_buffer_y: list = []
+        if self.gt_baseline:
+            self.logger.add_files(["gt_train", "gt_test", "gt_test_conn"])
         self.min_training_samples = conf.read_configuration(
             section, "min_training_samples", 30
         )
@@ -2547,6 +2577,9 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 "conn_main": self._blank_test_statistics(),
                 "shadow_local": self._blank_test_statistics(),
                 "conn_shadow": self._blank_test_statistics(),
+                # gt_baseline: the ground-truth model's score of the window
+                "gt": self._blank_test_statistics(),
+                "conn_gt": self._blank_test_statistics(),
             },
             "merged_served": False,
             # was a model live during this window? (fitted before this close
@@ -2787,6 +2820,8 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 ("local_test", t["shadow_local"]),
                 ("local_test_conn", t["conn_shadow"]),
             ]
+        if "gt" in t:
+            pairs += [("gt_test", t["gt"]), ("gt_test_conn", t["conn_gt"])]
         for target, stats in pairs:
             if self._stat_total(stats) > 0:
                 self.logger.log_test_marker(
@@ -3351,6 +3386,10 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
             self._detect_label_flips(fresh_uids)
             for cell in self._flow_ring:
                 self._test_cell(cell)
+            # gt_baseline: the side model scores this window, then trains on
+            # it with ground-truth labels (touches no other model)
+            if getattr(self, "gt_baseline", False):
+                self._gt_baseline_close(self._flow_ring[-1])
 
             # 4. finalize the K-old cell: flush its one per-window score line,
             #    then train on it (updating the live local model that serves
@@ -3614,6 +3653,90 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         self.training_buffer_ids[:] = [
             self.training_buffer_ids[i] for i in keep
         ]
+
+    def _gt_baseline_close(self, cell: dict) -> None:
+        """gt_baseline: score the window's flows with the ground-truth model
+        (prequential, before it trains), then train it on them labeled with
+        their simulated ground truth, at this close (no label delay).
+
+        Mirrors the local model's data path: buffer rows malicious first
+        (cell order), min_training_samples carry-over, the per-window
+        undersampling, the peer's scaler (never fit here). Errors are
+        logged, never raised.
+
+        :param cell: the cell this close opened
+        """
+        try:
+            if not hasattr(self.scaler, "mean_"):
+                return  # own scaler not fit yet: nothing scores or trains
+            items = list(cell["flows"].items())
+            if self.gt_model is not None and items:
+                kept, feats = self._flow_features(items)
+                if kept:
+                    pred = self._predict_batch_with(
+                        self.gt_model, self._scale(feats)
+                    )
+                    t = cell["test"]
+                    for i, (_, flow) in enumerate(kept):
+                        gt = self._get_simulated_gt(flow) or BENIGN
+                        self._tally(t["gt"], gt, pred[i])
+                        if flow.get("type_") == "conn":
+                            self._tally(t["conn_gt"], gt, pred[i])
+            labeled = [
+                (f, self._get_simulated_gt(f) or BENIGN) for _, f in items
+            ]
+            for want in (MALICIOUS, BENIGN):
+                for flow, label in labeled:
+                    if label == want:
+                        x, _ = self._process_flow(flow, label)
+                        if x is not None:
+                            self._gt_buffer_x.append(x)
+                            self._gt_buffer_y.append(label)
+            if len(self._gt_buffer_x) < self.min_training_samples:
+                return
+            X = np.array(self._gt_buffer_x)
+            y = np.array(self._gt_buffer_y)
+            self._gt_buffer_x.clear()
+            self._gt_buffer_y.clear()
+            if self._undersample:
+                X, y = self._undersample_majority(X, y)
+            self._train_gt_model(self.scaler.transform(X), y)
+        except Exception:
+            self._record_error("_gt_baseline_close")
+
+    def _train_gt_model(self, x_scaled: np.ndarray, y: np.ndarray) -> None:
+        """The local model's training (local training, then the fine-tune
+        with its Adam handling) applied to the ground-truth model, with its
+        own Adam state; the local model and its state are swapped back.
+
+        :param x_scaled: scaled training rows
+        :param y: their ground-truth labels
+        """
+        local_model, local_adam = self.model, self._adam_state
+        if self.gt_model is None:
+            self.gt_model = self.create_empty_model().to(self.device)
+        self.model, self._adam_state = self.gt_model, self._gt_adam
+        try:
+            self.fit_incremental_model(x_scaled, y, train_target="gt")
+            finetune_fc_layers = getattr(self, "finetune_fc_layers", True)
+            copy_adam = getattr(self, "merge_finetune_adam", "copy") == "copy"
+            train_adam = self._adam_state
+            if copy_adam:
+                self._adam_state = copy.deepcopy(train_adam)
+            elif finetune_fc_layers:
+                self._adam_state = {}
+            else:
+                self._reset_head_adam_state()
+            self._finetune_stage = True
+            try:
+                self.fit_incremental_model(x_scaled, y, train_target="gt")
+            finally:
+                self._finetune_stage = False
+                if copy_adam or finetune_fc_layers:
+                    self._adam_state = train_adam
+            self._gt_adam = self._adam_state
+        finally:
+            self.model, self._adam_state = local_model, local_adam
 
     def _train_batch(self, scaler_rows: Optional[list] = None):
         """Train on accumulated training buffer: local fc1+head, local head,
