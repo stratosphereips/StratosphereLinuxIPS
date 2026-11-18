@@ -8,6 +8,8 @@ import pytest
 from slips_files.core.aid_manager import AIDManager
 from tests.module_factory import ModuleFactory
 from multiprocessing import Queue
+from types import SimpleNamespace
+
 
 def make_task(flow=None, profileid="profile_1.1.1.1", twid="timewindow1"):
     return {
@@ -20,6 +22,14 @@ def make_task(flow=None, profileid="profile_1.1.1.1", twid="timewindow1"):
 
 def make_manager(queue=None) -> AIDManager:
     return AIDManager.for_queue(queue or Mock())
+
+
+def make_mock_queue(*gets) -> Mock:
+    """Mock queue whose get() yields `gets` and get_nowait() is always empty."""
+    queue = Mock()
+    queue.get.side_effect = list(gets)
+    queue.get_nowait.side_effect = Empty
+    return queue
 
 
 def test_for_queue_creates_client_with_only_the_queue():
@@ -50,8 +60,7 @@ def test_submit_aid_task_puts_task_dict_in_queue():
 
 def test_worker_loop_hashes_and_stores_flow_then_stops():
     task = make_task()
-    queue = Mock()
-    queue.get.side_effect = [task, "stop"]
+    queue = make_mock_queue(task, "stop")
     db = Mock()
 
     with patch(
@@ -61,15 +70,12 @@ def test_worker_loop_hashes_and_stores_flow_then_stops():
 
     get_aid.assert_called_once_with(task["flow"])
     assert task["flow"].aid == "aid123"
-    db.add_flow.assert_called_once_with(
-        task["flow"], task["profileid"], task["twid"], label="benign"
-    )
+    db.add_flows.assert_called_once_with([task])
 
 
 def test_worker_loop_preserves_queue_order():
     tasks = [make_task(profileid=f"profile_{i}") for i in range(3)]
-    queue = Mock()
-    queue.get.side_effect = [*tasks, "stop"]
+    queue = make_mock_queue(*tasks, "stop")
     db = Mock()
 
     with patch(
@@ -77,25 +83,27 @@ def test_worker_loop_preserves_queue_order():
     ):
         make_manager(queue)._worker_loop(queue, db)
 
-    stored = [call.args[1] for call in db.add_flow.call_args_list]
+    stored = [
+        task["profileid"]
+        for call in db.add_flows.call_args_list
+        for task in call.args[0]
+    ]
     assert stored == ["profile_0", "profile_1", "profile_2"]
 
 
 def test_worker_loop_stop_sentinel_stores_nothing():
-    queue = Mock()
-    queue.get.side_effect = ["stop"]
+    queue = make_mock_queue("stop")
     db = Mock()
 
     make_manager(queue)._worker_loop(queue, db)
 
-    db.add_flow.assert_not_called()
+    db.add_flows.assert_not_called()
 
 
 @pytest.mark.parametrize("interruption", [Empty(), KeyboardInterrupt()])
 def test_worker_loop_keeps_running_after_empty_or_interrupt(interruption):
     task = make_task()
-    queue = Mock()
-    queue.get.side_effect = [interruption, task, "stop"]
+    queue = make_mock_queue(interruption, task, "stop")
     db = Mock()
 
     with patch(
@@ -103,7 +111,7 @@ def test_worker_loop_keeps_running_after_empty_or_interrupt(interruption):
     ):
         make_manager(queue)._worker_loop(queue, db)
 
-    db.add_flow.assert_called_once()
+    db.add_flows.assert_called_once_with([task])
 
 
 def test_shutdown_sends_stop_sentinel_and_joins_process():
@@ -142,7 +150,8 @@ def test_aid_batches_drain_before_stop(count: int) -> None:
     """
     _factory = ModuleFactory()
     queue = Queue()
-    tasks = [{"flow": Mock(uid=str(n)), "profileid": f"profile_{n % 2}",
+    # real multiprocessing queues pickle tasks, and Mock objects can't be
+    tasks = [{"flow": SimpleNamespace(uid=str(n)), "profileid": f"profile_{n % 2}",
               "twid": "timewindow1", "label": "benign"} for n in range(count)]
     for task in tasks:
         queue.put(task)
@@ -152,18 +161,18 @@ def test_aid_batches_drain_before_stop(count: int) -> None:
         AIDManager.for_queue(queue)._worker_loop(queue, db)
     batches = [call.args[0] for call in db.add_flows.call_args_list]
     assert all(0 < len(batch) <= 64 for batch in batches)
-    assert [task for batch in batches for task in batch] == tasks
-    assert all(task["flow"].aid == "hash" for task in tasks)
+    stored = [task for batch in batches for task in batch]
+    assert [t["flow"].uid for t in stored] == [str(n) for n in range(count)]
+    assert [t["profileid"] for t in stored] == [t["profileid"] for t in tasks]
+    assert all(t["flow"].aid == "hash" for t in stored)
     db.add_flow.assert_not_called()
 
 
 def test_aid_sparse_flow_is_written_without_waiting_for_a_batch() -> None:
     """Commit an isolated flow immediately when no other task is ready."""
     _factory = ModuleFactory()
-    queue = Mock()
     task = {"flow": Mock(), "profileid": "profile_1", "twid": "tw1", "label": "benign"}
-    queue.get.side_effect = [task, "stop"]
-    queue.get_nowait.side_effect = Empty
+    queue = make_mock_queue(task, "stop")
     db = Mock()
     with patch("slips_files.core.aid_manager.utils.get_aid", return_value="hash"):
         AIDManager.for_queue(queue)._worker_loop(queue, db)
