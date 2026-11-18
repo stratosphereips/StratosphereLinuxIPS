@@ -6659,7 +6659,7 @@ async function loadHosts() {
       rows.forEach(rememberHostRecord);
       refreshHostLabels();
       applyPage("hosts", payload);
-      renderHostFilterChips(payload);
+      renderHostFilterChips();
       renderHostsPage();
       document.querySelector(".hosts-list-table").scrollTop = scroll;
     };
@@ -6789,29 +6789,17 @@ function hostPeakScoreCell(row) {
 }
 
 /** Keep threat and scope chips synchronized with the server filters. */
-function renderHostFilterChips(payload) {
-  const ranks = { info: 0, low: 1, medium: 2, high: 3, critical: 4 };
+function renderHostFilterChips() {
   const groups = [
-    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]], "max_threat_level"],
-    ["hosts-scope-chips", "hosts-scope", [["", "All"], ["local", "Local"], ["public", "Public"]], "scope"],
+    ["hosts-threat-chips", "hosts-threat", [["", "All"], ["critical_or_more", "Critical+"], ["high_or_more", "High+"], ["medium_or_more", "Medium+"], ["low_or_more", "Low+"], ["info_or_more", "Info+"]]],
+    ["hosts-scope-chips", "hosts-scope", [["", "All"], ["local", "Local"], ["public", "Public"]]],
   ];
-  groups.forEach(([targetId, selectId, options, field]) => {
+  groups.forEach(([targetId, selectId, options]) => {
     const target = byId(targetId);
     const select = byId(selectId);
     target.replaceChildren();
     options.forEach(([value, label]) => {
-      const completePage = payload.items.length === payload.total;
-      const minimum = value.replace("_or_more", "");
-      const count = !value || select.value === value ? payload.total
-        : payload.items.filter((row) => {
-          if (field === "max_threat_level" && row.has_findings === false) return false;
-          const rowValue = String(row[field] || "info").toLowerCase();
-          return field === "max_threat_level" && value.endsWith("_or_more")
-            ? (ranks[rowValue] ?? 0) >= ranks[minimum] : rowValue === value;
-        }).length;
-      const showCount = Boolean(value) && (select.value === value
-        || (completePage && !byId("hosts-threat").value && !byId("hosts-scope").value));
-      const button = text("button", `${label}${showCount ? ` ${compact(count)}` : ""}`, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
+      const button = text("button", label, `hosts-filter-chip ${select.value === value ? "active" : ""}`);
       button.type = "button";
       button.addEventListener("click", () => {
         select.value = value;

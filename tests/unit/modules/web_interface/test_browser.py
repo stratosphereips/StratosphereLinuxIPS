@@ -843,7 +843,7 @@ def test_tab_filter_popups_keep_queries_and_selections(tab: str, theme: str, wid
                 if tab == "alerts":
                     popup.get_by_role("button", name="All alerts", exact=True).click()
                 elif tab == "hosts":
-                    page.locator("#hosts-scope-chips").get_by_role("button", name="Local", exact=False).click()
+                    page.locator("#hosts-scope-chips").get_by_role("button", name="Local", exact=True).click()
                 else:
                     page.locator("#evidence-group-controls").get_by_role("button", name="None", exact=True).click()
             page.wait_for_function("tab => !state.requests.has(tab)", arg=tab)
