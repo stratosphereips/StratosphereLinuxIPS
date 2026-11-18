@@ -137,7 +137,17 @@ class LogRotationManager:
         rotated_logs = 0
         for path, lock in self._get_logs_to_rotate():
             try:
-                rotated_logs += int(self._rotate_log(path, lock, now))
+                rotated = self._rotate_log(path, lock, now)
+                rotated_logs += int(rotated)
+                if rotated:
+                    self.main.print(
+                        f"Rotated {path.name} because it reached "
+                        f"log_max_size_mb="
+                        f"{self.detection_history_policy['log_max_size_mb']}."
+                        f" Old copies are kept in {path.parent / 'rotated'}.",
+                        0,
+                        1,
+                    )
             except Exception as error:
                 self.main.print(
                     f"Failed to rotate {path}: {error}",

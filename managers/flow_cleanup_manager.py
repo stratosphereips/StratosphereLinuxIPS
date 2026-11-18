@@ -106,10 +106,20 @@ class FlowCleanupManager:
             < ROTATED_LOGS_EXPIRY_INTERVAL_SECONDS
         ):
             return
-        expire_rotated_logs(
+        removed = expire_rotated_logs(
             Path(self.main.args.output), self.detection_history_policy, now
         )
         self.last_rotated_logs_expiry_time = now
+        if removed:
+            policy = self.detection_history_policy
+            self.main.print(
+                f"Deleted {removed} expired rotated log file(s) because "
+                f"they were older than archive_retention_days="
+                f"{policy['archive_retention_days']} or exceeded "
+                f"log_backup_count={policy.get('log_backup_count', 30)}.",
+                0,
+                1,
+            )
 
     def _warn_if_history_keeps_getting_deferred(
         self, status: dict, now: float
@@ -180,6 +190,54 @@ class FlowCleanupManager:
         self.history_last_success_time = now
         self.history_deferred_since = None
         self.history_deferrals = 0
+        self._print_history_maintenance_result(status)
+
+    def _print_history_maintenance_result(self, status: Any) -> None:
+        """
+        Reports a history pass that archived or deleted something, and why.
+
+        Parameters:
+            status: Result of the completed history maintenance pass.
+        """
+        if not isinstance(status, dict):
+            return
+        policy = self.detection_history_policy
+        reasons = []
+        if status.get("size_pressure"):
+            reasons.append(
+                f"the active detection history size "
+                f"({status.get('active_size_bytes', 0) / 1024 / 1024:.0f} MB)"
+                f" exceeded max_active_size_mb="
+                f"{policy.get('max_active_size_mb')}"
+            )
+        else:
+            reasons.append(
+                f"records were older than active_days="
+                f"{policy['active_days']}"
+            )
+        if status.get("disk_pressure"):
+            reasons.append(
+                f"free disk space is below min_free_disk_mb="
+                f"{policy.get('min_free_disk_mb')}, so archiving was paused"
+            )
+        if status.get("expired_archives"):
+            self.main.print(
+                "Deleted expired detection history archive(s) because they "
+                f"were older than archive_retention_days="
+                f"{policy['archive_retention_days']} or the archives "
+                f"exceeded max_archive_size_mb="
+                f"{policy.get('max_archive_size_mb', 4096)}.",
+                0,
+                1,
+            )
+        if status.get("units"):
+            self.main.print(
+                f"Detection history maintenance did {status['units']} "
+                f"step(s) (summaries/archiving) because "
+                f"{'; '.join(reasons)}.",
+                0,
+                1,
+            )
 
     def _delete_old_flows_if_due(self, now: float) -> None:
         """
@@ -205,6 +263,15 @@ class FlowCleanupManager:
         )
         if removed_uids:
             self.main.db.remove_flow_index_uids(removed_uids)
+            self.main.print(
+                f"Deleted {len(removed_uids)} old flow(s) because they "
+                f"were older than {policy['ordinary_hours']}h (ordinary) / "
+                f"{policy['linked_days']}d (linked to evidence), or the "
+                f"flows database exceeded max_size_mb="
+                f"{policy['max_size_mb']}.",
+                0,
+                1,
+            )
         self.last_flow_cleanup_time = now
 
     def _run_cleanup_pass(self, now: float) -> None:
@@ -221,6 +288,7 @@ class FlowCleanupManager:
 
             if self.flow_retention_policy["enabled"]:
                 self._delete_old_flows_if_due(now)
+
         except Exception as error:
             self.main.print(
                 f"Flow retention maintenance failed: {error}",
