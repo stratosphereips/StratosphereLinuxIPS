@@ -19,7 +19,6 @@ from multiprocessing.synchronize import SEM_VALUE_MAX
 import queue
 import multiprocessing
 import time
-import threading
 from multiprocessing.synchronize import Event, Semaphore
 from typing import (
     List,
@@ -43,11 +42,6 @@ from slips_files.core.input_profilers.nfdump import Nfdump
 from slips_files.core.input_profilers.suricata import Suricata
 from slips_files.core.input_profilers.zeek import ZeekJSON, ZeekTabs
 from slips_files.core.worker_manager_mixin import WorkerManagerMixin
-from slips_files.common.log_rotation import expire_rotated_logs
-from slips_files.core.database.sqlite_db.detection_history import (
-    MAINTENANCE_INTERVAL_SECONDS,
-)
-from pathlib import Path
 
 SUPPORTED_INPUT_TYPES = {
     InputType.ZEEK: ZeekJSON,
@@ -65,13 +59,6 @@ SEPARATORS = {
     InputType.ZEEK_TABS: "\t",
     InputType.BINETFLOW_TABS: "\t",
 }
-
-
-# Internal tuning values, intentionally not user-configurable.
-# Flows deleted per cleanup pass.
-FLOW_RETENTION_BATCH_SIZE = 500
-# Seconds between flow cleanup passes.
-FLOW_RETENTION_INTERVAL_SECONDS = 60
 
 
 class Profiler(WorkerManagerMixin, ICore, IObservable):
@@ -126,11 +113,6 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         self.is_input_failed_event: Optional[Event] = is_input_failed_event
         self.input_handler_obj = None
         self.init_worker_manager()
-        self.flow_retention_thread = threading.Thread(
-            target=self._run_flow_retention,
-            name="flow_retention_loop",
-            daemon=True,
-        )
         # Bound the number of queued tasks to the platform semaphore limit.
         self.aid_queue = (
             aid_queue
@@ -154,99 +136,6 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
             Union[IPv4Network, IPv6Network, IPv4Address, IPv6Address]
         ]
         self.client_ips = conf.client_ips()
-        self.flow_retention_policy = conf.flow_retention_policy()
-        self.detection_history_policy = conf.detection_history_policy()
-
-    def _run_flow_retention(self) -> None:
-        """Prune small flow batches away from the profiler hot path."""
-        if not self.args.interface:
-            return
-        policy = self.flow_retention_policy
-        interval = FLOW_RETENTION_INTERVAL_SECONDS
-        ordinary_age = int(policy["ordinary_hours"]) * 3600
-        size_min_age = int(policy.get("size_min_age_minutes", 60)) * 60
-        linked_age = int(policy["linked_days"]) * 86400
-        batch_size = FLOW_RETENTION_BATCH_SIZE
-        max_size_bytes = int(policy["max_size_mb"]) * 1024 * 1024
-        history_policy = getattr(self, "detection_history_policy", {})
-        history_interval = MAINTENANCE_INTERVAL_SECONDS
-        last_flow_pass = 0.0
-        last_log_pass = 0.0
-        history_deferred_since: float | None = None
-        history_last_success: float | None = None
-        history_last_warning = 0.0
-        history_deferrals = 0
-        history_warning_interval = max(60, history_interval * 6)
-        while not self.did_all_workers_stop.wait(
-            min(interval, history_interval)
-        ):
-            now = time.time()
-            try:
-                if history_policy.get("enabled"):
-                    if now - last_log_pass >= 60:
-                        expire_rotated_logs(
-                            Path(self.parent_output_dir), history_policy, now
-                        )
-                        last_log_pass = now
-                    try:
-                        status = self.db.maintain_detection_history(
-                            history_policy, now=now
-                        )
-                        if isinstance(status, dict) and status.get("deferred"):
-                            history_deferrals += 1
-                            if history_deferred_since is None:
-                                history_deferred_since = now
-                            if (
-                                now - history_deferred_since
-                                >= history_warning_interval
-                                and now - history_last_warning
-                                >= history_warning_interval
-                            ):
-                                last_success = (
-                                    f"{now - history_last_success:.0f}s ago"
-                                    if history_last_success is not None
-                                    else "not yet completed"
-                                )
-                                self.print(
-                                    "Warning: History maintenance is waiting for database writers: "
-                                    f"{history_deferrals} deferred passes, "
-                                    f"phase={status.get('phase', 'unknown')}, "
-                                    f"SQLite={status.get('sqlite_errorname', 'not acquired')}, "
-                                    f"last successful pass {last_success}.",
-                                    1,
-                                    0,
-                                )
-                                history_last_warning = now
-                        else:
-                            history_last_success = now
-                            history_deferred_since = None
-                            history_deferrals = 0
-                    except Exception as error:
-                        self.print(
-                            f"Detection history maintenance failed: {error} "
-                            f"(phase={getattr(error, 'history_phase', 'unknown')}, "
-                            f"SQLite={getattr(error, 'sqlite_errorname', 'unknown')})",
-                            0,
-                            1,
-                        )
-                if policy["enabled"] and now - last_flow_pass >= interval:
-                    removed = self.db.maintain_flow_retention(
-                        now - ordinary_age,
-                        now - linked_age,
-                        batch_size=batch_size,
-                        max_size_bytes=max_size_bytes,
-                        unlinked_size_cutoff=now
-                        - min(ordinary_age, size_min_age),
-                    )
-                    if removed:
-                        self.db.remove_flow_index_uids(removed)
-                    last_flow_pass = now
-            except Exception as error:
-                self.print(
-                    f"Flow retention maintenance failed: {error}",
-                    0,
-                    1,
-                )
 
     def get_input_type(self, line: dict, input_type: str) -> str:
         """
@@ -466,12 +355,6 @@ class Profiler(WorkerManagerMixin, ICore, IObservable):
         for worker_id in range(self.num_of_initial_profiler_workers):
             self.last_worker_id = worker_id
             self.start_profiler_worker(worker_id)
-
-        if self.args.interface and (
-            self.flow_retention_policy["enabled"]
-            or self.detection_history_policy["enabled"]
-        ):
-            utils.start_thread(self.flow_retention_thread, self.db)
 
         self.is_profiler_done_starting_initial_workers_event.set()
 

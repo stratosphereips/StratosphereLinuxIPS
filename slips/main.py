@@ -674,6 +674,7 @@ class Main:
 
             self.proc_man.start_evidence_process()
             self.proc_man.start_profiler_process()
+            self.flow_cleanup_man = self.proc_man.start_flow_cleanup_manager()
             if not (
                 self.proc_man.is_profiler_done_starting_initial_workers_event.is_set()
             ):

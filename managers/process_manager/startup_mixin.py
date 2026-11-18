@@ -8,6 +8,7 @@ from multiprocessing import Process
 from multiprocessing.reduction import DupFd
 from typing import Optional
 
+from managers.flow_cleanup_manager import FlowCleanupManager
 from managers.update_manager import UpdateManager
 from modules.feeds_update_manager.feeds_update_manager import (
     FeedsUpdateManager,
@@ -42,6 +43,18 @@ class StartupMixin:
             is_slips_live_updating_event=self.is_slips_live_updating_event,
             print_func=self.main.print,
         )
+
+    def start_flow_cleanup_manager(self) -> FlowCleanupManager:
+        """
+        Create the flow cleanup manager and start its cleanup thread.
+        The thread only starts when Slips is monitoring an interface.
+
+        Returns:
+            Flow cleanup manager instance.
+        """
+        self.flow_cleanup_man = FlowCleanupManager(self.main)
+        self.flow_cleanup_man.start()
+        return self.flow_cleanup_man
 
     def start_output_process(
         self, stderr: str, slips_logfile: str, stdout: str = ""
