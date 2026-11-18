@@ -244,7 +244,7 @@ Shipped classes (MODEL_REGISTRY):
 | `model_class` | architecture | federated | class-weighted (default) |
 |---|---|---|---|
 | `random_projection_mlp` (default) | RP(18→256, frozen) → /16 → fc1 256→16 → ReLU → head 16→2 (the only ReLU is after fc1: RP and fc1 compose into one linear map) | fc1 | yes |
-| `random_projection_relu_mlp` | RP(18→256, frozen) → /16 → ReLU → fc1 256→16 → ReLU → head 16→2 (the default model with a ReLU on the projection, so fc1 sees nonlinear random features; same init, federated fc1) | fc1 | yes |
+| `random_projection_relu_mlp` | RP(18→256, frozen) → /16 → ReLU → fc1 256→16 → LeakyReLU(0.2) → head 16→2 (the default model with a ReLU on the projection, so fc1 sees nonlinear random features; those are all ≥ 0, so behind a plain ReLU every fc1 unit could die at once, hence the leaky slope; same init, federated fc1) | fc1 | yes |
 | `simple_mlp` | Linear 18→256 → Linear 256→16 → head 16→2 (ReLU after each; trainable twin of the RP net, nothing frozen) | fc1 + fc2 | no |
 | `random_projection_two_layer` | RP1(18→256, frozen, `seed`) → /16 → fc1 256→64 → RP2(64→256, frozen, `seed XOR 0x9E3779B1`) → /16 → lin2 256→32 → head 32→2 (ReLU after fc1 and lin2) | fc1 + lin2 (sent as `fc2_*`) | no |
 

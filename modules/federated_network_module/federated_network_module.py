@@ -582,16 +582,42 @@ class RandomProjectionTwoLayerNet(SimpleFederatedNet):
 
 
 class RandomProjectionReLUNet(SimpleFederatedNet):
-    """Model 4: R -> ReLU -> L -> ReLU -> H, the default model with a ReLU on
-    the scaled projection.
+    """Model 4: R -> ReLU -> L -> LeakyReLU(0.2) -> H, the default model with
+    a ReLU on the scaled projection.
 
         input(18) -> RP(18->256, frozen) -> /sqrt(256) -> ReLU
-        -> fc1(256->16) -> ReLU -> head(16->2)
+        -> fc1(256->16) -> LeakyReLU(0.2) -> head(16->2)
 
-    Without it the projection and fc1 compose into one linear map; the ReLU
-    gives fc1 nonlinear random features. All else is the default model's:
-    projection, init, federated fc1, local head, class weighting.
+    Without the projection ReLU the projection and fc1 compose into one
+    linear map; with it fc1 gets nonlinear random features. Those are all
+    >= 0, so an update shifts every fc1 pre-activation the same way: behind
+    a plain ReLU all fc1 units could go below zero at once (constant output,
+    no gradient). The leaky slope keeps such units learning. All else is the
+    default model's: projection, init, federated fc1, local head, class
+    weighting.
     """
+
+    FC1_NEGATIVE_SLOPE = 0.2
+
+    def __init__(
+        self,
+        input_dim: int,
+        hidden1: int = 256,
+        hidden2: int = 16,
+        rp_path: Optional[str] = None,
+        seed: int = 1111,
+    ) -> None:
+        """The default model's layers plus the LeakyReLU after fc1, which
+        has no weights (the state dict is the default model's).
+
+        :param input_dim: must be FIXED_INPUT_DIM (18)
+        :param hidden1: projection width
+        :param hidden2: fc1 width
+        :param rp_path: where the shared projection is stored
+        :param seed: seed of the shared projection
+        """
+        super().__init__(input_dim, hidden1, hidden2, rp_path, seed)
+        self.leaky_relu = nn.LeakyReLU(self.FC1_NEGATIVE_SLOPE)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Logits of x.
@@ -603,7 +629,7 @@ class RandomProjectionReLUNet(SimpleFederatedNet):
         x = x / self.projection_scale
         x = self.relu(x)
         x = self.fc1(x)
-        x = self.relu(x)
+        x = self.leaky_relu(x)
         return self.head(x)
 
 
@@ -632,7 +658,8 @@ def _build_random_projection_two_layer(module):
 
 
 def _build_random_projection_relu_mlp(module) -> RandomProjectionReLUNet:
-    """Builder for the default model with a ReLU on the projection.
+    """Builder for the default model with a ReLU on the projection and a
+    LeakyReLU(0.2) after fc1.
 
     :param module: the module (rp_path, seed; sets input_dim)
     :return: the network

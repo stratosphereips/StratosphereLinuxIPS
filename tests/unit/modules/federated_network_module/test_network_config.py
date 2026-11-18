@@ -29,7 +29,7 @@ RLH, RLHR = "random_projection_mlp", "random_projection_relu_mlp"
 # a module, the hand-written forward checks it).
 LAYERS = {
     RLH: ["random_projection", "fc1", "relu", "head"],
-    RLHR: ["random_projection", "relu", "fc1", "relu", "head"],
+    RLHR: ["random_projection", "relu", "fc1", "leaky_relu", "head"],
     "simple_mlp": ["fc1", "relu", "fc2", "relu", "head"],
     "random_projection_two_layer": [
         "random_projection",
@@ -52,7 +52,8 @@ def _by_hand(name: str, m: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:
         return F.linear(h, m.head.weight, m.head.bias)
     p = F.linear(x, m.random_projection.weight) / 16.0
     if name == RLHR:
-        p = relu(p)
+        h = F.leaky_relu(F.linear(relu(p), m.fc1.weight, m.fc1.bias), 0.2)
+        return F.linear(h, m.head.weight, m.head.bias)
     h = relu(F.linear(p, m.fc1.weight, m.fc1.bias))
     if name == "random_projection_two_layer":
         h = F.linear(h, m.random_projection2.weight) / 16.0
@@ -164,10 +165,32 @@ def test_only_the_projection_relu_makes_fc1_nonlinear_in_the_input(
     assert odd == linear
 
 
+@pytest.mark.parametrize("name, dead", [(RLH, True), (RLHR, False)])
+def test_fc1_units_below_zero_keep_learning_only_behind_the_leaky_slope(
+    name, dead, tmp_path
+):
+    """Every fc1 unit pushed below zero (what the attack onset did to the
+    relu model with plain ReLUs): behind a ReLU the output is the head bias
+    for every flow and fc1 gets no gradient; behind the LeakyReLU both still
+    depend on the input."""
+    m = _build(name, tmp_path)
+    with torch.no_grad():
+        m.fc1.bias.fill_(-100.0)
+    x = _x()
+    out = m(x)
+    y = torch.arange(len(x)) % 2
+    F.cross_entropy(out, y).backward()
+    constant = torch.allclose(out, out[:1].expand_as(out))
+    no_grad = m.fc1.weight.grad.abs().max().item() == 0.0
+    assert constant == dead
+    assert no_grad == dead
+
+
 def test_the_relu_model_is_the_default_model_plus_the_relu(tmp_path):
     """Same seed: the same projection, initial weights, frozen and
     federated tensors and class weighting as random_projection_mlp; only
-    the forward pass differs."""
+    the forward pass differs (the projection ReLU and the LeakyReLU after
+    fc1, neither has weights)."""
     rlh, rlhr = _build(RLH, tmp_path), _build(RLHR, tmp_path)
     assert isinstance(rlhr, fnm.SimpleFederatedNet)
     a, b = rlh.state_dict(), rlhr.state_dict()
