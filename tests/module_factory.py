@@ -4,8 +4,7 @@ import shutil
 import importlib.util
 import sys
 from contextlib import contextmanager
-from types import ModuleType, SimpleNamespace
-from typing import TYPE_CHECKING
+from types import ModuleType
 from unittest.mock import (
     patch,
     Mock,
@@ -1068,6 +1067,26 @@ class ModuleFactory:
         main.db = mock_db
         main.args = Mock()
         return ProfilersManager(main)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_flow_cleanup_manager_obj(self, mock_db):
+        from managers.flow_cleanup_manager import FlowCleanupManager
+
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.print = Mock()
+        main.args.interface = "eth0"
+        main.args.output = "output"
+        main.conf = Mock()
+        main.conf.flow_retention_policy.return_value = {
+            "enabled": True,
+            "ordinary_hours": 24,
+            "size_min_age_minutes": 60,
+            "linked_days": 30,
+            "max_size_mb": 512,
+        }
+        main.conf.detection_history_policy.return_value = {"enabled": False}
+        return FlowCleanupManager(main)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_host_ip_manager_obj(self, mock_db):

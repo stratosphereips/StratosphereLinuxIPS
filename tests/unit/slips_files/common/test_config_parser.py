@@ -311,25 +311,25 @@ def test_local_p2p_connection_settings(setting: str, value, expected) -> None:
 @pytest.mark.parametrize(
     "settings,expected",
     [
-        ({}, (True, 24, 30, 500, 60)),
+        ({}, (True, 24, 30)),
         (
             {"enabled": False, "ordinary_hours": 72, "linked_days": 1},
-            (False, 72, 3, 500, 60),
+            (False, 72, 3),
         ),
         (
-            {"batch_size": 9000, "interval_seconds": "bad"},
-            (True, 24, 30, 500, 60),
+            {"ordinary_hours": "bad", "linked_days": 9000},
+            (True, 24, 30),
         ),
     ],
 )
 def test_flow_retention_policy_bounds_settings(
-    settings: dict, expected: tuple[bool, int, int, int, int]
+    settings: dict, expected: tuple[bool, int, int]
 ) -> None:
     """Reject unsafe settings and keep linked flows at least as long.
 
     Parameters:
         settings: User flow retention YAML values.
-        expected: Sanitized enable, ages, batch size, and interval.
+        expected: Sanitized enable and ages.
     """
     _module_factory = ModuleFactory()
     parser = object.__new__(ConfigParser)
@@ -346,8 +346,6 @@ def test_flow_retention_policy_bounds_settings(
                 "enabled",
                 "ordinary_hours",
                 "linked_days",
-                "batch_size",
-                "interval_seconds",
             )
         )
         == expected

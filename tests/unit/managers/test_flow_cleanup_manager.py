@@ -1,0 +1,289 @@
+# SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
+# SPDX-License-Identifier: GPL-2.0-only
+"""Unit tests for the flow cleanup manager."""
+
+from pathlib import Path
+from unittest.mock import Mock, patch
+
+import pytest
+
+from tests.module_factory import ModuleFactory
+
+MANAGER = "managers.flow_cleanup_manager"
+
+
+def test_init_reads_the_cleanup_policies() -> None:
+    """Read both policies and prepare a thread that is not started yet."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+
+    assert manager.flow_retention_policy["enabled"] is True
+    assert manager.detection_history_policy == {"enabled": False}
+    assert manager.cleanup_thread.daemon is True
+    # the daemon stop path kills every stored PID without "thread" in its name
+    assert "thread" in manager.cleanup_thread.name
+    assert not manager.cleanup_thread.is_alive()
+    assert not manager.stop_event.is_set()
+
+
+@pytest.mark.parametrize(
+    "interface, flow_retention_enabled, history_enabled, expected",
+    [
+        ("eth0", True, True, True),
+        ("eth0", True, False, True),
+        ("eth0", False, True, True),
+        ("eth0", False, False, False),
+        (False, True, True, False),
+        (None, True, True, False),
+    ],
+)
+def test_start_only_starts_the_thread_when_cleanup_is_needed(
+    interface: str | bool | None,
+    flow_retention_enabled: bool,
+    history_enabled: bool,
+    expected: bool,
+) -> None:
+    """Start the thread on interfaces with at least one enabled policy.
+
+    Parameters:
+        interface: Interface given to Slips, if any.
+        flow_retention_enabled: Whether flow retention is enabled.
+        history_enabled: Whether detection history is enabled.
+        expected: Whether the thread should start.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.main.args.interface = interface
+    manager.flow_retention_policy["enabled"] = flow_retention_enabled
+    manager.detection_history_policy["enabled"] = history_enabled
+
+    with patch(f"{MANAGER}.utils.start_thread") as start_thread:
+        assert manager.start() is expected
+
+    if expected:
+        start_thread.assert_called_once_with(
+            manager.cleanup_thread, manager.main.db
+        )
+    else:
+        start_thread.assert_not_called()
+
+
+@pytest.mark.parametrize("is_thread_alive", [True, False])
+def test_shutdown_stops_the_cleanup_thread(is_thread_alive: bool) -> None:
+    """Signal the thread to stop and only wait for it when it is running.
+
+    Parameters:
+        is_thread_alive: Whether the cleanup thread is running.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.cleanup_thread = Mock()
+    manager.cleanup_thread.is_alive.return_value = is_thread_alive
+
+    manager.shutdown()
+
+    assert manager.stop_event.is_set()
+    assert manager.cleanup_thread.join.call_count == int(is_thread_alive)
+
+
+def test_started_thread_exits_on_shutdown() -> None:
+    """Make sure a real cleanup thread never outlives shutdown."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+
+    assert manager.start() is True
+    assert manager.cleanup_thread.is_alive()
+    manager.shutdown()
+
+    assert not manager.cleanup_thread.is_alive()
+    manager.main.db.maintain_flow_retention.assert_not_called()
+
+
+def test_flow_cleanup_runs_in_bounded_background_pass() -> None:
+    """Delete old flows in small batches and clean the web flow index."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.stop_event = Mock()
+    manager.stop_event.wait.side_effect = [False, True]
+    manager.main.db.maintain_flow_retention.return_value = ["old-flow"]
+
+    with patch(f"{MANAGER}.time.time", return_value=10000000):
+        manager._run_cleanup_loop()
+
+    manager.stop_event.wait.assert_called_with(10)
+    manager.main.db.maintain_flow_retention.assert_called_once_with(
+        9913600,
+        7408000,
+        batch_size=500,
+        max_size_bytes=512 * 1024 * 1024,
+        unlinked_size_cutoff=9996400,
+    )
+    manager.main.db.remove_flow_index_uids.assert_called_once_with(
+        ["old-flow"]
+    )
+    manager.main.db.maintain_detection_history.assert_not_called()
+
+
+def test_offline_analysis_never_runs_cleanup_work() -> None:
+    """Preserve old PCAP flows even if the loop is invoked directly."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.main.args.interface = False
+
+    manager._run_cleanup_loop()
+
+    manager.main.db.maintain_flow_retention.assert_not_called()
+    manager.main.db.maintain_detection_history.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "seconds_since_last_cleanup, removed_uids, expected_cleanups",
+    [
+        (59, [], 0),
+        (60, [], 1),
+        (61, ["uid1", "uid2"], 1),
+    ],
+)
+def test_delete_old_flows_if_due(
+    seconds_since_last_cleanup: int,
+    removed_uids: list[str],
+    expected_cleanups: int,
+) -> None:
+    """Skip passes that are not due and only clean the index when needed.
+
+    Parameters:
+        seconds_since_last_cleanup: Age of the previous flow cleanup.
+        removed_uids: Flow UIDs deleted by this pass.
+        expected_cleanups: Expected number of flow cleanup calls.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.last_flow_cleanup_time = 1000
+    manager.main.db.maintain_flow_retention.return_value = removed_uids
+    now = 1000 + seconds_since_last_cleanup
+
+    manager._delete_old_flows_if_due(now)
+
+    assert (
+        manager.main.db.maintain_flow_retention.call_count == expected_cleanups
+    )
+    assert manager.main.db.remove_flow_index_uids.call_count == int(
+        bool(removed_uids)
+    )
+    assert manager.last_flow_cleanup_time == (
+        now if expected_cleanups else 1000
+    )
+
+
+@pytest.mark.parametrize(
+    "seconds_since_last_expiry, expected_calls",
+    [
+        (59, 0),
+        (60, 1),
+    ],
+)
+def test_expire_rotated_logs_if_due(
+    seconds_since_last_expiry: int, expected_calls: int
+) -> None:
+    """Expire the rotated logs of this run at most once a minute.
+
+    Parameters:
+        seconds_since_last_expiry: Age of the previous expiry pass.
+        expected_calls: Expected number of expiry calls.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.last_rotated_logs_expiry_time = 1000
+    now = 1000 + seconds_since_last_expiry
+
+    with patch(f"{MANAGER}.expire_rotated_logs") as expire_rotated_logs:
+        manager._expire_rotated_logs_if_due(now)
+
+    assert expire_rotated_logs.call_count == expected_calls
+    if expected_calls:
+        expire_rotated_logs.assert_called_once_with(
+            Path("output"), manager.detection_history_policy, now
+        )
+
+
+@pytest.mark.parametrize("persistent", [False, True])
+def test_deferred_history_does_not_interrupt_flow_cleanup(
+    persistent: bool,
+) -> None:
+    """Keep capture cleanup running and report only persistent contention.
+
+    Parameters:
+        persistent: Whether every pass remains busy beyond a minute.
+    """
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = {"enabled": True}
+    manager.stop_event = Mock()
+    manager.stop_event.wait.side_effect = [False] * 9 + [True]
+    manager.main.db.maintain_detection_history.side_effect = [
+        {
+            "deferred": persistent or index == 0,
+            "phase": "cleanup",
+            "sqlite_errorname": "SQLITE_BUSY",
+        }
+        for index in range(9)
+    ]
+    manager.main.db.maintain_flow_retention.return_value = []
+
+    with (
+        patch(
+            f"{MANAGER}.time.time",
+            side_effect=[1000 + index * 10 for index in range(9)],
+        ),
+        patch(f"{MANAGER}.expire_rotated_logs"),
+    ):
+        manager._run_cleanup_loop()
+
+    # flows are only cleaned once a minute: at 1000 and at 1060
+    assert manager.main.db.maintain_flow_retention.call_count == 2
+    assert manager.main.db.maintain_detection_history.call_count == 9
+    assert manager.main.print.call_count == int(persistent)
+    if persistent:
+        message, verbosity, debug = manager.main.print.call_args.args
+        assert "phase=cleanup" in message
+        assert "SQLITE_BUSY" in message
+        assert verbosity == 1
+        assert debug == 0
+
+
+def test_successful_history_pass_resets_the_deferral_state() -> None:
+    """Forget earlier deferrals once a maintenance pass completes."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.history_deferrals = 4
+    manager.history_deferred_since = 900.0
+    manager.main.db.maintain_detection_history.return_value = {
+        "deferred": False
+    }
+
+    manager._maintain_detection_history(1000.0)
+
+    assert manager.history_deferrals == 0
+    assert manager.history_deferred_since is None
+    assert manager.history_last_success_time == 1000.0
+    manager.main.print.assert_not_called()
+
+
+def test_failed_history_pass_is_reported_and_flows_still_cleaned() -> None:
+    """Report a history failure without skipping the flow cleanup."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = {"enabled": True}
+    manager.main.db.maintain_detection_history.side_effect = RuntimeError(
+        "boom"
+    )
+    manager.main.db.maintain_flow_retention.return_value = []
+
+    with patch(f"{MANAGER}.expire_rotated_logs"):
+        manager._run_cleanup_pass(10000000)
+
+    message, verbosity, debug = manager.main.print.call_args.args
+    assert "Detection history maintenance failed: boom" in message
+    assert (verbosity, debug) == (0, 1)
+    manager.main.db.maintain_flow_retention.assert_called_once()
+
+
+def test_failed_flow_cleanup_never_kills_the_cleanup_thread() -> None:
+    """Report a flow cleanup failure instead of raising it."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.main.db.maintain_flow_retention.side_effect = RuntimeError("boom")
+
+    manager._run_cleanup_pass(10000000)
+
+    manager.main.print.assert_called_once_with(
+        "Flow retention maintenance failed: boom", 0, 1
+    )
