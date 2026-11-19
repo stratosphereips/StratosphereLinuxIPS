@@ -206,10 +206,9 @@ class Output(IObserver):
 
         date_time = utils.get_human_readable_datetime()
 
-        self.slips_logfile_lock.acquire()
-        with open(self.slips_logfile, "a") as slips_logfile:
-            slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
-        self.slips_logfile_lock.release()
+        with self.slips_logfile_lock:
+            with open(self.slips_logfile, "a") as slips_logfile:
+                slips_logfile.write(f"{date_time} [{sender}] {msg}\n")
 
     def print(self, sender: str, txt: str, end: str = "\n") -> None:
         """
@@ -268,10 +267,11 @@ class Output(IObserver):
         """
         date_time = utils.get_human_readable_datetime()
 
-        self.errors_logfile_lock.acquire()
-        with open(self.errors_logfile, "a") as errors_logfile:
-            errors_logfile.write(f'{date_time} [{msg["from"]}] {msg["txt"]}\n')
-        self.errors_logfile_lock.release()
+        with self.errors_logfile_lock:
+            with open(self.errors_logfile, "a") as errors_logfile:
+                errors_logfile.write(
+                    f'{date_time} [{msg["from"]}] {msg["txt"]}\n'
+                )
 
     def enough_verbose(self, verbose: int):
         """

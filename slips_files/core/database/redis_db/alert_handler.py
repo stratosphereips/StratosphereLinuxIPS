@@ -38,6 +38,8 @@ class AlertHandler:
     """
 
     r: Any
+    # stored in the alerted-evidence set to mark that it was fully built
+    ALERTED_EVIDENCE_MARKER = "__indexed__"
     constants: Any
     channels: Any
     default_ttl: int
@@ -123,11 +125,144 @@ class AlertHandler:
             # no previous alerts for this profileid twid
             profileid_twid_alerts = json.dumps(alert_dict)
 
-        self.r.hset(
+        index_key = self._get_alerted_evidence_key(
+            str(alert.profile), str(alert.timewindow)
+        )
+        evidence_ids = list(alert.correl_id)
+        if not self.r.sismember(index_key, self.ALERTED_EVIDENCE_MARKER):
+            # the index doesn't exist yet, so it must include the evidence
+            # of the older alerts too, not just this one.
+            evidence_ids += self._extract_evidence_ids_from_alerts(
+                old_profileid_twid_alerts
+            )
+
+        # store the alert and update the index atomically so they never
+        # disagree about which evidence is already part of an alert
+        pipe = self.r.pipeline()
+        pipe.hset(
             f"{alert.profile}_{alert.timewindow}",
             self.constants.ALERTS,
             profileid_twid_alerts,
         )
+        pipe.sadd(index_key, self.ALERTED_EVIDENCE_MARKER, *evidence_ids)
+        pipe.expire(index_key, self.default_ttl)
+        pipe.execute()
+
+    @staticmethod
+    def _get_alerted_evidence_key(profileid: str, twid: str) -> str:
+        """
+        Return the name of the redis set that holds the IDs of all evidence
+        that are already part of an alert in the given profile and tw.
+
+        Besides the evidence IDs, this set contains
+        ALERTED_EVIDENCE_MARKER, which means the set was fully built.
+        """
+        return f"{profileid}_{twid}:alerted_evidence"
+
+    @staticmethod
+    def _extract_evidence_ids_from_alerts(
+        alerts: Dict[str, str],
+    ) -> List[str]:
+        """
+        Flatten the evidence IDs of all the given alerts into one list.
+
+        :param alerts: {alert_id: json list of evidence IDs}, the format
+            returned by get_profileid_twid_alerts()
+        """
+        return [
+            evidence_id
+            for serialized_ids in alerts.values()
+            for evidence_id in json.loads(serialized_ids)
+        ]
+
+    def _build_alerted_evidence_index_if_missing(
+        self, profileid: str, twid: str
+    ) -> str:
+        """
+        Make sure the alerted-evidence set of the given profile and tw
+        exists, and build it from the stored alerts if it doesn't.
+
+        The set may be missing when it expired or when slips is
+        continuing a run that was stored before this set existed.
+
+        :param profileid: profile whose alerts are indexed
+        :param twid: time window whose alerts are indexed
+        :return: the name of the alerted-evidence set
+        """
+        key = self._get_alerted_evidence_key(profileid, twid)
+        if self.r.sismember(key, self.ALERTED_EVIDENCE_MARKER):
+            return key
+
+        alerts = self.get_profileid_twid_alerts(profileid, twid)
+        evidence_ids = self._extract_evidence_ids_from_alerts(alerts)
+        pipe = self.r.pipeline()
+        pipe.sadd(key, self.ALERTED_EVIDENCE_MARKER, *evidence_ids)
+        pipe.expire(key, self.default_ttl)
+        pipe.execute()
+        return key
+
+    def is_evidence_in_past_alert(
+        self, profileid: str, twid: str, evidence_id: str
+    ) -> bool:
+        """
+        Check if the given evidence is already part of an alert in the
+        given profile and tw.
+
+        Uses the alerted-evidence set instead of loading and decoding
+        all the past alerts of this tw.
+
+        :param profileid: profile the evidence belongs to
+        :param twid: time window the evidence belongs to
+        :param evidence_id: ID of the evidence to check
+        :return: True if any past alert of this tw contains this evidence
+        """
+        key = self._get_alerted_evidence_key(profileid, twid)
+        # one round trip to check the set is built and has the evidence
+        is_index_built, is_alerted = self.r.smismember(
+            key, [self.ALERTED_EVIDENCE_MARKER, evidence_id]
+        )
+        if is_index_built:
+            return bool(is_alerted)
+
+        key = self._build_alerted_evidence_index_if_missing(profileid, twid)
+        return bool(self.r.sismember(key, evidence_id))
+
+    def get_unalerted_processed_evidence(
+        self, profileid: str, twid: str
+    ) -> Dict[str, str]:
+        """
+        Get the evidence of the given profile and tw that was processed by
+        the evidence handler but isn't part of any alert yet.
+
+        Evidence IDs that are processed but were deleted from the
+        evidence hash are skipped.
+
+        :param profileid: profile the evidence belongs to
+        :param twid: time window the evidence belongs to
+        :return: {evidence_id: serialized evidence}
+        """
+        alerted_key = self._build_alerted_evidence_index_if_missing(
+            profileid, twid
+        )
+        processed_key = (
+            f"{self.constants.PROCESSED_EVIDENCE}_{profileid}_{twid}"
+        )
+        # returns IDs that are in the processed set but not in the alerted
+        # set.
+        unalerted_ids = list(self.r.sdiff(processed_key, alerted_key))
+        if not unalerted_ids:
+            return {}
+
+        serialized_evidence = self.r.hmget(
+            f"{profileid}_{twid}_evidence", unalerted_ids
+        )
+        return {
+            evidence_id: evidence
+            for evidence_id, evidence in zip(
+                unalerted_ids, serialized_evidence
+            )
+            if evidence
+        }
 
     def get_number_of_alerts_so_far(self):
         return self.r.get(self.constants.NUMBER_OF_ALERTS)
@@ -299,21 +434,38 @@ class AlertHandler:
                 entity.AS = ip_identification.get("AS")
                 entity.TI = ip_identification.get("TI")
                 entity.rDNS = ip_identification.get("rDNS")
-                entity.SNI = ip_identification.get("SNI")
-                # queries resolved to that ip
-                entity.queries = ip_identification.get("queries")
+                # the domains seen in the flow itself are more accurate
+                # than the ones cached for this ip, so only fall back to
+                # the cached ones when the evidence has none.
+                if not entity.queries:
+                    entity.SNI = entity.SNI or ip_identification.get("SNI")
+                    entity.queries = ip_identification.get("queries")
 
             elif entity.ioc_type == IoCType.DOMAIN:
-                domain_info: Dict[str, str]
+                domain_info: Any
                 domain_info = self.get_domain_data(entity.value)
+                # older runs may have stored the domain info serialized
+                if isinstance(domain_info, str):
+                    try:
+                        domain_info = json.loads(domain_info)
+                    except (TypeError, ValueError):
+                        continue
+                if not isinstance(domain_info, dict):
+                    continue
                 if not domain_info:
                     continue
 
                 entity.CNAME = domain_info.get("CNAME", [])
                 entity.DNS_resolution = domain_info.get("IPs", [])
-                entity.TI = domain_info.get("threatintelligence", {}).get(
-                    "source"
-                )
+                # can be a dict, a serialized dict, or a plain source name
+                threat_info = domain_info.get("threatintelligence")
+                if isinstance(threat_info, str):
+                    try:
+                        threat_info = json.loads(threat_info)
+                    except json.JSONDecodeError:
+                        entity.TI = threat_info
+                if isinstance(threat_info, dict):
+                    entity.TI = threat_info.get("source")
                 # if any of the domain's ips have an asn, set it here to
                 # check if it's whitelisted later
                 for ip in entity.DNS_resolution:
@@ -323,12 +475,33 @@ class AlertHandler:
             setattr(evidence, entity_type, entity)
         return evidence
 
-    def set_evidence(self, evidence: Evidence):
+    def publish_evidence_added(self, evidence: Evidence) -> None:
+        """
+        Publish the given evidence in the evidence_added channel.
+
+        Call this only after the evidence is stored in both redis and
+        sqlite, so subscribers never receive evidence they can't
+        find in the db yet.
+
+        :param evidence: the evidence that was just stored
+        """
+        self.publish(
+            self.channels.EVIDENCE_ADDED,
+            json.dumps(utils.to_dict(evidence)),
+        )
+
+    def set_evidence(self, evidence: Evidence, notify: bool = True) -> bool:
         """
         Set the evidence for this Profile and Timewindow.
         :param evidence: an Evidence obj (defined in
         slips_files/core/structures/evidence.py) with all the
         evidence details,
+        :param notify: if True, publish the evidence in the evidence_added
+            channel right after storing it in redis. Pass False when the
+            caller still has to store it in sqlite, and let the caller
+            call publish_evidence_added() after that.
+        :return: True if the evidence was stored, False if it's disabled
+            in the config or was already stored.
         """
         # create the profile if it doesn't exist
         self.add_profile(str(evidence.profile), evidence.timestamp)
@@ -358,7 +531,8 @@ class AlertHandler:
 
         self.r.hset(evidence_hash, evidence.id, evidence_to_send)
         self.r.incr(self.constants.NUMBER_OF_EVIDENCE)
-        self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
+        if notify:
+            self.publish(self.channels.EVIDENCE_ADDED, evidence_to_send)
         return True
 
     def set_alert(self, alert: Alert):

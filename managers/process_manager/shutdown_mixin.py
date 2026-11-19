@@ -662,6 +662,9 @@ class ShutdownMixin:
 
             print("Stopping Slips")
 
+            self.main.flow_cleanup_man.shutdown()
+            self.main.log_rotation_man.shutdown()
+
             self.children: List[BaseProcess] = (
                 multiprocessing.active_children()
             )

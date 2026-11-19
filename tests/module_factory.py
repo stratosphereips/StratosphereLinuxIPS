@@ -38,6 +38,24 @@ DB_MANAGER = "slips_files.core.database.database_manager.DBManager"
 
 
 class ModuleFactory:
+
+    def create_module_process_obj(
+        self, module: type | str, *args: object, **kwargs: object
+    ) -> object:
+        """Create an unstarted module process for process-boundary tests.
+
+        Parameters:
+            module: Module class or import path.
+            args: Module constructor arguments.
+            kwargs: Module constructor keyword arguments.
+
+        Returns:
+            Process that initializes the module in its child.
+        """
+        from slips_files.core.module_process import ModuleProcess
+
+        return ModuleProcess(module, *args, **kwargs)
+
     def __init__(self):
         self.profiler_queue = Queue()
         self.input_queue = Queue()
@@ -46,6 +64,14 @@ class ModuleFactory:
     def get_default_db(self):
         """default is o port 6379, this is the one we're using in conftest"""
         return self.create_db_manager_obj(6379)
+
+    def create_redis_publisher_obj(self) -> object:
+        """Return a Redis publisher with a mocked client and no connection."""
+        from slips_files.core.database.redis_db.database import RedisDB
+
+        db = object.__new__(RedisDB)
+        db.r = Mock()
+        return db
 
     def mocked_init_flock(self):
         self.lockfile_path = "/tmp/fake.lock"
@@ -1041,6 +1067,47 @@ class ModuleFactory:
         main.db = mock_db
         main.args = Mock()
         return ProfilersManager(main)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_flow_cleanup_manager_obj(self, mock_db):
+        from managers.flow_cleanup_manager import FlowCleanupManager
+
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.print = Mock()
+        main.args.interface = "eth0"
+        main.args.output = "output"
+        main.conf = Mock()
+        main.conf.flow_retention_policy.return_value = {
+            "enabled": True,
+            "ordinary_hours": 24,
+            "size_min_age_minutes": 60,
+            "linked_days": 30,
+            "max_size_mb": 512,
+        }
+        main.conf.detection_history_policy.return_value = {"enabled": False}
+        return FlowCleanupManager(main)
+
+    @patch(MODULE_DB_MANAGER, name="mock_db")
+    def create_log_rotation_manager_obj(self, mock_db):
+        from managers.log_rotation_manager import LogRotationManager
+
+        main = self.create_main_obj()
+        main.db = mock_db
+        main.print = Mock()
+        main.mode = "interactive"
+        main.args.output = "output"
+        main.logger = Mock()
+        main.logger.slips_logfile = os.path.join("output", "slips.log")
+        main.logger.errors_logfile = os.path.join("output", "errors.log")
+        main.conf = Mock()
+        main.conf.detection_history_policy.return_value = {
+            "enabled": True,
+            "log_max_size_mb": 1,
+            "log_backup_count": 30,
+            "archive_retention_days": 30,
+        }
+        return LogRotationManager(main)
 
     @patch(MODULE_DB_MANAGER, name="mock_db")
     def create_host_ip_manager_obj(self, mock_db):

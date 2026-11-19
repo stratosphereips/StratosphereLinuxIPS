@@ -183,6 +183,60 @@ parameters:
   client_ips: []
 
 #############################
+# Flow retention: how long Slips keeps raw flows when analysing
+# a live network interface, so the database doesn't grow forever.
+# - Flows that are part of an alert's evidence ( aka linked flows ) are kept longer than the rest.
+# - Not applied when you analyse a pcap/Zeek file; all flows are kept then.
+flow_retention:
+  # Set to false to keep all flows forever (the database will keep growing unlimited).
+  # disclaimer: setting it to False eats disk space.
+  enabled: true
+  # Hours to keep flows that are not linked to any evidence.
+  ordinary_hours: 24
+  # Days to keep flows that ARE linked to evidence (should be >= ordinary_hours).
+  linked_days: 30
+  # Soft size limit for the flow database, in MB. Above it, Slips deletes the
+  # oldest flows early: unlinked ones first, then linked ones.
+  # 0 = no size limit.
+  max_size_mb: 512
+  # Even when the size limit is exceeded, never delete unlinked flows younger
+  # than this many minutes, so detectors can still attach evidence to them.
+  size_min_age_minutes: 60
+
+#############################
+# Detection history: how long Slips keeps the details of past detections
+# (alerts and their evidence) so you can review them in the web interface.
+# Data goes through two stages:
+#   1. Active: recent details, stored in the main history database.
+#   2. Archived: details older than active_days are moved to monthly archive
+#      files, which are deleted after archive_retention_days.
+detection_history:
+  # Set to false to turn this cleanup off (history will keep growing).
+  # disclaimer: setting it to False eats disk space.
+  enabled: true
+  # Days detection details stay in the active database before being archived.
+  active_days: 90
+  # Soft size limit for the active database, in MB. Above it, details are
+  # archived earlier than active_days. 0 = no size limit.
+  max_active_size_mb: 2048
+  # Even above the size limit, details younger than this many hours are never
+  # archived early.
+  min_active_hours: 24
+  # Days an archive file is kept after its last write, then deleted.
+  archive_retention_days: 30
+  # Maximum size of a single archive file, in MB (a new file starts after it).
+  archive_file_size_mb: 256
+  # Soft size limit for all archives together, in MB. Above it, the oldest
+  # archive files are deleted early. 0 = no size limit.
+  max_archive_size_mb: 4096
+  # Stop archiving when free disk space drops below this many MB. 0 = never.
+  min_free_disk_mb: 1024
+  # Slips log files: rotate a log once it reaches this size (MB), and keep
+  # this many rotated logs.
+  log_max_size_mb: 64
+  log_backup_count: 30
+
+#############################
 Debug:
   # Generate latency, throughput, and other performance related CSV files and plots in output/performance_plots/ for debugging
   # When enabled, Slips records extra per-flow/per-minute performance data from

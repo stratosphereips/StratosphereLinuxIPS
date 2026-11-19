@@ -46,7 +46,6 @@ from slips_files.core.text_formatters.evidence_formatter import (
 )
 from slips_files.core.evidence_handler_worker import EvidenceHandlerWorker
 
-
 DEFAULT_EVIDENCE_HANDLER_WORKERS = 3
 EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS = 30
 
@@ -273,7 +272,16 @@ class EvidenceHandler(ICore):
         self.logger_stop_signal.set()
         self.print("Stopping the logger thread.", log_to_logfiles_only=True)
         try:
-            self.logger_thread.join(timeout=5)
+            self.logger_thread.join(
+                timeout=EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS
+            )
+            if self.logger_thread.is_alive():
+                self.print(
+                    "Logger thread did not stop in time.",
+                    0,
+                    1,
+                    log_to_logfiles_only=True,
+                )
         except Exception:
             pass
 
@@ -288,23 +296,32 @@ class EvidenceHandler(ICore):
             q.close()
         self.print("Done shutting down gracefully.")
 
-    def stop_evidence_workers(self):
+    def stop_evidence_workers(self) -> None:
+        """Drain accepted evidence, then wait for the workers to exit.
+
+        The queue is FIFO, so each worker finishes the accepted tasks
+        before reaching its stop marker. All workers share one grace
+        period so a stuck worker can't block shutdown forever; whoever
+        is still running after it is killed.
+        """
         for _ in self.evidence_worker_child_processes:
             self.evidence_worker_queue.put("stop")
-
-        for process in self.evidence_worker_child_processes:
+        deadline = (
+            time.monotonic() + EVIDENCE_HANDLER_SHUTDOWN_GRACE_PERIOD_SECONDS
+        )
+        for worker in self.evidence_worker_child_processes:
             try:
-                process.join(timeout=5)
-                if process.is_alive():
+                worker.join(timeout=max(0.0, deadline - time.monotonic()))
+                if worker.is_alive():
                     self.print(
-                        f"Evidence worker {process.pid} did not stop in time. "
-                        "Killing it.",
+                        f"Evidence worker {worker.pid} did not stop in "
+                        "time. Killing it.",
                         0,
                         1,
                         log_to_logfiles_only=True,
                     )
-                    process.kill()
-                    process.join(timeout=1)
+                    worker.kill()
+                    worker.join(timeout=1)
             except (OSError, ChildProcessError):
                 pass
 

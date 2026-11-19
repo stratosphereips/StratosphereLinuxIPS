@@ -1,6 +1,7 @@
 # SPDX-FileCopyrightText: 2021 Sebastian Garcia <sebastian.garcia@agents.fel.cvut.cz>
 # SPDX-License-Identifier: GPL-2.0-only
 import json
+from types import SimpleNamespace
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, call, patch
@@ -27,6 +28,20 @@ from slips_files.core.structures.risk_weights import (
 from tests.module_factory import ModuleFactory
 
 
+def test_shutdown_flushes_pending_evidence_logs_before_exit() -> None:
+    """Keep worker-produced log records until the active logger receives them."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    worker.evidence_queue = Mock()
+    worker.evidence_logger_q = Mock()
+    sequence = Mock()
+    sequence.attach_mock(worker.evidence_logger_q.close, "close")
+    sequence.attach_mock(worker.evidence_logger_q.join_thread, "flush")
+
+    worker.shutdown_gracefully()
+
+    worker.evidence_queue.cancel_join_thread.assert_called_once_with()
+    worker.evidence_logger_q.cancel_join_thread.assert_not_called()
+    assert sequence.mock_calls == [call.close(), call.flush()]
 @pytest.mark.parametrize(
     "profileid, our_ips, expected_result, expected_publish_call_count",
     [
@@ -700,6 +715,7 @@ def test_send_to_exporting_module():
     "sys_argv, running_non_stop, expected_result",
     [
         (["-i", "-p"], True, True),
+        (["-i", "--blocking"], True, True),
         (["-i", "-im"], False, False),
         ([], False, False),
     ],
@@ -909,3 +925,67 @@ def test_mixed_p2p_and_unrelated_evidence_is_not_filtered() -> None:
     ]
 
     assert worker.is_filtered_evidence(evidence, []) is False
+
+
+def test_evidence_score_preserves_snapshot_when_alert_resets_accumulator(tmp_path: Path) -> None:
+    """Retain the triggering score even after the alert resets the live total.
+
+    Parameters:
+        tmp_path: Isolated SQLite database.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    from types import SimpleNamespace
+    from slips_files.core.database.sqlite_db.database import SQLiteDB
+    database = SQLiteDB(Mock(), str(tmp_path), 12345)
+    database.execute("INSERT INTO evidence(evidence_id) VALUES ('trigger')")
+    worker._score_evidence = Mock(return_value=(1.28, .4096, RiskWeight.LOW))
+    worker.db.set_evidence_score.side_effect = database.set_evidence_score
+    observed = []
+
+    def alert_and_reset(*args: object) -> None:
+        """Reset Redis before the captured values are persisted.
+
+        Parameters:
+            args: Alert-generation inputs.
+        """
+        observed.append(database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='trigger'").fetchone())
+        worker.db.get_accumulated_threat_level.return_value = 0
+
+    worker._generate_alert_if_threshold_crossed = Mock(side_effect=alert_and_reset)
+    scores = worker._score_evidence_and_maybe_alert(SimpleNamespace(id='trigger'), 'profile_1.2.3.4', 'timewindow1')
+    assert observed == [(None, None)]
+    assert database.conn.execute("SELECT accumulated_threat_level,accumulated_ratl FROM evidence WHERE evidence_id='trigger'").fetchone() == (1.28,.4096)
+    assert scores == (1.28, .4096)
+    assert worker.db.get_accumulated_threat_level() == 0
+    database.close()
+
+
+def test_score_storage_failure_does_not_prevent_alert_generation() -> None:
+    """Keep detection working if a score snapshot cannot be written."""
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    import sqlite3
+    from types import SimpleNamespace
+    worker._score_evidence = Mock(return_value=(1.28, .4096, RiskWeight.LOW))
+    worker.db.set_evidence_score.side_effect = sqlite3.OperationalError('database is locked')
+    worker._generate_alert_if_threshold_crossed = Mock()
+    worker.print = Mock()
+    assert worker._score_evidence_and_maybe_alert(SimpleNamespace(id='trigger'), 'profile_1.2.3.4', 'timewindow1') == (1.28, .4096)
+    worker._generate_alert_if_threshold_crossed.assert_called_once()
+    assert 'Unable to persist evidence score' in worker.print.call_args.args[0]
+@pytest.mark.parametrize("already_correlated", [False, True])
+def test_scoring_checks_index_instead_of_loading_past_alerts(already_correlated: bool) -> None:
+    """Keep scoring independent of a profile's accumulated alert history.
+
+    Parameters:
+        already_correlated: Whether this finding already belongs to an alert.
+    """
+    worker = ModuleFactory().create_evidence_handler_worker_obj()
+    evidence = SimpleNamespace(id="finding", threat_level=ThreatLevel.LOW, evidence_type=EvidenceType.ARP_SCAN)
+    worker.db.is_evidence_in_past_alert.return_value = already_correlated
+    worker.db.get_accumulated_threat_level.return_value = .1
+    worker.update_accumulated_threat_level = Mock(return_value=.2)
+    worker.is_filtered_evidence = Mock(return_value=False)
+    worker.get_evidence_that_were_part_of_a_past_alert = Mock(side_effect=AssertionError("Historical scan"))
+    assert worker.get_accumulated_threat_level("profile_1", "timewindow1", evidence) == (.1 if already_correlated else .2)
+    worker.db.is_evidence_in_past_alert.assert_called_once_with("profile_1", "timewindow1", "finding")
+    assert worker.update_accumulated_threat_level.call_count == int(not already_correlated)

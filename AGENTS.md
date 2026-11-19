@@ -71,6 +71,12 @@ These rules MUST be followed:
 - when creating a new branch use the following format: my_name/fix_x.
 - be brief and avoid being verbose with comments in the code, .yml files, Dockerfiles etc. unless absolutely necessary.
 - Evidence descriptions must state observed facts and detection reasons. Omit recurring disclaimers about benign explanations, proof of attack or unconfirmed exploitation; document detector limitations in docs/.
+- any comments added to describe parameters in slips.yaml should be user friendly and not so technical.
+- use type hinting.
+- Each class, module, and function must have a single, clearly defined responsibility.
+- Avoid mixing unrelated concerns or introducing methods that do not directly support the component's primary responsibility.
+- If a component has multiple reasons to change, split its responsibilities into cohesive, loosely coupled components. Avoid overengineering.
+- Manager classes should be created in Main.__init__
 
 ### Core performance:
 - Core capture, parsing, profiling and routing throughput takes priority over detection features.
@@ -89,12 +95,13 @@ If a feature is added → MUST update relevant docs in docs/
 ### Functions:
 - Every new function MUST include a docstring
 Docstrings MUST include:
-- Short description
+- Short description, don't use robotic english, use a tone similar to what's used in ISQLite class docstring. document the "why" if applicable.
 - Parameters (if applicable)
 - Return value (if applicable). if the return value is None, it should not be explicitly stated in the docstring, just add it as a type annotation.
 - newly added functions in database_manager.py should never have a docstring, and should always have (*args, **kwargs) as args and should always forward these (*args, **kwargs) to the function it calls.
 - the database manager's role is a facade, which forwards code to other databases (e.g self.rdb, self.sqlite etc.). the only allowed code implementations in the database manager's functions is code that requires passing the output of one database to another, like this function set_evidence(), which uses the rdb to decide whether to use sqlite or not.
--
+- use descriptive variable names instead of generic ones, and preferably start functions' names with a verb.
+
 ## 4. Testing
 - Canonical test runner
 tests/run_all_tests.sh

@@ -49,7 +49,8 @@ class MetadataManager:
 
         # Add a copy of whitelist.conf
         whitelist = self.main.conf.local_whitelist_path()
-        shutil.copy(whitelist, metadata_dir)
+        if os.path.isfile(whitelist):
+            shutil.copy(whitelist, metadata_dir)
 
         now = utils.get_human_readable_datetime()
 
