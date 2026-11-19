@@ -478,24 +478,43 @@ accepts the setting. A native service can use `CPUQuota` immediately.
 
 ### Resource limits and updates
 
-Use a hard CPU limit such as `--cpus=2`; CPU shares only change scheduling
-priority under contention. Reserve memory for the operating system and other
-applications. For an 8 GiB Pi, `--memory=6g --memory-swap=6g` caps Slips at
-6 GiB and prevents container swap. A 16 GiB Pi can use a 10 GiB cap. Check
-the running container's `/sys/fs/cgroup/memory.max` and
-`/sys/fs/cgroup/cpu.max` to verify enforcement.
+**Limiting CPU and memory**
 
-Before replacing a container, stop it gracefully and back up its configuration
-and `permanent/` directory, including the whitelist, peer private key, trust
-database and authentication files. Bind mount these directories and `output/`
-into the replacement container. Keep each Pi's state separate so peer keys
-are never shared between devices. Retain the stopped container for rollback.
+- Set a hard CPU cap with `--cpus=2`. ✅ This actually limits usage.
+  ❌ `--cpu-shares` does not cap anything — it only changes who wins when the
+  Pi is already busy.
+- Leave some memory for the operating system itself, don't give it all to Slips.
+  - So if you have:
+    - 8 GiB Pi → use ` --memory=6g --memory-swap=6g` (caps Slips at 6 GiB, no swap)
+    - 16 GiB Pi → use a 10 GiB cap instead
+- To confirm the limits are really applied, check these files inside the
+  running container:
+  - `/sys/fs/cgroup/memory.max`
+  - `/sys/fs/cgroup/cpu.max`
 
-For an existing live interface output, use `--keep-history` with the same
-interface and output directory to retain its SQLite history. Verify the new
-image on Linux/ARM before replacing the running container; in particular,
-host names, notes and reviews must resolve with the installed SQLite version
-(including SQLite 3.37 on Ubuntu 22.04 images).
+This is best practice for any long-running container on limited hardware, not
+just Slips.
+
+**Safely replacing/updating a container**
+
+1. Stop the old container gracefully (don't kill it).
+2. Back up its config and the whole `permanent/` directory first — this holds
+   the whitelist, the peer's private key, the trust database, and
+   authentication files. Losing these means losing the Pi's identity.
+3. Bind mount `permanent/` and `output/` into the new container so it picks
+   up where the old one left off.
+4. Keep every Pi's `permanent/` folder separate — never copy one Pi's peer
+   key into another device. ❌ Sharing keys between devices breaks the trust
+   model.
+5. Keep the old (stopped) container around for a while in case you need to
+   roll back.
+
+**If you're keeping history from a live interface**
+
+Let's say you have a current slips run and want to update Slips, after safely updating the
+container, then, When rerunning slips, use the `--keep-history` parameter and reuse the same interface name
+ and output directory as before, so the old SQLite history is kept instead of started fresh.
+
 
 ## Running Slips' Docker in the Pi
 
