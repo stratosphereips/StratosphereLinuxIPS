@@ -319,8 +319,20 @@ def test_expired_rotated_logs_are_reported_with_the_reason() -> None:
     assert (verbosity, debug) == (0, 1)
 
 
-def test_history_maintenance_result_is_reported_with_the_reason() -> None:
-    """Tell the user which history work ran and which limit triggered it."""
+def test_expired_history_archives_are_reported_with_the_reason() -> None:
+    """Tell the user when archive files were deleted and which limit hit."""
+    manager = ModuleFactory().create_flow_cleanup_manager_obj()
+    manager.detection_history_policy = full_history_policy()
+
+    manager._print_history_maintenance_result({"expired_archives": 1})
+
+    message = manager.main.print.call_args.args[0]
+    assert "Deleted expired detection history archive(s)" in message
+    assert "archive_retention_days=30" in message
+
+
+def test_routine_history_steps_are_not_reported() -> None:
+    """Summary and archive steps run every pass, so they stay silent."""
     manager = ModuleFactory().create_flow_cleanup_manager_obj()
     manager.detection_history_policy = full_history_policy()
 
@@ -328,9 +340,7 @@ def test_history_maintenance_result_is_reported_with_the_reason() -> None:
         {"units": 3, "size_pressure": True, "active_size_bytes": 3 * 1024**3}
     )
 
-    message = manager.main.print.call_args.args[0]
-    assert "did 3 step(s)" in message
-    assert "max_active_size_mb=2048" in message
+    manager.main.print.assert_not_called()
 
 
 def test_history_maintenance_result_stays_silent_without_work() -> None:

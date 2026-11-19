@@ -194,50 +194,25 @@ class FlowCleanupManager:
 
     def _print_history_maintenance_result(self, status: Any) -> None:
         """
-        Reports a history pass that archived or deleted something, and why.
+        Reports deleted archive files, and why. Routine summary and archive
+        steps are not reported because they run on every pass and would
+        flood the logs.
 
         Parameters:
             status: Result of the completed history maintenance pass.
         """
-        if not isinstance(status, dict):
+        if not isinstance(status, dict) or not status.get("expired_archives"):
             return
         policy = self.detection_history_policy
-        reasons = []
-        if status.get("size_pressure"):
-            reasons.append(
-                f"the active detection history size "
-                f"({status.get('active_size_bytes', 0) / 1024 / 1024:.0f} MB)"
-                f" exceeded max_active_size_mb="
-                f"{policy.get('max_active_size_mb')}"
-            )
-        else:
-            reasons.append(
-                f"records were older than active_days="
-                f"{policy['active_days']}"
-            )
-        if status.get("disk_pressure"):
-            reasons.append(
-                f"free disk space is below min_free_disk_mb="
-                f"{policy.get('min_free_disk_mb')}, so archiving was paused"
-            )
-        if status.get("expired_archives"):
-            self.main.print(
-                "Deleted expired detection history archive(s) because they "
-                f"were older than archive_retention_days="
-                f"{policy['archive_retention_days']} or the archives "
-                f"exceeded max_archive_size_mb="
-                f"{policy.get('max_archive_size_mb', 4096)}.",
-                0,
-                1,
-            )
-        if status.get("units"):
-            self.main.print(
-                f"Detection history maintenance did {status['units']} "
-                f"step(s) (summaries/archiving) because "
-                f"{'; '.join(reasons)}.",
-                0,
-                1,
-            )
+        self.main.print(
+            "Deleted expired detection history archive(s) because they "
+            f"were older than archive_retention_days="
+            f"{policy['archive_retention_days']} or the archives "
+            f"exceeded max_archive_size_mb="
+            f"{policy.get('max_archive_size_mb', 4096)}.",
+            0,
+            1,
+        )
 
     def _delete_old_flows_if_due(self, now: float) -> None:
         """
