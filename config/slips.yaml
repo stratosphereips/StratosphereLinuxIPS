@@ -207,9 +207,12 @@ flow_retention:
 # Detection history: how long Slips keeps the details of past detections
 # (alerts and their evidence) so you can review them in the web interface.
 # Data goes through two stages:
-#   1. Active: recent details, stored in the main history database.
-#   2. Archived: details older than active_days are moved to monthly archive
-#      files, which are deleted after archive_retention_days.
+#   1. Active: recent details, stored in the main database
+#      (<output_dir>/databases/flows.sqlite).
+#   2. Archived: details older than active_days are moved out of flows.sqlite
+#      database into monthly archive files
+#      (<output_dir>/databases/archives/detections-YYYY-MM.sqlite), which
+#      are deleted after archive_retention_days.
 detection_history:
   # Set to false to turn this cleanup off (history will keep growing).
   # disclaimer: setting it to False eats disk space.
@@ -222,6 +225,7 @@ detection_history:
   # Even above the size limit, details younger than this many hours are never
   # archived early.
   min_active_hours: 24
+
   # Days an archive file is kept after its last write, then deleted.
   archive_retention_days: 30
   # Maximum size of a single archive file, in MB (a new file starts after it).
@@ -231,6 +235,7 @@ detection_history:
   max_archive_size_mb: 4096
   # Stop archiving when free disk space drops below this many MB. 0 = never.
   min_free_disk_mb: 1024
+
   # Slips log files: rotate a log once it reaches this size (MB), and keep
   # this many rotated logs.
   log_max_size_mb: 64

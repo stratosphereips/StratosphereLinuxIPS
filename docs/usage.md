@@ -795,6 +795,19 @@ this file can be used for training Slips RNN module.
 - ```-ap``` or  ```--access-point``` Used for reading packets from two interfaces when Slips is running as an access point.
 
 
+## Disk and RAM usage on long runs
+
+When Slips monitors an interface for days or weeks, it removes old data on its own so it does not fill your RAM or disk:
+
+- Old time windows are deleted from RAM.
+- Old flows are deleted from the flow database.
+- Old alerts and evidence are moved to archive files, which are deleted later.
+- Slips logs and Zeek logs are rotated.
+
+All limits have safe defaults and can be changed in the ```flow_retention``` and ```detection_history``` sections of ```config/slips.yaml```
+
+Check [How Slips forgets the past](data_retention.md) for what is kept, for how long, and how to change it.
+
 ## Limiting Slips resource consumption
 
 When given a very a large pcap, slips may use more memory/CPU than it should. to fix that you can reduce the niceness of
