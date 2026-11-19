@@ -72,7 +72,7 @@ import shutil
 import sqlite3
 import time
 import traceback
-from typing import Dict, Optional
+from typing import Callable, Dict, Optional
 
 import numpy as np
 import pandas as pd
@@ -269,6 +269,57 @@ def minibatch_indices(y, batch_size: int, rng: np.random.Generator) -> list:
         np.argsort(np.concatenate(rank), kind="stable")
     ]
     return np.array_split(order, -(-n // batch_size))
+
+
+def relu_alive(
+    model: Optional[nn.Module], predict: Callable[[], np.ndarray]
+) -> tuple:
+    """Run predict() (one forward pass of `model`) and report, per ReLU
+    application in that forward (in call order), which units were positive
+    on at least one row. A unit positive on no row is dead for the batch.
+
+    :param model: the network predict() runs (not a torch module, e.g.
+        None: nothing is hooked)
+    :param predict: zero-argument callable doing at most one forward pass
+    :return: (predict()'s result, [bool tensor (units,), ...]); the list is
+        empty when the model has no ReLU or no forward pass ran
+    """
+    calls = []
+    hooks = []
+    if isinstance(model, nn.Module):
+        for mod in model.modules():
+            if isinstance(mod, nn.ReLU):
+                hooks.append(
+                    mod.register_forward_hook(
+                        lambda _m, _i, out: calls.append(
+                            out.detach()
+                            .reshape(-1, out.shape[-1])
+                            .gt(0)
+                            .any(0)
+                            .cpu()
+                        )
+                    )
+                )
+    try:
+        result = predict()
+    finally:
+        for hook in hooks:
+            hook.remove()
+    return result, calls
+
+
+def merge_alive(acc: list, calls: list) -> None:
+    """OR one forward pass's per-ReLU alive masks into a window's
+    accumulator, layer by layer (call order).
+
+    :param acc: the window's masks so far (updated in place)
+    :param calls: relu_alive()'s masks of one forward pass
+    """
+    for i, mask in enumerate(calls):
+        if i < len(acc):
+            acc[i] = acc[i] | mask
+        else:
+            acc.append(mask)
 
 
 def build_with_init_seed(init_seed: int, build):
@@ -582,22 +633,25 @@ class RandomProjectionTwoLayerNet(SimpleFederatedNet):
 
 
 class RandomProjectionReLUNet(SimpleFederatedNet):
-    """Model 4: R -> ReLU -> L -> LeakyReLU(0.2) -> H, the default model with
-    a ReLU on the scaled projection.
+    """Model 4: R -> LeakyReLU(0.2) -> L -> ReLU -> H, the default model with
+    a LeakyReLU on the scaled projection.
 
-        input(18) -> RP(18->256, frozen) -> /sqrt(256) -> ReLU
-        -> fc1(256->16) -> LeakyReLU(0.2) -> head(16->2)
+        input(18) -> RP(18->256, frozen) -> /sqrt(256) -> LeakyReLU(0.2)
+        -> fc1(256->16) -> ReLU -> head(16->2)
 
-    Without the projection ReLU the projection and fc1 compose into one
-    linear map; with it fc1 gets nonlinear random features. Those are all
-    >= 0, so an update shifts every fc1 pre-activation the same way: behind
-    a plain ReLU all fc1 units could go below zero at once (constant output,
-    no gradient). The leaky slope keeps such units learning. All else is the
-    default model's: projection, init, federated fc1, local head, class
-    weighting.
+    Without an activation on the projection the projection and fc1 compose
+    into one linear map; with it fc1 gets nonlinear random features. The
+    only difference from the default model is that activation: fc1 keeps the
+    default model's ReLU, and projection, init, federated fc1, local head and
+    class weighting are the default model's. A plain ReLU there makes every
+    fc1 input >= 0, so an update shifts every fc1 pre-activation the same way
+    and all fc1 units could go below zero at once (constant output). The
+    leaky slope keeps the negative inputs (scaled by 0.2), which weakens that
+    common shift but does not remove it: the model still needs a smaller
+    learning rate than the default model (the grid uses 0.015).
     """
 
-    FC1_NEGATIVE_SLOPE = 0.2
+    PROJECTION_NEGATIVE_SLOPE = 0.2
 
     def __init__(
         self,
@@ -607,8 +661,8 @@ class RandomProjectionReLUNet(SimpleFederatedNet):
         rp_path: Optional[str] = None,
         seed: int = 1111,
     ) -> None:
-        """The default model's layers plus the LeakyReLU after fc1, which
-        has no weights (the state dict is the default model's).
+        """The default model's layers plus the LeakyReLU on the projection,
+        which has no weights (the state dict is the default model's).
 
         :param input_dim: must be FIXED_INPUT_DIM (18)
         :param hidden1: projection width
@@ -617,7 +671,7 @@ class RandomProjectionReLUNet(SimpleFederatedNet):
         :param seed: seed of the shared projection
         """
         super().__init__(input_dim, hidden1, hidden2, rp_path, seed)
-        self.leaky_relu = nn.LeakyReLU(self.FC1_NEGATIVE_SLOPE)
+        self.leaky_relu = nn.LeakyReLU(self.PROJECTION_NEGATIVE_SLOPE)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """Logits of x.
@@ -627,9 +681,9 @@ class RandomProjectionReLUNet(SimpleFederatedNet):
         """
         x = self.random_projection(x)
         x = x / self.projection_scale
-        x = self.relu(x)
-        x = self.fc1(x)
         x = self.leaky_relu(x)
+        x = self.fc1(x)
+        x = self.relu(x)
         return self.head(x)
 
 
@@ -658,8 +712,8 @@ def _build_random_projection_two_layer(module):
 
 
 def _build_random_projection_relu_mlp(module) -> RandomProjectionReLUNet:
-    """Builder for the default model with a ReLU on the projection and a
-    LeakyReLU(0.2) after fc1.
+    """Builder for the default model with a LeakyReLU(0.2) on the projection
+    (fc1 keeps its ReLU).
 
     :param module: the module (rp_path, seed; sets input_dim)
     :return: the network
@@ -1112,6 +1166,7 @@ class ModuleLogger:
                 "sofar_test": "sofar_test.jsonl",
                 "scaler_stats": "scaler_stats.jsonl",
                 "merged_scaler": "merged_scaler.jsonl",
+                "dead_units": "dead_units.jsonl",
             }
             for name in [
                 "local_train",
@@ -1134,6 +1189,7 @@ class ModuleLogger:
                 "sofar_test",
                 "scaler_stats",
                 "merged_scaler",
+                "dead_units",
                 "live_consistency",
                 "module_errors",
             ]:
@@ -2129,7 +2185,7 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
         """The model a live sensor acts on in this window: the merged model
         built at the last close when there is one, else the local model."""
         merged = getattr(self, "merged_model", None)
-        return merged if merged is not None else self.model
+        return merged if merged is not None else getattr(self, "model", None)
 
     def predict_batch(self, x_data: np.ndarray) -> np.ndarray:
         """Labels of a scaled batch from the SERVING model (merged if one
@@ -2799,20 +2855,31 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                 return
             serving = self._serving_scaler()
             x_scaled = self._scale(feats, serving)
-            main = self.predict_batch(x_scaled)
+            # dead_units.jsonl: which hidden ReLU units each scored model
+            # turns on for these flows (prediction unchanged)
+            main, main_alive = relu_alive(
+                self._serving_model(), lambda: self.predict_batch(x_scaled)
+            )
             # while merged serves, the local model is scored too (shadow),
             # on inputs scaled with its own scaler
             local_model = getattr(self, "model", None)
             local = None
+            local_alive = []
             if self._using_merged_model and local_model is not None:
                 x_local = (
                     x_scaled if serving is self.scaler else self._scale(feats)
                 )
-                local = self._predict_batch_with(local_model, x_local)
+                local, local_alive = relu_alive(
+                    local_model,
+                    lambda: self._predict_batch_with(local_model, x_local),
+                )
         except Exception:
             self._record_error("_test_cell")
             return
         cell["merged_served"] = bool(self._using_merged_model)
+        alive = cell.setdefault("alive", {"main": [], "shadow_local": []})
+        merge_alive(alive["main"], main_alive)
+        merge_alive(alive["shadow_local"], local_alive)
         if self._using_merged_model:
             self._check_live_consistency(kept, main)
         t = cell["test"]
@@ -2855,7 +2922,45 @@ class FederatedNetworkModule(ml_base.MLBaseDetection):
                     target, f"New local model ({span})"
                 )
                 self._write_stream_line(target, stats)
+        self._log_dead_units(cell, merged)
         cell["flushed"] = True
+
+    def _log_dead_units(self, cell: dict, merged: bool) -> None:
+        """dead_units.jsonl: per window and scored model (local; merged when
+        it served the window), the hidden ReLU units that were positive on
+        none of the flows the model scored for the window ("dead"), per ReLU
+        layer in forward order (fc1 for the random-projection models).
+        Errors are logged, never raised.
+
+        :param cell: the finalized window
+        :param merged: whether the merged model served the window
+        """
+        try:
+            alive = cell.get("alive") or {}
+            t = cell["test"]
+            for stream, model_name, stats in (
+                ("main", "merged" if merged else "local", t["main"]),
+                ("shadow_local", "local", t["shadow_local"]),
+            ):
+                masks = alive.get(stream) or []
+                flows = self._stat_total(stats)
+                if not masks or flows == 0:
+                    continue
+                layers = [
+                    {"units": int(m.numel()), "dead": int((~m).sum())}
+                    for m in masks
+                ]
+                row = {
+                    "window": cell["window"],
+                    "model": model_name,
+                    "flows": flows,
+                    "units": sum(x["units"] for x in layers),
+                    "dead": sum(x["dead"] for x in layers),
+                    "layers": layers,
+                }
+                self.logger._write("dead_units", json.dumps(row))
+        except Exception:
+            self._record_error("_log_dead_units")
 
     # ------------------------------------------------------------------
     # All-traffic-so-far evaluation (sofar_test.jsonl)

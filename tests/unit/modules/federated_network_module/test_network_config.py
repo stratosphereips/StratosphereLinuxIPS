@@ -29,7 +29,7 @@ RLH, RLHR = "random_projection_mlp", "random_projection_relu_mlp"
 # a module, the hand-written forward checks it).
 LAYERS = {
     RLH: ["random_projection", "fc1", "relu", "head"],
-    RLHR: ["random_projection", "relu", "fc1", "leaky_relu", "head"],
+    RLHR: ["random_projection", "leaky_relu", "fc1", "relu", "head"],
     "simple_mlp": ["fc1", "relu", "fc2", "relu", "head"],
     "random_projection_two_layer": [
         "random_projection",
@@ -52,8 +52,7 @@ def _by_hand(name: str, m: torch.nn.Module, x: torch.Tensor) -> torch.Tensor:
         return F.linear(h, m.head.weight, m.head.bias)
     p = F.linear(x, m.random_projection.weight) / 16.0
     if name == RLHR:
-        h = F.leaky_relu(F.linear(relu(p), m.fc1.weight, m.fc1.bias), 0.2)
-        return F.linear(h, m.head.weight, m.head.bias)
+        p = F.leaky_relu(p, 0.2)
     h = relu(F.linear(p, m.fc1.weight, m.fc1.bias))
     if name == "random_projection_two_layer":
         h = F.linear(h, m.random_projection2.weight) / 16.0
@@ -135,28 +134,31 @@ def test_each_forward_equals_the_hand_written_pass(name, tmp_path):
     assert torch.allclose(m(x), _by_hand(name, m, x), atol=1e-6)
 
 
-@pytest.mark.parametrize("name, rectified", [(RLH, False), (RLHR, True)])
-def test_fc1_sees_rectified_features_only_with_the_projection_relu(
-    name, rectified, tmp_path
+@pytest.mark.parametrize("name, leaky", [(RLH, False), (RLHR, True)])
+def test_fc1_gets_the_projection_through_the_leaky_slope_only_in_the_relu_model(
+    name, leaky, tmp_path
 ):
-    """The projection relu zeroes about half the 256 random features of
-    every flow; without it fc1 gets them signed."""
-    feats = _fc1_input(_build(name, tmp_path), _x())
+    """fc1's input is the scaled projection, signed; in the relu model its
+    negative part is scaled by 0.2 (nothing is zeroed, about half the 256
+    random features of a flow are negative in both)."""
+    m = _build(name, tmp_path)
+    x = _x()
+    feats = _fc1_input(m, x)
+    p = F.linear(x, m.random_projection.weight) / 16.0
     assert feats.shape == (256, 256)
-    negative = (feats < 0).float().mean().item()
-    zero = (feats == 0).float().mean().item()
-    if rectified:
-        assert negative == 0.0 and 0.3 < zero < 0.7
-    else:
-        assert 0.3 < negative < 0.7 and zero == 0.0
+    assert 0.3 < (feats < 0).float().mean().item() < 0.7
+    assert (feats == 0).float().mean().item() == 0.0
+    want = torch.where(p < 0, 0.2 * p, p) if leaky else p
+    assert torch.allclose(feats, want, atol=1e-7)
 
 
 @pytest.mark.parametrize("name, linear", [(RLH, True), (RLHR, False)])
-def test_only_the_projection_relu_makes_fc1_nonlinear_in_the_input(
+def test_only_the_projection_activation_makes_fc1_nonlinear_in_the_input(
     name, linear, tmp_path
 ):
-    """Without the relu, projection + scaling + fc1 is one linear map
-    (fc1(x) - bias is odd in x); with it, it is not."""
+    """Without an activation on the projection, projection + scaling + fc1
+    is one linear map (fc1(x) - bias is odd in x); with the leaky slope it
+    is not."""
     m = _build(name, tmp_path)
     x = _x()
     with torch.no_grad():
@@ -165,14 +167,10 @@ def test_only_the_projection_relu_makes_fc1_nonlinear_in_the_input(
     assert odd == linear
 
 
-@pytest.mark.parametrize("name, dead", [(RLH, True), (RLHR, False)])
-def test_fc1_units_below_zero_keep_learning_only_behind_the_leaky_slope(
-    name, dead, tmp_path
-):
-    """Every fc1 unit pushed below zero (what the attack onset did to the
-    relu model with plain ReLUs): behind a ReLU the output is the head bias
-    for every flow and fc1 gets no gradient; behind the LeakyReLU both still
-    depend on the input."""
+@pytest.mark.parametrize("name", [RLH, RLHR])
+def test_fc1_keeps_the_default_relu_in_both_models(name, tmp_path):
+    """Every fc1 unit pushed below zero: behind fc1's ReLU (in both models)
+    the output is the head bias for every flow and fc1 gets no gradient."""
     m = _build(name, tmp_path)
     with torch.no_grad():
         m.fc1.bias.fill_(-100.0)
@@ -180,17 +178,27 @@ def test_fc1_units_below_zero_keep_learning_only_behind_the_leaky_slope(
     out = m(x)
     y = torch.arange(len(x)) % 2
     F.cross_entropy(out, y).backward()
-    constant = torch.allclose(out, out[:1].expand_as(out))
-    no_grad = m.fc1.weight.grad.abs().max().item() == 0.0
-    assert constant == dead
-    assert no_grad == dead
+    assert torch.allclose(out, out[:1].expand_as(out))
+    assert m.fc1.weight.grad.abs().max().item() == 0.0
+
+
+def test_the_relu_model_with_slope_one_is_the_default_model(tmp_path):
+    """The projection activation is the only difference: with slope 1 (the
+    identity) the relu model computes exactly the default model."""
+    rlh, rlhr = _build(RLH, tmp_path), _build(RLHR, tmp_path)
+    assert rlhr.PROJECTION_NEGATIVE_SLOPE == 0.2
+    assert rlhr.leaky_relu.negative_slope == 0.2
+    x = _x()
+    assert not torch.allclose(rlh(x), rlhr(x))
+    rlhr.leaky_relu = torch.nn.LeakyReLU(1.0)
+    assert torch.equal(rlh(x), rlhr(x))
 
 
 def test_the_relu_model_is_the_default_model_plus_the_relu(tmp_path):
     """Same seed: the same projection, initial weights, frozen and
     federated tensors and class weighting as random_projection_mlp; only
-    the forward pass differs (the projection ReLU and the LeakyReLU after
-    fc1, neither has weights)."""
+    the forward pass differs (the LeakyReLU on the projection, which has
+    no weights)."""
     rlh, rlhr = _build(RLH, tmp_path), _build(RLHR, tmp_path)
     assert isinstance(rlhr, fnm.SimpleFederatedNet)
     a, b = rlh.state_dict(), rlhr.state_dict()
@@ -205,6 +213,57 @@ def test_the_relu_model_is_the_default_model_plus_the_relu(tmp_path):
     assert rlh.USE_CLASS_WEIGHTING == rlhr.USE_CLASS_WEIGHTING is True
     x = _x()
     assert not torch.allclose(rlh(x), rlhr(x))
+
+
+@pytest.mark.parametrize("name", sorted(LAYERS))
+def test_relu_alive_reports_each_relu_application_in_forward_order(
+    name, tmp_path
+):
+    """relu_alive (dead_units.jsonl): per ReLU application of one forward,
+    in order, the units positive on at least one row; the result is the
+    plain forward's, and no hook is left on the model."""
+    m = _build(name, tmp_path)
+    x = _x()
+    outs = []
+    hooks = [
+        mod.register_forward_hook(
+            lambda _m, _i, o: outs.append(o.detach().clone())
+        )
+        for mod in m.modules()
+        if isinstance(mod, torch.nn.ReLU)
+    ]
+    with torch.no_grad():
+        want = m(x)
+    for h in hooks:
+        h.remove()
+    with torch.no_grad():
+        got, masks = fnm.relu_alive(m, lambda: m(x))
+    assert torch.equal(got, want)
+    assert len(masks) == len(outs) == LAYERS[name].count("relu")
+    for mask, out in zip(masks, outs):
+        assert torch.equal(mask, (out > 0).any(0))
+    assert all(not mod._forward_hooks for mod in m.modules())
+    assert fnm.relu_alive(None, lambda: 7) == (7, [])
+    assert fnm.relu_alive(object(), lambda: 7) == (7, [])
+
+
+@pytest.mark.parametrize("name", [RLH, RLHR])
+def test_relu_alive_counts_every_fc1_unit_below_zero_as_dead(name, tmp_path):
+    m = _build(name, tmp_path)
+    with torch.no_grad():
+        m.fc1.bias.fill_(-100.0)
+        _, masks = fnm.relu_alive(m, lambda: m(_x()))
+    assert len(masks) == 1
+    assert masks[0].shape == (16,) and not masks[0].any()
+
+
+def test_merge_alive_ors_the_masks_layer_by_layer():
+    acc = []
+    fnm.merge_alive(acc, [torch.tensor([True, False, False])])
+    fnm.merge_alive(
+        acc, [torch.tensor([False, False, True]), torch.tensor([True])]
+    )
+    assert [a.tolist() for a in acc] == [[True, False, True], [True]]
 
 
 @pytest.mark.parametrize("name", sorted(LAYERS))

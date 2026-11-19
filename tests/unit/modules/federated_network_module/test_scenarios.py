@@ -764,6 +764,64 @@ def test_merged_and_local_streams_share_spans_and_flow_counts(
 
 
 # --------------------------------------------------------------------------
+# dead hidden units per window and scored model (dead_units.jsonl)
+# --------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "model_class, units",
+    [
+        ("random_projection_mlp", [16]),
+        ("random_projection_relu_mlp", [16]),
+        ("simple_mlp", [256, 16]),
+    ],
+)
+def test_dead_units_has_a_row_per_window_and_scored_model(
+    net, model_class, units
+):
+    """Once merged, every window the test streams scored has one
+    dead_units.jsonl row for the merged and one for the local model, over
+    the flows of the window's span; one entry per ReLU layer."""
+    p = net.peer(k=0, model_class=model_class)
+    p.m.handle_p2p_model(net.payload("slips-a", model_class))
+    for w, flows in enumerate(WINDOWS, start=1):
+        cited = [u for u in flows if u[0] in "ar"]
+        p.close(flows=flows, alerts=[(f"A{w}", cited)] if cited else [])
+    p.m.store_model()
+    spans = p.spans("merged_test.log")
+    assert spans == p.spans("local_test.log") and len(spans) == 4
+    rows = [json.loads(x) for x in p.lines("dead_units.jsonl")]
+    by = {(r["window"], r["model"]): r for r in rows}
+    assert len(by) == len(rows)
+    assert set(by) == {
+        (int(span.split("_")[1]), model)
+        for span in spans
+        for model in ("merged", "local")
+    }
+    for (w, _model), row in by.items():
+        assert row["flows"] == spans[f"window_{w}"]
+        assert [x["units"] for x in row["layers"]] == units
+        assert all(0 <= x["dead"] <= x["units"] for x in row["layers"])
+        assert row["units"] == sum(units)
+        assert row["dead"] == sum(x["dead"] for x in row["layers"])
+
+
+def test_dead_units_counts_a_local_model_with_every_fc1_unit_off(net):
+    """No peer model: the local model serves. With every fc1 unit pushed
+    below zero after the first training, the next window's row has all 16
+    fc1 units dead."""
+    p = net.peer(k=0)
+    p.close(flows=_ben(1, 4) + _atk(1, 2), alerts=[("A1", _atk(1, 2))])
+    with torch.no_grad():
+        p.m.model.fc1.bias.fill_(-100.0)
+    p.close(flows=_ben(2, 6) + _atk(2, 2), alerts=[("A2", _atk(2, 2))])
+    p.m.store_model()
+    rows = [json.loads(x) for x in p.lines("dead_units.jsonl")]
+    row = [r for r in rows if r["window"] == 2]
+    assert [(r["model"], r["flows"], r["units"], r["dead"]) for r in row] == [
+        ("local", 8, 16, 16)
+    ]
+
+
+# --------------------------------------------------------------------------
 # class balancing
 # --------------------------------------------------------------------------
 def test_undersample_trains_all_malicious_window_and_balances_mixed_one(net):

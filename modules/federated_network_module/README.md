@@ -244,7 +244,7 @@ Shipped classes (MODEL_REGISTRY):
 | `model_class` | architecture | federated | class-weighted (default) |
 |---|---|---|---|
 | `random_projection_mlp` (default) | RP(18→256, frozen) → /16 → fc1 256→16 → ReLU → head 16→2 (the only ReLU is after fc1: RP and fc1 compose into one linear map) | fc1 | yes |
-| `random_projection_relu_mlp` | RP(18→256, frozen) → /16 → ReLU → fc1 256→16 → LeakyReLU(0.2) → head 16→2 (the default model with a ReLU on the projection, so fc1 sees nonlinear random features; those are all ≥ 0, so behind a plain ReLU every fc1 unit could die at once, hence the leaky slope; same init, federated fc1) | fc1 | yes |
+| `random_projection_relu_mlp` | RP(18→256, frozen) → /16 → LeakyReLU(0.2) → fc1 256→16 → ReLU → head 16→2 (the default model with a LeakyReLU on the projection, so fc1 sees nonlinear random features; that activation is the only difference: same init, federated fc1, fc1's ReLU. With a plain ReLU there every fc1 input is ≥ 0 and all fc1 units can die at once; the leaky slope weakens that, but the model still needs a smaller learning rate than the default model) | fc1 | yes |
 | `simple_mlp` | Linear 18→256 → Linear 256→16 → head 16→2 (ReLU after each; trainable twin of the RP net, nothing frozen) | fc1 + fc2 | no |
 | `random_projection_two_layer` | RP1(18→256, frozen, `seed`) → /16 → fc1 256→64 → RP2(64→256, frozen, `seed XOR 0x9E3779B1`) → /16 → lin2 256→32 → head 32→2 (ReLU after fc1 and lin2) | fc1 + lin2 (sent as `fc2_*`) | no |
 
@@ -368,6 +368,7 @@ Labels, scaler and run health:
 | `alert_uids.jsonl` | one row per close: `window`, `alert_count`, `evidence_count`, `uid_count`, `open_cell_matches`, `uids` (the flow uids cited by the alerts since the previous close) |
 | `label_flips.log` | cumulative label-flip snapshot at every training and at shutdown: flows trained BENIGN that a later alert cited, overall and per train window |
 | `scaler_stats.jsonl` | one row per training: the own scaler after its fit (see Feature scaler) |
+| `dead_units.jsonl` | one row per window and scored model (`local`; `merged` in the windows it served), written with the window's test lines: `window`, `model`, `flows` (scored), `units`, `dead` and `layers` (per hidden ReLU application in forward order: `units`, `dead`). A unit is dead for the window when it was positive on none of the flows the model scored for it (fc1 for the random-projection models; fc1 and fc2 for `simple_mlp`) |
 | `live_consistency.log` | one line per close: live-scoring counts and live-vs-close agreement; a `MISMATCH` line per disagreeing flow (also recorded as an error) |
 | `module_errors.log` | every caught exception, with traceback; empty = clean run |
 | `training_federated_network_module.log` | opened by the base class (`training_<log_suffix>.log`; `testing_<log_suffix>.log` in test mode); stays empty |
