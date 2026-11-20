@@ -116,6 +116,30 @@ def test_busy_archive_keeps_uncommitted_evidence_active(tmp_path: Path) -> None:
     db.close()
 
 
+def test_new_archive_file_is_reported_only_when_it_is_new(
+    tmp_path: Path,
+) -> None:
+    """Report the archive file once, not on every pass that writes to it.
+
+    Parameters:
+        tmp_path: Isolated run output and monthly archive.
+    """
+    factory = ModuleFactory()
+    db = SQLiteDB(factory.logger, str(tmp_path), 12345)
+    policy = ConfigParser().detection_history_policy()
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old-1',1)")
+
+    first_pass = db.maintain_detection_history(policy, 2_000_000_000.0)
+
+    assert first_pass["new_archive_file"].startswith("detections-2033-05-")
+    db.execute("INSERT INTO evidence(evidence_id,evidence_time) VALUES ('old-2',2)")
+
+    second_pass = db.maintain_detection_history(policy, 2_000_000_100.0)
+
+    assert "new_archive_file" not in second_pass
+    db.close()
+
+
 @pytest.mark.parametrize("incomplete_table", ["evidence", "alerts"])
 def test_archive_schema_failure_rolls_back_new_tables(
     tmp_path: Path, incomplete_table: str
