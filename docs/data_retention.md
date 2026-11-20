@@ -234,11 +234,13 @@ This is controlled by `rotation`, `default_rotation_interval` and
 
 ## How do I know it is working?
 
-Slips prints a line every time it removes something, and says why:
+Slips writes a line to `slips.log` every time it removes or archives something, and says why.
+These lines are not shown in the terminal and are not written to `errors.log`:
 
 ```text
 Deleted 500 old flow(s) because they were older than 24h (ordinary) / 30d (linked to evidence), or the flows database exceeded max_size_mb=512.
 Rotated alerts.log because it reached log_max_size_mb=64. Old copies are kept in <output_dir>/alerts/rotated.
+Archiving old detection history into a new file, <output_dir>/databases/archives/detections-2026-11-0001.sqlite, because detections were older than active_days=90. A new file starts every month or once a file reaches archive_file_size_mb=256.
 Deleted expired detection history archive(s) because they were older than archive_retention_days=30 or the archives exceeded max_archive_size_mb=4096.
 ```
 

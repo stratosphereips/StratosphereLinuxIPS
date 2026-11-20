@@ -506,6 +506,8 @@ class DetectionHistory:
         """
         self.connection = connection
         self.archives_dir = Path(output_dir) / "databases" / "archives"
+        # name of the archive file this pass started writing to, if any
+        self.new_archive_filename: str | None = None
 
     def _get_checkpoint(self, key: str, default: str = "0") -> str:
         """Read a persistent maintenance checkpoint from history_state.
@@ -860,6 +862,10 @@ class DetectionHistory:
             archive_filename = self._pick_archive_filename(
                 now, max_archive_file_size_mb
             )
+            if archive_filename != self._get_checkpoint(
+                "archive_filename", ""
+            ):
+                self.new_archive_filename = archive_filename
             self._set_checkpoint("archive_filename", archive_filename)
             connection.execute(
                 "INSERT INTO history_archive_queue(entity,record_id,filename) VALUES (?,?,?)",
@@ -1199,6 +1205,8 @@ class DetectionHistory:
 
         Returns:
             Persistent maintenance health and progress statistics.
+            "new_archive_file" is the name of an archive file this pass
+            started writing to (only set when it is a new file),
             "units" is the number of maintenance steps done in this pass,
             "deferred" means the pass gave up because the db was busy.
         """
@@ -1206,6 +1214,7 @@ class DetectionHistory:
         pass_deadline = (
             pass_started_at + MAX_MAINTENANCE_PASS_DURATION_MS / 1000
         )
+        self.new_archive_filename = None
         batch_size = MAINTENANCE_BATCH_SIZE
         status: dict[str, Any] = {
             "last_run": now,
@@ -1299,6 +1308,8 @@ class DetectionHistory:
         status["elapsed_ms"] = round(
             (time.monotonic() - pass_started_at) * 1000, 1
         )
+        if self.new_archive_filename:
+            status["new_archive_file"] = self.new_archive_filename
         if status["deferred"]:
             return status
         try:

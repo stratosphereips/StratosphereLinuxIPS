@@ -117,8 +117,7 @@ class FlowCleanupManager:
                 f"they were older than archive_retention_days="
                 f"{policy['archive_retention_days']} or exceeded "
                 f"log_backup_count={policy.get('log_backup_count', 30)}.",
-                0,
-                1,
+                log_to_logfiles_only=True,
             )
 
     def _warn_if_history_keeps_getting_deferred(
@@ -183,6 +182,8 @@ class FlowCleanupManager:
             )
             return
 
+        self._print_new_archive_file(status)
+
         if isinstance(status, dict) and status.get("deferred"):
             self._warn_if_history_keeps_getting_deferred(status, now)
             return
@@ -191,6 +192,35 @@ class FlowCleanupManager:
         self.history_deferred_since = None
         self.history_deferrals = 0
         self._print_history_maintenance_result(status)
+
+    def _print_new_archive_file(self, status: Any) -> None:
+        """
+        Logs once each time archiving starts writing to a new archive file.
+
+        Parameters:
+            status: Result of the history maintenance pass.
+        """
+        if not isinstance(status, dict) or not status.get("new_archive_file"):
+            return
+        policy = self.detection_history_policy
+        archives_dir = Path(self.main.args.output) / "databases" / "archives"
+        if status.get("size_pressure"):
+            reason = (
+                f"the active detection history exceeded "
+                f"max_active_size_mb={policy.get('max_active_size_mb')}"
+            )
+        else:
+            reason = (
+                f"detections were older than "
+                f"active_days={policy['active_days']}"
+            )
+        self.main.print(
+            f"Archiving old detection history into a new file, "
+            f"{archives_dir / status['new_archive_file']}, because {reason}. "
+            f"A new file starts every month or once a file reaches "
+            f"archive_file_size_mb={policy.get('archive_file_size_mb', 256)}.",
+            log_to_logfiles_only=True,
+        )
 
     def _print_history_maintenance_result(self, status: Any) -> None:
         """
@@ -210,8 +240,7 @@ class FlowCleanupManager:
             f"{policy['archive_retention_days']} or the archives "
             f"exceeded max_archive_size_mb="
             f"{policy.get('max_archive_size_mb', 4096)}.",
-            0,
-            1,
+            log_to_logfiles_only=True,
         )
 
     def _delete_old_flows_if_due(self, now: float) -> None:
@@ -244,8 +273,7 @@ class FlowCleanupManager:
                 f"{policy['linked_days']}d (linked to evidence), or the "
                 f"flows database exceeded max_size_mb="
                 f"{policy['max_size_mb']}.",
-                0,
-                1,
+                log_to_logfiles_only=True,
             )
         self.last_flow_cleanup_time = now
 
