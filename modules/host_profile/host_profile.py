@@ -2,16 +2,16 @@
 """Archive host identity from completed run flows off the profiler path."""
 
 import ipaddress
-import json
-import sqlite3
 import time
-from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import redis
+
 from slips_files.common.abstracts.imodule import IModule
-from slips_files.common.slips_utils import utils
-from slips_files.core.database.sqlite_db.host_profiles import HostProfileStore
+
+# rowid of a stored flow, and the flow itself
+FlowRow = tuple[int, dict[str, Any]]
 
 
 class HostProfile(IModule):
@@ -20,10 +20,11 @@ class HostProfile(IModule):
     name = "host_profile"
     description = "Archives host names and identity clues across runs"
     authors = ["Sebastian Garcia"]
-    BATCH_SIZE = 64
+    FLOW_TABLES = ("flows", "altflows")
+    MAX_FLOWS_PER_TABLE_PER_BATCH = 64
     ENRICHMENT_BATCH_SIZE = 16
     ENRICHMENT_INTERVAL_SECONDS = 300
-    CACHE_LIMIT = 4096
+    MAX_TRACKED_IPS = 4096
     IP_INFO_FIELDS = (
         "reverse_dns",
         "asn",
@@ -32,165 +33,205 @@ class HostProfile(IModule):
         "threatintelligence",
         "reverse_dns_lookup",
     )
+    # how long main() rests between batches
+    IDLE_PAUSE_SECONDS = 1.0
+    MIN_PAUSE_SECONDS = 0.25
+    REST_TO_WORK_RATIO = 4
+    STOP_CHECK_INTERVAL_SECONDS = 0.25
+    SHUTDOWN_FLUSH_SECONDS = 2.0
 
     def init(self) -> None:
         """Initialize only inexpensive counters before modules start."""
-        self.flow_rowid = 0
-        self.altflow_rowid = 0
-        self.store: HostProfileStore | None = None
-        self._pending_ips: set[str] = set()
-        self._enriched_at: dict[str, float] = {}
-        self._enrichment_signatures: dict[str, int] = {}
-        self.flows_path = (
-            Path(self.parent_output_dir) / "databases" / "flows.sqlite"
-        )
+        self.last_processed_rowid_of_table: dict[str, int] = {
+            table: 0 for table in self.FLOW_TABLES
+        }
+        self._ips_awaiting_enrichment: set[str] = set()
+        self._last_enrichment_time_of_ip: dict[str, float] = {}
+        self._last_enrichment_signature_of_ip: dict[str, int] = {}
 
     def subscribe_to_channels(self) -> None:
         """Read completed SQLite rows instead of subscribing to every flow."""
         self.channels = {}
 
-    def pre_main(self) -> bool:
-        """Open the permanent store after core startup has completed.
+    def _read_new_flows(self) -> dict[str, list[FlowRow]]:
+        """Read a bounded batch of unprocessed flows from each flow table.
 
         Returns:
-            False when initialization succeeds.
+            New flow rows of each table, oldest first.
         """
-        self.store = HostProfileStore(
-            Path(self.conf.permanent_dir()) / "host_profiles" / "hosts.sqlite",
-            f"{self.parent_output_dir}:{self.ppid}",
-            self.db.rdb.get_network_state,
-            utils.get_all_interfaces(self.args),
-        )
-        return False
+        return {
+            table: self.db.get_flows_after_rowid(
+                table, last_processed_rowid, self.MAX_FLOWS_PER_TABLE_PER_BATCH
+            )
+            for table, last_processed_rowid in (
+                self.last_processed_rowid_of_table.items()
+            )
+        }
 
-    def _read_rows(
-        self,
-    ) -> tuple[
-        list[tuple[int, dict[str, Any]]], list[tuple[int, dict[str, Any]]]
-    ]:
-        """Read a bounded batch from each immutable flow stream.
+    def _mark_flows_as_processed(
+        self, new_flows_of_table: dict[str, list[FlowRow]]
+    ) -> None:
+        """Remember the last flow handled in each table.
 
-        Returns:
-            Network and protocol flow rows with their SQLite row IDs.
-        """
-        if not self.flows_path.exists():
-            return [], []
-        try:
-            with sqlite3.connect(
-                f"file:{self.flows_path}?mode=ro", uri=True, timeout=0.2
-            ) as connection:
-                batches = []
-                for table, last_rowid in (
-                    ("flows", self.flow_rowid),
-                    ("altflows", self.altflow_rowid),
-                ):
-                    rows = connection.execute(
-                        f"SELECT rowid, flow FROM {table} WHERE rowid > ? "
-                        "ORDER BY rowid LIMIT ?",
-                        (last_rowid, self.BATCH_SIZE),
-                    ).fetchall()
-                    batch = []
-                    for rowid, serialized in rows:
-                        try:
-                            flow = json.loads(serialized)
-                        except (TypeError, ValueError):
-                            flow = {}
-                        if not isinstance(flow, dict):
-                            flow = {}
-                        batch.append((int(rowid), flow))
-                    batches.append(batch)
-                return batches[0], batches[1]
-        except sqlite3.Error:
-            return [], []
-
-    def _remember_ips(self, rows: list[tuple[int, dict[str, Any]]]) -> None:
-        """Queue a small number of addresses for eventual Redis enrichment.
+        The next batch starts right after it, so no flow is read twice.
 
         Parameters:
-            rows: Parsed flow rows from the current batch.
+            new_flows_of_table: Flow rows that were just saved, per table.
+        """
+        for table, flow_rows in new_flows_of_table.items():
+            if flow_rows:
+                last_rowid, _ = flow_rows[-1]
+                self.last_processed_rowid_of_table[table] = last_rowid
+
+    def _was_enriched_recently(self, ip: str, now: float) -> bool:
+        """Check whether an address is too fresh to be enriched again.
+
+        Parameters:
+            ip: Address seen in a flow.
+            now: Current monotonic time.
+
+        Returns:
+            Whether the address was enriched in the last few minutes.
+        """
+        seconds_since_enrichment = now - self._last_enrichment_time_of_ip.get(
+            ip, 0
+        )
+        return seconds_since_enrichment < self.ENRICHMENT_INTERVAL_SECONDS
+
+    def _queue_ips_for_enrichment(self, flow_rows: list[FlowRow]) -> None:
+        """Queue the addresses of a flow batch for eventual Redis enrichment.
+
+        The queue is capped, addresses that don't fit are picked up when
+        they are seen again.
+
+        Parameters:
+            flow_rows: Parsed flow rows from the current batch.
         """
         now = time.monotonic()
-        for _, flow in rows:
-            for key in ("saddr", "daddr"):
-                ip = str(flow.get(key) or "")
+        for _, flow in flow_rows:
+            for address_field in ("saddr", "daddr"):
+                ip = str(flow.get(address_field) or "")
                 try:
                     ipaddress.ip_address(ip)
                 except ValueError:
                     continue
-                if (
-                    now - self._enriched_at.get(ip, 0)
-                    < self.ENRICHMENT_INTERVAL_SECONDS
-                ):
+                if self._was_enriched_recently(ip, now):
                     continue
-                if len(self._pending_ips) < self.CACHE_LIMIT:
-                    self._pending_ips.add(ip)
+                if len(self._ips_awaiting_enrichment) < self.MAX_TRACKED_IPS:
+                    self._ips_awaiting_enrichment.add(ip)
 
-    def _enrich_hosts(self) -> None:
-        """Read a small Redis batch for names and cached threat context."""
-        if not self.store:
-            return
-        if not self._pending_ips:
-            now = time.monotonic()
-            for ip, last in self._enriched_at.items():
-                if now - last >= self.ENRICHMENT_INTERVAL_SECONDS:
-                    self._pending_ips.add(ip)
-                if len(self._pending_ips) >= self.ENRICHMENT_BATCH_SIZE:
-                    break
-        if not self._pending_ips:
-            return
-        ips = [
-            self._pending_ips.pop()
-            for _ in range(
-                min(len(self._pending_ips), self.ENRICHMENT_BATCH_SIZE)
-            )
-        ]
-        cache = self.db.rdb.rcache.pipeline(transaction=False)
-        names = self.db.rdb.r.pipeline(transaction=False)
-        for ip in ips:
-            names.hget(f"profile_{ip}", "host_name")
-            for field in self.IP_INFO_FIELDS:
-                cache.hget(f"IPsInfo:{field}", ip)
-        try:
-            hostnames = names.execute()
-            values = cache.execute()
-        except Exception:
-            self._pending_ips.update(ips)
-            return
-        for index, ip in enumerate(ips):
-            fields = {}
-            raw_values = []
-            for offset, field in enumerate(self.IP_INFO_FIELDS):
-                value = values[index * len(self.IP_INFO_FIELDS) + offset]
-                raw_values.append(value)
-                if value is None:
-                    continue
-                try:
-                    fields[field] = json.loads(value)
-                except (TypeError, ValueError):
-                    fields[field] = value
-            self._request_ip_enrichment(ip, fields)
-            signature = hash(
-                (str(hostnames[index]), *(str(value) for value in raw_values))
-            )
-            if signature != self._enrichment_signatures.get(ip):
-                if fields:
-                    self.store.observe_ip_info(ip, fields)
-                if hostnames[index]:
-                    self.store.observe_hostname(
-                        str(hostnames[index]), f"profile_{ip}"
-                    )
-                self._enrichment_signatures[ip] = signature
-            self._enriched_at[ip] = time.monotonic()
-        if len(self._enriched_at) > self.CACHE_LIMIT:
-            self._enriched_at.clear()
-            self._enrichment_signatures.clear()
+    def _requeue_ips_due_for_refresh(self) -> None:
+        """Queue known addresses whose last enrichment is now too old.
 
-    def _request_ip_enrichment(self, ip: str, fields: dict[str, Any]) -> None:
+        Names and threat intelligence can change long after an address was
+        first seen, so each address is checked again every few minutes.
+        """
+        now = time.monotonic()
+        for ip in self._last_enrichment_time_of_ip:
+            if not self._was_enriched_recently(ip, now):
+                self._ips_awaiting_enrichment.add(ip)
+            if (
+                len(self._ips_awaiting_enrichment)
+                >= self.ENRICHMENT_BATCH_SIZE
+            ):
+                break
+
+    def _pop_ips_to_enrich(self) -> list[str]:
+        """Take the next small group of addresses out of the queue.
+
+        Returns:
+            At most one enrichment batch of addresses.
+        """
+        batch_size = min(
+            len(self._ips_awaiting_enrichment), self.ENRICHMENT_BATCH_SIZE
+        )
+        return [self._ips_awaiting_enrichment.pop() for _ in range(batch_size)]
+
+    def _read_cached_identity_of_ip(
+        self, ip: str
+    ) -> tuple[str | None, dict[str, Any]]:
+        """Read what the other modules have learned about an address so far.
+
+        Parameters:
+            ip: Address being enriched.
+
+        Returns:
+            Hostname of the address' profile, and its known IP info fields.
+        """
+        cached_hostname = self.db.get_cached_hostname_from_profile(
+            f"profile_{ip}"
+        )
+        ip_info = {}
+        for info_type in self.IP_INFO_FIELDS:
+            info = self.db.get_ip_info(ip, info_type)
+            if info is not None:
+                ip_info[info_type] = info
+        return cached_hostname, ip_info
+
+    def _save_cached_identity_of_ip(
+        self, ip: str, cached_hostname: str | None, ip_info: dict[str, Any]
+    ) -> None:
+        """Persist the cached identity of an address, if it changed.
+
+        A signature of the last saved values is kept in memory, so
+        unchanged addresses cost no database write.
+
+        Parameters:
+            ip: Address being enriched.
+            cached_hostname: Hostname of the address' profile, if known.
+            ip_info: Known IP info fields of the address.
+        """
+        enrichment_signature = hash(
+            (
+                str(cached_hostname),
+                *(str(ip_info.get(field)) for field in self.IP_INFO_FIELDS),
+            )
+        )
+        if enrichment_signature != self._last_enrichment_signature_of_ip.get(
+            ip
+        ):
+            if ip_info:
+                self.db.save_host_identity_from_ip_info(ip, ip_info)
+            if cached_hostname:
+                self.db.save_hostname_of_profile(
+                    str(cached_hostname), f"profile_{ip}"
+                )
+            self._last_enrichment_signature_of_ip[ip] = enrichment_signature
+        self._last_enrichment_time_of_ip[ip] = time.monotonic()
+
+    def _forget_enrichment_history_if_too_big(self) -> None:
+        """Keep the in-memory enrichment history bounded.
+
+        Forgetting it only costs one extra enrichment per address.
+        """
+        if len(self._last_enrichment_time_of_ip) > self.MAX_TRACKED_IPS:
+            self._last_enrichment_time_of_ip.clear()
+            self._last_enrichment_signature_of_ip.clear()
+
+    def _enrich_queued_ips(self) -> None:
+        """Save names and threat context of a small group of queued IPs."""
+        if not self._ips_awaiting_enrichment:
+            self._requeue_ips_due_for_refresh()
+        ips_to_enrich = self._pop_ips_to_enrich()
+        for position, ip in enumerate(ips_to_enrich):
+            try:
+                cached_hostname, ip_info = self._read_cached_identity_of_ip(ip)
+            except redis.exceptions.RedisError:
+                # put the unread addresses back, to retry in the next batch
+                self._ips_awaiting_enrichment.update(ips_to_enrich[position:])
+                return
+            self._request_missing_hostname_lookup(ip, ip_info)
+            self._save_cached_identity_of_ip(ip, cached_hostname, ip_info)
+        self._forget_enrichment_history_if_too_big()
+
+    def _request_missing_hostname_lookup(
+        self, ip: str, ip_info: dict[str, Any]
+    ) -> None:
         """Request missing names for destination-only hosts and retry failures.
 
         Parameters:
             ip: Observed source or destination address.
-            fields: Cached enrichment, including the previous lookup result.
+            ip_info: Cached enrichment, including the previous lookup result.
         """
         address = ipaddress.ip_address(ip)
         if (
@@ -199,12 +240,12 @@ class HostProfile(IModule):
             or address.is_reserved
         ):
             return
-        if fields.get("reverse_dns"):
+        if ip_info.get("reverse_dns"):
             return
-        previous = fields.get("reverse_dns_lookup")
+        previous_lookup = ip_info.get("reverse_dns_lookup")
         if (
-            isinstance(previous, dict)
-            and previous.get("retry_after", 0) > time.time()
+            isinstance(previous_lookup, dict)
+            and previous_lookup.get("retry_after", 0) > time.time()
         ):
             return
         self.db.set_new_ip(ip)
@@ -215,41 +256,79 @@ class HostProfile(IModule):
         Returns:
             Number of rows processed in this iteration.
         """
-        flows, altflows = self._read_rows()
-        rows = flows + altflows
-        if rows and self.store:
-            self.store.observe_flows(
-                SimpleNamespace(**flow) for _, flow in rows if flow
+        new_flows_of_table = self._read_new_flows()
+        new_flow_rows = [
+            flow_row
+            for flow_rows in new_flows_of_table.values()
+            for flow_row in flow_rows
+        ]
+        if new_flow_rows:
+            self.db.save_host_identity_from_flows(
+                SimpleNamespace(**flow) for _, flow in new_flow_rows if flow
             )
-            self._remember_ips(rows)
-            if flows:
-                self.flow_rowid = flows[-1][0]
-            if altflows:
-                self.altflow_rowid = altflows[-1][0]
-        self._enrich_hosts()
-        return len(rows)
+            self._queue_ips_for_enrichment(new_flow_rows)
+            self._mark_flows_as_processed(new_flows_of_table)
+        self._enrich_queued_ips()
+        return len(new_flow_rows)
+
+    def _get_pause_after_batch(
+        self, processed_flows_count: int, batch_duration: float
+    ) -> float:
+        """Decide how long to rest before reading the next batch.
+
+        With no new flows, wait a full second for some to arrive.
+        Otherwise rest four times as long as the batch took. That keeps
+        this module at about a fifth of one CPU core even with a long
+        backlog, so the modules that detect attacks aren't slowed down.
+
+        Parameters:
+            processed_flows_count: Flows handled by the batch that just ended.
+            batch_duration: Seconds that batch took.
+
+        Returns:
+            Seconds to rest.
+        """
+        if not processed_flows_count:
+            return self.IDLE_PAUSE_SECONDS
+        return max(
+            self.MIN_PAUSE_SECONDS, batch_duration * self.REST_TO_WORK_RATIO
+        )
+
+    def _sleep_unless_stopping(self, pause_seconds: float) -> None:
+        """Rest in short steps, so a stop request is noticed quickly.
+
+        Event.wait() can lose its condition lock after a worker is
+        force-stopped on macOS, so the stop flag is checked between short
+        sleeps instead.
+
+        Parameters:
+            pause_seconds: Total time to rest.
+        """
+        remaining_seconds = pause_seconds
+        while remaining_seconds > 0 and not self.termination_event.is_set():
+            sleep_step = min(
+                remaining_seconds, self.STOP_CHECK_INTERVAL_SECONDS
+            )
+            time.sleep(sleep_step)
+            remaining_seconds -= sleep_step
 
     def main(self) -> bool:
-        """Process one batch, yielding CPU when the backlog is empty.
+        """Process one batch, then rest so the backlog never hogs the CPU.
 
         Returns:
             False to keep the background module running.
         """
-        started = time.monotonic()
-        count = self.process_batch()
-        elapsed = time.monotonic() - started
-        # Event.wait() can lose its condition lock after a worker is
-        # force-stopped on macOS. Check the stop flag between short sleeps.
-        delay = max(0.25, elapsed * 4) if count else 1.0
-        while delay > 0 and not self.termination_event.is_set():
-            pause = min(delay, 0.25)
-            time.sleep(pause)
-            delay -= pause
+        batch_started_at = time.monotonic()
+        processed_flows_count = self.process_batch()
+        batch_duration = time.monotonic() - batch_started_at
+        self._sleep_unless_stopping(
+            self._get_pause_after_batch(processed_flows_count, batch_duration)
+        )
         return False
 
     def shutdown_gracefully(self) -> None:
         """Give pending observations a short bounded chance to persist."""
-        deadline = time.monotonic() + 2.0
-        while time.monotonic() < deadline:
+        flush_deadline = time.monotonic() + self.SHUTDOWN_FLUSH_SECONDS
+        while time.monotonic() < flush_deadline:
             if not self.process_batch():
                 break
